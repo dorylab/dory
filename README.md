@@ -1,8 +1,129 @@
-## Docker 
+# Dory
 
-``` docker --context orbstack run --rm -p 3000:3000 -v "$PWD/localdata:/app/localdata" --env-file .env dory/dory ```
 
-## Monorepo layout
+**Dory is an AI-native SQL workspace for modern databases.**  
 
-- `apps/web`: the Next.js application, supporting libraries, and migration scripts. Run `pnpm dev`, `pnpm build`, etc. from the repo root to operate on this package.
-- `apps/electron`: the Electron runtime and packaging configuration. Use `pnpm electron:dev`, `pnpm electron:build`, or `pnpm electron:standalone` from the workspace root to drive desktop builds.
+> The AI-powered Data Studio you’ve been waiting for.
+
+It combines intelligent SQL editing, context-aware AI assistance, conversational database exploration, and deep operational integration across modern databases into a single unified workspace — helping engineers and analysts write, understand, and manage data more efficiently.
+
+<!-- > Explore data with SQL and AI, together. -->
+
+
+![Dory Preview](./public/actions.png)
+
+## ✨ Key Features
+
+### 🧠 SQL Copilot
+
+An AI assistant grounded in real database schema and current query context.
+
+- **Ask** — Generate SQL from natural language  
+- **Action** — Fix or rewrite the current SQL  
+- **Context** — Explain query logic and field semantics  
+
+AI that understands your database — not just text completion.
+
+---
+
+### ⌨️ Schema-Aware Autocomplete
+
+- SQL completion based on real database schema  
+- Suggests tables, columns, functions, and aliases  
+- Supports multi-table joins and subqueries  
+
+---
+
+### ✍️ Intelligent SQL Editor
+
+- Multi-tab SQL editing and execution  
+- Query history management  
+- Saved frequently used queries  
+- Deep integration with SQL Copilot  
+
+---
+
+### 💬 Database Chatbot
+
+- Built-in conversational AI assistant  
+- Automatically understands connected database schema  
+- Ask questions directly about tables and SQL  
+- Quickly locate field meanings and query ideas  
+
+---
+
+### 📈 ClickHouse Monitoring (Deep Integration)
+
+A native observability interface designed specifically for ClickHouse.
+
+- Real-time metrics:
+  - Total queries  
+  - Slow queries  
+  - Error queries  
+  - Active users  
+- Query latency trends (P50 / P95)  
+- Query throughput trends (QPM)  
+- Multi-dimensional filtering:
+  - User  
+  - Database  
+  - Query type  
+  - Time range  
+
+---
+
+### 🔐 ClickHouse Privileges (Deep Integration)
+
+Native ClickHouse user and role management UI.
+
+- Create, edit, and delete database users  
+- Create roles and configure grant relationships  
+- Configure:
+  - Login username and password  
+  - Allowed host addresses  
+  - Granted roles and default roles  
+- Supports cluster-level privilege operations (On Cluster)  
+- No need to manually write GRANT / CREATE USER SQL  
+
+---
+
+## 🔌 Database Support
+
+| Database     | Status              |
+|--------------|---------------------|
+| ClickHouse   | ✅ Deeply integrated |
+| PostgreSQL  | 🚧 In development   |
+| MySQL       | 🚧 Planned          |
+| DuckDB      | 🚧 Planned          |
+| SQLite      | 🚧 Planned          |
+
+---
+
+## ⚙️ Tech Stack
+
+- Next.js + React  
+- Drizzle ORM  
+- Multi-model AI SDK integration  
+
+---
+
+## 🎯 Who is it for?
+
+- Data engineers  
+- Data analysts  
+- Database platform teams  
+- ClickHouse operations teams  
+
+---
+
+## 🚀 Getting Started
+
+> Docker one-click deployment coming soon  
+> Desktop client (Mac) coming soon  
+
+---
+
+## 📄 License
+
+Apache-2.0
+
+---
