@@ -1,0 +1,1933 @@
+{
+    "Common": {
+        "loading": "Loading...",
+        "error": "An error occurred",
+        "notFound": "Not Found",
+        "backToHome": "Back to Home",
+        "ok": "OK",
+        "cancel": "Cancel",
+        "save": "Save",
+        "edit": "Edit",
+        "delete": "Delete",
+        "close": "Close",
+        "search": "Search",
+        "refresh": "Refresh",
+        "yes": "Yes",
+        "no": "No",
+        "confirm": "Confirm",
+        "next": "Next",
+        "previous": "Previous",
+        "apply": "Apply",
+        "settings": "Settings",
+        "help": "Help",
+        "version": "Version",
+        "language": "Language",
+        "username": "Username",
+        "password": "Password",
+        "login": "Login",
+        "logout": "Logout",
+        "welcome": "Welcome",
+        "welcomeMessage": "Welcome to OpenDB",
+        "welcomeDescription": "This is an open-source database management tool that supports multiple database types.",
+        "loadingData": "Loading data...",
+        "noData": "No data available",
+        "connectionError": "Connection error",
+        "connectionSuccess": "Connection successful",
+        "connectionFailed": "Connection failed",
+        "connectionTimeout": "Connection timed out",
+        "connectionLost": "Connection lost",
+        "connectionClosed": "Connection closed",
+        "connectionEstablished": "Connection established",
+        "connectionRefused": "Connection refused",
+        "connectionReset": "Connection reset",
+        "connectionClosedByServer": "Connection closed by server",
+        "connectionErrorDetails": "Connection error details",
+        "connectionErrorRetry": "Connection error, please retry"
+    },
+    "Auth": {
+        "EmailVerifyRequired": "Email verification required. Please verify your email.",
+        "SignInFailed": "Sign-in failed",
+        "SignUp": {
+            "HasAccount": "Already have an account?",
+            "GoToSignIn": "Sign in",
+            "BrandName": "Acme Inc.",
+            "Title": "Create an account",
+            "AlreadyHaveAccount": "Already have an account?",
+            "SignIn": "Sign in",
+            "Name": "Name",
+            "NamePlaceholder": "Your name",
+            "Email": "Email",
+            "EmailPlaceholder": "m@example.com",
+            "Password": "Password",
+            "Submitting": "Signing up…",
+            "Submit": "Sign up",
+            "Or": "Or",
+            "ContinueWithApple": "Continue with Apple",
+            "ContinueWithGoogle": "Continue with Google",
+            "ContinueAgreement": "By clicking continue, you agree to our",
+            "Terms": "Terms of Service",
+            "And": "and",
+            "Privacy": "Privacy Policy",
+            "VerifyMatchPattern": "verify|unverified|exists"
+        },
+        "SignIn": {
+            "AuthFailed": "Authorization failed: {error}",
+            "MissingToken": "Login token not found. Please try again.",
+            "SuccessRefreshing": "Login successful. Refreshing…",
+            "InvalidCallback": "Invalid callback link. Please try again.",
+            "GithubStartFailed": "Failed to start GitHub login",
+            "LoginFailedRetry": "Login failed. Please try again later.",
+            "NetworkErrorRetry": "Network error. Please try again later.",
+            "ForgotPasswordEmailRequired": "Please enter your email before clicking “Forgot password”.",
+            "ResetEmailFailed": "Failed to send reset email",
+            "ResetEmailSent": "Password reset email sent. Please check your inbox.",
+            "SendFailedRetry": "Send failed. Please try again later.",
+            "Title": "Welcome back",
+            "Description": "Login to your Dory account",
+            "Email": "Email",
+            "EmailPlaceholder": "m@example.com",
+            "Password": "Password",
+            "ForgotPassword": "Forgot your password?",
+            "Submitting": "Signing in…",
+            "Submit": "Login",
+            "DemoEnter": "Enter as Demo",
+            "OrContinueWith": "Or continue with",
+            "LoginWithGithub": "Login with Github",
+            "LoginWithGoogle": "Login with Google",
+            "LoginWithMeta": "Login with Meta",
+            "NoAccount": "Don't have an account?",
+            "SignUp": "Sign up",
+            "ContinueAgreement": "By clicking continue, you agree to our",
+            "Terms": "Terms of Service",
+            "And": "and",
+            "Privacy": "Privacy Policy"
+        },
+        "VerifyEmail": {
+            "ResendFailed": "Resend failed. Please try again later.",
+            "Sent": "Verification email sent. Please check your inbox.",
+            "NetworkError": "Network error. Please try again later.",
+            "Title": "Verify your email",
+            "DescriptionPrefix": "We have sent a verification email to",
+            "DescriptionSuffix": "Please click the link in the email to complete verification.",
+            "EmailLabel": "Recipient email",
+            "Change": "Change",
+            "Hint": "Didn't receive it? Check your spam or promotions folder, or click “Resend verification email” later.",
+            "OpenMailApp": "Open mail app",
+            "ResendCooldown": "Resend ({seconds}s)",
+            "Resend": "Resend verification email"
+        },
+        "TeamName": "{name}'s team",
+        "TeamDefaultName": "Default",
+        "Emails": {
+            "ResetPassword": {
+                "Subject": "Reset your password",
+                "Text": "Click the link to reset your password: {url}"
+            },
+            "VerifyEmail": {
+                "Subject": "Verify your email address",
+                "Text": "Click the link to verify your email: {url}"
+            }
+        }
+    },
+    "HomePage": {
+        "title": "Hello world111!",
+        "about": "Go to the about page"
+    },
+    "Connections": {
+        "Connections": "Connections",
+        "All Connections": "All Connections",
+        "about": "about",
+        "Search": {
+            "placeholder": "Search Connections",
+            "emptyTitle": "No matching connections",
+            "emptyDescription": "We couldn't find any connections for \"{query}\".",
+            "emptyHint": "Try a different keyword or clear the search"
+        },
+        "Empty": {
+            "title": "Connect your database",
+            "description": "Add a connection to start exploring.",
+            "supportHint": "Currently supports ClickHouse · More engines coming soon",
+            "feature1": "Run SQL queries and browse schemas",
+            "feature2": "Ask questions in natural language and get answers",
+            "feature3": "Save results, charts, and insights for later",
+            "loadDemo": "Load demo data"
+        },
+        "Connecting": "Connecting...",
+        "Refresh Connection": "Refresh Connection",
+        "Confirm": "Confirm",
+        "Connected": "Connected",
+        "Disconnected": "Disconnected",
+        "Unknown": "Unknown",
+        "Last check": "Last check: {time}",
+        "Latency": "Latency: {latency}ms",
+        "title": "Connections",
+        "description": "Add and manage database connections",
+        "Add Connection": "Add Connection",
+        "Create Connection": "Create connection",
+        "Connection name": "Connection name",
+        "Host": "Host",
+        "Port": "Port",
+        "Database": "Database",
+        "User": "User",
+        "Password": "Password",
+        "Connect": "Connect",
+        "Cancel": "Cancel",
+        "Delete": "Delete",
+        "Test": "Test",
+        "Connection Info": "Connection info",
+        "Authentication Info": "Authentication",
+        "Enable": "Enable",
+        "Testing Connection": "Testing connection...",
+        "Saving": "Saving...",
+        "Creating": "Creating...",
+        "Save Changes": "Save changes",
+        "Fix Form Errors Before Testing": "Fix the form errors before testing the connection",
+        "Placeholder": "Placeholder",
+        "Missing connection id": "Missing connection id",
+        "Connection failed": "Connection failed",
+        "Request error": "Request error",
+        "Connection created": "Connection created",
+        "Create connection failed": "Failed to create connection",
+        "Connection updated": "Connection updated",
+        "Update connection failed": "Failed to update connection",
+        "Connection deleted": "Connection deleted",
+        "Delete connection failed": "Failed to delete connection",
+        "Connection test success": "Connection test succeeded, version: {version}",
+        "Connection test failed": "Connection test failed",
+        "Delete Dialog Title": "Are you absolutely sure?",
+        "Delete Dialog Description": "This action cannot be undone. This will permanently delete your datasource and remove its data from our servers.",
+        "Loading connections": "Loading connections...",
+        "No connections yet": "No connections yet",
+        "Connect to": "Connect to {name}",
+        "Unknown host": "Unknown host",
+        "Unnamed connection": "Unnamed connection",
+        "Add connection to get started": "Add a new connection to get started",
+        "Identities": "Identities",
+        "Default Identity": "Default identity",
+        "Connection name is required": "Connection name is required",
+        "Host is required": "Host is required",
+        "Close & Edit": "Close & Edit",
+        "refreshConnection": "Refresh Connection",
+        "ConnectionContent": {
+            "Create": {
+                "title": "Create Connection",
+                "description": "Create a new Connection"
+            },
+            "Edit": {
+                "title": "Edit Connection",
+                "description": "Edit Connection"
+            },
+            "Refresh Connection": "Refresh Connection",
+            "Delete": "Delete Connection",
+            "Database": "Database",
+            "General": "General",
+            "Connection Name": "Connection Name",
+            "Connection Name Placeholder": "Give your connection a friendly name",
+            "Type": "Type",
+            "Select Database Type": "Select database type",
+            "Host": "Host",
+            "Port": "Port",
+            "HTTP Port": "HTTP Port",
+            "User": "User",
+            "Password": "Password",
+            "Database Username": "Database username",
+            "Database Username Placeholder": "e.g. readonly_user",
+            "Password Optional": "Password (optional)",
+            "Data Directory": "Data Directory",
+            "Database File": "Database File",
+            "Select Directory": "Enter absolute path to your data directory or file",
+            "Select File": "Enter absolute path to your .sqlite/.db file",
+            "Choose": "Choose",
+            "Clear": "Clear",
+            "SSH": "SSH",
+            "SSL": "SSL",
+            "Cancel": "Cancel",
+            "Save": "Save",
+            "TestConnection": "Test Connection",
+            "Use SSH tunnel": "Use SSH tunnel",
+            "Hostname or IP address": "Hostname or IP address",
+            "SSH Host": "SSH Host",
+            "SSH Port": "SSH Port",
+            "SSH User": "SSH User",
+            "Authentication Method": "Authentication Method",
+            "SSH Password": "SSH Password",
+            "Private Key": "Private Key",
+            "Public Key": "Public Key",
+            "Passphrase": "Passphrase",
+            "Private Key Passphrase": "Private key passphrase",
+            "Private Key Passphrase (optional)": "Private key passphrase (optional)",
+            "SSH Private Key": "SSH private key",
+            "SSH Private Key Placeholder": "Paste your PEM-formatted private key",
+            "Use SSL": "Use SSL",
+            "Please upload": "Please upload your private key file",
+            "Please enter your password": "Please enter your password"
+        },
+        "Api": {
+            "AddFailed": "Failed to create connection",
+            "UpdateRequiresId": "updateConnection requires an id",
+            "UpdateFailed": "Failed to update connection",
+            "ListFailed": "Failed to fetch connections",
+            "DeleteFailed": "Failed to delete connection",
+            "DetailFailed": "Failed to fetch connection details",
+            "DetailNotFound": "Connection details not found",
+            "TestFailed": "Connection test failed",
+            "ConnectFailed": "Connection failed"
+        }
+    },
+    "SchemaSidebar": {
+        "Select database": "Select database",
+        "Search databases": "Search databases...",
+        "Databases": "Databases",
+        "No results": "No results found",
+        "Filter tables": "Filter tables",
+        "No matching tables found": "No matching tables found",
+        "Collapse": "Collapse",
+        "Expand": "Expand",
+        "Columns": "columns",
+        "Insert select for": "Insert SELECT for {table}"
+    },
+    "CatalogSchemaSidebar": {
+        "Filter tables or views": "Filter tables or views",
+        "No matching objects found": "No matching objects found",
+        "No matching items": "No matching items",
+        "Tables": "Tables",
+        "Materialized views": "Materialized views",
+        "Views": "Views",
+        "No tables": "No tables",
+        "No materialized views": "No materialized views",
+        "No views": "No views",
+        "Collapse": "Collapse",
+        "Expand": "Expand"
+    },
+    "TableBrowser": {
+        "Tabs": {
+            "overview": "Overview",
+            "data": "Data Preview",
+            "structure": "Structure",
+            "stats": "Stats"
+        },
+        "Select table to browse schema": "Select a table to browse its schema.",
+        "Select table tab to browse schema": "Select a table tab to browse its schema.",
+        "Select table to view overview": "Select a table to view overview.",
+        "Summary": "Summary",
+        "Updated at": "updated {time}",
+        "Regenerate": "Regenerate",
+        "Toggle detailed description": "Toggle detailed description",
+        "Key highlights": "Key highlights",
+        "No highlights yet": "No highlights yet.",
+        "Query snippets": "Query snippets",
+        "SQL example": "SQL example",
+        "No SQL snippets yet": "No SQL snippets yet.",
+        "Semantic layer": "Semantic layer",
+        "Semantic metrics": "Metrics",
+        "Semantic dimensions": "Dimensions",
+        "Semantic time": "Time",
+        "Semantic geo": "Geo",
+        "Semantic keys": "Keys",
+        "Schema overview": "Schema overview",
+        "Structure": "Structure",
+        "Columns": "Columns",
+        "Primary key": "Primary key",
+        "Partition key": "Partition key",
+        "Sorting key": "Sorting key",
+        "Engine": "Engine",
+        "Data": "Data",
+        "Row count": "Row count",
+        "Compressed size": "Compressed size",
+        "Uncompressed size": "Uncompressed size",
+        "Partitions": "Partitions",
+        "Compression ratio": "Compression ratio",
+        "No table preview": "No table preview",
+        "Loading preview": "Loading preview...",
+        "No data": "No data",
+        "Refresh": "Refresh",
+        "Failed to load data preview": "Failed to load data preview",
+        "Column name": "Name",
+        "Column type": "Type",
+        "Nullable": "Nullable",
+        "Yes": "YES",
+        "No": "NO",
+        "Default": "Default",
+        "Comment": "Comment",
+        "Tags": "Tags",
+        "Search columns": "Search columns",
+        "No matching columns": "No matching columns",
+        "No columns found": "No columns found",
+        "Select table to view columns": "Select a table to view its columns",
+        "Constraints": "Constraints",
+        "Defined constraints": "Defined constraints",
+        "Unnamed constraint": "Unnamed constraint",
+        "No expression provided": "No expression provided",
+        "No constraints found": "No constraints found for this table",
+        "DDL": "DDL",
+        "DDL not available": "-- DDL not available",
+        "Properties": "Properties",
+        "Sampling key": "Sampling key",
+        "Storage policy": "Storage policy",
+        "Fallback summary": "Table {table} contains {count} columns",
+        "Fallback current table": "current table",
+        "Fallback unknown count": "some",
+        "Fallback database": "database {database}",
+        "Fallback example columns": "Example columns: {columns}",
+        "Fallback engine": "engine {engine}",
+        "Fallback partition": "partition {partition}",
+        "Fallback comment": "Comment: {comment}",
+        "Fallback summary separator": ", ",
+        "Fallback no summary": "No table summary available",
+        "Fallback detail separator": ". ",
+        "Fallback detail engine": "Engine {engine}, ",
+        "Fallback detail partition": "Partition key {partition}, ",
+        "Fallback detail sorting": "Sorting key {sorting}, ",
+        "Fallback detail common queries metrics": "Common queries filter by time ranges and aggregate numeric metrics.",
+        "Fallback detail common queries generic": "Common queries include filtering and paginated browsing.",
+        "Fallback detail": "{summary}. Common queries include filtering, time-range scans, and aggregations. If you have partition or sorting keys, include them in filters for better performance.",
+        "Fallback column description": "Field {name}, type {type}{required}",
+        "Fallback unknown type": "unknown",
+        "Fallback required": " (required)",
+        "Fallback snippet title": "Quick preview",
+        "Fallback snippet aggregate by dimension": "Aggregate by dimension",
+        "Fallback snippet time range filter": "Time range filter",
+        "SemanticMatchers": {
+            "PrimaryKey": "primary key",
+            "Identifier": "identifier",
+            "Key": "key",
+            "Time": "time",
+            "Date": "date",
+            "Timestamp": "timestamp",
+            "Geo": "geo",
+            "Address": "address",
+            "Metric": "metric",
+            "Amount": "amount",
+            "Measure": "measure",
+            "Numeric": "numeric",
+            "Dimension": "dimension",
+            "Category": "category",
+            "Status": "status",
+            "Label": "label",
+            "Name": "name"
+        }
+    },
+    "TableStats": {
+        "No available connection": "No available connection found.",
+        "Select table to view stats": "Select a table to view stats.",
+        "Failed to load stats": "Unable to load table stats",
+        "Stats insights": "Stats Insights",
+        "Last updated": "(last updated {time})",
+        "Stats insights description": "Health checks and partition optimization suggestions for the table.",
+        "Reanalyze": "Reanalyze",
+        "Insights failed": "AI insights failed",
+        "Fallback insight 1": "✓ Table has 20,000,000 rows with good compression (0.55x)",
+        "Fallback insight 2": "✓ Only 1 partition currently, which may affect partition pruning performance",
+        "Fallback insight 3": "✓ Parts count is 2, healthy",
+        "Fallback insight 4": "✓ No active mutations",
+        "Fallback suggestion": "Suggestion: consider partitioning by date to improve time-filtered queries",
+        "Partitions": "Partitions",
+        "Partitions description": "Active partitions with row counts and sizes.",
+        "Partition count": "Partition count",
+        "No active partitions": "No active partitions.",
+        "Rows": "Rows",
+        "Compressed": "Compressed",
+        "Uncompressed": "Uncompressed",
+        "Ratio": "Ratio: {ratio}",
+        "Rows count": "{count} rows",
+        "Storage health": "Storage Health",
+        "Storage health description": "Part sizes and ongoing mutations.",
+        "Part count": "Part count",
+        "Avg part size": "Avg part size",
+        "Max part size": "Max part size",
+        "Active mutations": "Active mutations",
+        "No active mutations": "No active mutations.",
+        "Mutation": "Mutation {id}",
+        "Progress percent": "Progress: {percent}%",
+        "Progress unknown": "Progress: N/A",
+        "Parts progress": "({done} / {total} parts)",
+        "Created at": "Created at {time}",
+        "Size and rows": "Size & Rows",
+        "Size and rows description": "Row count and compressed/uncompressed footprint.",
+        "Row count": "Row count",
+        "Data size": "Data size",
+        "Compressed / Uncompressed": "Compressed / Uncompressed",
+        "Compression ratio": "Compression ratio",
+        "TTL": "TTL",
+        "TTL description": "Time-to-live rule for the table, if configured.",
+        "No TTL rule configured": "No TTL rule configured."
+    },
+    "Catalog": {
+        "Catalog": "Catalog",
+        "Databases": "Databases",
+        "Select database description": "Select a database to view details.",
+        "Catalog list unsupported": "Database list is not supported for this catalog.",
+        "Database count": "{count} databases",
+        "Only default catalog supported": "Only the default catalog supports database listings.",
+        "No databases": "No databases available.",
+        "Open": "Open",
+        "Name": "Name",
+        "Engine": "Engine",
+        "Data size": "Data size",
+        "Row count": "Row count",
+        "Last updated": "Last updated",
+        "Search tables placeholder": "Search tables / comments",
+        "No matching tables": "No matching tables",
+        "No tables": "No tables",
+        "Search views placeholder": "Search views / comments",
+        "No matching views": "No matching views",
+        "No views": "No views",
+        "Search materialized views placeholder": "Search materialized views / comments",
+        "No matching materialized views": "No matching materialized views",
+        "No materialized views": "No materialized views",
+        "Failed to fetch tables": "Failed to fetch tables",
+        "Failed to fetch views": "Failed to fetch views",
+        "Failed to fetch materialized views": "Failed to fetch materialized views",
+        "Tabs": {
+            "summary": "Summary",
+            "tables": "Tables",
+            "views": "Views",
+            "materialized-views": "Materialized Views"
+        }
+    },
+    "CatalogSummary": {
+        "Null tooltip": "This data source is unavailable, lacks permission, or is estimated.",
+        "Summary placeholder": "NYC Taxi dataset focused on trips, fares, and passenger-level analysis.",
+        "Unknown engine": "Unknown",
+        "Updated": "Updated",
+        "Open table": "Open table",
+        "Size": "Size",
+        "Rows": "Rows",
+        "Failed to fetch summary": "Failed to fetch summary",
+        "Summary unavailable": "Summary data is unavailable right now.",
+        "Failed to save summary": "Failed to save summary",
+        "Failed to save summary note": "Failed to save summary note.",
+        "Database Summary": "Database Summary",
+        "Summary unavailable description": "Summary data is temporarily unavailable.",
+        "Failed to load summary": "Failed to load summary",
+        "Retry": "Retry",
+        "Database summary description": "Identity, size, and activity overview for this database.",
+        "Identity": "Identity",
+        "Database": "Database",
+        "Catalog": "Catalog",
+        "Schema": "Schema",
+        "Engine": "Engine",
+        "Cluster / Endpoint": "Cluster / Endpoint",
+        "Size & Activity": "Size & Activity",
+        "Tables": "Tables",
+        "Views": "Views",
+        "Materialized Views": "Materialized Views",
+        "Total Size": "Total Size",
+        "Rows (est)": "Rows (est.)",
+        "Last Updated": "Last Updated",
+        "Last Queried": "Last Queried",
+        "One-line summary": "One-line summary",
+        "Edit": "Edit",
+        "Saving": "Saving...",
+        "Save": "Save",
+        "Cancel": "Cancel",
+        "Top by Size": "Top by Size",
+        "Top by Size description": "Largest tables by storage size.",
+        "Top by Rows": "Top by Rows",
+        "Top by Rows description": "Largest tables by estimated rows.",
+        "Recently Updated": "Recently Updated",
+        "Recently Updated description": "Latest table changes detected.",
+        "No tables found": "No tables found.",
+        "Create or Import": "Create or Import"
+    },
+    "Chatbot": {
+        "Close": "Close",
+        "EmptyState": "Select a session or create a new one.",
+        "Typing": "Generating",
+        "Input": {
+            "GlobalPlaceholder": "@ mention tables to ask about the database, Shift + Enter for a new line",
+            "CopilotPlaceholder": "Ask about this SQL / let AI fix or rewrite it, Shift + Enter for a new line",
+            "SentWithAttachments": "Sent with attachments"
+        },
+        "Sessions": {
+            "Title": "Sessions",
+            "SelectPlaceholder": "Select session",
+            "Empty": "No sessions yet. Click the button on the right to start a new chat.",
+            "New": "New session",
+            "Refresh": "Refresh sessions",
+            "Rename": "Rename",
+            "Delete": "Delete",
+            "RenamePlaceholder": "Enter a new session name",
+            "Untitled": "Untitled session",
+            "DefaultRename": "New chat",
+            "DeleteDialogTitle": "Delete session",
+            "DeleteDialogDescription": "Are you sure you want to delete \"{title}\"? This action cannot be undone.",
+            "Cancel": "Cancel",
+            "ConfirmDelete": "Delete",
+            "DeleteSuccess": "Session deleted",
+            "CopilotAutoCreate": "Copilot sessions are created automatically for the current tab"
+        },
+        "Errors": {
+            "FetchSessions": "Failed to fetch sessions",
+            "FetchSessionDetail": "Failed to fetch session details",
+            "FetchCopilotSession": "Failed to fetch Copilot session",
+            "CreateSession": "Failed to create session",
+            "RenameSession": "Failed to rename session",
+            "DeleteSession": "Failed to delete session",
+            "SessionNotFoundRename": "Session not found. Unable to rename.",
+            "SessionNotFoundDelete": "Session not found. Unable to delete.",
+            "SessionNameRequired": "Session name cannot be empty",
+            "CopilotRenameUnsupported": "Copilot sessions cannot be renamed",
+            "CopilotDeleteUnsupported": "Copilot sessions cannot be deleted (managed by the current tab)",
+            "CreateCopilotSession": "Failed to create Copilot session",
+            "SessionNotSelected": "No session selected",
+            "RequestFailed": "Request failed",
+            "SendFailed": "Failed to send message",
+            "SqlExecutionFailed": "SQL execution failed",
+            "ToolErrorUnknown": "Unknown tool error",
+            "UnknownTool": "unknown",
+            "CopySqlFailed": "Failed to copy SQL",
+            "CacheSqlFailed": "Failed to cache SQL locally"
+        },
+        "Tools": {
+            "Call": "Tool call: {name}",
+            "Failed": "Tool failed",
+            "ResultRaw": "Tool result (raw)",
+            "ToolLabel": "Tool",
+            "MessageLabel": "Message",
+            "ReplaceSql": "Replace SQL",
+            "NewTab": "New Tab"
+        },
+        "Actions": {
+            "Copy": "Copy",
+            "Retry": "Retry"
+        },
+        "TableSelect": {
+            "SelectDatabaseFirst": "Select database first",
+            "SelectTable": "Select table",
+            "SearchTables": "Search tables...",
+            "NoMatches": "No matching tables",
+            "GroupHeading": "Tables"
+        },
+        "TableMention": {
+            "Heading": "Tables"
+        }
+    },
+    "Monitoring": {
+        "Tabs": {
+            "Overview": "Overview",
+            "QueryLogs": "Query Logs",
+            "SlowQueries": "Slow Queries",
+            "ErrorQueries": "Error Queries"
+        },
+        "Summary": {
+            "TotalQueries": "Total Queries",
+            "SlowQueries": "Slow Queries",
+            "ErrorQueries": "Error Queries",
+            "ActiveUsers": "Active Users",
+            "SlowThreshold": "Duration ≥ {threshold} ms",
+            "ErrorQueriesDescription": "Failed queries"
+        },
+        "TimeRange": {
+            "1h": "Last 1 hour",
+            "6h": "Last 6 hours",
+            "24h": "Last 24 hours",
+            "7d": "Last 7 days"
+        },
+        "Filters": {
+            "QueryTypePlaceholder": "Query type",
+            "QueryTypeAll": "All types",
+            "QueryTypeOther": "Other",
+            "DynamicThreshold": "Dynamic threshold",
+            "FixedThreshold": "Fixed threshold",
+            "DynamicThresholdHelp": "Use recent query P95 as the slow query threshold",
+            "DynamicThresholdCurrent": "Current ~ {value} ms",
+            "DurationAtLeast": "Duration ≥"
+        },
+        "Actions": {
+            "Reset": "Reset",
+            "Apply": "Apply",
+            "Close": "Close"
+        },
+        "Empty": {
+            "NoData": "No data",
+            "NoQueries": "No query data",
+            "NoSlowQueries": "No slow queries",
+            "NoErrorQueries": "No error queries"
+        },
+        "Columns": {
+            "QueryId": "Query ID",
+            "Time": "Time",
+            "Duration": "Duration",
+            "User": "User",
+            "Database": "Database",
+            "ReadRowsBytes": "Read Rows / Bytes",
+            "ReadRows": "Read Rows",
+            "ReadBytes": "Read Bytes",
+            "WrittenBytes": "Written Bytes",
+            "MemoryUsage": "Memory Usage",
+            "Sql": "SQL",
+            "ErrorMessage": "Error Message",
+            "IP": "IP"
+        },
+        "Common": {
+            "EmptyValue": "—",
+            "DurationMs": "{value} ms",
+            "ReadRows": "{value} rows",
+            "DbPrefix": "DB: {value}",
+            "Error": "Error"
+        },
+        "Units": {
+            "Milliseconds": "ms",
+            "MsTick": "{value} ms"
+        },
+        "Charts": {
+            "P50Duration": "P50 Duration",
+            "P95Duration": "P95 Duration",
+            "QPM": "QPM",
+            "ErrorCount": "Error Count",
+            "SlowQueries": "Slow Queries",
+            "QueryLatencyTitle": "Query Latency",
+            "QueryLatencyDescription": "Query latency trend (P50 / P95)",
+            "QueryThroughputTitle": "Query Throughput",
+            "QueryThroughputDescription": "QPM (queries per minute) trend",
+            "ErrorCountTitle": "Error Count",
+            "ErrorCountDescription": "Error request trend",
+            "SlowQueriesTitle": "Slow Queries",
+            "SlowQueriesDescription": "Slow query count trend",
+            "Both": "Both"
+        },
+        "RecentQueries": {
+            "Title": "Recent Queries",
+            "Description": "Recently executed queries (updates with filters)",
+            "ViewAll": "View all"
+        },
+        "SqlDetails": {
+            "Title": "SQL Details"
+        },
+        "Errors": {
+            "RequestFailed": "Request failed",
+            "FetchUsers": "Failed to fetch users",
+            "FetchDatabases": "Failed to fetch databases"
+        }
+    },
+    "SqlConsole": {
+        "Layout": {
+            "InitFailed": "Failed to initialize local database"
+        },
+        "Errors": {
+            "InvalidSessionData": "Invalid session data",
+            "QueryCanceled": "Query canceled",
+            "ChatHandoffReadFailed": "Failed to read SQL from chat",
+            "ExecuteFailed": "Execute failed",
+            "AiFix": "AI Fix"
+        },
+        "Tabs": {
+            "NewQuery": "New Query",
+            "UntitledQuery": "Untitled Query",
+            "ChatQuery": "Chat Query",
+            "Rename": "Rename",
+            "GenerateAiTitle": "Generate AI title",
+            "Close": "Close",
+            "CloseOthers": "Close Others",
+            "NoActiveTab": "No active tab",
+            "CloseTabAria": "Close tab",
+            "AddTabAria": "Add tab",
+            "RenameDialogTitle": "Rename tab",
+            "RenameDialogDescription": "Enter a new name for this tab.",
+            "RenamePlaceholder": "Tab name"
+        },
+        "Actions": {
+            "Cancel": "Cancel",
+            "Save": "Save",
+            "Apply": "Apply",
+            "Reset": "Reset",
+            "ResetDefault": "Reset default",
+            "Close": "Close"
+        },
+        "Empty": {
+            "Brand": "SQL Console",
+            "ShortcutRunSelection": "Run selection: Cmd/Ctrl+Enter",
+            "ShortcutSave": "Save Query: Cmd/Ctrl+S",
+            "ShortcutNewTab": "New tab: Cmd/Ctrl+T",
+            "ShortcutToggleCopilot": "Open Copilot: Cmd/Ctrl+I",
+            "ShortcutFormat": "Format SQL: Shift+Cmd/Ctrl+F",
+            "NewConsole": "New console"
+        },
+        "Editor": {
+            "NoActiveTab": "No active tab",
+            "NotSqlTab": "This tab is not a SQL editor",
+            "Completion": {
+                "Keyword": "keyword",
+                "Table": "table",
+                "Database": "database",
+                "Column": "{table} column"
+            }
+        },
+        "ContextMenu": {
+            "Copy": "Copy",
+            "Paste": "Paste",
+            "Cut": "Cut",
+            "FormatGroup": "Format",
+            "Format": "Format SQL",
+            "ToggleCase": "Toggle case",
+            "ExecuteSelection": "Run selection",
+            "ExecuteSQL": "Run SQL"
+        },
+        "Copilot": {
+            "Errors": {
+                "NoActiveTab": "No active tab",
+                "NotSqlTab": "Active tab is not SQL",
+                "ActionFailed": "Action failed",
+                "UnknownAction": "Unknown action intent: {intent}",
+                "RequiresError": "This action requires an execution error",
+                "NotApplicable": "This action is not applicable to the current context",
+                "UnsupportedSurface": "Only the SQL surface is supported",
+                "InvalidRequest": "Invalid request body",
+                "InternalError": "Internal error",
+                "MissingAiEnv": "Missing AI configuration. Please set DORY_AI_API_KEY and DORY_AI_URL."
+            },
+            "Success": {
+                "ReplaceSql": "SQL replaced",
+                "NewTab": "New tab created"
+            },
+            "NewTabTitle": "AI Query",
+            "ToggleOpen": "Open AI panel",
+            "ToggleClose": "Close AI panel",
+            "ToggleAria": "Toggle AI panel",
+            "ToggleLabel": "AI",
+            "Context": {
+                "SqlTitle": "SQL Context",
+                "SqlLabel": "SQL",
+                "SqlEmpty": "No SQL available",
+                "SelectionLabel": "Selection",
+                "None": "None",
+                "CopyLabel": "Copy {label}",
+                "InferredTitle": "Inferred Context",
+                "DatabaseLabel": "Database",
+                "TablesLabel": "Tables",
+                "ConfidenceLabel": "Confidence",
+                "EmptyValue": "—",
+                "TableFactsTitle": "Table Facts",
+                "RowCountLabel": "Row count",
+                "PrimaryKeyLabel": "Primary key",
+                "TableLabel": "Table",
+                "RawCopilot": "Raw Copilot Context",
+                "RawBundle": "Raw Context Bundle",
+                "CopyJson": "Copy JSON",
+                "NotReady": "Context is not ready"
+            },
+            "Action": {
+                "SqlPreview": "SQL Preview",
+                "ResultTitle": "Result",
+                "RunningWithTitle": "Running: {title}",
+                "Running": "Running",
+                "UndoApply": "Undo apply",
+                "EmptyResult": "No result",
+                "Apply": "Apply",
+                "Copy": "Copy"
+            },
+            "Actions": {
+                "Title": "Actions",
+                "Empty": "No actions available",
+                "RequiresLastRun": "Requires the last SQL run",
+                "RequiresError": "Requires an execution error",
+                "NotApplicable": "Not applicable to the current context",
+                "NoExecutionInfo": "No execution info available",
+                "RunFailed": "Run failed",
+                "MissingAiEnv": "Missing AI configuration. Please set DORY_AI_API_KEY and DORY_AI_URL."
+            },
+            "QuickActions": {
+                "FixSqlError": {
+                    "Title": "Fix SQL errors",
+                    "Description": "Check syntax / columns / functions"
+                },
+                "OptimizePerformance": {
+                    "Title": "Optimize performance",
+                    "Description": "Reduce full scans / simplify filters"
+                },
+                "RewriteSql": {
+                    "Title": "Rewrite SQL",
+                    "Description": "Improve readability / structure"
+                },
+                "ToAggregation": {
+                    "Title": "Convert to aggregation",
+                    "Description": "Generate aggregated SQL by dimensions"
+                }
+            },
+            "ActionResults": {
+                "FixSqlError": {
+                    "MissingErrorTitle": "Missing error info",
+                    "MissingErrorDescription": "No SQL execution error detected; unable to fix.",
+                    "FailedTitle": "Auto-fix failed",
+                    "FailedDescription": "Failed to generate a reliable fix: {message}",
+                    "MissingAliasTitle": "Add alias for table missing alias",
+                    "MissingAliasDescription": "The error refers to table expression identifier \"{ident}\". Added alias \"{alias}\" for \"{ident}\" in FROM to match later references."
+                },
+                "OptimizePerformance": {
+                    "MissingSqlTitle": "Missing SQL to optimize",
+                    "MissingSqlDescription": "No SQL text available to optimize.",
+                    "FailedTitle": "Auto-optimization failed",
+                    "FailedDescription": "Failed to generate a reliable optimization: {message}"
+                },
+                "RewriteSql": {
+                    "MissingSqlTitle": "Missing SQL to rewrite",
+                    "MissingSqlDescription": "No SQL text available to rewrite.",
+                    "FailedTitle": "Auto-rewrite failed",
+                    "FailedDescription": "Failed to generate a reliable rewrite: {message}"
+                },
+                "ToAggregation": {
+                    "MissingSqlTitle": "Missing SQL to aggregate",
+                    "MissingSqlDescription": "No SQL text available to generate an aggregated query.",
+                    "FailedTitle": "Aggregation generation failed",
+                    "FailedDescription": "Failed to generate a reliable aggregation: {message}"
+                }
+            },
+            "Ask": {
+                "ActionLabels": {
+                    "FixSql": "Fix SQL",
+                    "Optimize": "Optimize",
+                    "Rewrite": "Rewrite",
+                    "ToAggregation": "Convert to aggregation",
+                    "Default": "Ask Copilot"
+                },
+                "AppliedLabel": "{action} applied",
+                "AppliedDescription": "Your SQL has been updated in the editor.",
+                "GoToActions": "Go to Actions"
+            },
+            "Panel": {
+                "NoSqlTab": "Select a SQL tab to use Copilot.",
+                "UnsupportedTab": "Copilot is not supported for {type} tabs.",
+                "TabAsk": "Ask",
+                "TabAction": "Action",
+                "TabContext": "Context"
+            }
+        },
+        "SavedQueries": {
+            "LoadFailed": "Failed to load saved queries",
+            "Loading": "Loading saved queries...",
+            "Empty": "No saved queries",
+            "Title": "Saved Queries",
+            "SearchPlaceholder": "Search saved queries",
+            "SearchEmpty": "No matching saved queries",
+            "MoreActions": "More actions",
+            "Rename": "Rename",
+            "RenameTitle": "Rename saved query",
+            "RenamePlaceholder": "Enter a new name",
+            "Delete": "Delete",
+            "Cancel": "Cancel",
+            "Save": "Save",
+            "Saving": "Saving...",
+            "OverrideTitle": "Replace current query?",
+            "OverrideDescription": "This will replace the SQL in the current tab.",
+            "Override": "Replace"
+        },
+        "SaveSql": {
+            "Title": "Save Query",
+            "NameLabel": "Name",
+            "NamePlaceholder": "Query name",
+            "DescriptionLabel": "Description",
+            "DescriptionPlaceholder": "Add a description (optional)",
+            "Saving": "Saving...",
+            "Success": "Saved",
+            "Errors": {
+                "SqlRequired": "SQL cannot be empty",
+                "TitleRequired": "Name cannot be empty",
+                "SaveFailed": "Failed to save SQL"
+            }
+        },
+        "Settings": {
+            "Title": "Result settings",
+            "Description": "Configure results display",
+            "DebugMode": "Debug mode",
+            "DebugHint": "Show debug metadata in result footer",
+            "RowBudgetLabel": "Row budget",
+            "RowsTitle": "Rows: {value}",
+            "RowBudgetHint": "Limits rows rendered in the UI for performance."
+        },
+        "ResultStatus": {
+            "Running": "Running",
+            "Displaying": "Displaying",
+            "Failed": "Failed",
+            "Finished": "Finished",
+            "ExecMs": "Execution: {value} ms",
+            "LimitNotice": "Limit: {value}",
+            "Returned": "Returned: {value}",
+            "Affected": "Affected: {value}",
+            "Shown": "Shown: {value}",
+            "LimitSuffix": " / limit {value}",
+            "Truncated": "Truncated",
+            "SqlPreviewLabel": "SQL preview",
+            "SqlPreviewAria": "Show SQL preview"
+        },
+        "Results": {
+            "SelectTab": "Select a tab to see results",
+            "RunQueryFirst": "Run the query first",
+            "NoResults": "No results",
+            "Overview": "Overview",
+            "ResultTab": "Result {index}",
+            "WaitingForResults": "Waiting for results...",
+            "DownloadCsvTitle": "Download CSV"
+        },
+        "Overview": {
+            "Status": "Status",
+            "Sql": "SQL",
+            "Message": "Message",
+            "Duration": "Duration",
+            "Rows": "Rows",
+            "Empty": "No results",
+            "StatusRunning": "Running",
+            "StatusSuccess": "Success",
+            "StatusError": "Error",
+            "StatusCanceled": "Canceled",
+            "DurationMs": "{value} ms",
+            "RowsAffected": "{value} rows",
+            "ViewResult": "View result",
+            "OpenResult": "Open result",
+            "CopySql": "Copy SQL",
+            "CopyError": "Copy error"
+        },
+        "Common": {
+            "NotAvailable": "N/A",
+            "EmptyValue": "—",
+            "Error": "Error"
+        },
+        "ResultMeta": {
+            "RowsReturned": "{value} rows returned",
+            "RowsAffected": "{value} rows affected",
+            "AriaLabel": "Result set {index}",
+            "Title": "Result {index} ({status})",
+            "Started": "Started",
+            "Finished": "Finished",
+            "Scan": "Scanned",
+            "Cache": "Cache",
+            "CacheHit": "hit",
+            "CacheMiss": "miss",
+            "Source": "Source",
+            "Truncated": "Truncated",
+            "CopyTitle": "Copy metadata",
+            "Copied": "Copied",
+            "CopyMeta": "Copy meta"
+        },
+        "Toolbar": {
+            "RunSelected": "Run selection",
+            "Run": "Run",
+            "Limit": "Limit",
+            "Saved": "Saved",
+            "SaveQuery": "Save Query",
+            "Stop": "Stop"
+        },
+        "Sidebar": {
+            "Tables": "Tables",
+            "SavedQueries": "Saved Queries"
+        },
+        "VTable": {
+            "Header": {
+                "RowNumberTitle": "Row number"
+            },
+            "RowIndexHint": "Click to select; Shift to extend; Cmd/Ctrl+C to copy rows; right-click for menu",
+            "Filter": {
+                "EditHint": "Click to edit filter",
+                "CaseSensitiveSuffix": " (Aa)",
+                "RemoveAria": "Remove filter",
+                "RemoveTitle": "Remove",
+                "ClearAll": "Clear all filters",
+                "Title": "Column filter",
+                "TitleWithColumn": "Column filter: {column}",
+                "Remove": "Remove",
+                "Operator": "Operator",
+                "Value": "Value",
+                "PlaceholderDate": "Select or enter a date",
+                "PlaceholderText": "Enter a filter value",
+                "CaseSensitive": "Case sensitive",
+                "Cancel": "Cancel",
+                "Apply": "Apply",
+                "Op": {
+                    "IsTrue": "Is true",
+                    "IsFalse": "Is false",
+                    "On": "On (date)",
+                    "Before": "Before",
+                    "After": "After",
+                    "Empty": "Is empty",
+                    "NotEmpty": "Not empty",
+                    "Contains": "Contains",
+                    "Equals": "Equals",
+                    "StartsWith": "Starts with",
+                    "EndsWith": "Ends with",
+                    "Regex": "Regex"
+                }
+            },
+            "Context": {
+                "ViewCell": "View cell",
+                "ViewRowDetails": "View row details",
+                "Copy": "Copy",
+                "CopyWithHeaders": "Copy with headers",
+                "FilterByValue": "Filter by this value",
+                "DownloadCsv": "Download CSV"
+            },
+            "Search": {
+                "FilteredTotalAria": "Filtered / Total",
+                "Placeholder": "Search (Ctrl/Cmd+F to focus)",
+                "ClearAria": "Clear search"
+            },
+            "Inspector": {
+                "ResizeTitle": "Drag to resize",
+                "TitleCell": "Cell inspector",
+                "TitleRow": "Row details",
+                "CopyJson": "Copy JSON",
+                "CopiedJson": "JSON copied!",
+                "CopyRow": "Copy row",
+                "CopiedRow": "Row copied!",
+                "Close": "Close",
+                "RowWithColumn": "Row {row} · {column}",
+                "RowOnly": "Row {row}",
+                "ViewJson": "View JSON",
+                "ViewTable": "View table",
+                "FilterPlaceholder": "Filter fields..."
+            }
+        },
+        "Debug": {
+            "Duration": "Duration",
+            "Started": "Started",
+            "Finished": "Finished",
+            "Cache": "Cache",
+            "CacheHit": "hit",
+            "CacheMiss": "miss",
+            "Source": "Source",
+            "Scanned": "Scanned: {rows} rows / {bytes}",
+            "Truncated": "Truncated (first {count} rows)",
+            "Status": "Status",
+            "Session": "Session",
+            "Set": "Set",
+            "Rows": "Rows",
+            "StorageKey": "Storage Key",
+            "CopyMetaTitle": "Copy debug meta",
+            "CopyMeta": "Copy meta"
+        },
+        "JsonPreview": {
+            "Truncated": "/* truncated for performance */",
+            "RenderFailed": "// JSON render failed"
+        }
+    },
+    "Privileges": {
+        "Title": "Privileges",
+        "Description": "Manage ClickHouse users and roles, and configure access.",
+        "Tabs": {
+            "Users": "Users",
+            "Roles": "Roles"
+        },
+        "Empty": {
+            "NoConnection": "Connect a data source to manage privileges."
+        },
+        "Actions": {
+            "Add": "Add",
+            "Edit": "Edit",
+            "Delete": "Delete",
+            "Create": "Create",
+            "SaveChanges": "Save changes",
+            "Cancel": "Cancel",
+            "Confirm": "Confirm",
+            "ConfirmDelete": "Confirm delete",
+            "Revoke": "Revoke",
+            "BackToList": "Back to list"
+        },
+        "Common": {
+            "EmptyValue": "—"
+        },
+        "Labels": {
+            "User": "User",
+            "Role": "Role"
+        },
+        "Dialogs": {
+            "DeleteUser": {
+                "Title": "Confirm delete",
+                "Description": "This will delete user {name}. This action cannot be undone."
+            },
+            "DeleteRole": {
+                "Title": "Confirm delete",
+                "Description": "This will delete role {name}. This action cannot be undone."
+            }
+        },
+        "Errors": {
+            "FetchUsers": "Failed to fetch users",
+            "FetchRoles": "Failed to fetch roles",
+            "FetchClusters": "Failed to fetch clusters",
+            "FetchUser": "Failed to fetch user",
+            "FetchRole": "Failed to fetch role",
+            "CreateUser": "Failed to create user",
+            "UpdateUser": "Failed to update user",
+            "DeleteUser": "Failed to delete user",
+            "CreateRole": "Failed to create role",
+            "UpdateRole": "Failed to update role",
+            "DeleteRole": "Failed to delete role",
+            "GrantGlobalFailed": "Failed to grant global privileges",
+            "RevokeGlobalFailed": "Failed to revoke global privileges",
+            "GrantScopedFailed": "Failed to grant privileges",
+            "RevokeScopedFailed": "Failed to revoke privileges",
+            "UserNotSpecified": "User not specified",
+            "RoleNotSpecified": "Role not specified"
+        },
+        "Toasts": {
+            "UserCreated": "User created",
+            "UserCreateFailed": "Failed to create user",
+            "UserUpdated": "User updated",
+            "UserUpdateFailed": "Failed to update user",
+            "UserDeleted": "User deleted",
+            "UserDeleteFailed": "Failed to delete user",
+            "RoleCreated": "Role created",
+            "RoleCreateFailed": "Failed to create role",
+            "RoleUpdated": "Role updated",
+            "RoleUpdateFailed": "Failed to update role",
+            "RoleDeleted": "Role deleted",
+            "RoleDeleteFailed": "Failed to delete role",
+            "FetchDatabasesFailed": "Failed to fetch databases",
+            "FetchTablesFailed": "Failed to fetch tables",
+            "FetchViewsFailed": "Failed to fetch views",
+            "GlobalGranted": "Global privileges granted",
+            "GlobalGrantFailed": "Failed to grant global privileges",
+            "GlobalRevoked": "Global privileges revoked",
+            "GlobalRevokeFailed": "Failed to revoke global privileges",
+            "ScopedGranted": "Privileges granted",
+            "ScopedGrantFailed": "Failed to grant privileges",
+            "ScopedRevoked": "Privileges revoked",
+            "ScopedRevokeFailed": "Failed to revoke privileges",
+            "SelectDatabase": "Select a database",
+            "SelectObject": "Select an object"
+        },
+        "Users": {
+            "Title": "Users",
+            "Add": "Add user",
+            "Loading": "Loading users...",
+            "Empty": "No users",
+            "Columns": {
+                "UserName": "User name",
+                "DefaultRole": "Default role",
+                "GrantedRoles": "Granted roles",
+                "Actions": "Actions"
+            }
+        },
+        "Roles": {
+            "Title": "Roles",
+            "Add": "Add role",
+            "Loading": "Loading roles...",
+            "Empty": "No roles",
+            "Columns": {
+                "RoleName": "Role name",
+                "PrivilegeCount": "Privileges",
+                "GrantedUsers": "Granted users",
+                "Actions": "Actions"
+            }
+        },
+        "UserDialog": {
+            "CreateTitle": "Create user",
+            "EditTitle": "Edit user {name}",
+            "NameLabel": "User name",
+            "NamePlaceholder": "e.g. readonly_user",
+            "PasswordLabel": "Password",
+            "PasswordPlaceholderCreate": "Leave empty to create a passwordless user",
+            "PasswordPlaceholderEdit": "Leave empty to remove the password",
+            "PasswordHintCreate": "Optional. Leaving it empty creates a passwordless user.",
+            "PasswordHintEdit": "Fill to update the password. Leave empty to remove it.",
+            "AllowedHostsLabel": "Allowed hosts",
+            "AllowedHostsPlaceholder": "Separate multiple hosts with commas or new lines. Leave empty to allow any host.",
+            "RolesLabel": "Granted roles",
+            "RolesPlaceholder": "Select roles to grant",
+            "RolesSearchPlaceholder": "Search roles...",
+            "RolesEmpty": "No matching roles",
+            "DefaultRoleLabel": "Default role",
+            "DefaultRolePlaceholder": "Select default role (optional)",
+            "DefaultRoleNone": "No default role",
+            "OnClusterLabel": "On cluster",
+            "OnClusterDescription": "Apply this operation across the selected cluster.",
+            "ClusterLabel": "Cluster",
+            "ClusterPlaceholder": "Select a cluster",
+            "ClusterDescription": "Pick a cluster to apply ON CLUSTER commands.",
+            "ClusterLoading": "Loading clusters...",
+            "ClusterMissing": "No cluster configuration detected, falling back to This node.",
+            "Errors": {
+                "NameRequired": "User name is required"
+            }
+        },
+        "RoleDialog": {
+            "CreateTitle": "Create role",
+            "EditTitle": "Edit role {name}",
+            "NameLabel": "Role name",
+            "NamePlaceholder": "e.g. readonly",
+            "OnClusterLabel": "On cluster",
+            "OnClusterDescription": "Run this change across the selected cluster.",
+            "ClusterLabel": "Cluster",
+            "ClusterPlaceholder": "Select a cluster",
+            "ClusterDescription": "Pick a cluster to apply ON CLUSTER commands.",
+            "ClusterLoading": "Loading clusters...",
+            "ClusterMissing": "No cluster configuration detected, falling back to This node.",
+            "Errors": {
+                "NameRequired": "Role name is required"
+            }
+        },
+        "GlobalGrantDialog": {
+            "Title": "Grant global privileges",
+            "Description": "Select global privileges to grant to this {entity}.",
+            "Empty": "No global privileges available."
+        },
+        "GlobalRevokeDialog": {
+            "Title": "Revoke global privileges",
+            "Description": "Select global privileges to revoke.",
+            "Empty": "No global privileges to revoke."
+        },
+        "GlobalPrivileges": {
+            "Title": "Global privileges",
+            "GlobalLabel": "Global",
+            "Columns": {
+                "Name": "Name",
+                "Actions": "Actions"
+            },
+            "AllGranted": "This {entity} has ALL global privileges.",
+            "Empty": "No global privileges."
+        },
+        "PrivilegeDetails": {
+            "Title": "Privilege details",
+            "AddPrivilege": "Add privilege",
+            "EmptyEntity": "This {entity} has no privilege records.",
+            "EmptyScoped": "No database or table-level privileges.",
+            "Columns": {
+                "Name": "Name"
+            }
+        },
+        "ScopedGrantDialog": {
+            "Title": "Grant scoped privileges",
+            "Description": "Grant privileges for a database, table, or view. Multiple selections allowed.",
+            "Tabs": {
+                "Database": "Database",
+                "Table": "Table",
+                "View": "View"
+            },
+            "DatabaseLabel": "Database",
+            "DatabasePlaceholder": "Select a database",
+            "TableLabel": "Table",
+            "ViewLabel": "View",
+            "ObjectPlaceholderTable": "Select a table",
+            "ObjectPlaceholderView": "Select a view",
+            "PrivilegesLabel": "Privileges (multi-select)"
+        },
+        "ScopedRevokeDialog": {
+            "Title": "Revoke scoped privileges",
+            "Description": "Select privileges to revoke. Multiple selections allowed.",
+            "ObjectLabel": "Object:",
+            "Empty": "No privileges to revoke."
+        },
+        "UserPage": {
+            "Title": "User privileges",
+            "Description": "View and analyze a user's privilege scope.",
+            "Empty": {
+                "NoConnection": "Connect a data source to view user privileges."
+            },
+            "Loading": "Loading privileges...",
+            "LoadFailed": "Unable to load user information.",
+            "Fields": {
+                "DefaultRoles": "Default roles",
+                "GrantedRoles": "Granted roles",
+                "HostRestriction": "Host restriction",
+                "AnyHost": "Any host",
+                "NotConfigured": "Not configured",
+                "AuthType": "Authentication type"
+            }
+        },
+        "RolePage": {
+            "Title": "Role privileges",
+            "Description": "View and manage a role's privilege scope.",
+            "Empty": {
+                "NoConnection": "Connect a data source to view role privileges."
+            },
+            "Loading": "Loading role details...",
+            "LoadFailed": "Unable to load role information.",
+            "Fields": {
+                "GrantedUsers": "Granted users",
+                "GrantedRoles": "Granted roles",
+                "PrivilegeCount": "Privilege count"
+            }
+        }
+    },
+    "Utils": {
+        "FormatType": {
+            "Unknown": "Unknown"
+        },
+        "EnsureConnection": {
+            "MissingConnectionId": "Missing Connection ID",
+            "ConnectionNotFound": "Connection not found or closed"
+        },
+        "SshTunnel": {
+            "Disabled": "SSH tunnel is disabled",
+            "MissingHost": "SSH host is required",
+            "MissingDependency": "SSH dependency is not installed",
+            "MissingPassword": "SSH password is required",
+            "MissingPrivateKey": "SSH private key is required",
+            "MissingAgent": "SSH agent is not available"
+        },
+        "Connection": {
+            "CancelUnsupported": "Canceling queries is not supported for this connection"
+        },
+        "Clickhouse": {
+            "MissingQueryId": "Missing query ID; unable to cancel the query",
+            "NamedParamsOnly": "ClickHouse driver only supports named parameters",
+            "ParseJsonFailedNoResult": "Failed to parse JSON; this may be a DDL/INSERT statement without result sets"
+        }
+    },
+    "Client": {
+        "Errors": {
+            "InvalidRequest": "Invalid request",
+            "InvalidConnection": "Invalid connection",
+            "RequestFailed": "Request failed"
+        },
+        "Pglite": {
+            "DbNotInitialized": "Database not initialized",
+            "UserNotInitialized": "User not initialized",
+            "BrowserOnly": "PGlite only runs in browser",
+            "InvalidInstance": "Invalid PGlite drizzle instance: missing dialect.migrate or session",
+            "MigrationFailed": "[PGlite migrate] Migration failed. The old database will be discarded and a new version will be created."
+        }
+    },
+    "Api": {
+        "Errors": {
+            "BodyParseFailed": "Failed to parse request body",
+            "InvalidParams": "Invalid parameters",
+            "MissingTeamContext": "Missing team context or not authenticated",
+            "InternalError": "Internal server error",
+            "Unauthorized": "Unauthorized"
+        },
+        "Connection": {
+            "Errors": {
+                "Unauthorized": "Unauthorized or insufficient permissions",
+            "FetchCatalogFailed": "Failed to fetch catalog context",
+            "NotFound": "Connection not found or insufficient permissions",
+            "MissingHost": "Connection is missing host information",
+            "MissingConnectionId": "Missing connection ID",
+            "MissingUsername": "Missing username",
+            "MissingIdentity": "No available identity found",
+            "MissingIdentityInfo": "Missing identity information",
+            "MissingPassword": "Missing identity password",
+            "MissingSshPassword": "Missing SSH password",
+            "MissingSshPrivateKey": "Missing SSH private key",
+            "UnsupportedType": "This database type is not supported yet",
+            "ConnectFailed": "Connection failed",
+            "SchemaReadFailed": "Failed to read schema",
+            "TestFailed": "Test connection failed"
+        },
+            "Validation": {
+                "DatabaseRequired": "Database name is required",
+                "TableRequired": "Table name is required"
+            },
+            "Databases": {
+                "Errors": {
+                    "ListFailed": "Failed to fetch databases",
+                    "DetailFailed": "Failed to fetch database details",
+                    "SummaryFailed": "Failed to fetch database summary",
+                    "TablesFailed": "Failed to fetch tables"
+                }
+            },
+            "Tables": {
+                "Errors": {
+                    "ColumnsFailed": "Failed to fetch columns",
+                    "PropertiesFailed": "Failed to fetch table properties",
+                    "StatsFailed": "Failed to fetch table stats",
+                    "DdlFailed": "Failed to fetch table DDL"
+                }
+            }
+        },
+        "SqlConsole": {
+            "Tabs": {
+                "MissingConnectionContext": "Missing connection context",
+                "TabIdMismatch": "tabId does not match state.tabId",
+                "DatabaseNotInitialized": "Database not initialized",
+                "MissingTabId": "Missing tabId"
+            },
+            "SavedQueries": {
+                "NotFound": "Saved query not found or insufficient permissions",
+                "MissingId": "Missing saved query ID"
+            }
+        },
+        "Query": {
+            "Errors": {
+                "MissingConnectionId": "Missing connection ID",
+                "DatabaseNameRequired": "Database name is required",
+                "DatabaseNameTooLong": "Database name is too long",
+                "DatabaseNameInvalid": "Database name format is invalid",
+                "ConnectionFailed": "Failed to connect to database",
+                "TooManyStatements": "At most {max} statements are allowed per request; got {count}",
+                "MissingSessionId": "Missing sessionId; unable to cancel query",
+                "DatasourceNotFound": "Datasource not found or connection closed",
+                "CancelNotSupported": "Current datasource does not support canceling queries"
+            }
+        },
+        "Monitoring": {
+            "Errors": {
+                "QueryFailed": "Query failed"
+            }
+        },
+        "Chat": {
+            "Errors": {
+                "MissingSessionId": "Missing session ID",
+                "SessionNotFound": "Session not found",
+                "FetchSessionFailed": "Failed to fetch session details",
+                "InvalidTitle": "Invalid title",
+                "InvalidMetadata": "Invalid metadata",
+                "MissingUpdatePayload": "Missing update payload",
+                "UpdateSessionFailed": "Failed to update session",
+                "DeleteSessionFailed": "Failed to delete session",
+                "MissingTabId": "Missing tabId",
+                "FetchCopilotSessionFailed": "Failed to fetch Copilot session",
+                "InvalidSessionType": "Invalid session type",
+                "ListSessionsFailed": "Failed to fetch sessions",
+                "CopilotCreationNotAllowed": "Copilot sessions cannot be created via this endpoint",
+                "CreateSessionFailed": "Failed to create session"
+            },
+            "Tools": {
+                "Rag": {
+                    "Description": "Retrieve the most relevant document snippets for the user's question and return context passages for answering."
+                }
+            },
+            "Prompt": {
+                "SchemaContextTitle": "[Current data context]",
+                "DatabaseContextTitle": "[Database context]",
+                "CopilotContextTitle": "[Current Copilot context]"
+            },
+            "ChartBuilder": {
+                "Description": "Return a chart configuration based on the provided data.\n\nUsage:\n1. Specify chartType (bar/line/area/pie).\n2. data is an array of query result rows.\n3. If you are unsure about xKey / yKeys / categoryKey / valueKey, leave them empty and the tool will infer:\n   - Line/area: prefer a time field for x, numeric fields for y.\n   - Bar: prefer a category field for x, numeric fields for y.\n   - Pie: choose one category field as categoryKey and one numeric field as valueKey.\n4. The tool infers time/numeric/category columns and sets options.xKeyType/sortBy when appropriate.",
+                "Errors": {
+                    "DataRequired": "Chart data cannot be empty",
+                    "YKeyRequired": "y-axis field cannot be empty"
+                }
+            },
+            "SqlRunner": {
+                "Description": "A tool to execute read-only SQL queries on ClickHouse / data warehouses.\nUsage:\n- Only accepts a single SELECT / SHOW / DESCRIBE / DESC / EXPLAIN statement; no INSERT/UPDATE/DELETE.\n- For questions about queries, aggregations, reports, or metrics, generate SQL first, call this tool, then answer from results.\n- If schema is unclear, call DESCRIBE or SHOW to explore first.",
+                "SqlRequired": "SQL cannot be empty",
+                "MissingConnection": "Missing database connection info; unable to execute query.",
+                "ReadOnlyOnly": "Only read-only queries are allowed (SELECT/SHOW/DESCRIBE/EXPLAIN). Do not include write or update statements.",
+                "ExecuteFailed": "SQL execution failed"
+            }
+        },
+        "Ai": {
+            "SchemaExplanations": {
+                "InvalidParams": "Invalid request parameters",
+                "Fallback name": "column",
+                "Fallback type": "unknown type",
+                "Fallback summary": "{name}, type: {type}",
+                "Fallback required": "required",
+                "Fallback nullable": "nullable",
+                "Fallback comment": "comment: {comment}",
+                "Fallback separator": "; ",
+                "Fallback default": "{name} column"
+            },
+            "TableStats": {
+                "Suggestions": {
+                    "Healthy": "The table looks healthy overall; no special optimizations needed.",
+                    "Critical": "Priority recommendation: {message}",
+                    "Warn": "Recommendation: {message}",
+                    "Default": "Consider further optimization based on workload patterns."
+                },
+                "Errors": {
+                    "MissingStats": "No table statistics provided.",
+                    "AnalyzeFailed": "Analysis failed."
+                },
+                "Issues": {
+                    "RowCountUnknown": "Row count unknown",
+                    "RowCountSmall": "Small data volume (rows < 1M)",
+                    "RowCountMedium": "Moderate data volume (1M–100M rows)",
+                    "RowCountLarge": "Large data volume (> 100M rows)",
+                    "RowCountHuge": "Very large data volume (> 1B rows)",
+                    "TotalSizeLarge": "Large table disk size (> 50GB)",
+                    "TotalSizeHuge": "Very large table disk size (> 200GB)",
+                    "PartitionTooFew": "Too few partitions for a large table; limited partition pruning",
+                    "PartitionTooMany": "Too many partitions may add metadata overhead",
+                    "PartitionSkewed": "Severe partition skew; one partition holds most data",
+                    "PartsTooMany": "Too many parts; consider merging small files",
+                    "PartsTooManyCritical": "Extremely high part count may hurt queries and merges",
+                    "PartsManySmallTable": "Small table has unusually many parts; possible frequent small writes",
+                    "PartsFewLargeTable": "Large table has few parts; merges look healthy",
+                    "PartSizeTooSmall": "Average part size is too small; many small files",
+                    "PartSizeTooLarge": "Very large part detected; may affect merges and performance",
+                    "PartFragmented": "Part sizes are uneven; fragmentation risk",
+                    "CompressionUnknown": "Compression ratio unknown; cannot evaluate",
+                    "CompressionExcellent": "Excellent compression (ratio < 0.40)",
+                    "CompressionGood": "Good compression (ratio 0.40–0.80)",
+                    "CompressionPoor": "Limited compression (ratio > 0.80); review types/encoding",
+                    "CompressionInconsistent": "Compression stats inconsistent (compressed > uncompressed)",
+                    "TtlConfigured": "TTL lifecycle is configured",
+                    "TtlMissing": "Large table without TTL may accumulate historical data",
+                    "ActiveMutations": "There are {count} active mutations",
+                    "TooManyActiveMutations": "Many active mutations may impact cluster resources",
+                    "StatsInconsistent": "Inconsistent stats detected"
+                },
+                "Details": {
+                    "RowCountMissing": "rowCount missing or cannot be parsed",
+                    "RowCount": "rowCount={rowCount}",
+                    "CompressedSize": "compressedSize≈{size} GB",
+                    "PartitionCount": "rowCount={rowCount}, partitionCount={partitionCount}",
+                    "PartitionOnlyCount": "partitionCount={partitionCount}",
+                    "MaxPartitionRatio": "max partition ratio≈{ratio}%",
+                    "PartCount": "partCount={partCount}",
+                    "RowPartCount": "rowCount={rowCount}, partCount={partCount}",
+                    "PartSizeSmall": "avgPartSize≈{avgSize} MB, partCount={partCount}",
+                    "PartMaxSize": "maxPartSize≈{maxSize} GB",
+                    "PartSizeRatio": "max/avg≈{ratio}",
+                    "CompressionRatio": "compressionRatio={ratio}",
+                    "CompressionBytes": "compressedBytes={compressedBytes}, uncompressedBytes={uncompressedBytes}",
+                    "TtlExpression": "ttl={ttl}",
+                    "ActiveMutations": "activeMutations={count}",
+                    "CompressedBytes": "compressedBytes={compressedBytes}",
+                    "UncompressedBytes": "uncompressedBytes={uncompressedBytes}"
+                }
+            }
+        },
+        "Privileges": {
+            "Errors": {
+                "MissingConnectionId": "Missing connection ID",
+                "NotClickhouse": "Current datasource does not support ClickHouse privilege management",
+                "Fallback": "Operation failed, please try again later",
+                "ConnectionUnavailable": "Current connection is unavailable, please try again later",
+                "UserNotFound": "User not found",
+                "RoleNotFound": "Role not found"
+            },
+            "Users": {
+                "ListFailed": "Failed to fetch users",
+                "NameRequired": "User name is required",
+                "CreateFailed": "Failed to create user",
+                "DetailFailed": "Failed to fetch user details",
+                "UpdateFailed": "Failed to update user",
+                "DeleteFailed": "Failed to delete user",
+                "GrantGlobalFailed": "Failed to grant global privileges",
+                "RevokeGlobalFailed": "Failed to revoke global privileges",
+                "GrantScopedFailed": "Failed to grant scoped privileges",
+                "RevokeScopedFailed": "Failed to revoke scoped privileges"
+            },
+            "Roles": {
+                "ListFailed": "Failed to fetch roles",
+                "NameRequired": "Role name is required",
+                "CreateFailed": "Failed to create role",
+                "DetailFailed": "Failed to fetch role details",
+                "UpdateFailed": "Failed to update role",
+                "DeleteFailed": "Failed to delete role",
+                "GrantGlobalFailed": "Failed to grant global privileges",
+                "RevokeGlobalFailed": "Failed to revoke global privileges",
+                "GrantScopedFailed": "Failed to grant scoped privileges",
+                "RevokeScopedFailed": "Failed to revoke scoped privileges"
+            },
+            "Targets": {
+                "DatabaseRequired": "Database is required",
+                "UnsupportedType": "Unsupported type",
+                "FetchFailed": "Failed to fetch privilege targets"
+            }
+            ,
+            "Clusters": {
+                "FetchFailed": "Failed to fetch cluster metadata"
+            }
+        }
+    },
+    "Ai": {
+        "PromptLanguage": "Respond in English.",
+        "SystemLanguage": {
+            "Auto": "Respond in the user's language.",
+            "En": "Answer in English by default.",
+            "Zh": "Respond in Simplified Chinese by default."
+        },
+        "SchemaExplanations": {
+            "InvalidParams": "Invalid request parameters",
+            "Fallback name": "column",
+            "Fallback type": "unknown type",
+            "Fallback summary": "{name}, type: {type}",
+            "Fallback required": "required",
+            "Fallback nullable": "nullable",
+            "Fallback comment": "comment: {comment}",
+            "Fallback separator": "; ",
+            "Fallback default": "{name} column"
+        },
+        "SchemaTags": {
+            "InvalidParams": "Invalid request parameters",
+            "MissingConnectionContext": "Missing connection context",
+            "MissingTeamIdFallback": "Missing teamId; using local heuristic tags",
+            "Tags": {
+                "PrimaryKey": "primary key",
+                "Identifier": "identifier",
+                "Key": "key",
+                "Time": "time",
+                "Name": "name",
+                "Dimension": "dimension",
+                "Description": "description",
+                "Status": "status",
+                "Type": "type",
+                "Code": "code",
+                "Address": "address",
+                "Amount": "amount",
+                "Metric": "metric",
+                "Geo": "geo",
+                "Contact": "contact",
+                "Network": "network",
+                "Boolean": "boolean",
+                "Enum": "enum",
+                "Array": "array",
+                "Required": "required",
+                "Nullable": "nullable",
+                "Column": "column",
+                "LowCardinality": "low-cardinality",
+                "Json": "json"
+            },
+            "Summary": {
+                "Tags": "Tags: {tags}",
+                "Comment": "Comment: {comment}",
+                "Separator": "; "
+            }
+        },
+        "TableStats": {
+            "Suggestions": {
+                "Healthy": "The table looks healthy overall; no special optimizations needed.",
+                "Critical": "Priority recommendation: {message}",
+                "Warn": "Recommendation: {message}",
+                "Default": "Consider further optimization based on workload patterns."
+            },
+            "Errors": {
+                "MissingStats": "No table statistics provided.",
+                "AnalyzeFailed": "Analysis failed."
+            },
+            "Issues": {
+                "RowCountUnknown": "Row count unknown",
+                "RowCountSmall": "Small data volume (rows < 1M)",
+                "RowCountMedium": "Moderate data volume (1M–100M rows)",
+                "RowCountLarge": "Large data volume (> 100M rows)",
+                "RowCountHuge": "Very large data volume (> 1B rows)",
+                "TotalSizeLarge": "Large table disk size (> 50GB)",
+                "TotalSizeHuge": "Very large table disk size (> 200GB)",
+                "PartitionTooFew": "Too few partitions for a large table; limited partition pruning",
+                "PartitionTooMany": "Too many partitions may add metadata overhead",
+                "PartitionSkewed": "Severe partition skew; one partition holds most data",
+                "PartsTooMany": "Too many parts; consider merging small files",
+                "PartsTooManyCritical": "Extremely high part count may hurt queries and merges",
+                "PartsManySmallTable": "Small table has unusually many parts; possible frequent small writes",
+                "PartsFewLargeTable": "Large table has few parts; merges look healthy",
+                "PartSizeTooSmall": "Average part size is too small; many small files",
+                "PartSizeTooLarge": "Very large part detected; may affect merges and performance",
+                "PartFragmented": "Part sizes are uneven; fragmentation risk",
+                "CompressionUnknown": "Compression ratio unknown; cannot evaluate",
+                "CompressionExcellent": "Excellent compression (ratio < 0.40)",
+                "CompressionGood": "Good compression (ratio 0.40–0.80)",
+                "CompressionPoor": "Limited compression (ratio > 0.80); review types/encoding",
+                "CompressionInconsistent": "Compression stats inconsistent (compressed > uncompressed)",
+                "TtlConfigured": "TTL lifecycle is configured",
+                "TtlMissing": "Large table without TTL may accumulate historical data",
+                "ActiveMutations": "There are {count} active mutations",
+                "TooManyActiveMutations": "Many active mutations may impact cluster resources",
+                "StatsInconsistent": "Inconsistent stats detected"
+            },
+            "Details": {
+                "RowCountMissing": "rowCount missing or cannot be parsed",
+                "RowCount": "rowCount={rowCount}",
+                "CompressedSize": "compressedSize≈{size} GB",
+                "PartitionCount": "rowCount={rowCount}, partitionCount={partitionCount}",
+                "PartitionOnlyCount": "partitionCount={partitionCount}",
+                "MaxPartitionRatio": "max partition ratio≈{ratio}%",
+                "PartCount": "partCount={partCount}",
+                "RowPartCount": "rowCount={rowCount}, partCount={partCount}",
+                "PartSizeSmall": "avgPartSize≈{avgSize} MB, partCount={partCount}",
+                "PartMaxSize": "maxPartSize≈{maxSize} GB",
+                "PartSizeRatio": "max/avg≈{ratio}",
+                "CompressionRatio": "compressionRatio={ratio}",
+                "CompressionBytes": "compressedBytes={compressedBytes}, uncompressedBytes={uncompressedBytes}",
+                "TtlExpression": "ttl={ttl}",
+                "ActiveMutations": "activeMutations={count}",
+                "CompressedBytes": "compressedBytes={compressedBytes}",
+                "UncompressedBytes": "uncompressedBytes={uncompressedBytes}"
+            }
+        }
+    },
+    "DoryUI": {
+        "Select": {
+            "Placeholder": "Select",
+            "Empty": "No matches found",
+            "All": "All",
+            "SearchPlaceholder": "Search..."
+        },
+        "DatabaseSelect": {
+            "All": "All databases",
+            "Placeholder": "Select database",
+            "Empty": "No databases found",
+            "GroupLabel": "Databases"
+        },
+        "DatabaseUserSelect": {
+            "All": "All users",
+            "Placeholder": "Select user",
+            "Empty": "No users found",
+            "GroupLabel": "Users"
+        },
+        "Table": {
+            "Empty": "No data",
+            "Loading": "Loading..."
+        },
+        "Pagination": {
+            "Total": "Total {total} records",
+            "PerPage": "Per page",
+            "PageSizePlaceholder": "Page size",
+            "Records": "records",
+            "First": "First page",
+            "Previous": "Previous page",
+            "Next": "Next page",
+            "Last": "Last page",
+            "PageStatus": "Page {current} / {total}"
+        },
+        "PageHeader": {
+            "Back": "Back"
+        },
+        "AssistantFallback": {
+            "Title": "Response error",
+            "Description": "The assistant did not return usable content. Please try again later or refine your prompt.",
+            "MissingAiEnvTitle": "Missing AI configuration",
+            "MissingAiEnvDescription": "Please set DORY_AI_API_KEY and DORY_AI_URL to enable AI features."
+        },
+        "CodeReview": {
+            "Header": "SQL Preview",
+            "Preview": "Preview",
+            "Diff": "Diff",
+            "Apply": "Apply",
+            "Applied": "Applied"
+        },
+        "CopyButton": {
+            "Copy": "Copy",
+            "Copied": "Copied!"
+        },
+        "SqlResult": {
+            "Title": "SQL",
+            "Actions": {
+                "Run": "Run",
+                "OpenInEditor": "Open in Editor",
+                "DownloadCsv": "Download CSV",
+                "CopyResults": "Copy results",
+                "ResultsCopied": "Results copied!",
+                "More": "More actions"
+            },
+            "Status": {
+                "Success": "Succeeded",
+                "Failed": "Failed"
+            },
+            "FollowUp": {
+                "Button": "Follow up on this result",
+                "Tooltip": "Ask a follow-up based on this result",
+                "ErrorPrompt": "Please analyze and fix this SQL execution error.\\n\\nSQL:\\n{sql}\\n\\nError: {error}{metaLine}",
+                "SuccessPrompt": "Based on this SQL result, continue analyzing and provide further insights or optimization suggestions.\\n\\nSQL:\\n{sql}{metaLine}"
+            },
+            "Copied": "SQL copied!",
+            "Copy": "Copy",
+            "CopyTooltip": "Copy SQL",
+            "ChartTooltip": "Generate a chart from this result",
+            "RunInConsole": "Run in SQL Console",
+            "Collapse": "Collapse result",
+            "Expand": "Expand result",
+            "Meta": {
+                "Database": "Database: {database}",
+                "RowCount": "Rows: {rowCount}",
+                "Duration": "Duration: {durationMs} ms",
+                "Timestamp": "Time: {timestamp}",
+                "Line": "Meta: {meta}",
+                "Separator": ", "
+            },
+            "UnknownError": "Unknown error",
+            "Truncated": "Showing only first {count} rows. Run manually to view full results.",
+            "NoRows": "Query executed but returned no data.",
+            "ExecutionFailed": "Execution failed: {error}",
+            "AutoChart": {
+                "Title": "Auto visualization",
+                "Description": "Auto-generated chart based on query preview"
+            },
+            "ChartUnavailable": "This result cannot be visualized automatically. Please choose manually.",
+            "ColumnPlaceholder": "(column)"
+        },
+        "ChartResult": {
+            "Title": "Chart",
+            "NoData": "No visualization data provided.",
+            "AutoGenerated": "Auto generated",
+            "Meta": {
+                "Series": "{count} series",
+                "Points": "{count} points"
+            },
+            "FollowUp": {
+                "Button": "Follow up on this result",
+                "Title": "Chart title: {title}",
+                "Description": "Description: {description}",
+                "ChartType": "Chart type: {chartType}",
+                "XKey": "X-axis field: {xKey}",
+                "SeriesItem": "{label} (field: {key})",
+                "Separator": ", ",
+                "YKeys": "Y-axis/series fields: {yKeys}",
+                "CategoryKey": "Category field: {categoryKey}",
+                "ValueKey": "Value field: {valueKey}",
+                "AutoGenerated": "This chart was auto-generated.",
+                "Prompt": "Please continue analyzing this chart result, such as trends, anomalies, business implications, and whether further breakdowns or data views are needed."
+            },
+            "Errors": {
+                "MissingAxis": "Missing xKey or yKeys.",
+                "MissingPieKeys": "Missing category or value key.",
+                "UnsupportedType": "Unsupported chart type: {chartType}"
+            },
+            "Collapse": "Collapse chart",
+            "Expand": "Expand chart"
+        },
+        "ModeToggle": {
+            "ToggleTheme": "Toggle theme",
+            "Light": "Light",
+            "Dark": "Dark",
+            "System": "System"
+        },
+        "QueryClient": {
+            "Error": "Something went wrong: {message}"
+        },
+        "LiquidGlassCard": {
+            "Title": "Design by Tanya",
+            "Subtitle": "Product Designer who focuses on simplicity & usability.",
+            "Follow": "Follow"
+        },
+        "Logo": {
+            "AriaLabel": "Dory logo"
+        }
+    },
+    "Database": {
+        "Errors": {
+            "UnsupportedDbType": "Unsupported DB_TYPE: {dbType}",
+            "MissingDatabaseUrl": "DATABASE_URL (or POSTGRES_URL) is required for the postgres provider",
+            "PgliteInvalidInstance": "Invalid PGlite drizzle instance: missing dialect.migrate or session",
+            "PgliteMigrationFailed": "[PGlite migrate] Migration failed. The old database will be discarded and a new version will be created.",
+            "ConnectionFailed": "Database connection failed",
+            "InitFailed": "Database initialization failed. Please check configuration or connection status.",
+            "NotInitialized": "Database not initialized",
+            "ConnectionCreateFailed": "Failed to create connection",
+            "NotTeamMember": "You are not a team member",
+            "NotAdmin": "You do not have admin privileges",
+            "ConnectionIdentityCreateFailed": "Failed to create connection identity",
+            "ConnectionIdentityUpdateFailed": "Failed to update connection identity: record not found or insufficient permissions",
+            "ConnectionDuplicateName": "A connection with the same name already exists",
+            "ConnectionNotFound": "Connection not found or insufficient permissions",
+            "ConnectionIdentityInvalid": "Connection identity information is incomplete",
+            "ConnectionIdentityUpdateRequiresId": "Updating identity requires an id",
+            "ConnectionIdentityMissingId": "Missing identity id",
+            "ConnectionIdentityNameRequired": "Name is required",
+            "ConnectionIdentityUsernameRequired": "Username is required",
+            "SaveQueryFailed": "Failed to save query",
+            "SavedQueryNotFound": "Saved query not found or insufficient permissions",
+            "ChatSessionNotFound": "Session not found",
+            "ChatSessionForbidden": "You do not have access to this session",
+            "ChatSessionArchived": "Session is archived and cannot be modified",
+            "ChatCopilotSessionFailed": "Failed to get or create Copilot session",
+            "ChatGlobalSessionFailed": "Failed to create or get global session",
+            "ChatUpdateSessionNotFound": "Session not found",
+            "ChatInsertMessageFailed": "Failed to write message"
+        },
+        "Logs": {
+            "InitFailed": "Database initialization failed:",
+            "AiSchemaCacheInitFailed": "[postgres] Failed to initialize AI schema cache repository:",
+            "ChatRepoInitFailed": "[postgres] Failed to initialize chat repository:",
+            "QueryAuditWriteFailed": "[pg] Failed to write queryAudit:"
+        }
+    },
+    "ErrorCodes": {
+        "ERROR": "Internal server error",
+        "BAD_REQUEST": "Bad request",
+        "INVALID_PARAMS": "Invalid parameters",
+        "UNAUTHORIZED": "Unauthorized",
+        "FORBIDDEN": "Forbidden",
+        "NOT_FOUND": "Not found",
+        "CONFLICT": "Conflict",
+        "VALIDATION_ERROR": "Validation failed",
+        "DATABASE_ERROR": "Database error",
+        "TIMEOUT": "Request timeout",
+        "Unknown": "Unknown error"
+    },
+    "Routes": {
+        "SQL Console": "SQL Console"
+    }
+}
+    

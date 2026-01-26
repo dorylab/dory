@@ -1,0 +1,33 @@
+# deps / build outputs
+node_modules
+.next
+out
+dist
+.cache
+.turbo
+coverage
+
+# package managers
+.pnpm-store
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# runtime data
+data
+logs
+
+# misc
+.DS_Store
+.git
+*.tgz
+*.zip
+
+# optional: if you never need sourcemaps in image context
+*.map

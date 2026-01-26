@@ -1,0 +1,1934 @@
+{
+    "Common": {
+        "loading": "加载中...",
+        "error": "发生错误",
+        "notFound": "未找到",
+        "backToHome": "返回首页",
+        "ok": "确定",
+        "cancel": "取消",
+        "save": "保存",
+        "edit": "编辑",
+        "delete": "删除",
+        "close": "关闭",
+        "search": "搜索",
+        "refresh": "刷新",
+        "yes": "是",
+        "no": "否",
+        "confirm": "确认",
+        "next": "下一步",
+        "previous": "上一步",
+        "apply": "应用",
+        "settings": "设置",
+        "help": "帮助",
+        "version": "版本",
+        "language": "语言",
+        "username": "用户名",
+        "password": "密码",
+        "login": "登录",
+        "logout": "登出",
+        "welcome": "欢迎",
+        "welcomeMessage": "欢迎使用 OpenDB",
+        "welcomeDescription": "这是一个开源的数据库管理工具，支持多种数据库类型。",
+        "loadingData": "正在加载数据...",
+        "noData": "没有数据",
+        "connectionError": "连接错误",
+        "connectionSuccess": "连接成功",
+        "connectionFailed": "连接失败",
+        "connectionTimeout": "连接超时",
+        "connectionLost": "连接丢失",
+        "connectionClosed": "连接已关闭",
+        "connectionEstablished": "连接已建立",
+        "connectionRefused": "连接被拒绝",
+        "connectionReset": "连接重置",
+        "connectionClosedByServer": "连接被服务器关闭",
+        "connectionErrorDetails": "连接错误详情",
+        "connectionErrorRetry": "连接错误，请重试",
+        "connectionErrorHelp": "如果问题持续存在，请检查你的网络连接或联系管理员。",
+        "connectionErrorSupport": "需要帮助？请联系支持团队。",
+        "connectionErrorContact": "联系支持团队",
+        "connectionErrorSupportEmail": "支持邮箱：support@example.com"
+    },
+    "Auth": {
+        "EmailVerifyRequired": "需要邮箱验证，请先完成验证。",
+        "SignInFailed": "登录失败",
+        "SignUp": {
+            "HasAccount": "已有账号？",
+            "GoToSignIn": "去登录",
+            "BrandName": "Acme Inc.",
+            "Title": "创建账号",
+            "AlreadyHaveAccount": "已有账号？",
+            "SignIn": "去登录",
+            "Name": "姓名",
+            "NamePlaceholder": "你的姓名",
+            "Email": "邮箱",
+            "EmailPlaceholder": "m@example.com",
+            "Password": "密码",
+            "Submitting": "正在注册…",
+            "Submit": "注册",
+            "Or": "或",
+            "ContinueWithApple": "使用 Apple 继续",
+            "ContinueWithGoogle": "使用 Google 继续",
+            "ContinueAgreement": "继续即表示你同意我们的",
+            "Terms": "服务条款",
+            "And": "和",
+            "Privacy": "隐私政策",
+            "VerifyMatchPattern": "未验证|verify|unverified|exists"
+        },
+        "SignIn": {
+            "AuthFailed": "授权失败：{error}",
+            "MissingToken": "未获取到登录 token，请重试",
+            "SuccessRefreshing": "登录成功，正在刷新…",
+            "InvalidCallback": "无效的回调链接，请重试",
+            "GithubStartFailed": "启动 GitHub 登录失败",
+            "LoginFailedRetry": "登录失败，请稍后重试",
+            "NetworkErrorRetry": "网络异常，请稍后重试",
+            "ForgotPasswordEmailRequired": "请先输入邮箱，再点“忘记密码”。",
+            "ResetEmailFailed": "发送重置邮件失败",
+            "ResetEmailSent": "已发送密码重置邮件，请查收邮箱。",
+            "SendFailedRetry": "发送失败，请稍后重试",
+            "Title": "欢迎回来",
+            "Description": "登录你的 Dory 账号",
+            "Email": "邮箱",
+            "EmailPlaceholder": "m@example.com",
+            "Password": "密码",
+            "ForgotPassword": "忘记密码？",
+            "Submitting": "正在登录…",
+            "Submit": "登录",
+            "DemoEnter": "以 Demo 身份进入",
+            "OrContinueWith": "或使用以下方式继续",
+            "LoginWithGithub": "使用 GitHub 登录",
+            "LoginWithGoogle": "使用 Google 登录",
+            "LoginWithMeta": "使用 Meta 登录",
+            "NoAccount": "还没有账号？",
+            "SignUp": "注册",
+            "ContinueAgreement": "继续即表示你同意我们的",
+            "Terms": "服务条款",
+            "And": "和",
+            "Privacy": "隐私政策"
+        },
+        "VerifyEmail": {
+            "ResendFailed": "重发失败，请稍后再试",
+            "Sent": "验证邮件已发送，请前往邮箱查收",
+            "NetworkError": "网络异常，请稍后重试",
+            "Title": "验证你的邮箱",
+            "DescriptionPrefix": "我们已向",
+            "DescriptionSuffix": "发送验证邮件。请前往邮箱点击链接完成验证。",
+            "EmailLabel": "收件邮箱",
+            "Change": "更换",
+            "Hint": "没收到？检查垃圾箱/推广邮件；或稍后点击“重发验证邮件”。",
+            "OpenMailApp": "打开邮箱 App",
+            "ResendCooldown": "重发 ({seconds}s)",
+            "Resend": "重发验证邮件"
+        },
+        "TeamName": "{name}的团队",
+        "TeamDefaultName": "默认",
+        "Emails": {
+            "ResetPassword": {
+                "Subject": "重置你的密码",
+                "Text": "点击链接重置你的密码：{url}"
+            },
+            "VerifyEmail": {
+                "Subject": "验证你的邮箱地址",
+                "Text": "点击链接验证你的邮箱：{url}"
+            }
+        }
+    },
+    "HomePage": {
+        "title": "你好",
+        "about": "关于"
+    },
+    "Connections": {
+        "Connections": "数据源",
+        "All Connections": "全部数据源",
+        "Connecting": "连接中...",
+        "about": "关于",
+        "Search": {
+            "placeholder": "搜索数据源...",
+            "emptyTitle": "未找到匹配的数据源",
+            "emptyDescription": "未找到符合 \"{query}\" 的连接。",
+            "emptyHint": "尝试其他关键词，或清空搜索"
+        },
+        "Empty": {
+            "title": "连接您的数据库",
+            "description": "Dory 是面向 SQL 与 AI 的现代数据工作台，添加连接即可开始探索。",
+            "supportHint": "当前支持 ClickHouse · 更多引擎即将上线",
+            "feature1": "运行 SQL 查询并浏览模式",
+            "feature2": "使用自然语言提问并获取答案",
+            "feature3": "保存结果、图表和洞察以供后续使用",
+            "loadDemo": "加载演示数据"
+        },
+        "Confirm": "确定",
+        "Connected": "已连接",
+        "Disconnected": "未连接",
+        "Unknown": "未知",
+        "Last check": "上次检查：{time}",
+        "Latency": "延迟：{latency}ms",
+        "Refresh Connection": "刷新连接",
+        "title": "数据库连接",
+        "description": "管理你的数据库连接",
+        "Add Connection": "添加连接",
+        "Create Connection": "创建连接",
+        "Connection Name": "连接名称",
+        "Host": "主机",
+        "Port": "端口",
+        "Database": "数据库",
+        "User": "用户",
+        "Password": "密码",
+        "Connect": "连接",
+        "Cancel": "取消",
+        "Delete": "删除",
+        "Test": "测试",
+        "Connection Info": "连接信息",
+        "Authentication Info": "认证信息",
+        "Enable": "启用",
+        "Testing Connection": "测试连接中...",
+        "Saving": "保存中...",
+        "Creating": "创建中...",
+        "Save Changes": "保存修改",
+        "Fix Form Errors Before Testing": "请先修正表单中的错误再测试连接",
+        "Placeholder": "占位",
+        "Missing connection id": "缺少连接 ID",
+        "Connection failed": "连接失败",
+        "Request error": "请求异常",
+        "Connection created": "连接创建成功",
+        "Create connection failed": "创建连接失败",
+        "Connection updated": "连接已更新",
+        "Update connection failed": "更新连接失败",
+        "Connection deleted": "连接已删除",
+        "Delete connection failed": "删除连接失败",
+        "Connection test success": "连接测试成功，版本：{version}",
+        "Connection test failed": "连接测试失败",
+        "Delete Dialog Title": "确定要删除吗？",
+        "Delete Dialog Description": "此操作无法撤销。这将永久删除你的数据源，并从服务器移除其数据。",
+        "Loading connections": "加载连接中...",
+        "No connections yet": "暂无连接",
+        "Connect to": "连接到 {name}",
+        "Unknown host": "未知主机",
+        "Unnamed connection": "未命名连接",
+        "Add connection to get started": "添加一个连接以开始使用",
+        "Identities": "身份",
+        "Default Identity": "默认身份",
+        "Connection name is required": "连接名称是必需的",
+        "Host is required": "主机是必需的",
+        "Close & Edit": "关闭并编辑",
+        "ConnectionContent": {
+            "Create": {
+                "title": "创建连接",
+                "description": "创建一个新的数据库连接"
+            },
+            "Edit": {
+                "title": "编辑连接",
+                "description": "编辑数据库连接"
+            },
+            "Delete": "删除连接",
+            "General": "常规",
+            "Connection Name": "连接名称",
+            "Connection Name Placeholder": "为你的连接取一个友好的名字",
+            "Type": "类型",
+            "Select Database Type": "选择数据库类型",
+            "Host": "主机",
+            "Port": "端口",
+            "HTTP Port": "HTTP 端口",
+            "Database": "数据库",
+            "User": "用户",
+            "Password": "密码",
+            "Database Username": "数据库用户名",
+            "Database Username Placeholder": "例如：readonly_user",
+            "Password Optional": "密码（可选）",
+            "Data Directory": "数据目录",
+            "Database File": "数据库文件",
+            "Select Directory": "请输入数据目录或文件的绝对路径",
+            "Select File": "请输入 .sqlite/.db 文件的绝对路径",
+            "Choose": "选择",
+            "Clear": "清除",
+            "SSH": "SSH",
+            "SSL": "SSL",
+            "Cancel": "取消",
+            "Save": "保存",
+            "TestConnection": "测试连接",
+            "Use SSH tunnel": "使用 SSH 隧道",
+            "Hostname or IP address": "主机名或 IP 地址",
+            "SSH Host": "SSH 主机",
+            "SSH Port": "SSH 端口",
+            "SSH User": "SSH 用户",
+            "Authentication Method": "认证方法",
+            "SSH Password": "SSH 密码",
+            "Private Key": "私钥",
+            "Public Key": "公钥",
+            "Passphrase": "密码",
+            "Private Key Passphrase": "私钥密码",
+            "Private Key Passphrase (optional)": "私钥密码（可选）",
+            "SSH Private Key": "SSH 私钥",
+            "SSH Private Key Placeholder": "粘贴 PEM 格式私钥内容",
+            "Use SSL": "使用 SSL",
+            "Please upload": "请上传你的私钥文件",
+            "Please enter your password": "请输入你的密码"
+        },
+        "Api": {
+            "AddFailed": "新增连接失败",
+            "UpdateRequiresId": "updateConnection 需要 id",
+            "UpdateFailed": "更新连接失败",
+            "ListFailed": "获取连接列表失败",
+            "DeleteFailed": "删除连接失败",
+            "DetailFailed": "获取连接详情失败",
+            "DetailNotFound": "未找到连接详情",
+            "TestFailed": "连接测试失败",
+            "ConnectFailed": "连接失败"
+        }
+    },
+    "SchemaSidebar": {
+        "Select database": "选择数据库",
+        "Search databases": "搜索数据库...",
+        "Databases": "数据库",
+        "No results": "未找到匹配项",
+        "Filter tables": "筛选表",
+        "No matching tables found": "未找到匹配的表",
+        "Collapse": "收起",
+        "Expand": "展开",
+        "Columns": "列",
+        "Insert select for": "插入 {table} 的 SELECT"
+    },
+    "CatalogSchemaSidebar": {
+        "Filter tables or views": "筛选表或视图",
+        "No matching objects found": "未找到匹配的对象",
+        "No matching items": "未找到匹配项",
+        "Tables": "表",
+        "Materialized views": "物化视图",
+        "Views": "视图",
+        "No tables": "暂无表",
+        "No materialized views": "暂无物化视图",
+        "No views": "暂无视图",
+        "Collapse": "收起",
+        "Expand": "展开"
+    },
+    "TableBrowser": {
+        "Tabs": {
+            "overview": "概览",
+            "data": "数据预览",
+            "structure": "结构",
+            "stats": "统计"
+        },
+        "Select table to browse schema": "请选择一张表以浏览其结构。",
+        "Select table tab to browse schema": "请选择一个表标签以浏览其结构。",
+        "Select table to view overview": "请选择一张表查看概览。",
+        "Summary": "摘要",
+        "Updated at": "更新于 {time}",
+        "Regenerate": "重新生成",
+        "Toggle detailed description": "展开/收起详细说明",
+        "Key highlights": "关键亮点",
+        "No highlights yet": "暂无亮点。",
+        "Query snippets": "查询片段",
+        "SQL example": "SQL 示例",
+        "No SQL snippets yet": "暂无 SQL 片段。",
+        "Semantic layer": "语义层",
+        "Semantic metrics": "度量",
+        "Semantic dimensions": "维度",
+        "Semantic time": "时间",
+        "Semantic geo": "地理",
+        "Semantic keys": "主/外键",
+        "Schema overview": "结构概览",
+        "Structure": "结构",
+        "Columns": "字段",
+        "Primary key": "主键",
+        "Partition key": "分区键",
+        "Sorting key": "排序键",
+        "Engine": "引擎",
+        "Data": "数据",
+        "Row count": "行数",
+        "Compressed size": "压缩后大小",
+        "Uncompressed size": "未压缩大小",
+        "Partitions": "分区",
+        "Compression ratio": "压缩比",
+        "No table preview": "暂无表预览",
+        "Loading preview": "加载预览中...",
+        "No data": "没有数据",
+        "Refresh": "刷新",
+        "Failed to load data preview": "加载数据预览失败",
+        "Column name": "名称",
+        "Column type": "类型",
+        "Nullable": "可为空",
+        "Yes": "是",
+        "No": "否",
+        "Default": "默认值",
+        "Comment": "备注",
+        "Tags": "标签",
+        "Search columns": "搜索字段",
+        "No matching columns": "未找到匹配的字段",
+        "No columns found": "未找到字段",
+        "Select table to view columns": "请选择一张表查看字段",
+        "Constraints": "约束",
+        "Defined constraints": "已定义约束",
+        "Unnamed constraint": "未命名约束",
+        "No expression provided": "未提供表达式",
+        "No constraints found": "该表暂无约束",
+        "DDL": "DDL",
+        "DDL not available": "-- 未提供 DDL",
+        "Properties": "属性",
+        "Sampling key": "采样键",
+        "Storage policy": "存储策略",
+        "Fallback summary": "表 {table} 包含 {count} 个字段",
+        "Fallback current table": "当前表",
+        "Fallback unknown count": "若干",
+        "Fallback database": "数据库 {database}",
+        "Fallback example columns": "示例字段：{columns}",
+        "Fallback engine": "引擎 {engine}",
+        "Fallback partition": "分区 {partition}",
+        "Fallback comment": "备注：{comment}",
+        "Fallback summary separator": "，",
+        "Fallback no summary": "暂无表结构摘要",
+        "Fallback detail separator": "。",
+        "Fallback detail engine": "引擎 {engine}，",
+        "Fallback detail partition": "分区键 {partition}，",
+        "Fallback detail sorting": "排序键 {sorting}，",
+        "Fallback detail common queries metrics": "常见查询包含按时间范围过滤并统计数值指标。",
+        "Fallback detail common queries generic": "常见查询包含条件过滤与分页浏览。",
+        "Fallback detail": "{summary}。常见查询包含条件过滤、按时间范围筛选与聚合统计。若有分区或排序键，请在查询条件中使用以获得更好性能。",
+        "Fallback column description": "字段 {name}，类型 {type}{required}",
+        "Fallback unknown type": "未知",
+        "Fallback required": "（必填）",
+        "Fallback snippet title": "快速预览",
+        "Fallback snippet aggregate by dimension": "按维度聚合",
+        "Fallback snippet time range filter": "时间范围过滤",
+        "SemanticMatchers": {
+            "PrimaryKey": "主键",
+            "Identifier": "标识",
+            "Key": "键",
+            "Time": "时间",
+            "Date": "日期",
+            "Timestamp": "时间戳",
+            "Geo": "地理",
+            "Address": "地址",
+            "Metric": "指标",
+            "Amount": "金额",
+            "Measure": "度量",
+            "Numeric": "数值",
+            "Dimension": "维度",
+            "Category": "分类",
+            "Status": "状态",
+            "Label": "标签",
+            "Name": "名称"
+        }
+    },
+    "TableStats": {
+        "No available connection": "未找到可用的数据源连接。",
+        "Select table to view stats": "请选择一张表查看统计信息。",
+        "Failed to load stats": "无法加载表统计信息",
+        "Stats insights": "统计洞察",
+        "Last updated": "（上次更新 {time}）",
+        "Stats insights description": "表的健康状况与分区优化建议。",
+        "Reanalyze": "重新分析",
+        "Insights failed": "AI 洞察生成失败",
+        "Fallback insight 1": "✓ 表共 20,000,000 行，压缩比良好（0.55x）",
+        "Fallback insight 2": "✓ 当前仅 1 个分区，可能影响分区裁剪性能",
+        "Fallback insight 3": "✓ Parts 数量为 2，健康",
+        "Fallback insight 4": "✓ 无活跃 mutation",
+        "Fallback suggestion": "建议：考虑按日期分区以提升按时间过滤的查询性能",
+        "Partitions": "分区",
+        "Partitions description": "活跃分区的行数与大小。",
+        "Partition count": "分区数量",
+        "No active partitions": "暂无活跃分区。",
+        "Rows": "行数",
+        "Compressed": "压缩后",
+        "Uncompressed": "未压缩",
+        "Ratio": "比率：{ratio}",
+        "Rows count": "{count} 行",
+        "Storage health": "存储健康",
+        "Storage health description": "分片大小与进行中的 mutation。",
+        "Part count": "Part 数量",
+        "Avg part size": "平均 Part 大小",
+        "Max part size": "最大 Part 大小",
+        "Active mutations": "活跃 Mutation",
+        "No active mutations": "暂无活跃 mutation。",
+        "Mutation": "Mutation {id}",
+        "Progress percent": "进度：{percent}%",
+        "Progress unknown": "进度：N/A",
+        "Parts progress": "（{done} / {total} 个 part）",
+        "Created at": "创建于 {time}",
+        "Size and rows": "大小与行数",
+        "Size and rows description": "行数与压缩/未压缩大小。",
+        "Row count": "行数",
+        "Data size": "数据大小",
+        "Compressed / Uncompressed": "压缩 / 未压缩",
+        "Compression ratio": "压缩比",
+        "TTL": "TTL",
+        "TTL description": "表的存活时间规则（如已配置）。",
+        "No TTL rule configured": "未配置 TTL 规则。"
+    },
+    "Catalog": {
+        "Catalog": "目录",
+        "Databases": "数据库",
+        "Select database description": "选择一个数据库查看详情。",
+        "Catalog list unsupported": "当前 catalog 暂不支持数据库列表。",
+        "Database count": "{count} 个数据库",
+        "Only default catalog supported": "仅 default catalog 支持数据库列表展示。",
+        "No databases": "暂无数据库数据。",
+        "Open": "打开",
+        "Name": "名称",
+        "Engine": "引擎",
+        "Data size": "数据大小",
+        "Row count": "行数",
+        "Last updated": "最后修改",
+        "Search tables placeholder": "搜索表名 / 注释",
+        "No matching tables": "没有匹配的表",
+        "No tables": "暂无表",
+        "Search views placeholder": "搜索视图名 / 注释",
+        "No matching views": "没有匹配的视图",
+        "No views": "暂无视图",
+        "Search materialized views placeholder": "搜索物化视图名 / 注释",
+        "No matching materialized views": "没有匹配的物化视图",
+        "No materialized views": "暂无物化视图",
+        "Failed to fetch tables": "获取表列表失败",
+        "Failed to fetch views": "获取视图列表失败",
+        "Failed to fetch materialized views": "获取物化视图列表失败",
+        "Tabs": {
+            "summary": "概览",
+            "tables": "表",
+            "views": "视图",
+            "materialized-views": "物化视图"
+        }
+    },
+    "CatalogSummary": {
+        "Null tooltip": "该数据源暂不可用/权限不足/估算值",
+        "Summary placeholder": "纽约出租车数据集，聚焦行程、费用和乘客层级分析。",
+        "Unknown engine": "未知",
+        "Updated": "更新于",
+        "Open table": "打开表",
+        "Size": "大小",
+        "Rows": "行数",
+        "Failed to fetch summary": "获取概览失败",
+        "Summary unavailable": "概览数据暂不可用。",
+        "Failed to save summary": "保存概览失败",
+        "Failed to save summary note": "保存概览备注失败。",
+        "Database Summary": "数据库概览",
+        "Summary unavailable description": "概览数据暂时不可用。",
+        "Failed to load summary": "无法加载概览",
+        "Retry": "重试",
+        "Database summary description": "当前数据库的身份、规模与活跃度概览。",
+        "Identity": "身份",
+        "Database": "数据库",
+        "Catalog": "目录",
+        "Schema": "Schema",
+        "Engine": "引擎",
+        "Cluster / Endpoint": "集群 / 终端",
+        "Size & Activity": "规模与活跃度",
+        "Tables": "表",
+        "Views": "视图",
+        "Materialized Views": "物化视图",
+        "Total Size": "总大小",
+        "Rows (est)": "行数（估计）",
+        "Last Updated": "最后更新",
+        "Last Queried": "最近查询",
+        "One-line summary": "一句话概览",
+        "Edit": "编辑",
+        "Saving": "保存中...",
+        "Save": "保存",
+        "Cancel": "取消",
+        "Top by Size": "按大小排行",
+        "Top by Size description": "按存储大小排序的最大表。",
+        "Top by Rows": "按行数排行",
+        "Top by Rows description": "按估算行数排序的最大表。",
+        "Recently Updated": "最近更新",
+        "Recently Updated description": "最近发生变更的表。",
+        "No tables found": "未找到表。",
+        "Create or Import": "创建或导入"
+    },
+    "Chatbot": {
+        "Close": "关闭",
+        "EmptyState": "请选择一个会话或创建新的会话。",
+        "Typing": "正在生成",
+        "Input": {
+            "GlobalPlaceholder": "@ 选中表进行数据库问答，Shift + Enter 换行",
+            "CopilotPlaceholder": "问这段 SQL / 让 AI 修复或改写，Shift + Enter 换行",
+            "SentWithAttachments": "已发送附件"
+        },
+        "Sessions": {
+            "Title": "会话列表",
+            "SelectPlaceholder": "选择会话",
+            "Empty": "暂无会话，点击右侧按钮开始新对话。",
+            "New": "新建会话",
+            "Refresh": "刷新会话列表",
+            "Rename": "重命名",
+            "Delete": "删除",
+            "RenamePlaceholder": "请输入新的会话名称",
+            "Untitled": "未命名会话",
+            "DefaultRename": "新对话",
+            "DeleteDialogTitle": "删除会话",
+            "DeleteDialogDescription": "确认删除 \"{title}\"？删除后该会话及其消息无法恢复。",
+            "Cancel": "取消",
+            "ConfirmDelete": "删除",
+            "DeleteSuccess": "删除成功",
+            "CopilotAutoCreate": "Copilot 会话随当前 Tab 自动创建"
+        },
+        "Errors": {
+            "FetchSessions": "获取会话列表失败",
+            "FetchSessionDetail": "获取会话详情失败",
+            "FetchCopilotSession": "获取 Copilot 会话失败",
+            "CreateSession": "创建会话失败",
+            "RenameSession": "重命名失败",
+            "DeleteSession": "删除会话失败",
+            "SessionNotFoundRename": "未找到会话，无法重命名",
+            "SessionNotFoundDelete": "未找到会话，无法删除",
+            "SessionNameRequired": "会话名称不能为空",
+            "CopilotRenameUnsupported": "Copilot 会话不支持重命名",
+            "CopilotDeleteUnsupported": "Copilot 会话不支持删除（随 Tab 自动管理）",
+            "CreateCopilotSession": "创建 Copilot 会话失败",
+            "SessionNotSelected": "未选择会话",
+            "RequestFailed": "请求失败",
+            "SendFailed": "发送失败",
+            "SqlExecutionFailed": "执行 SQL 失败",
+            "ToolErrorUnknown": "未知工具错误",
+            "UnknownTool": "未知工具",
+            "CopySqlFailed": "复制 SQL 失败",
+            "CacheSqlFailed": "缓存 SQL 到本地失败"
+        },
+        "Tools": {
+            "Call": "调用工具：{name}",
+            "Failed": "工具执行失败",
+            "ResultRaw": "工具返回（Raw）",
+            "ToolLabel": "工具",
+            "MessageLabel": "消息",
+            "ReplaceSql": "替换 SQL",
+            "NewTab": "新建 Tab"
+        },
+        "Actions": {
+            "Copy": "复制",
+            "Retry": "重试"
+        },
+        "TableSelect": {
+            "SelectDatabaseFirst": "请先选择数据库",
+            "SelectTable": "选择表",
+            "SearchTables": "搜索表...",
+            "NoMatches": "未找到匹配表",
+            "GroupHeading": "表"
+        },
+        "TableMention": {
+            "Heading": "表名"
+        }
+    },
+    "Monitoring": {
+        "Tabs": {
+            "Overview": "概览",
+            "QueryLogs": "查询日志",
+            "SlowQueries": "慢查询",
+            "ErrorQueries": "错误查询"
+        },
+        "Summary": {
+            "TotalQueries": "总查询数",
+            "SlowQueries": "慢查询",
+            "ErrorQueries": "错误查询",
+            "ActiveUsers": "活跃用户数",
+            "SlowThreshold": "耗时 ≥ {threshold} ms",
+            "ErrorQueriesDescription": "执行失败的查询"
+        },
+        "TimeRange": {
+            "1h": "最近 1 小时",
+            "6h": "最近 6 小时",
+            "24h": "最近 24 小时",
+            "7d": "最近 7 天"
+        },
+        "Filters": {
+            "QueryTypePlaceholder": "查询类型",
+            "QueryTypeAll": "全部类型",
+            "QueryTypeOther": "其它",
+            "DynamicThreshold": "动态阈值",
+            "FixedThreshold": "固定阈值",
+            "DynamicThresholdHelp": "使用最近查询的 p95 作为慢查询阈值",
+            "DynamicThresholdCurrent": "当前约 {value} ms",
+            "DurationAtLeast": "耗时 ≥"
+        },
+        "Actions": {
+            "Reset": "重置",
+            "Apply": "查询",
+            "Close": "关闭"
+        },
+        "Empty": {
+            "NoData": "暂无数据",
+            "NoQueries": "暂无查询数据",
+            "NoSlowQueries": "暂无慢查询",
+            "NoErrorQueries": "暂无错误查询"
+        },
+        "Columns": {
+            "QueryId": "Query ID",
+            "Time": "时间",
+            "Duration": "耗时",
+            "User": "用户",
+            "Database": "数据库",
+            "ReadRowsBytes": "读取行 / 字节",
+            "ReadRows": "读取行数",
+            "ReadBytes": "读取字节",
+            "WrittenBytes": "写入字节",
+            "MemoryUsage": "内存使用",
+            "Sql": "SQL",
+            "ErrorMessage": "错误信息",
+            "IP": "IP"
+        },
+        "Common": {
+            "EmptyValue": "—",
+            "DurationMs": "{value} ms",
+            "ReadRows": "{value} 行",
+            "DbPrefix": "数据库：{value}",
+            "Error": "错误"
+        },
+        "Units": {
+            "Milliseconds": "ms",
+            "MsTick": "{value} ms"
+        },
+        "Charts": {
+            "P50Duration": "P50 耗时",
+            "P95Duration": "P95 耗时",
+            "QPM": "QPM",
+            "ErrorCount": "错误次数",
+            "SlowQueries": "慢查询",
+            "QueryLatencyTitle": "查询耗时",
+            "QueryLatencyDescription": "查询耗时趋势（P50 / P95）",
+            "QueryThroughputTitle": "查询吞吐",
+            "QueryThroughputDescription": "QPM（每分钟查询量）趋势",
+            "ErrorCountTitle": "错误次数",
+            "ErrorCountDescription": "错误请求次数趋势",
+            "SlowQueriesTitle": "慢查询次数",
+            "SlowQueriesDescription": "慢查询次数趋势",
+            "Both": "全部"
+        },
+        "RecentQueries": {
+            "Title": "最近查询",
+            "Description": "最近执行的查询（随筛选条件变化）",
+            "ViewAll": "查看全部"
+        },
+        "SqlDetails": {
+            "Title": "SQL 详情"
+        },
+        "Errors": {
+            "RequestFailed": "请求失败",
+            "FetchUsers": "获取用户列表失败",
+            "FetchDatabases": "获取数据库列表失败"
+        }
+    },
+    "SqlConsole": {
+        "Layout": {
+            "InitFailed": "本地数据库初始化失败"
+        },
+        "Errors": {
+            "InvalidSessionData": "会话数据无效",
+            "QueryCanceled": "查询已取消",
+            "ChatHandoffReadFailed": "读取聊天 SQL 失败",
+            "ExecuteFailed": "执行失败",
+            "AiFix": "AI 修复"
+        },
+        "Tabs": {
+            "NewQuery": "新查询",
+            "UntitledQuery": "未命名查询",
+            "ChatQuery": "聊天查询",
+            "Rename": "重命名",
+            "GenerateAiTitle": "生成 AI 标题",
+            "Close": "关闭",
+            "CloseOthers": "关闭其他",
+            "NoActiveTab": "没有活动标签",
+            "CloseTabAria": "关闭标签页",
+            "AddTabAria": "新建标签页",
+            "RenameDialogTitle": "重命名标签页",
+            "RenameDialogDescription": "输入新的标签页名称。",
+            "RenamePlaceholder": "标签页名称"
+        },
+        "Actions": {
+            "Cancel": "取消",
+            "Save": "保存",
+            "Apply": "应用",
+            "Reset": "重置",
+            "ResetDefault": "恢复默认",
+            "Close": "关闭"
+        },
+        "Empty": {
+            "Brand": "SQL 控制台",
+            "ShortcutRunSelection": "运行选中内容：Cmd/Ctrl+Enter",
+            "ShortcutSave": "保存 SQL：Cmd/Ctrl+S",
+            "ShortcutNewTab": "新建标签页：Cmd/Ctrl+T",
+            "ShortcutToggleCopilot": "切换 Copilot：Cmd/Ctrl+K",
+            "ShortcutFormat": "格式化 SQL：Shift+Cmd/Ctrl+F",
+            "NewConsole": "新建控制台"
+        },
+        "Editor": {
+            "NoActiveTab": "没有活动标签",
+            "NotSqlTab": "当前标签不是 SQL 编辑器",
+            "Completion": {
+                "Keyword": "关键字",
+                "Table": "表",
+                "Database": "数据库",
+                "Column": "{table} 列"
+            }
+        },
+        "ContextMenu": {
+            "Copy": "复制",
+            "Paste": "粘贴",
+            "Cut": "剪贴",
+            "FormatGroup": "格式化",
+            "Format": "格式化 SQL",
+            "ToggleCase": "大小写切换",
+            "ExecuteSelection": "执行选中",
+            "ExecuteSQL": "执行 SQL"
+        },
+        "Copilot": {
+            "Errors": {
+                "NoActiveTab": "没有活动标签",
+                "NotSqlTab": "当前标签不是 SQL",
+                "ActionFailed": "操作失败",
+                "UnknownAction": "未知的操作意图：{intent}",
+                "RequiresError": "该操作需要一次执行错误",
+                "NotApplicable": "当前上下文不适用",
+                "UnsupportedSurface": "仅支持 SQL 场景",
+                "InvalidRequest": "无效的请求体",
+                "InternalError": "服务器内部错误",
+                "MissingAiEnv": "缺少 AI 配置，请设置 DORY_AI_API_KEY 和 DORY_AI_URL。"
+            },
+            "Success": {
+                "ReplaceSql": "已替换 SQL",
+                "NewTab": "已创建新标签页"
+            },
+            "NewTabTitle": "AI 查询",
+            "ToggleOpen": "打开 AI 面板",
+            "ToggleClose": "关闭 AI 面板",
+            "ToggleAria": "切换 AI 面板",
+            "ToggleLabel": "AI",
+            "Context": {
+                "SqlTitle": "SQL 上下文",
+                "SqlLabel": "SQL",
+                "SqlEmpty": "暂无 SQL",
+                "SelectionLabel": "选中内容",
+                "None": "无",
+                "CopyLabel": "复制{label}",
+                "InferredTitle": "推断上下文",
+                "DatabaseLabel": "数据库",
+                "TablesLabel": "表",
+                "ConfidenceLabel": "置信度",
+                "EmptyValue": "—",
+                "TableFactsTitle": "表信息",
+                "RowCountLabel": "行数",
+                "PrimaryKeyLabel": "主键",
+                "TableLabel": "表",
+                "RawCopilot": "Copilot 原始上下文",
+                "RawBundle": "原始上下文包",
+                "CopyJson": "复制 JSON",
+                "NotReady": "上下文尚未就绪"
+            },
+            "Action": {
+                "SqlPreview": "SQL 预览",
+                "ResultTitle": "结果",
+                "RunningWithTitle": "运行中：{title}",
+                "Running": "运行中",
+                "UndoApply": "撤销应用",
+                "EmptyResult": "无结果",
+                "Apply": "应用",
+                "Copy": "复制"
+            },
+            "Actions": {
+                "Title": "操作",
+                "Empty": "暂无操作",
+                "RequiresLastRun": "需要最近一次运行",
+                "RequiresError": "需要一次执行错误",
+                "NotApplicable": "当前上下文不适用",
+                "NoExecutionInfo": "没有执行信息",
+                "RunFailed": "运行失败",
+                "MissingAiEnv": "缺少 AI 配置，请设置 DORY_AI_API_KEY 和 DORY_AI_URL。"
+            },
+            "QuickActions": {
+                "FixSqlError": {
+                    "Title": "修复 SQL 错误",
+                    "Description": "检查语法 / 字段 / 函数"
+                },
+                "OptimizePerformance": {
+                    "Title": "性能优化",
+                    "Description": "减少全表扫描 / 精简过滤"
+                },
+                "RewriteSql": {
+                    "Title": "改写 SQL",
+                    "Description": "提升可读性 / 结构化"
+                },
+                "ToAggregation": {
+                    "Title": "转换为聚合",
+                    "Description": "生成按维度汇总的 SQL"
+                }
+            },
+            "ActionResults": {
+                "FixSqlError": {
+                    "MissingErrorTitle": "缺少错误信息",
+                    "MissingErrorDescription": "当前没有检测到 SQL 执行错误，无法进行修复。",
+                    "FailedTitle": "自动修复失败",
+                    "FailedDescription": "未能生成可靠的修复结果：{message}",
+                    "MissingAliasTitle": "为缺失别名的表补充 alias",
+                    "MissingAliasDescription": "错误提示引用了表表达式标识符 \"{ident}\"。尝试为 FROM 中的 \"{ident}\" 补充别名 \"{alias}\"，以匹配后续引用。"
+                },
+                "OptimizePerformance": {
+                    "MissingSqlTitle": "缺少可优化的 SQL",
+                    "MissingSqlDescription": "当前没有可用的 SQL 文本，无法进行性能优化。",
+                    "FailedTitle": "自动优化失败",
+                    "FailedDescription": "未能生成可靠的优化方案：{message}"
+                },
+                "RewriteSql": {
+                    "MissingSqlTitle": "缺少可改写的 SQL",
+                    "MissingSqlDescription": "当前没有可用的 SQL 文本，无法进行改写。",
+                    "FailedTitle": "自动改写失败",
+                    "FailedDescription": "未能生成可靠的改写结果：{message}"
+                },
+                "ToAggregation": {
+                    "MissingSqlTitle": "缺少可聚合的 SQL",
+                    "MissingSqlDescription": "当前没有可用的 SQL 文本，无法生成聚合版查询。",
+                    "FailedTitle": "生成聚合查询失败",
+                    "FailedDescription": "未能生成可靠的聚合版本：{message}"
+                }
+            },
+            "Ask": {
+                "ActionLabels": {
+                    "FixSql": "修复 SQL",
+                    "Optimize": "优化",
+                    "Rewrite": "重写",
+                    "ToAggregation": "转换为聚合",
+                    "Default": "询问 Copilot"
+                },
+                "AppliedLabel": "已应用：{action}",
+                "AppliedDescription": "SQL 已更新到编辑器。",
+                "GoToActions": "前往操作"
+            },
+            "Panel": {
+                "NoSqlTab": "请选择 SQL 标签以使用 Copilot。",
+                "UnsupportedTab": "Copilot 不支持 {type} 标签。",
+                "TabAsk": "提问",
+                "TabAction": "操作",
+                "TabContext": "上下文"
+            }
+        },
+        "SavedQueries": {
+            "LoadFailed": "加载保存的查询失败",
+            "Loading": "正在加载保存的查询...",
+            "Empty": "暂无保存的查询",
+            "Title": "保存的查询",
+            "SearchPlaceholder": "搜索保存的查询",
+            "SearchEmpty": "未找到匹配的查询",
+            "MoreActions": "更多操作",
+            "Rename": "重命名",
+            "RenameTitle": "重命名查询",
+            "RenamePlaceholder": "输入新名称",
+            "Delete": "删除",
+            "Cancel": "取消",
+            "Save": "保存",
+            "Saving": "保存中...",
+            "OverrideTitle": "替换当前查询？",
+            "OverrideDescription": "这将替换当前标签页中的 SQL。",
+            "Override": "替换"
+        },
+        "SaveQuery": {
+            "Title": "保存 SQL",
+            "NameLabel": "名称",
+            "NamePlaceholder": "查询名称",
+            "DescriptionLabel": "描述",
+            "DescriptionPlaceholder": "添加描述（可选）",
+            "Saving": "保存中...",
+            "Success": "已保存",
+            "Errors": {
+                "SqlRequired": "SQL 不能为空",
+                "TitleRequired": "名称不能为空",
+                "SaveFailed": "保存 SQL 失败"
+            }
+        },
+        "Settings": {
+            "Title": "结果设置",
+            "Description": "配置结果展示",
+            "DebugMode": "调试模式",
+            "DebugHint": "在结果页脚显示调试信息",
+            "RowBudgetLabel": "行数预算",
+            "RowsTitle": "行数：{value}",
+            "RowBudgetHint": "限制 UI 渲染行数以提升性能。"
+        },
+        "ResultStatus": {
+            "Running": "运行中",
+            "Displaying": "显示中",
+            "Failed": "失败",
+            "Finished": "完成",
+            "ExecMs": "执行耗时：{value} ms",
+            "LimitNotice": "限制：{value}",
+            "Returned": "返回：{value}",
+            "Affected": "影响：{value}",
+            "Shown": "显示：{value}",
+            "LimitSuffix": " / 限制 {value}",
+            "Truncated": "已截断",
+            "SqlPreviewLabel": "SQL 预览",
+            "SqlPreviewAria": "显示 SQL 预览"
+        },
+        "Results": {
+            "SelectTab": "请选择标签查看结果",
+            "RunQueryFirst": "请先运行查询",
+            "NoResults": "无结果",
+            "Overview": "概览",
+            "ResultTab": "结果 {index}",
+            "WaitingForResults": "等待结果中...",
+            "DownloadCsvTitle": "下载 CSV"
+        },
+        "Overview": {
+            "Status": "状态",
+            "Sql": "SQL",
+            "Message": "消息",
+            "Duration": "耗时",
+            "Rows": "行数",
+            "Empty": "无结果",
+            "StatusRunning": "运行中",
+            "StatusSuccess": "成功",
+            "StatusError": "错误",
+            "StatusCanceled": "已取消",
+            "DurationMs": "{value} ms",
+            "RowsAffected": "{value} 行",
+            "ViewResult": "查看结果",
+            "OpenResult": "打开结果",
+            "CopySql": "复制 SQL",
+            "CopyError": "复制错误"
+        },
+        "Common": {
+            "NotAvailable": "—",
+            "EmptyValue": "—",
+            "Error": "错误"
+        },
+        "ResultMeta": {
+            "RowsReturned": "返回 {value} 行",
+            "RowsAffected": "影响 {value} 行",
+            "AriaLabel": "结果集 {index}",
+            "Title": "结果 {index}（{status}）",
+            "Started": "开始",
+            "Finished": "结束",
+            "Scan": "扫描",
+            "Cache": "缓存",
+            "CacheHit": "命中",
+            "CacheMiss": "未命中",
+            "Source": "来源",
+            "Truncated": "已截断",
+            "CopyTitle": "复制元信息",
+            "Copied": "已复制",
+            "CopyMeta": "复制元信息"
+        },
+        "Toolbar": {
+            "RunSelected": "运行选中",
+            "Run": "运行",
+            "Limit": "限制",
+            "Saved": "已保存",
+            "SaveSql": "保存 SQL",
+            "Stop": "停止"
+        },
+        "Sidebar": {
+            "Tables": "表",
+            "SavedQueries": "保存的查询"
+        },
+        "VTable": {
+            "Header": {
+                "RowNumberTitle": "行号"
+            },
+            "RowIndexHint": "点击单选；Shift 连选；Cmd/Ctrl+C 复制选中行；右键打开菜单",
+            "Filter": {
+                "EditHint": "点击编辑筛选",
+                "CaseSensitiveSuffix": "（区分大小写）",
+                "RemoveAria": "移除筛选",
+                "RemoveTitle": "移除",
+                "ClearAll": "清除全部筛选",
+                "Title": "列筛选",
+                "TitleWithColumn": "列筛选：{column}",
+                "Remove": "移除",
+                "Operator": "操作符",
+                "Value": "值",
+                "PlaceholderDate": "选择或输入日期",
+                "PlaceholderText": "输入筛选值",
+                "CaseSensitive": "区分大小写",
+                "Cancel": "取消",
+                "Apply": "应用",
+                "Op": {
+                    "IsTrue": "为真",
+                    "IsFalse": "为假",
+                    "On": "等于（当天）",
+                    "Before": "早于",
+                    "After": "晚于",
+                    "Empty": "为空",
+                    "NotEmpty": "非空",
+                    "Contains": "包含",
+                    "Equals": "等于",
+                    "StartsWith": "开头为",
+                    "EndsWith": "结尾为",
+                    "Regex": "正则"
+                }
+            },
+            "Context": {
+                "ViewCell": "查看单元格",
+                "ViewRowDetails": "查看行详情",
+                "Copy": "复制",
+                "CopyWithHeaders": "复制（含表头）",
+                "FilterByValue": "按此值筛选",
+                "DownloadCsv": "下载 CSV"
+            },
+            "Search": {
+                "FilteredTotalAria": "筛选 / 总数",
+                "Placeholder": "搜索（Ctrl/Cmd+F 聚焦）",
+                "ClearAria": "清除搜索"
+            },
+            "Inspector": {
+                "ResizeTitle": "拖动调整宽度",
+                "TitleCell": "单元格检查",
+                "TitleRow": "行详情",
+                "CopyJson": "复制 JSON",
+                "CopiedJson": "已复制 JSON！",
+                "CopyRow": "复制行",
+                "CopiedRow": "已复制行！",
+                "Close": "关闭",
+                "RowWithColumn": "第 {row} 行 · {column}",
+                "RowOnly": "第 {row} 行",
+                "ViewJson": "查看 JSON",
+                "ViewTable": "查看表格",
+                "FilterPlaceholder": "筛选字段..."
+            }
+        },
+        "Debug": {
+            "Duration": "耗时",
+            "Started": "开始",
+            "Finished": "结束",
+            "Cache": "缓存",
+            "CacheHit": "命中",
+            "CacheMiss": "未命中",
+            "Source": "来源",
+            "Scanned": "扫描：{rows} 行 / {bytes}",
+            "Truncated": "已截断（前 {count} 行）",
+            "Status": "状态",
+            "Session": "会话",
+            "Set": "结果集",
+            "Rows": "行数",
+            "StorageKey": "存储键",
+            "CopyMetaTitle": "复制调试信息",
+            "CopyMeta": "复制元信息"
+        },
+        "JsonPreview": {
+            "Truncated": "/* 为性能截断 */",
+            "RenderFailed": "// JSON 渲染失败"
+        }
+    },
+    "Privileges": {
+        "Title": "权限管理",
+        "Description": "管理 ClickHouse 用户与角色，配置访问权限。",
+        "Tabs": {
+            "Users": "用户",
+            "Roles": "角色"
+        },
+        "Empty": {
+            "NoConnection": "请先连接一个数据源以管理权限。"
+        },
+        "Actions": {
+            "Add": "添加",
+            "Edit": "编辑",
+            "Delete": "删除",
+            "Create": "创建",
+            "SaveChanges": "保存更改",
+            "Cancel": "取消",
+            "Confirm": "确定",
+            "ConfirmDelete": "确认删除",
+            "Revoke": "撤销",
+            "BackToList": "返回列表"
+        },
+        "Common": {
+            "EmptyValue": "—"
+        },
+        "Labels": {
+            "User": "用户",
+            "Role": "角色"
+        },
+        "Dialogs": {
+            "DeleteUser": {
+                "Title": "确认删除",
+                "Description": "将删除用户 {name}，该操作不可撤销。"
+            },
+            "DeleteRole": {
+                "Title": "确认删除",
+                "Description": "将删除角色 {name}，该操作不可撤销。"
+            }
+        },
+        "Errors": {
+            "FetchUsers": "获取用户列表失败",
+            "FetchRoles": "获取角色列表失败",
+            "FetchClusters": "获取集群信息失败",
+            "FetchUser": "获取用户失败",
+            "FetchRole": "获取角色失败",
+            "CreateUser": "创建用户失败",
+            "UpdateUser": "更新用户失败",
+            "DeleteUser": "删除用户失败",
+            "CreateRole": "创建角色失败",
+            "UpdateRole": "更新角色失败",
+            "DeleteRole": "删除角色失败",
+            "GrantGlobalFailed": "添加全局权限失败",
+            "RevokeGlobalFailed": "撤销全局权限失败",
+            "GrantScopedFailed": "权限授予失败",
+            "RevokeScopedFailed": "权限撤销失败",
+            "UserNotSpecified": "未指定用户",
+            "RoleNotSpecified": "未指定角色"
+        },
+        "Toasts": {
+            "UserCreated": "用户创建成功",
+            "UserCreateFailed": "用户创建失败",
+            "UserUpdated": "用户更新成功",
+            "UserUpdateFailed": "用户更新失败",
+            "UserDeleted": "用户已删除",
+            "UserDeleteFailed": "删除用户失败",
+            "RoleCreated": "角色创建成功",
+            "RoleCreateFailed": "角色创建失败",
+            "RoleUpdated": "角色更新成功",
+            "RoleUpdateFailed": "角色更新失败",
+            "RoleDeleted": "角色已删除",
+            "RoleDeleteFailed": "删除角色失败",
+            "FetchDatabasesFailed": "获取数据库列表失败",
+            "FetchTablesFailed": "获取数据表失败",
+            "FetchViewsFailed": "获取视图失败",
+            "GlobalGranted": "全局权限添加成功",
+            "GlobalGrantFailed": "添加全局权限失败",
+            "GlobalRevoked": "全局权限已撤销",
+            "GlobalRevokeFailed": "撤销全局权限失败",
+            "ScopedGranted": "权限授予成功",
+            "ScopedGrantFailed": "权限授予失败",
+            "ScopedRevoked": "权限撤销成功",
+            "ScopedRevokeFailed": "权限撤销失败",
+            "SelectDatabase": "请选择数据库",
+            "SelectObject": "请选择对象"
+        },
+        "Users": {
+            "Title": "用户",
+            "Add": "添加用户",
+            "Loading": "加载用户中...",
+            "Empty": "暂无用户",
+            "Columns": {
+                "UserName": "用户名",
+                "DefaultRole": "默认角色",
+                "GrantedRoles": "授权角色",
+                "Actions": "操作"
+            }
+        },
+        "Roles": {
+            "Title": "角色",
+            "Add": "添加角色",
+            "Loading": "加载角色中...",
+            "Empty": "暂无角色",
+            "Columns": {
+                "RoleName": "角色名称",
+                "PrivilegeCount": "权限数量",
+                "GrantedUsers": "授予用户",
+                "Actions": "操作"
+            }
+        },
+        "UserDialog": {
+            "CreateTitle": "创建用户",
+            "EditTitle": "编辑用户 {name}",
+            "NameLabel": "用户名",
+            "NamePlaceholder": "例如 readonly_user",
+            "PasswordLabel": "密码",
+            "PasswordPlaceholderCreate": "留空创建无密码用户",
+            "PasswordPlaceholderEdit": "留空将移除密码",
+            "PasswordHintCreate": "可选项，不填写则创建无密码用户。",
+            "PasswordHintEdit": "填写以更新密码，清空后提交将移除密码。",
+            "AllowedHostsLabel": "允许的主机",
+            "AllowedHostsPlaceholder": "多个主机使用逗号或换行分隔，留空表示允许任意主机访问。",
+            "RolesLabel": "授予角色",
+            "RolesPlaceholder": "选择授予的角色",
+            "RolesSearchPlaceholder": "搜索角色...",
+            "RolesEmpty": "未找到匹配角色",
+            "DefaultRoleLabel": "默认角色",
+            "DefaultRolePlaceholder": "选择默认角色（可选）",
+            "DefaultRoleNone": "无默认角色",
+            "OnClusterLabel": "On cluster",
+            "OnClusterDescription": "将操作应用到选定的集群。",
+            "ClusterLabel": "集群",
+            "ClusterPlaceholder": "选择一个集群",
+            "ClusterDescription": "选择用于执行 ON CLUSTER 的集群。",
+            "ClusterLoading": "正在加载集群...",
+            "ClusterMissing": "未检测到集群配置，已退回 This node",
+            "Errors": {
+                "NameRequired": "请输入用户名"
+            }
+        },
+        "RoleDialog": {
+            "CreateTitle": "创建角色",
+            "EditTitle": "编辑角色 {name}",
+            "NameLabel": "角色名称",
+            "NamePlaceholder": "例如 readonly",
+            "OnClusterLabel": "On cluster",
+            "OnClusterDescription": "将操作应用到选定的集群。",
+            "ClusterLabel": "集群",
+            "ClusterPlaceholder": "选择一个集群",
+            "ClusterDescription": "选择用于执行 ON CLUSTER 的集群。",
+            "ClusterLoading": "正在加载集群...",
+            "ClusterMissing": "未检测到集群配置，已退回 This node",
+            "Errors": {
+                "NameRequired": "请输入角色名称"
+            }
+        },
+        "GlobalGrantDialog": {
+            "Title": "添加全局权限",
+            "Description": "选择要授予该{entity}的 Global 权限，可多选。",
+            "Empty": "暂无可添加的全局权限。"
+        },
+        "GlobalRevokeDialog": {
+            "Title": "撤销全局权限",
+            "Description": "请选择要从 Global 撤销的权限，可多选。",
+            "Empty": "暂无可撤销的全局权限。"
+        },
+        "GlobalPrivileges": {
+            "Title": "Global 权限",
+            "GlobalLabel": "Global",
+            "Columns": {
+                "Name": "名称",
+                "Actions": "操作"
+            },
+            "AllGranted": "该{entity}已拥有 ALL Global 权限。",
+            "Empty": "暂无 Global 权限。"
+        },
+        "PrivilegeDetails": {
+            "Title": "权限明细",
+            "AddPrivilege": "权限",
+            "EmptyEntity": "该{entity}暂无权限记录。",
+            "EmptyScoped": "暂无数据库或表级权限。",
+            "Columns": {
+                "Name": "名称"
+            }
+        },
+        "ScopedGrantDialog": {
+            "Title": "添加数据权限",
+            "Description": "为指定数据库、数据表或视图授予权限，可多选。",
+            "Tabs": {
+                "Database": "数据库",
+                "Table": "数据表",
+                "View": "视图"
+            },
+            "DatabaseLabel": "数据库",
+            "DatabasePlaceholder": "请选择数据库",
+            "TableLabel": "数据表",
+            "ViewLabel": "视图",
+            "ObjectPlaceholderTable": "请选择数据表",
+            "ObjectPlaceholderView": "请选择视图",
+            "PrivilegesLabel": "权限（多选）"
+        },
+        "ScopedRevokeDialog": {
+            "Title": "撤销数据权限",
+            "Description": "请选择要撤销的权限，可多选。",
+            "ObjectLabel": "对象：",
+            "Empty": "暂无可撤销的权限。"
+        },
+        "UserPage": {
+            "Title": "用户权限",
+            "Description": "查看并分析用户的权限范围。",
+            "Empty": {
+                "NoConnection": "请先连接一个数据源以查看用户权限。"
+            },
+            "Loading": "加载权限数据...",
+            "LoadFailed": "无法加载用户信息。",
+            "Fields": {
+                "DefaultRoles": "默认角色",
+                "GrantedRoles": "授权角色",
+                "HostRestriction": "主机限制",
+                "AnyHost": "任意主机",
+                "NotConfigured": "未配置",
+                "AuthType": "认证类型"
+            }
+        },
+        "RolePage": {
+            "Title": "角色权限",
+            "Description": "查看并维护角色的权限范围。",
+            "Empty": {
+                "NoConnection": "请先连接一个数据源以查看角色权限。"
+            },
+            "Loading": "加载角色信息...",
+            "LoadFailed": "无法加载角色信息。",
+            "Fields": {
+                "GrantedUsers": "授予用户",
+                "GrantedRoles": "授予角色",
+                "PrivilegeCount": "权限数量"
+            }
+        }
+    },
+    "Utils": {
+        "FormatType": {
+            "Unknown": "未知"
+        },
+        "EnsureConnection": {
+            "MissingConnectionId": "缺少 Connection ID",
+            "ConnectionNotFound": "连接不存在或已关闭"
+        },
+        "SshTunnel": {
+            "Disabled": "SSH 隧道未启用",
+            "MissingHost": "缺少 SSH 主机",
+            "MissingDependency": "未安装 SSH 依赖",
+            "MissingPassword": "缺少 SSH 密码",
+            "MissingPrivateKey": "缺少 SSH 私钥",
+            "MissingAgent": "SSH agent 不可用"
+        },
+        "Connection": {
+            "CancelUnsupported": "此连接不支持取消查询"
+        },
+        "Clickhouse": {
+            "MissingQueryId": "缺少查询 ID，无法终止查询",
+            "NamedParamsOnly": "ClickHouse 驱动仅支持命名参数",
+            "ParseJsonFailedNoResult": "解析 JSON 失败，可能是 DDL/INSERT 等无结果集语句"
+        }
+    },
+    "Client": {
+        "Errors": {
+            "InvalidRequest": "无效请求",
+            "InvalidConnection": "无效连接",
+            "RequestFailed": "请求失败"
+        },
+        "Pglite": {
+            "DbNotInitialized": "DB 未初始化",
+            "UserNotInitialized": "User 未初始化",
+            "BrowserOnly": "PGlite 仅可在浏览器中运行",
+            "InvalidInstance": "PGlite drizzle 实例无效：缺少 dialect.migrate 或 session",
+            "MigrationFailed": "[PGlite migrate] 迁移失败！将直接丢弃旧数据库，并切换到一个全新的版本。"
+        }
+    },
+    "Api": {
+        "Errors": {
+            "BodyParseFailed": "请求体解析失败",
+            "InvalidParams": "参数校验失败",
+            "MissingTeamContext": "用户未登录或缺少团队信息",
+            "InternalError": "服务器内部错误",
+            "Unauthorized": "用户未登录"
+        },
+        "Connection": {
+            "Errors": {
+                "Unauthorized": "用户未登录或无权限",
+            "FetchCatalogFailed": "获取目录对象失败",
+            "NotFound": "数据源不存在或无权限",
+            "MissingHost": "数据源缺少主机信息",
+            "MissingConnectionId": "缺少数据源 ID",
+            "MissingUsername": "缺少用户名",
+            "MissingIdentity": "未找到可用身份",
+            "MissingIdentityInfo": "缺少身份信息",
+            "MissingPassword": "缺少身份密码",
+            "MissingSshPassword": "缺少 SSH 密码",
+            "MissingSshPrivateKey": "缺少 SSH 私钥",
+            "UnsupportedType": "暂不支持该类型的数据库",
+            "ConnectFailed": "连接失败",
+            "SchemaReadFailed": "读取 schema 失败",
+            "TestFailed": "连接测试失败"
+        },
+            "Validation": {
+                "DatabaseRequired": "数据库名称不能为空",
+                "TableRequired": "数据表名不能为空"
+            },
+            "Databases": {
+                "Errors": {
+                    "ListFailed": "获取数据库列表失败",
+                    "DetailFailed": "获取数据库详情失败",
+                    "SummaryFailed": "获取数据库摘要失败",
+                    "TablesFailed": "获取数据表失败"
+                }
+            },
+            "Tables": {
+                "Errors": {
+                    "ColumnsFailed": "获取数据列失败",
+                    "PropertiesFailed": "获取表属性失败",
+                    "StatsFailed": "获取表统计失败",
+                    "DdlFailed": "获取表 DDL 失败"
+                }
+            }
+        },
+        "SqlConsole": {
+            "Tabs": {
+                "MissingConnectionContext": "缺少连接上下文",
+                "TabIdMismatch": "tabId 与 state.tabId 不一致",
+                "DatabaseNotInitialized": "数据库未初始化",
+                "MissingTabId": "缺少 tabId"
+            },
+            "SavedQueries": {
+                "NotFound": "保存的查询不存在或无权限访问",
+                "MissingId": "缺少保存的查询 ID"
+            }
+        },
+        "Query": {
+            "Errors": {
+                "MissingConnectionId": "缺少连接 ID",
+                "DatabaseNameRequired": "数据库名不能为空",
+                "DatabaseNameTooLong": "数据库名过长",
+                "DatabaseNameInvalid": "数据库名格式不合法",
+                "ConnectionFailed": "连接数据库失败",
+                "TooManyStatements": "单次最多允许 {max} 条语句，当前为 {count} 条",
+                "MissingSessionId": "缺少 sessionId，无法取消查询",
+                "DatasourceNotFound": "数据源不存在或连接已关闭",
+                "CancelNotSupported": "当前数据源不支持取消查询"
+            }
+        },
+        "Monitoring": {
+            "Errors": {
+                "QueryFailed": "查询失败"
+            }
+        },
+        "Chat": {
+            "Errors": {
+                "MissingSessionId": "缺少会话 ID",
+                "SessionNotFound": "会话不存在",
+                "FetchSessionFailed": "获取会话详情失败",
+                "InvalidTitle": "无效的标题",
+                "InvalidMetadata": "无效的元数据",
+                "MissingUpdatePayload": "缺少更新内容",
+                "UpdateSessionFailed": "更新会话失败",
+                "DeleteSessionFailed": "删除会话失败",
+                "MissingTabId": "缺少 tabId",
+                "FetchCopilotSessionFailed": "获取 Copilot 会话失败",
+                "InvalidSessionType": "非法的 session type",
+                "ListSessionsFailed": "获取会话列表失败",
+                "CopilotCreationNotAllowed": "Copilot 会话不能通过该接口创建",
+                "CreateSessionFailed": "创建会话失败"
+            },
+            "Tools": {
+                "Rag": {
+                    "Description": "检索与用户问题最相关的文档片段，返回若干上下文段落用于回答。"
+                }
+            },
+            "Prompt": {
+                "SchemaContextTitle": "【当前数据上下文】",
+                "DatabaseContextTitle": "【数据库上下文】",
+                "CopilotContextTitle": "【当前 Copilot 上下文】"
+            },
+            "ChartBuilder": {
+                "Description": "根据提供的数据返回图表配置。\n\n使用说明：\n1. 指定 chartType（bar/line/area/pie）。\n2. data 为查询结果行数组。\n3. 如果不确定 xKey / yKeys / categoryKey / valueKey，可留空，工具会自动推断：\n   - Line/area：优先选择时间字段作为 x，数值字段作为 y。\n   - Bar：优先选择分类字段作为 x，数值字段作为 y。\n   - Pie：选择一个分类字段作为 categoryKey，一个数值字段作为 valueKey。\n4. 工具会识别时间/数值/分类列，并在合适时设置 options.xKeyType/sortBy。",
+                "Errors": {
+                    "DataRequired": "图表数据不能为空",
+                    "YKeyRequired": "y 轴字段不能为空"
+                }
+            },
+            "SqlRunner": {
+                "Description": "在 ClickHouse / 数据仓库上执行只读 SQL 查询的工具。\n功能说明：\n- 只接受单条 SELECT / SHOW / DESCRIBE / DESC / EXPLAIN 语句，不允许 INSERT/UPDATE/DELETE 等写入操作。\n- 当用户问题涉及查询、统计、聚合、报表、指标分析时，请先生成 SQL 并调用本工具，再根据结果回答。\n- 如果不确定表结构，可以先调用 DESCRIBE 或 SHOW 等语句探查。",
+                "SqlRequired": "SQL 语句不能为空",
+                "MissingConnection": "缺少数据库连接信息，无法执行查询。",
+                "ReadOnlyOnly": "目前仅允许执行只读查询（SELECT/SHOW/DESCRIBE/EXPLAIN），请勿包含写入或更新语句。",
+                "ExecuteFailed": "执行 SQL 失败"
+            }
+        },
+        "Ai": {
+            "SchemaExplanations": {
+                "InvalidParams": "请求参数无效",
+                "Fallback name": "字段",
+                "Fallback type": "未知类型",
+                "Fallback summary": "{name}，类型：{type}",
+                "Fallback required": "必填",
+                "Fallback nullable": "可为空",
+                "Fallback comment": "备注：{comment}",
+                "Fallback separator": "；",
+                "Fallback default": "{name} 字段"
+            },
+            "TableStats": {
+                "Suggestions": {
+                    "Healthy": "当前表整体健康，无需特别优化。",
+                    "Critical": "建议优先处理：{message}",
+                    "Warn": "建议关注：{message}",
+                    "Default": "整体可结合业务查询模式做进一步优化。"
+                },
+                "Errors": {
+                    "MissingStats": "未提供表统计信息。",
+                    "AnalyzeFailed": "分析失败。"
+                },
+                "Issues": {
+                    "RowCountUnknown": "行数未知",
+                    "RowCountSmall": "数据量较小（行数 < 100 万）",
+                    "RowCountMedium": "数据量适中（100 万 ~ 1 亿行）",
+                    "RowCountLarge": "数据量较大（超过 1 亿行）",
+                    "RowCountHuge": "数据量非常大（超过 10 亿行）",
+                    "TotalSizeLarge": "表占用磁盘空间较大（> 50GB）",
+                    "TotalSizeHuge": "表占用磁盘空间非常大（> 200GB）",
+                    "PartitionTooFew": "大表分区数量过少，分区裁剪能力有限",
+                    "PartitionTooMany": "分区数量较多，可能带来元数据开销",
+                    "PartitionSkewed": "分区数据倾斜严重，单个分区占据大部分数据",
+                    "PartsTooMany": "Part 数量较多，建议适当合并小文件",
+                    "PartsTooManyCritical": "Part 数量极多，可能严重影响查询性能和后台合并",
+                    "PartsManySmallTable": "小表 Part 数量异常偏多，可能存在频繁小批量写入",
+                    "PartsFewLargeTable": "大表 Part 数量较少，整体合并情况较好",
+                    "PartSizeTooSmall": "平均 Part 大小过小，存在大量小文件",
+                    "PartSizeTooLarge": "存在超大 Part 文件，可能影响合并与查询性能",
+                    "PartFragmented": "Part 大小分布不均，存在碎片化风险",
+                    "CompressionUnknown": "压缩比未知，无法评估压缩效果",
+                    "CompressionExcellent": "压缩效果优秀（压缩比 < 0.40）",
+                    "CompressionGood": "压缩效果良好（压缩比在 0.40~0.80）",
+                    "CompressionPoor": "压缩空间有限（压缩比 > 0.80），可评估列类型/编码",
+                    "CompressionInconsistent": "压缩统计数据异常，压缩后大小大于未压缩",
+                    "TtlConfigured": "已配置 TTL 生命周期策略",
+                    "TtlMissing": "大表未配置 TTL，可能导致历史数据长期堆积",
+                    "ActiveMutations": "存在 {count} 个活跃变更任务",
+                    "TooManyActiveMutations": "活跃变更任务数量较多，可能影响集群资源",
+                    "StatsInconsistent": "统计数据异常"
+                },
+                "Details": {
+                    "RowCountMissing": "rowCount 缺失或无法解析",
+                    "RowCount": "rowCount={rowCount}",
+                    "CompressedSize": "compressedSize≈{size} GB",
+                    "PartitionCount": "rowCount={rowCount}, partitionCount={partitionCount}",
+                    "PartitionOnlyCount": "partitionCount={partitionCount}",
+                    "MaxPartitionRatio": "最大分区行数比例≈{ratio}%",
+                    "PartCount": "partCount={partCount}",
+                    "RowPartCount": "rowCount={rowCount}, partCount={partCount}",
+                    "PartSizeSmall": "avgPartSize≈{avgSize} MB, partCount={partCount}",
+                    "PartMaxSize": "maxPartSize≈{maxSize} GB",
+                    "PartSizeRatio": "max/avg≈{ratio}",
+                    "CompressionRatio": "compressionRatio={ratio}",
+                    "CompressionBytes": "compressedBytes={compressedBytes}, uncompressedBytes={uncompressedBytes}",
+                    "TtlExpression": "ttl={ttl}",
+                    "ActiveMutations": "activeMutations={count}",
+                    "CompressedBytes": "compressedBytes={compressedBytes}",
+                    "UncompressedBytes": "uncompressedBytes={uncompressedBytes}"
+                }
+            }
+        },
+        "Privileges": {
+            "Errors": {
+                "MissingConnectionId": "缺少数据源连接 ID",
+                "NotClickhouse": "当前数据源不支持 ClickHouse 权限管理",
+                "Fallback": "操作失败，请稍后重试",
+                "ConnectionUnavailable": "当前连接不可用，请稍后重试",
+                "UserNotFound": "指定的用户不存在",
+                "RoleNotFound": "指定的角色不存在"
+            },
+            "Users": {
+                "ListFailed": "获取用户列表失败",
+                "NameRequired": "用户名称不能为空",
+                "CreateFailed": "创建用户失败",
+                "DetailFailed": "获取用户详情失败",
+                "UpdateFailed": "更新用户失败",
+                "DeleteFailed": "删除用户失败",
+                "GrantGlobalFailed": "添加全局权限失败",
+                "RevokeGlobalFailed": "撤销全局权限失败",
+                "GrantScopedFailed": "授予权限失败",
+                "RevokeScopedFailed": "撤销权限失败"
+            },
+            "Roles": {
+                "ListFailed": "获取角色列表失败",
+                "NameRequired": "角色名称不能为空",
+                "CreateFailed": "创建角色失败",
+                "DetailFailed": "获取角色详情失败",
+                "UpdateFailed": "更新角色失败",
+                "DeleteFailed": "删除角色失败",
+                "GrantGlobalFailed": "添加全局权限失败",
+                "RevokeGlobalFailed": "撤销全局权限失败",
+                "GrantScopedFailed": "授予权限失败",
+                "RevokeScopedFailed": "撤销权限失败"
+            },
+            "Targets": {
+                "DatabaseRequired": "缺少数据库信息",
+                "UnsupportedType": "不支持的类型",
+                "FetchFailed": "获取权限对象失败"
+            }
+            ,
+            "Clusters": {
+                "FetchFailed": "获取集群信息失败"
+            }
+        }
+    },
+    "Ai": {
+        "PromptLanguage": "请使用简体中文回答。",
+        "SystemLanguage": {
+            "Auto": "请默认使用用户的语言回答。",
+            "En": "请默认使用英文回答。",
+            "Zh": "请默认使用简体中文回答。"
+        },
+        "SchemaExplanations": {
+            "InvalidParams": "请求参数无效",
+            "Fallback name": "字段",
+            "Fallback type": "未知类型",
+            "Fallback summary": "{name}，类型：{type}",
+            "Fallback required": "必填",
+            "Fallback nullable": "可为空",
+            "Fallback comment": "备注：{comment}",
+            "Fallback separator": "；",
+            "Fallback default": "{name} 字段"
+        },
+        "SchemaTags": {
+            "InvalidParams": "请求参数无效",
+            "MissingConnectionContext": "缺少连接上下文",
+            "MissingTeamIdFallback": "缺少 teamId，已使用本地启发式标签",
+            "Tags": {
+                "PrimaryKey": "主键",
+                "Identifier": "标识",
+                "Key": "键",
+                "Time": "时间",
+                "Name": "名称",
+                "Dimension": "维度",
+                "Description": "描述",
+                "Status": "状态",
+                "Type": "类型",
+                "Code": "编码",
+                "Address": "地址",
+                "Amount": "金额",
+                "Metric": "指标",
+                "Geo": "地理",
+                "Contact": "联系方式",
+                "Network": "网络",
+                "Boolean": "布尔",
+                "Enum": "枚举",
+                "Array": "数组",
+                "Required": "必填",
+                "Nullable": "可为空",
+                "Column": "字段",
+                "LowCardinality": "LowCardinality",
+                "Json": "JSON"
+            },
+            "Summary": {
+                "Tags": "标签：{tags}",
+                "Comment": "备注：{comment}",
+                "Separator": "；"
+            }
+        },
+        "TableStats": {
+            "Suggestions": {
+                "Healthy": "当前表整体健康，无需特别优化。",
+                "Critical": "建议优先处理：{message}",
+                "Warn": "建议关注：{message}",
+                "Default": "整体可结合业务查询模式做进一步优化。"
+            },
+            "Errors": {
+                "MissingStats": "未提供表统计信息。",
+                "AnalyzeFailed": "分析失败。"
+            },
+            "Issues": {
+                "RowCountUnknown": "行数未知",
+                "RowCountSmall": "数据量较小（行数 < 100 万）",
+                "RowCountMedium": "数据量适中（100 万 ~ 1 亿行）",
+                "RowCountLarge": "数据量较大（超过 1 亿行）",
+                "RowCountHuge": "数据量非常大（超过 10 亿行）",
+                "TotalSizeLarge": "表占用磁盘空间较大（> 50GB）",
+                "TotalSizeHuge": "表占用磁盘空间非常大（> 200GB）",
+                "PartitionTooFew": "大表分区数量过少，分区裁剪能力有限",
+                "PartitionTooMany": "分区数量较多，可能带来元数据开销",
+                "PartitionSkewed": "分区数据倾斜严重，单个分区占据大部分数据",
+                "PartsTooMany": "Part 数量较多，建议适当合并小文件",
+                "PartsTooManyCritical": "Part 数量极多，可能严重影响查询性能和后台合并",
+                "PartsManySmallTable": "小表 Part 数量异常偏多，可能存在频繁小批量写入",
+                "PartsFewLargeTable": "大表 Part 数量较少，整体合并情况较好",
+                "PartSizeTooSmall": "平均 Part 大小过小，存在大量小文件",
+                "PartSizeTooLarge": "存在超大 Part 文件，可能影响合并与查询性能",
+                "PartFragmented": "Part 大小分布不均，存在碎片化风险",
+                "CompressionUnknown": "压缩比未知，无法评估压缩效果",
+                "CompressionExcellent": "压缩效果优秀（压缩比 < 0.40）",
+                "CompressionGood": "压缩效果良好（压缩比在 0.40~0.80）",
+                "CompressionPoor": "压缩空间有限（压缩比 > 0.80），可评估列类型/编码",
+                "CompressionInconsistent": "压缩统计数据异常，压缩后大小大于未压缩",
+                "TtlConfigured": "已配置 TTL 生命周期策略",
+                "TtlMissing": "大表未配置 TTL，可能导致历史数据长期堆积",
+                "ActiveMutations": "存在 {count} 个活跃变更任务",
+                "TooManyActiveMutations": "活跃变更任务数量较多，可能影响集群资源",
+                "StatsInconsistent": "统计数据异常"
+            },
+            "Details": {
+                "RowCountMissing": "rowCount 缺失或无法解析",
+                "RowCount": "rowCount={rowCount}",
+                "CompressedSize": "compressedSize≈{size} GB",
+                "PartitionCount": "rowCount={rowCount}, partitionCount={partitionCount}",
+                "PartitionOnlyCount": "partitionCount={partitionCount}",
+                "MaxPartitionRatio": "最大分区行数比例≈{ratio}%",
+                "PartCount": "partCount={partCount}",
+                "RowPartCount": "rowCount={rowCount}, partCount={partCount}",
+                "PartSizeSmall": "avgPartSize≈{avgSize} MB, partCount={partCount}",
+                "PartMaxSize": "maxPartSize≈{maxSize} GB",
+                "PartSizeRatio": "max/avg≈{ratio}",
+                "CompressionRatio": "compressionRatio={ratio}",
+                "CompressionBytes": "compressedBytes={compressedBytes}, uncompressedBytes={uncompressedBytes}",
+                "TtlExpression": "ttl={ttl}",
+                "ActiveMutations": "activeMutations={count}",
+                "CompressedBytes": "compressedBytes={compressedBytes}",
+                "UncompressedBytes": "uncompressedBytes={uncompressedBytes}"
+            }
+        }
+    },
+    "DoryUI": {
+        "Select": {
+            "Placeholder": "请选择",
+            "Empty": "未找到匹配项",
+            "All": "全部",
+            "SearchPlaceholder": "搜索…"
+        },
+        "DatabaseSelect": {
+            "All": "所有数据库",
+            "Placeholder": "选择数据库",
+            "Empty": "未找到匹配的数据库",
+            "GroupLabel": "数据库"
+        },
+        "DatabaseUserSelect": {
+            "All": "所有用户",
+            "Placeholder": "选择用户",
+            "Empty": "未找到匹配的用户",
+            "GroupLabel": "用户"
+        },
+        "Table": {
+            "Empty": "暂无数据",
+            "Loading": "加载中…"
+        },
+        "Pagination": {
+            "Total": "共 {total} 条记录",
+            "PerPage": "每页",
+            "PageSizePlaceholder": "每页数量",
+            "Records": "条",
+            "First": "第一页",
+            "Previous": "上一页",
+            "Next": "下一页",
+            "Last": "最后一页",
+            "PageStatus": "第 {current} / {total} 页"
+        },
+        "PageHeader": {
+            "Back": "返回"
+        },
+        "AssistantFallback": {
+            "Title": "响应异常",
+            "Description": "助手暂未返回可用内容，请稍后重试或调整提问。",
+            "MissingAiEnvTitle": "缺少 AI 配置",
+            "MissingAiEnvDescription": "请设置 DORY_AI_API_KEY 和 DORY_AI_URL 以启用 AI 功能。"
+        },
+        "CodeReview": {
+            "Header": "SQL 预览",
+            "Preview": "预览",
+            "Diff": "更改对比",
+            "Apply": "应用",
+            "Applied": "已应用"
+        },
+        "CopyButton": {
+            "Copy": "复制",
+            "Copied": "已复制"
+        },
+        "SqlResult": {
+            "Title": "生成的 SQL",
+            "Actions": {
+                "Run": "运行",
+                "OpenInEditor": "在编辑器中打开",
+                "DownloadCsv": "下载 CSV",
+                "CopyResults": "复制结果",
+                "ResultsCopied": "结果已复制！",
+                "More": "更多操作"
+            },
+            "Status": {
+                "Success": "执行成功",
+                "Failed": "执行失败"
+            },
+            "FollowUp": {
+                "Button": "继续追问此结果",
+                "Tooltip": "基于当前结果继续提问",
+                "ErrorPrompt": "请帮我分析并修复这个 SQL 执行错误。\\n\\nSQL：\\n{sql}\\n\\n错误信息：{error}{metaLine}",
+                "SuccessPrompt": "基于这个 SQL 的执行结果继续帮我分析，并给出进一步的洞察或优化建议。\\n\\nSQL：\\n{sql}{metaLine}"
+            },
+            "Copied": "SQL 已复制",
+            "Copy": "复制",
+            "CopyTooltip": "复制 SQL",
+            "ChartTooltip": "基于当前结果生成图表",
+            "RunInConsole": "在 SQL Console 中执行",
+            "Collapse": "折叠结果",
+            "Expand": "展开结果",
+            "Meta": {
+                "Database": "数据库：{database}",
+                "RowCount": "行数：{rowCount}",
+                "Duration": "耗时：{durationMs} ms",
+                "Timestamp": "时间：{timestamp}",
+                "Line": "元信息：{meta}",
+                "Separator": "，"
+            },
+            "UnknownError": "未知错误",
+            "Truncated": "结果仅显示前 {count} 行，更多数据请手动执行查看完整结果。",
+            "NoRows": "查询已执行，但没有返回数据。",
+            "ExecutionFailed": "执行失败：{error}",
+            "AutoChart": {
+                "Title": "自动可视化",
+                "Description": "基于查询结果预览自动生成的图表"
+            },
+            "ChartUnavailable": "当前结果无法生成可视化，请尝试手动选择。",
+            "ColumnPlaceholder": "（字段）"
+        },
+        "ChartResult": {
+            "Title": "图表",
+            "NoData": "未提供可视化数据。",
+            "AutoGenerated": "自动生成",
+            "Meta": {
+                "Series": "{count} 个系列",
+                "Points": "{count} 个数据点"
+            },
+            "FollowUp": {
+                "Button": "继续追问此结果",
+                "Title": "图表标题：{title}",
+                "Description": "说明：{description}",
+                "ChartType": "图表类型：{chartType}",
+                "XKey": "X 轴字段：{xKey}",
+                "SeriesItem": "{label}（字段：{key}）",
+                "Separator": "，",
+                "YKeys": "Y 轴/系列字段：{yKeys}",
+                "CategoryKey": "分类字段：{categoryKey}",
+                "ValueKey": "数值字段：{valueKey}",
+                "AutoGenerated": "该图表由系统自动生成。",
+                "Prompt": "请基于下面这个图表的结果继续帮我做更深入的分析，例如趋势、异常点、对业务的可能含义，以及是否有需要进一步拆分或补充的数据视角。"
+            },
+            "Errors": {
+                "MissingAxis": "缺少 xKey 或 yKeys。",
+                "MissingPieKeys": "缺少分类或数值字段。",
+                "UnsupportedType": "暂不支持的图表类型：{chartType}"
+            },
+            "Collapse": "折叠图表",
+            "Expand": "展开图表"
+        },
+        "ModeToggle": {
+            "ToggleTheme": "切换主题",
+            "Light": "浅色",
+            "Dark": "深色",
+            "System": "跟随系统"
+        },
+        "QueryClient": {
+            "Error": "发生错误：{message}"
+        },
+        "LiquidGlassCard": {
+            "Title": "Tanya 的设计",
+            "Subtitle": "专注于简洁与易用的产品设计师。",
+            "Follow": "关注"
+        },
+        "Logo": {
+            "AriaLabel": "Dory 标志"
+        }
+    },
+    "Database": {
+        "Errors": {
+            "UnsupportedDbType": "不支持的 DB_TYPE：{dbType}",
+            "MissingDatabaseUrl": "缺少 DATABASE_URL（或 POSTGRES_URL）",
+            "PgliteInvalidInstance": "PGlite drizzle 实例无效：缺少 dialect.migrate 或 session",
+            "PgliteMigrationFailed": "[PGlite migrate] 迁移失败！将直接丢弃旧数据库，并切换到一个全新的版本。",
+            "ConnectionFailed": "数据库连接失败",
+            "InitFailed": "数据库初始化失败，请检查配置或连接状态",
+            "NotInitialized": "数据库未初始化",
+            "ConnectionCreateFailed": "创建连接失败",
+            "NotTeamMember": "你不是 Team 成员",
+            "NotAdmin": "你没有 Admin 权限",
+            "ConnectionIdentityCreateFailed": "创建连接身份失败",
+            "ConnectionIdentityUpdateFailed": "更新连接身份失败，记录不存在或无权限",
+            "ConnectionDuplicateName": "同名连接已存在",
+            "ConnectionNotFound": "连接不存在或无权限操作",
+            "ConnectionIdentityInvalid": "连接身份信息不完整",
+            "ConnectionIdentityUpdateRequiresId": "更新 identity 需要 id",
+            "ConnectionIdentityMissingId": "缺少 identity id",
+            "ConnectionIdentityNameRequired": "name 不能为空",
+            "ConnectionIdentityUsernameRequired": "username 不能为空",
+            "SaveQueryFailed": "保存查询失败",
+            "SavedQueryNotFound": "保存的查询不存在或无权限操作",
+            "ChatSessionNotFound": "会话不存在",
+            "ChatSessionForbidden": "无权访问该会话",
+            "ChatSessionArchived": "会话已归档，无法写入",
+            "ChatCopilotSessionFailed": "获取 / 创建 Copilot 会话失败",
+            "ChatGlobalSessionFailed": "创建 / 获取 global 会话失败",
+            "ChatUpdateSessionNotFound": "会话不存在",
+            "ChatInsertMessageFailed": "写入消息失败"
+        },
+        "Logs": {
+            "InitFailed": "数据库初始化失败:",
+            "AiSchemaCacheInitFailed": "[postgres] 初始化 AI Schema 缓存仓储失败:",
+            "ChatRepoInitFailed": "[postgres] 初始化聊天仓储失败:",
+            "QueryAuditWriteFailed": "[pg] 写入 queryAudit 失败:"
+        }
+    },
+    "ErrorCodes": {
+        "ERROR": "服务器内部错误",
+        "BAD_REQUEST": "请求错误",
+        "INVALID_PARAMS": "请求参数错误",
+        "UNAUTHORIZED": "用户未授权",
+        "FORBIDDEN": "禁止访问",
+        "NOT_FOUND": "未找到",
+        "CONFLICT": "资源冲突",
+        "VALIDATION_ERROR": "数据验证失败",
+        "DATABASE_ERROR": "数据库错误",
+        "TIMEOUT": "请求超时",
+        "Unknown": "未知错误"
+    },
+    "Routes": {
+        "SQL Console": "SQL 控制台"
+    }
+}

@@ -1,0 +1,527 @@
+{
+  "id": "d927aaa2-2a90-4511-ad4d-a388ed17cb9d",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.query_result_page": {
+      "name": "query_result_page",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "set_index": {
+          "name": "set_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_no": {
+          "name": "page_no",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_row_index": {
+          "name": "first_row_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "row_count": {
+          "name": "row_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rows_data": {
+          "name": "rows_data",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_gzip": {
+          "name": "is_gzip",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_qrp_read": {
+          "name": "idx_qrp_read",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "set_index",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "page_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fk_qrp_resultset": {
+          "name": "fk_qrp_resultset",
+          "tableFrom": "query_result_page",
+          "tableTo": "query_result_set",
+          "columnsFrom": [
+            "session_id",
+            "set_index"
+          ],
+          "columnsTo": [
+            "session_id",
+            "set_index"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_qrp": {
+          "name": "pk_qrp",
+          "columns": [
+            "session_id",
+            "set_index",
+            "page_no"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "chk_qrp_pageno_nonneg": {
+          "name": "chk_qrp_pageno_nonneg",
+          "value": "\"query_result_page\".\"page_no\" >= 0"
+        },
+        "chk_qrp_firstrow_nonneg": {
+          "name": "chk_qrp_firstrow_nonneg",
+          "value": "\"query_result_page\".\"first_row_index\" >= 0"
+        },
+        "chk_qrp_rowcount_pos": {
+          "name": "chk_qrp_rowcount_pos",
+          "value": "\"query_result_page\".\"row_count\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.query_result_set": {
+      "name": "query_result_set",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "set_index": {
+          "name": "set_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sql_text": {
+          "name": "sql_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sql_op": {
+          "name": "sql_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "columns": {
+          "name": "columns",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "row_count": {
+          "name": "row_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "limited": {
+          "name": "limited",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "limit": {
+          "name": "limit",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "affected_rows": {
+          "name": "affected_rows",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "query_result_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'success'"
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_sql_state": {
+          "name": "error_sql_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_meta": {
+          "name": "error_meta",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "warnings": {
+          "name": "warnings",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_qrs_session": {
+          "name": "idx_qrs_session",
+          "columns": [
+            {
+              "expression": "session_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "set_index",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_qrs_status": {
+          "name": "idx_qrs_status",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_qrs_sqlop": {
+          "name": "idx_qrs_sqlop",
+          "columns": [
+            {
+              "expression": "sql_op",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "fk_qrs_session": {
+          "name": "fk_qrs_session",
+          "tableFrom": "query_result_set",
+          "tableTo": "query_session",
+          "columnsFrom": [
+            "session_id"
+          ],
+          "columnsTo": [
+            "session_id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "pk_qrs": {
+          "name": "pk_qrs",
+          "columns": [
+            "session_id",
+            "set_index"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "chk_qrs_setindex_nonneg": {
+          "name": "chk_qrs_setindex_nonneg",
+          "value": "\"query_result_set\".\"set_index\" >= 0"
+        },
+        "chk_qrs_rowcount_nonneg": {
+          "name": "chk_qrs_rowcount_nonneg",
+          "value": "\"query_result_set\".\"row_count\" IS NULL OR \"query_result_set\".\"row_count\" >= 0"
+        },
+        "chk_qrs_affected_nonneg": {
+          "name": "chk_qrs_affected_nonneg",
+          "value": "\"query_result_set\".\"affected_rows\" IS NULL OR \"query_result_set\".\"affected_rows\" >= 0"
+        },
+        "chk_qrs_duration_nonneg": {
+          "name": "chk_qrs_duration_nonneg",
+          "value": "\"query_result_set\".\"duration_ms\" IS NULL OR \"query_result_set\".\"duration_ms\" >= 0"
+        },
+        "chk_qrs_limit_nonneg": {
+          "name": "chk_qrs_limit_nonneg",
+          "value": "\"query_result_set\".\"limit\" IS NULL OR \"query_result_set\".\"limit\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.query_session": {
+      "name": "query_session",
+      "schema": "",
+      "columns": {
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tab_id": {
+          "name": "tab_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "connection_id": {
+          "name": "connection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "database": {
+          "name": "database",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sql_text": {
+          "name": "sql_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "query_session_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'running'"
+        },
+        "error_message": {
+          "name": "error_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp (3)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "elapsed_ms": {
+          "name": "elapsed_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result_set_count": {
+          "name": "result_set_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "stop_on_error": {
+          "name": "stop_on_error",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_qs_user_tab_time": {
+          "name": "idx_qs_user_tab_time",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "tab_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "chk_qs_elapsed_nonneg": {
+          "name": "chk_qs_elapsed_nonneg",
+          "value": "\"query_session\".\"elapsed_ms\" IS NULL OR \"query_session\".\"elapsed_ms\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.query_result_status": {
+      "name": "query_result_status",
+      "schema": "public",
+      "values": [
+        "success",
+        "error"
+      ]
+    },
+    "public.query_session_status": {
+      "name": "query_session_status",
+      "schema": "public",
+      "values": [
+        "running",
+        "success",
+        "error",
+        "canceled"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -1,0 +1,32 @@
+module.exports = {
+    printWidth: 180,
+    semi: true,
+    singleQuote: true,
+    trailingComma: 'all',
+    bracketSpacing: true,
+    arrowParens: 'avoid',
+    insertPragma: false,
+    tabWidth: 4,
+    useTabs: false,
+    importOrder: [
+        '^Licensed to the Apache Software Foundation (ASF)',
+        '^(react/(.*)$)|^(react$)',
+        '^(next/(.*)$)|^(next$)',
+        '<THIRD_PARTY_MODULES>',
+        '',
+        '^types$',
+        '^@/types/(.*)$',
+        '^@/config/(.*)$',
+        '^@/lib/(.*)$',
+        '^@/hooks/(.*)$',
+        '^@/components/ui/(.*)$',
+        '^@/components/(.*)$',
+        './components/(.*)$',
+        '^@/styles/(.*)$',
+        '^@/app/(.*)$',
+        '',
+        '^[./]',
+    ],
+};
+
+console.log('Using prettier config');

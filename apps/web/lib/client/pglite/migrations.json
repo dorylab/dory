@@ -1,0 +1,21 @@
+[
+  {
+    "sql": [
+      "CREATE TYPE \"public\".\"query_result_status\" AS ENUM('success', 'error');",
+      "\nCREATE TYPE \"public\".\"query_session_status\" AS ENUM('running', 'success', 'error', 'canceled');",
+      "\nCREATE TABLE \"query_result_page\" (\n\t\"session_id\" text NOT NULL,\n\t\"set_index\" integer NOT NULL,\n\t\"page_no\" integer NOT NULL,\n\t\"first_row_index\" integer NOT NULL,\n\t\"row_count\" integer NOT NULL,\n\t\"rows_data\" \"bytea\" NOT NULL,\n\t\"is_gzip\" boolean DEFAULT true NOT NULL,\n\t\"created_at\" timestamp DEFAULT now() NOT NULL,\n\tCONSTRAINT \"pk_qrp\" PRIMARY KEY(\"session_id\",\"set_index\",\"page_no\"),\n\tCONSTRAINT \"chk_qrp_pageno_nonneg\" CHECK (\"query_result_page\".\"page_no\" >= 0),\n\tCONSTRAINT \"chk_qrp_firstrow_nonneg\" CHECK (\"query_result_page\".\"first_row_index\" >= 0),\n\tCONSTRAINT \"chk_qrp_rowcount_pos\" CHECK (\"query_result_page\".\"row_count\" > 0)\n);\n",
+      "\nCREATE TABLE \"query_result_set\" (\n\t\"session_id\" text NOT NULL,\n\t\"set_index\" integer NOT NULL,\n\t\"sql_text\" text NOT NULL,\n\t\"sql_op\" text,\n\t\"title\" text,\n\t\"columns\" jsonb,\n\t\"row_count\" integer,\n\t\"limited\" boolean DEFAULT false NOT NULL,\n\t\"limit\" integer,\n\t\"affected_rows\" integer,\n\t\"status\" \"query_result_status\" DEFAULT 'success' NOT NULL,\n\t\"error_message\" text,\n\t\"error_code\" text,\n\t\"error_sql_state\" text,\n\t\"error_meta\" jsonb,\n\t\"warnings\" jsonb,\n\t\"started_at\" timestamp (3),\n\t\"finished_at\" timestamp (3),\n\t\"duration_ms\" integer,\n\tCONSTRAINT \"pk_qrs\" PRIMARY KEY(\"session_id\",\"set_index\"),\n\tCONSTRAINT \"chk_qrs_setindex_nonneg\" CHECK (\"query_result_set\".\"set_index\" >= 0),\n\tCONSTRAINT \"chk_qrs_rowcount_nonneg\" CHECK (\"query_result_set\".\"row_count\" IS NULL OR \"query_result_set\".\"row_count\" >= 0),\n\tCONSTRAINT \"chk_qrs_affected_nonneg\" CHECK (\"query_result_set\".\"affected_rows\" IS NULL OR \"query_result_set\".\"affected_rows\" >= 0),\n\tCONSTRAINT \"chk_qrs_duration_nonneg\" CHECK (\"query_result_set\".\"duration_ms\" IS NULL OR \"query_result_set\".\"duration_ms\" >= 0),\n\tCONSTRAINT \"chk_qrs_limit_nonneg\" CHECK (\"query_result_set\".\"limit\" IS NULL OR \"query_result_set\".\"limit\" >= 0)\n);\n",
+      "\nCREATE TABLE \"query_session\" (\n\t\"session_id\" text PRIMARY KEY NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"tab_id\" text NOT NULL,\n\t\"connection_id\" text,\n\t\"database\" text,\n\t\"sql_text\" text NOT NULL,\n\t\"status\" \"query_session_status\" DEFAULT 'running' NOT NULL,\n\t\"error_message\" text,\n\t\"started_at\" timestamp (3) DEFAULT now() NOT NULL,\n\t\"finished_at\" timestamp (3),\n\t\"elapsed_ms\" integer,\n\t\"result_set_count\" integer DEFAULT 0 NOT NULL,\n\t\"stop_on_error\" boolean DEFAULT false NOT NULL,\n\t\"source\" text,\n\tCONSTRAINT \"chk_qs_elapsed_nonneg\" CHECK (\"query_session\".\"elapsed_ms\" IS NULL OR \"query_session\".\"elapsed_ms\" >= 0)\n);\n",
+      "\nALTER TABLE \"query_result_page\" ADD CONSTRAINT \"fk_qrp_resultset\" FOREIGN KEY (\"session_id\",\"set_index\") REFERENCES \"public\".\"query_result_set\"(\"session_id\",\"set_index\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"query_result_set\" ADD CONSTRAINT \"fk_qrs_session\" FOREIGN KEY (\"session_id\") REFERENCES \"public\".\"query_session\"(\"session_id\") ON DELETE cascade ON UPDATE no action;",
+      "\nCREATE INDEX \"idx_qrp_read\" ON \"query_result_page\" USING btree (\"session_id\",\"set_index\",\"page_no\");",
+      "\nCREATE INDEX \"idx_qrs_session\" ON \"query_result_set\" USING btree (\"session_id\",\"set_index\");",
+      "\nCREATE INDEX \"idx_qrs_status\" ON \"query_result_set\" USING btree (\"status\");",
+      "\nCREATE INDEX \"idx_qrs_sqlop\" ON \"query_result_set\" USING btree (\"sql_op\");",
+      "\nCREATE INDEX \"idx_qs_user_tab_time\" ON \"query_session\" USING btree (\"user_id\",\"tab_id\",\"started_at\");"
+    ],
+    "bps": true,
+    "folderMillis": 1769399838967,
+    "hash": "a558c786a349dd1bd0119b3486614941c948ab8c4ef4ea093282010d8a5181e0"
+  }
+]

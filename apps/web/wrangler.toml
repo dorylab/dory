@@ -1,0 +1,13 @@
+name = "dory"
+main = ".open-next/worker.js"
+compatibility_date = "2026-01-26"
+
+assets = { directory = ".open-next/assets" }
+
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+NODE_ENV = "production"
+TRUSTED_ORIGINS = "dory.dorystudio-lab.workers.dev"
+BETTER_AUTH_URL = "dory.dorystudio-lab.workers.dev"
+

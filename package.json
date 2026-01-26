@@ -1,0 +1,54 @@
+{
+  "name": "dory",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter v4 dev",
+    "prebuild": "pnpm --filter v4 prebuild",
+    "build": "pnpm -C apps/web build",
+    "build:bootstrap": "pnpm --filter v4 build:bootstrap",
+    "deploy": "pnpm -C apps/web deploy",
+    "start": "pnpm --filter v4 start",
+    "studio": "pnpm --filter v4 studio",
+    "pglite:studio": "pnpm --filter v4 pglite:studio",
+    "drizzle:push": "pnpm --filter v4 drizzle:push",
+    "migrate:generate": "pnpm --filter v4 migrate:generate",
+    "pglite:migrate:generate": "pnpm --filter v4 pglite:migrate:generate",
+    "pglite:migrate:compile": "pnpm --filter v4 pglite:migrate:compile",
+    "pglite:seed:queries": "pnpm --filter v4 pglite:seed:queries",
+    "client:migrate:generate": "pnpm --filter v4 client:migrate:generate",
+    "client:migrate:compile": "pnpm --filter v4 client:migrate:compile",
+    "lint": "pnpm --filter v4 lint",
+    "lint:fix": "pnpm --filter v4 lint:fix",
+    "typecheck": "pnpm --filter v4 typecheck",
+    "format:write": "pnpm --filter v4 format:write",
+    "format:check": "pnpm --filter v4 format:check",
+    "test:clean-json": "pnpm --filter v4 test:clean-json",
+    "docker:build": "docker build --build-arg VERSION=$(git rev-parse HEAD) -t dorylab/dory .",
+    "docker:run": "pnpm --filter v4 docker:run",
+    "registry:build": "pnpm --filter v4 registry:build",
+    "electron:compile": "pnpm --filter v4-electron electron:compile",
+    "electron:dev": "pnpm --filter v4-electron dev",
+    "electron:standalone": "pnpm --filter v4-electron electron:standalone",
+    "electron:build": "pnpm --filter v4-electron electron:build",
+    "electron:build:apple": "pnpm --filter v4-electron electron:build:apple"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "@prisma/client",
+      "@swc/core",
+      "@tailwindcss/oxide",
+      "better-sqlite3",
+      "cpu-features",
+      "esbuild",
+      "sharp",
+      "ssh2",
+      "ssh2-no-cpu-features",
+      "unrs-resolver"
+    ]
+  }
+}

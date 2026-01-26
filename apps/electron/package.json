@@ -1,0 +1,54 @@
+{
+    "name": "v4-electron",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "compile": "tsc -p tsconfig.json",
+        "dev": "pnpm run compile && electron ./dist-electron/main.js",
+        "standalone": "bash ../web/scripts/build-standalone.sh",
+        "build": "pnpm --filter v4 build && pnpm run compile && electron-builder",
+        "build:apple": "pnpm run compile && electron-builder --mac"
+    },
+    "dependencies": {
+        "dotenv": "^17.2.3",
+        "electron": "^38.7.2",
+        "electron-notarize": "^1.2.2",
+        "typescript": "^5.9.3"
+    },
+    "devDependencies": {
+        "@types/node": "^24.3.1",
+        "electron-builder": "^25.1.8"
+    },
+    "build": {
+        "appId": "com.dory.app",
+        "productName": "Dory",
+        "files": [
+            "dist-electron/**/*",
+            "../web/package.json"
+        ],
+        "extraResources": [
+            {
+                "from": "../web/release/standalone",
+                "to": "standalone"
+            }
+        ],
+        "asar": true,
+        "asarUnpack": [
+            "**/*.node"
+        ],
+        "afterSign": "./scripts/notarize.js",
+        "mac": {
+            "icon": "../web/public/logo.icns",
+            "category": "public.app-category.developer-tools",
+            "hardenedRuntime": true,
+            "gatekeeperAssess": false,
+            "entitlements": "./scripts/entitlements.mac.plist",
+            "entitlementsInherit": "./scripts/entitlements.mac.plist",
+            "target": [
+                "dmg",
+                "zip"
+            ]
+        }
+    }
+}
