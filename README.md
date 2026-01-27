@@ -13,7 +13,7 @@ It combines intelligent SQL editing, context-aware AI assistance, conversational
 ![Dory Preview](./public/actions.png)
 
 ## 🚀 Quick Start
-Run with Docker
+### Run with Docker
 
 Make sure Docker is installed, then run:
 
@@ -30,6 +30,22 @@ docker run -d --name dory \
   dorylab/dory:latest
 
 ```
+### 🧠 Supported AI Providers
+
+Dory is built with a pluggable AI provider architecture.
+You can freely switch between different model vendors by changing environment variables — no code changes required.
+
+Currently supported providers:
+
+| Provider | Env `DORY_AI_PROVIDER` | Description |
+|----------|-------------------------|-------------|
+| OpenAI | `openai` | Default provider. Uses official OpenAI API. |
+| OpenAI-Compatible | `openai-compatible` | Any service exposing an OpenAI-compatible API. |
+| Anthropic | `anthropic` | Claude models via Anthropic official API. |
+| Google | `google` | Gemini models via Google Generative AI API. |
+| Qwen (Alibaba) | `qwen` | Qwen models via DashScope OpenAI-compatible endpoint. |
+| xAI | `xai` | Grok models via xAI API. |
+
 
 ## ✨ Key Features
 
