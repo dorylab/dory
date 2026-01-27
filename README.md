@@ -17,7 +17,7 @@ Run with Docker
 
 Make sure Docker is installed, then run:
 
-```
+```bash
 docker run -d --name dory \
   -p 3000:3000 \
   -e TRUSTED_ORIGINS="http://localhost:3000" \
@@ -56,7 +56,6 @@ AI that understands your database — not just text completion.
 ### ✍️ Intelligent SQL Editor
 
 - Multi-tab SQL editing and execution  
-- Query history management  
 - Saved frequently used queries  
 - Deep integration with SQL Copilot  
 
@@ -144,5 +143,3 @@ Native ClickHouse user and role management UI.
 ## 📄 License
 
 Apache-2.0
-
----
