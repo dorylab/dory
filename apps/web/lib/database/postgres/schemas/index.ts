@@ -9,7 +9,6 @@ import * as aiSchemaCache from './ai-schema-cache';
 import * as savedQueriesSchema from './saved-queries';
 
 
-export * from './enums';
 export * from './tabs';
 export * from './auth-schema';
 export * from './chat';
