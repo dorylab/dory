@@ -3,7 +3,7 @@ import { SQLTab } from "@/types/tabs";
 
 export const DEFAULT_ACTIVE_TAB: SQLTab = {
     tabId: '1',
-    tabName: '查询 01',
+    tabName: 'Query 01',
     content: '',
     status: 'idle',
     tabType: 'sql',

@@ -62,7 +62,6 @@ export const activeTabIdAtom = atom(
 
 export const tabsMapAtom = atom<Map<string, UITabPayload>>(get => {
     const tabs = get(tabsAtom);
-    // 把数组转换成 Map，查找 O(1)
     return new Map(tabs.map(tab => [tab.tabId, tab]));
 });
 
