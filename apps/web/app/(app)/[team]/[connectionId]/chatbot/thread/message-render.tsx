@@ -4,9 +4,7 @@ import { ReactNode } from 'react';
 import type { UIMessage } from 'ai';
 import { CopyIcon, RefreshCcwIcon } from 'lucide-react';
 
-import { Action, Actions } from '@/components/ai-elements/actions';
-import { Message, MessageContent } from '@/components/ai-elements/message';
-import { Response } from '@/components/ai-elements/response';
+import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { ChartResultPart, ChartResultCard } from '@/components/@dory/ui/ai/charts-result';
@@ -262,7 +260,7 @@ const MessageRenderer = ({
 
         
         if (part.type === 'text') {
-            contentItems.push(<Response key={`${message.id}-text-${i}`}>{part.text}</Response>);
+            contentItems.push(<MessageResponse key={`${message.id}-text-${i}`}>{part.text}</MessageResponse>);
             return;
         }
 
@@ -309,8 +307,8 @@ const MessageRenderer = ({
                 </MessageContent>
             </Message>
 
-            {showActions && (
-                <Actions>
+            {/* {showActions && (
+                <ResponseActions>
                     <Action
                         label={t('Actions.Copy')}
                         onClick={() => {
@@ -327,7 +325,7 @@ const MessageRenderer = ({
                         <RefreshCcwIcon className="size-3" />
                     </Action>
                 </Actions>
-            )}
+            )} */}
         </div>
     );
 };

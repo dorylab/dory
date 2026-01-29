@@ -8,7 +8,7 @@ export interface ChatSessionSettings {
     model?: string; // e.g. "gpt-5.2"
     temperature?: number;
     top_p?: number;
-    maxTokens?: number;
+    maxOutputTokens?: number;
     systemPrompt?: string;
     toolsEnabled?: boolean;
     [k: string]: unknown;

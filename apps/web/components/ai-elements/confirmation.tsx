@@ -39,10 +39,10 @@ type ToolUIPartApproval =
     }
   | undefined;
 
-type ConfirmationContextValue = {
+interface ConfirmationContextValue {
   approval: ToolUIPartApproval;
   state: ToolUIPart["state"];
-};
+}
 
 const ConfirmationContext = createContext<ConfirmationContextValue | null>(
   null
@@ -89,66 +89,36 @@ export const ConfirmationTitle = ({
   <AlertDescription className={cn("inline", className)} {...props} />
 );
 
-export type ConfirmationRequestProps = {
+export interface ConfirmationRequestProps {
   children?: ReactNode;
-};
+}
 
 export const ConfirmationRequest = ({ children }: ConfirmationRequestProps) => {
   const { state } = useConfirmation();
 
-  // Only show when approval is requested
-  // @ts-expect-error state only available in AI SDK v6
-  if (state !== "approval-requested") {
-    return null;
-  }
-
   return children;
 };
 
-export type ConfirmationAcceptedProps = {
+export interface ConfirmationAcceptedProps {
   children?: ReactNode;
-};
+}
 
 export const ConfirmationAccepted = ({
   children,
 }: ConfirmationAcceptedProps) => {
   const { approval, state } = useConfirmation();
 
-  // Only show when approved and in response states
-  if (
-    !approval?.approved ||
-        // @ts-expect-error state only available in AI SDK v6
-    (state !== "approval-responded" &&
-        // @ts-expect-error state only available in AI SDK v6
-      state !== "output-denied" &&
-      state !== "output-available")
-  ) {
-    return null;
-  }
-
   return children;
 };
 
-export type ConfirmationRejectedProps = {
+export interface ConfirmationRejectedProps {
   children?: ReactNode;
-};
+}
 
 export const ConfirmationRejected = ({
   children,
 }: ConfirmationRejectedProps) => {
   const { approval, state } = useConfirmation();
-
-  // Only show when rejected and in response states
-  if (
-    approval?.approved !== false ||
-        // @ts-expect-error state only available in AI SDK v6
-    (state !== "approval-responded" &&
-        // @ts-expect-error state only available in AI SDK v6
-      state !== "output-denied" &&
-      state !== "output-available")
-  ) {
-    return null;
-  }
 
   return children;
 };
@@ -161,11 +131,6 @@ export const ConfirmationActions = ({
 }: ConfirmationActionsProps) => {
   const { state } = useConfirmation();
 
-  // Only show when approval is requested
-  // @ts-expect-error state only available in AI SDK v6
-  if (state !== "approval-requested") {
-    return null;
-  }
 
   return (
     <div

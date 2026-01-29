@@ -125,7 +125,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
                 prompt,
                 temperature: preset.temperature,
                 topP: 1,
-                maxOutputTokens: preset.maxTokens ?? 512,
+                maxOutputTokens: preset.maxOutputTokens ?? 512,
                 context: {
                     teamId,
                     feature,
