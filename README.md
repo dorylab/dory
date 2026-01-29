@@ -9,6 +9,15 @@ It combines intelligent SQL editing, context-aware AI assistance, conversational
 
 <!-- > Explore data with SQL and AI, together. -->
 
+<p align="center">
+  <a href="https://demo.getdory.dev"><b>🚀 Try Live Demo</b></a> &nbsp; • &nbsp;
+  <a href="#quick-start"><b>📦 Quick Start</b></a> &nbsp; • &nbsp;
+  <a href="https://github.com/dorylab/dory/stargazers"><b>⭐ Star</b></a>
+</p>
+
+**No signup required. Click “Enter as Demo” to start instantly.**
+
+**👇 Live Playground: https://demo.getdory.dev**
 
 ![Dory Preview](./public/actions.png)
 
