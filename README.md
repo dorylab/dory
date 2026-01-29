@@ -143,9 +143,13 @@ Native ClickHouse user and role management UI.
 
 ## ⚙️ Tech Stack
 
-- Next.js + React  
+- Next.js + React + Tailwind
 - Drizzle ORM  
-- Multi-model AI SDK integration  
+- Multi-model AI SDK integration
+- PGLite
+- Resend
+- Shadcn UI
+- Monaco Editor
 
 ---
 
@@ -160,7 +164,7 @@ Native ClickHouse user and role management UI.
 
 ## 🚀 Getting Started
 
-> Docker one-click deployment coming soon  
+> Docker one-click deployment
 > Desktop client (Mac) coming soon  
 
 ---
