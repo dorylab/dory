@@ -4,17 +4,12 @@ import {
     type ModelMessage,
     type ToolSet,
     type LanguageModelUsage,
+    type SystemModelMessage,
 } from 'ai';
 import { runAiWithCache as runAiWithCacheBase, type RunAiWithCacheOptions, type RunAiWithCacheResult } from './runtime/runAiWithCache';
 
-type TokenUsage = {
-    input?: number;
-    output?: number;
-    total?: number;
-};
-
 export type AiDebugInput = {
-    system?: string | null;
+    system?: string | SystemModelMessage | Array<SystemModelMessage> | null;
     prompt?: string | null;
     messages?: ModelMessage[] | null;
 };
@@ -114,33 +109,6 @@ function createRequestId(): string {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function normalizeUsage(usage?: LanguageModelUsage | null): LanguageModelUsage | undefined {
-    if (!usage) return undefined;
-    const anyUsage = usage as Record<string, number | undefined>;
-    const input =
-        anyUsage.inputTokens ??
-        anyUsage.inputTokens ??
-        anyUsage.input ??
-        anyUsage.input_tokens;
-    const output =
-        anyUsage.outputTokens ??
-        anyUsage.outputTokens ??
-        anyUsage.output ??
-        anyUsage.output_tokens;
-    const total =
-        anyUsage.totalTokens ??
-        anyUsage.total ??
-        anyUsage.total_tokens ??
-        (typeof input === 'number' && typeof output === 'number'
-            ? input + output
-            : undefined);
-    return {
-        input: typeof input === 'number' ? input : undefined,
-        output: typeof output === 'number' ? output : undefined,
-        total: typeof total === 'number' ? total : undefined,
-    };
-}
-
 function truncateString(value: string, maxLength: number): string {
     if (value.length <= maxLength) return value;
     return `${value.slice(0, maxLength)}...(truncated)`;
@@ -195,8 +163,12 @@ function buildDebugInput(
     };
 
     return {
-        system: input.system ? (sanitizeForDebug(input.system, redaction) as string) : input.system ?? null,
-        prompt: input.prompt ? (sanitizeForDebug(input.prompt, redaction) as string) : input.prompt ?? null,
+        system: input.system
+            ? (sanitizeForDebug(input.system, redaction) as AiDebugInput['system'])
+            : input.system ?? null,
+        prompt: input.prompt
+            ? (sanitizeForDebug(input.prompt, redaction) as string)
+            : input.prompt ?? null,
         messages: input.messages
             ? (sanitizeForDebug(input.messages, redaction) as ModelMessage[])
             : input.messages ?? null,
@@ -237,17 +209,21 @@ export async function generateText(
     const promptVersion = context?.promptVersion ?? 1;
     const algoVersion = context?.algoVersion;
 
+    const promptValue = typeof callOptions.prompt === 'string' ? callOptions.prompt : null;
+    const messagesValue = (callOptions as { messages?: ModelMessage[] }).messages ?? null;
+    const systemValue = callOptions.system ?? null;
+
     const debugInput = buildDebugInput(
         {
-            system: callOptions.system ?? null,
-            prompt: callOptions.prompt as string,
-            messages: (callOptions as { messages?: ModelMessage[] }).messages ?? null,
+            system: systemValue,
+            prompt: promptValue,
+            messages: messagesValue,
         },
         debugOptions?.redaction,
     );
 
     const result = await sdkGenerateText(callOptions);
-    const usage = normalizeUsage(result.usage);
+    const usage = result.usage;
     const debug: AiDebugInfo = {
         requestId,
         feature: context?.feature,
@@ -312,7 +288,7 @@ export function streamText<TOOLS extends ToolSet>(
     };
 
     const wrappedOnFinish = async (event: Parameters<NonNullable<typeof callOptions.onFinish>>[0]) => {
-        debug.usage = normalizeUsage(event.totalUsage);
+        debug.usage = event.totalUsage;
         debug.latencyMs = Date.now() - startedAt;
         emitDebug(debug, debugOptions);
         await writeAiUsage(

@@ -20,12 +20,12 @@ const ICON_STROKE_WIDTH = 2;
 
 type ModelId = string;
 
-type ContextSchema = {
+interface ContextSchema {
   usedTokens: number;
-  maxOutputTokens: number;
+  maxTokens: number;
   usage?: LanguageModelUsage;
   modelId?: ModelId;
-};
+}
 
 const ContextContext = createContext<ContextSchema | null>(null);
 
@@ -43,7 +43,7 @@ export type ContextProps = ComponentProps<typeof HoverCard> & ContextSchema;
 
 export const Context = ({
   usedTokens,
-  maxOutputTokens,
+  maxTokens,
   usage,
   modelId,
   ...props
@@ -51,7 +51,7 @@ export const Context = ({
   <ContextContext.Provider
     value={{
       usedTokens,
-      maxOutputTokens,
+      maxTokens,
       usage,
       modelId,
     }}
@@ -61,7 +61,7 @@ export const Context = ({
 );
 
 const ContextIcon = () => {
-  const { usedTokens, maxOutputTokens } = useContextValue();
+  const { usedTokens, maxTokens } = useContextValue();
   const circumference = 2 * Math.PI * ICON_RADIUS;
   const usedPercent = usedTokens / maxTokens;
   const dashOffset = circumference * (1 - usedPercent);
@@ -104,7 +104,7 @@ const ContextIcon = () => {
 export type ContextTriggerProps = ComponentProps<typeof Button>;
 
 export const ContextTrigger = ({ children, ...props }: ContextTriggerProps) => {
-  const { usedTokens, maxOutputTokens } = useContextValue();
+  const { usedTokens, maxTokens } = useContextValue();
   const usedPercent = usedTokens / maxTokens;
   const renderedPercent = new Intl.NumberFormat("en-US", {
     style: "percent",
@@ -144,7 +144,7 @@ export const ContextContentHeader = ({
   className,
   ...props
 }: ContextContentHeaderProps) => {
-  const { usedTokens, maxOutputTokens } = useContextValue();
+  const { usedTokens, maxTokens } = useContextValue();
   const usedPercent = usedTokens / maxTokens;
   const displayPct = new Intl.NumberFormat("en-US", {
     style: "percent",
