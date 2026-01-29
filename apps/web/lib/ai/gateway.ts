@@ -25,7 +25,7 @@ export type AiDebugInfo = {
     model?: string;
     promptVersion?: number;
     algoVersion?: number;
-    usage?: TokenUsage;
+    usage?: LanguageModelUsage;
     latencyMs?: number;
     input?: AiDebugInput;
     fromCache?: boolean;
@@ -68,7 +68,7 @@ export type AiUsageRecord = {
     model?: string;
     promptVersion?: number;
     algoVersion?: number;
-    usage?: TokenUsage;
+    usage?: LanguageModelUsage;
     latencyMs?: number;
     fromCache?: boolean;
 };
@@ -114,16 +114,16 @@ function createRequestId(): string {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function normalizeUsage(usage?: LanguageModelUsage | null): TokenUsage | undefined {
+function normalizeUsage(usage?: LanguageModelUsage | null): LanguageModelUsage | undefined {
     if (!usage) return undefined;
     const anyUsage = usage as Record<string, number | undefined>;
     const input =
-        anyUsage.promptTokens ??
+        anyUsage.inputTokens ??
         anyUsage.inputTokens ??
         anyUsage.input ??
         anyUsage.input_tokens;
     const output =
-        anyUsage.completionTokens ??
+        anyUsage.outputTokens ??
         anyUsage.outputTokens ??
         anyUsage.output ??
         anyUsage.output_tokens;

@@ -236,7 +236,7 @@ async function handleChatRequest(req: NextRequest) {
         .filter(Boolean)
         .join('\n\n');
 
-    const modelMessages = convertToModelMessages(
+    const modelMessages = await convertToModelMessages(
         historyMessagesForModel,
         { tools },
     );

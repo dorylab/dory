@@ -13,5 +13,5 @@ export type ModelPreset = {
     model: string;
     temperature: number;
     system?: string;
-    maxTokens?: number;
+    maxOutputTokens?: number;
 };

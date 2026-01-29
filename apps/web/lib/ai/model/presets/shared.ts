@@ -5,7 +5,7 @@ type Preset = {
     model: string;
     temperature: number;
     system?: SystemSpec;
-    maxTokens?: number;
+    maxOutputTokens?: number;
 };
 
 type BasePreset = Omit<Preset, 'model'>;
@@ -68,7 +68,7 @@ const BASE_PRESETS: Record<ModelRole, BasePreset> = {
     },
     table_summary: {
         temperature: 0,
-        maxTokens: 512,
+        maxOutputTokens: 512,
         system: {
             persona: 'Table Summary Generator',
             language: 'auto',
