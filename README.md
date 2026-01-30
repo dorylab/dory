@@ -1,11 +1,11 @@
 # Dory
 
 
-**Dory is an AI-native SQL workspace for modern databases.**  
+**Dory is an AI-native SQL Studio for modern databases.**  
 
 > The AI-powered Data Studio you’ve been waiting for.
 
-It combines intelligent SQL editing, context-aware AI assistance, conversational database exploration, and deep operational integration across modern databases into a single unified workspace — helping engineers and analysts write, understand, and manage data more efficiently.
+It combines intelligent SQL editing, context-aware AI assistance, conversational database exploration, and deep operational integration across modern databases into a single unified studio — helping engineers and analysts write, understand, and manage data more efficiently.
 
 <!-- > Explore data with SQL and AI, together. -->
 
