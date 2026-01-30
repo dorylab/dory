@@ -232,7 +232,6 @@ export function normalizeTableSummary(input: {
 }
 
 export function parseTableSummaryResponse(text: string) {
-    console.debug('[table-summary] raw response:', text);
     const cleaned = cleanJson(text);
     let parsed: TableSummaryResponse | null = null;
     try {

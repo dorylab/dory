@@ -15,6 +15,7 @@ export type RunAiWithCacheOptions<TNormalized, TPayload> = {
 
     promptVersion?: number;
     algoVersion?: number;
+    ignoreCache?: boolean;
 
     normalize: (payload: TPayload | null) => TNormalized;
     run: () => Promise<{ payload: TPayload | null }>;
@@ -41,9 +42,12 @@ export async function runAiWithCache<TNormalized, TPayload>(
         tableName,
         promptVersion = 1,
         algoVersion,
+        ignoreCache = false,
         normalize,
         run,
     } = options;
+
+    console.log(`[runAiWithCache] feature=${feature}, model=${model}, inputHash=${inputHash}, ignoreCache=${ignoreCache}`);
 
     const effectiveCatalog = catalog ?? 'default';
     const featureKey = typeof algoVersion === 'number' ? `${feature}:algo${algoVersion}` : feature;
@@ -61,7 +65,11 @@ export async function runAiWithCache<TNormalized, TPayload>(
         promptVersion,
     };
 
-    const cached = await aiSchemaCacheRepo.find(cacheKey);
+    let cached = null;
+    if (!ignoreCache) {
+        cached = await aiSchemaCacheRepo.find(cacheKey);
+    }
+
     if (cached?.payload) {
         const payload = cached.payload as TPayload;
         const normalized = normalize(payload);

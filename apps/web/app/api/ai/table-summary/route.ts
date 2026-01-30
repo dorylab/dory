@@ -18,6 +18,7 @@ type TableSummaryRequest = {
     connectionId?: string;
     catalog?: string | null;
     dbType?: string | null;
+    ignoreCache?: boolean;
 };
 
 type TableSummarySource = 'cache' | 'ai' | 'fallback';
@@ -51,7 +52,8 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
     const payload = (await req.json()) as TableSummaryRequest;
     timer.stamp('parsed body');
 
-    const { columns, database, table, properties, model, connectionId, catalog, dbType } = payload || {};
+    const { columns, database, table, properties, model, connectionId, catalog, dbType, ignoreCache } =
+        payload || {};
     const colList = Array.isArray(columns) ? columns : [];
 
     const fallbackPayload = {
@@ -99,6 +101,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
             database: database ?? null,
             table: table ?? null,
             model: model ?? null,
+            ignoreCache: Boolean(ignoreCache),
             locale,
         });
 
