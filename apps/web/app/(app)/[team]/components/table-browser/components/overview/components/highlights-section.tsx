@@ -31,7 +31,7 @@ export function HighlightsSection({ highlights, loading }: HighlightsSectionProp
                         </div>
                     ) : highlights.length ? (
                         highlights.map(item => (
-                            <div key={item.field} className="flex items-start gap-3">
+                            <div key={item.field} className="flex items-center gap-3">
                                 <Badge variant="outline" className="mt-0.5 px-2 py-1 text-[11px]">
                                     {item.field}
                                 </Badge>

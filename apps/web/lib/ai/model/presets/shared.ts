@@ -68,7 +68,7 @@ const BASE_PRESETS: Record<ModelRole, BasePreset> = {
     },
     table_summary: {
         temperature: 0,
-        maxOutputTokens: 512,
+        maxOutputTokens: 1024,
         system: {
             persona: 'Table Summary Generator',
             language: 'auto',

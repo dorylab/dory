@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
@@ -215,6 +215,8 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
         [columns, databaseName, properties, t, tableName],
     );
 
+    const ignoreAiCacheRef = useRef(false);
+
     const aiOverviewQuery = useQuery({
         queryKey: tableQueryKeys.aiOverview(connectionId, databaseName, tableName),
         enabled: Boolean(connectionId && databaseName && tableName && !aiBlocked && columns.length),
@@ -222,6 +224,9 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
         gcTime: 1000 * 60 * 30,
         refetchOnWindowFocus: false,
         queryFn: async () => {
+            const ignoreCache = ignoreAiCacheRef.current;
+            ignoreAiCacheRef.current = false;
+
             const res = await authFetch('/api/ai/table-summary', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -232,6 +237,7 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
                     properties,
                     connectionId: currentConnection?.connection.id,
                     dbType: currentConnection?.connection.type,
+                    ignoreCache,
                 }),
             });
 
@@ -240,6 +246,8 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
             }
 
             const data = (await res.json()) as AiOverviewResponse;
+            console.log('AI Overview response:', data);
+            
             return {
                 summary: (data.summary || fallbackOverview.summary).trim(),
                 detail: (data.detail || fallbackOverview.detail).trim(),
@@ -281,6 +289,7 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
                     updatedAt={aiUpdatedAt}
                     onRefresh={() => {
                         if (!aiBlocked) {
+                            ignoreAiCacheRef.current = true;
                             void aiOverviewQuery.refetch();
                         }
                     }}

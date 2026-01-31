@@ -33,6 +33,7 @@ type GetTableSummaryOptions = {
     feature?: string;        // Default 'table_summary'
     promptVersion?: number;  // Default 1
     algoVersion?: number;
+    ignoreCache?: boolean;
 };
 
 export async function getTableSummaryWithCache(options: GetTableSummaryOptions) {
@@ -50,7 +51,9 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         feature = 'table_summary',
         promptVersion = 1,
         algoVersion,
+        ignoreCache = false,
     } = options;
+
 
     const colList = columns ?? [];
     if (!colList.length) {
@@ -100,6 +103,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         tableName: table ?? null,
         promptVersion,
         algoVersion,
+        ignoreCache,
         normalize: (savedPayload) =>
             normalizeTableSummary({
                 payload: savedPayload,
@@ -136,8 +140,27 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
             });
 
             const { parsed, cleaned } = parseTableSummaryResponse(text);
+            let parsedPayload = parsed;
+            let cleanedRaw = cleaned;
+
+            if (!parsedPayload?.summary?.trim() && typeof parsedPayload?.raw === 'string') {
+                let depth = 0;
+                let currentRaw = parsedPayload.raw;
+                while (depth < 3 && typeof currentRaw === 'string') {
+                    const nested = parseTableSummaryResponse(currentRaw);
+                    if (!nested.parsed) break;
+
+                    parsedPayload = nested.parsed;
+                    cleanedRaw = nested.cleaned;
+                    if (parsedPayload.summary?.trim()) break;
+
+                    currentRaw = parsedPayload.raw as string;
+                    depth += 1;
+                }
+            }
+
             const normalizedResult = normalizeTableSummary({
-                payload: parsed,
+                payload: parsedPayload,
                 columns: colList,
                 properties: properties ?? null,
                 database: database ?? null,
@@ -147,7 +170,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
 
             const payloadToSave: TableSummaryResponse = {
                 ...normalizedResult,
-                raw: parsed?.raw ?? cleaned,
+                raw: parsedPayload?.raw ?? cleanedRaw,
             };
 
             return { payload: payloadToSave };
