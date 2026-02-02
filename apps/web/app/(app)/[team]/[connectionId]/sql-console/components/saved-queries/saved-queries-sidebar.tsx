@@ -23,7 +23,9 @@ import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { cn } from '@/lib/utils';
+import { useAtomValue } from 'jotai';
 import { useLocale, useTranslations } from 'next-intl';
+import { currentConnectionAtom } from '@/shared/stores/app.store';
 
 export type SavedQueryItem = {
     id: string;
@@ -34,6 +36,7 @@ export type SavedQueryItem = {
     tags?: string[] | null;
     workId?: string | null;
     userId?: string | null;
+    connectionId?: string | null;
     createdAt?: string | Date | null;
     updatedAt?: string | Date | null;
     archivedAt?: string | Date | null;
@@ -57,6 +60,8 @@ function summarizeSql(sqlText: string) {
 export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const t = useTranslations('SqlConsole');
     const locale = useLocale();
+    const currentConnection = useAtomValue(currentConnectionAtom);
+    const connectionId = currentConnection?.connection.id ?? null;
     const scrollRootRef = useRef<HTMLDivElement | null>(null);
     const scrollRestoreRef = useRef<{ top: number } | null>(null);
     const [loading, setLoading] = useState(false);
@@ -82,8 +87,20 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const fetchList = useCallback(async (nextLimit: number, options?: { silent?: boolean }) => {
         if (!options?.silent) setLoading(true);
         setError(null);
+        if (!connectionId) {
+            const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+            setError(message);
+            setItems([]);
+            setHasMore(false);
+            if (!options?.silent) setLoading(false);
+            return;
+        }
         try {
-            const res = await authFetch(`/api/sql-console/saved-queries?limit=${nextLimit}`);
+            const res = await authFetch(`/api/sql-console/saved-queries?limit=${nextLimit}`, {
+                headers: {
+                    'X-Connection-ID': connectionId,
+                },
+            });
             const data = await res.json().catch(() => null);
             if (!res.ok || (data && data.code !== 0)) {
                 throw new Error(data?.message ?? t('SavedQueries.LoadFailed'));
@@ -99,7 +116,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         } finally {
             if (!options?.silent) setLoading(false);
         }
-    }, [t]);
+    }, [t, connectionId]);
 
     useEffect(() => {
         fetchList(50);
@@ -176,11 +193,17 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     const commitPatch = useCallback(
         async (itemId: string, patch: Partial<SavedQueryItem>) => {
+            if (!connectionId) {
+                const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+                setError(message);
+                return;
+            }
             try {
                 const res = await authFetch(`/api/sql-console/saved-queries?id=${itemId}`, {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-Connection-ID': connectionId,
                     },
                     body: patch ? JSON.stringify(patch) : undefined,
                 });
@@ -196,13 +219,21 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                 setError(message);
             }
         },
-        [t],
+        [t, connectionId],
     );
 
     const handleDelete = async (item: SavedQueryItem) => {
+        if (!connectionId) {
+            const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+            setError(message);
+            return;
+        }
         try {
             const res = await authFetch(`/api/sql-console/saved-queries?id=${item.id}`, {
                 method: 'DELETE',
+                headers: {
+                    'X-Connection-ID': connectionId,
+                },
             });
             const data = await res.json().catch(() => null);
             if (!res.ok || (data && data.code !== 0)) {

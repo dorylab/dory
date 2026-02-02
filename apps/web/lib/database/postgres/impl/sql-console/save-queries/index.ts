@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, or } from 'drizzle-orm';
 
 import { savedQueries } from '@/lib/database/postgres/schemas';
 import { getClient } from '@/lib/database/postgres/client';
@@ -19,6 +19,7 @@ export type SavedQueryCreateInput = {
     context?: Record<string, unknown> | null;
     tags?: string[] | null;
     workId?: string | null;
+    connectionId: string;
 };
 
 export type SavedQueryUpdateInput = {
@@ -36,10 +37,20 @@ export type SavedQueryListParams = {
     userId: string;
     includeArchived?: boolean;
     limit?: number;
+    connectionId: string;
 };
 
 export class PostgresSavedQueriesRepository {
     private db!: PostgresDBClient;
+
+    private normalizeConnectionId(value: string) {
+        return value.trim();
+    }
+
+    private buildConnectionScopeCondition(connectionId: string) {
+        const normalized = this.normalizeConnectionId(connectionId);
+        return or(eq(savedQueries.connectionId, normalized), isNull(savedQueries.connectionId));
+    }
 
     async init() {
         try {
@@ -75,6 +86,7 @@ export class PostgresSavedQueriesRepository {
                 context: (input.context ?? {}) as any,
                 tags: (input.tags ?? []) as any,
                 workId: input.workId ?? null,
+                connectionId: this.normalizeConnectionId(input.connectionId),
                 createdAt: now,
                 updatedAt: now,
                 archivedAt: null,
@@ -90,6 +102,7 @@ export class PostgresSavedQueriesRepository {
         userId: string;
         id: string;
         includeArchived?: boolean;
+        connectionId: string;
     }): Promise<SavedQueryRecord | null> {
         this.assertInited();
 
@@ -99,6 +112,7 @@ export class PostgresSavedQueriesRepository {
             eq(savedQueries.userId, params.userId),
         ];
         if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
+        conds.push(this.buildConnectionScopeCondition(params.connectionId));
 
         const [row] = await this.db
             .select()
@@ -117,6 +131,7 @@ export class PostgresSavedQueriesRepository {
             eq(savedQueries.userId, params.userId),
         ];
         if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
+        conds.push(this.buildConnectionScopeCondition(params.connectionId));
 
         let query = this.db
             .select()
@@ -137,6 +152,7 @@ export class PostgresSavedQueriesRepository {
         userId: string;
         id: string;
         patch: SavedQueryUpdateInput;
+        connectionId: string;
     }): Promise<SavedQueryRecord> {
         this.assertInited();
 
@@ -168,6 +184,7 @@ export class PostgresSavedQueriesRepository {
                         eq(savedQueries.id, params.id),
                         eq(savedQueries.teamId, params.teamId),
                         eq(savedQueries.userId, params.userId),
+                        this.buildConnectionScopeCondition(params.connectionId),
                     ),
                 );
         }
@@ -180,6 +197,7 @@ export class PostgresSavedQueriesRepository {
                     eq(savedQueries.id, params.id),
                     eq(savedQueries.teamId, params.teamId),
                     eq(savedQueries.userId, params.userId),
+                    this.buildConnectionScopeCondition(params.connectionId),
                 ),
             )
             .limit(1);
@@ -188,7 +206,7 @@ export class PostgresSavedQueriesRepository {
         return row as SavedQueryRecord;
     }
 
-    async delete(params: { teamId: string; userId: string; id: string }): Promise<void> {
+    async delete(params: { teamId: string; userId: string; id: string; connectionId: string }): Promise<void> {
         this.assertInited();
 
         await this.db
@@ -199,6 +217,7 @@ export class PostgresSavedQueriesRepository {
                     eq(savedQueries.id, params.id),
                     eq(savedQueries.teamId, params.teamId),
                     eq(savedQueries.userId, params.userId),
+                    this.buildConnectionScopeCondition(params.connectionId),
                 ),
             );
     }

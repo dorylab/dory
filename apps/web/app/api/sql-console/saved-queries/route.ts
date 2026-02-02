@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { withUserAndTeamHandler } from '../../utils/with-team-handler';
 import { handleApiError } from '../../utils/handle-error';
-import { parseJsonBody } from '../../utils/parse-json';
+import { parseJsonBody, BadRequestError } from '../../utils/parse-json';
+import { getConnectionIdFromRequest } from '@/lib/utils/request';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 const createSchema = z.object({
@@ -40,6 +41,20 @@ const updateSchema = z
             data.archivedAt !== undefined,
     );
 
+const normalizeConnectionId = (value?: string | null) => {
+    if (!value) return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+};
+
+const requireConnectionId = (req: NextRequest, t: (key: string, values?: Record<string, unknown>) => string) => {
+    const connectionId = normalizeConnectionId(getConnectionIdFromRequest(req));
+    if (!connectionId) {
+        throw new BadRequestError(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+    }
+    return connectionId;
+};
+
 // GET /api/sql-console/saved-queries?id=xxx&includeArchived=1&limit=50
 export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) => {
     const locale = await getApiLocale();
@@ -48,6 +63,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =>
     const includeArchived = req.nextUrl.searchParams.get('includeArchived');
     const limitRaw = req.nextUrl.searchParams.get('limit');
     const limit = limitRaw ? Number(limitRaw) : undefined;
+    const connectionId = requireConnectionId(req, t);
 
     try {
         if (id) {
@@ -56,6 +72,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =>
                 userId,
                 id,
                 includeArchived: includeArchived === '1' || includeArchived === 'true',
+                connectionId,
             });
             if (!record) {
                 return NextResponse.json(
@@ -73,6 +90,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =>
             teamId,
             userId,
             includeArchived: includeArchived === '1' || includeArchived === 'true',
+            connectionId,
             limit: Number.isFinite(limit) ? limit : undefined,
         });
         return NextResponse.json(ResponseUtil.success(list));
@@ -83,12 +101,16 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =>
 
 // POST /api/sql-console/saved-queries
 export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) => {
+    const locale = await getApiLocale();
+    const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     try {
         const payload = await parseJsonBody(req, createSchema);
+        const connectionId = requireConnectionId(req, t);
         const created = await db.savedQueries.create({
             ...payload,
             teamId,
             userId: userId as string,
+            connectionId,
         });
         return NextResponse.json(ResponseUtil.success(created), { status: 201 });
     } catch (err: any) {
@@ -115,10 +137,12 @@ export const PATCH = withUserAndTeamHandler(async ({ req, db, userId, teamId }) 
             );
         }
 
+        const connectionId = requireConnectionId(req, t);
         const updated = await db.savedQueries.update({
             teamId,
             userId: userId as string,
             id: savedQueryId,
+            connectionId,
             patch: payload,
         });
         return NextResponse.json(ResponseUtil.success(updated));
@@ -143,7 +167,8 @@ export const DELETE = withUserAndTeamHandler(async ({ req, db, userId, teamId })
             );
         }
 
-        await db.savedQueries.delete({ teamId, userId: userId as string, id });
+        const connectionId = requireConnectionId(req, t);
+        await db.savedQueries.delete({ teamId, userId: userId as string, id, connectionId });
         return NextResponse.json(ResponseUtil.success({ deleted: [id] }));
     } catch (err: any) {
         return handleApiError(err);

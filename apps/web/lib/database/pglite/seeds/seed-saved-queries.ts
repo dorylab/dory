@@ -48,6 +48,7 @@ async function main() {
                 context: { database: 'demo', schema: 'public' },
                 tags: [],
                 workId: null,
+                connectionId: teamId,
                 createdAt: now,
                 updatedAt: now,
                 archivedAt: null,

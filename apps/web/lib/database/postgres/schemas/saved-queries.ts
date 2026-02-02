@@ -15,7 +15,9 @@ export const savedQueries = pgTable(
 
         sqlText: text('sql_text').notNull(),
 
-        // { connectionId, database, schema, dialect, ... }
+        
+        connectionId: text('connection_id').notNull(),
+        
         context: jsonb('context').notNull().default(sql`'{}'::jsonb`),
 
         // text[]
@@ -39,4 +41,3 @@ export const savedQueries = pgTable(
 
 export type SavedQuery = typeof savedQueries.$inferSelect;
 export type NewSavedQuery = typeof savedQueries.$inferInsert;
-

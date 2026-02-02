@@ -31,11 +31,8 @@ import {
     sqlEditorSettingsAtom,
 } from '@/shared/stores/sql-editor-settings.store';
 
-type SavedQueryItem = {
-    id: string;
-    title: string;
-    sqlText: string;
-};
+import { currentConnectionAtom } from '@/shared/stores/app.store';
+import type { SavedQueryItem } from '../saved-queries/saved-queries-sidebar';
 
 export function SqlMode({
     tabs,
@@ -64,6 +61,8 @@ export function SqlMode({
     const isRunning = runningTabs[activeTab?.tabId ?? ''] === 'running';
     const canSave = activeTab?.tabType === 'sql';
     const defaultSaveTitle = useMemo(() => activeTab?.tabName ?? t('Tabs.NewQuery'), [activeTab?.tabName, t]);
+    const currentConnection = useAtomValue(currentConnectionAtom);
+    const connectionId = currentConnection?.connection.id ?? null;
     const handleRunQuery = () => {
         if (!activeTab || isRunning) return;
         const options = hasSqlLimit ? undefined : { limit: queryLimit };
@@ -86,15 +85,23 @@ export function SqlMode({
     const isSaved = !!currentSqlText && savedQueries.some(q => q.sqlText.trim() === currentSqlText);
 
     const fetchSavedQueries = useCallback(async () => {
+        if (!connectionId) {
+            setSavedQueries([]);
+            return;
+        }
         try {
-            const res = await authFetch('/api/sql-console/saved-queries');
+            const res = await authFetch('/api/sql-console/saved-queries', {
+                headers: {
+                    'X-Connection-ID': connectionId,
+                },
+            });
             const data = await res.json().catch(() => null);
             if (!res.ok || (data && data.code !== 0)) return;
             setSavedQueries((data?.data ?? []) as SavedQueryItem[]);
         } catch {
             // ignore
         }
-    }, []);
+    }, [connectionId]);
 
     useEffect(() => {
         fetchSavedQueries();

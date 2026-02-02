@@ -7,7 +7,9 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import { useAtomValue } from 'jotai';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { useTranslations } from 'next-intl';
 
 type SaveSqlDialogProps = {
@@ -20,6 +22,8 @@ type SaveSqlDialogProps = {
 
 export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, onSaved }: SaveSqlDialogProps) {
     const t = useTranslations('SqlConsole');
+    const currentConnection = useAtomValue(currentConnectionAtom);
+    const connectionId = currentConnection?.connection.id ?? null;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [saving, setSaving] = useState(false);
@@ -48,6 +52,12 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
             setError(t('SaveSql.Errors.TitleRequired'));
             return;
         }
+        if (!connectionId) {
+            const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+            setError(message);
+            toast.error(message);
+            return;
+        }
 
         setSaving(true);
         setError(null);
@@ -57,6 +67,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Connection-ID': connectionId,
                 },
                 body: JSON.stringify({
                     title: title.trim(),
