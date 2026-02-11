@@ -110,7 +110,7 @@ export default async function RootLayout({
                 <FontSizeProvider />
                 <NextIntlClientProvider locale={locale} messages={messages}>
                     <JotaiProvider>
-                        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange enableColorScheme>
+                        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange enableColorScheme>
                             <ActiveThemeProvider initialTheme={activeThemeValue}>
                                 {children}
                                 <Toaster />
