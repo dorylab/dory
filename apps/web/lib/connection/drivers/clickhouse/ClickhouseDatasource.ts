@@ -1,27 +1,15 @@
-import http from 'node:http';
 import { createClient, type ClickHouseClient, type ClickHouseClientConfigOptions, type ClickHouseSettings, type ResponseJSON } from '@clickhouse/client';
 
 import { BaseConnection } from '../../base/base-connection';
 import type { DatabaseMeta, GetTableInfoAPI, HealthInfo, QueryInsightsAPI, QueryResult, SQLParams, TableMeta } from '../../base/types';
 import { getQueryInsightsImpl } from './impl/getQueryInsightsImpl';
-import { SshTunnel, createSshTunnel, SshOptions } from '@/lib/network/ssh-tunnel';
 import { getTableInfoImpl } from './impl/getTableInfoImpl';
 import { getClickhousePrivilegesImpl, type ClickhousePrivilegesImpl } from './impl/privilegesImpl';
 import { enforceSelectLimit } from '@/lib/utils/enforce-select-limit';
 import { MAX_RESULT_BYTES, MAX_RESULT_ROWS } from '@/app/config/sql-console';
 import { translate } from '@/lib/i18n/i18n';
 import { routing } from '@/lib/i18n/routing';
-import {
-    getDatabaseSummary,
-    getDatabaseTablesDetail,
-    getFunctions,
-    getMaterializedViews,
-    getTablesOnly,
-    getViews,
-    type DatabaseSummary,
-} from './impl/metadataImpl';
-
-// Import SSH-related pieces from a separate module
+import { getDatabaseSummary, getDatabaseTablesDetail, getFunctions, getMaterializedViews, getTablesOnly, getViews, type DatabaseSummary } from './impl/metadataImpl';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -40,19 +28,16 @@ export class ClickhouseDatasource extends BaseConnection {
     private client: ClickHouseClient | null = null;
     private configOptions!: ClickHouseClientConfigOptions;
 
-    // SSH-related
-    private sshTunnel: SshTunnel | null = null;
-    private sshAgent: http.Agent | null = null;
-
     /* -------------------- Lifecycle -------------------- */
 
     protected async _init(): Promise<void> {
-        await this.setupSshIfNeeded();
+        const targetPort = this.resolveHttpPort() ?? (this.isTlsEnabled() ? 8443 : 8123);
+
+        await this.setupSshIfNeeded(targetPort);
 
         this.configOptions = this.createClientOptions();
         this.client = createClient(this.configOptions);
 
-        // Ping during init to ensure availability
         await this.client.ping();
     }
 
@@ -102,10 +87,7 @@ export class ClickhouseDatasource extends BaseConnection {
     /**
      * Supports context.queryId + explicit database
      */
-    async queryWithContext<Row = any>(
-        sql: string,
-        context?: { database?: string; params?: SQLParams; queryId?: string },
-    ): Promise<QueryResult<Row>> {
+    async queryWithContext<Row = any>(sql: string, context?: { database?: string; params?: SQLParams; queryId?: string }): Promise<QueryResult<Row>> {
         const targetDb = context?.database ?? this.config.database;
 
         if (!targetDb || targetDb === this.configOptions.database) {
@@ -150,12 +132,7 @@ export class ClickhouseDatasource extends BaseConnection {
     /**
      * Pass queryId through to ClickHouse query_id
      */
-    private async executeQuery<Row>(
-        client: ClickHouseClient,
-        sql: string,
-        params?: SQLParams,
-        queryId?: string,
-    ): Promise<QueryResult<Row>> {
+    private async executeQuery<Row>(client: ClickHouseClient, sql: string, params?: SQLParams, queryId?: string): Promise<QueryResult<Row>> {
         const started = Date.now();
         const queryParams = this.normalizeParams(params);
 
@@ -217,8 +194,6 @@ export class ClickhouseDatasource extends BaseConnection {
         };
     }
 
-
-
     private normalizeParams(params?: SQLParams): Record<string, unknown> | undefined {
         if (!params) return undefined;
         if (Array.isArray(params)) {
@@ -239,16 +214,13 @@ export class ClickhouseDatasource extends BaseConnection {
 
     async getTables(database?: string): Promise<TableMeta[]> {
         if (database) {
-            const rows = await this.query<{ table: string; db: string }>(
-                'SELECT name AS table, database AS db FROM system.tables WHERE database = {db:String} ORDER BY name',
-                { db: database },
-            );
+            const rows = await this.query<{ table: string; db: string }>('SELECT name AS table, database AS db FROM system.tables WHERE database = {db:String} ORDER BY name', {
+                db: database,
+            });
             return rows.rows.map(row => ({ value: row.table, label: row.table, database: row.db }));
         }
 
-        const rows = await this.query<{ table: string; db: string }>(
-            'SELECT name AS table, database AS db FROM system.tables ORDER BY database, name',
-        );
+        const rows = await this.query<{ table: string; db: string }>('SELECT name AS table, database AS db FROM system.tables ORDER BY database, name');
         return rows.rows.map(row => ({ value: row.table, label: `${row.db}.${row.table}`, database: row.db }));
     }
 
@@ -347,35 +319,6 @@ export class ClickhouseDatasource extends BaseConnection {
             }
         }
         return Object.keys(normalized).length ? normalized : undefined;
-    }
-
-    /* -------------------- SSH Helpers -------------------- */
-
-    private async setupSshIfNeeded(): Promise<void> {
-        const ssh = this.getSshOptions();
-        if (!ssh?.enabled) return;
-
-        const targetPort = this.resolveHttpPort() ?? (this.isTlsEnabled() ? 8443 : 8123);
-
-        // this.sshTunnel = await createSshTunnel(this.config.host, targetPort, ssh);
-        this.sshTunnel = await createSshTunnel('host.docker.internal', targetPort, ssh);
-        this.sshAgent = this.sshTunnel.agent;
-    }
-
-    private async teardownSsh(): Promise<void> {
-        if (this.sshTunnel) {
-            await this.sshTunnel.close();
-            this.sshTunnel = null;
-        }
-        this.sshAgent = null;
-    }
-
-    private getSshOptions(): SshOptions | null {
-        const options = this.config.options as Record<string, unknown> | undefined;
-        if (!options || typeof options !== 'object') return null;
-        const ssh = (options as any).ssh as SshOptions | undefined;
-        if (!ssh || !ssh.enabled) return null;
-        return ssh;
     }
 
     /* -------------------- Query Insights -------------------- */

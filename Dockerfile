@@ -1,7 +1,8 @@
 FROM node:22-alpine AS installer
 WORKDIR /app
 
-RUN corepack enable
+RUN corepack enable \
+ && corepack prepare yarn@1.22.22 --activate
 COPY . .
 
 ARG VERSION
@@ -12,8 +13,8 @@ RUN apk add --no-cache curl bash
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
-RUN pnpm install --frozen-lockfile
-RUN pnpm run build
+RUN yarn install --frozen-lockfile
+RUN yarn run build
 RUN mkdir -p apps/web/dist-scripts \
  && bun build apps/web/scripts/bootstrap.ts --target=node --format=esm --outfile=apps/web/dist-scripts/bootstrap.mjs
 
@@ -25,7 +26,7 @@ RUN DIST="$(find apps/web -path '*/@electric-sql/pglite*/dist' -type d -print -q
  && ls -lah apps/web/dist-scripts | sed -n '1,120p'
  
 RUN rm -f apps/web/.next/standalone/.env apps/web/.next/standalone/.env.local
-RUN pnpm prune --prod
+RUN yarn install --production --frozen-lockfile
 
 FROM node:22-alpine AS runner
 WORKDIR /app

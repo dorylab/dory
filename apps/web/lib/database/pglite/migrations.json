@@ -82,5 +82,13 @@
     "bps": true,
     "folderMillis": 1770019908900,
     "hash": "28335481d29bd44d9bac6458a52e49658f1568cdb8d04bcdfa4732a4fc82acf5"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"saved_queries\" ALTER COLUMN \"connection_id\" SET NOT NULL;"
+    ],
+    "bps": true,
+    "folderMillis": 1770305788967,
+    "hash": "7ffddb2c70b9c6fbba32d3c5b1864314d8a65ce960ebd8af4ee354ed5ac0f2e6"
   }
 ]

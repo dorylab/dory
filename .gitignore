@@ -22,6 +22,7 @@ apps/electron/node_modules/.bin/**
 /apps/web/dist-scripts/
 /apps/electron/dist-electron/
 /apps/web/release/
+**/release**
 dist
 # production
 /build

@@ -21,5 +21,14 @@
   "include": [
     "./**/*.ts",
     "./**/*.cts"
+  ],
+  "exclude": [
+    "**/dist/**",
+    "**/.next/**",
+    "**/out/**",
+    "**/build/**",
+    "**/standalone/**",
+    "**/.turbo/**",
+    "**/node_modules/**"
   ]
 }

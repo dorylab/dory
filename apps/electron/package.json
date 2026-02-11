@@ -1,35 +1,36 @@
 {
-    "name": "v4-electron",
+    "name": "dory",
     "version": "0.1.0",
     "private": true,
     "type": "module",
     "scripts": {
         "compile": "tsc -p tsconfig.json",
-        "dev": "pnpm run compile && electron ./dist-electron/main.js",
-        "standalone": "bash ../web/scripts/build-standalone.sh",
-        "build": "pnpm --filter v4 build && pnpm run compile && electron-builder",
-        "build:apple": "pnpm run compile && electron-builder --mac"
-    },
-    "dependencies": {
-        "dotenv": "^17.2.3",
-        "electron": "^38.7.2",
-        "electron-notarize": "^1.2.2",
-        "typescript": "^5.9.3"
+        "dev": "yarn run compile && electron ./dist-electron/main.js",
+        "electron:standalone": "bash ../../scripts/build-app-standalone.sh",
+        "build": "yarn --cwd ../web run build && yarn run compile && electron-builder",
+        "electron:build:apple": "yarn run compile && electron-builder --mac"
     },
     "devDependencies": {
         "@types/node": "^24.3.1",
-        "electron-builder": "^25.1.8"
+        "dotenv": "^17.2.3",
+        "electron": "38.7.2",
+        "electron-builder": "^25.1.8",
+        "electron-notarize": "^1.2.2",
+        "typescript": "^5.9.3"
     },
     "build": {
         "appId": "com.dory.app",
         "productName": "Dory",
+        "extraMetadata": {
+            "main": "dist-electron/main.js"
+        },
         "files": [
             "dist-electron/**/*",
-            "../web/package.json"
+            "package.json"
         ],
         "extraResources": [
             {
-                "from": "../web/release/standalone",
+                "from": "../../release/standalone",
                 "to": "standalone"
             }
         ],
@@ -50,5 +51,8 @@
                 "zip"
             ]
         }
+    },
+    "dependencies": {
+        "electron-log": "^5.4.3"
     }
 }

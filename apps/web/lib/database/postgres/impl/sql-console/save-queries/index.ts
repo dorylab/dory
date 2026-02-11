@@ -112,7 +112,10 @@ export class PostgresSavedQueriesRepository {
             eq(savedQueries.userId, params.userId),
         ];
         if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
-        conds.push(this.buildConnectionScopeCondition(params.connectionId));
+        const connectionCond = this.buildConnectionScopeCondition(params.connectionId);
+        if (connectionCond) {
+            conds.push(connectionCond);
+        }
 
         const [row] = await this.db
             .select()
@@ -131,7 +134,10 @@ export class PostgresSavedQueriesRepository {
             eq(savedQueries.userId, params.userId),
         ];
         if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
-        conds.push(this.buildConnectionScopeCondition(params.connectionId));
+        const connectionCond = this.buildConnectionScopeCondition(params.connectionId);
+        if (connectionCond) {
+            conds.push(connectionCond);
+        }
 
         let query = this.db
             .select()

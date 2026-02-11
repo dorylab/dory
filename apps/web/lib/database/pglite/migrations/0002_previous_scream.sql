@@ -1,0 +1,1 @@
+ALTER TABLE "saved_queries" ALTER COLUMN "connection_id" SET NOT NULL;

@@ -5,25 +5,30 @@ import path from 'node:path';
 import { migratePgliteDB } from '../lib/database/pglite/migrate-pglite';
 import { getDatabaseProvider } from '../lib/database/provider';
 import { DEFAULT_PGLITE_DB_PATH } from '@/shared/data/app.data';
-import { ensureFileUrl, extractFilePath } from '@/lib/database/pglite/url';
+import { fileURLToPath } from 'node:url';
 
 
 async function ensureDirForFile(filePath: string) {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
 
+function toFsPath(v: string) {
+  if (v.startsWith("file:")) return fileURLToPath(v);
+  return decodeURIComponent(v);
+}
+
 async function bootstrapPglite() {
-    const defaultFile = DEFAULT_PGLITE_DB_PATH;
+  const defaultFile = DEFAULT_PGLITE_DB_PATH;
+  const raw = process.env.DATABASE_URL ?? defaultFile;
 
-    const dbUrl = process.env.DATABASE_URL;
+  const dbFilePath = toFsPath(raw);
 
-    const dbFilePath = dbUrl ? extractFilePath(dbUrl) : defaultFile;
-    process.env.DATABASE_URL = ensureFileUrl(dbFilePath);
+  process.env.DATABASE_URL = dbFilePath;
 
-    await ensureDirForFile(dbFilePath);
+  await ensureDirForFile(dbFilePath);
 
-    console.log('[bootstrap] running pglite migrate...');
-    await migratePgliteDB();
+  console.log("[bootstrap] running pglite migrate...");
+  await migratePgliteDB();
 }
 
 export async function bootstrap() {

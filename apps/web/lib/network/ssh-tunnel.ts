@@ -12,6 +12,7 @@ export type SshOptions = {
     password?: string | null;
     privateKey?: string | null;
     passphrase?: string | null;
+    targetHostOverride?: string;
 };
 
 class SshHttpAgent extends http.Agent {

@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import * as schemas from '../schemas';
 import type { PostgresDBClient } from '@/types';
 import { DEFAULT_PGLITE_DB_PATH } from '@/shared/data/app.data';
-import { ensureFileUrl, extractFilePath } from '@/lib/database/pglite/url';
+import { extractFilePath } from '@/lib/database/pglite/url';
 
 const globalForPglite = globalThis as typeof globalThis & {
     __pgliteDbPromise?: Promise<PostgresDBClient>;
@@ -21,7 +21,7 @@ async function resolvePgliteDataDir(): Promise<string> {
     // 1) Explicitly set (local dev / CI / multi-instance)
     if (process.env.DATABASE_URL) {
         const pathFromUrl = extractFilePath(process.env.DATABASE_URL);
-        return ensureFileUrl(pathFromUrl);
+        return pathFromUrl;
     }
 
     // 2) Electron main process default (production)
@@ -33,7 +33,7 @@ async function resolvePgliteDataDir(): Promise<string> {
 
     // 3) Fallback (e.g. local Node debugging)
     const dir = path.resolve(process.cwd(), DEFAULT_PGLITE_DB_PATH);
-    return `file://${dir}`;
+    return dir;
 }
 
 async function initPglite(): Promise<PostgresDBClient> {
