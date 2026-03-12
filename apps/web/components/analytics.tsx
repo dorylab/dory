@@ -8,21 +8,24 @@ import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
 import { posthogBaseProperties } from '@/lib/posthog-config';
 import { normalizeRuntime } from '@/lib/runtime/runtime';
 
-const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-const isPostHogEnabled = Boolean(posthogKey) && Boolean(posthogHost);
-
 export function Analytics() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const hasInitializedRef = useRef(false);
 
     useEffect(() => {
-        if (!isPostHogEnabled || hasInitializedRef.current) {
+        if (hasInitializedRef.current) {
             return;
         }
 
-        posthog.init(posthogKey!, {
+        const posthogKey = env('NEXT_PUBLIC_POSTHOG_KEY');
+        const posthogHost = env('NEXT_PUBLIC_POSTHOG_HOST');
+
+        if (!posthogKey || !posthogHost) {
+            return;
+        }
+
+        posthog.init(posthogKey, {
             api_host: '/ingest',
             ui_host: 'https://us.posthog.com',
             defaults: '2026-01-30',
@@ -39,7 +42,7 @@ export function Analytics() {
     }, []);
 
     useEffect(() => {
-        if (!isPostHogEnabled || !hasInitializedRef.current) {
+        if (!hasInitializedRef.current) {
             return;
         }
 
