@@ -745,7 +745,6 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     autoUpdater.on('error', (error: Error) => {
         debugPreviewMode = false;
         stopDebugProgressTimer();
-        const wasManual = isManualCheck;
         checkInProgress = false;
         downloadInProgress = false;
         downloadCanceledByUser = false;
@@ -754,7 +753,9 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
         isManualCheck = false;
         availableVersion = null;
         closeAllDialogs();
-        showUpdateError(logError, t, error, wasManual);
+        // Dialog is handled by the catch block at each call site (runCheckForUpdates,
+        // downloadUpdate, etc.) to avoid duplicate dialogs, so always pass manual=false here.
+        showUpdateError(logError, t, error, false);
     });
 
     app.on('before-quit', () => {
