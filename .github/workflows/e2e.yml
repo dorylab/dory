@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Add node_modules binaries to PATH
+        run: echo "$PWD/node_modules/.bin" >> $GITHUB_PATH
+
       - name: Install Playwright browser
         run: bunx playwright install --with-deps chromium
 
