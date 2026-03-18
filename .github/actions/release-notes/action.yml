@@ -74,7 +74,7 @@ runs:
         MAX_COMMITS="${{ inputs.max_commits }}"
 
         if [ -n "$PREVIOUS_TAG" ]; then
-          yarn release-notes --from "$PREVIOUS_TAG" --to "$TO_REF" --max-commits "$MAX_COMMITS" --output "$NOTES_FILE"
+          bun run release-notes --from "$PREVIOUS_TAG" --to "$TO_REF" --max-commits "$MAX_COMMITS" --output "$NOTES_FILE"
         else
-          yarn release-notes --to "$TO_REF" --max-commits "$MAX_COMMITS" --output "$NOTES_FILE"
+          bun run release-notes --to "$TO_REF" --max-commits "$MAX_COMMITS" --output "$NOTES_FILE"
         fi

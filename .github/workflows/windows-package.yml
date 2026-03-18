@@ -37,36 +37,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: yarn
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install dependencies (retry)
-        shell: pwsh
-        run: |
-          $maxAttempts = 3
-          $attempt = 1
-
-          while ($attempt -le $maxAttempts) {
-            Write-Host "Install attempt $attempt..."
-
-            yarn install --frozen-lockfile --non-interactive --network-concurrency 4
-
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "Dependencies installed successfully"
-              exit 0
-            }
-
-            Write-Host "Install failed. Retrying in 10 seconds..."
-            Start-Sleep -Seconds 10
-            $attempt++
-          }
-
-          Write-Error "yarn install failed after $maxAttempts attempts"
-          exit 1
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Resolve release tag
         id: tag
@@ -122,7 +100,7 @@ jobs:
         shell: bash
         env:
           DORY_UPDATE_CHANNEL: ${{ steps.release_kind.outputs.is_prerelease == 'true' && 'beta' || 'latest' }}
-        run: yarn electron:build:win
+        run: bun run electron:build:win
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

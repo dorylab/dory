@@ -19,27 +19,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: yarn
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: bunx playwright install --with-deps chromium
 
       - name: Run e2e tests
         env:
           CI: true
-        run: yarn test:e2e
+        run: bun run test:e2e
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

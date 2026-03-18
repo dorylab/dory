@@ -66,15 +66,15 @@ Currently supported providers:
 Use dedicated `RELEASE_NOTES_AI_*` environment variables to generate English release notes from git commits without sharing product runtime credentials:
 
 ```bash
-yarn release-notes
+bun run release-notes
 ```
 
 Useful options:
 
 ```bash
-yarn release-notes --from v0.3.6 --to HEAD
-yarn release-notes --output ./release-notes/v0.3.7.md
-yarn release-notes --model gpt-4o-mini
+bun run release-notes --from v0.3.6 --to HEAD
+bun run release-notes --output ./release-notes/v0.3.7.md
+bun run release-notes --model gpt-4o-mini
 ```
 
 The GitHub release workflow also writes the generated markdown to `release-notes/<tag>.md` and commits it to the repository with the release version update.

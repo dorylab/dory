@@ -37,7 +37,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: yarn
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -45,7 +44,7 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Resolve release tag
         id: tag
@@ -110,7 +109,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
           CSC_IDENTITY_AUTO_DISCOVERY: true
           DORY_UPDATE_CHANNEL: ${{ steps.release_kind.outputs.is_prerelease == 'true' && 'beta' || 'latest' }}
-        run: yarn electron:build:apple
+        run: bun run electron:build:apple
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

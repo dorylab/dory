@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository is a Yarn workspace monorepo for Dory.
+This repository is a Bun workspace monorepo for Dory.
 
 - `apps/web`: main product application
 - `apps/admin`: admin application
@@ -63,25 +63,25 @@ Avoid editing generated or local artifact paths unless the task explicitly targe
 
 Run from the repository root unless workspace-local execution is more appropriate.
 
-- `yarn`
-- `yarn dev`
-- `yarn admin:dev`
-- `yarn electron:dev`
-- `yarn build`
-- `yarn admin:build`
-- `yarn electron:build`
-- `yarn lint`
-- `yarn typecheck`
-- `yarn format:check`
-- `yarn format:write`
-- `yarn test:e2e`
+- `bun install`
+- `bun run dev`
+- `bun run admin:dev`
+- `bun run electron:dev`
+- `bun run build`
+- `bun run admin:build`
+- `bun run electron:build`
+- `bun run lint`
+- `bun run typecheck`
+- `bun run format:check`
+- `bun run format:write`
+- `bun run test:e2e`
 
 Useful workspace commands:
 
-- `yarn workspace v4 run lint`
-- `yarn workspace v4 run typecheck`
-- `yarn workspace admin run lint`
-- `yarn workspace admin run typecheck`
+- `bun run --filter v4 lint`
+- `bun run --filter v4 typecheck`
+- `bun run --filter admin lint`
+- `bun run --filter admin typecheck`
 
 ## Coding Rules
 

@@ -183,7 +183,7 @@ function readValue(argv: string[], index: number, flag: string) {
 
 function printHelp() {
     const lines = [
-        'Usage: yarn release-notes [options]',
+        'Usage: bun run release-notes [options]',
         '',
         'Options:',
         '  --from <ref>         Start ref. Defaults to the latest git tag.',
