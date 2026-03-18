@@ -1,55 +1,53 @@
-FROM node:22-alpine AS installer
+FROM oven/bun:1 AS base
 WORKDIR /app
 
-RUN corepack enable \
- && corepack prepare yarn@1.22.22 --activate
+FROM base AS builder
+
+# Install native build dependencies (for better-sqlite3 etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+ && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency manifests first for better layer caching
+COPY package.json bun.lock ./
+COPY apps/web/package.json apps/web/package.json
+COPY apps/admin/package.json apps/admin/package.json
+COPY apps/electron/package.json apps/electron/package.json
+COPY packages/auth-core/package.json packages/auth-core/package.json
+
+ENV CI=true
+RUN bun install --frozen-lockfile
+
+# Copy source code after dependencies are installed
 COPY . .
 
 ARG VERSION
 ENV VERSION="${VERSION}"
-ENV CI=true
 
-RUN apk add --no-cache curl bash
-RUN curl -fsSL https://bun.sh/install | bash
-ENV PATH="/root/.bun/bin:${PATH}"
+# build includes bootstrap bundle and pglite asset copying
+RUN bun run build
 
-RUN yarn install --frozen-lockfile --non-interactive --network-concurrency 4
-RUN yarn run build
-RUN mkdir -p apps/web/dist-scripts \
- && bun build apps/web/scripts/bootstrap.ts --target=node --format=esm --outfile=apps/web/dist-scripts/bootstrap.mjs
-
-# copy pglite runtime assets next to bootstrap.mjs
-RUN DIST="$(find apps/web -path '*/@electric-sql/pglite*/dist' -type d -print -quit)" \
- && [ -n "$DIST" ] \
- && cp -a "$DIST"/postgres.* apps/web/dist-scripts/ \
- && cp -a "$DIST"/*.wasm apps/web/dist-scripts/ \
- && ls -lah apps/web/dist-scripts | sed -n '1,120p'
- 
 RUN rm -f apps/web/.next/standalone/.env apps/web/.next/standalone/.env.local
-RUN yarn install --production --frozen-lockfile
 
-FROM node:22-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV DORY_RUNTIME=docker
 ENV NEXT_PUBLIC_DORY_RUNTIME=docker
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
-# tzdata
-RUN apk add --no-cache tzdata ca-certificates
-
-RUN addgroup -S -g 1001 nodejs \
- && adduser -S -u 1001 -G nodejs nextjs \
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
  && mkdir -p /app/logs /app/data \
- && chown -R nextjs:nodejs /app
+ && chown -R bun:bun /app
 
-USER nextjs
+USER bun
 
-COPY --from=installer /app/apps/web/package.json .
-COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=installer --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
-COPY --from=installer --chown=nextjs:nodejs /app/apps/web/dist-scripts ./dist-scripts
-COPY --from=installer --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
-
+COPY --from=builder --chown=bun:bun /app/apps/web/package.json .
+COPY --from=builder --chown=bun:bun /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=bun:bun /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=bun:bun /app/apps/web/dist-scripts ./dist-scripts
+COPY --from=builder --chown=bun:bun /app/apps/web/.next/static ./apps/web/.next/static
 
 EXPOSE 3000
-CMD ["sh", "-lc", "node dist-scripts/bootstrap.mjs && if [ -f apps/web/server.js ]; then node apps/web/server.js; else node server.js; fi"]
+CMD ["sh", "-c", "bun dist-scripts/bootstrap.mjs && bun apps/web/server.js"]

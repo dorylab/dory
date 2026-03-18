@@ -9,14 +9,14 @@
     "type": "module",
     "scripts": {
         "compile": "tsc -p tsconfig.json && node ./scripts/copy-assets.cjs",
-        "dev": "yarn run compile && electron ./dist-electron/main.js",
-        "dev:app": "yarn run compile && electron-builder --config electron-builder.mjs --mac --dir && open \"dist/mac-arm64/Dory.app\"",
+        "dev": "bun run compile && electron ./dist-electron/main.js",
+        "dev:app": "bun run compile && electron-builder --config electron-builder.mjs --mac --dir && open \"dist/mac-arm64/Dory.app\"",
         "electron:standalone": "bash ../../scripts/build-app-standalone.sh",
-        "build": "yarn --cwd ../web run build && yarn run compile && electron-builder --config electron-builder.mjs",
-        "electron:build:apple": "yarn run compile && electron-builder --config electron-builder.mjs --mac --publish never",
-        "electron:build:windows": "yarn run compile && electron-builder --config electron-builder.mjs --win --publish never",
-        "electron:build:apple:quick": "yarn run compile && SKIP_NOTARIZE=1 electron-builder --config electron-builder.mjs --mac zip",
-        "electron:build:apple:unsigned": "yarn run compile && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.mjs --mac --dir"
+        "build": "bun run --cwd ../web build && bun run compile && electron-builder --config electron-builder.mjs",
+        "electron:build:apple": "bun run compile && electron-builder --config electron-builder.mjs --mac --publish never",
+        "electron:build:windows": "bun run compile && electron-builder --config electron-builder.mjs --win --publish never",
+        "electron:build:apple:quick": "bun run compile && SKIP_NOTARIZE=1 electron-builder --config electron-builder.mjs --mac zip",
+        "electron:build:apple:unsigned": "bun run compile && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.mjs --mac --dir"
     },
     "devDependencies": {
         "@types/node": "^24.3.1",
