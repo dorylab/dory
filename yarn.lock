@@ -2170,13 +2170,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@drizzle-team/studio@npm:^1.0.3":
-  version: 1.0.3
-  resolution: "@drizzle-team/studio@npm:1.0.3"
-  checksum: 10c0/f7c2de679cf7412169de502cf467af7f75367f18ba17c37bad619f2c5eda8ea972c168dc492b2d0840713d1bb3bc66cd4cfcb93cf377eb602cd22f52cbf70d17
-  languageName: node
-  linkType: hard
-
 "@ecies/ciphers@npm:^0.2.5":
   version: 0.2.5
   resolution: "@ecies/ciphers@npm:0.2.5"
@@ -22811,7 +22804,6 @@ __metadata:
     "@dnd-kit/modifiers": "npm:^9.0.0"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
-    "@drizzle-team/studio": "npm:^1.0.3"
     "@electric-sql/pglite": "npm:^0.2.17"
     "@eslint/eslintrc": "npm:^3"
     "@hookform/resolvers": "npm:^5.2.2"
