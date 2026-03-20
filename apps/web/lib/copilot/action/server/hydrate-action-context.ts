@@ -1,11 +1,11 @@
 import 'server-only';
 
 import { buildSchemaContextForTables } from '@/lib/ai/prompts';
-import { inferSqlDraftContext } from '@/app/(app)/[team]/[connectionId]/chatbot/copilot/infer-sql-context';
+import { inferSqlDraftContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/infer-sql-context';
 import type { ActionContext } from '../types';
 
 export async function hydrateActionContext(ctx: ActionContext): Promise<ActionContext> {
-    if (!ctx.teamId || !ctx.userId || !ctx.connectionId) {
+    if (!ctx.organizationId || !ctx.userId || !ctx.connectionId) {
         return ctx;
     }
 
@@ -21,7 +21,7 @@ export async function hydrateActionContext(ctx: ActionContext): Promise<ActionCo
 
     const schemaContext = await buildSchemaContextForTables({
         userId: ctx.userId,
-        teamId: ctx.teamId,
+        organizationId: ctx.organizationId,
         datasourceId: ctx.connectionId,
         database: inferred.database ?? ctx.database ?? null,
         schema: inferred.schema ?? null,

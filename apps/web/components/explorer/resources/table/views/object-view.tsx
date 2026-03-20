@@ -1,6 +1,6 @@
 'use client';
 
-import UrlTableBrowser from '@/app/(app)/[team]/components/table-browser/url-table-browser';
+import UrlTableBrowser from '@/app/(app)/[organization]/components/table-browser/url-table-browser';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { formatObjectKindLabel } from '@/lib/explorer/routing';
 import type { ExplorerResource } from '@/lib/explorer/types';

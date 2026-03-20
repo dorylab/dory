@@ -25,10 +25,10 @@ export type ResolvedPrivilegesConnection = {
 
 export async function resolvePrivilegesConnection(
     req: NextRequest,
-    options?: { teamId?: string },
+    options?: { organizationId?: string },
 ): Promise<{ response?: NextResponse; resolved?: ResolvedPrivilegesConnection }> {
     const locale = await getApiLocale();
-    const teamId = options?.teamId ?? resolveCurrentOrganizationId(await getSessionFromRequest(req));
+    const organizationId = options?.organizationId ?? resolveCurrentOrganizationId(await getSessionFromRequest(req));
     const connectionId =
         req.headers.get(X_CONNECTION_ID_KEY) ??
         req.headers.get(X_CONNECTION_ID_KEY.toLowerCase()) ??
@@ -46,19 +46,19 @@ export async function resolvePrivilegesConnection(
         };
     }
 
-    if (!teamId) {
+    if (!organizationId) {
         return {
             response: NextResponse.json(
                 ResponseUtil.error({
                     code: ErrorCodes.UNAUTHORIZED,
-                    message: translateApi('Api.Errors.MissingTeamContext', undefined, locale),
+                    message: translateApi('Api.Errors.MissingOrganizationContext', undefined, locale),
                 }),
                 { status: 401 },
             ),
         };
     }
 
-    const entry = await getOrCreateConnectionPool(teamId, connectionId);
+    const entry = await getOrCreateConnectionPool(organizationId, connectionId);
     if (!entry) {
         return {
             response: NextResponse.json(

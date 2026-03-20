@@ -1,7 +1,7 @@
 // app/api/ai/table-summary/route.ts
 import provider from '@/lib/ai/provider';
 import type { TablePropertiesRow } from '@/types/table-info';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale } from '@/app/api/utils/i18n';
 import { buildFallbackSummary, buildFallbackDetail, buildFallbackHighlights, buildFallbackSnippets } from '@/lib/ai/core/table-summary';
 import { ColumnInput } from '@/types';
@@ -44,14 +44,14 @@ function createTimer(label: string) {
     return { stamp, end };
 }
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
     const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/table-summary');
     if (proxied) return proxied;
 
     const locale = await getApiLocale();
     const timer = createTimer('POST');
     console.log('[api/ai/table-summary] start');
-    timer.stamp(`got teamId=${teamId}`);
+    timer.stamp(`got organizationId=${organizationId}`);
 
     const payload = (await req.json()) as TableSummaryRequest;
     timer.stamp('parsed body');
@@ -96,7 +96,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
         timer.stamp('call getTableSummaryWithCache');
 
         const result = await provider.getTableSummaryWithCache({
-            teamId,
+            organizationId,
             userId,
             connectionId,
             columns: colList,

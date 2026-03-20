@@ -11,7 +11,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { useDatabases } from '@/hooks/use-databases';
 import type { ResponseObject } from '@/types';
-import { getSidebarConfig } from '@/app/(app)/[team]/components/sql-console-sidebar/sidebar-config';
+import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';

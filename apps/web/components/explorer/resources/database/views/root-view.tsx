@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 
 type RootViewProps = {
-    team: string;
+    organization: string;
     connectionId: string;
     catalog: string;
 };
@@ -23,7 +23,7 @@ type DatabaseItem = {
     label: string;
 };
 
-export function RootView({ team, connectionId, catalog }: RootViewProps) {
+export function RootView({ organization, connectionId, catalog }: RootViewProps) {
     const router = useRouter();
     const { databases } = useDatabases();
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
@@ -38,8 +38,8 @@ export function RootView({ team, connectionId, catalog }: RootViewProps) {
         const matched = items.find(db => db.value === preferredDatabase);
         if (!matched) return;
         setActiveDatabase(matched.value);
-        router.replace(buildExplorerDatabasePath({ team, connectionId, catalog }, matched.value));
-    }, [catalog, connectionId, items, preferredDatabase, router, setActiveDatabase, team]);
+        router.replace(buildExplorerDatabasePath({ organization, connectionId, catalog }, matched.value));
+    }, [catalog, connectionId, items, preferredDatabase, router, setActiveDatabase, organization]);
 
     if (items.length === 0) {
         return (
@@ -66,7 +66,7 @@ export function RootView({ team, connectionId, catalog }: RootViewProps) {
                     return (
                         <Link
                             key={db.value}
-                            href={buildExplorerDatabasePath({ team, connectionId, catalog }, db.value)}
+                            href={buildExplorerDatabasePath({ organization, connectionId, catalog }, db.value)}
                             onClick={() => setActiveDatabase(db.value)}
                             className="block"
                         >

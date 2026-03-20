@@ -27,8 +27,8 @@ export const connections = pgTable(
         // Creator (nullable)
         createdByUserId: text('created_by_user_id'),
 
-        // Team-scoped resource
-        teamId: text('team_id').notNull(),
+        // Organization-scoped resource
+        organizationId: text('organization_id').notNull(),
 
         source: text('source').notNull().default('local'),
         cloudId: text('cloud_id'),
@@ -84,19 +84,19 @@ export const connections = pgTable(
         tags: text('tags').notNull().default(''),
     },
     t => [
-        // Name unique within team (excluding soft-deleted)
-        uniqueIndex('uniq_connections_team_name')
-            .on(t.teamId, t.name)
+        // Name unique within organization (excluding soft-deleted)
+        uniqueIndex('uniq_connections_organization_name')
+            .on(t.organizationId, t.name)
             .where(sql`${t.deletedAt} IS NULL`),
         uniqueIndex('uniq_connections_cloud_id')
             .on(t.cloudId)
             .where(sql`${t.cloudId} IS NOT NULL`),
 
-        index('idx_connections_team_id_status').on(t.teamId, t.status),
+        index('idx_connections_organization_id_status').on(t.organizationId, t.status),
         index('idx_connections_created_by_user_id').on(t.createdByUserId),
         index('idx_connections_sync_status').on(t.syncStatus),
-        index('idx_connections_team_cloud_id').on(t.teamId, t.cloudId),
-        index('idx_connections_team_env').on(t.teamId, t.environment),
+        index('idx_connections_organization_cloud_id').on(t.organizationId, t.cloudId),
+        index('idx_connections_organization_env').on(t.organizationId, t.environment),
 
         check('chk_connections_port', sql`${t.port} IS NULL OR (${t.port} BETWEEN 1 AND 65535)`),
         check('chk_connections_http_port', sql`${t.httpPort} IS NULL OR (${t.httpPort} BETWEEN 1 AND 65535)`),
@@ -116,8 +116,8 @@ export const connectionIdentities = pgTable(
 
         connectionId: text('connection_id').notNull(),
 
-        // Redundant teamId for permission checks/queries
-        teamId: text('team_id').notNull(),
+        // Redundant organizationId for permission checks/queries
+        organizationId: text('organization_id').notNull(),
 
         source: text('source').notNull().default('local'),
         cloudId: text('cloud_id'),
@@ -172,10 +172,10 @@ export const connectionIdentities = pgTable(
 
         index('idx_conn_identity_connection_id').on(t.connectionId),
         index('idx_conn_identity_created_by_user_id').on(t.createdByUserId),
-        index('idx_conn_identity_team_id').on(t.teamId),
+        index('idx_conn_identity_organization_id').on(t.organizationId),
         index('idx_conn_identity_enabled').on(t.enabled),
         index('idx_conn_identity_sync_status').on(t.syncStatus),
-        index('idx_conn_identity_team_cloud_id').on(t.teamId, t.cloudId),
+        index('idx_conn_identity_organization_cloud_id').on(t.organizationId, t.cloudId),
     ],
 );
 

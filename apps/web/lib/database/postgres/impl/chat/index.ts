@@ -50,7 +50,7 @@ export class PostgresChatRepository implements ChatRepository {
     private async getScopedSessionOn(
         db: DBLike,
         params: {
-            teamId: string;
+            organizationId: string;
             sessionId: string;
             userId: string;
             allowArchived?: boolean;
@@ -59,7 +59,7 @@ export class PostgresChatRepository implements ChatRepository {
         const [session] = await db
             .select({
                 id: chatSessions.id,
-                teamId: chatSessions.teamId,
+                organizationId: chatSessions.organizationId,
                 userId: chatSessions.userId,
                 archivedAt: chatSessions.archivedAt,
                 type: chatSessions.type,
@@ -69,7 +69,7 @@ export class PostgresChatRepository implements ChatRepository {
             .where(
                 and(
                     eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.teamId, params.teamId),
+                    eq(chatSessions.organizationId, params.organizationId),
                     eq(chatSessions.userId, params.userId),
                 ),
             );
@@ -100,7 +100,7 @@ export class PostgresChatRepository implements ChatRepository {
         title, settings, metadata,
         created_at, updated_at, archived_at, last_message_at
       ) VALUES (
-        ${id}, ${input.teamId}, ${input.userId}, 'copilot', ${input.tabId},
+        ${id}, ${input.organizationId}, ${input.userId}, 'copilot', ${input.tabId},
         ${input.connectionId ?? null}, ${input.activeDatabase ?? null}, ${input.activeSchema ?? null},
         ${input.title ?? null}, ${input.settings ?? null}, ${input.metadata ?? null},
         ${now}, ${now}, NULL, NULL
@@ -123,7 +123,7 @@ export class PostgresChatRepository implements ChatRepository {
         return row as ChatSessionRecord;
     }
 
-    async findCopilotSessionByTab(params: { teamId: string; userId: string; tabId: string }): Promise<ChatSessionRecord | null> {
+    async findCopilotSessionByTab(params: { organizationId: string; userId: string; tabId: string }): Promise<ChatSessionRecord | null> {
         this.assertInited();
 
         const [record] = await this.db
@@ -131,7 +131,7 @@ export class PostgresChatRepository implements ChatRepository {
             .from(chatSessions)
             .where(
                 and(
-                    eq(chatSessions.teamId, params.teamId),
+                    eq(chatSessions.organizationId, params.organizationId),
                     eq(chatSessions.userId, params.userId),
                     eq(chatSessions.tabId, params.tabId),
                     eq(chatSessions.type, 'copilot'),
@@ -154,7 +154,7 @@ export class PostgresChatRepository implements ChatRepository {
             .insert(chatSessions)
             .values({
                 id,
-                teamId: input.teamId,
+                organizationId: input.organizationId,
                 userId: input.userId,
                 type: 'global',
                 tabId: null,
@@ -177,14 +177,14 @@ export class PostgresChatRepository implements ChatRepository {
     }
 
     async listSessions(params: {
-        teamId: string;
+        organizationId: string;
         userId: string;
         includeArchived?: boolean;
         type?: ChatSessionType;
     }) {
         this.assertInited();
 
-        const conds = [eq(chatSessions.teamId, params.teamId), eq(chatSessions.userId, params.userId)];
+        const conds = [eq(chatSessions.organizationId, params.organizationId), eq(chatSessions.userId, params.userId)];
         if (!params.includeArchived) conds.push(isNull(chatSessions.archivedAt));
         if (params.type) conds.push(eq(chatSessions.type, params.type));
 
@@ -198,7 +198,7 @@ export class PostgresChatRepository implements ChatRepository {
     }
 
     async readSession(params: {
-        teamId: string;
+        organizationId: string;
         sessionId: string;
         userId: string;
     }) {
@@ -209,7 +209,7 @@ export class PostgresChatRepository implements ChatRepository {
             .where(
                 and(
                     eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.teamId, params.teamId),
+                    eq(chatSessions.organizationId, params.organizationId),
                     eq(chatSessions.userId, params.userId),
                 ),
             );
@@ -218,7 +218,7 @@ export class PostgresChatRepository implements ChatRepository {
     }
 
     async updateSession(params: {
-        teamId: string;
+        organizationId: string;
         sessionId: string;
         userId: string;
         patch: ChatSessionUpdate;
@@ -250,7 +250,7 @@ export class PostgresChatRepository implements ChatRepository {
                 .where(
                     and(
                         eq(chatSessions.id, params.sessionId),
-                        eq(chatSessions.teamId, params.teamId),
+                        eq(chatSessions.organizationId, params.organizationId),
                         eq(chatSessions.userId, params.userId),
                     ),
                 );
@@ -262,7 +262,7 @@ export class PostgresChatRepository implements ChatRepository {
             .where(
                 and(
                     eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.teamId, params.teamId),
+                    eq(chatSessions.organizationId, params.organizationId),
                     eq(chatSessions.userId, params.userId),
                 ),
             );
@@ -272,7 +272,7 @@ export class PostgresChatRepository implements ChatRepository {
     }
 
     async archiveSession(params: {
-        teamId: string;
+        organizationId: string;
         sessionId: string;
         userId: string;
     }) {
@@ -285,7 +285,7 @@ export class PostgresChatRepository implements ChatRepository {
             .where(
                 and(
                     eq(chatSessions.id, params.sessionId),
-                    eq(chatSessions.teamId, params.teamId),
+                    eq(chatSessions.organizationId, params.organizationId),
                     eq(chatSessions.userId, params.userId),
                 ),
             );
@@ -298,7 +298,7 @@ export class PostgresChatRepository implements ChatRepository {
      * - lastMessageAt is monotonic (avoid rollback)
      */
     async appendMessage(params: {
-        teamId: string;
+        organizationId: string;
         sessionId: string;
         userId: string;
         message: ChatMessageInsert;
@@ -310,7 +310,7 @@ export class PostgresChatRepository implements ChatRepository {
 
         return await this.db.transaction(async tx => {
             const session = await this.getScopedSessionOn(tx as any, {
-                teamId: params.teamId,
+                organizationId: params.organizationId,
                 sessionId: params.sessionId,
                 userId: params.userId,
                 allowArchived: false,
@@ -331,7 +331,7 @@ export class PostgresChatRepository implements ChatRepository {
                 .insert(chatMessages)
                 .values({
                     id: messageId,
-                    teamId: params.teamId,
+                    organizationId: params.organizationId,
                     sessionId: params.sessionId,
                     userId: normalizedUserId,
                     connectionId: params.message.connectionId ?? null,
@@ -352,7 +352,7 @@ export class PostgresChatRepository implements ChatRepository {
                 .where(
                     and(
                         eq(chatSessions.id, params.sessionId),
-                        eq(chatSessions.teamId, params.teamId),
+                        eq(chatSessions.organizationId, params.organizationId),
                         eq(chatSessions.userId, params.userId),
                     ),
                 );
@@ -363,7 +363,7 @@ export class PostgresChatRepository implements ChatRepository {
     }
 
     async listMessages(params: {
-        teamId: string;
+        organizationId: string;
         sessionId: string;
         userId: string;
         limit?: number;
@@ -374,7 +374,7 @@ export class PostgresChatRepository implements ChatRepository {
         let q = this.db
             .select()
             .from(chatMessages)
-            .where(and(eq(chatMessages.teamId, params.teamId), eq(chatMessages.sessionId, params.sessionId)))
+            .where(and(eq(chatMessages.organizationId, params.organizationId), eq(chatMessages.sessionId, params.sessionId)))
             .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
 
         if (params.limit && params.limit > 0) q = (q as any).limit(params.limit);

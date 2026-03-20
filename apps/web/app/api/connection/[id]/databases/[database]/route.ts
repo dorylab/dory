@@ -5,11 +5,11 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { hasMetadataCapability } from '@/lib/connection/base/types';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string; database: string }> }) {
-    return withUserAndTeamHandler(async ({ userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ userId, organizationId }) => {
         const locale = await getApiLocale();
         const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
         const errorMessages = {
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         }
 
         try {
-            const { entry } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+            const { entry } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
             const metadata = entry.instance.capabilities.metadata;
             if (!hasMetadataCapability(metadata, 'getDatabaseTablesDetail')) {
                 throw new Error(errorMessages.fallback);

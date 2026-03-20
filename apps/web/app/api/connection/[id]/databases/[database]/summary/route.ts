@@ -5,7 +5,7 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { hasMetadataCapability } from '@/lib/connection/base/types';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 const paramsSchema = z.object({
@@ -134,7 +134,7 @@ function decodeParam(value: string) {
 }
 
 export async function GET(req: NextRequest, context: { params: Promise<{ database: string }> }) {
-    return withUserAndTeamHandler(async ({ userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ userId, organizationId }) => {
         const locale = await getApiLocale();
         const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
         const connectionId = req.headers.get(X_CONNECTION_ID_KEY);
@@ -158,7 +158,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ databas
         const schemaName = parsedQuery.success ? (parsedQuery.data.schema ?? null) : null;
 
         try {
-            const { entry, config } = await ensureConnectionPoolForUser(userId, teamId, connectionId, null);
+            const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, connectionId, null);
             const engine = (config.type ?? 'unknown') as 'clickhouse' | 'doris' | 'mysql' | 'postgres' | 'unknown';
             const cluster = config.port ? `${config.host}:${config.port}` : (config.host ?? null);
             const metadata = entry.instance.capabilities.metadata;

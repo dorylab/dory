@@ -3,7 +3,7 @@ import { z } from 'zod';
 import provider from '@/lib/ai/provider';
 import { heuristicTagging } from '@/lib/ai/core/column-tagging';
 import { getConnectionIdFromRequest } from '@/lib/utils/request';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 
@@ -30,7 +30,7 @@ const schemaTagRequestSchema = z.object({
 
 type SchemaTagRequest = z.infer<typeof schemaTagRequestSchema>;
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
     const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/schema-tags');
     if (proxied) return proxied;
 
@@ -66,7 +66,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
 
     try {
         const result = await provider.getColumnTagsWithCache({
-            teamId,
+            organizationId,
             userId,
             connectionId,
             columns,

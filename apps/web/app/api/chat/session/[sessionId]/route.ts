@@ -4,7 +4,7 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { DatabaseError } from '@/lib/errors/DatabaseError';
 import type { ChatMessageRecord, ChatSessionRecord } from '@/types';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 function toIso(value: Date | number | null | undefined) {
@@ -51,7 +51,7 @@ function serializeMessage(message: ChatMessageRecord) {
  * => { session, messages }
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
-    return withUserAndTeamHandler(async ({ db, userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ db, userId, organizationId }) => {
         const locale = await getApiLocale();
         const { sessionId } = await params;
         console.log('Fetching chat session detail for sessionId:', sessionId);
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ sess
             if (!db?.chat) throw new Error('Chat repository not available');
 
             const sessionRecord = await db.chat.readSession({
-                teamId,
+                organizationId,
                 sessionId,
                 userId,
             });
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ sess
             }
 
             const messages = await db.chat.listMessages({
-                teamId,
+                organizationId,
                 sessionId,
                 userId,
                 
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ sess
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
-    return withUserAndTeamHandler(async ({ db, userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ db, userId, organizationId }) => {
         const locale = await getApiLocale();
         const { sessionId } = await params
         if (!sessionId) {
@@ -189,7 +189,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ se
             if (!db?.chat) throw new Error('Chat repository not available');
 
             const updated = await db.chat.updateSession({
-                teamId,
+                organizationId,
                 sessionId,
                 userId,
                 patch,
@@ -221,7 +221,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ se
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
-    return withUserAndTeamHandler(async ({ db, userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ db, userId, organizationId }) => {
         const locale = await getApiLocale();
         const { sessionId } = await params
         if (!sessionId) {
@@ -239,10 +239,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ s
 
             
             if (typeof (db.chat as any).archiveSession === 'function') {
-                await (db.chat as any).archiveSession({ teamId, sessionId, userId });
+                await (db.chat as any).archiveSession({ organizationId, sessionId, userId });
             } else {
                 
-                await (db.chat as any).deleteSession({ teamId, sessionId, userId });
+                await (db.chat as any).deleteSession({ organizationId, sessionId, userId });
             }
 
             return NextResponse.json(ResponseUtil.success(), { status: 200 });

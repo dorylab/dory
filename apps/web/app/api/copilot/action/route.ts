@@ -3,16 +3,16 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { runQuickActionServer } from '@/lib/copilot/action/server/runQuickActionServer';
 import type { ActionIntent } from '@/lib/copilot/action/types';
-import type { CopilotFixInput } from '@/app/(app)/[team]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
+import type { CopilotFixInput } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { translate } from '@/lib/i18n/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
     const locale = await getServerLocale();
     try {
         const body = (await req.json()) as { intent?: ActionIntent; input?: CopilotFixInput; model?: string | null };
@@ -56,7 +56,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
         const result = await runQuickActionServer(
             body.intent,
             { ...body.input, model: requestedModel },
-            { locale, teamId, userId },
+            { locale, organizationId, userId },
         );
         return NextResponse.json(result);
     } catch (e: any) {

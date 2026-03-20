@@ -56,7 +56,7 @@ export class PostgresAiUsageRepository implements AiUsageRepository {
     }
 
     private buildBaseWhere(params: AiUsageOverviewParams): SQLWrapper[] {
-        const where: SQLWrapper[] = [eq(aiUsageEvents.teamId, params.teamId)];
+        const where: SQLWrapper[] = [eq(aiUsageEvents.organizationId, params.organizationId)];
         const fromDate = parseDate(params.from);
         const toDate = parseDate(params.to);
         if (fromDate) where.push(gte(aiUsageEvents.createdAt, fromDate));
@@ -234,7 +234,7 @@ export class PostgresAiUsageRepository implements AiUsageRepository {
                 id: event.id,
                 requestId: event.requestId,
                 createdAt: event.createdAt.toISOString(),
-                teamId: event.teamId,
+                organizationId: event.organizationId,
                 userId: event.userId,
                 userName: row.userName ?? event.userId ?? 'unknown',
                 feature: event.feature,

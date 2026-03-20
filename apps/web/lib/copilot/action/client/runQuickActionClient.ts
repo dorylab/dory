@@ -1,5 +1,5 @@
 import type { ActionIntent, ActionResult } from '../types';
-import type { CopilotFixInput } from '@/app/(app)/[team]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
+import type { CopilotFixInput } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { translate } from '@/lib/i18n/i18n';
 import { getClientLocale } from '@/lib/i18n/client-locale';

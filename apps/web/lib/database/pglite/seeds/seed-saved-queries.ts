@@ -1,6 +1,6 @@
 import { newEntityId } from '@/lib/id';
 import { getPgliteClient } from '@/lib/database/postgres/client/pglite';
-import { savedQueries, teams, user } from '@/lib/database/postgres/schemas';
+import { savedQueries, organizations, user } from '@/lib/database/postgres/schemas';
 import { migratePgliteDB } from '@/lib/database/pglite/migrate-pglite';
 
 const TOTAL = 500;
@@ -23,15 +23,15 @@ async function main() {
     const db = await getPgliteClient();
     await migratePgliteDB();
 
-    const [team] = await db.select().from(teams).limit(1);
+    const [organization] = await db.select().from(organizations).limit(1);
     const [userRow] = await db.select().from(user).limit(1);
 
-    if (!team || !userRow) {
-        throw new Error('Missing team or user. Please create one before seeding saved queries.');
+    if (!organization || !userRow) {
+        throw new Error('Missing organization or user. Please create one before seeding saved queries.');
     }
 
-    const teamId = team.id;
-    const userId = team.ownerUserId ?? userRow.id;
+    const organizationId = organization.id;
+    const userId = organization.ownerUserId ?? userRow.id;
     const now = new Date();
 
     for (let offset = 0; offset < TOTAL; offset += BATCH_SIZE) {
@@ -40,7 +40,7 @@ async function main() {
             const index = offset + i;
             return {
                 id: newEntityId(),
-                teamId,
+                organizationId,
                 userId,
                 title: `Seed Query ${index + 1}`,
                 description: `Auto generated query ${index + 1}`,
@@ -48,7 +48,7 @@ async function main() {
                 context: { database: 'demo', schema: 'public' },
                 tags: [],
                 workId: null,
-                connectionId: teamId,
+                connectionId: organizationId,
                 createdAt: now,
                 updatedAt: now,
                 archivedAt: null,
@@ -58,7 +58,7 @@ async function main() {
         await db.insert(savedQueries).values(rows);
     }
 
-    console.log(`Inserted ${TOTAL} saved queries for team ${teamId}.`);
+    console.log(`Inserted ${TOTAL} saved queries for organization ${organizationId}.`);
 }
 
 main().catch(error => {

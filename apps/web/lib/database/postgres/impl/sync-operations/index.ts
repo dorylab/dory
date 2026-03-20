@@ -5,7 +5,7 @@ import type { PostgresDBClient } from '@/types';
 import { translateDatabase } from '@/lib/database/i18n';
 
 export type SyncOperationEnqueueInput = {
-    teamId: string;
+    organizationId: string;
     entityType: 'connection' | 'connection_identity';
     entityId: string;
     operation: 'create' | 'update' | 'delete';
@@ -31,7 +31,7 @@ export class PostgresSyncOperationsRepository {
         const [row] = await this.db
             .insert(syncOperations)
             .values({
-                teamId: input.teamId,
+                organizationId: input.organizationId,
                 entityType: input.entityType,
                 entityId: input.entityId,
                 operation: input.operation,

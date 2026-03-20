@@ -17,7 +17,7 @@ export interface ChatSessionSettings {
 export interface ChatSessionRecord {
     id: string;
 
-    teamId: string;
+    organizationId: string;
     userId: string;
 
     type: ChatSessionType;
@@ -41,7 +41,7 @@ export interface ChatSessionRecord {
 
 export interface ChatSessionCreateGlobal {
     id?: string;
-    teamId: string;
+    organizationId: string;
     userId: string;
 
     type?: 'global';
@@ -55,7 +55,7 @@ export interface ChatSessionCreateGlobal {
 }
 
 export interface ChatSessionCreateOrGetCopilot {
-    teamId: string;
+    organizationId: string;
     userId: string;
     tabId: string;
 
@@ -82,7 +82,7 @@ export interface ChatSessionUpdate {
 
 export interface ChatSessionPatchById {
     id: string;
-    teamId: string;
+    organizationId: string;
     userId: string;
 
     title?: string | null;
@@ -137,7 +137,7 @@ export interface ChatMessageMetadata {
 export interface ChatMessageRecord {
     id: string;
 
-    teamId: string;
+    organizationId: string;
     sessionId: string;
 
     userId: string | null;
@@ -156,7 +156,7 @@ export interface ChatMessageRecord {
 export interface ChatMessageInsert {
     id?: string;
 
-    teamId: string;
+    organizationId: string;
     sessionId: string;
 
     userId?: string | null;
@@ -174,24 +174,24 @@ export interface ChatRepository {
     init(): Promise<void>;
 
     createOrGetCopilotSession(input: ChatSessionCreateOrGetCopilot): Promise<ChatSessionRecord>;
-    findCopilotSessionByTab(params: { teamId: string; userId: string; tabId: string }): Promise<ChatSessionRecord | null>;
+    findCopilotSessionByTab(params: { organizationId: string; userId: string; tabId: string }): Promise<ChatSessionRecord | null>;
 
     createGlobalSession(input: ChatSessionCreateGlobal): Promise<ChatSessionRecord>;
 
-    listSessions(params: { teamId: string; userId: string; includeArchived?: boolean; type?: ChatSessionType }): Promise<ChatSessionRecord[]>;
+    listSessions(params: { organizationId: string; userId: string; includeArchived?: boolean; type?: ChatSessionType }): Promise<ChatSessionRecord[]>;
 
-    readSession(params: { teamId: string; sessionId: string; userId: string }): Promise<ChatSessionRecord | null>;
+    readSession(params: { organizationId: string; sessionId: string; userId: string }): Promise<ChatSessionRecord | null>;
 
-    updateSession(params: { teamId: string; sessionId: string; userId: string; patch: ChatSessionUpdate }): Promise<ChatSessionRecord>;
+    updateSession(params: { organizationId: string; sessionId: string; userId: string; patch: ChatSessionUpdate }): Promise<ChatSessionRecord>;
 
-    archiveSession(params: { teamId: string; sessionId: string; userId: string }): Promise<void>;
+    archiveSession(params: { organizationId: string; sessionId: string; userId: string }): Promise<void>;
 
     appendMessage(params: {
-        teamId: string;
+        organizationId: string;
         sessionId: string;
         userId: string;
         message: ChatMessageInsert;
     }): Promise<ChatMessageRecord>;
 
-    listMessages(params: { teamId: string; sessionId: string; userId: string; limit?: number }): Promise<ChatMessageRecord[]>;
+    listMessages(params: { organizationId: string; sessionId: string; userId: string; limit?: number }): Promise<ChatMessageRecord[]>;
 }

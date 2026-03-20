@@ -2,13 +2,13 @@ import { getSessionFromRequest } from '@/lib/auth/session';
 import { createAuthProxyHeaders } from '@/lib/auth/auth-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { headers } from 'next/headers';
-import type { TeamAccess } from './types';
-import { resolveCurrentOrganizationIdStrict } from '@/lib/auth/current-organization';
+import type { OrganizationAccess } from './types';
+import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 
-async function fetchCloudTeamAccess(teamId: string): Promise<TeamAccess | null> {
+async function fetchCloudOrganizationAccess(organizationId: string): Promise<OrganizationAccess | null> {
     const cloudBaseUrl = getCloudApiBaseUrl();
-    console.log('[authz][desktop] fetchCloudTeamAccess:start', {
-        teamId,
+    console.log('[authz][desktop] fetchCloudOrganizationAccess:start', {
+        organizationId,
         cloudBaseUrl,
     });
     if (!cloudBaseUrl) {
@@ -17,16 +17,16 @@ async function fetchCloudTeamAccess(teamId: string): Promise<TeamAccess | null> 
 
     const incomingHeaders = await headers();
     const forwardedHeaders = createAuthProxyHeaders(incomingHeaders, cloudBaseUrl);
-    const url = new URL('/api/team/access', cloudBaseUrl);
-    url.searchParams.set('teamId', teamId);
+    const url = new URL('/api/organization/access', cloudBaseUrl);
+    url.searchParams.set('organizationId', organizationId);
 
     try {
         const response = await fetch(url.toString(), {
             headers: forwardedHeaders,
             cache: 'no-store',
         });
-        console.log('[authz][desktop] fetchCloudTeamAccess:response', {
-            teamId,
+        console.log('[authz][desktop] fetchCloudOrganizationAccess:response', {
+            organizationId,
             status: response.status,
             ok: response.ok,
             url: url.toString(),
@@ -37,36 +37,36 @@ async function fetchCloudTeamAccess(teamId: string): Promise<TeamAccess | null> 
         }
 
         const payload = (await response.json().catch(() => null)) as
-            | { code?: number; data?: { access?: TeamAccess | null } }
+            | { code?: number; data?: { access?: OrganizationAccess | null } }
             | null;
 
         if (payload?.code !== 0) {
-            console.log('[authz][desktop] fetchCloudTeamAccess:invalid-payload', {
-                teamId,
+            console.log('[authz][desktop] fetchCloudOrganizationAccess:invalid-payload', {
+                organizationId,
                 payload,
             });
             return null;
         }
 
-        console.log('[authz][desktop] fetchCloudTeamAccess:success', {
-            teamId,
+        console.log('[authz][desktop] fetchCloudOrganizationAccess:success', {
+            organizationId,
             access: payload?.data?.access ?? null,
         });
         return payload?.data?.access ?? null;
     } catch {
-        console.log('[authz][desktop] fetchCloudTeamAccess:error', {
-            teamId,
+        console.log('[authz][desktop] fetchCloudOrganizationAccess:error', {
+            organizationId,
         });
         return null;
     }
 }
 
-export async function resolveDesktopTeamAccess(teamId: string, userId: string): Promise<TeamAccess | null> {
+export async function resolveDesktopOrganizationAccess(organizationId: string, userId: string): Promise<OrganizationAccess | null> {
     const session = await getSessionFromRequest();
     const sessionUserId = session?.user?.id ?? null;
-    const activeOrganizationId = resolveCurrentOrganizationIdStrict(session);
-    console.log('[authz][desktop] resolveDesktopTeamAccess', {
-        teamId,
+    const activeOrganizationId = resolveCurrentOrganizationId(session);
+    console.log('[authz][desktop] resolveDesktopOrganizationAccess', {
+        organizationId,
         userId,
         sessionUserId,
         activeOrganizationId,
@@ -76,29 +76,34 @@ export async function resolveDesktopTeamAccess(teamId: string, userId: string): 
         return null;
     }
 
-    if (sessionUserId !== userId || activeOrganizationId !== teamId) {
+    if (sessionUserId !== userId || activeOrganizationId !== organizationId) {
         return null;
     }
 
-    const cloudAccess = await fetchCloudTeamAccess(teamId);
+    const cloudBaseUrl = getCloudApiBaseUrl();
+    const cloudAccess = await fetchCloudOrganizationAccess(organizationId);
     if (cloudAccess?.isMember) {
         return cloudAccess;
     }
 
-    console.log('[authz][desktop] resolveDesktopTeamAccess:fallback-session-only', {
-        teamId,
+    if (cloudBaseUrl) {
+        return null;
+    }
+
+    console.log('[authz][desktop] resolveDesktopOrganizationAccess:fallback-session-only', {
+        organizationId,
         userId,
     });
     return {
         source: 'desktop',
-        teamId,
+        organizationId,
         userId,
         isMember: true,
         role: null,
-        team: {
-            id: teamId,
-            slug: teamId,
-            name: teamId,
+        organization: {
+            id: organizationId,
+            slug: organizationId,
+            name: organizationId,
         },
     };
 }

@@ -22,11 +22,11 @@ function hasSshSecret(ssh?: SSHConfigWithSecrets | null): boolean {
 }
 
 
-export async function testConnectService(teamId: string, payload: TestConnectionPayload): Promise<HealthInfo> {
+export async function testConnectService(organizationId: string, payload: TestConnectionPayload): Promise<HealthInfo> {
     const db = await getDBService();
     const connectionId = payload.connection?.id;
     const startedAt = Date.now();
-    const plainPassword = await db.connections.getIdentityPlainPassword(teamId, payload.identity.id);
+    const plainPassword = await db.connections.getIdentityPlainPassword(organizationId, payload.identity.id);
 
     const recordLastCheck = async (status: 'ok' | 'error', error?: string | null, tookMs?: number | null) => {
         if (!connectionId) return;
@@ -43,7 +43,7 @@ export async function testConnectService(teamId: string, payload: TestConnection
     };
 
     const testPassword = payload?.identity?.password ?? plainPassword;
-    const resolvedSsh = await resolveSshSecrets(teamId, payload, db);
+    const resolvedSsh = await resolveSshSecrets(organizationId, payload, db);
     const config = buildTestConnectionConfig(
         { ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh },
         code => createConnectionError(code as ConnectionErrorCode),
@@ -75,7 +75,7 @@ export async function testConnectService(teamId: string, payload: TestConnection
     }
 }
 
-async function resolveSshSecrets(teamId: string, payload: TestConnectionPayload, db: DBServiceInstance): Promise<SSHConfigWithSecrets | null> {
+async function resolveSshSecrets(organizationId: string, payload: TestConnectionPayload, db: DBServiceInstance): Promise<SSHConfigWithSecrets | null> {
     const ssh = payload.ssh as SSHConfigWithSecrets | null;
 
     if (!ssh?.enabled) {
@@ -85,7 +85,7 @@ async function resolveSshSecrets(teamId: string, payload: TestConnectionPayload,
     const resolved: SSHConfigWithSecrets = { ...ssh };
 
     if (!hasSshSecret(resolved) && payload.connection?.id) {
-        const stored = await db.connections.getSshPlainSecrets(teamId, payload.connection.id);
+        const stored = await db.connections.getSshPlainSecrets(organizationId, payload.connection.id);
         if (stored) {
             resolved.password = stored.password ?? undefined;
             resolved.privateKey = stored.privateKey ?? undefined;

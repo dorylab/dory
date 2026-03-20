@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
-import { withUserAndTeamHandler } from '../../utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '../../utils/with-organization-handler';
 import { handleApiError } from '../../utils/handle-error';
 import { parseJsonBody, BadRequestError } from '../../utils/parse-json';
 import { getConnectionIdFromRequest } from '@/lib/utils/request';
@@ -60,7 +60,7 @@ const requireConnectionId = (req: NextRequest, t: (key: string, values?: Record<
 };
 
 // GET /api/sql-console/saved-queries?id=xxx&includeArchived=1&limit=50
-export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const id = req.nextUrl.searchParams.get('id');
@@ -72,7 +72,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =>
     try {
         if (id) {
             const record = await db.savedQueries.getById({
-                teamId,
+                organizationId,
                 userId,
                 id,
                 includeArchived: includeArchived === '1' || includeArchived === 'true',
@@ -91,7 +91,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =>
         }
 
         const list = await db.savedQueries.list({
-            teamId,
+            organizationId,
             userId,
             includeArchived: includeArchived === '1' || includeArchived === 'true',
             connectionId,
@@ -104,7 +104,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =>
 });
 
 // POST /api/sql-console/saved-queries
-export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, userId, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     try {
@@ -112,7 +112,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) =
         const connectionId = requireConnectionId(req, t);
         const created = await db.savedQueries.create({
             ...payload,
-            teamId,
+            organizationId,
             userId: userId as string,
             connectionId,
         });
@@ -123,7 +123,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) =
 });
 
 // PATCH /api/sql-console/saved-queries?id=xxx
-export const PATCH = withUserAndTeamHandler(async ({ req, db, userId, teamId }) => {
+export const PATCH = withUserAndOrganizationHandler(async ({ req, db, userId, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     try {
@@ -143,7 +143,7 @@ export const PATCH = withUserAndTeamHandler(async ({ req, db, userId, teamId }) 
 
         const connectionId = requireConnectionId(req, t);
         const updated = await db.savedQueries.update({
-            teamId,
+            organizationId,
             userId: userId as string,
             id: savedQueryId,
             connectionId,
@@ -156,7 +156,7 @@ export const PATCH = withUserAndTeamHandler(async ({ req, db, userId, teamId }) 
 });
 
 // DELETE /api/sql-console/saved-queries?id=xxx
-export const DELETE = withUserAndTeamHandler(async ({ req, db, userId, teamId }) => {
+export const DELETE = withUserAndOrganizationHandler(async ({ req, db, userId, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     try {
@@ -172,7 +172,7 @@ export const DELETE = withUserAndTeamHandler(async ({ req, db, userId, teamId })
         }
 
         const connectionId = requireConnectionId(req, t);
-        await db.savedQueries.delete({ teamId, userId: userId as string, id, connectionId });
+        await db.savedQueries.delete({ organizationId, userId: userId as string, id, connectionId });
         return NextResponse.json(ResponseUtil.success({ deleted: [id] }));
     } catch (err: any) {
         return handleApiError(err);

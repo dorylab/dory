@@ -124,7 +124,7 @@
             "ResendCooldown": "Resend ({seconds}s)",
             "Resend": "Resend verification email"
         },
-        "TeamName": "{name}'s team",
+        "TeamName": "{name}'s organization",
         "TeamDefaultName": "Default",
         "Emails": {
             "ResetPassword": {
@@ -1565,7 +1565,7 @@
         "Errors": {
             "BodyParseFailed": "Failed to parse request body",
             "InvalidParams": "Invalid parameters",
-            "MissingTeamContext": "Missing team context or not authenticated",
+            "MissingOrganizationContext": "Missing organization context or not authenticated",
             "InternalError": "Internal server error",
             "Unauthorized": "Unauthorized"
         },
@@ -1828,7 +1828,7 @@
         "SchemaTags": {
             "InvalidParams": "Invalid request parameters",
             "MissingConnectionContext": "Missing connection context",
-            "MissingTeamIdFallback": "Missing teamId; using local heuristic tags",
+            "MissingOrganizationIdFallback": "Missing organizationId; using local heuristic tags",
             "Tags": {
                 "PrimaryKey": "primary key",
                 "Identifier": "identifier",
@@ -2084,7 +2084,7 @@
             "InitFailed": "Database initialization failed. Please check configuration or connection status.",
             "NotInitialized": "Database not initialized",
             "ConnectionCreateFailed": "Failed to create connection",
-            "NotTeamMember": "You are not a team member",
+            "NotOrganizationMember": "You are not a organization member",
             "NotAdmin": "You do not have admin privileges",
             "ConnectionIdentityCreateFailed": "Failed to create connection identity",
             "ConnectionIdentityUpdateFailed": "Failed to update connection identity: record not found or insufficient permissions",

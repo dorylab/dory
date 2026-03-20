@@ -6,7 +6,7 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { TableStats } from '@/types/table-info';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 const buildParamsSchema = (t: (key: string) => string) =>
@@ -16,7 +16,7 @@ const buildParamsSchema = (t: (key: string) => string) =>
     });
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string; database: string; table: string }> }) {
-    return withUserAndTeamHandler(async ({ userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ userId, organizationId }) => {
         const locale = await getApiLocale();
         const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
         const paramsSchema = buildParamsSchema(t);
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         const { database, table } = parsed.data;
 
         try {
-            const { entry } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+            const { entry } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
             const tableInfo = entry.instance.capabilities.tableInfo;
             if (!tableInfo) {
                 throw new Error(errorMessages.fallback);

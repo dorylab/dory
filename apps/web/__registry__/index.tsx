@@ -1454,7 +1454,7 @@ export const Index: Record<string, any> = {
         target: "",
       },
       {
-        path: "registry/blocks/sidebar-07/components/team-switcher.tsx",
+        path: "registry/blocks/sidebar-07/components/organization-switcher.tsx",
         type: "registry:component",
         target: "",
       },
@@ -1622,7 +1622,7 @@ export const Index: Record<string, any> = {
         target: "",
       },
       {
-        path: "registry/blocks/sidebar-10/components/team-switcher.tsx",
+        path: "registry/blocks/sidebar-10/components/organization-switcher.tsx",
         type: "registry:component",
         target: "",
       },
@@ -1849,7 +1849,7 @@ export const Index: Record<string, any> = {
         target: "",
       },
       {
-        path: "registry/blocks/sidebar-15/components/team-switcher.tsx",
+        path: "registry/blocks/sidebar-15/components/organization-switcher.tsx",
         type: "registry:component",
         target: "",
       },

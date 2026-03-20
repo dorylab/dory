@@ -8,12 +8,12 @@ import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { ExplorerRouter } from './explorer-router';
 
 type ExplorerPageProps = {
-    team: string;
+    organization: string;
     connectionId: string;
     slug?: string[];
 };
 
-export function ExplorerPage({ team, connectionId, slug }: ExplorerPageProps) {
+export function ExplorerPage({ organization, connectionId, slug }: ExplorerPageProps) {
     const currentConnection = useAtomValue(currentConnectionAtom);
     const driver = currentConnection?.connection?.id === connectionId ? currentConnection.connection.type : undefined;
 
@@ -26,5 +26,5 @@ export function ExplorerPage({ team, connectionId, slug }: ExplorerPageProps) {
         [driver, slug],
     );
 
-    return <ExplorerRouter baseParams={{ team, connectionId }} route={route} />;
+    return <ExplorerRouter baseParams={{ organization, connectionId }} route={route} />;
 }

@@ -3,11 +3,11 @@ import { getEffectiveModelBundle } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { buildTabTitlePrompt } from '@/lib/ai/prompts';
 import { getApiLocale } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
     try {
         const locale = await getApiLocale();
         const body = (await req.json()) as {
@@ -42,7 +42,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
             prompt,
             temperature: preset.temperature,
             context: {
-                teamId,
+                organizationId,
                 userId,
                 feature: 'tab_title',
                 model: providerModelName,

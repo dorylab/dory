@@ -8,7 +8,7 @@ import { getEffectiveModelBundle } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnTagsWithCacheOptions = {
-    teamId: string;
+    organizationId: string;
     userId?: string | null;
     connectionId: string;
     columns: ColumnInput[];
@@ -27,7 +27,7 @@ type GetColumnTagsWithCacheOptions = {
 
 export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOptions) {
     const {
-        teamId,
+        organizationId,
         userId,
         connectionId,
         columns,
@@ -67,7 +67,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
     const localeKey = locale ?? 'en';
 
     const { normalized, payload, fromCache } = await runAiWithCache<SchemaTag[], SchemaTagResponse | null>({
-        teamId,
+        organizationId,
         connectionId,
         feature,
         model: providerModelName,
@@ -79,7 +79,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
         promptVersion,
         algoVersion,
         context: {
-            teamId,
+            organizationId,
             userId: userId ?? null,
             feature,
             model: providerModelName,
@@ -100,7 +100,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
                 temperature: preset.temperature,
                 topP: 1,
                 context: {
-                    teamId,
+                    organizationId,
                     userId: userId ?? null,
                     feature,
                     model: providerModelName,

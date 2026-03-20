@@ -28,7 +28,7 @@ export function ExplorerRouter({ baseParams, route }: ExplorerRouterProps) {
         <div className="flex h-full min-h-0 flex-col">
             <ExplorerHeader breadcrumbs={breadcrumbs} badgeLabel={badgeLabel} />
             <div className="min-h-0 flex-1 overflow-auto">
-                {route.pageType === 'root' ? <RootView team={baseParams.team} connectionId={baseParams.connectionId} catalog={route.catalog} /> : null}
+                {route.pageType === 'root' ? <RootView organization={baseParams.organization} connectionId={baseParams.connectionId} catalog={route.catalog} /> : null}
                 {route.pageType === 'namespace' && route.resource ? (
                     <NamespaceComponent
                         baseParams={paramsWithCatalog}

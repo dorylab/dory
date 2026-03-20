@@ -12,7 +12,7 @@ export const syncOperations = pgTable(
             .primaryKey()
             .$defaultFn(() => newEntityId()),
 
-        teamId: text('team_id').notNull(),
+        organizationId: text('organization_id').notNull(),
         entityType: text('entity_type').notNull().default('connection'),
         entityId: text('entity_id').notNull(),
         operation: text('operation').notNull(),
@@ -31,7 +31,7 @@ export const syncOperations = pgTable(
             .$onUpdateFn(() => new Date()),
     },
     t => [
-        index('idx_sync_operations_team_status').on(t.teamId, t.status),
+        index('idx_sync_operations_organization_status').on(t.organizationId, t.status),
         index('idx_sync_operations_entity').on(t.entityType, t.entityId),
         index('idx_sync_operations_created_at').on(t.createdAt),
     ],

@@ -29,7 +29,7 @@ export type AiDebugInfo = {
 };
 
 export type AiGatewayContext = {
-    teamId?: string | null;
+    organizationId?: string | null;
     userId?: string | null;
     feature?: string;
     model?: string;
@@ -65,7 +65,7 @@ export type AiMeteringOptions = {
 
 export type AiUsageRecord = {
     requestId: string;
-    teamId?: string | null;
+    organizationId?: string | null;
     userId?: string | null;
     feature?: string;
     model?: string;
@@ -87,7 +87,7 @@ export type AiUsageRecord = {
 
 export type AiTraceRecord = {
     requestId: string;
-    teamId?: string | null;
+    organizationId?: string | null;
     userId?: string | null;
     feature?: string;
     model?: string;
@@ -374,7 +374,7 @@ function buildTraceRecord(args: {
 
     return {
         requestId,
-        teamId: context?.teamId ?? null,
+        organizationId: context?.organizationId ?? null,
         userId: context?.userId ?? null,
         feature: context?.feature,
         model: context?.model,
@@ -426,7 +426,7 @@ async function writeAiUsageToDatabase(record: AiUsageRecord): Promise<void> {
         };
         const usage = extractUsageFields(record.usage);
         const setValues = {
-            teamId: record.teamId ?? null,
+            organizationId: record.organizationId ?? null,
             userId: record.userId ?? null,
             feature: record.feature ?? null,
             model: record.model ?? null,
@@ -473,7 +473,7 @@ async function writeAiTraceToDatabase(record: AiTraceRecord): Promise<void> {
             };
         };
         const setValues = {
-            teamId: record.teamId ?? null,
+            organizationId: record.organizationId ?? null,
             userId: record.userId ?? null,
             feature: record.feature ?? null,
             model: record.model ?? null,
@@ -546,7 +546,7 @@ export async function generateText(
         await writeAiUsage(
             {
                 requestId,
-                teamId: context?.teamId ?? null,
+                organizationId: context?.organizationId ?? null,
                 userId: context?.userId ?? null,
                 feature: context?.feature,
                 model: context?.model,
@@ -579,7 +579,7 @@ export async function generateText(
         await writeAiUsage(
             {
                 requestId,
-                teamId: context?.teamId ?? null,
+                organizationId: context?.organizationId ?? null,
                 userId: context?.userId ?? null,
                 feature: context?.feature,
                 model: context?.model,
@@ -668,7 +668,7 @@ export function streamText<TOOLS extends ToolSet>(
         await writeAiUsage(
             {
                 requestId,
-                teamId: context?.teamId ?? null,
+                organizationId: context?.organizationId ?? null,
                 userId: context?.userId ?? null,
                 feature: context?.feature,
                 model: context?.model,
@@ -805,7 +805,7 @@ export async function runAiWithCache<TNormalized, TPayload>(
     if (result.fromCache) {
         await writeAiUsage({
             requestId,
-            teamId: context?.teamId ?? cacheOptions.teamId ?? null,
+            organizationId: context?.organizationId ?? cacheOptions.organizationId ?? null,
             userId: context?.userId ?? null,
             feature: context?.feature ?? cacheOptions.feature,
             model: context?.model ?? cacheOptions.model,

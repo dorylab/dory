@@ -8,7 +8,7 @@ import z from 'zod';
 import { logger } from '@/lib/logger';
 import { BaseConnection } from '@/lib/connection/base/base-connection';
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { getPostHogClient } from '@/lib/posthog-server';
 import { getPostHogServerProperties } from '@/lib/posthog-config';
@@ -132,7 +132,7 @@ async function executeOne(
     }
 }
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const DatabaseNameSchema = createDatabaseNameSchema(t);
@@ -169,7 +169,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
         database = parsed.data;
     }
 
-    const poolEntry = await getOrCreateConnectionPool(teamId, connectionId);
+    const poolEntry = await getOrCreateConnectionPool(organizationId, connectionId);
     if (!poolEntry) {
         return NextResponse.json(
             ResponseUtil.error({

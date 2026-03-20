@@ -7,7 +7,7 @@ import { BaseConfig } from '@/lib/connection/base/types';
 import { CONNECTION_REQUEST_TIMEOUT_MS, withConnectionTimeout } from '@/lib/connection/defaults';
 import { getDatasourcePool, destroyDatasourcePool, ensureDatasourcePool } from '@/lib/connection/pool-store';
 import { buildStoredConnectionConfig, pickConnectionIdentity } from '@/lib/connection/config-builder';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError, getConnectionErrorCode } from '@/app/api/connection/utils';
 export const runtime = 'nodejs';
@@ -27,7 +27,7 @@ async function ensurePoolWithLatest(config: BaseConfig) {
     return ensureDatasourcePool(config);
 }
 
-export const POST = withUserAndTeamHandler(async ({ req, db, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId }) => {
     const startedAt = Date.now();
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
@@ -52,7 +52,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId }) => {
     }
 
     try {
-        const record = await db.connections.getById(teamId, connectionId);
+        const record = await db.connections.getById(organizationId, connectionId);
 
         if (!record) {
             return NextResponse.json(
@@ -71,9 +71,9 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId }) => {
 
         const passwordFromPayload = payload?.identity?.password ?? payload?.password ?? null;
         const plainPassword =
-            passwordFromPayload ?? (identity.id ? await db.connections.getIdentityPlainPassword(teamId, identity.id) : null);
+            passwordFromPayload ?? (identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null);
 
-        const sshSecrets = await db.connections.getSshPlainSecrets(teamId, record.connection.id);
+        const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
         const sshConfig: SshWithSecrets | null = record.ssh
             ? { ...record.ssh, ...(sshSecrets ?? {}) }
             : sshSecrets
@@ -102,7 +102,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId }) => {
             tookMs,
             error: null,
             checkedAt: new Date(),
-            teamId,
+            organizationId,
         });
 
         return NextResponse.json(
@@ -140,7 +140,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId }) => {
                     tookMs,
                     error: message,
                     checkedAt: new Date(),
-                    teamId,
+                    organizationId,
                 })
                 .catch(err => console.error('[connection] failed to record last check (connect)', err));
         }

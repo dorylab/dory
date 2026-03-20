@@ -27,7 +27,7 @@ export class PgAuditQueryRepository {
         const db = (await getClient()) as PostgresDBClient;
         const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
 
-        const where: SQLWrapper[] = [eq(queryAudit.teamId, params.teamId)];
+        const where: SQLWrapper[] = [eq(queryAudit.organizationId, params.organizationId)];
 
         // Time range (createdAt: timestamp -> Date)
         if (params.from) {
@@ -84,7 +84,7 @@ export class PgAuditQueryRepository {
             id: r.id,
             created_at: r.createdAt.toISOString(),
 
-            teamId: r.teamId,
+            organizationId: r.organizationId,
             user_id: r.userId,
 
             source: r.source as any,
@@ -120,7 +120,7 @@ export class PgAuditQueryRepository {
             ? sql<string>`to_char(${queryAudit.createdAt}, 'YYYY-MM-DD HH24:00:00')`
             : sql<string>`to_char(${queryAudit.createdAt}, 'YYYY-MM-DD 00:00:00')`;
 
-        const whereClauses: SQLWrapper[] = [eq(queryAudit.teamId, filters.teamId)];
+        const whereClauses: SQLWrapper[] = [eq(queryAudit.organizationId, filters.organizationId)];
         const fromDate = msToDate(fromMs);
         const toDate = msToDate(toMs);
         if (fromDate) whereClauses.push(gte(queryAudit.createdAt, fromDate));
@@ -253,12 +253,12 @@ export class PgAuditQueryRepository {
         };
     }
 
-    async readById(teamId: string, id: string): Promise<AuditItem | null> {
+    async readById(organizationId: string, id: string): Promise<AuditItem | null> {
         const db = (await getClient()) as PostgresDBClient;
         const [r] = await db
             .select()
             .from(queryAudit)
-            .where(and(eq(queryAudit.id, id), eq(queryAudit.teamId, teamId)))
+            .where(and(eq(queryAudit.id, id), eq(queryAudit.organizationId, organizationId)))
             .limit(1);
         if (!r) return null;
 
@@ -266,7 +266,7 @@ export class PgAuditQueryRepository {
             id: r.id,
             created_at: r.createdAt.toISOString(),
 
-            teamId: r.teamId,
+            organizationId: r.organizationId,
             user_id: r.userId,
 
             source: r.source as any,

@@ -1,4 +1,5 @@
 import { getAuth } from '@/lib/auth';
+import { getDBService } from '@/lib/database';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -10,6 +11,16 @@ const DEMO_USER = {
     password: 'demo',
     name: 'Demo User',
 };
+
+function slugifyOrganizationName(name: string) {
+    const normalized = name
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+
+    return normalized || 'workspace';
+}
 
 function getSetCookies(headers: Headers): string[] {
     const anyHeaders = headers as unknown as { getSetCookie?: () => string[] };
@@ -69,12 +80,16 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await ctx.password.hash(DEMO_USER.password);
 
+    let userId: string;
+
     if (!existing) {
         const createdUser = await ctx.internalAdapter.createUser({
             email: DEMO_USER.email,
             name: DEMO_USER.name,
             emailVerified: true,
         });
+
+        userId = createdUser.id;
 
         await ctx.internalAdapter.linkAccount({
             userId: createdUser.id,
@@ -83,6 +98,8 @@ export async function POST(req: NextRequest) {
             password: passwordHash,
         });
     } else {
+        userId = existing.user.id;
+
         if (!existing.user.emailVerified) {
             await ctx.internalAdapter.updateUser(existing.user.id, { emailVerified: true });
         }
@@ -98,6 +115,24 @@ export async function POST(req: NextRequest) {
         } else {
             await ctx.internalAdapter.updatePassword(existing.user.id, passwordHash);
         }
+    }
+
+    const db = await getDBService();
+    if (!db) {
+        throw new Error('Database service not initialized');
+    }
+
+    const existingMemberships = await db.organizations.listByUser(userId);
+    if (existingMemberships.length === 0) {
+        const name = `${DEMO_USER.name}'s Workspace`;
+        await auth.api.createOrganization({
+            body: {
+                name,
+                slug: `${slugifyOrganizationName(name)}-${userId.slice(0, 8)}`,
+                userId,
+                keepCurrentActiveOrganization: false,
+            },
+        });
     }
 
     const response = await auth.api.signInEmail({

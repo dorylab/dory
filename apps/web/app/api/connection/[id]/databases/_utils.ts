@@ -12,7 +12,7 @@ type CatalogContext = {
 export async function resolveCatalogContext(
     req: NextRequest,
     context: { params: Promise<{ database: string }> },
-    auth: { userId: string; teamId: string },
+    auth: { userId: string; organizationId: string },
 ): Promise<{ response?: NextResponse; resolved?: CatalogContext }> {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
@@ -23,8 +23,8 @@ export async function resolveCatalogContext(
         missingHost: t('Api.Connection.Errors.MissingHost'),
         missingDatabase: t('Api.Connection.Validation.DatabaseRequired'),
     };
-    const { userId, teamId } = auth;
-    if (!userId || !teamId) {
+    const { userId, organizationId } = auth;
+    if (!userId || !organizationId) {
         return {
             response: NextResponse.json(
                 ResponseUtil.error({ code: ErrorCodes.UNAUTHORIZED, message: errorMessages.unauthorized }),
@@ -62,7 +62,7 @@ export async function resolveCatalogContext(
     }
 
     try {
-        const { entry } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+        const { entry } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
         return {
             resolved: {
                 database,

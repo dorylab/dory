@@ -3,18 +3,18 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { handleApiError } from '../utils/handle-error';
 import { parseJsonBody } from '../utils/parse-json';
-import { withTeamHandler, withUserAndTeamHandler } from '../utils/with-team-handler';
+import { withOrganizationHandler, withUserAndOrganizationHandler } from '../utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 // GET /api/connections?id=xxx
-export const GET = withTeamHandler(async ({ req, db, teamId }) => {
+export const GET = withOrganizationHandler(async ({ req, db, organizationId }) => {
     const id = req.nextUrl.searchParams.get('id');
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
 
     try {
         if (id) {
-            const record = await db.connections.getById(teamId, id);
+            const record = await db.connections.getById(organizationId, id);
             if (!record) {
                 return NextResponse.json(
                     ResponseUtil.error({
@@ -27,7 +27,7 @@ export const GET = withTeamHandler(async ({ req, db, teamId }) => {
             return NextResponse.json(ResponseUtil.success(record));
         }
 
-        const data = await db.connections.list(teamId);
+        const data = await db.connections.list(organizationId);
         return NextResponse.json(ResponseUtil.success(data));
     } catch (err: any) {
         return handleApiError(err);
@@ -35,12 +35,12 @@ export const GET = withTeamHandler(async ({ req, db, teamId }) => {
 });
 
 // POST /api/connections
-export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, userId, organizationId }) => {
     try {
         const payload = await req.json();
-        const created = await db.connections.create(userId!, teamId, payload);
+        const created = await db.connections.create(userId!, organizationId, payload);
         await db.syncOperations.enqueue({
-            teamId,
+            organizationId,
             entityType: 'connection',
             entityId: created.connection.id,
             operation: 'create',
@@ -53,7 +53,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) =
 });
 
 // PATCH /api/connections?id=xxx
-export const PATCH = withUserAndTeamHandler(async ({ req, db, teamId }) => {
+export const PATCH = withUserAndOrganizationHandler(async ({ req, db, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
 
@@ -74,9 +74,9 @@ export const PATCH = withUserAndTeamHandler(async ({ req, db, teamId }) => {
             );
         }
 
-        const updated = await db.connections.update(teamId, connectionId, payload);
+        const updated = await db.connections.update(organizationId, connectionId, payload);
         await db.syncOperations.enqueue({
-            teamId,
+            organizationId,
             entityType: 'connection',
             entityId: connectionId,
             operation: 'update',
@@ -89,7 +89,7 @@ export const PATCH = withUserAndTeamHandler(async ({ req, db, teamId }) => {
 });
 
 // DELETE /api/connections?id=xxx
-export const DELETE = withUserAndTeamHandler(async ({ req, db, teamId }) => {
+export const DELETE = withUserAndOrganizationHandler(async ({ req, db, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
 
@@ -105,9 +105,9 @@ export const DELETE = withUserAndTeamHandler(async ({ req, db, teamId }) => {
             );
         }
 
-        await db.connections.delete(teamId, id);
+        await db.connections.delete(organizationId, id);
         await db.syncOperations.enqueue({
-            teamId,
+            organizationId,
             entityType: 'connection',
             entityId: id,
             operation: 'delete',

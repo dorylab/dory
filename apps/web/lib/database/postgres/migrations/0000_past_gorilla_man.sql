@@ -141,7 +141,7 @@ CREATE TABLE "query_audit" (
 	"extra_json" jsonb
 );
 --> statement-breakpoint
-CREATE TABLE "team_members" (
+CREATE TABLE "organization_members" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"team_id" text NOT NULL,
@@ -151,7 +151,7 @@ CREATE TABLE "team_members" (
 	"joined_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "teams" (
+CREATE TABLE "organizations" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"owner_user_id" text NOT NULL,
@@ -277,10 +277,10 @@ CREATE UNIQUE INDEX "uidx_chat_sessions_copilot_tab" ON "chat_sessions" USING bt
 CREATE INDEX "idx_team_created" ON "query_audit" USING btree ("team_id","created_at");--> statement-breakpoint
 CREATE INDEX "idx_source_created" ON "query_audit" USING btree ("source","created_at");--> statement-breakpoint
 CREATE INDEX "idx_query_id" ON "query_audit" USING btree ("query_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "team_members_team_id_user_id_unique" ON "team_members" USING btree ("team_id","user_id");--> statement-breakpoint
-CREATE INDEX "idx_team_members_team" ON "team_members" USING btree ("team_id");--> statement-breakpoint
-CREATE INDEX "idx_team_members_user" ON "team_members" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "teams_slug_unique" ON "teams" USING btree ("slug");--> statement-breakpoint
+CREATE UNIQUE INDEX "organization_members_team_id_user_id_unique" ON "organization_members" USING btree ("team_id","user_id");--> statement-breakpoint
+CREATE INDEX "idx_organization_members_team" ON "organization_members" USING btree ("team_id");--> statement-breakpoint
+CREATE INDEX "idx_organization_members_user" ON "organization_members" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "organizations_slug_unique" ON "organizations" USING btree ("slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "uniq_conn_identity_connection_name" ON "connection_identities" USING btree ("connection_id","name") WHERE "connection_identities"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX "uniq_conn_identity_default_per_connection" ON "connection_identities" USING btree ("connection_id") WHERE "connection_identities"."is_default" = true;--> statement-breakpoint
 CREATE INDEX "idx_conn_identity_connection_id" ON "connection_identities" USING btree ("connection_id");--> statement-breakpoint

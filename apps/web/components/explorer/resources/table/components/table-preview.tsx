@@ -1,6 +1,6 @@
 'use client';
 
-import TableDataPreview from '@/app/(app)/[team]/components/table-browser/components/data-preview';
+import TableDataPreview from '@/app/(app)/[organization]/components/table-browser/components/data-preview';
 
 type TablePreviewProps = {
     connectionId?: string;

@@ -16,7 +16,7 @@ type EnsureConnectionOptions = {
         missingTeamId?: string;
         connectionNotFound?: string;
     };
-    teamId?: string;
+    organizationId?: string;
 };
 
 function resolveLocale(req: NextRequest, explicitLocale?: Locale): Locale {
@@ -54,20 +54,20 @@ export async function ensureConnection(
         };
     }
 
-    const teamId = options?.teamId ?? resolveCurrentOrganizationId(await getSessionFromRequest(req));
-    if (!teamId) {
+    const organizationId = options?.organizationId ?? resolveCurrentOrganizationId(await getSessionFromRequest(req));
+    if (!organizationId) {
         return {
             response: NextResponse.json(
                 ResponseUtil.error({
                     code: ErrorCodes.UNAUTHORIZED,
-                    message: options?.messages?.missingTeamId ?? translate(locale, 'Api.Errors.MissingTeamContext'),
+                    message: options?.messages?.missingTeamId ?? translate(locale, 'Api.Errors.MissingOrganizationContext'),
                 }),
                 { status: 401 },
             ),
         };
     }
 
-    const poolEntry = await getOrCreateConnectionPool(teamId, connectionId);
+    const poolEntry = await getOrCreateConnectionPool(organizationId, connectionId);
     if (!poolEntry) {
         return {
             response: NextResponse.json(

@@ -7,7 +7,7 @@ export interface Connection {
     id: string;
 
     createdByUserId: string | null;
-    teamId: string;
+    organizationId: string;
 
     type: ConnectionType;
     engine: string;
@@ -44,7 +44,7 @@ export interface ConnectionIdentity {
     id: string;
 
     connectionId: string;
-    teamId: string;
+    organizationId: string;
 
     name: string;
     username: string;
@@ -67,7 +67,7 @@ export interface CreateConnectionIdentity {
     id: string;
 
     connectionId: string;
-    teamId: string;
+    organizationId: string;
 
     name: string; 
     username: string;
@@ -101,10 +101,10 @@ export interface ConnectionSsh {
     updatedAt: Date;
 }
 
-export type ConnectionItem = Omit<Connection, 'deletedAt' | 'teamId' | 'validationErrors' | 'createdByUserId'>
+export type ConnectionItem = Omit<Connection, 'deletedAt' | 'organizationId' | 'validationErrors' | 'createdByUserId'>
 
 export interface ConnectionCreateInput {
-    teamId: string;
+    organizationId: string;
 
     type: ConnectionType;
     engine: string;
@@ -145,7 +145,7 @@ export interface ConnectionUpdateInput {
 
 export interface ConnectionIdentityCreateInput {
     connectionId: string;
-    teamId: string;
+    organizationId: string;
 
     name: string;
     username: string;
@@ -244,7 +244,7 @@ export interface ConnectionDetail extends Connection {
 
 
 export interface ConnectionQueryParams {
-    teamId: string;
+    organizationId: string;
 
     status?: ConnectionStatus | ConnectionStatus[];
     environment?: string | string[];

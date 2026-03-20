@@ -1,7 +1,7 @@
 export type AiUsageStatus = 'ok' | 'error' | 'aborted';
 
 export type AiUsageOverviewParams = {
-    teamId: string;
+    organizationId: string;
     from?: string | null;
     to?: string | null;
     feature?: string | null;
@@ -75,7 +75,7 @@ export type AiUsageEventItem = {
     id: string;
     requestId: string;
     createdAt: string;
-    teamId: string | null;
+    organizationId: string | null;
     userId: string | null;
     userName: string;
     feature: string | null;

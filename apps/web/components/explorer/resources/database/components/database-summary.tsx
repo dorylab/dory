@@ -19,7 +19,7 @@ import { buildExplorerListPath, buildExplorerObjectPath } from '@/lib/explorer/b
 import type { ExplorerBaseParams } from '@/lib/explorer/types';
 import { cn } from '@/lib/utils';
 import { splitQualifiedName } from '@/components/explorer/core/explorer-store';
-import { formatBytes, formatNumber } from '@/app/(app)/[team]/components/table-browser/components/stats/components/formatters';
+import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 import type { DatabaseSummary as DatabaseSummaryData, DatabaseSummaryRecommendation, DatabaseSummaryTable } from '@/lib/connection/base/types';
 import type { ResponseObject } from '@/types';
 
@@ -107,7 +107,7 @@ function SectionCard({ id, title, description, children }: { id?: string; title:
 }
 
 export default function DatabaseSummary({ baseParams, catalog, database, schema }: DatabaseSummaryProps) {
-    const params = useParams<{ team?: string | string[]; connectionId?: string | string[]; catalog?: string | string[]; database?: string | string[] }>();
+    const params = useParams<{ organization?: string | string[]; connectionId?: string | string[]; catalog?: string | string[]; database?: string | string[] }>();
     const currentConnection = useAtomValue(currentConnectionAtom);
     const t = useTranslations('CatalogSummary');
     const tCatalog = useTranslations('Catalog');
@@ -118,7 +118,7 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
 
     const databaseName = decodeParam(database ?? resolveParam(params?.database) ?? '') ?? '';
     const catalogName = decodeParam(catalog ?? resolveParam(params?.catalog) ?? null) ?? null;
-    const teamId = resolveParam(params?.team);
+    const organizationId = resolveParam(params?.organization);
     const connectionId = resolveParam(params?.connectionId) ?? currentConnection?.connection.id;
     const nullTooltip = t('Null tooltip');
     const summaryTitle = schema ? t('Schema Summary') : t('Database Summary');
@@ -126,13 +126,13 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
 
     const resolvedBaseParams = useMemo<ExplorerBaseParams | null>(() => {
         if (baseParams) return baseParams;
-        if (!teamId || !connectionId) return null;
+        if (!organizationId || !connectionId) return null;
         return {
-            team: teamId,
+            organization: organizationId,
             connectionId,
             catalog: catalogName ?? undefined,
         };
-    }, [baseParams, catalogName, connectionId, teamId]);
+    }, [baseParams, catalogName, connectionId, organizationId]);
 
     const buildObjectHref = (tableName: string) => {
         if (!resolvedBaseParams) return null;

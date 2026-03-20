@@ -17,7 +17,7 @@ export const aiSchemaCache = pgTable(
             .$defaultFn(() => newEntityId()),
 
         // Multi-tenant isolation
-        teamId: text('team_id').notNull(),
+        organizationId: text('organization_id').notNull(),
 
         // Multi-connection isolation
         connectionId: text('connection_id').notNull(),
@@ -61,9 +61,9 @@ export const aiSchemaCache = pgTable(
     (table) => ({
         // Unique cache key: includes all dimensions
         uniqCache: uniqueIndex(
-            'uniq_ai_cache_team_conn_catalog_feature_schema_model_prompt',
+            'uniq_ai_cache_organization_conn_catalog_feature_schema_model_prompt',
         ).on(
-            table.teamId,
+            table.organizationId,
             table.connectionId,
             table.catalog,
             table.feature,
@@ -72,8 +72,8 @@ export const aiSchemaCache = pgTable(
             table.promptVersion,
         ),
 
-        idxTeamConn: index('idx_ai_cache_team_conn').on(
-            table.teamId,
+        idxTeamConn: index('idx_ai_cache_organization_conn').on(
+            table.organizationId,
             table.connectionId,
         ),
 

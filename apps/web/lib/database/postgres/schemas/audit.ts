@@ -7,7 +7,7 @@ export const queryAudit = pgTable(
         id: text('id')
             .primaryKey()
             .$defaultFn(() => newEntityId()),
-        teamId: text('team_id').notNull(),
+        organizationId: text('organization_id').notNull(),
         tabId: text('tab_id'),
         userId: text('user_id').notNull(),
         source: text('source').$type<'console' | 'chatbot' | 'api' | 'task'>().notNull(),
@@ -28,5 +28,5 @@ export const queryAudit = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         extraJson: jsonb('extra_json').$type<Record<string, unknown> | null>(),
     },
-    t => [index('idx_team_created').on(t.teamId, t.createdAt), index('idx_source_created').on(t.source, t.createdAt), index('idx_query_id').on(t.queryId)],
+    t => [index('idx_organization_created').on(t.organizationId, t.createdAt), index('idx_source_created').on(t.source, t.createdAt), index('idx_query_id').on(t.queryId)],
 );

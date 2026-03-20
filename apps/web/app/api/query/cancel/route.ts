@@ -4,10 +4,10 @@ import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const connectionId = req.headers.get(X_CONNECTION_ID_KEY);
@@ -34,7 +34,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
         );
     }
 
-    const poolEntry = await getOrCreateConnectionPool(teamId, connectionId);
+    const poolEntry = await getOrCreateConnectionPool(organizationId, connectionId);
     if (!poolEntry) {
         return NextResponse.json(
             ResponseUtil.error({

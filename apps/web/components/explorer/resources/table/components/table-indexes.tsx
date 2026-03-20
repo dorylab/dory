@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { TableIndexesTab } from '@/app/(app)/[team]/components/table-browser/components/indexes';
+import { TableIndexesTab } from '@/app/(app)/[organization]/components/table-browser/components/indexes';
 import type { ExplorerResource } from '@/lib/explorer/types';
 import { useTable } from '../hooks/use-table';
 

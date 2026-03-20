@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import z from 'zod';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { ResponseUtil } from '@/lib/result';
@@ -28,7 +28,7 @@ function safeDecode(value: string | null | undefined) {
 }
 
 export async function POST(req: NextRequest, context: { params: Promise<{ id: string; database: string; table: string }> }) {
-    return withUserAndTeamHandler(async ({ userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ userId, organizationId }) => {
         const locale = await getApiLocale();
         const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
         const previewSchema = buildPreviewSchema(t);
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         const { database, table, limit, sessionId, tabId, source } = parsed.data;
 
         try {
-            const { entry } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+            const { entry } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
             const payload = await buildTablePreviewPayload({
                 connection: entry.instance,
                 connectionId: datasourceId,

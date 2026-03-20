@@ -33,7 +33,7 @@ export function splitQualifiedName(value: string): { schema?: string; name: stri
 }
 
 export type ExplorerConnectionContext = {
-    teamId?: string;
+    organizationId?: string;
     connectionId?: string;
     connectionType: ExplorerDriver;
 };
@@ -41,7 +41,7 @@ export type ExplorerConnectionContext = {
 export function useExplorerConnectionContext(): ExplorerConnectionContext {
     const currentConnection = useAtomValue(currentConnectionAtom);
     const params = useParams<{
-        team?: string | string[];
+        organization?: string | string[];
         connectionId?: string | string[];
     }>();
 
@@ -49,7 +49,7 @@ export function useExplorerConnectionContext(): ExplorerConnectionContext {
     const connection = currentConnection?.connection;
 
     return {
-        teamId: resolveParam(params?.team),
+        organizationId: resolveParam(params?.organization),
         connectionId: routeConnectionId ?? connection?.id,
         connectionType: resolveExplorerDriver(connection?.type),
     };

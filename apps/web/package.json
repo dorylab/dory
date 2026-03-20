@@ -49,7 +49,7 @@
         "@dnd-kit/modifiers": "^9.0.0",
         "@dnd-kit/sortable": "^10.0.0",
         "@dnd-kit/utilities": "^3.2.2",
-        "@drizzle-team/studio": "^1.0.3",
+        "@drizzle-organization/studio": "^1.0.3",
         "@electric-sql/pglite": "^0.2.17",
         "@hookform/resolvers": "^5.2.2",
         "@monaco-editor/react": "^4.7.0",

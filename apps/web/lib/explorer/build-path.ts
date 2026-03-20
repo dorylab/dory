@@ -11,7 +11,7 @@ function e(value: string): string {
 }
 
 export function buildExplorerBasePath(params: ExplorerBaseParams): string {
-    const base = `/${e(params.team)}/${e(params.connectionId)}/explorer`;
+    const base = `/${e(params.organization)}/${e(params.connectionId)}/explorer`;
 
     if (!params.catalog || params.catalog === DEFAULT_EXPLORER_CATALOG) {
         return base;

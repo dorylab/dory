@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { CopilotFixInput } from '@/app/(app)/[team]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
+import type { CopilotFixInput } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
 import { ActionContext } from '../types';
 import { Locale, routing } from '@/lib/i18n/routing';
 import { translate } from '@/lib/i18n/i18n';
@@ -8,7 +8,7 @@ import { translate } from '@/lib/i18n/i18n';
 export function toActionContext(
     input: CopilotFixInput,
     locale?: Locale,
-    identity?: { teamId?: string; userId?: string },
+    identity?: { organizationId?: string; userId?: string },
 ): ActionContext {
     if (input.surface !== 'sql') {
         const resolvedLocale = locale ?? routing.defaultLocale;
@@ -18,7 +18,7 @@ export function toActionContext(
     const exec = input.lastExecution;
 
     return {
-        teamId: identity?.teamId,
+        organizationId: identity?.organizationId,
         userId: identity?.userId,
         connectionId: input.meta?.connectionId,
         dialect: exec.dialect ?? 'unknown',

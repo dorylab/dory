@@ -28,7 +28,7 @@ export async function executeRewriteSql(ctx: ActionContext): Promise<ActionResul
             maxRetries: 1,
             model: ctx.model,
             context: {
-                teamId: ctx.teamId,
+                organizationId: ctx.organizationId,
                 userId: ctx.userId,
                 feature: 'copilot_action_rewrite_sql',
             },

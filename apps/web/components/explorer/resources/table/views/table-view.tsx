@@ -1,6 +1,6 @@
 'use client';
 
-import { DriverTableBrowser } from '@/app/(app)/[team]/components/table-browser/driver-table-browser';
+import { DriverTableBrowser } from '@/app/(app)/[organization]/components/table-browser/driver-table-browser';
 import type { ExplorerResource } from '@/lib/explorer/types';
 import { useTable } from '../hooks/use-table';
 

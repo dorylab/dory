@@ -43,6 +43,13 @@
       "when": 1774013589368,
       "tag": "0005_ambiguous_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774021147746,
+      "tag": "0010_glamorous_blizzard",
+      "breakpoints": true
     }
   ]
 }

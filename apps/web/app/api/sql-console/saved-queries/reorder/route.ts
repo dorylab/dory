@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { ResponseUtil } from '@/lib/result';
-import { withUserAndTeamHandler } from '../../../utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '../../../utils/with-organization-handler';
 import { handleApiError } from '../../../utils/handle-error';
 import { parseJsonBody } from '../../../utils/parse-json';
 
@@ -12,11 +12,11 @@ const reorderSchema = z.object({
 });
 
 // POST /api/sql-console/saved-queries/reorder
-export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
         const payload = await parseJsonBody(req, reorderSchema);
         await db.savedQueries.reorder({
-            teamId,
+            organizationId,
             userId,
             folderId: payload.folderId ?? null,
             orderedIds: payload.orderedIds,

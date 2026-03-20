@@ -14,7 +14,7 @@ import type { ResponseObject } from '@/types';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { formatBytes, formatNumber } from '@/app/(app)/[team]/components/table-browser/components/stats/components/formatters';
+import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 
 type DatabaseViewRow = {
     name: string;

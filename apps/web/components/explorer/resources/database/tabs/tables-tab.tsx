@@ -17,7 +17,7 @@ import type { ResponseObject } from '@/types';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { formatBytes, formatNumber } from '@/app/(app)/[team]/components/table-browser/components/stats/components/formatters';
+import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 
 type DatabaseTableRow = {
     name: string;
@@ -66,12 +66,12 @@ export default function DatabaseTables() {
     const t = useTranslations('Catalog');
     const locale = useLocale();
     const params = useParams<{
-        team?: string | string[];
+        organization?: string | string[];
         connectionId?: string | string[];
         catalog?: string | string[];
         database?: string | string[];
     }>();
-    const teamId = resolveParam(params?.team);
+    const organizationId = resolveParam(params?.organization);
     const connectionId = resolveParam(params?.connectionId) ?? currentConnection?.connection.id;
     const catalogParam = resolveParam(params?.catalog);
     const databaseParam = resolveParam(params?.database);
@@ -92,14 +92,14 @@ export default function DatabaseTables() {
         }
     }, [databaseParam]);
     const tableHrefBase = React.useMemo(() => {
-        if (!teamId || !connectionId || !databaseName || !catalogName) return null;
+        if (!organizationId || !connectionId || !databaseName || !catalogName) return null;
         return {
-            team: teamId,
+            organization: organizationId,
             connectionId,
             catalog: catalogName,
             database: databaseName,
         };
-    }, [catalogName, connectionId, databaseName, teamId]);
+    }, [catalogName, connectionId, databaseName, organizationId]);
 
     const loadTables = React.useCallback(async () => {
         if (!connectionId || !databaseName) return;
@@ -152,7 +152,7 @@ export default function DatabaseTables() {
                     const href = tableHrefBase
                         ? buildExplorerObjectPath(
                               {
-                                  team: tableHrefBase.team,
+                                  organization: tableHrefBase.organization,
                                   connectionId: tableHrefBase.connectionId,
                                   catalog: tableHrefBase.catalog,
                               },

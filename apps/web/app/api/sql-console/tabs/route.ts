@@ -4,10 +4,10 @@ import { getConnectionIdFromRequest } from '@/lib/utils/request';
 import { TabResultMetaPayload } from '@/types/tabs';
 import { NextResponse } from 'next/server';
 import z from 'zod';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
-export const GET = withUserAndTeamHandler(async ({ req, db, userId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, db, userId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const connectionId = getConnectionIdFromRequest(req);
@@ -19,7 +19,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, userId }) => {
 });
 
 
-export const POST = withUserAndTeamHandler(async ({ req, db, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, userId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const raw = await req.json();
@@ -75,7 +75,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, userId }) => {
 
 
 
-export const DELETE = withUserAndTeamHandler(async ({ req, db, userId }) => {
+export const DELETE = withUserAndOrganizationHandler(async ({ req, db, userId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const { searchParams } = new URL(req.url);
@@ -92,7 +92,7 @@ export const DELETE = withUserAndTeamHandler(async ({ req, db, userId }) => {
 });
 
 
-export const PATCH = withUserAndTeamHandler(async ({ req, db, userId }) => {
+export const PATCH = withUserAndOrganizationHandler(async ({ req, db, userId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const schema = z.object({

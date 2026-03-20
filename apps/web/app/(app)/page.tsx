@@ -9,7 +9,7 @@ export default async function Page() {
     const currentOrganizationId = resolveCurrentOrganizationId(session);
 
     if (!currentOrganizationId) {
-        redirect('/create-team');
+        redirect('/create-organization');
     }
 
     redirect(`/${currentOrganizationId}/connections`);

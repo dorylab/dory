@@ -1,6 +1,6 @@
 'use client';
 
-import TableStructure from '@/app/(app)/[team]/components/table-browser/components/structure';
+import TableStructure from '@/app/(app)/[organization]/components/table-browser/components/structure';
 
 type TableColumnsProps = {
     database: string;

@@ -28,7 +28,7 @@ export async function executeOptimizePerformance(ctx: ActionContext): Promise<Ac
             maxRetries: 1,
             model: ctx.model,
             context: {
-                teamId: ctx.teamId,
+                organizationId: ctx.organizationId,
                 userId: ctx.userId,
                 feature: 'copilot_action_optimize_performance',
             },

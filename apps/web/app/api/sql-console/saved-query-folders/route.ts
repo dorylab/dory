@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
-import { withUserAndTeamHandler } from '../../utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '../../utils/with-organization-handler';
 import { handleApiError } from '../../utils/handle-error';
 import { parseJsonBody } from '../../utils/parse-json';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
@@ -17,9 +17,9 @@ const updateSchema = z.object({
 }).refine((data) => data.name !== undefined);
 
 // GET /api/sql-console/saved-query-folders
-export const GET = withUserAndTeamHandler(async ({ db, teamId, userId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ db, organizationId, userId }) => {
     try {
-        const list = await db.savedQueryFolders.list({ teamId, userId });
+        const list = await db.savedQueryFolders.list({ organizationId, userId });
         return NextResponse.json(ResponseUtil.success(list));
     } catch (err: any) {
         return handleApiError(err);
@@ -27,11 +27,11 @@ export const GET = withUserAndTeamHandler(async ({ db, teamId, userId }) => {
 });
 
 // POST /api/sql-console/saved-query-folders
-export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
         const payload = await parseJsonBody(req, createSchema);
         const created = await db.savedQueryFolders.create({
-            teamId,
+            organizationId,
             userId,
             name: payload.name,
         });
@@ -42,7 +42,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =
 });
 
 // PATCH /api/sql-console/saved-query-folders?id=xxx
-export const PATCH = withUserAndTeamHandler(async ({ req, db, teamId, userId }) => {
+export const PATCH = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     try {
@@ -60,7 +60,7 @@ export const PATCH = withUserAndTeamHandler(async ({ req, db, teamId, userId }) 
         const payload = await parseJsonBody(req, updateSchema);
         const updated = await db.savedQueryFolders.update({
             id,
-            teamId,
+            organizationId,
             userId,
             patch: payload,
         });
@@ -71,7 +71,7 @@ export const PATCH = withUserAndTeamHandler(async ({ req, db, teamId, userId }) 
 });
 
 // DELETE /api/sql-console/saved-query-folders?id=xxx
-export const DELETE = withUserAndTeamHandler(async ({ req, db, teamId, userId }) => {
+export const DELETE = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     try {
@@ -86,7 +86,7 @@ export const DELETE = withUserAndTeamHandler(async ({ req, db, teamId, userId })
             );
         }
 
-        await db.savedQueryFolders.delete({ id, teamId, userId });
+        await db.savedQueryFolders.delete({ id, organizationId, userId });
         return NextResponse.json(ResponseUtil.success({ deleted: [id] }));
     } catch (err: any) {
         return handleApiError(err);

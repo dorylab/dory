@@ -13,7 +13,7 @@ import { getEffectiveModelBundle } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnExplanationsOptions = {
-    teamId: string;
+    organizationId: string;
     userId?: string | null;
     connectionId: string;
 
@@ -35,7 +35,7 @@ export async function getColumnExplanationsWithCache(
     options: GetColumnExplanationsOptions,
 ): Promise<{ columns: SchemaExplanationResponse['columns']; raw?: string; fromCache: boolean }> {
     const {
-        teamId,
+        organizationId,
         userId,
         connectionId,
         dbType,
@@ -82,7 +82,7 @@ export async function getColumnExplanationsWithCache(
         SchemaExplanationResponse['columns'],
         SchemaExplanationResponse | null
     >({
-        teamId,
+        organizationId,
         connectionId,
         feature,
         model: providerModelName,
@@ -94,7 +94,7 @@ export async function getColumnExplanationsWithCache(
         promptVersion,
         algoVersion,
         context: {
-            teamId,
+            organizationId,
             userId: userId ?? null,
             feature,
             model: providerModelName,
@@ -112,7 +112,7 @@ export async function getColumnExplanationsWithCache(
                 temperature: preset.temperature,
                 topP: 1,
                 context: {
-                    teamId,
+                    organizationId,
                     userId: userId ?? null,
                     feature,
                     model: providerModelName,

@@ -35,6 +35,6 @@ export function createPgAuditService(): IAuditService {
             return query.overview(filters);
         },
 
-        async readById(teamId, id) { return query.readById(teamId, id); },
+        async readById(organizationId, id) { return query.readById(organizationId, id); },
     };
 }

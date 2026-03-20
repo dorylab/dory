@@ -1,34 +1,34 @@
 import { getDBService } from '@/lib/database';
-import type { TeamAccess } from './types';
+import type { OrganizationAccess } from './types';
 
-export async function resolveLocalTeamAccess(teamId: string, userId: string): Promise<TeamAccess | null> {
+export async function resolveLocalOrganizationAccess(organizationId: string, userId: string): Promise<OrganizationAccess | null> {
     const db = await getDBService();
     if (!db) throw new Error('Database service not initialized');
 
-    const members = await db.teams.list(userId);
-    const member = members.find(item => item.teamId === teamId && item.status === 'active');
-    if (!member) {
+    const organization = await db.organizations.getOrganizationBySlugOrId(organizationId);
+    const members = await db.organizations.listByUser(userId);
+    const member = members.find(item => item.organizationId === organizationId && (item.status === 'active' || item.status == null));
+
+    if (!member && organization?.ownerUserId !== userId) {
         return null;
     }
 
-    const team = await db.teams.getTeamBySlugOrId(teamId);
-
     return {
         source: 'local',
-        teamId,
+        organizationId,
         userId,
         isMember: true,
-        role: member.role ?? null,
-        team: team
+        role: member?.role ?? (organization?.ownerUserId === userId ? 'owner' : null),
+        organization: organization
             ? {
-                  id: team.id,
-                  slug: team.slug ?? null,
-                  name: team.name ?? null,
+                  id: organization.id,
+                  slug: organization.slug ?? null,
+                  name: organization.name ?? null,
               }
             : {
-                  id: teamId,
-                  slug: teamId,
-                  name: teamId,
+                  id: organizationId,
+                  slug: organizationId,
+                  name: organizationId,
               },
     };
 }

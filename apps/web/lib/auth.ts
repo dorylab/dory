@@ -1,20 +1,17 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { jwt, organization, role } from 'better-auth/plugins';
-import { schema } from '@/lib/database/schema';
-import { getDatabaseProvider } from '@/lib/database/provider';
-import { sendEmail } from './email';
-import { PostgresDBClient } from '@/types';
 import { eq } from 'drizzle-orm';
-import { getClient } from './database/postgres/client';
-import { getServerLocale } from './i18n/server-locale';
-import { translate } from './i18n/i18n';
 import { createCachedAsyncFactory } from '@dory/auth-core';
+import type { PostgresDBClient } from '../types';
+import { getClient } from './database/postgres/client';
+import { getDatabaseProvider } from './database/provider';
+import { schema } from './database/schema';
+import { sendEmail } from './email';
+import { resolveOrganizationIdForSession, shouldCreateDefaultOrganization } from './auth/migration-state';
+import { translate } from './i18n/i18n';
+import { getServerLocale } from './i18n/server-locale';
 import { isDesktopRuntime } from './runtime/runtime';
-import {
-    resolveOrganizationIdForSession,
-    shouldCreateDefaultOrganization,
-} from './auth/migration-state';
 
 type AuthUser = {
     id: string;
@@ -43,17 +40,15 @@ function createAuth() {
         const provider = getDatabaseProvider() === 'pglite' ? 'pg' : 'pg';
         const isDesktop = isDesktopRuntime();
         const desktopOrigin =
-            process.env.DORY_ELECTRON_ORIGIN?.trim() ||
-            process.env.NEXT_PUBLIC_DORY_ELECTRON_ORIGIN?.trim() ||
-            (isDesktop ? `http://127.0.0.1:${process.env.PORT ?? 3000}` : '');
+            process.env.DORY_ELECTRON_ORIGIN?.trim() || process.env.NEXT_PUBLIC_DORY_ELECTRON_ORIGIN?.trim() || (isDesktop ? `http://127.0.0.1:${process.env.PORT ?? 3000}` : '');
 
         console.log('[auth] TRUSTED_ORIGINS =', process.env.TRUSTED_ORIGINS);
 
         async function findInitialOrganizationId(userId: string): Promise<string | null> {
             const [existingMembership] = await db
-                .select({ organizationId: schema.teamMembers.teamId })
-                .from(schema.teamMembers)
-                .where(eq(schema.teamMembers.userId, userId))
+                .select({ organizationId: schema.organizationMembers.organizationId })
+                .from(schema.organizationMembers)
+                .where(eq(schema.organizationMembers.userId, userId))
                 .limit(1);
 
             const resolvedOrganizationId = resolveOrganizationIdForSession({
@@ -124,11 +119,12 @@ function createAuth() {
                             },
                         },
                         organization: {
-                            modelName: 'teams',
+                            modelName: 'organizations',
                             fields: {
                                 name: 'name',
                                 slug: 'slug',
                                 logo: 'logo',
+                                metadata: 'metadata',
                                 createdAt: 'createdAt',
                                 updatedAt: 'updatedAt',
                             },
@@ -141,9 +137,9 @@ function createAuth() {
                             },
                         },
                         member: {
-                            modelName: 'teamMembers',
+                            modelName: 'organizationMembers',
                             fields: {
-                                organizationId: 'teamId',
+                                organizationId: 'organizationId',
                                 userId: 'userId',
                                 role: 'role',
                                 createdAt: 'createdAt',
@@ -206,7 +202,7 @@ function createAuth() {
              * user.create.after: runs after any new-user creation (email / social / magic link, etc.)
              *
              * Used to:
-             *   - auto-create a team on first social login
+             *   - auto-create a organization on first social login
              *   - for email signup, optionally wait for emailVerified=true (enabled here)
              */
             databaseHooks: {
@@ -225,11 +221,13 @@ function createAuth() {
                             // For email+password signup:
                             //   - With requireEmailVerification, emailVerified is usually false
                             //   → Create the organization in afterEmailVerification instead
-                            if (shouldCreateDefaultOrganization({
-                                isDesktop,
-                                existingOrganizationId,
-                                emailVerified: user.emailVerified,
-                            })) {
+                            if (
+                                shouldCreateDefaultOrganization({
+                                    isDesktop,
+                                    existingOrganizationId,
+                                    emailVerified: user.emailVerified,
+                                })
+                            ) {
                                 await ensureDefaultOrganizationForUser(auth as any, user.id, user.email);
                             }
                         },

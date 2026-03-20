@@ -4,7 +4,7 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { resolvePrivilegesConnection, handlePrivilegesError } from '../../../_utils';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
 type GlobalPrivilegePayload = {
     privileges: string[];
@@ -24,8 +24,8 @@ async function parsePayload(req: NextRequest): Promise<GlobalPrivilegePayload | 
 
 export async function POST(req: NextRequest, context: { params: Promise<{ name: string }> }) {
     const locale = await getApiLocale();
-    return withUserAndTeamHandler(async ({ req, teamId }) => {
-        const resolved = await resolvePrivilegesConnection(req, { teamId });
+    return withUserAndOrganizationHandler(async ({ req, organizationId }) => {
+        const resolved = await resolvePrivilegesConnection(req, { organizationId });
         if (resolved.response) return resolved.response;
         const params = await context.params;
         const payload = await parsePayload(req);
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ name: 
 
 export async function DELETE(req: NextRequest, context: { params: Promise<{ name: string }> }) {
     const locale = await getApiLocale();
-    return withUserAndTeamHandler(async ({ req, teamId }) => {
-        const resolved = await resolvePrivilegesConnection(req, { teamId });
+    return withUserAndOrganizationHandler(async ({ req, organizationId }) => {
+        const resolved = await resolvePrivilegesConnection(req, { organizationId });
         if (resolved.response) return resolved.response;
         const params = await context.params;
         const payload = await parsePayload(req);

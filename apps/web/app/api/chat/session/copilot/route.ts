@@ -4,7 +4,7 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { DatabaseError } from '@/lib/errors/DatabaseError';
 import type { ChatSessionRecord } from '@/types';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 function toIso(value: Date | number | null | undefined) {
@@ -36,7 +36,7 @@ function serializeSession(session: ChatSessionRecord) {
 /**
  * POST /api/chat/session/copilot
  */
-export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, userId, organizationId }) => {
     const locale = await getApiLocale();
     let payload: any = null;
     try {
@@ -75,7 +75,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) =
         if (!db?.chat) throw new Error('Chat repository not available');
 
         const session = await db.chat.createOrGetCopilotSession({
-            teamId,
+            organizationId,
             userId,
             tabId,
             connectionId,
@@ -125,7 +125,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, userId, teamId }) =
 /**
  * GET /api/chat/session/copilot?tabId=...
  */
-export const GET = withUserAndTeamHandler(async ({ req, db, userId, teamId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, db, userId, organizationId }) => {
     const locale = await getApiLocale();
     const { searchParams } = new URL(req.url);
     const tabId = (searchParams.get('tabId') ?? '').trim();
@@ -142,7 +142,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, userId, teamId }) =>
     try {
         if (!db?.chat) throw new Error('Chat repository not available');
 
-        const session = await db.chat.findCopilotSessionByTab({ teamId, userId, tabId });
+        const session = await db.chat.findCopilotSessionByTab({ organizationId, userId, tabId });
         return NextResponse.json(
             ResponseUtil.success({
                 session: session ? serializeSession(session) : null,

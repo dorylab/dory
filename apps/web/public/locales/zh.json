@@ -1567,7 +1567,7 @@
         "Errors": {
             "BodyParseFailed": "请求体解析失败",
             "InvalidParams": "参数校验失败",
-            "MissingTeamContext": "用户未登录或缺少团队信息",
+            "MissingOrganizationContext": "用户未登录或缺少团队信息",
             "InternalError": "服务器内部错误",
             "Unauthorized": "用户未登录"
         },
@@ -1830,7 +1830,7 @@
         "SchemaTags": {
             "InvalidParams": "请求参数无效",
             "MissingConnectionContext": "缺少连接上下文",
-            "MissingTeamIdFallback": "缺少 teamId，已使用本地启发式标签",
+            "MissingOrganizationIdFallback": "缺少 organizationId，已使用本地启发式标签",
             "Tags": {
                 "PrimaryKey": "主键",
                 "Identifier": "标识",
@@ -2086,7 +2086,7 @@
             "InitFailed": "数据库初始化失败，请检查配置或连接状态",
             "NotInitialized": "数据库未初始化",
             "ConnectionCreateFailed": "创建连接失败",
-            "NotTeamMember": "你不是 Team 成员",
+            "NotOrganizationMember": "你不是 Organization 成员",
             "NotAdmin": "你没有 Admin 权限",
             "ConnectionIdentityCreateFailed": "创建连接身份失败",
             "ConnectionIdentityUpdateFailed": "更新连接身份失败，记录不存在或无权限",

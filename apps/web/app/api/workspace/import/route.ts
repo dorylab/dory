@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
-import { withUserAndTeamHandler } from '../../utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '../../utils/with-organization-handler';
 import { handleApiError } from '../../utils/handle-error';
 import { parseJsonBody } from '../../utils/parse-json';
 
@@ -86,7 +86,7 @@ async function resolveUniqueConnectionName(
     return candidate;
 }
 
-export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
         const payload = await parseJsonBody(req, importSchema);
 
@@ -97,7 +97,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =
         };
 
         // 1. Get existing connection names
-        const existingConnections = await db.connections.list(teamId);
+        const existingConnections = await db.connections.list(organizationId);
         const existingNames = new Set(existingConnections.map(c => c.connection.name));
 
         // Map: original export name -> new connectionId
@@ -114,11 +114,11 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =
                 const resolvedName = await resolveUniqueConnectionName(existingNames, item.connection.name);
                 existingNames.add(resolvedName);
 
-                const created = await db.connections.create(userId, teamId, {
+                const created = await db.connections.create(userId, organizationId, {
                     connection: {
                         ...item.connection,
                         name: resolvedName,
-                        teamId,
+                        organizationId,
                     } as any,
                     identities: (item.identities ?? []) as any,
                     ssh: item.ssh as any,
@@ -135,7 +135,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =
         if (payload.savedQueryFolders) {
             for (const folder of payload.savedQueryFolders) {
                 const created = await db.savedQueryFolders.create({
-                    teamId,
+                    organizationId,
                     userId,
                     name: folder.name,
                 });
@@ -163,7 +163,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =
                     : null;
 
                 const created = await db.savedQueries.create({
-                    teamId,
+                    organizationId,
                     userId,
                     title: query.title,
                     description: query.description,
@@ -176,7 +176,7 @@ export const POST = withUserAndTeamHandler(async ({ req, db, teamId, userId }) =
                 // Update folderId and position if needed
                 if (folderId || query.position) {
                     await db.savedQueries.update({
-                        teamId,
+                        organizationId,
                         userId,
                         id: created.id,
                         connectionId,

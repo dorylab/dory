@@ -10,7 +10,7 @@ export type AiSchemaFeature =
 export type AiSchemaCacheRecord = typeof aiSchemaCache.$inferSelect;
 
 export type AiSchemaCacheKey = {
-    teamId: string;
+    organizationId: string;
     connectionId: string;
     catalog: string;
     feature: AiSchemaFeature;
@@ -33,7 +33,7 @@ export interface AiSchemaCacheRepository {
 
     upsert(entry: AiSchemaCacheUpsert): Promise<void>;
 
-    deleteByConnection(teamId: string, connectionId: string): Promise<void>;
+    deleteByConnection(organizationId: string, connectionId: string): Promise<void>;
 }
 
 export type ColumnInput = {

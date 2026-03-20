@@ -17,7 +17,7 @@ const MAX_FOLDERS = 50;
 export type SavedQueryFolderRecord = typeof savedQueryFolders.$inferSelect;
 
 export type SavedQueryFolderCreateInput = {
-    teamId: string;
+    organizationId: string;
     userId: string;
     name: string;
 };
@@ -56,7 +56,7 @@ export class PostgresSavedQueryFoldersRepository {
             .from(savedQueryFolders)
             .where(
                 and(
-                    eq(savedQueryFolders.teamId, input.teamId),
+                    eq(savedQueryFolders.organizationId, input.organizationId),
                     eq(savedQueryFolders.userId, input.userId),
                 ),
             );
@@ -70,7 +70,7 @@ export class PostgresSavedQueryFoldersRepository {
             .from(savedQueryFolders)
             .where(
                 and(
-                    eq(savedQueryFolders.teamId, input.teamId),
+                    eq(savedQueryFolders.organizationId, input.organizationId),
                     eq(savedQueryFolders.userId, input.userId),
                 ),
             );
@@ -81,7 +81,7 @@ export class PostgresSavedQueryFoldersRepository {
             .insert(savedQueryFolders)
             .values({
                 id: newEntityId(),
-                teamId: input.teamId,
+                organizationId: input.organizationId,
                 userId: input.userId,
                 name: input.name,
                 position,
@@ -94,7 +94,7 @@ export class PostgresSavedQueryFoldersRepository {
         return row as SavedQueryFolderRecord;
     }
 
-    async list(params: { teamId: string; userId: string }): Promise<SavedQueryFolderRecord[]> {
+    async list(params: { organizationId: string; userId: string }): Promise<SavedQueryFolderRecord[]> {
         this.assertInited();
 
         const rows = await this.db
@@ -102,7 +102,7 @@ export class PostgresSavedQueryFoldersRepository {
             .from(savedQueryFolders)
             .where(
                 and(
-                    eq(savedQueryFolders.teamId, params.teamId),
+                    eq(savedQueryFolders.organizationId, params.organizationId),
                     eq(savedQueryFolders.userId, params.userId),
                 ),
             )
@@ -111,7 +111,7 @@ export class PostgresSavedQueryFoldersRepository {
         return rows as SavedQueryFolderRecord[];
     }
 
-    async getById(params: { id: string; teamId: string; userId: string }): Promise<SavedQueryFolderRecord | null> {
+    async getById(params: { id: string; organizationId: string; userId: string }): Promise<SavedQueryFolderRecord | null> {
         this.assertInited();
 
         const [row] = await this.db
@@ -120,7 +120,7 @@ export class PostgresSavedQueryFoldersRepository {
             .where(
                 and(
                     eq(savedQueryFolders.id, params.id),
-                    eq(savedQueryFolders.teamId, params.teamId),
+                    eq(savedQueryFolders.organizationId, params.organizationId),
                     eq(savedQueryFolders.userId, params.userId),
                 ),
             )
@@ -131,7 +131,7 @@ export class PostgresSavedQueryFoldersRepository {
 
     async update(params: {
         id: string;
-        teamId: string;
+        organizationId: string;
         userId: string;
         patch: SavedQueryFolderUpdateInput;
     }): Promise<SavedQueryFolderRecord> {
@@ -152,7 +152,7 @@ export class PostgresSavedQueryFoldersRepository {
                 .where(
                     and(
                         eq(savedQueryFolders.id, params.id),
-                        eq(savedQueryFolders.teamId, params.teamId),
+                        eq(savedQueryFolders.organizationId, params.organizationId),
                         eq(savedQueryFolders.userId, params.userId),
                     ),
                 );
@@ -164,7 +164,7 @@ export class PostgresSavedQueryFoldersRepository {
             .where(
                 and(
                     eq(savedQueryFolders.id, params.id),
-                    eq(savedQueryFolders.teamId, params.teamId),
+                    eq(savedQueryFolders.organizationId, params.organizationId),
                     eq(savedQueryFolders.userId, params.userId),
                 ),
             )
@@ -174,7 +174,7 @@ export class PostgresSavedQueryFoldersRepository {
         return row as SavedQueryFolderRecord;
     }
 
-    async delete(params: { id: string; teamId: string; userId: string }): Promise<void> {
+    async delete(params: { id: string; organizationId: string; userId: string }): Promise<void> {
         this.assertInited();
 
         // Move queries in this folder back to root level
@@ -189,13 +189,13 @@ export class PostgresSavedQueryFoldersRepository {
             .where(
                 and(
                     eq(savedQueryFolders.id, params.id),
-                    eq(savedQueryFolders.teamId, params.teamId),
+                    eq(savedQueryFolders.organizationId, params.organizationId),
                     eq(savedQueryFolders.userId, params.userId),
                 ),
             );
     }
 
-    async reorder(params: { teamId: string; userId: string; orderedIds: string[] }): Promise<void> {
+    async reorder(params: { organizationId: string; userId: string; orderedIds: string[] }): Promise<void> {
         this.assertInited();
 
         for (let i = 0; i < params.orderedIds.length; i++) {
@@ -205,7 +205,7 @@ export class PostgresSavedQueryFoldersRepository {
                 .where(
                     and(
                         eq(savedQueryFolders.id, params.orderedIds[i]),
-                        eq(savedQueryFolders.teamId, params.teamId),
+                        eq(savedQueryFolders.organizationId, params.organizationId),
                         eq(savedQueryFolders.userId, params.userId),
                     ),
                 );

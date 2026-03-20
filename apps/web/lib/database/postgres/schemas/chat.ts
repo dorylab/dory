@@ -11,7 +11,7 @@ export const chatSessions = pgTable(
     {
         id: text('id').primaryKey().$defaultFn(() => newEntityId()),
 
-        teamId: text('team_id').notNull(),
+        organizationId: text('organization_id').notNull(),
         userId: text('user_id').notNull(),
 
         // 'copilot' | 'global' | 'task'(future)
@@ -43,8 +43,8 @@ export const chatSessions = pgTable(
         lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
     },
     t => [
-        // Composite unique: enforce team consistency for messages/state (app-level)
-        unique('uq_chat_sessions_id_team').on(t.id, t.teamId),
+        // Composite unique: enforce organization consistency for messages/state (app-level)
+        unique('uq_chat_sessions_id_organization').on(t.id, t.organizationId),
 
         // Type constraint: copilot must have tabId; non-copilot must not
         check(
@@ -53,16 +53,16 @@ export const chatSessions = pgTable(
         ),
 
         // List index (active sessions)
-        index('idx_chat_sessions_list').on(t.teamId, t.userId, t.archivedAt, t.lastMessageAt),
-        index('idx_chat_sessions_team_user_type').on(t.teamId, t.userId, t.type),
+        index('idx_chat_sessions_list').on(t.organizationId, t.userId, t.archivedAt, t.lastMessageAt),
+        index('idx_chat_sessions_organization_user_type').on(t.organizationId, t.userId, t.type),
 
         // Common filters: by connection / db
-        index('idx_chat_sessions_team_conn').on(t.teamId, t.connectionId),
-        index('idx_chat_sessions_team_db').on(t.teamId, t.activeDatabase),
+        index('idx_chat_sessions_organization_conn').on(t.organizationId, t.connectionId),
+        index('idx_chat_sessions_organization_db').on(t.organizationId, t.activeDatabase),
 
         // Tab -> session uniqueness (copilot), partial unique
         uniqueIndex('uidx_chat_sessions_copilot_tab')
-            .on(t.teamId, t.userId, t.tabId)
+            .on(t.organizationId, t.userId, t.tabId)
             .where(sql`${t.type} = 'copilot'`),
     ],
 );
@@ -75,7 +75,7 @@ export const chatMessages = pgTable(
     {
         id: text('id').primaryKey().$defaultFn(() => newEntityId()),
 
-        teamId: text('team_id').notNull(),
+        organizationId: text('organization_id').notNull(),
         sessionId: text('session_id').notNull(),
 
         // Sender (user messages filled; assistant/tool can be null)
@@ -94,11 +94,11 @@ export const chatMessages = pgTable(
     },
     t => [
         // Fetch messages by time/insert order
-        index('idx_chat_messages_session_time').on(t.teamId, t.sessionId, t.createdAt),
-        index('idx_chat_messages_session_id').on(t.teamId, t.sessionId, t.id),
+        index('idx_chat_messages_session_time').on(t.organizationId, t.sessionId, t.createdAt),
+        index('idx_chat_messages_session_id').on(t.organizationId, t.sessionId, t.id),
 
         // Audit/troubleshoot by connection
-        index('idx_chat_messages_team_conn_time').on(t.teamId, t.connectionId, t.createdAt),
+        index('idx_chat_messages_organization_conn_time').on(t.organizationId, t.connectionId, t.createdAt),
     ],
 );
 
@@ -109,7 +109,7 @@ export const chatSessionState = pgTable(
     'chat_session_state',
     {
         sessionId: text('session_id').primaryKey(),
-        teamId: text('team_id').notNull(),
+        organizationId: text('organization_id').notNull(),
 
         // Redundant with session but speeds up queries
         connectionId: text('connection_id'),
@@ -145,8 +145,8 @@ export const chatSessionState = pgTable(
             .$onUpdateFn(() => new Date()),
     },
     t => [
-        index('idx_chat_state_team_conn').on(t.teamId, t.connectionId),
-        index('idx_chat_state_team_tab').on(t.teamId, t.activeTabId),
-        index('idx_chat_state_team_updated').on(t.teamId, t.updatedAt),
+        index('idx_chat_state_organization_conn').on(t.organizationId, t.connectionId),
+        index('idx_chat_state_organization_tab').on(t.organizationId, t.activeTabId),
+        index('idx_chat_state_organization_updated').on(t.organizationId, t.updatedAt),
     ],
 );

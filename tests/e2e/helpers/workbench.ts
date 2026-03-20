@@ -419,10 +419,10 @@ export async function openMockConnectionConsole(page: Page, connection: Connecti
     await page.waitForURL(/\/[^/]+\/connections$/);
 
     const match = page.url().match(/\/([^/]+)\/connections$/);
-    const teamId = match?.[1];
+    const organizationId = match?.[1];
 
-    if (!teamId) {
-        throw new Error(`Failed to resolve team id from URL: ${page.url()}`);
+    if (!organizationId) {
+        throw new Error(`Failed to resolve organization id from URL: ${page.url()}`);
     }
 
     await page.evaluate(
@@ -432,11 +432,11 @@ export async function openMockConnectionConsole(page: Page, connection: Connecti
         connection,
     );
 
-    const targetPath = `/${teamId}/${connection.connection.id}/sql-console`;
+    const targetPath = `/${organizationId}/${connection.connection.id}/sql-console`;
 
     try {
         await page.goto(targetPath, { waitUntil: 'commit' });
-        await expect(page).toHaveURL(new RegExp(`/${teamId}/${connection.connection.id}/sql-console$`));
+        await expect(page).toHaveURL(new RegExp(`/${organizationId}/${connection.connection.id}/sql-console$`));
         await expect(page.getByRole('button', { name: /New Console/i })).toBeEnabled();
     } catch (error) {
         const diagnostics = await collectOpenConsoleDiagnostics(page);

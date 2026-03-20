@@ -1,7 +1,7 @@
 'use client';
 
 import type { BreadcrumbItem as ExplorerBreadcrumbItem } from '@/lib/explorer/types';
-import { ExplorerBreadcrumb } from '@/app/(app)/[team]/[connectionId]/explorer/components/explorer-breadcrumb';
+import { ExplorerBreadcrumb } from '@/app/(app)/[organization]/[connectionId]/explorer/components/explorer-breadcrumb';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 
 type ExplorerHeaderProps = {

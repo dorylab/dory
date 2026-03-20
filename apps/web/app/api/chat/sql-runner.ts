@@ -7,7 +7,7 @@ import { translateApi } from '@/app/api/utils/i18n';
 
 type CreateSqlRunnerOptions = {
     userId: string;
-    teamId: string;
+    organizationId: string;
     chatId: string;
     messageId?: string;
     datasourceId: string;
@@ -20,7 +20,7 @@ const ROW_LIMIT = parsePositiveInt(process.env.CHATBOT_SQL_ROW_LIMIT, 200);
 
 export function createSqlRunnerTool({
     userId,
-    teamId,
+    organizationId,
     datasourceId,
     messageId,
     chatId,
@@ -62,7 +62,7 @@ export function createSqlRunnerTool({
             }
 
             const baseAudit = {
-                teamId,
+                organizationId,
                 user_id: userId,
                 source: 'chatbot' as const,
                 datasource_id: datasourceId,
@@ -80,7 +80,7 @@ export function createSqlRunnerTool({
 
             try {
                 
-                const { entry, config } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+                const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
                 const instance = entry.instance;
 
                 const targetDatabase = requestedDatabase ?? sanitizeDatabase(defaultDatabase) ?? sanitizeDatabase(config.database);

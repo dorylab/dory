@@ -2,7 +2,7 @@ import { getDatabaseProvider } from './provider';
 import { PostgresChatRepository } from './postgres/impl/chat';
 import { PostgresTabStateRepository } from './postgres/impl/sql-console/tabs/tab-states';
 import { createPgAuditService } from './postgres/impl/audit';
-import { PostgresTeamsRepository } from './postgres/impl/team';
+import { PostgresOrganizationsRepository } from './postgres/impl/organization';
 import { PostgresConnectionsRepository } from './postgres/impl/connections';
 import { PostgresAiSchemaCacheRepository } from './postgres/impl/ai-schema-cache';
 import { PostgresSavedQueriesRepository } from './postgres/impl/sql-console/save-queries';
@@ -20,7 +20,7 @@ export type PostgresDBService = {
     chat: PostgresChatRepository;
     audit: ReturnType<typeof createPgAuditService>;
     // datasource: PostgresDatasourceRepository;
-    teams: PostgresTeamsRepository;
+    organizations: PostgresOrganizationsRepository;
     connections: PostgresConnectionsRepository;
     aiSchemaCache: PostgresAiSchemaCacheRepository;
     savedQueries: PostgresSavedQueriesRepository;
@@ -54,8 +54,8 @@ export async function getDBService(): Promise<DBService> {
             const chatRepo = new PostgresChatRepository();
             await chatRepo.init();
 
-            const teamsRepo = new PostgresTeamsRepository();
-            await teamsRepo.init();
+            const organizationsRepo = new PostgresOrganizationsRepository();
+            await organizationsRepo.init();
 
             const connectionsRepo = new PostgresConnectionsRepository();
             await connectionsRepo.init();
@@ -79,7 +79,7 @@ export async function getDBService(): Promise<DBService> {
                 tabState: tabStateRepo,
                 chat: chatRepo,
                 audit: createPgAuditService(),
-                teams: teamsRepo,
+                organizations: organizationsRepo,
                 connections: connectionsRepo,
                 aiSchemaCache: aiSchemaCacheRepo,
                 savedQueries: savedQueriesRepo,

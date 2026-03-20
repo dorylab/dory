@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
 import { resolvePrivilegesConnection, handlePrivilegesError } from '../_utils';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
-export const GET = withUserAndTeamHandler(async ({ req, teamId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
     const locale = await getApiLocale();
-    const resolved = await resolvePrivilegesConnection(req, { teamId });
+    const resolved = await resolvePrivilegesConnection(req, { organizationId });
     if (resolved.response) return resolved.response;
 
     try {

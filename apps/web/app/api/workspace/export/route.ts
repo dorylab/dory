@@ -1,18 +1,18 @@
 import { NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { withUserAndTeamHandler } from '../../utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '../../utils/with-organization-handler';
 import { handleApiError } from '../../utils/handle-error';
 
-export const GET = withUserAndTeamHandler(async ({ db, teamId, userId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ db, organizationId, userId }) => {
     try {
-        // Fetch connections (team-level)
-        const connectionList = await db.connections.list(teamId);
+        // Fetch connections (organization-level)
+        const connectionList = await db.connections.list(organizationId);
 
         // Fetch saved query folders (user-level)
-        const folders = await db.savedQueryFolders.list({ teamId, userId });
+        const folders = await db.savedQueryFolders.list({ organizationId, userId });
 
         // Fetch all saved queries across all connections (user-level)
-        const queries = await db.savedQueries.listAll({ teamId, userId });
+        const queries = await db.savedQueries.listAll({ organizationId, userId });
 
         // Build connection name map: connectionId -> connectionName
         const connectionNameMap = new Map<string, string>();

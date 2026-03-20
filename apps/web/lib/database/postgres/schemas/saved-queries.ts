@@ -7,7 +7,7 @@ export const savedQueries = pgTable(
     {
         id: text('id').primaryKey().$defaultFn(() => newEntityId()),
 
-        teamId: text('team_id').notNull(),
+        organizationId: text('organization_id').notNull(),
         userId: text('user_id').notNull(),
 
         title: text('title').notNull(),
@@ -37,7 +37,7 @@ export const savedQueries = pgTable(
         archivedAt: timestamp('archived_at', { withTimezone: true }),
     },
     (t) => ([
-        index('idx_saved_queries_team_user').on(t.teamId, t.userId),
+        index('idx_saved_queries_organization_user').on(t.organizationId, t.userId),
         index('idx_saved_queries_updated_at').on(t.updatedAt),
         index('idx_saved_queries_folder_id').on(t.folderId),
     ]),

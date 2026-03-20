@@ -2,7 +2,7 @@ import type { AiSchemaCacheRepository } from '@/lib/database/postgres/impl/ai-sc
 import { getDBService } from '@/lib/database';
 
 export type RunAiWithCacheOptions<TNormalized, TPayload> = {
-    teamId: string;
+    organizationId: string;
     connectionId: string;
     feature: string;
     model: string;
@@ -31,7 +31,7 @@ export async function runAiWithCache<TNormalized, TPayload>(
     options: RunAiWithCacheOptions<TNormalized, TPayload>,
 ): Promise<RunAiWithCacheResult<TNormalized, TPayload>> {
     const {
-        teamId,
+        organizationId,
         connectionId,
         feature,
         model,
@@ -56,7 +56,7 @@ export async function runAiWithCache<TNormalized, TPayload>(
     const aiSchemaCacheRepo = (dbService as any).aiSchemaCache as AiSchemaCacheRepository;
 
     const cacheKey = {
-        teamId,
+        organizationId,
         connectionId,
         catalog: effectiveCatalog,
         feature: featureKey,

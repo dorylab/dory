@@ -32,7 +32,7 @@ export async function executeFixSqlError(ctx: ActionContext): Promise<ActionResu
             maxRetries: 1,
             model: ctx.model,
             context: {
-                teamId: ctx.teamId,
+                organizationId: ctx.organizationId,
                 userId: ctx.userId,
                 feature: 'copilot_action_fix_sql_error',
             },

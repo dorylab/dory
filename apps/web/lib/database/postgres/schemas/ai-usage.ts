@@ -10,7 +10,7 @@ export const aiUsageEvents = pgTable(
             .$defaultFn(() => newEntityId()),
         requestId: text('request_id').notNull(),
 
-        teamId: text('team_id'),
+        organizationId: text('organization_id'),
         userId: text('user_id'),
 
         feature: text('feature'),
@@ -43,11 +43,11 @@ export const aiUsageEvents = pgTable(
     t => [
         check('ck_ai_usage_events_status', sql`${t.status} in ('ok', 'error', 'aborted')`),
         uniqueIndex('uidx_ai_usage_events_request_id').on(t.requestId),
-        index('idx_ai_usage_events_team_created').on(t.teamId, t.createdAt),
-        index('idx_ai_usage_events_team_created_total').on(t.teamId, t.createdAt, t.totalTokens),
-        index('idx_ai_usage_events_team_user_created').on(t.teamId, t.userId, t.createdAt),
+        index('idx_ai_usage_events_organization_created').on(t.organizationId, t.createdAt),
+        index('idx_ai_usage_events_organization_created_total').on(t.organizationId, t.createdAt, t.totalTokens),
+        index('idx_ai_usage_events_organization_user_created').on(t.organizationId, t.userId, t.createdAt),
         index('idx_ai_usage_events_feature_created').on(t.feature, t.createdAt),
-        index('idx_ai_usage_events_team_feature_created').on(t.teamId, t.feature, t.createdAt),
+        index('idx_ai_usage_events_organization_feature_created').on(t.organizationId, t.feature, t.createdAt),
     ],
 );
 
@@ -59,7 +59,7 @@ export const aiUsageTraces = pgTable(
             .$defaultFn(() => newEntityId()),
         requestId: text('request_id').notNull(),
 
-        teamId: text('team_id'),
+        organizationId: text('organization_id'),
         userId: text('user_id'),
 
         feature: text('feature'),
@@ -78,8 +78,8 @@ export const aiUsageTraces = pgTable(
     },
     t => [
         uniqueIndex('uidx_ai_usage_traces_request_id').on(t.requestId),
-        index('idx_ai_usage_traces_team_created').on(t.teamId, t.createdAt),
-        index('idx_ai_usage_traces_team_user_created').on(t.teamId, t.userId, t.createdAt),
+        index('idx_ai_usage_traces_organization_created').on(t.organizationId, t.createdAt),
+        index('idx_ai_usage_traces_organization_user_created').on(t.organizationId, t.userId, t.createdAt),
         index('idx_ai_usage_traces_expires_at').on(t.expiresAt),
     ],
 );

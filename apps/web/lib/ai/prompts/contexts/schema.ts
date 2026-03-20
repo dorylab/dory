@@ -12,7 +12,7 @@ type ColumnInfo = {
 
 type SchemaContextOptions = {
     userId: string;
-    teamId: string;
+    organizationId: string;
     datasourceId: string;
     database?: string | null;
     table?: string | null;
@@ -48,10 +48,10 @@ export function getDefaultSchemaSampleLimits() {
  * - Otherwise: List some representative tables, each table lists some fields.
  */
 export async function buildSchemaContext(options: SchemaContextOptions): Promise<string | null> {
-    const { userId, teamId, datasourceId, database, table, tableSampleLimit = DEFAULT_TABLE_SAMPLE_LIMIT, columnSampleLimit = DEFAULT_COLUMN_SAMPLE_LIMIT } = options;
+    const { userId, organizationId, datasourceId, database, table, tableSampleLimit = DEFAULT_TABLE_SAMPLE_LIMIT, columnSampleLimit = DEFAULT_COLUMN_SAMPLE_LIMIT } = options;
 
     try {
-        const { entry, config } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+        const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
         const instance = entry.instance;
         const resolvedDatabase = await resolveDatabaseName(instance, config.database, database, table);
 
@@ -135,21 +135,21 @@ export async function buildSchemaContext(options: SchemaContextOptions): Promise
 
 export async function buildSchemaContextForTables(options: {
     userId: string;
-    teamId: string;
+    organizationId: string;
     datasourceId: string;
     database?: string | null;
     schema?: string | null;
     tables: SchemaTableRef[];
     columnSampleLimit?: number;
 }): Promise<string | null> {
-    const { userId, teamId, datasourceId, database, schema, tables, columnSampleLimit = DEFAULT_COLUMN_SAMPLE_LIMIT } = options;
+    const { userId, organizationId, datasourceId, database, schema, tables, columnSampleLimit = DEFAULT_COLUMN_SAMPLE_LIMIT } = options;
 
     if (!tables.length) {
         return null;
     }
 
     try {
-        const { entry, config } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+        const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
         const instance = entry.instance;
         const effectiveColumnLimit = sanitizeLimit(columnSampleLimit, DEFAULT_COLUMN_SAMPLE_LIMIT);
 

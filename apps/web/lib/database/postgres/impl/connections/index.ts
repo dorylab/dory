@@ -73,13 +73,13 @@ export class PostgresConnectionsRepository {
 
     /* -------------------- List: returns ConnectionListItem[] -------------------- */
 
-    async list(teamId: string): Promise<ConnectionListItem[]> {
+    async list(organizationId: string): Promise<ConnectionListItem[]> {
         // 1) Fetch all non-soft-deleted connections
         const connectionMap = new Map<string, any>();
         const rows = await this.db
             .select()
             .from(connections)
-            .where(and(eq(connections.teamId, teamId), isNull(connections.deletedAt)))
+            .where(and(eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
             .orderBy(connections.createdAt);
 
         if (!rows.length) return [];
@@ -193,20 +193,20 @@ export class PostgresConnectionsRepository {
 
     /* -------------------- Detail: single connection -------------------- */
 
-    async getById(teamId: string, connectionId: string, db: DbExecutor = this.db): Promise<ConnectionListItem | null> {
+    async getById(organizationId: string, connectionId: string, db: DbExecutor = this.db): Promise<ConnectionListItem | null> {
         const rows = await db
             .select()
             .from(connections)
-            .where(and(eq(connections.id, connectionId), eq(connections.teamId, teamId), isNull(connections.deletedAt)))
+            .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
             .limit(1);
 
         if (!rows[0]) return null;
-        return this.toConnectionListItem(db, teamId, rows[0]);
+        return this.toConnectionListItem(db, organizationId, rows[0]);
     }
 
     /* ---------------- Create: create Connection + default Identity + SSH -------------------- */
 
-    async create(userId: string, teamId: string, payload: ConnectionPayload): Promise<ConnectionListItem> {
+    async create(userId: string, organizationId: string, payload: ConnectionPayload): Promise<ConnectionListItem> {
         const { connection, identities, ssh } = payload;
         try {
             return await this.db.transaction(async tx => {
@@ -214,7 +214,7 @@ export class PostgresConnectionsRepository {
                 const baseRecord = {
                     createdByUserId: userId,
                     ...connection,
-                    teamId,
+                    organizationId,
                     engine,
                 } as any;
 
@@ -247,11 +247,11 @@ export class PostgresConnectionsRepository {
                                 passwordEncrypted,
                             },
                         }
-                        await this.createIdentityWithSecret(tx, userId, created.teamId, created.id, savedIdentityWithSecret as any);
+                        await this.createIdentityWithSecret(tx, userId, created.organizationId, created.id, savedIdentityWithSecret as any);
                     }
                 }
 
-                return this.getById(teamId, created.id, tx) as Promise<ConnectionListItem>;
+                return this.getById(organizationId, created.id, tx) as Promise<ConnectionListItem>;
             });
         } catch (error: any) {
             const message = String(error?.message ?? '');
@@ -262,7 +262,7 @@ export class PostgresConnectionsRepository {
         }
     }
 
-    async update(teamId: string, connectionId: string, payload: ConnectionPayload): Promise<any> {
+    async update(organizationId: string, connectionId: string, payload: ConnectionPayload): Promise<any> {
         const connectionPayload = { ...payload.connection } as any;
         // Avoid writing id back
         if ('id' in connectionPayload) {
@@ -272,7 +272,7 @@ export class PostgresConnectionsRepository {
         const [updatedConnection] = await this.db
             .update(connections)
             .set(connectionPayload)
-            .where(and(eq(connections.id, connectionId), eq(connections.teamId, teamId), isNull(connections.deletedAt)))
+            .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
             .returning();
 
         if (!updatedConnection) {
@@ -296,7 +296,7 @@ export class PostgresConnectionsRepository {
                 const secret =
                     typeof password === 'undefined' ? undefined : { passwordEncrypted: await encrypt(password ?? '') };
 
-                await this.updateIdentityWithSecret(this.db, teamId, connectionId, {
+                await this.updateIdentityWithSecret(this.db, organizationId, connectionId, {
                     ...restIdentity,
                     id: identity.id,
                     secret,
@@ -307,10 +307,10 @@ export class PostgresConnectionsRepository {
     }
 
 
-    async delete(teamId: string, connectionId: string): Promise<any> {
+    async delete(organizationId: string, connectionId: string): Promise<any> {
         const deleted = await this.db
             .delete(connections)
-            .where(and(eq(connections.id, connectionId), eq(connections.teamId, teamId), isNull(connections.deletedAt)))
+            .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
             .returning({ id: connections.id });
 
         if (!deleted[0]) {
@@ -331,7 +331,7 @@ export class PostgresConnectionsRepository {
             tookMs?: number | null;
             error?: string | null;
             checkedAt?: Date | null;
-            teamId?: string;
+            organizationId?: string;
         },
     ) {
         if (!connectionId) return;
@@ -357,8 +357,8 @@ export class PostgresConnectionsRepository {
         if (!Object.keys(payload).length) return;
 
         const conditions = [eq(connections.id, connectionId)];
-        if (info.teamId) {
-            conditions.push(eq(connections.teamId, info.teamId));
+        if (info.organizationId) {
+            conditions.push(eq(connections.organizationId, info.organizationId));
         }
 
         await this.db
@@ -368,7 +368,7 @@ export class PostgresConnectionsRepository {
     }
 
 
-    async toConnectionListItem(db: DbExecutor, teamId: string, row: any): Promise<ConnectionListItem> {
+    async toConnectionListItem(db: DbExecutor, organizationId: string, row: any): Promise<ConnectionListItem> {
         // 1) SSH config
         const [sshRow] = await db.select().from(connectionSsh).where(eq(connectionSsh.connectionId, row.id)).limit(1);
         const sshConfig: ConnectionSsh | null = sshRow
@@ -488,7 +488,7 @@ export class PostgresConnectionsRepository {
     private async createIdentityWithSecret(
         db: DbExecutor,
         userId: string | null,
-        teamId: string,
+        organizationId: string,
         connectionId: string,
         payload: ConnectionIdentityCreateInput & {
             secret?: Omit<ConnectionIdentitySecretUpsertInput, 'identityId'>;
@@ -503,7 +503,7 @@ export class PostgresConnectionsRepository {
             .insert(connectionIdentities)
             .values({
                 createdByUserId: userId,
-                teamId,
+                organizationId,
                 connectionId,
                 name: payload.name,
                 username: payload.username,
@@ -543,7 +543,7 @@ export class PostgresConnectionsRepository {
  */
     private async updateIdentityWithSecret(
         db: DbExecutor,
-        teamId: string,
+        organizationId: string,
         connectionId: string,
         payload: ConnectionIdentityUpdateInput & {
             id: string; // 👈 Update requires id
@@ -587,7 +587,7 @@ export class PostgresConnectionsRepository {
             .where(
                 and(
                     eq(connectionIdentities.id, payload.id),
-                    eq(connectionIdentities.teamId, teamId),
+                    eq(connectionIdentities.organizationId, organizationId),
                     eq(connectionIdentities.connectionId, connectionId),
                     isNull(connectionIdentities.deletedAt),
                 ),
@@ -633,7 +633,7 @@ export class PostgresConnectionsRepository {
     /**
      * Decrypt plaintext password by identityId (for testConnection)
      */
-    async getIdentityPlainPassword(teamId: string, identityId: string): Promise<string | null> {
+    async getIdentityPlainPassword(organizationId: string, identityId: string): Promise<string | null> {
         const [secret] = await this.db
             .select({
                 passwordEncrypted: connectionIdentitySecrets.passwordEncrypted,
@@ -644,8 +644,8 @@ export class PostgresConnectionsRepository {
             .where(
                 and(
                     eq(connectionIdentitySecrets.identityId, identityId),
-                    eq(connectionIdentities.teamId, teamId),
-                    eq(connections.teamId, teamId),
+                    eq(connectionIdentities.organizationId, organizationId),
+                    eq(connections.organizationId, organizationId),
                     isNull(connectionIdentities.deletedAt),
                     isNull(connections.deletedAt),
                 ),
@@ -665,7 +665,7 @@ export class PostgresConnectionsRepository {
     /**
      * Decrypt SSH credentials by connectionId (for testConnection)
      */
-    async getSshPlainSecrets(teamId: string, connectionId: string): Promise<{ password: string | null; privateKey: string | null; passphrase: string | null } | null> {
+    async getSshPlainSecrets(organizationId: string, connectionId: string): Promise<{ password: string | null; privateKey: string | null; passphrase: string | null } | null> {
         const [sshRow] = await this.db
             .select({
                 passwordEncrypted: connectionSsh.passwordEncrypted,
@@ -674,7 +674,7 @@ export class PostgresConnectionsRepository {
             })
             .from(connectionSsh)
             .innerJoin(connections, eq(connectionSsh.connectionId, connections.id))
-            .where(and(eq(connectionSsh.connectionId, connectionId), eq(connections.teamId, teamId), isNull(connections.deletedAt)))
+            .where(and(eq(connectionSsh.connectionId, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
             .limit(1);
         if (!sshRow) return null;
 

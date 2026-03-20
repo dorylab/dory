@@ -4,7 +4,7 @@ import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { resolvePrivilegesConnection, handlePrivilegesError } from '../_utils';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
 type TargetOption = {
     label: string;
@@ -20,9 +20,9 @@ function toOption(name: unknown): TargetOption | null {
     return { label: trimmed, value: trimmed };
 }
 
-export const GET = withUserAndTeamHandler(async ({ req, teamId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
     const locale = await getApiLocale();
-    const resolved = await resolvePrivilegesConnection(req, { teamId });
+    const resolved = await resolvePrivilegesConnection(req, { organizationId });
     if (resolved.response) return resolved.response;
 
     const url = new URL(req.url);

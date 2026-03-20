@@ -3,7 +3,7 @@ import 'server-only';
 import { toActionContext } from './to-action-context';
 import { hydrateActionContext } from './hydrate-action-context';
 import { ActionContext, ActionIntent, ActionResult } from '../types';
-import type { CopilotFixInput } from '@/app/(app)/[team]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
+import type { CopilotFixInput } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
 import { fixSqlError } from './quick-actions/fix-sql-error';
 import { optimizePerformance } from './quick-actions/optimize-performance';
 import { rewriteSql } from './quick-actions/rewrite-sql';
@@ -34,7 +34,7 @@ const QUICK_ACTION_MAP: Record<ActionIntent, QuickActionServer> = QUICK_ACTIONS.
 export async function runQuickActionServer(
     intent: ActionIntent,
     input: CopilotFixInput,
-    options?: { locale?: Locale; teamId?: string; userId?: string },
+    options?: { locale?: Locale; organizationId?: string; userId?: string },
 ): Promise<ActionResult> {
     const locale = options?.locale ?? routing.defaultLocale;
     const action = QUICK_ACTION_MAP[intent];
@@ -43,7 +43,7 @@ export async function runQuickActionServer(
     }
 
     const baseCtx = toActionContext(input, locale, {
-        teamId: options?.teamId,
+        organizationId: options?.organizationId,
         userId: options?.userId,
     });
     const ctx = await hydrateActionContext(baseCtx);

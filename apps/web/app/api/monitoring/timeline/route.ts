@@ -4,12 +4,12 @@ import { ErrorCodes } from '@/lib/errors';
 import { parseFiltersFromPayload } from '../_utils';
 import { ensureConnection } from '@/lib/utils/ensure-connection';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
-    const connection = await ensureConnection(req, { teamId });
+    const connection = await ensureConnection(req, { organizationId });
     if ('response' in connection) {
         return connection.response;
     }

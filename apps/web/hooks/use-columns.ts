@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue } from 'jotai';
-import { buildColumnCacheKey } from '@/app/(app)/[team]/components/table-browser/utils';
+import { buildColumnCacheKey } from '@/app/(app)/[organization]/components/table-browser/utils';
 import { columnsAtom, columnsCacheAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import type { ResponseObject } from '@/types';
 import { authFetch } from '@/lib/client/auth-fetch';

@@ -7,11 +7,11 @@ import { buildCloudToolSet } from '@/lib/ai/cloud-tools';
 import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
 export const runtime = 'nodejs';
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
     try {
         const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/stream');
         if (proxied) return proxied;
@@ -71,7 +71,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
             stopWhen: stepCountIs(Math.max(1, body.maxSteps ?? 1)),
             temperature: body.temperature ?? preset.temperature,
             context: {
-                teamId,
+                organizationId,
                 userId,
                 feature: 'chat_stream',
                 model: providerModelName,

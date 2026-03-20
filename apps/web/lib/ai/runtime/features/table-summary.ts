@@ -18,7 +18,7 @@ import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { resolveModelName } from '@/lib/ai/model/presets';
 
 type GetTableSummaryOptions = {
-    teamId: string;
+    organizationId: string;
     userId?: string | null;
     connectionId: string;
     columns: ColumnInput[];
@@ -39,7 +39,7 @@ type GetTableSummaryOptions = {
 
 export async function getTableSummaryWithCache(options: GetTableSummaryOptions) {
     const {
-        teamId,
+        organizationId,
         userId,
         connectionId,
         columns,
@@ -96,7 +96,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
     const localeKey = locale ?? 'en';
 
     const { normalized, payload, fromCache } = await runAiWithCache<TableSummaryResponse, TableSummaryResponse | null>({
-        teamId,
+        organizationId,
         connectionId,
         feature,
         model: providerModelName,
@@ -109,7 +109,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         algoVersion,
         ignoreCache,
         context: {
-            teamId,
+            organizationId,
             userId: userId ?? null,
             feature,
             model: providerModelName,
@@ -143,7 +143,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
                 topP: 1,
                 maxOutputTokens: preset.maxOutputTokens ?? 512,
                 context: {
-                    teamId,
+                    organizationId,
                     userId: userId ?? null,
                     feature,
                     model: providerModelName,

@@ -4,11 +4,11 @@ import { ErrorCodes } from '@/lib/errors';
 import { resolvePrivilegesConnection, handlePrivilegesError } from '../_utils';
 import type { CreateUserPayload } from '@/types/privileges';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
-export const GET = withUserAndTeamHandler(async ({ req, teamId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
     const locale = await getApiLocale();
-    const resolved = await resolvePrivilegesConnection(req, { teamId });
+    const resolved = await resolvePrivilegesConnection(req, { organizationId });
     if (resolved.response) return resolved.response;
     try {
         const users = await resolved.resolved!.privileges.listClickHouseUsers();
@@ -19,9 +19,9 @@ export const GET = withUserAndTeamHandler(async ({ req, teamId }) => {
     }
 });
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
     const locale = await getApiLocale();
-    const resolved = await resolvePrivilegesConnection(req, { teamId });
+    const resolved = await resolvePrivilegesConnection(req, { organizationId });
     if (resolved.response) return resolved.response;
     let payload: CreateUserPayload;
     try {

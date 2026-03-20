@@ -23,10 +23,10 @@ import { createChartBuilderTool } from './chart-builder';
 import { MAX_HISTORY_MESSAGES, SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import { normalizeMessage } from './utils';
 import { newEntityId } from '@/lib/id';
-import type { CopilotEnvelopeV1 } from '@/app/(app)/[team]/[connectionId]/chatbot/copilot/types/copilot-envelope';
-import { toPromptContext } from '@/app/(app)/[team]/[connectionId]/chatbot/copilot/copilot-envelope';
+import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
+import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import { getApiLocale } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '../utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '../utils/with-organization-handler';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
@@ -34,7 +34,7 @@ import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 
 export const runtime = 'nodejs';
 
-export const POST = withUserAndTeamHandler(async ({ req }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req }) => {
     try {
         return await handleChatRequest(req);
     } catch (error) {
@@ -101,7 +101,7 @@ async function handleChatRequest(req: NextRequest) {
 
     const session = await getSessionFromRequest(req);
     const userId = session?.user?.id ?? null;
-    const teamId = resolveCurrentOrganizationId(session);
+    const organizationId = resolveCurrentOrganizationId(session);
     const connectionId =
         connectionIdFromBody ?? req.headers.get('x-connection-id') ?? null;
 
@@ -140,10 +140,10 @@ async function handleChatRequest(req: NextRequest) {
     /* 3) create / get chat session                                        */
     /* ------------------------------------------------------------------ */
 
-    if (db && userId && teamId) {
+    if (db && userId && organizationId) {
         if (tabId) {
             const s = await db.chat.createOrGetCopilotSession({
-                teamId,
+                organizationId,
                 userId,
                 tabId,
                 connectionId: connectionId ?? null,
@@ -158,7 +158,7 @@ async function handleChatRequest(req: NextRequest) {
         } else {
             if (chatId) {
                 const existed = await db.chat.readSession({
-                    teamId,
+                    organizationId,
                     sessionId: chatId,
                     userId,
                 });
@@ -167,7 +167,7 @@ async function handleChatRequest(req: NextRequest) {
                 } else {
                     const s = await db.chat.createGlobalSession({
                         id: chatId,
-                        teamId,
+                        organizationId,
                         userId,
                         connectionId: connectionId ?? null,
                         activeDatabase: database ?? null,
@@ -181,7 +181,7 @@ async function handleChatRequest(req: NextRequest) {
                 }
             } else {
                 const s = await db.chat.createGlobalSession({
-                    teamId,
+                    organizationId,
                     userId,
                     connectionId: connectionId ?? null,
                     activeDatabase: database ?? null,
@@ -207,11 +207,11 @@ async function handleChatRequest(req: NextRequest) {
     let sqlToolEnabled = false;
     let schemaContext: string | null = null;
 
-    if (db && userId && teamId && connectionId) {
+    if (db && userId && organizationId && connectionId) {
         const defaults = getDefaultSchemaSampleLimits();
         schemaContext = await buildSchemaContext({
             userId,
-            teamId,
+            organizationId,
             datasourceId: connectionId,
             database,
             table,
@@ -221,7 +221,7 @@ async function handleChatRequest(req: NextRequest) {
 
         tools.sqlRunner = createSqlRunnerTool({
             userId,
-            teamId,
+            organizationId,
             chatId: chatId ?? '',
             messageId: requestMessageId ?? undefined,
             datasourceId: connectionId,
@@ -296,19 +296,19 @@ async function handleChatRequest(req: NextRequest) {
     if (
         db &&
         userId &&
-        teamId &&
+        organizationId &&
         chatId &&
         currentUserMessage &&
         currentUserMessageId
     ) {
         try {
             await db.chat.appendMessage({
-                teamId,
+                organizationId,
                 sessionId: chatId,
                 userId,
                 message: {
                     id: currentUserMessageId,
-                    teamId,
+                    organizationId,
                     sessionId: chatId,
                     userId,
                     connectionId: connectionId ?? null,
@@ -421,7 +421,7 @@ async function handleChatRequest(req: NextRequest) {
                     collectToolCalls(streamForTools),
                 ]);
 
-                if (assistantMessage && db && userId && teamId && chatId) {
+                if (assistantMessage && db && userId && organizationId && chatId) {
                     const messageId =
                         typeof (assistantMessage as any)?.id === 'string' &&
                         (assistantMessage as any).id
@@ -431,12 +431,12 @@ async function handleChatRequest(req: NextRequest) {
                     if (!existedMessageIds.has(messageId)) {
                         try {
                             await db.chat.appendMessage({
-                                teamId,
+                                organizationId,
                                 sessionId: chatId,
                                 userId,
                                 message: {
                                     id: messageId,
-                                    teamId,
+                                    organizationId,
                                     sessionId: chatId,
                                     userId: null,
                                     connectionId: connectionId ?? null,
@@ -544,7 +544,7 @@ async function handleChatRequest(req: NextRequest) {
                         }
                     }
 
-                    if (db && userId && teamId && chatId) {
+                    if (db && userId && organizationId && chatId) {
                         const toolMessageId = newEntityId();
                         try {
                             const ok =
@@ -558,12 +558,12 @@ async function handleChatRequest(req: NextRequest) {
                                     : toolErrorText === null;
 
                             await db.chat.appendMessage({
-                                teamId,
+                                organizationId,
                                 sessionId: chatId,
                                 userId,
                                 message: {
                                     id: toolMessageId,
-                                    teamId,
+                                    organizationId,
                                     sessionId: chatId,
                                     userId: null,
                                     connectionId: connectionId ?? null,

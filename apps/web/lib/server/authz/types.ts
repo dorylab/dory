@@ -1,12 +1,12 @@
-export type TeamAccessRole = 'owner' | 'admin' | 'member' | 'viewer' | null;
+export type OrganizationAccessRole = 'owner' | 'admin' | 'member' | 'viewer' | null;
 
-export type TeamAccess = {
+export type OrganizationAccess = {
     source: 'desktop' | 'local';
-    teamId: string;
+    organizationId: string;
     userId: string;
     isMember: boolean;
-    role: TeamAccessRole;
-    team: {
+    role: OrganizationAccessRole;
+    organization: {
         id: string;
         slug?: string | null;
         name?: string | null;

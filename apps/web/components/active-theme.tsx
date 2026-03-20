@@ -11,10 +11,23 @@ import {
 const COOKIE_NAME = "active_theme"
 const DEFAULT_THEME = "default"
 
+function getThemeCookie() {
+  if (typeof document === "undefined") return null
+
+  const prefix = `${COOKIE_NAME}=`
+  const entry = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix))
+
+  return entry ? decodeURIComponent(entry.slice(prefix.length)) : null
+}
+
 function setThemeCookie(theme: string) {
   if (typeof window === "undefined") return
+  if (getThemeCookie() === theme) return
 
-  document.cookie = `${COOKIE_NAME}=${theme}; path=/; max-age=31536000; SameSite=Lax; ${window.location.protocol === "https:" ? "Secure;" : ""}`
+  document.cookie = `${COOKIE_NAME}=${encodeURIComponent(theme)}; path=/; max-age=31536000; SameSite=Lax; ${window.location.protocol === "https:" ? "Secure;" : ""}`
 }
 
 type ThemeContextType = {

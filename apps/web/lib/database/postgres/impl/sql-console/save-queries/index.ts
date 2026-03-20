@@ -17,7 +17,7 @@ export type SavedQueryRecord = typeof savedQueries.$inferSelect;
 
 export type SavedQueryCreateInput = {
     id?: string;
-    teamId: string;
+    organizationId: string;
     userId: string;
     title: string;
     description?: string | null;
@@ -41,7 +41,7 @@ export type SavedQueryUpdateInput = {
 };
 
 export type SavedQueryListParams = {
-    teamId: string;
+    organizationId: string;
     userId: string;
     includeArchived?: boolean;
     limit?: number;
@@ -88,7 +88,7 @@ export class PostgresSavedQueriesRepository {
             .from(savedQueries)
             .where(
                 and(
-                    eq(savedQueries.teamId, input.teamId),
+                    eq(savedQueries.organizationId, input.organizationId),
                     eq(savedQueries.userId, input.userId),
                     isNull(savedQueries.folderId),
                     isNull(savedQueries.archivedAt),
@@ -101,7 +101,7 @@ export class PostgresSavedQueriesRepository {
             .insert(savedQueries)
             .values({
                 id,
-                teamId: input.teamId,
+                organizationId: input.organizationId,
                 userId: input.userId,
                 title: input.title,
                 description: input.description ?? null,
@@ -123,7 +123,7 @@ export class PostgresSavedQueriesRepository {
     }
 
     async getById(params: {
-        teamId: string;
+        organizationId: string;
         userId: string;
         id: string;
         includeArchived?: boolean;
@@ -133,7 +133,7 @@ export class PostgresSavedQueriesRepository {
 
         const conds = [
             eq(savedQueries.id, params.id),
-            eq(savedQueries.teamId, params.teamId),
+            eq(savedQueries.organizationId, params.organizationId),
             eq(savedQueries.userId, params.userId),
         ];
         if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
@@ -151,7 +151,7 @@ export class PostgresSavedQueriesRepository {
         return (row as SavedQueryRecord | undefined) ?? null;
     }
 
-    async listAll(params: { teamId: string; userId: string }): Promise<SavedQueryRecord[]> {
+    async listAll(params: { organizationId: string; userId: string }): Promise<SavedQueryRecord[]> {
         this.assertInited();
 
         const rows = await this.db
@@ -159,7 +159,7 @@ export class PostgresSavedQueriesRepository {
             .from(savedQueries)
             .where(
                 and(
-                    eq(savedQueries.teamId, params.teamId),
+                    eq(savedQueries.organizationId, params.organizationId),
                     eq(savedQueries.userId, params.userId),
                     isNull(savedQueries.archivedAt),
                 ),
@@ -173,7 +173,7 @@ export class PostgresSavedQueriesRepository {
         this.assertInited();
 
         const conds = [
-            eq(savedQueries.teamId, params.teamId),
+            eq(savedQueries.organizationId, params.organizationId),
             eq(savedQueries.userId, params.userId),
         ];
         if (!params.includeArchived) conds.push(isNull(savedQueries.archivedAt));
@@ -197,7 +197,7 @@ export class PostgresSavedQueriesRepository {
     }
 
     async update(params: {
-        teamId: string;
+        organizationId: string;
         userId: string;
         id: string;
         patch: SavedQueryUpdateInput;
@@ -233,7 +233,7 @@ export class PostgresSavedQueriesRepository {
                 .where(
                     and(
                         eq(savedQueries.id, params.id),
-                        eq(savedQueries.teamId, params.teamId),
+                        eq(savedQueries.organizationId, params.organizationId),
                         eq(savedQueries.userId, params.userId),
                         this.buildConnectionScopeCondition(params.connectionId),
                     ),
@@ -246,7 +246,7 @@ export class PostgresSavedQueriesRepository {
             .where(
                 and(
                     eq(savedQueries.id, params.id),
-                    eq(savedQueries.teamId, params.teamId),
+                    eq(savedQueries.organizationId, params.organizationId),
                     eq(savedQueries.userId, params.userId),
                     this.buildConnectionScopeCondition(params.connectionId),
                 ),
@@ -257,7 +257,7 @@ export class PostgresSavedQueriesRepository {
         return row as SavedQueryRecord;
     }
 
-    async delete(params: { teamId: string; userId: string; id: string; connectionId: string }): Promise<void> {
+    async delete(params: { organizationId: string; userId: string; id: string; connectionId: string }): Promise<void> {
         this.assertInited();
 
         await this.db
@@ -266,7 +266,7 @@ export class PostgresSavedQueriesRepository {
             .where(
                 and(
                     eq(savedQueries.id, params.id),
-                    eq(savedQueries.teamId, params.teamId),
+                    eq(savedQueries.organizationId, params.organizationId),
                     eq(savedQueries.userId, params.userId),
                     this.buildConnectionScopeCondition(params.connectionId),
                 ),
@@ -274,7 +274,7 @@ export class PostgresSavedQueriesRepository {
     }
 
     async reorder(params: {
-        teamId: string;
+        organizationId: string;
         userId: string;
         folderId: string | null;
         orderedIds: string[];
@@ -288,7 +288,7 @@ export class PostgresSavedQueriesRepository {
                 .where(
                     and(
                         eq(savedQueries.id, params.orderedIds[i]),
-                        eq(savedQueries.teamId, params.teamId),
+                        eq(savedQueries.organizationId, params.organizationId),
                         eq(savedQueries.userId, params.userId),
                     ),
                 );

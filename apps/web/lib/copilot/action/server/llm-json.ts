@@ -13,7 +13,7 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
     maxRetries?: number;
     model?: string | null;
     context?: {
-        teamId?: string | null;
+        organizationId?: string | null;
         userId?: string | null;
         feature?: string;
     };
@@ -32,7 +32,7 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
                 prompt,
                 temperature: temperature ?? preset.temperature,
                 context: {
-                    teamId: context?.teamId ?? null,
+                    organizationId: context?.organizationId ?? null,
                     userId: context?.userId ?? null,
                     feature: context?.feature ?? 'copilot_action',
                     model: providerModelName,

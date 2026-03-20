@@ -28,7 +28,7 @@ export async function executeToAggregation(ctx: ActionContext): Promise<ActionRe
             maxRetries: 1,
             model: ctx.model,
             context: {
-                teamId: ctx.teamId,
+                organizationId: ctx.organizationId,
                 userId: ctx.userId,
                 feature: 'copilot_action_to_aggregation',
             },

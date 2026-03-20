@@ -4,12 +4,12 @@ import { ErrorCodes } from '@/lib/errors';
 import { resolvePrivilegesConnection, handlePrivilegesError } from '../../_utils';
 import type { UpdateUserPayload } from '@/types/privileges';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
 export async function GET(req: NextRequest, context: { params: Promise<{ name: string }> }) {
-    return withUserAndTeamHandler(async ({ req, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ req, organizationId }) => {
         const locale = await getApiLocale();
-        const resolved = await resolvePrivilegesConnection(req, { teamId });
+        const resolved = await resolvePrivilegesConnection(req, { organizationId });
         if (resolved.response) return resolved.response;
         const params = await context.params;
         try {
@@ -31,9 +31,9 @@ export async function GET(req: NextRequest, context: { params: Promise<{ name: s
 }
 
 export async function PATCH(req: NextRequest, context: { params: Promise<{ name: string }> }) {
-    return withUserAndTeamHandler(async ({ req, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ req, organizationId }) => {
         const locale = await getApiLocale();
-        const resolved = await resolvePrivilegesConnection(req, { teamId });
+        const resolved = await resolvePrivilegesConnection(req, { organizationId });
         if (resolved.response) return resolved.response;
         const params = await context.params;
         let payload: UpdateUserPayload;
@@ -61,9 +61,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ name:
 }
 
 export async function DELETE(req: NextRequest, context: { params: Promise<{ name: string }> }) {
-    return withUserAndTeamHandler(async ({ req, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ req, organizationId }) => {
         const locale = await getApiLocale();
-        const resolved = await resolvePrivilegesConnection(req, { teamId });
+        const resolved = await resolvePrivilegesConnection(req, { organizationId });
         if (resolved.response) return resolved.response;
         const params = await context.params;
 

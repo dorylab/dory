@@ -82,9 +82,9 @@ async function ensurePoolWithLatest(config: BaseConfig) {
     return ensureDatasourcePool(config);
 }
 
-export async function ensureConnectionPoolForUser(userId: string, teamId: string, connectionId: string, identityId?: string | null) {
+export async function ensureConnectionPoolForUser(userId: string, organizationId: string, connectionId: string, identityId?: string | null) {
     const db = await getDBService();
-    const record = await db.connections.getById(teamId, connectionId);
+    const record = await db.connections.getById(organizationId, connectionId);
 
     if (!record) {
         throw createConnectionError(CONNECTION_ERROR_CODES.notFound);
@@ -95,9 +95,9 @@ export async function ensureConnectionPoolForUser(userId: string, teamId: string
         throw createConnectionError(CONNECTION_ERROR_CODES.missingIdentity);
     }
 
-    const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(teamId, identity.id) : null;
+    const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
 
-    const sshSecrets = await db.connections.getSshPlainSecrets(teamId, record.connection.id);
+    const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
     const sshConfig: SshWithSecrets | null = record.ssh
         ? { ...record.ssh, ...(sshSecrets ?? {}) }
         : sshSecrets

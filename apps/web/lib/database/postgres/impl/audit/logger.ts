@@ -29,7 +29,7 @@ export class PgAuditLoggerRepository {
 
             await this.db.insert(queryAudit).values({
                 // —— Required fields —— //
-                teamId: payload.teamId,
+                organizationId: payload.organizationId,
                 tabId: payload.tabId,
                 userId: payload.userId,
                 source: payload.source,

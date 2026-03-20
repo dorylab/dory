@@ -1,8 +1,8 @@
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
 export const runtime = 'nodejs';
 
-export const GET = withUserAndTeamHandler(async ({ req, db, teamId }) => {
+export const GET = withUserAndOrganizationHandler(async ({ req, db, organizationId }) => {
     const from = req.nextUrl.searchParams.get('from');
     const to = req.nextUrl.searchParams.get('to');
     const feature = req.nextUrl.searchParams.get('feature');
@@ -14,7 +14,7 @@ export const GET = withUserAndTeamHandler(async ({ req, db, teamId }) => {
     }
 
     const data = await db.aiUsage.getOverview({
-        teamId,
+        organizationId,
         from,
         to,
         feature,

@@ -5,11 +5,11 @@ import { ErrorCodes } from '@/lib/errors';
 import { ResponseUtil } from '@/lib/result';
 import { ensureConnectionPoolForUser } from '../../utils';
 import { hasMetadataCapability } from '@/lib/connection/base/types';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-    return withUserAndTeamHandler(async ({ userId, teamId }) => {
+    return withUserAndOrganizationHandler(async ({ userId, organizationId }) => {
         const locale = await getApiLocale();
         const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
         const headerId = req.headers.get('x-connection-id');
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
             const url = new URL(req.url);
             const databaseParam = url.searchParams.get('database');
 
-            const { entry, config } = await ensureConnectionPoolForUser(userId, teamId, datasourceId, null);
+            const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
             const metadata = entry.instance.capabilities.metadata;
 
             const targetDatabase = databaseParam ?? (typeof config.database === 'string' ? config.database : 'default');

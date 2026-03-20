@@ -32,7 +32,7 @@ export type ExplorerListKind =
     | 'schemas';
 
 export type ExplorerBaseParams = {
-    team: string;
+    organization: string;
     connectionId: string;
     catalog?: string;
 };

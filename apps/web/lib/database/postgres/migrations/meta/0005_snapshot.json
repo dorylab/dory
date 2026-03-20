@@ -1283,8 +1283,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.team_members": {
-      "name": "team_members",
+    "public.organization_members": {
+      "name": "organization_members",
       "schema": "",
       "columns": {
         "id": {
@@ -1335,8 +1335,8 @@
         }
       },
       "indexes": {
-        "team_members_team_id_user_id_unique": {
-          "name": "team_members_team_id_user_id_unique",
+        "organization_members_team_id_user_id_unique": {
+          "name": "organization_members_team_id_user_id_unique",
           "columns": [
             {
               "expression": "team_id",
@@ -1356,8 +1356,8 @@
           "method": "btree",
           "with": {}
         },
-        "idx_team_members_team": {
-          "name": "idx_team_members_team",
+        "idx_organization_members_team": {
+          "name": "idx_organization_members_team",
           "columns": [
             {
               "expression": "team_id",
@@ -1371,8 +1371,8 @@
           "method": "btree",
           "with": {}
         },
-        "idx_team_members_user": {
-          "name": "idx_team_members_user",
+        "idx_organization_members_user": {
+          "name": "idx_organization_members_user",
           "columns": [
             {
               "expression": "user_id",
@@ -1394,8 +1394,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.teams": {
-      "name": "teams",
+    "public.organizations": {
+      "name": "organizations",
       "schema": "",
       "columns": {
         "id": {
@@ -1444,8 +1444,8 @@
         }
       },
       "indexes": {
-        "teams_slug_unique": {
-          "name": "teams_slug_unique",
+        "organizations_slug_unique": {
+          "name": "organizations_slug_unique",
           "columns": [
             {
               "expression": "slug",

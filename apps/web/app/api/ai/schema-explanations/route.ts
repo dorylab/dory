@@ -1,7 +1,7 @@
 // app/api/ai/schema-explanations/route.ts
 import { z } from 'zod';
 import provider from '@/lib/ai/provider';
-import { withUserAndTeamHandler } from '@/app/api/utils/with-team-handler';
+import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { fallbackSummaries } from '@/lib/ai/core/schema-explanations';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
@@ -31,7 +31,7 @@ const schemaExplanationRequestSchema = z.object({
 
 type SchemaExplanationRequest = z.infer<typeof schemaExplanationRequestSchema>;
 
-export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
     const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/schema-explanations');
     if (proxied) return proxied;
 
@@ -63,7 +63,7 @@ export const POST = withUserAndTeamHandler(async ({ req, teamId, userId }) => {
 
     try {
         const result = await provider.getColumnExplanationsWithCache({
-            teamId,
+            organizationId,
             userId,
             connectionId,
             dbType,

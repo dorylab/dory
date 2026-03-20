@@ -2,7 +2,7 @@ import { v4 as uuidv4, v7 as uuidv7 } from 'uuid';
 
 /**
  * Entity primary keys: use UUID v7 (sortable, DB-friendly)
- * Used for user / team / datasource / audit / trace / chat / message, etc.
+ * Used for user / organization / datasource / audit / trace / chat / message, etc.
  */
 export function newEntityId(): string {
     return uuidv7();

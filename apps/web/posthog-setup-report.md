@@ -6,8 +6,8 @@ The wizard has completed a deep integration of PostHog into the Studio Next.js a
 **Changes made:**
 
 - `apps/web/.env.local` — Set `NEXT_PUBLIC_POSTHOG_KEY` and `NEXT_PUBLIC_POSTHOG_HOST` to correct values via wizard-tools (never hardcoded)
-- `apps/web/app/(app)/[team]/connections/hooks/use-connect-connection.ts` — Added `posthog-js` import; capture `connection_opened` on success and `connection_open_failed` on error
-- `apps/web/app/(app)/[team]/[connectionId]/sql-console/components/saved-queries/saved-queries-sidebar.tsx` — Added `posthog-js` import; capture `saved_query_opened` when a saved query is clicked, and `saved_query_deleted` when one is deleted
+- `apps/web/app/(app)/[organization]/connections/hooks/use-connect-connection.ts` — Added `posthog-js` import; capture `connection_opened` on success and `connection_open_failed` on error
+- `apps/web/app/(app)/[organization]/[connectionId]/sql-console/components/saved-queries/saved-queries-sidebar.tsx` — Added `posthog-js` import; capture `saved_query_opened` when a saved query is clicked, and `saved_query_deleted` when one is deleted
 
 **Pre-existing events confirmed in place:**
 - `user_signed_in` / `user_sign_in_failed` — `SignInForm.tsx`
@@ -23,16 +23,16 @@ The wizard has completed a deep integration of PostHog into the Studio Next.js a
 | `user_sign_in_failed` | Sign-in attempt fails, with error context | `app/(auth)/components/SignInForm.tsx` |
 | `user_signed_up` | User completes sign-up and moves to verify stage | `app/(auth)/components/SignUpform.tsx` |
 | `user_sign_up_failed` | Sign-up attempt fails with an error | `app/(auth)/components/SignUpform.tsx` |
-| `connection_created` | New database connection created | `app/(app)/[team]/connections/hooks/use-connections.ts` |
-| `connection_updated` | Existing database connection updated | `app/(app)/[team]/connections/hooks/use-connections.ts` |
-| `connection_deleted` | Database connection deleted | `app/(app)/[team]/connections/hooks/use-connections.ts` |
-| `connection_opened` | User successfully opens/connects to a connection | `app/(app)/[team]/connections/hooks/use-connect-connection.ts` |
-| `connection_open_failed` | User fails to open/connect to a connection | `app/(app)/[team]/connections/hooks/use-connect-connection.ts` |
-| `chat_message_sent` | User submits a message in the AI chatbot | `app/(app)/[team]/[connectionId]/chatbot/thread/chatbox.tsx` |
-| `chat_session_created` | New chat session created | `app/(app)/[team]/[connectionId]/chatbot/core/session-controller.ts` |
-| `chat_session_deleted` | Chat session deleted | `app/(app)/[team]/[connectionId]/chatbot/core/session-controller.ts` |
-| `saved_query_opened` | User opens a saved query in the SQL console | `app/(app)/[team]/[connectionId]/sql-console/components/saved-queries/saved-queries-sidebar.tsx` |
-| `saved_query_deleted` | User deletes a saved query | `app/(app)/[team]/[connectionId]/sql-console/components/saved-queries/saved-queries-sidebar.tsx` |
+| `connection_created` | New database connection created | `app/(app)/[organization]/connections/hooks/use-connections.ts` |
+| `connection_updated` | Existing database connection updated | `app/(app)/[organization]/connections/hooks/use-connections.ts` |
+| `connection_deleted` | Database connection deleted | `app/(app)/[organization]/connections/hooks/use-connections.ts` |
+| `connection_opened` | User successfully opens/connects to a connection | `app/(app)/[organization]/connections/hooks/use-connect-connection.ts` |
+| `connection_open_failed` | User fails to open/connect to a connection | `app/(app)/[organization]/connections/hooks/use-connect-connection.ts` |
+| `chat_message_sent` | User submits a message in the AI chatbot | `app/(app)/[organization]/[connectionId]/chatbot/thread/chatbox.tsx` |
+| `chat_session_created` | New chat session created | `app/(app)/[organization]/[connectionId]/chatbot/core/session-controller.ts` |
+| `chat_session_deleted` | Chat session deleted | `app/(app)/[organization]/[connectionId]/chatbot/core/session-controller.ts` |
+| `saved_query_opened` | User opens a saved query in the SQL console | `app/(app)/[organization]/[connectionId]/sql-console/components/saved-queries/saved-queries-sidebar.tsx` |
+| `saved_query_deleted` | User deletes a saved query | `app/(app)/[organization]/[connectionId]/sql-console/components/saved-queries/saved-queries-sidebar.tsx` |
 | `sql_query_executed` | Server-side: SQL query executed via API, with duration and row count | `app/api/query/route.ts` |
 
 ## Next steps

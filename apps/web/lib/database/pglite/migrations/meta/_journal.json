@@ -43,6 +43,13 @@
       "when": 1774013589412,
       "tag": "0005_wooden_nekra",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1774021104177,
+      "tag": "0010_rapid_namorita",
+      "breakpoints": true
     }
   ]
 }
