@@ -124,7 +124,7 @@
             "ResendCooldown": "Resend ({seconds}s)",
             "Resend": "Resend verification email"
         },
-        "TeamName": "{name}'s organization",
+        "TeamName": "{name}'s project",
         "TeamDefaultName": "Default",
         "Emails": {
             "ResetPassword": {

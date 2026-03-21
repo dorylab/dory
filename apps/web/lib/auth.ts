@@ -93,7 +93,7 @@ function createAuth() {
 
             const locale = await getServerLocale();
             const t = (key: string, values?: Record<string, unknown>) => translate(locale, key, values);
-            const name = t('Auth.TeamName', { name: email ?? t('Auth.TeamDefaultName') });
+            const name = t('Auth.TeamName', { name: email?.split('@')[0] ?? t('Auth.TeamDefaultName') });
 
             const created = await auth.api.createOrganization({
                 body: {
