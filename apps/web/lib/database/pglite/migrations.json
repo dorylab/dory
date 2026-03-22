@@ -106,5 +106,18 @@
     "bps": true,
     "folderMillis": 1774112951843,
     "hash": "39f6a2a2536b4a36ea2fd566e1a5cebc699e8427f88a82bae2a8253aafcb69ac"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"subscription\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"plan\" text NOT NULL,\n\t\"reference_id\" text NOT NULL,\n\t\"stripe_customer_id\" text,\n\t\"stripe_subscription_id\" text,\n\t\"status\" text DEFAULT 'incomplete' NOT NULL,\n\t\"period_start\" timestamp with time zone,\n\t\"period_end\" timestamp with time zone,\n\t\"trial_start\" timestamp with time zone,\n\t\"trial_end\" timestamp with time zone,\n\t\"cancel_at_period_end\" boolean DEFAULT false,\n\t\"cancel_at\" timestamp with time zone,\n\t\"canceled_at\" timestamp with time zone,\n\t\"ended_at\" timestamp with time zone,\n\t\"seats\" integer,\n\t\"billing_interval\" text,\n\t\"stripe_schedule_id\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nALTER TABLE \"user\" ADD COLUMN \"stripe_customer_id\" text;",
+      "\nALTER TABLE \"organizations\" ADD COLUMN \"stripe_customer_id\" text;",
+      "\nCREATE INDEX \"idx_subscription_reference_id\" ON \"subscription\" USING btree (\"reference_id\");",
+      "\nCREATE INDEX \"idx_subscription_stripe_subscription_id\" ON \"subscription\" USING btree (\"stripe_subscription_id\");",
+      "\nCREATE INDEX \"idx_subscription_stripe_customer_id\" ON \"subscription\" USING btree (\"stripe_customer_id\");"
+    ],
+    "bps": true,
+    "folderMillis": 1774155701241,
+    "hash": "d5413333c9f8ca8a0c05a95db4e1361d026eb06f17ec7269919e047fbcfc30ee"
   }
 ]

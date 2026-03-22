@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, boolean, index, integer } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@/lib/id';
 
 /**
@@ -15,6 +15,7 @@ export const user = pgTable('user', {
         .$defaultFn(() => false)
         .notNull(),
     image: text('image'),
+    stripeCustomerId: text('stripe_customer_id'),
     lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -118,3 +119,35 @@ export const jwks = pgTable('jwks', {
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
 });
+
+export const subscription = pgTable(
+    'subscription',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => newEntityId()),
+        plan: text('plan').notNull(),
+        referenceId: text('reference_id').notNull(),
+        stripeCustomerId: text('stripe_customer_id'),
+        stripeSubscriptionId: text('stripe_subscription_id'),
+        status: text('status').notNull().default('incomplete'),
+        periodStart: timestamp('period_start', { withTimezone: true }),
+        periodEnd: timestamp('period_end', { withTimezone: true }),
+        trialStart: timestamp('trial_start', { withTimezone: true }),
+        trialEnd: timestamp('trial_end', { withTimezone: true }),
+        cancelAtPeriodEnd: boolean('cancel_at_period_end').default(false),
+        cancelAt: timestamp('cancel_at', { withTimezone: true }),
+        canceledAt: timestamp('canceled_at', { withTimezone: true }),
+        endedAt: timestamp('ended_at', { withTimezone: true }),
+        seats: integer('seats'),
+        billingInterval: text('billing_interval'),
+        stripeScheduleId: text('stripe_schedule_id'),
+        createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    },
+    table => ({
+        referenceIdIdx: index('idx_subscription_reference_id').on(table.referenceId),
+        stripeSubscriptionIdIdx: index('idx_subscription_stripe_subscription_id').on(table.stripeSubscriptionId),
+        stripeCustomerIdIdx: index('idx_subscription_stripe_customer_id').on(table.stripeCustomerId),
+    }),
+);

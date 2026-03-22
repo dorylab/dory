@@ -20,6 +20,7 @@ export const organizations = pgTable(
         slug: text('slug'),
         logo: text('logo'),
         metadata: text('metadata'),
+        stripeCustomerId: text('stripe_customer_id'),
 
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

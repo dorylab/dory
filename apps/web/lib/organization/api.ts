@@ -138,7 +138,7 @@ export function slugifyOrganizationName(name: string) {
         .toLowerCase()
         .trim()
         .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '') || 'workspace';
+        .replace(/^-+|-+$/g, '');
 }
 
 export async function listOrganizations() {
@@ -150,22 +150,41 @@ export async function createOrganization(input: { name: string; slug: string }) 
         method: 'POST',
         body: {
             name: input.name,
-            slug: input.slug,
+            slug: input.slug || 'workspace',
             keepCurrentActiveOrganization: false,
         },
     });
 }
 
+async function resolveOrganizationIdFromQuery(query?: { organizationId?: string; organizationSlug?: string }) {
+    if (query?.organizationId) {
+        return query.organizationId;
+    }
+
+    if (!query?.organizationSlug) {
+        return undefined;
+    }
+
+    const organizations = await listOrganizations();
+    const match = organizations.find(organization => organization.slug === query.organizationSlug);
+
+    return match?.id;
+}
+
 export async function setActiveOrganization(input: { organizationId?: string; organizationSlug?: string }) {
+    const organizationId = await resolveOrganizationIdFromQuery(input);
+
     return authOrganizationRequest<{ organizationId: string | null }>('/organization/set-active', {
         method: 'POST',
-        body: input,
+        body: organizationId ? { organizationId } : input.organizationSlug ? {} : input,
     });
 }
 
 export async function getFullOrganization(query?: { organizationId?: string; organizationSlug?: string }) {
+    const organizationId = await resolveOrganizationIdFromQuery(query);
+
     return authOrganizationRequest<OrganizationFull | null>('/organization/get-full-organization', {
-        query,
+        query: organizationId ? { organizationId } : {},
     });
 }
 
@@ -183,8 +202,10 @@ export async function updateOrganization(input: { organizationId: string; name: 
 }
 
 export async function listMembers(query?: { organizationId?: string; organizationSlug?: string }) {
+    const organizationId = await resolveOrganizationIdFromQuery(query);
+
     return authOrganizationRequest<{ members: OrganizationMember[]; total: number }>('/organization/list-members', {
-        query,
+        query: organizationId ? { organizationId } : {},
     });
 }
 

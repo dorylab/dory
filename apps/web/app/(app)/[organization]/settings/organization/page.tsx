@@ -33,12 +33,22 @@ export default function OrganizationSettingsPage() {
     }, [organizationQuery.data]);
 
     const updateMutation = useMutation({
-        mutationFn: () =>
-            updateOrganization({
+        mutationFn: () => {
+            const normalizedSlug = slugifyOrganizationName(slug);
+            if (!slug.trim()) {
+                throw new Error('Slug is required');
+            }
+
+            if (normalizedSlug !== slug.trim()) {
+                throw new Error('Slug can only contain lowercase letters, numbers, and hyphens');
+            }
+
+            return updateOrganization({
                 organizationId: organizationQuery.data!.id,
                 name: name.trim(),
                 slug: slug.trim(),
-            }),
+            });
+        },
         onSuccess: async updated => {
             toast.success('Organization updated');
             await queryClient.invalidateQueries({ queryKey: ['organization-full'] });
@@ -70,13 +80,7 @@ export default function OrganizationSettingsPage() {
                     <Input
                         id="organization-name"
                         value={name}
-                        onChange={event => {
-                            const nextName = event.target.value;
-                            setName(nextName);
-                            if (!slug.trim() || slug === slugifyOrganizationName(name)) {
-                                setSlug(slugifyOrganizationName(nextName));
-                            }
-                        }}
+                        onChange={event => setName(event.target.value)}
                         disabled={!organization || !canUpdate || updateMutation.isPending}
                     />
                 </div>
@@ -85,7 +89,7 @@ export default function OrganizationSettingsPage() {
                     <Input
                         id="organization-slug"
                         value={slug}
-                        onChange={event => setSlug(slugifyOrganizationName(event.target.value))}
+                        onChange={event => setSlug(event.target.value)}
                         disabled={!organization || !canUpdate || updateMutation.isPending}
                     />
                 </div>
@@ -110,4 +114,3 @@ export default function OrganizationSettingsPage() {
         </Card>
     );
 }
-

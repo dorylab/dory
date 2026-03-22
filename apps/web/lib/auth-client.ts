@@ -1,6 +1,7 @@
 // lib/auth/client.ts — only import in client components
 'use client';
 import { dashClient, sentinelClient } from '@better-auth/infra/client';
+import { stripeClient } from '@better-auth/stripe/client';
 import { createAuthClient } from 'better-auth/react';
 import { inferOrgAdditionalFields, organizationClient } from 'better-auth/client/plugins';
 import { translate } from '@/lib/i18n/i18n';
@@ -25,9 +26,11 @@ export const authClient = createAuthClient({
             roles: organizationRoles,
             schema: inferOrgAdditionalFields<Awaited<ReturnType<typeof getAuth>>>(),
         }),
+        stripeClient({
+            subscription: true,
+        }),
     ],
 });
-
 
 // ==== Wrapper: social login ====
 export function signInViaGithub(redirectTo = '/') {

@@ -1,20 +1,22 @@
 'use client';
 
-import { IconDotsVertical, IconLogout } from '@tabler/icons-react';
+import { IconDotsVertical, IconFolder, IconLogout } from '@tabler/icons-react';
 
 import { Avatar, AvatarImage } from '@/registry/new-york-v4/ui/avatar';
 import BoringAvatar from 'boring-avatars';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger, useSidebar } from '@/registry/new-york-v4/ui/sidebar';
 import { signOut } from '@/lib/auth-client';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ModeToggle } from '@/components/mode-toggle';
 import { User } from 'better-auth';
 
 export function NavUser({ user }: { user: User | null }) {
     const { isMobile, state } = useSidebar();
+    const params = useParams<{ organization: string }>();
     const router = useRouter();
     const collapsed = state === 'collapsed';
+    const organizationSlug = params.organization;
 
     const renderMenuContent = () => (
         <DropdownMenuContent className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg" side={isMobile ? 'bottom' : 'right'} align="end" sideOffset={4}>
@@ -30,6 +32,15 @@ export function NavUser({ user }: { user: User | null }) {
                     </div>
                 </div>
             </DropdownMenuLabel>
+            <DropdownMenuItem
+                onClick={() => {
+                    if (!organizationSlug) return;
+                    router.push(`/${organizationSlug}/settings/organization`);
+                }}
+            >
+                <IconFolder />
+                My Project
+            </DropdownMenuItem>
             <DropdownMenuItem
                 onClick={async e => {
                     e.preventDefault();

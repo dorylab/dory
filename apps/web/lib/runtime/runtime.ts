@@ -23,6 +23,27 @@ export function isDesktopRuntime(): boolean {
     return runtime === 'desktop';
 }
 
+export function isBillingAvailableRuntimeValue(value: DoryRuntime | null | undefined): boolean {
+    return value === 'web' || value === 'docker';
+}
+
+export function isBillingAvailableRuntime(): boolean {
+    return isBillingAvailableRuntimeValue(runtime);
+}
+
+export function isBillingEnabledForServer(): boolean {
+    const resolvedRuntime = getRuntimeForServer() ?? 'web';
+
+    return (
+        isBillingAvailableRuntimeValue(resolvedRuntime) &&
+        Boolean(
+            process.env.STRIPE_SECRET_KEY?.trim() &&
+                process.env.STRIPE_WEBHOOK_SECRET?.trim() &&
+                process.env.STRIPE_PRO_MONTHLY_PRICE_ID?.trim(),
+        )
+    );
+}
+
 export function getRuntimeForServer(): DoryRuntime | null {
     const raw = process.env.DORY_RUNTIME?.trim() || process.env.NEXT_PUBLIC_DORY_RUNTIME?.trim() || '';
     return normalizeRuntime(raw);

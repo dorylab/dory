@@ -9,6 +9,7 @@ import { PostgresSavedQueriesRepository } from './postgres/impl/sql-console/save
 import { PostgresSavedQueryFoldersRepository } from './postgres/impl/sql-console/saved-query-folders';
 import { PostgresAiUsageRepository } from './postgres/impl/ai-usage';
 import { PostgresSyncOperationsRepository } from './postgres/impl/sync-operations';
+import { PostgresBillingRepository } from './postgres/impl/billing';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@/types';
 
@@ -27,6 +28,7 @@ export type PostgresDBService = {
     savedQueryFolders: PostgresSavedQueryFoldersRepository;
     aiUsage: AiUsageRepository;
     syncOperations: PostgresSyncOperationsRepository;
+    billing: PostgresBillingRepository;
 };
 
 /**
@@ -75,6 +77,9 @@ export async function getDBService(): Promise<DBService> {
             const syncOperationsRepo = new PostgresSyncOperationsRepository();
             await syncOperationsRepo.init();
 
+            const billingRepo = new PostgresBillingRepository();
+            await billingRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
@@ -86,6 +91,7 @@ export async function getDBService(): Promise<DBService> {
                 savedQueryFolders: savedQueryFoldersRepo,
                 aiUsage: aiUsageRepo,
                 syncOperations: syncOperationsRepo,
+                billing: billingRepo,
             };
             break;
         }

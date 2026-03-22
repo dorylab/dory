@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import type React from 'react';
+import { isBillingEnabledForServer } from '@/lib/runtime/runtime';
 import { cn } from '@/lib/utils';
 
-const NAV_ITEMS = [{ slug: 'organization', label: 'Organization' }];
+const NAV_ITEMS = [{ slug: 'organization', label: 'Organization' }, ...(isBillingEnabledForServer() ? [{ slug: 'billing', label: 'Billing' }] : [])];
 
 export default async function OrganizationSettingsLayout({ children, params }: { children: React.ReactNode; params: Promise<{ organization: string }> }) {
     const { organization } = await params;

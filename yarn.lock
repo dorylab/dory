@@ -1951,6 +1951,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@better-auth/stripe@npm:1.5.5":
+  version: 1.5.5
+  resolution: "@better-auth/stripe@npm:1.5.5"
+  dependencies:
+    defu: "npm:^6.1.4"
+    zod: "npm:^4.3.6"
+  peerDependencies:
+    "@better-auth/core": 1.5.5
+    better-auth: 1.5.5
+    better-call: 1.3.2
+    stripe: ^18 || ^19 || ^20
+  checksum: 10c0/a9065df5bac8fe25e39985034bbf2963b7ec2b07adbbb3c0265c8acdb7662c1e3e69a468d1a0eb9725980471a589ffdf49d42eec685b4485f0f9e99d7241bccb
+  languageName: node
+  linkType: hard
+
 "@better-auth/telemetry@npm:1.5.5":
   version: 1.5.5
   resolution: "@better-auth/telemetry@npm:1.5.5"
@@ -21788,6 +21803,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"stripe@npm:^20":
+  version: 20.4.1
+  resolution: "stripe@npm:20.4.1"
+  peerDependencies:
+    "@types/node": ">=16"
+  peerDependenciesMeta:
+    "@types/node":
+      optional: true
+  checksum: 10c0/c4ca1099d70afd175b27ec1fc83f72230c46a95868b85d615a141a806e63dd6d1896fa239f593aca7ad110bb8a14a5fb136b8091453c1c5db663b07529e0f94b
+  languageName: node
+  linkType: hard
+
 "strnum@npm:^2.1.2":
   version: 2.2.0
   resolution: "strnum@npm:2.2.0"
@@ -23172,6 +23199,7 @@ __metadata:
     "@ai-sdk/xai": "npm:^3.0.23"
     "@better-auth/infra": "npm:^0.1.12"
     "@better-auth/sso": "npm:^1.5.5"
+    "@better-auth/stripe": "npm:1.5.5"
     "@clickhouse/client": "npm:^1.12.0"
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/modifiers": "npm:^9.0.0"
@@ -23317,6 +23345,7 @@ __metadata:
     ssh2: "npm:^1.17.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
     streamdown: "npm:^2.1.0"
+    stripe: "npm:^20"
     swr: "npm:^2.3.3"
     tailwind-merge: "npm:^3.0.1"
     tailwindcss: "npm:^4.0.7"
