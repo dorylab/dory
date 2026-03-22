@@ -95,7 +95,7 @@ export class PostgresChatRepository implements ChatRepository {
 
         const result = await this.db.execute(sql`
       INSERT INTO chat_sessions (
-        id, team_id, user_id, type, tab_id,
+        id, organization_id, user_id, type, tab_id,
         connection_id, active_database, active_schema,
         title, settings, metadata,
         created_at, updated_at, archived_at, last_message_at
@@ -105,7 +105,7 @@ export class PostgresChatRepository implements ChatRepository {
         ${input.title ?? null}, ${input.settings ?? null}, ${input.metadata ?? null},
         ${now}, ${now}, NULL, NULL
       )
-      ON CONFLICT (team_id, user_id, tab_id) WHERE type = 'copilot'
+      ON CONFLICT (organization_id, user_id, tab_id) WHERE type = 'copilot'
       DO UPDATE SET
         connection_id = COALESCE(EXCLUDED.connection_id, chat_sessions.connection_id),
         active_database = COALESCE(EXCLUDED.active_database, chat_sessions.active_database),
