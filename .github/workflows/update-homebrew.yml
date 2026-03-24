@@ -40,25 +40,37 @@ jobs:
                   echo "Using tag: $VERSION"
                   echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
 
-            - name: Download macOS DMG and compute checksum
+            - name: Download macOS DMGs and compute checksums
               id: checksum
               run: |
                   set -euo pipefail
                   VERSION="${{ steps.validate-tag.outputs.tag }}"
                   VERSION_NUM="${VERSION#v}"
                   BASE_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}"
-                  DMG_NAME="Dory-${VERSION_NUM}-arm64.dmg"
 
-                  curl -fsSL "${BASE_URL}/${DMG_NAME}" -o "${DMG_NAME}"
-                  SHA256=$(sha256sum "${DMG_NAME}" | cut -d' ' -f1)
+                  ARM64_DMG="Dory-${VERSION_NUM}-arm64.dmg"
+                  X64_DMG="Dory-${VERSION_NUM}-x64.dmg"
 
-                  if [[ ! "$SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
-                    echo "Error: invalid checksum: $SHA256"
+                  curl -fsSL "${BASE_URL}/${ARM64_DMG}" -o "${ARM64_DMG}"
+                  ARM64_SHA=$(sha256sum "${ARM64_DMG}" | cut -d' ' -f1)
+
+                  curl -fsSL "${BASE_URL}/${X64_DMG}" -o "${X64_DMG}"
+                  X64_SHA=$(sha256sum "${X64_DMG}" | cut -d' ' -f1)
+
+                  if [[ ! "$ARM64_SHA" =~ ^[0-9a-fA-F]{64}$ ]]; then
+                    echo "Error: invalid arm64 checksum: $ARM64_SHA"
                     exit 1
                   fi
 
-                  echo "SHA256: $SHA256"
-                  echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+                  if [[ ! "$X64_SHA" =~ ^[0-9a-fA-F]{64}$ ]]; then
+                    echo "Error: invalid x64 checksum: $X64_SHA"
+                    exit 1
+                  fi
+
+                  echo "ARM64 SHA256: $ARM64_SHA"
+                  echo "X64 SHA256: $X64_SHA"
+                  echo "arm64_sha=$ARM64_SHA" >> "$GITHUB_OUTPUT"
+                  echo "x64_sha=$X64_SHA" >> "$GITHUB_OUTPUT"
 
             - name: Update Homebrew Cask
               env:
@@ -67,12 +79,10 @@ jobs:
                   set -euo pipefail
                   VERSION="${{ steps.validate-tag.outputs.tag }}"
                   VERSION_NUM="${VERSION#v}"
-                  SHA256="${{ steps.checksum.outputs.sha256 }}"
+                  ARM64_SHA="${{ steps.checksum.outputs.arm64_sha }}"
+                  X64_SHA="${{ steps.checksum.outputs.x64_sha }}"
 
-                  git clone "https://git:${GH_TOKEN}@github.com/dorylab/homebrew-dory.git"
-                  cd homebrew-dory
-
-                  cat > Casks/dory.rb <<'CASK_EOF'
+                  cat > dory.rb <<'CASK_EOF'
                   cask "dory" do
                     version "VERSION_PLACEHOLDER"
 
@@ -80,10 +90,13 @@ jobs:
                     desc "The database manager for modern developers"
                     homepage "https://github.com/dorylab/dory"
 
-                    url "https://github.com/dorylab/dory/releases/download/v#{version}/Dory-#{version}-arm64.dmg"
-                    sha256 "SHA256_PLACEHOLDER"
-
-                    depends_on arch: :arm64
+                    if Hardware::CPU.intel?
+                      url "https://github.com/dorylab/dory/releases/download/v#{version}/Dory-#{version}-x64.dmg"
+                      sha256 "X64_SHA_PLACEHOLDER"
+                    else
+                      url "https://github.com/dorylab/dory/releases/download/v#{version}/Dory-#{version}-arm64.dmg"
+                      sha256 "ARM64_SHA_PLACEHOLDER"
+                    end
 
                     app "Dory.app"
 
@@ -95,9 +108,14 @@ jobs:
                   end
                   CASK_EOF
 
-                  sed -i "s/VERSION_PLACEHOLDER/${VERSION_NUM}/" Casks/dory.rb
-                  sed -i "s/SHA256_PLACEHOLDER/${SHA256}/" Casks/dory.rb
+                  sed -i "s/VERSION_PLACEHOLDER/${VERSION_NUM}/" dory.rb
+                  sed -i "s/ARM64_SHA_PLACEHOLDER/${ARM64_SHA}/" dory.rb
+                  sed -i "s/X64_SHA_PLACEHOLDER/${X64_SHA}/" dory.rb
 
+                  git clone "https://git:${GH_TOKEN}@github.com/dorylab/homebrew-dory.git"
+                  cp dory.rb homebrew-dory/Casks/dory.rb
+
+                  cd homebrew-dory
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
                   git add Casks/dory.rb

@@ -92,6 +92,10 @@ jobs:
         runs-on: macos-latest
         environment: ${{ needs.resolve_context.outputs.environment_name }}
 
+        strategy:
+            matrix:
+                arch: [arm64, x64]
+
         env:
             GH_TOKEN: ${{ github.token }}
 
@@ -179,7 +183,7 @@ jobs:
                   NEXT_PUBLIC_DORY_CLOUD_API_URL=$NEXT_PUBLIC_DORY_CLOUD_API_URL
                   EOF
 
-            - name: Build Electron app (mac)
+            - name: Build Electron app (mac ${{ matrix.arch }})
               env:
                   CSC_LINK: ${{ secrets.APPLE_CERT_BASE64 }}
                   CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -189,12 +193,15 @@ jobs:
                   DORY_APP_BASE_URL: ${{ steps.build_config.outputs.app_base_url }}
                   DORY_ELECTRON_APP_ID: ${{ steps.build_config.outputs.electron_app_id }}
                   DORY_PROTOCOL_SCHEME: ${{ steps.build_config.outputs.protocol_scheme }}
-              run: yarn electron:build:apple
+              run: |
+                  yarn run electron:standalone
+                  cd apps/electron
+                  npx electron-builder --config electron-builder.mjs --mac --${{ matrix.arch }} --publish never
 
             - name: Upload workflow artifact
               uses: actions/upload-artifact@v4
               with:
-                  name: ${{ needs.resolve_context.outputs.distribution == 'beta' && 'electron-macos-beta-dist' || 'electron-macos-dist' }}
+                  name: ${{ needs.resolve_context.outputs.distribution == 'beta' && format('electron-macos-beta-{0}-dist', matrix.arch) || format('electron-macos-{0}-dist', matrix.arch) }}
                   path: apps/electron/dist/*
                   if-no-files-found: error
 
@@ -218,9 +225,16 @@ jobs:
                   find apps/electron/dist -maxdepth 1 -type f -name "${CHANNEL}*.yml" \
                     -print0 | xargs -0 -I {} gh release upload "$TAG" "{}" --clobber
 
+    update-homebrew:
+        needs: [resolve_context, package]
+        if: needs.resolve_context.outputs.tag != '' && needs.resolve_context.outputs.distribution == 'stable'
+        runs-on: ubuntu-latest
+        env:
+            GH_TOKEN: ${{ github.token }}
+        steps:
             - name: Dispatch Homebrew tap update
-              if: needs.resolve_context.outputs.tag != '' && needs.resolve_context.outputs.distribution == 'stable'
               run: |
-                  gh workflow run ".github/workflows/update-homebrew.yml" \
+                  gh workflow run "update-homebrew.yml" \
+                    --repo "${{ github.repository }}" \
                     --ref "${{ github.ref_name }}" \
                     -f tag="${{ needs.resolve_context.outputs.tag }}"
