@@ -1,0 +1,105 @@
+name: Update Homebrew Cask
+
+on:
+    workflow_dispatch:
+        inputs:
+            tag:
+                description: '版本号 (例如: v0.4.10)'
+                required: true
+                type: string
+    workflow_call:
+        inputs:
+            tag:
+                required: true
+                type: string
+        secrets:
+            HOMEBREW_TAP_TOKEN:
+                required: true
+
+jobs:
+    update-homebrew:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Validate tag input
+              id: validate-tag
+              run: |
+                  set -euo pipefail
+                  VERSION="${{ inputs.tag }}"
+                  VERSION="$(printf '%s' "$VERSION" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+
+                  if [[ -z "$VERSION" ]]; then
+                    echo "Error: tag input is empty"
+                    exit 1
+                  fi
+
+                  if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                    echo "Error: invalid tag format: $VERSION"
+                    exit 1
+                  fi
+
+                  echo "Using tag: $VERSION"
+                  echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+
+            - name: Download macOS DMG and compute checksum
+              id: checksum
+              run: |
+                  set -euo pipefail
+                  VERSION="${{ steps.validate-tag.outputs.tag }}"
+                  VERSION_NUM="${VERSION#v}"
+                  BASE_URL="https://github.com/${{ github.repository }}/releases/download/${VERSION}"
+                  DMG_NAME="Dory-${VERSION_NUM}-arm64.dmg"
+
+                  curl -fsSL "${BASE_URL}/${DMG_NAME}" -o "${DMG_NAME}"
+                  SHA256=$(sha256sum "${DMG_NAME}" | cut -d' ' -f1)
+
+                  if [[ ! "$SHA256" =~ ^[0-9a-fA-F]{64}$ ]]; then
+                    echo "Error: invalid checksum: $SHA256"
+                    exit 1
+                  fi
+
+                  echo "SHA256: $SHA256"
+                  echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+            - name: Update Homebrew Cask
+              env:
+                  GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  VERSION="${{ steps.validate-tag.outputs.tag }}"
+                  VERSION_NUM="${VERSION#v}"
+                  SHA256="${{ steps.checksum.outputs.sha256 }}"
+
+                  git clone "https://git:${GH_TOKEN}@github.com/dorylab/homebrew-dory.git"
+                  cd homebrew-dory
+
+                  cat > Casks/dory.rb <<'CASK_EOF'
+                  cask "dory" do
+                    version "VERSION_PLACEHOLDER"
+
+                    name "Dory"
+                    desc "The database manager for modern developers"
+                    homepage "https://github.com/dorylab/dory"
+
+                    url "https://github.com/dorylab/dory/releases/download/v#{version}/Dory-#{version}-arm64.dmg"
+                    sha256 "SHA256_PLACEHOLDER"
+
+                    depends_on arch: :arm64
+
+                    app "Dory.app"
+
+                    zap trash: [
+                      "~/Library/Application Support/Dory",
+                      "~/Library/Preferences/com.dory.app.plist",
+                      "~/Library/Caches/com.dory.app",
+                    ]
+                  end
+                  CASK_EOF
+
+                  sed -i "s/VERSION_PLACEHOLDER/${VERSION_NUM}/" Casks/dory.rb
+                  sed -i "s/SHA256_PLACEHOLDER/${SHA256}/" Casks/dory.rb
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add Casks/dory.rb
+                  git commit -m "Update Dory to ${VERSION}" || echo "No changes to commit"
+                  git push

@@ -217,3 +217,10 @@ jobs:
                     -print0 | xargs -0 -I {} gh release upload "$TAG" "{}" --clobber
                   find apps/electron/dist -maxdepth 1 -type f -name "${CHANNEL}*.yml" \
                     -print0 | xargs -0 -I {} gh release upload "$TAG" "{}" --clobber
+
+            - name: Dispatch Homebrew tap update
+              if: needs.resolve_context.outputs.tag != '' && needs.resolve_context.outputs.distribution == 'stable'
+              run: |
+                  gh workflow run ".github/workflows/update-homebrew.yml" \
+                    --ref "${{ github.ref_name }}" \
+                    -f tag="${{ needs.resolve_context.outputs.tag }}"
