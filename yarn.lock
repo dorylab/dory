@@ -2206,6 +2206,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/automation@workspace:packages/automation":
+  version: 0.0.0-use.local
+  resolution: "@dory/automation@workspace:packages/automation"
+  languageName: unknown
+  linkType: soft
+
 "@dotenvx/dotenvx@npm:1.31.0":
   version: 1.31.0
   resolution: "@dotenvx/dotenvx@npm:1.31.0"
