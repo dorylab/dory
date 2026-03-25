@@ -32,6 +32,12 @@
       "@dory/auth-core": [
         "../../packages/auth-core/src/index.ts"
       ],
+      "@dory/automation": [
+        "../../packages/automation/src/index.ts"
+      ],
+      "@dory/automation/*": [
+        "../../packages/automation/src/*"
+      ],
       "react": [
         "./node_modules/@types/react"
       ]

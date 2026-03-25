@@ -80,7 +80,7 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
         stopStandaloneServer();
 
         const hostname = '127.0.0.1';
-        const port = await findAvailablePort();
+        const port = 3210;
 
         log(`[electron] Starting bootstrap script on port ${port}...`);
 
