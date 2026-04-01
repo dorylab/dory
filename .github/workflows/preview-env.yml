@@ -1,0 +1,317 @@
+name: Preview Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: dorylab/dory
+  PREVIEW_TAG: pr-${{ github.event.pull_request.number }}
+  PREVIEW_DOMAIN: preview.getdory.dev
+  MAX_PREVIEWS: 3
+
+jobs:
+  deploy-preview:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Comment deployment status (building)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const domain = 'preview.getdory.dev';
+            const previewUrl = `https://pr-${prNumber}.${domain}`;
+            const sha = context.sha.substring(0, 7);
+            const body = [
+              `**Preview Environment** for this PR`,
+              ``,
+              `| Name | Status | Preview | Updated (UTC) |`,
+              `|------|--------|---------|---------------|`,
+              `| **pr-${prNumber}** | 🔨 Building (${sha}) | [Visit Preview](${previewUrl}) | ${new Date().toISOString().replace('T', ' ').substring(0, 19)} |`,
+              ``,
+              `Built with commit ${sha}`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c =>
+              c.body.includes('**Preview Environment**') && c.user.type === 'Bot'
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
+
+      - name: Check preview capacity
+        uses: appleboy/ssh-action@v1
+        id: capacity
+        env:
+          MAX_PREVIEWS: ${{ env.MAX_PREVIEWS }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        with:
+          host: ${{ secrets.PREVIEW_SERVER_HOST }}
+          username: ${{ secrets.PREVIEW_SERVER_USER }}
+          key: ${{ secrets.PREVIEW_SERVER_SSH_KEY }}
+          envs: MAX_PREVIEWS,PR_NUMBER
+          script: |
+            CURRENT=$(docker ps --filter "name=preview-pr-" --format '{{.Names}}' | wc -l)
+            OWN=$(docker ps --filter "name=preview-pr-${PR_NUMBER}" --format '{{.Names}}' | wc -l)
+            OTHERS=$((CURRENT - OWN))
+            if [ "$OTHERS" -ge "$MAX_PREVIEWS" ] && [ "$OWN" -eq 0 ]; then
+              echo "FULL"
+            else
+              echo "OK"
+            fi
+
+      - name: Comment capacity full
+        if: contains(steps.capacity.outputs.stdout, 'FULL')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const body = [
+              `**Preview Environment** for this PR`,
+              ``,
+              `| Name | Status | Preview | Updated (UTC) |`,
+              `|------|--------|---------|---------------|`,
+              `| **pr-${prNumber}** | ⏳ Queued | — | ${new Date().toISOString().replace('T', ' ').substring(0, 19)} |`,
+              ``,
+              `Preview slots are full (${{ env.MAX_PREVIEWS }}/${{ env.MAX_PREVIEWS }}). This PR will be deployed when a slot is freed.`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c =>
+              c.body.includes('**Preview Environment**') && c.user.type === 'Bot'
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            }
+
+            core.setFailed('Preview slots full');
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push preview image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: ${{ env.IMAGE_NAME }}:${{ env.PREVIEW_TAG }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache-pr,mode=max
+          build-args: |
+            VERSION=${{ github.sha }}
+
+      - name: Deploy to preview server
+        uses: appleboy/ssh-action@v1
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ env.PREVIEW_TAG }}
+          PREVIEW_DOMAIN: preview.getdory.dev
+          BETTER_AUTH_SECRET: ${{ secrets.PREVIEW_AUTH_SECRET }}
+        with:
+          host: ${{ secrets.PREVIEW_SERVER_HOST }}
+          username: ${{ secrets.PREVIEW_SERVER_USER }}
+          key: ${{ secrets.PREVIEW_SERVER_SSH_KEY }}
+          envs: PR_NUMBER,IMAGE,PREVIEW_DOMAIN,BETTER_AUTH_SECRET
+          script: |
+            set -e
+            CONTAINER_NAME="preview-pr-${PR_NUMBER}"
+            HOSTNAME="pr-${PR_NUMBER}.${PREVIEW_DOMAIN}"
+
+            docker pull "${IMAGE}"
+            docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+
+            docker run -d \
+              --name "${CONTAINER_NAME}" \
+              --restart unless-stopped \
+              --network preview \
+              -e NODE_ENV=production \
+              -e DORY_RUNTIME=docker \
+              -e NEXT_PUBLIC_DORY_RUNTIME=docker \
+              -e BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET}" \
+              -e BETTER_AUTH_URL="https://${HOSTNAME}" \
+              -e TRUSTED_ORIGINS="https://${HOSTNAME}" \
+              -l "traefik.enable=true" \
+              -l "traefik.http.routers.${CONTAINER_NAME}.rule=Host(\`${HOSTNAME}\`)" \
+              -l "traefik.http.routers.${CONTAINER_NAME}.entrypoints=websecure" \
+              -l "traefik.http.routers.${CONTAINER_NAME}.tls.certresolver=letsencrypt" \
+              -l "traefik.http.services.${CONTAINER_NAME}.loadbalancer.server.port=3000" \
+              "${IMAGE}"
+
+      - name: Comment deployment status (ready)
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const domain = 'preview.getdory.dev';
+            const previewUrl = `https://pr-${prNumber}.${domain}`;
+            const sha = context.sha.substring(0, 7);
+            const body = [
+              `**Preview Environment** for this PR`,
+              ``,
+              `| Name | Status | Preview | Updated (UTC) |`,
+              `|------|--------|---------|---------------|`,
+              `| **pr-${prNumber}** | ✅ Ready (${sha}) | [Visit Preview](${previewUrl}) | ${new Date().toISOString().replace('T', ' ').substring(0, 19)} |`,
+              ``,
+              `Built with commit ${sha}`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c =>
+              c.body.includes('**Preview Environment**') && c.user.type === 'Bot'
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            }
+
+      - name: Comment deployment status (failed)
+        if: failure() && !contains(steps.capacity.outputs.stdout, 'FULL')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const sha = context.sha.substring(0, 7);
+            const body = [
+              `**Preview Environment** for this PR`,
+              ``,
+              `| Name | Status | Preview | Updated (UTC) |`,
+              `|------|--------|---------|---------------|`,
+              `| **pr-${prNumber}** | ❌ Failed (${sha}) | — | ${new Date().toISOString().replace('T', ' ').substring(0, 19)} |`,
+              ``,
+              `Deployment failed. Check the [workflow logs](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c =>
+              c.body.includes('**Preview Environment**') && c.user.type === 'Bot'
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            }
+
+  cleanup-preview:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Remove preview from server
+        uses: appleboy/ssh-action@v1
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ env.PREVIEW_TAG }}
+        with:
+          host: ${{ secrets.PREVIEW_SERVER_HOST }}
+          username: ${{ secrets.PREVIEW_SERVER_USER }}
+          key: ${{ secrets.PREVIEW_SERVER_SSH_KEY }}
+          envs: PR_NUMBER,IMAGE
+          script: |
+            set -e
+            CONTAINER_NAME="preview-pr-${PR_NUMBER}"
+
+            docker rm -f "${CONTAINER_NAME}" 2>/dev/null || true
+            docker rmi "${IMAGE}" 2>/dev/null || true
+
+      - name: Comment cleanup status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const body = [
+              `**Preview Environment** for this PR`,
+              ``,
+              `| Name | Status | Preview | Updated (UTC) |`,
+              `|------|--------|---------|---------------|`,
+              `| **pr-${prNumber}** | 🗑️ Destroyed | — | ${new Date().toISOString().replace('T', ' ').substring(0, 19)} |`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c =>
+              c.body.includes('**Preview Environment**') && c.user.type === 'Bot'
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            }
