@@ -45,7 +45,7 @@ export function NavUser({ user }: { user: User | null }) {
         try {
             const res = await signOut();
             if (res.data?.success) {
-                router.push('/sign-in');
+                window.location.assign('/sign-in');
                 return;
             }
             setSignOutError(isAnonymous ? t('GuestSession.DeleteFailed') : null);

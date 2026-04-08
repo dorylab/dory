@@ -8,6 +8,8 @@ import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from 
 import { HeroBackground } from '../components/bg';
 import { RuntimeHint } from '../components/runtime-hint';
 
+export const dynamic = 'force-dynamic';
+
 // const fontSans = localFont({
 //     src: [
 //         { path: '../../../public/fonts/lexend-400.ttf', weight: '400', style: 'normal' },
