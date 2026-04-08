@@ -86,6 +86,7 @@
             "GoogleNotSupportedDesktop": "デスクトップアプリでは Google ログインはまだサポートされていません。",
             "LoginFailedRetry": "ログインに失敗しました。後でもう一度お試しください。",
             "NetworkErrorRetry": "ネットワークエラーです。後でもう一度お試しください。",
+            "CloudFeaturesUnavailableOffline": "デスクトップアプリがオフラインの間は、クラウド依存のログインと復旧操作は利用できません。",
             "ForgotPasswordEmailRequired": "「パスワードを忘れた場合」をクリックする前にメールアドレスを入力してください。",
             "ResetEmailFailed": "リセットメールの送信に失敗しました",
             "ResetEmailSent": "パスワード再設定メールを送信しました。受信箱を確認してください。",
@@ -2489,5 +2490,8 @@
     },
     "Routes": {
         "SQL Console": "SQL コンソール"
+    },
+    "Offline": {
+        "DesktopBanner": "現在オフラインです。Dory はローカルのデスクトップデータを使用しており、クラウド専用機能は一時的に利用できません。"
     }
 }

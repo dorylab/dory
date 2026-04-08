@@ -90,6 +90,7 @@
             "GoogleNotSupportedDesktop": "桌面端暂不支持 Google 登录。",
             "LoginFailedRetry": "登录失败，请稍后重试",
             "NetworkErrorRetry": "网络异常，请稍后重试",
+            "CloudFeaturesUnavailableOffline": "桌面应用离线时，依赖云端的登录和找回操作不可用。",
             "ForgotPasswordEmailRequired": "请先输入邮箱，再点“忘记密码”。",
             "ResetEmailFailed": "发送重置邮件失败",
             "ResetEmailSent": "已发送密码重置邮件，请查收邮箱。",
@@ -2505,5 +2506,8 @@
     },
     "Routes": {
         "SQL Console": "SQL 控制台"
+    },
+    "Offline": {
+        "DesktopBanner": "当前处于离线状态。Dory 正在使用本地桌面数据，云端专属功能暂时不可用。"
     }
 }

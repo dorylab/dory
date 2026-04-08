@@ -1,70 +1,71 @@
-import { getSessionFromRequest } from '@/lib/auth/session';
-import { createAuthProxyHeaders } from '@/lib/auth/auth-proxy';
-import { getCloudApiBaseUrl } from '@/lib/cloud/url';
-import { headers } from 'next/headers';
-import type { OrganizationAccess } from './types';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
+import { getSessionFromRequest } from '@/lib/auth/session';
+import { fetchDesktopCloud } from '@/lib/server/desktop-cloud';
+import { resolveLocalOrganizationAccess } from './authz.local';
+import {
+    finalizeDesktopOrganizationAccessResult,
+    type CloudOrganizationAccessAttempt,
+    type DesktopOrganizationAccessResult,
+} from './authz.desktop.shared';
+import type { OrganizationAccess } from './types';
 
-async function fetchCloudOrganizationAccess(organizationId: string): Promise<OrganizationAccess | null> {
-    const cloudBaseUrl = getCloudApiBaseUrl();
+export type { DesktopOrganizationAccessResolution, DesktopOrganizationAccessResult } from './authz.desktop.shared';
+
+async function fetchCloudOrganizationAccess(organizationId: string): Promise<CloudOrganizationAccessAttempt> {
+    const cloudResponse = await fetchDesktopCloud(`/api/organization/access?organizationId=${encodeURIComponent(organizationId)}`);
+
     console.log('[authz][desktop] fetchCloudOrganizationAccess:start', {
         organizationId,
-        cloudBaseUrl,
+        cloudState: cloudResponse.state,
+        cloudBaseUrl: cloudResponse.baseUrl,
     });
-    if (!cloudBaseUrl) {
-        return null;
+
+    if (cloudResponse.state !== 'available') {
+        return { status: cloudResponse.state };
     }
 
-    const incomingHeaders = await headers();
-    const forwardedHeaders = createAuthProxyHeaders(incomingHeaders, cloudBaseUrl);
-    const url = new URL('/api/organization/access', cloudBaseUrl);
-    url.searchParams.set('organizationId', organizationId);
+    const { response } = cloudResponse;
 
-    try {
-        const response = await fetch(url.toString(), {
-            headers: forwardedHeaders,
-            cache: 'no-store',
-        });
-        console.log('[authz][desktop] fetchCloudOrganizationAccess:response', {
-            organizationId,
-            status: response.status,
-            ok: response.ok,
-            url: url.toString(),
-        });
+    console.log('[authz][desktop] fetchCloudOrganizationAccess:response', {
+        organizationId,
+        status: response.status,
+        ok: response.ok,
+    });
 
-        if (!response.ok) {
-            return null;
-        }
-
-        const payload = (await response.json().catch(() => null)) as
-            | { code?: number; data?: { access?: OrganizationAccess | null } }
-            | null;
-
-        if (payload?.code !== 0) {
-            console.log('[authz][desktop] fetchCloudOrganizationAccess:invalid-payload', {
-                organizationId,
-                payload,
-            });
-            return null;
-        }
-
-        console.log('[authz][desktop] fetchCloudOrganizationAccess:success', {
-            organizationId,
-            access: payload?.data?.access ?? null,
-        });
-        return payload?.data?.access ?? null;
-    } catch {
-        console.log('[authz][desktop] fetchCloudOrganizationAccess:error', {
-            organizationId,
-        });
-        return null;
+    if (response.status === 401 || response.status === 403) {
+        return { status: 'denied' };
     }
+
+    if (!response.ok) {
+        return { status: 'unreachable' };
+    }
+
+    const payload = (await response.json().catch(() => null)) as
+        | { code?: number; data?: { access?: OrganizationAccess | null } }
+        | null;
+
+    if (payload?.code !== 0) {
+        return { status: 'denied' };
+    }
+
+    if (!payload.data?.access?.isMember) {
+        return { status: 'denied' };
+    }
+
+    return {
+        status: 'granted',
+        access: {
+            ...payload.data.access,
+            source: 'desktop_cloud',
+        },
+    };
 }
 
-export async function resolveDesktopOrganizationAccess(organizationId: string, userId: string): Promise<OrganizationAccess | null> {
+export async function resolveDesktopOrganizationAccessResult(organizationId: string, userId: string): Promise<DesktopOrganizationAccessResult> {
     const session = await getSessionFromRequest();
     const sessionUserId = session?.user?.id ?? null;
     const activeOrganizationId = resolveCurrentOrganizationId(session);
+
     console.log('[authz][desktop] resolveDesktopOrganizationAccess', {
         organizationId,
         userId,
@@ -72,45 +73,19 @@ export async function resolveDesktopOrganizationAccess(organizationId: string, u
         activeOrganizationId,
     });
 
-    if (!sessionUserId || !activeOrganizationId) {
-        return null;
-    }
-
-    if (sessionUserId !== userId || activeOrganizationId !== organizationId) {
-        return null;
-    }
-
-    const cloudBaseUrl = getCloudApiBaseUrl();
-    const cloudAccess = await fetchCloudOrganizationAccess(organizationId);
-    if (cloudAccess?.isMember) {
-        return cloudAccess;
-    }
-
-    if (cloudBaseUrl) {
-        return null;
-    }
-
-    console.log('[authz][desktop] resolveDesktopOrganizationAccess:fallback-session-only', {
+    const cloudAttempt = await fetchCloudOrganizationAccess(organizationId);
+    const localAccess = await resolveLocalOrganizationAccess(organizationId, userId).catch(() => null);
+    return finalizeDesktopOrganizationAccessResult({
         organizationId,
         userId,
+        sessionUserId,
+        activeOrganizationId,
+        cloudAttempt,
+        localAccess,
     });
-    return {
-        source: 'desktop',
-        organizationId,
-        userId,
-        isMember: true,
-        role: null,
-        permissions: {
-            organization: { read: false, update: false, delete: false },
-            member: { read: false, create: false, update: false, delete: false },
-            invitation: { read: false, create: false, cancel: false },
-            workspace: { read: false, write: false },
-            connection: { read: false, create: false, update: false, delete: false },
-        },
-        organization: {
-            id: organizationId,
-            slug: organizationId,
-            name: organizationId,
-        },
-    };
+}
+
+export async function resolveDesktopOrganizationAccess(organizationId: string, userId: string): Promise<OrganizationAccess | null> {
+    const result = await resolveDesktopOrganizationAccessResult(organizationId, userId);
+    return result.access;
 }

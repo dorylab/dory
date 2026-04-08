@@ -13,6 +13,7 @@ import { IconBrandGithub } from '@tabler/icons-react';
 import { authClient, signInViaGithub, signInViaGoogle } from '@/lib/auth-client';
 import { InputPassword } from '@/components/originui/input-password';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { useCloudFeatureAvailability } from '@/lib/client/use-cloud-features';
 import { useTranslations } from 'next-intl';
 import { runtime } from '@/lib/runtime/runtime';
 
@@ -44,6 +45,7 @@ export function SignInForm({
     const [err, setErr] = useState<string | null>(null);
     const [msg, setMsg] = useState<string | null>(null);
     const [guestLoading, setGuestLoading] = useState(false);
+    const { isOffline: isDesktopOffline } = useCloudFeatureAvailability();
     const callbackURL = callbackURLOverride || searchParams?.get('callbackURL') || '/';
 
     useEffect(() => {
@@ -101,6 +103,10 @@ export function SignInForm({
     }, [callbackURL, router, t]);
 
     async function signInViaGithubElectron() {
+        if (isDesktopOffline) {
+            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
+            return;
+        }
         setErr(null);
         setMsg(null);
         try {
@@ -117,6 +123,10 @@ export function SignInForm({
     }
 
     async function signInViaGoogleElectron() {
+        if (isDesktopOffline) {
+            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
+            return;
+        }
         setErr(null);
         setMsg(null);
         try {
@@ -181,6 +191,10 @@ export function SignInForm({
     }
 
     async function onForgotPassword() {
+        if (isDesktopOffline) {
+            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
+            return;
+        }
         if (!email) {
             setErr(t('SignIn.ForgotPasswordEmailRequired'));
             return;
@@ -292,6 +306,11 @@ export function SignInForm({
                                         {msg}
                                     </div>
                                 ) : null}
+                                {isDesktopOffline ? (
+                                    <div className="rounded-md border border-amber-300/40 bg-amber-50 p-3 text-sm text-amber-800" data-testid="offline-cloud-warning">
+                                        {t('SignIn.CloudFeaturesUnavailableOffline')}
+                                    </div>
+                                ) : null}
 
                                 <div className="grid gap-3">
                                     <Label htmlFor="email">{t('SignIn.Email')}</Label>
@@ -309,7 +328,7 @@ export function SignInForm({
                                 <div className="grid gap-3">
                                     <div className="flex items-center">
                                         <Label htmlFor="password">{t('SignIn.Password')}</Label>
-                                        <button type="button" onClick={onForgotPassword} className="ml-auto text-sm underline-offset-2 hover:underline">
+                                        <button type="button" onClick={onForgotPassword} disabled={isDesktopOffline} className="ml-auto text-sm underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50">
                                             {t('SignIn.ForgotPassword')}
                                         </button>
                                     </div>
@@ -344,6 +363,7 @@ export function SignInForm({
                                         variant="outline"
                                         type="button"
                                         className="w-full"
+                                        disabled={isDesktopOffline}
                                         onClick={() => {
                                             if (window.authBridge?.openExternal) {
                                                 void signInViaGithubElectron();
@@ -360,6 +380,7 @@ export function SignInForm({
                                         variant="outline"
                                         type="button"
                                         className="w-full"
+                                        disabled={isDesktopOffline}
                                         onClick={() => {
                                             if (window.authBridge?.openExternal) {
                                                 void signInViaGoogleElectron();

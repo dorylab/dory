@@ -1,17 +1,16 @@
 import { redirect } from 'next/navigation';
-import { getSessionFromRequest } from '@/lib/auth/session';
-import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
-import { getFirstOrganizationForUser } from '@/lib/server/organization';
+import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 
 export default async function Page() {
-    const session = await getSessionFromRequest();
+    const bootstrap = await getAppBootstrapState();
+    const session = bootstrap.session;
 
     if (!session) redirect('/sign-in');
-    const currentOrganizationId = resolveCurrentOrganizationId(session);
+    const currentOrganizationId = bootstrap.activeOrganizationId;
 
     if (!currentOrganizationId) {
-        const fallbackOrganization = await getFirstOrganizationForUser(session.user.id);
+        const fallbackOrganization = bootstrap.organization;
         if (fallbackOrganization) {
             redirect(`/${fallbackOrganization.slug}/connections`);
         }
@@ -23,5 +22,5 @@ export default async function Page() {
         redirect('/create-organization');
     }
 
-    redirect(`/${currentOrganizationId}/connections`);
+    redirect(`/${bootstrap.organization?.slug ?? currentOrganizationId}/connections`);
 }

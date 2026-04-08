@@ -86,6 +86,7 @@
             "GoogleNotSupportedDesktop": "Google login isn't supported in the desktop app yet.",
             "LoginFailedRetry": "Login failed. Please try again later.",
             "NetworkErrorRetry": "Network error. Please try again later.",
+            "CloudFeaturesUnavailableOffline": "Cloud-backed sign-in and recovery actions are unavailable while the desktop app is offline.",
             "ForgotPasswordEmailRequired": "Please enter your email before clicking “Forgot password”.",
             "ResetEmailFailed": "Failed to send reset email",
             "ResetEmailSent": "Password reset email sent. Please check your inbox.",
@@ -2503,5 +2504,8 @@
     },
     "Routes": {
         "SQL Console": "SQL Console"
+    },
+    "Offline": {
+        "DesktopBanner": "You're offline. Dory is using local desktop data, and cloud-only features are temporarily unavailable."
     }
 }

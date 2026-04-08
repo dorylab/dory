@@ -5,6 +5,7 @@ import { resolveLocalOrganizationAccess } from './authz.local';
 import type { OrganizationAccess, OrganizationAccessRole } from './types';
 
 export type { OrganizationAccess, OrganizationAccessRole } from './types';
+export type { DesktopOrganizationAccessResolution } from './authz.desktop';
 
 const ORGANIZATION_ACCESS_TTL_MS = 60 * 1000;
 

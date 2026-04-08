@@ -86,6 +86,7 @@
             "GoogleNotSupportedDesktop": "El inicio de sesión con Google todavía no está disponible en la app de escritorio.",
             "LoginFailedRetry": "El inicio de sesión falló. Inténtalo más tarde.",
             "NetworkErrorRetry": "Error de red. Inténtalo más tarde.",
+            "CloudFeaturesUnavailableOffline": "Las acciones de inicio de sesión y recuperación que dependen de la nube no están disponibles mientras la app de escritorio está sin conexión.",
             "ForgotPasswordEmailRequired": "Introduce tu correo antes de hacer clic en “¿Olvidaste tu contraseña?”.",
             "ResetEmailFailed": "No se pudo enviar el correo de restablecimiento",
             "ResetEmailSent": "Correo de restablecimiento enviado. Revisa tu bandeja de entrada.",
@@ -2489,5 +2490,8 @@
     },
     "Routes": {
         "SQL Console": "Consola SQL"
+    },
+    "Offline": {
+        "DesktopBanner": "Estás sin conexión. Dory está usando los datos locales del escritorio y las funciones exclusivas de la nube no están disponibles temporalmente."
     }
 }

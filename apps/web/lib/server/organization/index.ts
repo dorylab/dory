@@ -1,143 +1,66 @@
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
-import { createAuthProxyHeaders } from '@/lib/auth/auth-proxy';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { getDBService } from '@/lib/database';
+import { resolveDesktopOrganizationAccessResult } from '@/lib/server/authz/authz.desktop';
+import { fetchDesktopCloud } from '@/lib/server/desktop-cloud';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
-import { headers } from 'next/headers';
 
-export async function getOrganizationBySlugOrId(slugOrId: string, userId: string) {
-    if (shouldProxyAuthRequest()) {
-        const session = await getSessionFromRequest();
-        const currentOrganizationId = resolveCurrentOrganizationId(session);
+type OrganizationSummary = {
+    id: string;
+    slug: string;
+    name: string;
+};
 
-        console.log('[organization] resolve:desktop', {
-            slugOrId,
-            userId,
-            currentOrganizationId,
-        });
+export type OrganizationResolutionState = {
+    organization: OrganizationSummary | null;
+    isOffline: boolean;
+};
 
-        if (!currentOrganizationId) {
-            console.log('[organization] resolve:desktop:mismatch', {
-                slugOrId,
-                userId,
-                currentOrganizationId,
-            });
-            return null;
-        }
-
-        const access = await resolveOrganizationAccess(currentOrganizationId, userId);
-        if (!access?.isMember) {
-            console.log('[organization] resolve:desktop:access-denied', {
-                slugOrId,
-                userId,
-                currentOrganizationId,
-                access,
-            });
-            return null;
-        }
-
-        const resolvedOrganization = access.organization
-            ? {
-                  id: access.organization.id,
-                  slug: access.organization.slug ?? access.organization.id,
-                  name: access.organization.name ?? access.organization.id,
-              }
-            : {
-                  id: currentOrganizationId,
-                  slug: currentOrganizationId,
-                  name: currentOrganizationId,
-              };
-
-        if (slugOrId !== resolvedOrganization.id && slugOrId !== resolvedOrganization.slug) {
-            console.log('[organization] resolve:desktop:mismatch', {
-                slugOrId,
-                userId,
-                currentOrganizationId,
-                resolvedOrganizationId: resolvedOrganization.id,
-                resolvedOrganizationSlug: resolvedOrganization.slug,
-            });
-            return null;
-        }
-
-        console.log('[organization] resolve:desktop:success', {
-            slugOrId,
-            userId,
-            currentOrganizationId,
-            accessSource: access.source,
-        });
-        return resolvedOrganization;
+function toOrganizationSummary(organization: { id: string; slug?: string | null; name?: string | null } | null, fallbackId?: string | null): OrganizationSummary | null {
+    if (!organization && !fallbackId) {
+        return null;
     }
 
+    const id = organization?.id ?? fallbackId ?? null;
+    if (!id) {
+        return null;
+    }
+
+    return {
+        id,
+        slug: organization?.slug ?? id,
+        name: organization?.name ?? id,
+    };
+}
+
+async function getLocalOrganizationSummaryBySlugOrId(slugOrId: string, userId: string): Promise<OrganizationSummary | null> {
     const db = await getDBService();
     if (!db) {
         throw new Error('Database service not initialized');
     }
 
-    console.log('[organization] resolve:local', {
-        slugOrId,
-        userId,
-    });
-
     const organization = await db.organizations.getOrganizationBySlugOrId(slugOrId);
     if (!organization) {
-        console.log('[organization] resolve:local:not-found', {
-            slugOrId,
-            userId,
-        });
         return null;
     }
 
     const access = await resolveOrganizationAccess(organization.id, userId);
     if (!access?.isMember) {
-        console.log('[organization] resolve:local:access-denied', {
-            slugOrId,
-            organizationId: organization.id,
-            userId,
-            access,
-        });
         return null;
     }
 
-    console.log('[organization] resolve:local:success', {
-        slugOrId,
-        organizationId: organization.id,
-        userId,
-        accessSource: access.source,
-    });
-    return access.organization
-        ? {
-              ...organization,
-              slug: access.organization.slug ?? organization.slug,
-              name: access.organization.name ?? organization.name,
-          }
-        : organization;
+    return toOrganizationSummary(
+        {
+            ...organization,
+            slug: access.organization?.slug ?? organization.slug,
+            name: access.organization?.name ?? organization.name,
+        },
+        organization.id,
+    );
 }
 
-export async function getFirstOrganizationForUser(userId: string) {
-    if (shouldProxyAuthRequest()) {
-        const cloudBaseUrl = getCloudApiBaseUrl();
-        if (cloudBaseUrl) {
-            const incomingHeaders = await headers();
-            const forwardedHeaders = createAuthProxyHeaders(incomingHeaders, cloudBaseUrl);
-            const url = new URL('/api/auth/organization/list', cloudBaseUrl);
-            const response = await fetch(url.toString(), {
-                headers: forwardedHeaders,
-                cache: 'no-store',
-            }).catch(() => null);
-            const organizations = response?.ok ? ((await response.json().catch(() => null)) as Array<{ id: string; slug: string; name: string }> | null) : null;
-            const firstOrganization = organizations?.[0] ?? null;
-            if (firstOrganization) {
-                return {
-                    id: firstOrganization.id,
-                    slug: firstOrganization.slug ?? firstOrganization.id,
-                    name: firstOrganization.name,
-                };
-            }
-        }
-    }
-
+async function getLocalOrganizationSummaryByUser(userId: string): Promise<OrganizationSummary | null> {
     const db = await getDBService();
     if (!db) {
         throw new Error('Database service not initialized');
@@ -150,13 +73,117 @@ export async function getFirstOrganizationForUser(userId: string) {
     }
 
     const organization = await db.organizations.getOrganizationBySlugOrId(firstMembership.organizationId);
-    if (!organization) {
-        return null;
+    return toOrganizationSummary(organization, firstMembership.organizationId);
+}
+
+export async function getOrganizationBySlugOrIdState(slugOrId: string, userId: string): Promise<OrganizationResolutionState> {
+    if (shouldProxyAuthRequest()) {
+        const session = await getSessionFromRequest();
+        const currentOrganizationId = resolveCurrentOrganizationId(session);
+
+        console.log('[organization] resolve:desktop', {
+            slugOrId,
+            userId,
+            currentOrganizationId,
+        });
+
+        if (!currentOrganizationId) {
+            return {
+                organization: null,
+                isOffline: false,
+            };
+        }
+
+        const accessResult = await resolveDesktopOrganizationAccessResult(currentOrganizationId, userId);
+        if (!accessResult.access?.isMember) {
+            return {
+                organization: null,
+                isOffline: accessResult.isOffline,
+            };
+        }
+
+        if (accessResult.status === 'granted_from_cloud') {
+            const resolvedOrganization = toOrganizationSummary(accessResult.access.organization, currentOrganizationId);
+            if (slugOrId !== resolvedOrganization?.id && slugOrId !== resolvedOrganization?.slug) {
+                return {
+                    organization: null,
+                    isOffline: false,
+                };
+            }
+
+            return {
+                organization: resolvedOrganization,
+                isOffline: false,
+            };
+        }
+
+        const localOrganization = await getLocalOrganizationSummaryBySlugOrId(slugOrId, userId).catch(() => null);
+        if (localOrganization && currentOrganizationId === localOrganization.id) {
+            return {
+                organization: localOrganization,
+                isOffline: accessResult.isOffline,
+            };
+        }
+
+        const sessionOrganization = toOrganizationSummary(accessResult.access.organization, currentOrganizationId);
+        if (slugOrId !== sessionOrganization?.id && slugOrId !== sessionOrganization?.slug) {
+            return {
+                organization: null,
+                isOffline: accessResult.isOffline,
+            };
+        }
+
+        return {
+            organization: sessionOrganization,
+            isOffline: accessResult.isOffline,
+        };
     }
 
     return {
-        id: organization.id,
-        slug: organization.slug ?? organization.id,
-        name: organization.name,
+        organization: await getLocalOrganizationSummaryBySlugOrId(slugOrId, userId),
+        isOffline: false,
     };
+}
+
+export async function getFirstOrganizationForUserState(userId: string): Promise<OrganizationResolutionState> {
+    if (shouldProxyAuthRequest()) {
+        const cloudResponse = await fetchDesktopCloud('/api/auth/organization/list');
+        if (cloudResponse.state === 'available') {
+            const organizations = (await cloudResponse.response.json().catch(() => null)) as Array<{ id: string; slug: string; name: string }> | null;
+            const firstOrganization = organizations?.[0] ?? null;
+            if (firstOrganization) {
+                return {
+                    organization: {
+                        id: firstOrganization.id,
+                        slug: firstOrganization.slug ?? firstOrganization.id,
+                        name: firstOrganization.name,
+                    },
+                    isOffline: false,
+                };
+            }
+
+            return {
+                organization: null,
+                isOffline: false,
+            };
+        }
+
+        return {
+            organization: await getLocalOrganizationSummaryByUser(userId).catch(() => null),
+            isOffline: cloudResponse.state === 'unreachable',
+        };
+    }
+
+    return {
+        organization: await getLocalOrganizationSummaryByUser(userId),
+        isOffline: false,
+    };
+}
+
+export async function getOrganizationBySlugOrId(slugOrId: string, userId: string) {
+    return (await getOrganizationBySlugOrIdState(slugOrId, userId)).organization;
+}
+
+export async function getFirstOrganizationForUser(userId: string) {
+    return (await getFirstOrganizationForUserState(userId)).organization;
 }
