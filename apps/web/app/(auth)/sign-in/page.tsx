@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { cn } from '@/lib/utils';
 import { SignInForm } from '../components/SignInForm';
 import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from '@/lib/auth/anonymous-recovery';
+import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 // import { BubbleBackground } from '@/components/animate-ui/components/backgrounds/bubble';
 import { HeroBackground } from '../components/bg';
 import { RuntimeHint } from '../components/runtime-hint';
@@ -36,7 +37,9 @@ export const dynamic = 'force-dynamic';
 export default async function SignInPage() {
     const cookieStore = await cookies();
     const recoveryToken = cookieStore.get(getAnonymousRecoveryCookieName())?.value;
-    const resumeAnonymousSession = Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
+    const resumeAnonymousSession = shouldProxyAuthRequest()
+        ? Boolean(recoveryToken)
+        : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
 
     return (
         <div
