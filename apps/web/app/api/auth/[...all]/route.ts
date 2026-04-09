@@ -7,6 +7,7 @@ import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy'
 import { deleteAnonymousUserLocally } from '@/lib/auth/anonymous';
 import { buildAnonymousDeleteResponse, isLocalAnonymousDeleteRequest } from '@/lib/auth/anonymous-delete';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
+import { appendClearDesktopSessionCookieHeader } from '@/lib/auth/desktop-session-recovery';
 
 function getSetCookies(headers: Headers): string[] {
     const anyHeaders = headers as unknown as { getSetCookie?: () => string[] };
@@ -74,18 +75,37 @@ function rewriteAuthResponse(req: Request, res: Response): Response {
     });
 }
 
+function shouldClearDesktopSessionCookie(pathname: string): boolean {
+    return pathname.endsWith('/sign-out');
+}
+
+function withDesktopSessionCleanup(req: Request, res: Response): Response {
+    const pathname = new URL(req.url).pathname;
+    if (!shouldClearDesktopSessionCookie(pathname)) {
+        return res;
+    }
+
+    const headers = new Headers(res.headers);
+    appendClearDesktopSessionCookieHeader(headers, req.url);
+    return new Response(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers,
+    });
+}
+
 export async function GET(req: Request) {
     if (shouldProxyAuthRequest()) {
-        return proxyAuthRequest(req);
+        return withDesktopSessionCleanup(req, await proxyAuthRequest(req));
     }
     const auth = await getAuth();
     const res = await auth.handler(req);
-    return rewriteAuthResponse(req, res);
+    return withDesktopSessionCleanup(req, rewriteAuthResponse(req, res));
 }
 
 export async function POST(req: Request) {
     if (shouldProxyAuthRequest()) {
-        return proxyAuthRequest(req);
+        return withDesktopSessionCleanup(req, await proxyAuthRequest(req));
     }
     const auth = await getAuth();
     const pathname = new URL(req.url).pathname;
@@ -108,5 +128,5 @@ export async function POST(req: Request) {
     }
 
     const res = await auth.handler(req);
-    return rewriteAuthResponse(req, res);
+    return withDesktopSessionCleanup(req, rewriteAuthResponse(req, res));
 }

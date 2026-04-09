@@ -1,5 +1,6 @@
 import { getAuth } from '@/lib/auth';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
+import { mirrorCloudSessionToDesktop } from '@/lib/auth/desktop-session-recovery';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -47,7 +48,19 @@ function rewriteSetCookie(value: string, isSecureRequest: boolean): string {
 
 export async function POST(req: Request) {
     if (shouldProxyAuthRequest()) {
-        return proxyAuthRequest(req);
+        const response = await proxyAuthRequest(req);
+        const mirroredCookie = response.ok ? await mirrorCloudSessionToDesktop(req, response.headers) : null;
+        if (!mirroredCookie) {
+            return response;
+        }
+
+        const headers = new Headers(response.headers);
+        headers.append('set-cookie', mirroredCookie);
+        return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers,
+        });
     }
 
     const auth = await getAuth();

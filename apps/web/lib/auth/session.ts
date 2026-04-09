@@ -5,6 +5,7 @@ import type { NextRequest } from 'next/server';
 import { createSessionResolver } from '@dory/auth-core';
 import { getAuth } from '../auth';
 import { createAuthProxyHeaders, shouldProxyAuthRequest } from './auth-proxy';
+import { resolveDesktopRecoveredSession } from './desktop-session-recovery';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { getRuntimeForServer } from '@/lib/runtime/runtime';
 
@@ -42,8 +43,14 @@ function normalizeSessionCookieHeader(headers: Headers): Headers {
 export async function getSessionFromRequest(req?: NextRequest) {
     const reqHeaders = req ? req.headers : await headers();
     const normalizedHeaders = normalizeSessionCookieHeader(reqHeaders);
-    return resolveSession({
+    const session = await resolveSession({
         headers: normalizedHeaders,
         url: req?.url ?? null,
     });
+
+    if (session || !shouldProxyAuthRequest()) {
+        return session;
+    }
+
+    return resolveDesktopRecoveredSession(normalizedHeaders);
 }
