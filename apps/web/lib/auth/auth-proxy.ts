@@ -18,7 +18,10 @@ function getSetCookies(headers: Headers): string[] {
 
     const raw = headers.get('set-cookie');
     if (!raw) return [];
-    return [raw];
+    return raw
+        .split(/,(?=\s*[^;,\s]+=)/)
+        .map(value => value.trim())
+        .filter(Boolean);
 }
 
 function rewriteSetCookie(value: string, isSecureRequest: boolean): string {
