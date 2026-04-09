@@ -253,10 +253,8 @@ export function SignInForm({
                 });
 
                 if (!recoverResponse.ok) {
-                    const result = await authClient.signIn.anonymous();
-                    if (result?.error) {
-                        throw new Error(result.error.message || t('SignIn.Guest.StartFailed'));
-                    }
+                    const payload = await recoverResponse.json().catch(() => null);
+                    throw new Error(typeof payload?.error === 'string' ? payload.error : t('SignIn.Guest.StartFailed'));
                 }
             } else {
                 const result = await authClient.signIn.anonymous();

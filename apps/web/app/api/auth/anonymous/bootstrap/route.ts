@@ -11,7 +11,36 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     if (shouldProxyAuthRequest()) {
-        return proxyAuthRequest(req);
+        const proxiedResponse = await proxyAuthRequest(req);
+        if (!proxiedResponse.ok) {
+            return proxiedResponse;
+        }
+
+        const payload = (await proxiedResponse.clone().json().catch(() => null)) as
+            | { organizationId?: string; organizationSlug?: string; organizationName?: string }
+            | null;
+        const session = await getSessionFromRequest(req);
+
+        if (!session?.user?.id || !isAnonymousUser(session.user) || !payload?.organizationId) {
+            return proxiedResponse;
+        }
+
+        const token = await issueAnonymousRecoveryToken({
+            userId: session.user.id,
+            activeOrganizationId: payload.organizationId,
+        });
+
+        const headers = new Headers(proxiedResponse.headers);
+        appendAnonymousRecoveryCookieHeader(headers, {
+            requestUrl: req.url,
+            token,
+        });
+
+        return new Response(proxiedResponse.body, {
+            status: proxiedResponse.status,
+            statusText: proxiedResponse.statusText,
+            headers,
+        });
     }
 
     const session = await getSessionFromRequest(req);

@@ -32,10 +32,8 @@ export default function WelcomePageClient({ resumeAnonymousSession = false }: We
                 });
 
                 if (!recoverResponse.ok) {
-                    const result = await authClient.signIn.anonymous();
-                    if (result?.error) {
-                        throw new Error(result.error.message || t('Errors.StartFailed'));
-                    }
+                    const payload = await recoverResponse.json().catch(() => null);
+                    throw new Error(typeof payload?.error === 'string' ? payload.error : t('Errors.StartFailed'));
                 }
             } else {
                 const result = await authClient.signIn.anonymous();

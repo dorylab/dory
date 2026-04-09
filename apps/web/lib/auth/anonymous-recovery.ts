@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { getAuth } from '@/lib/auth';
+import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { getClient } from '@/lib/database/postgres/client';
 import { schema } from '@/lib/database/schema';
 
@@ -169,6 +170,9 @@ export async function resolveRecoverableAnonymousUser(token: string | null | und
     }
 
     const payload = await verifyRecoveryToken(token);
+    if (payload && shouldProxyAuthRequest()) {
+        return payload;
+    }
     return resolveRecoverableAnonymousPayload(payload);
 }
 
