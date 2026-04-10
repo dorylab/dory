@@ -213,12 +213,13 @@ async function getTableStats(datasource: MySqlDatasource, database: string, tabl
     };
 }
 
-async function getTablePreview(datasource: MySqlDatasource, database: string, table: string, options?: { limit?: number }) {
+async function getTablePreview(datasource: MySqlDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
     const target = resolveTableInput(database, table);
     const limit = normalizePreviewLimit(options?.limit);
-    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${quoteMysqlQualifiedTable(target.database, target.table)} LIMIT ?`, {
+    const offset = options?.offset ?? 0;
+    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${quoteMysqlQualifiedTable(target.database, target.table)} LIMIT ? OFFSET ?`, {
         database: target.database,
-        params: [limit],
+        params: [limit, offset],
     });
 
     return {

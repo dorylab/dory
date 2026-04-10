@@ -17,6 +17,8 @@ import { currentSessionMetaAtom } from '../../../../[connectionId]/sql-console/c
 import VTable from '../../../../[connectionId]/sql-console/components/result-table/vtable';
 import { InspectorPanel } from '../../../../[connectionId]/sql-console/components/result-table/vtable/InspectorPanel';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
+import { useTablePropertiesQuery } from '../table-queries';
+import { DataPreviewPaginationBar } from './DataPreviewPaginationBar';
 
 type PreviewColumn = {
     name: string;
@@ -93,6 +95,11 @@ function DataPreview({
     const [inspectorPayload, setInspectorPayload] = useState<any>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
+    const [pageIndex, setPageIndex] = useState(0);
+    const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PREVIEW_LIMIT);
+
+    const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
+    const totalRowEstimate = tableProperties?.totalRows ?? null;
 
     useEffect(() => {
         setRows([]);
@@ -106,6 +113,7 @@ function DataPreview({
         setInspectorPayload(null);
         setRowViewMode('table');
         setError(null);
+        setPageIndex(0);
     }, [connectionId, databaseName, tableName, setSessionMeta]);
 
     const runPreview = useCallback(
@@ -120,7 +128,8 @@ function DataPreview({
                     connectionId,
                     databaseName,
                     tableName,
-                    limit: DEFAULT_TABLE_PREVIEW_LIMIT,
+                    limit: pageSize,
+                    offset: pageIndex * pageSize,
                     source,
                     signal,
                 });
@@ -151,7 +160,7 @@ function DataPreview({
                 }
             }
         },
-        [connectionId, databaseName, source, storageKey, tableName, setSessionMeta, t],
+        [connectionId, databaseName, source, storageKey, tableName, setSessionMeta, t, pageSize, pageIndex],
     );
 
     useEffect(() => {
@@ -211,6 +220,15 @@ function DataPreview({
         [filteredResults.length],
     );
 
+    const handlePageChange = useCallback((newPageIndex: number) => {
+        setPageIndex(newPageIndex);
+    }, []);
+
+    const handlePageSizeChange = useCallback((newPageSize: number) => {
+        setPageSize(newPageSize);
+        setPageIndex(0);
+    }, []);
+
     const handleRefresh = useCallback(() => {
         if (loading) return;
         void runPreview();
@@ -257,8 +275,8 @@ function DataPreview({
     }
 
     return (
-        <div className="h-full min-h-0">
-            <div className="flex items-center justify-between w-full gap-3">
+        <div className="h-full min-h-0 flex flex-col">
+            <div className="flex items-center justify-between w-full gap-3 flex-none">
                 <VTableSearchBar
                     query={query}
                     className="w-96 pl-0"
@@ -273,14 +291,26 @@ function DataPreview({
                 </Button>
             </div>
 
-            <VTable
-                results={filteredResults}
-                storageKey={storageKey}
-                onStatsChange={onStatsChange}
-                showSearchBar={true}
-                setInspectorOpen={setInspectorOpen}
-                setInspectorMode={setInspectorMode}
-                setInspectorPayload={setInspectorPayload}
+            <div className="flex-1 min-h-0">
+                <VTable
+                    results={filteredResults}
+                    storageKey={storageKey}
+                    onStatsChange={onStatsChange}
+                    showSearchBar={true}
+                    setInspectorOpen={setInspectorOpen}
+                    setInspectorMode={setInspectorMode}
+                    setInspectorPayload={setInspectorPayload}
+                />
+            </div>
+
+            <DataPreviewPaginationBar
+                pageIndex={pageIndex}
+                pageSize={pageSize}
+                totalRowEstimate={totalRowEstimate}
+                currentPageRowCount={rows.length}
+                loading={loading}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
             />
 
             <InspectorPanel

@@ -397,6 +397,17 @@
         "No data": "No hay datos",
         "Refresh": "Actualizar",
         "Failed to load data preview": "No se pudo cargar la vista previa de los datos",
+        "Pagination": {
+            "Previous": "Anterior",
+            "Next": "Siguiente",
+            "PageOf": "Página {current} de ~{total}",
+            "PageOfExact": "Página {current} de {total}",
+            "PageUnknown": "Página {current}",
+            "RowsPerPage": "Filas por página",
+            "ShowingRange": "{start}–{end} de ~{total}",
+            "ShowingRangeExact": "{start}–{end} de {total}",
+            "ShowingCount": "{count} filas"
+        },
         "Column name": "Nombre",
         "Column type": "Tipo",
         "Nullable": "Acepta nulos",

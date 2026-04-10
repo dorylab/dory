@@ -189,17 +189,19 @@ async function getTablePreview(
     datasource: ClickhouseDatasource,
     database: string,
     table: string,
-    options?: { limit?: number },
+    options?: { limit?: number; offset?: number },
 ) {
     const limit = normalizePreviewLimit(options?.limit);
+    const offset = options?.offset ?? 0;
     const result = await datasource.queryWithContext<Record<string, unknown>>(
-        'SELECT * FROM {db:Identifier}.{tbl:Identifier} LIMIT {limit:UInt64}',
+        'SELECT * FROM {db:Identifier}.{tbl:Identifier} LIMIT {limit:UInt64} OFFSET {offset:UInt64}',
         {
             database,
             params: {
                 db: database,
                 tbl: table,
                 limit,
+                offset,
             },
         },
     );

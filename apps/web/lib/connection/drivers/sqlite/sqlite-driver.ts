@@ -219,9 +219,10 @@ export function previewSqliteTable(
     database: string,
     table: string,
     limit: number,
+    offset: number = 0,
 ): QueryResult<Record<string, unknown>> {
-    const sql = `SELECT * FROM ${buildQualifiedName(database, table)} LIMIT ?`;
-    return executeSqliteQuery<Record<string, unknown>>(db, sql, [limit]);
+    const sql = `SELECT * FROM ${buildQualifiedName(database, table)} LIMIT ? OFFSET ?`;
+    return executeSqliteQuery<Record<string, unknown>>(db, sql, [limit, offset]);
 }
 
 export function getSqliteTableIndexes(db: SqliteDatabase, database: string, table: string): TableIndexInfo[] {

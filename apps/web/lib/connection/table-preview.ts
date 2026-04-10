@@ -9,6 +9,7 @@ type BuildTablePreviewPayloadParams = {
     database: string;
     table: string;
     limit?: number;
+    offset?: number;
     sessionId?: string | null;
     tabId?: string | null;
     userId?: string | null;
@@ -22,6 +23,13 @@ function normalizePreviewLimit(limit?: number): number {
     return Math.floor(limit);
 }
 
+function normalizePreviewOffset(offset?: number): number {
+    if (!Number.isFinite(offset) || !offset || offset < 0) {
+        return 0;
+    }
+    return Math.floor(offset);
+}
+
 function buildPreviewSqlText(database: string, table: string): string {
     return `TABLE PREVIEW ${database}.${table}`;
 }
@@ -32,6 +40,7 @@ export async function buildTablePreviewPayload({
     database,
     table,
     limit,
+    offset,
     sessionId,
     tabId,
     userId,
@@ -43,10 +52,11 @@ export async function buildTablePreviewPayload({
     }
 
     const normalizedLimit = normalizePreviewLimit(limit);
+    const normalizedOffset = normalizePreviewOffset(offset);
     const sqlText = buildPreviewSqlText(database, table);
     const startedAt = new Date();
     const perfStart = performance.now();
-    const result = await tableInfo.preview(database, table, { limit: normalizedLimit });
+    const result = await tableInfo.preview(database, table, { limit: normalizedLimit, offset: normalizedOffset });
     const durationMs = Math.round(performance.now() - perfStart);
     const finishedAt = new Date();
     const rows = Array.isArray(result.rows) ? result.rows : [];
@@ -80,6 +90,7 @@ export async function buildTablePreviewPayload({
                 rowCount: result.rowCount ?? rows.length,
                 limited: result.limited ?? true,
                 limit: result.limit ?? normalizedLimit,
+                offset: normalizedOffset,
                 affectedRows: null,
                 status: 'success' as const,
                 errorMessage: null,

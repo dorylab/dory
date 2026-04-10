@@ -6,6 +6,7 @@ type FetchTablePreviewParams = {
     databaseName: string;
     tableName: string;
     limit?: number;
+    offset?: number;
     sessionId?: string;
     tabId?: string;
     source?: string;
@@ -17,6 +18,7 @@ export async function fetchTablePreview({
     databaseName,
     tableName,
     limit,
+    offset,
     sessionId,
     tabId,
     source,
@@ -32,6 +34,7 @@ export async function fetchTablePreview({
         },
         body: JSON.stringify({
             limit,
+            offset,
             sessionId,
             tabId,
             source,

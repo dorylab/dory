@@ -13,6 +13,7 @@ const buildPreviewSchema = (t: (key: string, values?: Record<string, unknown>) =
         database: z.string().min(1, t('Api.Connection.Validation.DatabaseRequired')),
         table: z.string().min(1, t('Api.Connection.Validation.TableRequired')),
         limit: z.number().int().positive().max(10000).optional().default(DEFAULT_TABLE_PREVIEW_LIMIT),
+        offset: z.number().int().min(0).optional().default(0),
         sessionId: z.string().min(1).optional(),
         tabId: z.string().min(1).optional(),
         source: z.string().min(1).optional(),
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             database: safeDecode(params?.database),
             table: safeDecode(params?.table),
             limit: typeof body?.limit === 'number' ? body.limit : undefined,
+            offset: typeof body?.offset === 'number' ? body.offset : undefined,
             sessionId: typeof body?.sessionId === 'string' ? body.sessionId : undefined,
             tabId: typeof body?.tabId === 'string' ? body.tabId : undefined,
             source: typeof body?.source === 'string' ? body.source : undefined,
@@ -67,7 +69,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
             );
         }
 
-        const { database, table, limit, sessionId, tabId, source } = parsed.data;
+        const { database, table, limit, offset, sessionId, tabId, source } = parsed.data;
 
         try {
             const { entry } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
@@ -77,6 +79,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
                 database,
                 table,
                 limit,
+                offset,
                 sessionId,
                 tabId,
                 userId,

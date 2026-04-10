@@ -397,6 +397,17 @@
         "No data": "データがありません",
         "Refresh": "更新",
         "Failed to load data preview": "データプレビューの読み込みに失敗しました",
+        "Pagination": {
+            "Previous": "前へ",
+            "Next": "次へ",
+            "PageOf": "ページ {current} / ~{total}",
+            "PageOfExact": "ページ {current} / {total}",
+            "PageUnknown": "ページ {current}",
+            "RowsPerPage": "表示件数",
+            "ShowingRange": "{start}–{end} / ~{total}",
+            "ShowingRangeExact": "{start}–{end} / {total}",
+            "ShowingCount": "{count} 行"
+        },
         "Column name": "名前",
         "Column type": "型",
         "Nullable": "NULL 可",

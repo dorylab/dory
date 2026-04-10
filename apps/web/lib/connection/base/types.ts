@@ -176,6 +176,7 @@ export type Pagination = {
 
 export type TablePreviewOptions = {
     limit?: number;
+    offset?: number;
 };
 
 export type QueryInsightsImpl = {

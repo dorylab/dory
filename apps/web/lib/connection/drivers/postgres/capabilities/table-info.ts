@@ -328,15 +328,16 @@ async function getTableStats(datasource: PostgresDatasource, database: string, t
     };
 }
 
-async function getTablePreview(datasource: PostgresDatasource, database: string, table: string, options?: { limit?: number }) {
+async function getTablePreview(datasource: PostgresDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
     const parsed = parseTableName(table);
     const schemaName = parsed.schema?.trim() || 'public';
     const tableName = parsed.name.trim();
     const limit = normalizePreviewLimit(options?.limit);
+    const offset = options?.offset ?? 0;
     const qualifiedName = `${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}`;
-    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${qualifiedName} LIMIT $1`, {
+    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${qualifiedName} LIMIT $1 OFFSET $2`, {
         database,
-        params: [limit],
+        params: [limit, offset],
     });
 
     return {

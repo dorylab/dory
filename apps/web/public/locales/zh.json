@@ -399,6 +399,17 @@
         "No data": "没有数据",
         "Refresh": "刷新",
         "Failed to load data preview": "加载数据预览失败",
+        "Pagination": {
+            "Previous": "上一页",
+            "Next": "下一页",
+            "PageOf": "第 {current} 页，共 ~{total} 页",
+            "PageOfExact": "第 {current} 页，共 {total} 页",
+            "PageUnknown": "第 {current} 页",
+            "RowsPerPage": "每页行数",
+            "ShowingRange": "{start}–{end} / ~{total}",
+            "ShowingRangeExact": "{start}–{end} / {total}",
+            "ShowingCount": "{count} 行"
+        },
         "Column name": "名称",
         "Column type": "类型",
         "Nullable": "可为空",

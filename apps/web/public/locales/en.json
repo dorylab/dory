@@ -397,6 +397,17 @@
         "No data": "No data",
         "Refresh": "Refresh",
         "Failed to load data preview": "Failed to load data preview",
+        "Pagination": {
+            "Previous": "Previous",
+            "Next": "Next",
+            "PageOf": "Page {current} of ~{total}",
+            "PageOfExact": "Page {current} of {total}",
+            "PageUnknown": "Page {current}",
+            "RowsPerPage": "Rows per page",
+            "ShowingRange": "{start}–{end} of ~{total}",
+            "ShowingRangeExact": "{start}–{end} of {total}",
+            "ShowingCount": "{count} rows"
+        },
         "Column name": "Name",
         "Column type": "Type",
         "Nullable": "Nullable",
