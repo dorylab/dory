@@ -282,8 +282,8 @@ function DataPreview({
                     className="w-96 pl-0"
                     onQueryChange={setQuery}
                     onClearQuery={() => setQuery('')}
-                    filteredCount={stats.filteredCount}
-                    totalCount={stats.totalCount}
+                    filteredCount={query.trim() ? stats.filteredCount : undefined}
+                    totalCount={query.trim() ? stats.totalCount : undefined}
                 />
                 <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={loading}>
                     <RotateCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
