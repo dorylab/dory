@@ -79,7 +79,7 @@ async function getSecretKeyBytes(): Promise<Uint8Array> {
             cachedKeyBytes = decoded;
             return decoded;
         }
-        if (decoded && !warnedAboutInvalidBase64Secret) {
+        if (decoded && decoded.length >= 28 && decoded.length <= 36 && !warnedAboutInvalidBase64Secret) {
             warnedAboutInvalidBase64Secret = true;
             console.warn('[crypto] DS_SECRET_KEY decoded as base64 but was not 32 bytes; trying other supported formats.');
         }
@@ -99,7 +99,9 @@ async function getSecretKeyBytes(): Promise<Uint8Array> {
         const crypto = getWebCrypto();
         if (!warnedAboutDerivedSecret) {
             warnedAboutDerivedSecret = true;
-            console.warn('[crypto] DS_SECRET_KEY is not base64, hex, or 32-byte raw text; deriving a stable key with SHA-256.');
+            console.warn(
+                '[crypto] DS_SECRET_KEY is not base64, hex, or 32-byte raw text; deriving a stable key with SHA-256. Migrate to a 32-byte secret for stronger protection.',
+            );
         }
         const digest = await crypto.subtle.digest('SHA-256', rawBytes);
         cachedKeyBytes = new Uint8Array(digest);
