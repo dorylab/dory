@@ -26,6 +26,14 @@ function base64ToBytes(b64: string): Uint8Array {
     throw new Error('Base64 decoding is not supported in this runtime');
 }
 
+function tryBase64ToBytes(b64: string): Uint8Array | null {
+    try {
+        return base64ToBytes(b64);
+    } catch {
+        return null;
+    }
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
     if (typeof btoa === 'function') {
         let binary = '';
@@ -44,16 +52,33 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
 }
 
-function getSecretKeyBytes(): Uint8Array {
+async function getSecretKeyBytes(): Promise<Uint8Array> {
     if (cachedKeyBytes) return cachedKeyBytes;
     const envSecret = typeof process !== 'undefined' ? process.env.DS_SECRET_KEY : undefined;
     if (envSecret) {
-        const decoded = base64ToBytes(envSecret);
-        if (decoded.length !== 32) {
-            throw new Error('DS_SECRET_KEY must be 32 bytes (base64 encoded)');
+        const normalizedSecret = envSecret.trim();
+        const decoded = tryBase64ToBytes(normalizedSecret);
+        if (decoded?.length === 32) {
+            cachedKeyBytes = decoded;
+            return decoded;
         }
-        cachedKeyBytes = decoded;
-        return decoded;
+
+        if (/^[0-9a-f]{64}$/i.test(normalizedSecret) && typeof Buffer !== 'undefined') {
+            const hexDecoded = Uint8Array.from(Buffer.from(normalizedSecret, 'hex'));
+            cachedKeyBytes = hexDecoded;
+            return hexDecoded;
+        }
+
+        const rawBytes = new TextEncoder().encode(normalizedSecret);
+        if (rawBytes.length === 32) {
+            cachedKeyBytes = rawBytes;
+            return rawBytes;
+        }
+
+        const crypto = getWebCrypto();
+        const digest = await crypto.subtle.digest('SHA-256', rawBytes);
+        cachedKeyBytes = new Uint8Array(digest);
+        return cachedKeyBytes;
     }
 
     const crypto = getWebCrypto();
@@ -66,10 +91,7 @@ function getSecretKeyBytes(): Uint8Array {
 async function getCryptoKey(): Promise<CryptoKey> {
     if (cachedKey) return cachedKey;
     const crypto = getWebCrypto();
-    cachedKey = await crypto.subtle.importKey('raw', toArrayBuffer(getSecretKeyBytes()), { name: 'AES-GCM' }, false, [
-        'encrypt',
-        'decrypt',
-    ]);
+    cachedKey = await crypto.subtle.importKey('raw', toArrayBuffer(await getSecretKeyBytes()), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     return cachedKey;
 }
 
