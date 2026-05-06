@@ -3,6 +3,7 @@ const TAG_LENGTH = 16; // 128-bit auth tag for AES-GCM
 
 let cachedKeyBytes: Uint8Array | null = null;
 let cachedKey: CryptoKey | null = null;
+let warnedAboutInvalidBase64Secret = false;
 let warnedAboutDerivedSecret = false;
 
 function getWebCrypto(): Crypto {
@@ -78,6 +79,10 @@ async function getSecretKeyBytes(): Promise<Uint8Array> {
             cachedKeyBytes = decoded;
             return decoded;
         }
+        if (decoded && !warnedAboutInvalidBase64Secret) {
+            warnedAboutInvalidBase64Secret = true;
+            console.warn('[crypto] DS_SECRET_KEY decoded as base64 but was not 32 bytes; trying other supported formats.');
+        }
 
         if (/^[0-9a-f]{64}$/i.test(normalizedSecret)) {
             const hexDecoded = hexToBytes(normalizedSecret);
@@ -111,7 +116,8 @@ async function getSecretKeyBytes(): Promise<Uint8Array> {
 async function getCryptoKey(): Promise<CryptoKey> {
     if (cachedKey) return cachedKey;
     const crypto = getWebCrypto();
-    cachedKey = await crypto.subtle.importKey('raw', toArrayBuffer(await getSecretKeyBytes()), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+    const keyBytes = await getSecretKeyBytes();
+    cachedKey = await crypto.subtle.importKey('raw', toArrayBuffer(keyBytes), { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
     return cachedKey;
 }
 
