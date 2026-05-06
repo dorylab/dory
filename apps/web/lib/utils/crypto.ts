@@ -3,6 +3,7 @@ const TAG_LENGTH = 16; // 128-bit auth tag for AES-GCM
 
 let cachedKeyBytes: Uint8Array | null = null;
 let cachedKey: CryptoKey | null = null;
+let warnedAboutDerivedSecret = false;
 
 function getWebCrypto(): Crypto {
     if (!globalThis.crypto?.subtle) {
@@ -76,6 +77,10 @@ async function getSecretKeyBytes(): Promise<Uint8Array> {
         }
 
         const crypto = getWebCrypto();
+        if (!warnedAboutDerivedSecret) {
+            warnedAboutDerivedSecret = true;
+            console.warn('[crypto] DS_SECRET_KEY is not base64, hex, or 32-byte raw text; deriving a stable key with SHA-256.');
+        }
         const digest = await crypto.subtle.digest('SHA-256', rawBytes);
         cachedKeyBytes = new Uint8Array(digest);
         return cachedKeyBytes;
