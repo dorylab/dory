@@ -14,6 +14,7 @@ import {
   createMainWindow,
   focusMainWindow,
   hasMainWindow,
+  loadMainWindowUrl,
   sendAuthCallback,
   setPendingAuthCallback,
   setMainWindowQuitting,
@@ -225,22 +226,26 @@ async function launch() {
   }
 
   launchPromise = (async () => {
-  try {
-    const targetUrl = await serverManager.getAppUrl();
-    log('[electron] launch targetUrl:', targetUrl);
-    createMainWindow({
-      targetUrl,
-      preloadPath: path.join(__dirname, 'preload.cjs'),
-      log,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logError('[electron] launch error:', error);
-    dialog.showErrorBox('Launch Failed', message);
-    app.quit();
-  } finally {
-    launchPromise = null;
-  }
+    try {
+      if (!hasMainWindow()) {
+        createMainWindow({
+          preloadPath: path.join(__dirname, 'preload.cjs'),
+          log,
+        });
+      }
+      focusMainWindow();
+
+      const targetUrl = await serverManager.getAppUrl();
+      log('[electron] launch targetUrl:', targetUrl);
+      loadMainWindowUrl(targetUrl, log);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logError('[electron] launch error:', error);
+      dialog.showErrorBox('Launch Failed', message);
+      app.quit();
+    } finally {
+      launchPromise = null;
+    }
   })();
 
   return launchPromise;

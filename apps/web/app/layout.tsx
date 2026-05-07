@@ -95,8 +95,15 @@ export default async function RootLayout({
                     dangerouslySetInnerHTML={{
                         __html: `
               try {
-                if (localStorage.theme === 'dark' || ((!('theme' in localStorage) || localStorage.theme === 'system') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                  document.querySelector('meta[name="theme-color"]').setAttribute('content', '${META_THEME_COLORS.dark}')
+                var storedTheme = localStorage.theme;
+                var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var isDark = storedTheme === 'dark' || ((!storedTheme || storedTheme === 'system') && prefersDark);
+                document.documentElement.classList.toggle('dark', isDark);
+                document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+                if (isDark) {
+                  document.querySelector('meta[name="theme-color"]').setAttribute('content', '${META_THEME_COLORS.dark}');
+                } else {
+                  document.querySelector('meta[name="theme-color"]').setAttribute('content', '${META_THEME_COLORS.light}');
                 }
               } catch (_) {}
             `,
@@ -115,7 +122,7 @@ export default async function RootLayout({
                 <PublicEnvProvider>
                     <NextIntlClientProvider locale={locale} messages={messages}>
                         <JotaiProvider>
-                            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange enableColorScheme>
+                            <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange enableColorScheme>
                                 <ElectronLocaleSync />
                                 <ElectronThemeSync />
                                 <ActiveThemeProvider initialTheme={activeThemeValue}>

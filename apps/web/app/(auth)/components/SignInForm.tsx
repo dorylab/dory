@@ -18,7 +18,6 @@ import { useTranslations } from 'next-intl';
 import { runtime } from '@/lib/runtime/runtime';
 
 type SignInFormProps = React.ComponentProps<'div'> & {
-    imageUrl?: string;
     callbackURL?: string;
     onRequestSignUp?: () => void;
     showGuestOption?: boolean;
@@ -28,7 +27,6 @@ type SignInFormProps = React.ComponentProps<'div'> & {
 
 export function SignInForm({
     className,
-    imageUrl,
     callbackURL: callbackURLOverride,
     onRequestSignUp,
     showGuestOption = true,
@@ -490,10 +488,6 @@ export function SignInForm({
                                 </div>
                             </div>
                         </form>
-                        {/* 
-                    <div className="bg-primary/50 relative hidden md:block">
-                        {imageUrl && <Image fill src={imageUrl} alt="Image" className="absolute inset-0 h-full w-full object-cover" />}
-                    </div> */}
                     </CardContent>
                 </Card>
 
