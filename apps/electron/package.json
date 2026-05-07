@@ -18,7 +18,8 @@
         "electron:build:apple": "yarn run electron:standalone && yarn run compile && electron-builder --config electron-builder.mjs --mac --publish never",
         "electron:build:windows": "yarn run electron:standalone && yarn run compile && electron-builder --config electron-builder.mjs --win --publish never",
         "electron:build:apple:quick": "yarn run electron:standalone && yarn run compile && SKIP_NOTARIZE=1 electron-builder --config electron-builder.mjs --mac zip",
-        "electron:build:apple:unsigned": "yarn run electron:standalone && yarn run compile && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.mjs --mac --dir"
+        "electron:build:apple:unsigned": "yarn run electron:standalone && yarn run compile && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.mjs --mac --dir",
+        "package:app:existing": "yarn run compile && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --config electron-builder.mjs --mac --dir && open \"dist/mac-arm64/Dory.app\""
     },
     "devDependencies": {
         "@types/node": "^25.5.2",

@@ -3,8 +3,8 @@ const path = require('node:path');
 
 const assets = [
   {
-    src: path.join(__dirname, '../main/splash.html'),
-    dest: path.join(__dirname, '../dist-electron/main/splash.html'),
+    src: path.join(__dirname, '../main/loading.html'),
+    dest: path.join(__dirname, '../dist-electron/main/loading.html'),
   },
   {
     src: path.join(__dirname, '../main/update-available-dialog.html'),

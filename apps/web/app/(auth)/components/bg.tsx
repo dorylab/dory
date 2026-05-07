@@ -1,62 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState, type RefObject, type ReactNode } from 'react';
-import dynamic from 'next/dynamic';
+import type { ReactNode } from 'react';
+
+import { AuroraBackground } from '@/components/ui/aurora-background';
 import { cn } from '@/lib/utils';
-
-const GrainGradient = dynamic(
-    () => import('@paper-design/shaders-react').then((mod) => mod.GrainGradient),
-    { ssr: false },
-);
-
-const Dithering = dynamic(
-    () => import('@paper-design/shaders-react').then((mod) => mod.Dithering),
-    { ssr: false },
-);
-
-let observer: IntersectionObserver;
-const observerTargets = new WeakMap<Element, (entry: IntersectionObserverEntry) => void>();
-
-function supportsWebGL2() {
-    if (typeof window === 'undefined') return false;
-
-    const userAgent = navigator.userAgent ?? '';
-    if (navigator.webdriver || /HeadlessChrome|Playwright/i.test(userAgent)) {
-        return false;
-    }
-
-    try {
-        const canvas = document.createElement('canvas');
-        return Boolean(canvas.getContext('webgl2'));
-    } catch {
-        return false;
-    }
-}
-
-function useIsVisible(ref: RefObject<HTMLElement | null>) {
-    const [visible, setVisible] = useState(false);
-
-    useEffect(() => {
-        observer ??= new IntersectionObserver((entries) => {
-            for (const entry of entries) {
-                observerTargets.get(entry.target)?.(entry);
-            }
-        });
-
-        const el = ref.current;
-        if (!el) return;
-
-        observerTargets.set(el, (entry) => setVisible(entry.isIntersecting));
-        observer.observe(el);
-
-        return () => {
-            observer.unobserve(el);
-            observerTargets.delete(el);
-        };
-    }, [ref]);
-
-    return visible;
-}
 
 export function HeroBackground({
     className,
@@ -65,63 +12,11 @@ export function HeroBackground({
     className?: string;
     children?: ReactNode;
 }) {
-    const ref = useRef<HTMLDivElement>(null);
-    const visible = useIsVisible(ref);
-
-    const [showShaders, setShowShaders] = useState(false);
-
-    useEffect(() => {
-        if (!supportsWebGL2()) return;
-        const t = setTimeout(() => setShowShaders(true), 200);
-        return () => clearTimeout(t);
-    }, []);
-
-    const ditherFront = '#22D3EE';
-
     return (
-        <div ref={ref} className={cn('relative isolate overflow-hidden', className)}>
-            <div className="absolute inset-0 -z-10" style={{ background: '#050814' }} />
-
-            {showShaders && (
-                <GrainGradient
-                    className="absolute inset-0 -z-10 animate-fd-fade-in duration-800"
-                    colors={[
-                        '#3B82F6',
-                        '#06B6D4',
-                        '#6366F1',
-                        '#0B122000',
-                    ]}
-                    // colorBack="#00000000"
-                    softness={1}
-                    intensity={0.6}
-                    noise={0.5}
-                    speed={0.3}
-                    shape="corners"
-                    minPixelRatio={1}
-                    maxPixelCount={1920 * 1080}
-                />
-            )}
-
-            {showShaders && (
-                <Dithering
-                    width={720}
-                    height={720}
-                    colorBack="#00000000"
-                    colorFront={ditherFront}
-                    shape="sphere"
-                    type="4x4"
-                    scale={0.5}
-                    size={3}
-                    speed={0}
-                    frame={5000 * 120}
-                    className="pointer-events-none absolute -z-10 animate-fd-fade-in duration-500 max-lg:bottom-[-50%] max-lg:-left-50 lg:top-[-6%] lg:right-[-4%]"
-                    minPixelRatio={1}
-                />
-            )}
-
-            <div className="pointer-events-none absolute inset-0 -z-10 bg-linear-to-b from-transparent via-transparent to-fd-background/80" />
-
+        <AuroraBackground className={cn('h-full w-full bg-zinc-50 dark:bg-[#050814]', className)}>
+            <div className="pointer-events-none absolute inset-0 bg-white/34 dark:bg-[#050814]/28" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-[linear-gradient(to_bottom,transparent_0%,rgba(255,255,255,0.72)_58%,#ffffff_100%)] dark:bg-[linear-gradient(to_bottom,transparent_0%,rgba(5,8,20,0.5)_58%,#050814_100%)]" />
             {children ? <div className="relative z-10">{children}</div> : null}
-        </div>
+        </AuroraBackground>
     );
 }

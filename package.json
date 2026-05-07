@@ -43,6 +43,7 @@
     "electron:build": "yarn workspace dory run build",
     "electron:build:apple": "yarn run electron:standalone && yarn workspace dory run electron:build:apple",
     "electron:build:win": "yarn run electron:standalone && yarn workspace dory run electron:build:windows",
+    "electron:package:app:existing": "yarn workspace dory run package:app:existing",
     "admin:dev": "yarn workspace admin run dev",
     "admin:build": "yarn workspace admin run build",
     "admin:start": "yarn workspace admin run start",

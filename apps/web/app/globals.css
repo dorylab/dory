@@ -63,6 +63,14 @@
 :root {
     --radius: 0.625rem;
     --app-font-size: 16px;
+    --white: #ffffff;
+    --black: #000000;
+    --transparent: transparent;
+    --blue-300: var(--color-blue-300);
+    --blue-400: var(--color-blue-400);
+    --blue-500: var(--color-blue-500);
+    --indigo-300: var(--color-indigo-300);
+    --violet-200: var(--color-violet-200);
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -103,6 +111,24 @@
     --code-number: oklch(0.56 0 0);
     --selection: oklch(0.145 0 0);
     --selection-foreground: oklch(1 0 0);
+}
+
+@keyframes aurora {
+    from {
+        background-position:
+            50% 50%,
+            50% 50%;
+    }
+
+    to {
+        background-position:
+            350% 50%,
+            350% 50%;
+    }
+}
+
+.animate-aurora {
+    animation: aurora 60s linear infinite;
 }
 
 .dark {

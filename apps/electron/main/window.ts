@@ -1,15 +1,17 @@
 import { BrowserWindow, screen, shell } from 'electron';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import Store from 'electron-store';
 import type { LogFn } from './logger.js';
-import { createSplashWindow, getSplashShownAt, getSplashWindow } from './splash.js';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingAuthCallback: string | null = null;
 let windowStateSaveTimer: NodeJS.Timeout | null = null;
 let isQuitting = false;
+let isMainAppLoaded = false;
 const MIN_WINDOW_WIDTH = 480;
 const MIN_WINDOW_HEIGHT = 360;
+const loadingHtmlPath = fileURLToPath(new URL('./loading.html', import.meta.url));
 
 interface WindowState {
     x?: number;
@@ -32,15 +34,12 @@ const windowStateStore = new Store<{ bounds: WindowState }>({
 
 interface CreateMainWindowOptions {
     preloadPath: string;
-    targetUrl: string;
     log: LogFn;
 }
 
-export function createMainWindow({ preloadPath, targetUrl, log }: CreateMainWindowOptions) {
-    log('[electron] createMainWindow ->', targetUrl);
+export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) {
+    log('[electron] createMainWindow');
     log('[electron] preloadPath ->', preloadPath, 'exists:', fs.existsSync(preloadPath));
-
-    createSplashWindow();
 
     const windowState = loadWindowState(log);
     mainWindow = new BrowserWindow({
@@ -48,7 +47,7 @@ export function createMainWindow({ preloadPath, targetUrl, log }: CreateMainWind
         height: windowState?.height ?? 800,
         x: windowState?.x,
         y: windowState?.y,
-        show: false,
+        show: true,
         frame: true,
         alwaysOnTop: false,
         transparent: false,
@@ -65,44 +64,15 @@ export function createMainWindow({ preloadPath, targetUrl, log }: CreateMainWind
         movable: true,
     });
 
-    mainWindow.loadURL(targetUrl);
+    if (windowState?.isMaximized) {
+        mainWindow.maximize();
+    }
 
-    mainWindow.once('ready-to-show', () => {
-        const minSplashMs = 800;
-        const elapsed = Date.now() - getSplashShownAt();
-        const remaining = Math.max(0, minSplashMs - elapsed);
-        setTimeout(() => {
-            const splashWindow = getSplashWindow();
-            if (splashWindow && !splashWindow.isDestroyed()) {
-                splashWindow.close();
-            }
-            if (windowState?.isMaximized) {
-                mainWindow?.maximize();
-            }
-            mainWindow?.show();
-        }, remaining);
-    });
+    mainWindow.loadFile(loadingHtmlPath);
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         shell.openExternal(url);
         return { action: 'deny' };
-    });
-
-    mainWindow.webContents.once('did-finish-load', () => {
-        mainWindow?.webContents
-            .executeJavaScript(
-                '({ hasThemeBridge: !!window.themeBridge, hasLogBridge: !!window.logBridge, hasElectron: !!window.electron })',
-                true,
-            )
-            .then(result => {
-                log('[electron] renderer globals:', result);
-            })
-            .catch(error => {
-                log('[electron] renderer globals check failed:', error instanceof Error ? error.message : String(error));
-            });
-        if (!pendingAuthCallback) return;
-        mainWindow?.webContents.send('auth:callback', pendingAuthCallback);
-        pendingAuthCallback = null;
     });
 
     const scheduleWindowStateSave = () => {
@@ -136,9 +106,39 @@ export function createMainWindow({ preloadPath, targetUrl, log }: CreateMainWind
 
     mainWindow.on('closed', () => {
         mainWindow = null;
+        isMainAppLoaded = false;
     });
 }
 
+export function loadMainWindowUrl(targetUrl: string, log: LogFn) {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    log('[electron] loadMainWindowUrl ->', targetUrl);
+    isMainAppLoaded = false;
+    const targetOrigin = new URL(targetUrl).origin;
+
+    const handleAppLoad = () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        const currentUrl = mainWindow.webContents.getURL();
+        if (!currentUrl.startsWith(targetOrigin)) return;
+        mainWindow.webContents.off('did-finish-load', handleAppLoad);
+        isMainAppLoaded = true;
+        mainWindow?.webContents
+            .executeJavaScript(
+                '({ hasThemeBridge: !!window.themeBridge, hasLogBridge: !!window.logBridge, hasElectron: !!window.electron })',
+                true,
+            )
+            .then(result => {
+                log('[electron] renderer globals:', result);
+            })
+            .catch(error => {
+                log('[electron] renderer globals check failed:', error instanceof Error ? error.message : String(error));
+            });
+        flushPendingAuthCallback();
+    };
+
+    mainWindow.webContents.on('did-finish-load', handleAppLoad);
+    mainWindow.loadURL(targetUrl);
+}
 
 export function sendAuthCallback(url: string, logWarn: LogFn) {
     if (!mainWindow || mainWindow.isDestroyed()) {
@@ -147,7 +147,13 @@ export function sendAuthCallback(url: string, logWarn: LogFn) {
         return;
     }
     if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
     mainWindow.focus();
+    if (!isMainAppLoaded) {
+        logWarn('[electron] main app not loaded, queueing auth callback:', url);
+        pendingAuthCallback = url;
+        return;
+    }
     logWarn('[electron] sending auth callback to renderer:', url);
     mainWindow.webContents.send('auth:callback', url);
 }
@@ -174,6 +180,12 @@ export function getMainWindow() {
 
 export function setMainWindowQuitting(quitting: boolean) {
     isQuitting = quitting;
+}
+
+function flushPendingAuthCallback() {
+    if (!mainWindow || mainWindow.isDestroyed() || !pendingAuthCallback) return;
+    mainWindow.webContents.send('auth:callback', pendingAuthCallback);
+    pendingAuthCallback = null;
 }
 
 function loadWindowState(log: LogFn): WindowState | null {
