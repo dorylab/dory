@@ -245,6 +245,7 @@ function didUserRequestChart(messages: UIMessage[], messageIndex: number): boole
 
 function removeUnavailableImageMarkdown(text: string) {
     return text
+        .replace(/!\[[^\]]*]\([^)]*\)/g, '')
         .replace(/!\[\s*Image not available\s*\]\([^)]*\)/gi, '')
         .replace(/^\s*Image not available\s*$/gim, '')
         .trim();
@@ -359,7 +360,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
     const userRequestedChart = didUserRequestChart(messages, messageIndex);
     const renderTextPart = (text: string, key: string) => {
-        const displayText = assistantMessage && messageHasChartResult ? removeUnavailableImageMarkdown(text) : text;
+        const displayText = assistantMessage ? removeUnavailableImageMarkdown(text) : text;
         if (!displayText.trim()) {
             return null;
         }

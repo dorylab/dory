@@ -41,7 +41,7 @@ About the sqlRunner tool
 export function buildDialectSqlPrompt(connectionType?: ConnectionType | null): string {
     const normalizedType = connectionType === 'neon' ? 'postgres' : connectionType;
 
-    const commonRules = [SQL_TOOL_INSTRUCTION, SQL_RUNNER_GUIDE];
+    const commonRules = [SQL_TOOL_INSTRUCTION, SQL_RUNNER_GUIDE, CHART_BUILDER_GUIDE];
 
     const dialectRules: string[] = [];
 
