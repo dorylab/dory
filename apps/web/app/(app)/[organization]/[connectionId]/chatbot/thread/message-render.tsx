@@ -352,10 +352,8 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
     const userRequestedChart = didUserRequestChart(messages, messageIndex);
     const renderTextPart = (text: string, key: string) => {
         if (message.role === 'user') {
-            const shouldKeepSingleLine = !text.includes('\n') && text.trim().length <= 24;
-
             return (
-                <div key={key} className={cn('max-w-full leading-7 text-foreground', shouldKeepSingleLine ? 'whitespace-nowrap' : 'whitespace-pre-wrap break-words')}>
+                <div key={key} className="max-w-full whitespace-pre-wrap break-words leading-7 text-foreground [overflow-wrap:anywhere]">
                     {text}
                 </div>
             );
