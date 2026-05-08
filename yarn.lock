@@ -9564,7 +9564,7 @@ __metadata:
     eslint: "npm:^10.2.0"
     eslint-config-next: "npm:^16.2.2"
     next: "npm:^16.2.3"
-    next-intl: "npm:^4.9.1"
+    next-intl: "npm:^4.9.2"
     react: "npm:^19.2.4"
     react-dom: "npm:^19.2.4"
     typescript: "npm:^6.0.2"
@@ -15095,7 +15095,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"icu-minify@npm:^4.9.1":
+"icu-minify@npm:^4.11.0":
   version: 4.11.0
   resolution: "icu-minify@npm:4.11.0"
   dependencies:
@@ -18022,32 +18022,32 @@ __metadata:
   languageName: node
   linkType: hard
 
-"next-intl-swc-plugin-extractor@npm:^4.9.1":
-  version: 4.9.1
-  resolution: "next-intl-swc-plugin-extractor@npm:4.9.1"
-  checksum: 10c0/f2175d5e2a5229548266399b99a022f768051b127d19271c4b5f2d2e32f3945bea8d724e86dc17d038a7e2ee168eb8bb84ba1f84d9d2a9c445f1925dfe8ad4d1
+"next-intl-swc-plugin-extractor@npm:^4.11.0":
+  version: 4.11.0
+  resolution: "next-intl-swc-plugin-extractor@npm:4.11.0"
+  checksum: 10c0/b895c03ffdefaa4dad2fd104f184e8d52c7bfb9e358d3f5e4e4f584f887b9a59b05b5125256e2639ffbf2e5875690d0858ad4d1255b164e6c23dfd09c4a6fb29
   languageName: node
   linkType: hard
 
-"next-intl@npm:^4.9.1":
-  version: 4.9.1
-  resolution: "next-intl@npm:4.9.1"
+"next-intl@npm:^4.9.2":
+  version: 4.11.0
+  resolution: "next-intl@npm:4.11.0"
   dependencies:
     "@formatjs/intl-localematcher": "npm:^0.8.1"
     "@parcel/watcher": "npm:^2.4.1"
     "@swc/core": "npm:^1.15.2"
-    icu-minify: "npm:^4.9.1"
+    icu-minify: "npm:^4.11.0"
     negotiator: "npm:^1.0.0"
-    next-intl-swc-plugin-extractor: "npm:^4.9.1"
+    next-intl-swc-plugin-extractor: "npm:^4.11.0"
     po-parser: "npm:^2.1.1"
-    use-intl: "npm:^4.9.1"
+    use-intl: "npm:^4.11.0"
   peerDependencies:
     next: ^12.0.0 || ^13.0.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
     react: ^16.8.0 || ^17.0.0 || ^18.0.0 || >=19.0.0-rc <19.0.0 || ^19.0.0
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/5de74d60427c75995a84a639cb440d9b972d35e4a227ddaa6e2c664695cadcd1951620b6c6bece60a57264d2e862b4dc40ad9fa57d4089ae98fd528e583e587a
+  checksum: 10c0/fe7b28948b66de2683f8a5888ae25e078b09627c8cc4e01a6f5cad7ec4dc53e678157202cedb441c00eb106b2fe19d4f77a52088164a6edc180ee27ada0c4773
   languageName: node
   linkType: hard
 
@@ -22789,17 +22789,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"use-intl@npm:^4.9.1":
-  version: 4.9.1
-  resolution: "use-intl@npm:4.9.1"
+"use-intl@npm:^4.11.0":
+  version: 4.11.0
+  resolution: "use-intl@npm:4.11.0"
   dependencies:
     "@formatjs/fast-memoize": "npm:^3.1.0"
     "@schummar/icu-type-parser": "npm:1.21.5"
-    icu-minify: "npm:^4.9.1"
+    icu-minify: "npm:^4.11.0"
     intl-messageformat: "npm:^11.1.0"
   peerDependencies:
     react: ^17.0.0 || ^18.0.0 || >=19.0.0-rc <19.0.0 || ^19.0.0
-  checksum: 10c0/df01383077b9d55d2962cc1cb75eb4605bf4eb211a07af3d408d271227bad6861b62415ca3bc7409e689313d895519043bec483c706010cfaea9dd3eab3fde37
+  checksum: 10c0/d8681e6a18e7d00efe5c17268b70d5154b573087595802b1e0c9389855455ae4dbfeeea99fbee81412ba2b445c1ac0e808ae65588282cc55d116dde64625a607
   languageName: node
   linkType: hard
 
@@ -23202,7 +23202,7 @@ __metadata:
     mysql2: "npm:^3.20.0"
     nanoid: "npm:^5.1.7"
     next: "npm:16.2.3"
-    next-intl: "npm:^4.9.1"
+    next-intl: "npm:^4.9.2"
     next-runtime-env: "npm:^3.3.0"
     next-themes: "npm:^0.4.6"
     npm: "npm:^11.12.1"
