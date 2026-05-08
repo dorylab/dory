@@ -2,10 +2,11 @@
 
 import { headers } from 'next/headers';
 import type { NextRequest } from 'next/server';
+import { cache } from 'react';
 import { createSessionResolver } from '@dory/auth-core';
 import { getAuth } from '../auth';
 import { createAuthProxyHeaders, shouldProxyAuthRequest } from './auth-proxy';
-import { resolveDesktopRecoveredSession } from './desktop-session-recovery';
+import { readDesktopSessionRecoveryPayload, resolveDesktopRecoveredSession } from './desktop-session-recovery';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { getRuntimeForServer } from '@/lib/runtime/runtime';
 
@@ -40,12 +41,22 @@ function normalizeSessionCookieHeader(headers: Headers): Headers {
     return next;
 }
 
-export async function getSessionFromRequest(req?: NextRequest) {
-    const reqHeaders = req ? req.headers : await headers();
+async function resolveSessionFromHeaders(reqHeaders: Headers, url: string | null) {
     const normalizedHeaders = normalizeSessionCookieHeader(reqHeaders);
+
+    if (shouldProxyAuthRequest()) {
+        const recoveryPayload = await readDesktopSessionRecoveryPayload(normalizedHeaders);
+        if (recoveryPayload?.userId) {
+            const recoveredSession = await resolveDesktopRecoveredSession(normalizedHeaders);
+            if (recoveredSession) {
+                return recoveredSession;
+            }
+        }
+    }
+
     const session = await resolveSession({
         headers: normalizedHeaders,
-        url: req?.url ?? null,
+        url,
     });
 
     if (session || !shouldProxyAuthRequest()) {
@@ -53,4 +64,17 @@ export async function getSessionFromRequest(req?: NextRequest) {
     }
 
     return resolveDesktopRecoveredSession(normalizedHeaders);
+}
+
+const getSessionFromCurrentRequest = cache(async () => {
+    const reqHeaders = await headers();
+    return resolveSessionFromHeaders(reqHeaders, null);
+});
+
+export async function getSessionFromRequest(req?: NextRequest) {
+    if (req) {
+        return resolveSessionFromHeaders(req.headers, req.url);
+    }
+
+    return getSessionFromCurrentRequest();
 }
