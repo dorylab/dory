@@ -243,6 +243,13 @@ function didUserRequestChart(messages: UIMessage[], messageIndex: number): boole
     return !!previousUserMessage?.parts?.some((part: any) => part?.type === 'text' && /visualization|chart/i.test(part?.text ?? ''));
 }
 
+function removeUnavailableImageMarkdown(text: string) {
+    return text
+        .replace(/!\[\s*Image not available\s*\]\([^)]*\)/gi, '')
+        .replace(/^\s*Image not available\s*$/gim, '')
+        .trim();
+}
+
 function formatToolName(toolName: string | null | undefined, t: ChatbotTranslate): string {
     const fallback = t('Tools.Names.Tool');
     if (!toolName) return fallback;
@@ -348,18 +355,24 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         .filter((index: number) => index >= 0);
     const finalTextPartIndex = textPartIndexes.at(-1) ?? -1;
     const hasMultipleTextParts = textPartIndexes.length > 1;
+    const messageHasChartResult = !!message.parts?.some((part: any) => Boolean(getChartResultFromPart(part)));
 
     const userRequestedChart = didUserRequestChart(messages, messageIndex);
     const renderTextPart = (text: string, key: string) => {
+        const displayText = assistantMessage && messageHasChartResult ? removeUnavailableImageMarkdown(text) : text;
+        if (!displayText.trim()) {
+            return null;
+        }
+
         if (message.role === 'user') {
             return (
                 <div key={key} className="max-w-full whitespace-pre-wrap break-words leading-7 text-foreground [overflow-wrap:anywhere]">
-                    {text}
+                    {displayText}
                 </div>
             );
         }
 
-        return <MessageResponse key={key}>{text}</MessageResponse>;
+        return <MessageResponse key={key}>{displayText}</MessageResponse>;
     };
     const pushNarrativeContent = (node: ReactNode) => {
         narrativeContentItems.push(node);
@@ -523,6 +536,10 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         const toolName = getToolName(part);
 
         if (toolName === 'sqlRunner') {
+            return summary;
+        }
+
+        if (toolName === 'chartBuilder') {
             return summary;
         }
 
@@ -707,6 +724,26 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 return;
             }
 
+            if (toolName === 'chartBuilder') {
+                const chartResult = pairedResult?.part ? getChartResultFromPart(pairedResult.part) : null;
+                if (chartResult) {
+                    chartResults.push(chartResult);
+                }
+
+                pushDeferredToolContent(
+                    <>
+                        {renderToolStateCard({
+                            part: pairedResult?.part ?? part,
+                            key: `${message.id}-tool-call-${i}`,
+                            fallbackInput: chartResult && pairedResult?.part ? inferToolArgsFromResult(pairedResult.part) : undefined,
+                            forceState: chartResult ? 'output-available' : 'input-available',
+                        })}
+                        {chartResult ? <ChartResultCard key={`${message.id}-chart-${i}`} result={chartResult} source="tool" /> : null}
+                    </>,
+                );
+                return;
+            }
+
             processItems.push({
                 key: `${message.id}-tool-call-${i}`,
                 summary: getToolStepSummary(part),
@@ -742,6 +779,26 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 return;
             }
 
+            if (toolName === 'chartBuilder') {
+                const chartResult = pairedResult?.part ? getChartResultFromPart(pairedResult.part) : null;
+                if (chartResult) {
+                    chartResults.push(chartResult);
+                }
+
+                pushDeferredToolContent(
+                    <>
+                        {renderToolStateCard({
+                            part: pairedResult?.part ?? part,
+                            key: `${message.id}-dynamic-tool-call-${i}`,
+                            fallbackInput: chartResult && pairedResult?.part ? inferToolArgsFromResult(pairedResult.part) : undefined,
+                            forceState: chartResult ? 'output-available' : 'input-available',
+                        })}
+                        {chartResult ? <ChartResultCard key={`${message.id}-dynamic-chart-${i}`} result={chartResult} source="tool" /> : null}
+                    </>,
+                );
+                return;
+            }
+
             processItems.push({
                 key: `${message.id}-dynamic-tool-call-${i}`,
                 summary: getToolStepSummary(part),
@@ -763,23 +820,25 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
         const chartResult = getChartResultFromPart(part);
         if (chartResult) {
+            const toolId = getToolResultId(part);
+            const pairedToolCall = toolId ? toolCallPartById.get(toolId) : null;
+            if (pairedToolCall && (pairedToolCall.messageIndex < messageIndex || (pairedToolCall.messageIndex === messageIndex && pairedToolCall.partIndex < i))) {
+                return;
+            }
             if (shouldHideIntermediateSuccess(part, i)) {
                 return;
             }
 
             chartResults.push(chartResult);
-
-            processItems.push({
-                key: `${message.id}-tool-chart-${i}`,
-                summary: getToolStepSummary(part),
-                status: getProcessVisualStatus(part),
-                defaultOpen: false,
-                content: (
-                    <div key={`${message.id}-tool-chart-${i}`} className="pt-1">
-                        <ChartResultCard key={`${message.id}-chart-${i}`} result={chartResult} source="tool" />
-                    </div>
-                ),
-            });
+            pushDeferredToolContent(
+                renderToolStateCard({
+                    part,
+                    key: `${message.id}-tool-chart-${i}`,
+                    fallbackInput: inferToolArgsFromResult(part),
+                    forceState: 'output-available',
+                }),
+            );
+            pushDeferredToolContent(<ChartResultCard key={`${message.id}-chart-${i}`} result={chartResult} source="tool" />);
             return;
         }
 
@@ -878,10 +937,16 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
         if (part.type === 'text') {
             if (assistantMessage && hasMultipleTextParts && i !== finalTextPartIndex) {
-                foldedNarrativeParts.push(renderTextPart(part.text, `${message.id}-folded-text-${i}`));
+                const textNode = renderTextPart(part.text, `${message.id}-folded-text-${i}`);
+                if (textNode) {
+                    foldedNarrativeParts.push(textNode);
+                }
                 return;
             }
-            pushNarrativeContent(renderTextPart(part.text, `${message.id}-text-${i}`));
+            const textNode = renderTextPart(part.text, `${message.id}-text-${i}`);
+            if (textNode) {
+                pushNarrativeContent(textNode);
+            }
             return;
         }
 

@@ -3,40 +3,14 @@
 import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/registry/new-york-v4/ui/card';
 import { BarChart3, ChevronsUpDown } from 'lucide-react';
-import {
-    CartesianGrid,
-    XAxis,
-    YAxis,
-    Bar,
-    Line,
-    Area,
-    Pie,
-    Cell,
-    BarChart,
-    LineChart,
-    AreaChart,
-    PieChart,
-    ResponsiveContainer,
-} from 'recharts';
-import {
-    ChartContainer,
-    ChartTooltip,
-    ChartTooltipContent,
-    type ChartConfig as ShadChartConfig,
-} from '@/registry/new-york-v4/ui/chart';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { useTranslations } from 'next-intl';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/registry/new-york-v4/ui/chart';
 
-const DEFAULT_CHART_COLORS = [
-    'var(--chart-1)',
-    'var(--chart-2)',
-    'var(--chart-3)',
-    'var(--chart-4)',
-    'var(--chart-5)',
-    'var(--chart-6)',
-];
+const DEFAULT_CHART_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)', 'var(--chart-6)'];
 
 export type ChartResultCardProps = {
     result: ChartResultPart;
@@ -65,11 +39,7 @@ type ChartSeries = {
     color?: string;
 };
 
-function buildChartFollowUpPrompt(
-    result: ChartResultPart,
-    t: (key: string, values?: Record<string, unknown>) => string,
-    source?: 'tool' | 'auto',
-) {
+function buildChartFollowUpPrompt(result: ChartResultPart, t: (key: string, values?: Record<string, unknown>) => string, source?: 'tool' | 'auto') {
     const { chartType, title, description, xKey, yKeys, categoryKey, valueKey } = result;
 
     const lines: string[] = [];
@@ -79,11 +49,7 @@ function buildChartFollowUpPrompt(
 
     if (xKey) lines.push(t('ChartResult.FollowUp.XKey', { xKey }));
     if (yKeys && yKeys.length) {
-        const yDesc = yKeys
-            .map((series) =>
-                t('ChartResult.FollowUp.SeriesItem', { label: series.label ?? series.key, key: series.key }),
-            )
-            .join(t('ChartResult.FollowUp.Separator'));
+        const yDesc = yKeys.map(series => t('ChartResult.FollowUp.SeriesItem', { label: series.label ?? series.key, key: series.key })).join(t('ChartResult.FollowUp.Separator'));
         lines.push(t('ChartResult.FollowUp.YKeys', { yKeys: yDesc }));
     }
     if (categoryKey) lines.push(t('ChartResult.FollowUp.CategoryKey', { categoryKey }));
@@ -103,8 +69,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
     const t = useTranslations('DoryUI');
     const { chartType, data, title, description, xKey, yKeys, categoryKey, valueKey, options } = result;
 
-    // ✅ 默认展开策略：Auto 生成的图，默认展开更符合“我帮你画了”的预期
-    const [open, setOpen] = useState(source === 'auto');
+    const [open, setOpen] = useState(true);
 
     const hasData = Array.isArray(data) && data.length > 0;
 
@@ -113,13 +78,11 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
 
         if (yKeys && yKeys.length > 0) return yKeys;
 
-        // 如果是 pie：更合理的是用 valueKey（或第二列）
         if (valueKey) return [{ key: valueKey, label: valueKey }];
 
-        // fallback：尝试找出除 xKey 外的第一个数值列
         const firstRow = data[0] as Record<string, unknown>;
         const fallbackX = xKey ?? categoryKey ?? getFirstKey(firstRow);
-        const keys = Object.keys(firstRow).filter((k) => k !== fallbackX);
+        const keys = Object.keys(firstRow).filter(k => k !== fallbackX);
         if (keys.length) return [{ key: keys[0], label: keys[0] }];
 
         return [];
@@ -131,31 +94,18 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
         return xKey ?? categoryKey ?? getFirstKey(firstRow);
     }, [hasData, data, xKey, categoryKey]);
 
-    const effectiveValueKey = useMemo(() => {
-        // pie 主要看 valueKey；其它看 series[0]
-        return valueKey ?? effectiveSeries[0]?.key ?? effectiveXKey;
-    }, [valueKey, effectiveSeries, effectiveXKey]);
+    const effectiveValueKey = useMemo(() => valueKey ?? effectiveSeries[0]?.key ?? effectiveXKey, [effectiveSeries, effectiveXKey, valueKey]);
 
-    const chartConfig = useMemo<ShadChartConfig>(() => {
-        const cfg: ShadChartConfig = {};
+    const chartConfig = useMemo<ChartConfig>(() => {
+        const config: ChartConfig = {};
         effectiveSeries.forEach((series, index) => {
-            cfg[series.key] = {
+            config[series.key] = {
                 label: series.label ?? series.key,
                 color: series.color ?? DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length],
             };
         });
-        return cfg;
+        return config;
     }, [effectiveSeries]);
-
-    const metaLine = useMemo(() => {
-        if (!hasData) return '';
-        const pointCount = data.length;
-        const seriesCount = chartType === 'pie' ? 1 : Math.max(1, effectiveSeries.length);
-        const xLabel = effectiveXKey ? `X: ${String(effectiveXKey)}` : '';
-        const sLabel = seriesCount ? t('ChartResult.Meta.Series', { count: seriesCount }) : '';
-        const pLabel = t('ChartResult.Meta.Points', { count: pointCount });
-        return [xLabel, sLabel, pLabel].filter(Boolean).join(' · ');
-    }, [hasData, data.length, chartType, effectiveSeries.length, effectiveXKey, t]);
 
     const handleFollowUpClick = useCallback(() => {
         if (!onFollowUp) return;
@@ -178,19 +128,15 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0 pb-4">
-                    <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">
-                        {t('ChartResult.NoData')}
-                    </div>
+                    <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">{t('ChartResult.NoData')}</div>
                 </CardContent>
             </Card>
         );
     }
 
     const renderChart = () => {
-        // ✅ 统一：容器高度固定，避免 layout 抖动
-        const containerClass = 'min-h-[240px] w-full';
+        const containerClass = 'aspect-auto h-[280px] w-full overflow-hidden';
 
-        // ✅ 对缺轴给出更明确错误
         if (chartType !== 'pie' && (!effectiveXKey || effectiveSeries.length === 0)) {
             return <div className="text-sm text-muted-foreground">{t('ChartResult.Errors.MissingAxis')}</div>;
         }
@@ -205,7 +151,6 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
 
             return (
                 <ChartContainer
-                    // pie 的 config 主要用于 tooltip label/颜色体系；这里保持最小配置
                     config={{
                         [String(pieValueKey)]: {
                             label: effectiveSeries[0]?.label ?? String(pieValueKey),
@@ -214,19 +159,20 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                     }}
                     className={containerClass}
                 >
-                    <ResponsiveContainer width="100%" height={240}>
-                        <PieChart>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart accessibilityLayer margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
                             <ChartTooltip content={<ChartTooltipContent nameKey={String(pieCategoryKey)} />} />
                             <Pie
-                                data={data as Array<Record<string, any>>}
+                                data={data}
                                 dataKey={String(pieValueKey)}
                                 nameKey={String(pieCategoryKey)}
-                                innerRadius={42}
-                                outerRadius={92}
-                                paddingAngle={3}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={44}
+                                outerRadius="75%"
                                 stroke="transparent"
                             >
-                                {(data as Array<Record<string, any>>).map((_, index) => (
+                                {data.map((_, index) => (
                                     <Cell key={index} fill={DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length]} />
                                 ))}
                             </Pie>
@@ -239,20 +185,21 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
         if (chartType === 'bar') {
             return (
                 <ChartContainer config={chartConfig} className={containerClass}>
-                    <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={data} barSize={22} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
                             <CartesianGrid vertical={false} />
-                            <XAxis dataKey={String(effectiveXKey)} tickLine={false} axisLine={false} tickMargin={8} />
-                            <YAxis tickLine={false} axisLine={false} width={36} />
+                            <XAxis
+                                dataKey={String(effectiveXKey)}
+                                tickLine={false}
+                                axisLine={false}
+                                tickMargin={10}
+                                minTickGap={24}
+                                tickFormatter={value => String(value).slice(0, 18)}
+                            />
+                            <YAxis tickLine={false} axisLine={false} width={48} />
                             <ChartTooltip content={<ChartTooltipContent />} />
-                            {effectiveSeries.map((series) => (
-                                <Bar
-                                    key={series.key}
-                                    dataKey={series.key}
-                                    fill={`var(--color-${series.key})`}
-                                    radius={4}
-                                    stackId={options?.stacked ? 'stack' : undefined}
-                                />
+                            {effectiveSeries.map(series => (
+                                <Bar key={series.key} dataKey={series.key} fill={`var(--color-${series.key})`} radius={4} stackId={options?.stacked ? 'stack' : undefined} />
                             ))}
                         </BarChart>
                     </ResponsiveContainer>
@@ -263,13 +210,20 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
         if (chartType === 'line') {
             return (
                 <ChartContainer config={chartConfig} className={containerClass}>
-                    <ResponsiveContainer width="100%" height={260}>
-                        <LineChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="4 4" />
-                            <XAxis dataKey={String(effectiveXKey)} tickLine={false} axisLine={false} tickMargin={8} />
-                            <YAxis tickLine={false} axisLine={false} width={36} />
+                    <ResponsiveContainer width="100%" height="100%">
+                        <LineChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
+                            <CartesianGrid vertical={false} />
+                            <XAxis
+                                dataKey={String(effectiveXKey)}
+                                tickLine={false}
+                                axisLine={false}
+                                tickMargin={10}
+                                minTickGap={24}
+                                tickFormatter={value => String(value).slice(0, 18)}
+                            />
+                            <YAxis tickLine={false} axisLine={false} width={48} />
                             <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-                            {effectiveSeries.map((series) => (
+                            {effectiveSeries.map(series => (
                                 <Line
                                     key={series.key}
                                     type="monotone"
@@ -286,16 +240,22 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
             );
         }
 
-        // area
         return (
             <ChartContainer config={chartConfig} className={containerClass}>
-                <ResponsiveContainer width="100%" height={260}>
-                    <AreaChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="4 4" />
-                        <XAxis dataKey={String(effectiveXKey)} tickLine={false} axisLine={false} tickMargin={8} />
-                        <YAxis tickLine={false} axisLine={false} width={36} />
+                <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
+                        <CartesianGrid vertical={false} />
+                        <XAxis
+                            dataKey={String(effectiveXKey)}
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={10}
+                            minTickGap={24}
+                            tickFormatter={value => String(value).slice(0, 18)}
+                        />
+                        <YAxis tickLine={false} axisLine={false} width={48} />
                         <ChartTooltip content={<ChartTooltipContent />} />
-                        {effectiveSeries.map((series) => (
+                        {effectiveSeries.map(series => (
                             <Area
                                 key={series.key}
                                 type="monotone"
@@ -328,40 +288,18 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                                 )}
                             </CardTitle>
 
-                            {/* ✅ meta 行：把“这张图是什么”说清楚，但不打扰 */}
-                            <div className="mt-1 text-xs text-muted-foreground">
-                                {metaLine}
-                            </div>
-
-                            {/* description 更像“附注”，只在展开时显示 */}
-                            {description && open && (
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                    {description}
-                                </div>
-                            )}
+                            {description && open && <div className="mt-1 text-xs text-muted-foreground">{description}</div>}
                         </div>
 
                         <div className="flex items-center gap-1.5">
                             {onFollowUp && (
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2 text-xs"
-                                    onClick={handleFollowUpClick}
-                                >
+                                <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={handleFollowUpClick}>
                                     {t('ChartResult.FollowUp.Button')}
                                 </Button>
                             )}
 
                             <CollapsibleTrigger asChild>
-                                <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7"
-                                    aria-label={open ? t('ChartResult.Collapse') : t('ChartResult.Expand')}
-                                >
+                                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={open ? t('ChartResult.Collapse') : t('ChartResult.Expand')}>
                                     <ChevronsUpDown className="h-4 w-4" />
                                 </Button>
                             </CollapsibleTrigger>
@@ -370,9 +308,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                 </CardHeader>
 
                 <CollapsibleContent>
-                    <CardContent className="pt-0 pb-4">
-                        {renderChart()}
-                    </CardContent>
+                    <CardContent className="pt-0 pb-4">{renderChart()}</CardContent>
                 </CollapsibleContent>
             </Card>
         </Collapsible>
