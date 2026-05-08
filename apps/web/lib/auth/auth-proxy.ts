@@ -148,7 +148,24 @@ export async function proxyAuthRequest(req: Request): Promise<Response> {
         headers,
         body,
         redirect: 'manual',
+    }).catch(error => {
+        console.warn('[auth-proxy] upstream unavailable', {
+            method,
+            targetUrl: targetUrl.toString(),
+            error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
     });
+
+    if (!upstream) {
+        return Response.json(
+            {
+                error: 'CLOUD_AUTH_UNAVAILABLE',
+                message: 'Cloud-backed sign-in and recovery actions are unavailable while the desktop app is offline.',
+            },
+            { status: 503 },
+        );
+    }
 
     console.log('[auth-proxy] upstream response', {
         status: upstream.status,

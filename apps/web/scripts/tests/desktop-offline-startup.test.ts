@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getOrganizationPermissionMap } from '../../lib/auth/organization-ac';
 import { finalizeDesktopOrganizationAccessResult } from '../../lib/server/authz/authz.desktop.shared';
+import { resolveAppBootstrapCloudCapabilities } from '../../lib/server/app-bootstrap.shared';
 import type { OrganizationAccess } from '../../lib/server/authz/types';
 import { getDesktopCloudStateFromFlags } from '../../lib/runtime/cloud-capabilities';
 
@@ -123,6 +124,32 @@ test('cloud capability state disables cloud features only for offline desktop', 
         {
             isOffline: false,
             canUseCloudFeatures: true,
+        },
+    );
+});
+
+test('app bootstrap cloud capabilities preserve desktop cloud-unavailable state', () => {
+    assert.deepEqual(
+        resolveAppBootstrapCloudCapabilities({
+            runtime: 'desktop',
+            hasCloudBaseUrl: true,
+            isOffline: true,
+        }),
+        {
+            isOffline: true,
+            canUseCloudFeatures: false,
+        },
+    );
+
+    assert.deepEqual(
+        resolveAppBootstrapCloudCapabilities({
+            runtime: 'desktop',
+            hasCloudBaseUrl: false,
+            isOffline: false,
+        }),
+        {
+            isOffline: false,
+            canUseCloudFeatures: false,
         },
     );
 });
