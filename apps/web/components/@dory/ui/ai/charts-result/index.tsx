@@ -2,15 +2,13 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/registry/new-york-v4/ui/card';
-import { BarChart3, ChevronsUpDown } from 'lucide-react';
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { useTranslations } from 'next-intl';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/registry/new-york-v4/ui/chart';
 
-const DEFAULT_CHART_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)', 'var(--chart-6)'];
+const DEFAULT_CHART_COLORS = ['var(--primary)', 'var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
 export type ChartResultCardProps = {
     result: ChartResultPart;
@@ -69,8 +67,6 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
     const t = useTranslations('DoryUI');
     const { chartType, data, title, description, xKey, yKeys, categoryKey, valueKey, options } = result;
 
-    const [open, setOpen] = useState(true);
-
     const hasData = Array.isArray(data) && data.length > 0;
 
     const effectiveSeries = useMemo<ChartSeries[]>(() => {
@@ -115,10 +111,9 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
 
     if (!hasData) {
         return (
-            <Card className="mt-3 border-border/70 bg-muted/20">
-                <CardHeader className="py-3">
+            <Card className="mt-2 border-border/60 bg-background/40 shadow-none">
+                <CardHeader className="px-3 py-2">
                     <CardTitle className="text-sm font-medium flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4 text-muted-foreground" />
                         {title ?? t('ChartResult.Title')}
                         {source === 'auto' && (
                             <Badge variant="outline" className="ml-1 text-[11px]">
@@ -127,7 +122,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                         )}
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-0 pb-4">
+                <CardContent className="px-3 pb-3 pt-0">
                     <div className="rounded-md border border-border/60 bg-background/50 px-3 py-2 text-sm text-muted-foreground">{t('ChartResult.NoData')}</div>
                 </CardContent>
             </Card>
@@ -197,9 +192,16 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                                 tickFormatter={value => String(value).slice(0, 18)}
                             />
                             <YAxis tickLine={false} axisLine={false} width={48} />
-                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
                             {effectiveSeries.map(series => (
-                                <Bar key={series.key} dataKey={series.key} fill={`var(--color-${series.key})`} radius={4} stackId={options?.stacked ? 'stack' : undefined} />
+                                <Bar
+                                    key={series.key}
+                                    dataKey={series.key}
+                                    fill={`var(--color-${series.key})`}
+                                    radius={4}
+                                    stackId={options?.stacked ? 'stack' : undefined}
+                                    activeBar={false}
+                                />
                             ))}
                         </BarChart>
                     </ResponsiveContainer>
@@ -273,44 +275,18 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
     };
 
     return (
-        <Collapsible open={open} onOpenChange={setOpen} className="mt-3">
-            <Card className="border-border/70 bg-muted/20 py-0">
-                <CardHeader className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                            <CardTitle className="text-sm font-medium flex items-center gap-2">
-                                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                                <span className="truncate">{title ?? t('ChartResult.Title')}</span>
-                                {source === 'auto' && (
-                                    <Badge variant="outline" className="text-[11px]">
-                                        {t('ChartResult.AutoGenerated')}
-                                    </Badge>
-                                )}
-                            </CardTitle>
-
-                            {description && open && <div className="mt-1 text-xs text-muted-foreground">{description}</div>}
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                            {onFollowUp && (
-                                <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={handleFollowUpClick}>
-                                    {t('ChartResult.FollowUp.Button')}
-                                </Button>
-                            )}
-
-                            <CollapsibleTrigger asChild>
-                                <Button type="button" size="icon" variant="ghost" className="h-7 w-7" aria-label={open ? t('ChartResult.Collapse') : t('ChartResult.Expand')}>
-                                    <ChevronsUpDown className="h-4 w-4" />
-                                </Button>
-                            </CollapsibleTrigger>
-                        </div>
+        <div className="mt-2">
+            <div className="rounded-lg border border-border/50 bg-background/35 px-2 py-2 shadow-none">
+                {description ? <div className="px-1 pb-1 text-xs text-muted-foreground">{description}</div> : null}
+                {onFollowUp ? (
+                    <div className="flex justify-end px-1 pb-1">
+                        <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={handleFollowUpClick}>
+                            {t('ChartResult.FollowUp.Button')}
+                        </Button>
                     </div>
-                </CardHeader>
-
-                <CollapsibleContent>
-                    <CardContent className="pt-0 pb-4">{renderChart()}</CardContent>
-                </CollapsibleContent>
-            </Card>
-        </Collapsible>
+                ) : null}
+                {renderChart()}
+            </div>
+        </div>
     );
 }

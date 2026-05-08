@@ -308,6 +308,7 @@ export function ChartCanvas(props: {
                                         fill={`var(--color-${series.key})`}
                                         radius={4}
                                         stackId={effectiveGroupKey === NONE_VALUE ? undefined : 'group'}
+                                        activeBar={false}
                                         className="cursor-pointer"
                                         onClick={(data, _index, event) =>
                                             handleDatumClick(
@@ -348,6 +349,7 @@ export function ChartCanvas(props: {
                                     dataKey="__histValue"
                                     fill={primaryChartColor}
                                     radius={4}
+                                    activeBar={false}
                                     className="cursor-pointer"
                                     onClick={(data, _index, event) =>
                                         handleDatumClick(
