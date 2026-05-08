@@ -12,9 +12,10 @@ const DESKTOP_SESSION_COOKIE_NAME = 'dory.desktop_session_token';
 const DESKTOP_SESSION_COOKIE_TTL_SECONDS = 60 * 60 * 24 * 30;
 const DESKTOP_SESSION_COOKIE_VERSION = 1;
 
-type CloudSessionLike = {
+export type CloudSessionLike = {
     session?: {
         activeOrganizationId?: string | null;
+        [key: string]: unknown;
     } | null;
     user?: {
         id?: string | null;
@@ -23,10 +24,11 @@ type CloudSessionLike = {
         image?: string | null;
         emailVerified?: boolean;
         isAnonymous?: boolean;
+        [key: string]: unknown;
     } | null;
 };
 
-type OrganizationAccessPayload = {
+export type OrganizationAccessPayload = {
     organization?: {
         id?: string | null;
         slug?: string | null;
@@ -389,6 +391,25 @@ function buildDesktopRecoveryCookie(recoveryToken: string, requestUrl?: string |
         maxAge: DESKTOP_SESSION_COOKIE_TTL_SECONDS,
         secure: getSecureCookieFlag(requestUrl),
     });
+}
+
+export async function buildDesktopSessionRecoveryCookie(input: { userId: string; activeOrganizationId?: string | null; requestUrl?: string | null }) {
+    const recoveryToken = await issueDesktopSessionRecoveryToken({
+        userId: input.userId,
+        activeOrganizationId: input.activeOrganizationId ?? null,
+    });
+    return buildDesktopRecoveryCookie(recoveryToken, input.requestUrl);
+}
+
+export async function persistDesktopCloudSessionSnapshot(input: {
+    cloudSession: CloudSessionLike;
+    access: OrganizationAccessPayload;
+}) {
+    if (!input.cloudSession.user?.id) {
+        return;
+    }
+
+    await ensureLocalDesktopUserState(input);
 }
 
 async function buildLocalSessionCookie(sessionToken: string, requestUrl?: string | null) {
