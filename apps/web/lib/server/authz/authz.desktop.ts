@@ -1,5 +1,6 @@
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
+import { persistDesktopCloudSessionSnapshot } from '@/lib/auth/desktop-session-recovery';
 import { fetchDesktopCloud } from '@/lib/server/desktop-cloud';
 import { resolveLocalOrganizationAccess } from './authz.local';
 import {
@@ -124,6 +125,13 @@ export async function resolveDesktopOrganizationAccessResult(organizationId: str
         }
 
         const cloudAttempt = await fetchCloudOrganizationAccess(organizationId);
+        if (cloudAttempt.status === 'granted' && session?.user?.id) {
+            await persistDesktopCloudSessionSnapshot({
+                cloudSession: session,
+                access: cloudAttempt.access,
+            });
+        }
+
         return finalizeDesktopOrganizationAccessResult({
             organizationId,
             userId,
