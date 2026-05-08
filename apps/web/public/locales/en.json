@@ -116,6 +116,9 @@
                 "Cancel": "Back",
                 "StartFailed": "Failed to start guest workspace"
             },
+            "Offline": {
+                "Action": "Continue offline"
+            },
             "Demo": {
                 "Action": "Sign in as demo",
                 "StartFailed": "Failed to sign in as demo"
