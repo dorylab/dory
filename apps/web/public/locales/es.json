@@ -116,6 +116,9 @@
                 "Cancel": "Volver",
                 "StartFailed": "No se pudo iniciar el espacio de trabajo de invitado"
             },
+            "Offline": {
+                "Action": "Continuar sin conexión"
+            },
             "Demo": {
                 "Action": "Entrar como demo",
                 "StartFailed": "No se pudo iniciar sesión como demo"
