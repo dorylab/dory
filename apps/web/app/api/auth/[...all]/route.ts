@@ -128,7 +128,9 @@ async function withDesktopSessionMirror(req: Request, res: Response): Promise<Re
 
     const activeOrganizationId = cloudSessionPayload.session?.activeOrganizationId ?? null;
     const access = activeOrganizationId ? await getCloudOrganizationAccess(activeOrganizationId) : null;
-    await persistDesktopCloudSessionSnapshot({ cloudSession: cloudSessionPayload, access });
+    await persistDesktopCloudSessionSnapshot({ cloudSession: cloudSessionPayload, access }).catch(error => {
+        console.warn('[desktop-session] failed to persist cloud session snapshot:', error);
+    });
 
     const headers = new Headers(res.headers);
     headers.append(
