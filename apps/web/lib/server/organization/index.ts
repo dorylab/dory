@@ -147,6 +147,14 @@ export async function getOrganizationBySlugOrIdState(slugOrId: string, userId: s
 
 export async function getFirstOrganizationForUserState(userId: string): Promise<OrganizationResolutionState> {
     if (shouldProxyAuthRequest()) {
+        const localOrganization = await getLocalOrganizationSummaryByUser(userId).catch(() => null);
+        if (localOrganization) {
+            return {
+                organization: localOrganization,
+                isOffline: false,
+            };
+        }
+
         const cloudResponse = await fetchDesktopCloud('/api/auth/organization/list');
         if (cloudResponse.state === 'available') {
             const organizations = (await cloudResponse.response.json().catch(() => null)) as Array<{ id: string; slug: string; name: string }> | null;
@@ -169,7 +177,7 @@ export async function getFirstOrganizationForUserState(userId: string): Promise<
         }
 
         return {
-            organization: await getLocalOrganizationSummaryByUser(userId).catch(() => null),
+            organization: null,
             isOffline: cloudResponse.state === 'unreachable',
         };
     }
