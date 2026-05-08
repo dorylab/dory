@@ -44,6 +44,10 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
     const selectedSessionRef = useRef<string | null>(null);
     const lastCopilotTabIdRef = useRef<string | null>(null);
     const copilotSessionRequestSeqRef = useRef(0);
+    const sessionsRequestSeqRef = useRef(0);
+    const sessionDetailRequestSeqRef = useRef(0);
+    const creatingSessionRef = useRef(false);
+    const skipNextDetailFetchSessionRef = useRef<string | null>(null);
 
     const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
     const [loadingSessions, setLoadingSessions] = useState(mode !== 'copilot');
@@ -69,9 +73,12 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
                 return;
             }
 
+            const requestSeq = ++sessionsRequestSeqRef.current;
             setLoadingSessions(true);
             try {
                 const list = await apiFetchSessions({ mode: 'global', connectionId, errorMessage: t('Errors.FetchSessions') });
+                if (requestSeq !== sessionsRequestSeqRef.current) return;
+
                 setSessions(list);
 
                 const currentPreferred = preferredId ?? selectedSessionRef.current;
@@ -84,10 +91,14 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
                 const hasPreferred = currentPreferred && list.some(item => item.id === currentPreferred);
                 setSelectedSessionId(hasPreferred ? (currentPreferred as string) : list[0].id);
             } catch (e: any) {
+                if (requestSeq !== sessionsRequestSeqRef.current) return;
+
                 console.error('[chat] fetch sessions failed', e);
                 toast.error(e?.message || t('Errors.FetchSessions'));
             } finally {
-                setLoadingSessions(false);
+                if (requestSeq === sessionsRequestSeqRef.current) {
+                    setLoadingSessions(false);
+                }
             }
         },
         [mode, connectionId, t],
@@ -95,9 +106,11 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
 
     const fetchSessionDetail = useCallback(
         async (sessionId: string) => {
+            const requestSeq = ++sessionDetailRequestSeqRef.current;
             setLoadingMessages(true);
             try {
                 const { detail, messages } = await apiFetchSessionDetail(sessionId, { errorMessage: t('Errors.FetchSessionDetail') });
+                if (requestSeq !== sessionDetailRequestSeqRef.current || selectedSessionRef.current !== sessionId) return;
 
                 if (detail?.session) {
                     setSessions(prev => {
@@ -108,11 +121,15 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
                 }
                 setInitialMessages(messages);
             } catch (e: any) {
+                if (requestSeq !== sessionDetailRequestSeqRef.current) return;
+
                 console.error('[chat] fetch session detail failed', e);
                 toast.error(e?.message || t('Errors.FetchSessionDetail'));
                 setInitialMessages([]);
             } finally {
-                setLoadingMessages(false);
+                if (requestSeq === sessionDetailRequestSeqRef.current) {
+                    setLoadingMessages(false);
+                }
             }
         },
         [t],
@@ -174,6 +191,8 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
     useEffect(() => {
         if (!enabled) {
             copilotSessionRequestSeqRef.current += 1;
+            sessionsRequestSeqRef.current += 1;
+            sessionDetailRequestSeqRef.current += 1;
             setLoadingSessions(false);
             setLoadingMessages(false);
             setSessions([]);
@@ -197,16 +216,22 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
         if (!enabled) {
             return;
         }
+        if (skipNextDetailFetchSessionRef.current === selectedSessionId) {
+            skipNextDetailFetchSessionRef.current = null;
+            setInitialMessages([]);
+            return;
+        }
         fetchSessionDetail(selectedSessionId).catch(() => undefined);
     }, [enabled, selectedSessionId, fetchSessionDetail]);
 
     const handleCreateSession = useCallback(async () => {
         if (mode === 'copilot') {
             toast.message(t('Sessions.CopilotAutoCreate'));
-            return;
+            return null;
         }
 
-        if (creatingSession) return;
+        if (creatingSessionRef.current || creatingSession) return null;
+        creatingSessionRef.current = true;
         setCreatingSession(true);
         try {
             const created = await apiCreateSession({
@@ -218,6 +243,7 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
             });
             if (created?.id) {
                 posthog.capture('chat_session_created', { session_id: created.id });
+                skipNextDetailFetchSessionRef.current = created.id;
                 setSelectedSessionId(created.id);
                 setInitialMessages([]);
                 setSessions(prev => {
@@ -226,10 +252,13 @@ export function useChatSessions(params: { mode: ChatMode; copilotEnvelope?: Copi
                 });
             }
             await fetchSessions(created?.id ?? null);
+            return created ?? null;
         } catch (e: any) {
             console.error('[chat] create session failed', e);
             toast.error(e?.message || t('Errors.CreateSession'));
+            return null;
         } finally {
+            creatingSessionRef.current = false;
             setCreatingSession(false);
         }
     }, [mode, creatingSession, connectionId, fetchSessions, resolvedActiveDatabase, resolvedActiveSchema, t]);

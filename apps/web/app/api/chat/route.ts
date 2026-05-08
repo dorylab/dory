@@ -378,13 +378,13 @@ async function handleChatRequest(req: NextRequest) {
         chartBuilderDescription: tools.chartBuilder?.description,
     });
 
-    const maxSteps = 4;
+    const maxSteps = 6;
     const baseCloudPayload: Omit<CloudStreamRequest, 'messages'> = {
         system: systemPrompt,
         tools: cloudTools,
         toolChoice: 'auto',
         temperature: preset.temperature,
-        maxSteps: 1,
+        maxSteps: maxSteps,
         // Desktop runtime proxies to cloud. In that path, do not forward
         // client-selected local model names (e.g. gpt-4o); let cloud env resolve.
         model: useCloud ? null : providerModelName,

@@ -16,11 +16,19 @@ import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
+import { SmartCodeBlock } from "@/components/@dory/ui/code-block/code-block";
 import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
-import { createContext, memo, useContext, useEffect, useState } from "react";
-import { Streamdown } from "streamdown";
+import {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { Streamdown, type CustomRendererProps } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -187,11 +195,18 @@ export const MessageBranchContent = ({
   ...props
 }: MessageBranchContentProps) => {
   const { currentBranch, setBranches, branches } = useMessageBranch();
-  const childrenArray = Array.isArray(children) ? children : [children];
+  const childrenArray = useMemo(
+    () => (Array.isArray(children) ? children : [children]),
+    [children]
+  );
 
   // Use useEffect to update branches when they change
   useEffect(() => {
-    if (branches.length !== childrenArray.length) {
+    const branchesChanged =
+      branches.length !== childrenArray.length ||
+      branches.some((branch, index) => branch !== childrenArray[index]);
+
+    if (branchesChanged) {
       setBranches(childrenArray);
     }
   }, [childrenArray, branches, setBranches]);
@@ -304,6 +319,79 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
+const doryCodeRendererLanguages = [
+  "sql",
+  "pgsql",
+  "postgres",
+  "postgresql",
+  "mysql",
+  "sqlite",
+  "json",
+  "jsonc",
+  "javascript",
+  "js",
+  "typescript",
+  "ts",
+  "tsx",
+  "jsx",
+  "bash",
+  "sh",
+  "shell",
+  "python",
+  "py",
+  "yaml",
+  "yml",
+  "html",
+  "css",
+  "markdown",
+  "md",
+  "text",
+  "txt",
+];
+
+const DoryMarkdownCodeBlock = ({
+  code,
+  language,
+}: CustomRendererProps) => {
+  const normalizedLanguage = language.toLowerCase();
+  const displayCode = code.trimEnd();
+  const type =
+    normalizedLanguage.includes("sql") ||
+    normalizedLanguage === "pgsql" ||
+    normalizedLanguage === "postgres" ||
+    normalizedLanguage === "postgresql" ||
+    normalizedLanguage === "mysql" ||
+    normalizedLanguage === "sqlite"
+      ? "sql"
+      : normalizedLanguage === "json" || normalizedLanguage === "jsonc"
+        ? "json"
+        : "text";
+
+  return (
+    <SmartCodeBlock
+      className="mt-3"
+      label={language || undefined}
+      value={displayCode}
+      type={type}
+      showLineNumbers
+      maxHeightClassName="max-h-[min(32rem,70vh)]"
+    />
+  );
+};
+
+const messageResponsePlugins = {
+  code,
+  mermaid,
+  math,
+  cjk,
+  renderers: [
+    {
+      language: doryCodeRendererLanguages,
+      component: DoryMarkdownCodeBlock,
+    },
+  ],
+};
+
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
@@ -311,7 +399,7 @@ export const MessageResponse = memo(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
-      plugins={{ code, mermaid, math, cjk }}
+      plugins={messageResponsePlugins}
       {...props}
     />
   ),

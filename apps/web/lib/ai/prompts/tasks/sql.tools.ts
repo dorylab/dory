@@ -7,8 +7,6 @@ SQL generation rules:
 - Always match the SQL syntax to the current database dialect from the provided connection/schema context.
 - Never use SELECT * in generated SQL. Always select only the columns needed to answer the question.
 - For "latest N rows", "top N recent rows", or any ORDER BY ... LIMIT query on a large table, prefer the minimum necessary columns first.
-- Before relying on ORDER BY on a timestamp or sort field, check whether the field appears to be indexed from the provided schema/index context.
-- If you cannot confirm index support for the ORDER BY field, say that the query may be expensive and prefer a lighter exploratory query first.
 `;
 
 export const SQL_RUNNER_GUIDE = `
@@ -21,16 +19,13 @@ About the sqlRunner tool
      - MySQL / MariaDB: DESCRIBE, SHOW COLUMNS, and information_schema are acceptable.
      - SQLite: use PRAGMA table_info(...) when needed.
   3) Never use SELECT *. Only project the columns needed for the answer.
-  4) For ORDER BY ... LIMIT queries, especially "latest N" requests, check the provided index context before assuming the sort is cheap.
-  5) If the sort field is not confirmed indexed, or index support is unknown, tell the user the query may be heavy and prefer a narrower query first.
-  6) Call sqlRunner to execute the SQL.
-  7) Analyze results using previewRows, columns, rowCount, hasMore, and explain what the data indicates.
+  4) Call sqlRunner to execute the SQL.
+  5) Analyze results using previewRows, columns, rowCount, hasMore, and explain what the data indicates.
      - If hasMore=true, note that only a sample is shown and conclusions are based on the sample.
 
 - If sqlRunner returns ok=false:
   - If the error says the SQL is not read-only, do not retry with sqlRunner. Tell the user the SQL must be executed manually in the SQL editor or console.
   - If the error says SELECT * is not allowed, rewrite the query to request only the needed columns.
-  - If the error says ORDER BY may be expensive, first inspect schema/indexes or switch to a narrower query before retrying.
   - Read error.message and error.code to determine syntax issues, missing tables/columns, or other errors.
   - Try to fix the SQL using the error hints and retry up to 2 times.
   - If it still fails, be honest about the cause and suggest next steps (e.g., check table names, column names, time ranges).
@@ -41,7 +36,7 @@ About the sqlRunner tool
 export function buildDialectSqlPrompt(connectionType?: ConnectionType | null): string {
     const normalizedType = connectionType === 'neon' ? 'postgres' : connectionType;
 
-    const commonRules = [SQL_TOOL_INSTRUCTION, SQL_RUNNER_GUIDE];
+    const commonRules = [SQL_TOOL_INSTRUCTION, SQL_RUNNER_GUIDE, CHART_BUILDER_GUIDE];
 
     const dialectRules: string[] = [];
 
@@ -53,8 +48,7 @@ PostgreSQL-specific rules
 - Do not query non-existent MySQL-style metadata objects such as information_schema.indexes.
 - If you need metadata, prefer the provided schema context first.
 - For table/column metadata, use PostgreSQL-compatible sources only, such as information_schema.columns, pg_catalog, or pg_indexes.
-- For ORDER BY ... LIMIT requests, do not write ad-hoc index-inspection SQL before the main query. Write the target read-only query first and let sqlRunner assess execution risk.
-- If sqlRunner says a sort may be expensive, do not loop on metadata discovery queries unless the user explicitly asks for index analysis.
+- Do not write ad-hoc index-inspection SQL before the main query unless the user explicitly asks for index analysis.
 `.trim());
     } else if (normalizedType === 'mysql' || normalizedType === 'mariadb') {
         dialectRules.push(`

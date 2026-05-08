@@ -64,6 +64,8 @@ type PersistedToolCallSnapshot = {
     firstSeenOrder: number;
 };
 
+const submittedInitialPromptKeys = new Set<string>();
+
 const ChatBotComp = ({
     sessionId,
     initialMessages,
@@ -104,6 +106,7 @@ const ChatBotComp = ({
     const appliedInitialRef = useRef<string | null>(null);
     const sessionRef = useRef<string>(chatStateId);
     const activityRef = useRef(false);
+    const submitInFlightRef = useRef(false);
     const [persistedToolCalls, setPersistedToolCalls] = useState<PersistedToolCallSnapshot[]>([]);
 
     const hasAssistantContent = messages.some(m => {
@@ -204,6 +207,10 @@ const ChatBotComp = ({
             activityRef.current = false;
             onConversationActivity?.();
         }
+
+        if (status === 'ready' || status === 'error') {
+            submitInFlightRef.current = false;
+        }
     }, [status, onConversationActivity]);
 
     const handleStickToBottomContextRef = useCallback((context: StickToBottomContext | null) => {
@@ -263,11 +270,19 @@ const ChatBotComp = ({
 
     useEffect(() => {
         if (initialPrompt && !initialPromptSubmittedRef.current && status === 'ready') {
+            const promptKey = `${mode}:${chatStateId}:${initialPrompt}`;
+            if (submittedInitialPromptKeys.has(promptKey)) {
+                initialPromptSubmittedRef.current = true;
+                onInitialPromptConsumed?.();
+                return;
+            }
+
             initialPromptSubmittedRef.current = true;
-            handleSubmit({ text: initialPrompt, files: [] });
+            submittedInitialPromptKeys.add(promptKey);
             onInitialPromptConsumed?.();
+            handleSubmit({ text: initialPrompt, files: [] });
         }
-    }, [initialPrompt, onInitialPromptConsumed, status]);
+    }, [chatStateId, initialPrompt, mode, onInitialPromptConsumed, status]);
 
     const handleCopySql = useCallback(
         async (sql: string) => {
@@ -329,65 +344,75 @@ const ChatBotComp = ({
         const hasText = Boolean(message.text);
         const hasAttachments = Boolean(message.files?.length);
         if (!(hasText || hasAttachments)) return;
+        if (submitInFlightRef.current || status === 'submitted' || status === 'streaming') return;
+        submitInFlightRef.current = true;
+        let didSend = false;
 
-        const tabId = mode === 'copilot' ? (copilotEnvelope?.meta?.tabId ?? null) : null;
-        if (mode === 'copilot' && !tabId) return;
-        const connectionId = copilotEnvelope?.meta?.connectionId ?? params?.connectionId ?? currentConnection?.connection.id ?? null;
+        try {
+            const tabId = mode === 'copilot' ? (copilotEnvelope?.meta?.tabId ?? null) : null;
+            if (mode === 'copilot' && !tabId) return;
+            const connectionId = copilotEnvelope?.meta?.connectionId ?? params?.connectionId ?? currentConnection?.connection.id ?? null;
 
-        const databaseForContext =
-            mode === 'copilot'
-                ? copilotEnvelope?.surface === 'sql'
-                    ? (copilotEnvelope.context.baseline.database ?? resolvedActiveDatabase)
-                    : (copilotEnvelope?.context.database ?? resolvedActiveDatabase)
-                : resolvedActiveDatabase;
-        const schemaForContext =
-            mode === 'copilot'
-                ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.schema ?? null) : null)
-                : resolvedActiveSchema;
+            const databaseForContext =
+                mode === 'copilot'
+                    ? copilotEnvelope?.surface === 'sql'
+                        ? (copilotEnvelope.context.baseline.database ?? resolvedActiveDatabase)
+                        : (copilotEnvelope?.context.database ?? resolvedActiveDatabase)
+                    : resolvedActiveDatabase;
+            const schemaForContext =
+                mode === 'copilot'
+                    ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.schema ?? null) : null)
+                    : resolvedActiveSchema;
 
-        const tableForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.name ?? null) : null) : selectedTable || null;
+            const tableForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.name ?? null) : null) : selectedTable || null;
 
-        let chatIdForRequest = sessionId ?? null;
-        if (mode === 'copilot' && !chatIdForRequest) {
-            try {
-                const session = await apiGetOrCreateCopilotSession({
-                    envelope: copilotEnvelope ?? null,
-                    errorMessage: t('Errors.FetchCopilotSession'),
-                });
-                chatIdForRequest = session.id;
-                onSessionCreated?.(session.id);
-            } catch (err: any) {
-                console.error('[chat] create copilot session failed', err);
-                toast.error(err?.message || t('Errors.CreateCopilotSession'));
-                return;
+            let chatIdForRequest = sessionId ?? null;
+            if (mode === 'copilot' && !chatIdForRequest) {
+                try {
+                    const session = await apiGetOrCreateCopilotSession({
+                        envelope: copilotEnvelope ?? null,
+                        errorMessage: t('Errors.FetchCopilotSession'),
+                    });
+                    chatIdForRequest = session.id;
+                    onSessionCreated?.(session.id);
+                } catch (err: any) {
+                    console.error('[chat] create copilot session failed', err);
+                    toast.error(err?.message || t('Errors.CreateCopilotSession'));
+                    return;
+                }
+            }
+
+            posthog.capture('chat_message_sent', {
+                mode,
+                has_attachments: Boolean(message.files?.length),
+                has_table_context: Boolean(tableForContext),
+                connection_id: connectionId,
+            });
+
+            const requestOptions = {
+                body: {
+                    webSearch,
+                    database: databaseForContext,
+                    activeSchema: schemaForContext,
+                    table: tableForContext,
+                    connectionId,
+                    connectionType: currentConnection?.connection?.type ?? null,
+                    mode,
+                    tabId,
+                    copilotEnvelope,
+                    chatId: chatIdForRequest,
+                },
+            };
+
+            sendMessage({ text: message.text || t('Input.SentWithAttachments'), files: message.files }, requestOptions);
+            didSend = true;
+
+            setInput('');
+        } finally {
+            if (!didSend) {
+                submitInFlightRef.current = false;
             }
         }
-
-        posthog.capture('chat_message_sent', {
-            mode,
-            has_attachments: Boolean(message.files?.length),
-            has_table_context: Boolean(tableForContext),
-            connection_id: connectionId,
-        });
-
-        const requestOptions = {
-            body: {
-                webSearch,
-                database: databaseForContext,
-                activeSchema: schemaForContext,
-                table: tableForContext,
-                connectionId,
-                connectionType: currentConnection?.connection?.type ?? null,
-                mode,
-                tabId,
-                copilotEnvelope,
-                chatId: chatIdForRequest,
-            },
-        };
-
-        sendMessage({ text: message.text || t('Input.SentWithAttachments'), files: message.files }, requestOptions);
-
-        setInput('');
     };
 
     const handleSubmit = async (message: PromptInputMessage) => {
