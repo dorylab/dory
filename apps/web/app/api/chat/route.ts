@@ -633,13 +633,14 @@ async function handleChatRequest(req: NextRequest) {
                     }
 
                     executedToolCallIds.add(toolCall.toolCallId);
-                    toolResultMessages.push(buildToolCallModelMessage(toolCall));
+                    const executableToolCall = withChartBuilderFallbackData(toolCall, [...nextMessages, ...toolResultMessages]);
+                    toolResultMessages.push(buildToolCallModelMessage(executableToolCall));
 
-                    if (!tools[toolCall.toolName]?.execute) {
-                        const errorText = `Tool not available: ${toolCall.toolName}`;
+                    if (!tools[executableToolCall.toolName]?.execute) {
+                        const errorText = `Tool not available: ${executableToolCall.toolName}`;
                         writer.write({
                             type: 'tool-output-error',
-                            toolCallId: toolCall.toolCallId,
+                            toolCallId: executableToolCall.toolCallId,
                             errorText,
                         } as UIMessageChunk);
 
@@ -648,8 +649,8 @@ async function handleChatRequest(req: NextRequest) {
                             content: [
                                 {
                                     type: 'tool-result',
-                                    toolCallId: toolCall.toolCallId,
-                                    toolName: toolCall.toolName,
+                                    toolCallId: executableToolCall.toolCallId,
+                                    toolName: executableToolCall.toolName,
                                     output: {
                                         type: 'error-text',
                                         value: errorText,
@@ -664,7 +665,7 @@ async function handleChatRequest(req: NextRequest) {
                     let toolErrorText: string | null = null;
 
                     try {
-                        toolOutput = await tools[toolCall.toolName].execute(toolCall.input);
+                        toolOutput = await tools[executableToolCall.toolName].execute(executableToolCall.input);
                     } catch (err) {
                         toolErrorText = err instanceof Error ? err.message : String(err);
                     }
@@ -672,7 +673,7 @@ async function handleChatRequest(req: NextRequest) {
                     if (toolErrorText) {
                         writer.write({
                             type: 'tool-output-error',
-                            toolCallId: toolCall.toolCallId,
+                            toolCallId: executableToolCall.toolCallId,
                             errorText: toolErrorText,
                         } as UIMessageChunk);
 
@@ -681,8 +682,8 @@ async function handleChatRequest(req: NextRequest) {
                             content: [
                                 {
                                     type: 'tool-result',
-                                    toolCallId: toolCall.toolCallId,
-                                    toolName: toolCall.toolName,
+                                    toolCallId: executableToolCall.toolCallId,
+                                    toolName: executableToolCall.toolName,
                                     output: {
                                         type: 'error-text',
                                         value: toolErrorText,
@@ -693,10 +694,10 @@ async function handleChatRequest(req: NextRequest) {
                     } else {
                         writer.write({
                             type: 'tool-output-available',
-                            toolCallId: toolCall.toolCallId,
+                            toolCallId: executableToolCall.toolCallId,
                             output: toolOutput,
                         } as UIMessageChunk);
-                        toolResultMessages.push(buildToolResultModelMessage(toolCall, toolOutput));
+                        toolResultMessages.push(buildToolResultModelMessage(executableToolCall, toolOutput));
                         if (isManualExecutionRequiredSqlResult(toolOutput)) {
                             shouldStopAfterToolResults = true;
                         }
@@ -724,7 +725,7 @@ async function handleChatRequest(req: NextRequest) {
                                     parts: [
                                         {
                                             type: 'tool_result',
-                                            callId: toolCall.toolCallId,
+                                            callId: executableToolCall.toolCallId,
                                             ok,
                                             result: toolErrorText === null ? toolOutput : undefined,
                                             error: toolErrorText ?? undefined,
@@ -843,6 +844,64 @@ function buildToolResultModelMessage(toolCall: CollectedToolCall, output: unknow
             },
         ],
     } as ModelMessage;
+}
+
+function withChartBuilderFallbackData(toolCall: CollectedToolCall, messages: ModelMessage[]): CollectedToolCall {
+    if (toolCall.toolName !== 'chartBuilder') {
+        return toolCall;
+    }
+
+    const input = toolCall.input && typeof toolCall.input === 'object' ? (toolCall.input as Record<string, unknown>) : {};
+    const hasData = Array.isArray(input.data) && input.data.length > 0;
+    if (hasData) {
+        return toolCall;
+    }
+
+    const fallbackRows = findLatestSqlPreviewRows(messages);
+    if (!fallbackRows.length) {
+        return toolCall;
+    }
+
+    return {
+        ...toolCall,
+        input: {
+            ...input,
+            data: fallbackRows,
+        },
+    };
+}
+
+function findLatestSqlPreviewRows(messages: ModelMessage[]): Array<Record<string, unknown>> {
+    for (const message of [...messages].reverse()) {
+        const content = (message as any)?.content;
+        if (!Array.isArray(content)) continue;
+
+        for (const part of [...content].reverse()) {
+            const value = extractToolResultValue(part);
+            if (!value || typeof value !== 'object') continue;
+
+            const result = value as Record<string, unknown>;
+            if (result.type !== 'sql-result' || result.ok !== true || !Array.isArray(result.previewRows)) {
+                continue;
+            }
+
+            return result.previewRows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object' && !Array.isArray(row));
+        }
+    }
+
+    return [];
+}
+
+function extractToolResultValue(part: unknown): unknown {
+    if (!part || typeof part !== 'object') return null;
+
+    const record = part as Record<string, any>;
+    const output = record.output;
+    if (output && typeof output === 'object' && output.type === 'json') {
+        return output.value;
+    }
+
+    return record.result ?? record.value ?? null;
 }
 
 function extractReadOnlySqlFromAssistantMessage(message: UIMessage | null): string | null {

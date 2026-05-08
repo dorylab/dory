@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, Activity, useCallback, useEffect } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
-import { Loader2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 import { useChatSessions } from '../../../chatbot/core/session-controller';
 import type { CopilotEnvelopeV1 } from '../../../chatbot/copilot/types/copilot-envelope';
@@ -156,6 +156,11 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         editorSelection,
     ]);
 
+    const activeCopilotEnvelope = useMemo(() => {
+        if (!isSqlTab || !tabId) return null;
+        return copilotEnvelope?.meta?.tabId === tabId ? copilotEnvelope : null;
+    }, [copilotEnvelope, isSqlTab, tabId]);
+
     const actionInput: CopilotFixInput | null = useMemo(() => {
         const hasErrorMessage = typeof sessionErrorMessage === 'string' && !!sessionErrorMessage.trim();
         const selectedSql =
@@ -292,10 +297,8 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
 
     const chat = useChatSessions({
         mode: 'copilot',
-        copilotEnvelope,
+        copilotEnvelope: activeCopilotEnvelope,
     });
-
-    const loading = chat.loadingSessions || (chat.loadingMessages && !chat.selectedSessionId);
 
     useEffect(() => {
         setActionsState(null);
@@ -334,10 +337,6 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
                     <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
                         {t('Copilot.Panel.UnsupportedTab', { type: String(tabType) })}
                     </div>
-                ) : loading ? (
-                    <div className="flex h-full items-center justify-center text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                    </div>
                 ) : (
                     <Tabs
                         value={subTab}
@@ -373,9 +372,9 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
                                 <Activity mode={subTab === 'ask' ? 'visible' : 'hidden'}>
                                     <AskTab
                                         chat={chat}
-                                        copilotEnvelope={copilotEnvelope}
+                                        copilotEnvelope={activeCopilotEnvelope}
                                         actionsState={actionsState}
-                                        initialPrompt={promptRequest?.prompt ?? null}
+                                        initialPrompt={activeCopilotEnvelope ? (promptRequest?.prompt ?? null) : null}
                                         onInitialPromptConsumed={() => {
                                             if (!promptRequest?.id) return;
                                             setPromptRequest(prev => (prev?.id === promptRequest.id ? null : prev));
@@ -416,7 +415,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
                                 forceMount
                             >
                                 <Activity mode={subTab === 'context' ? 'visible' : 'hidden'}>
-                                    <ContextTab copilotEnvelope={copilotEnvelope} sessionMeta={sessionMeta} activeTabCoreFields={activeTabCoreFields} />
+                                    <ContextTab copilotEnvelope={activeCopilotEnvelope} sessionMeta={sessionMeta} activeTabCoreFields={activeTabCoreFields} />
                                 </Activity>
                             </TabsContent>
                         </div>
