@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { X } from 'lucide-react';
@@ -26,6 +26,7 @@ type ChatBotPageContentProps = {
 export default function ChatBotPageContent({ variant = 'sidebar', mode = 'global', copilotEnvelope = null, onClose }: ChatBotPageContentProps) {
     const [compactMode, setCompactMode] = useState<boolean>(variant === 'compact');
     const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+    const welcomeSendLockRef = useRef(false);
     useEffect(() => setCompactMode(variant === 'compact'), [variant]);
     const t = useTranslations('Chatbot');
 
@@ -76,8 +77,16 @@ export default function ChatBotPageContent({ variant = 'sidebar', mode = 'global
     );
 
     const handleWelcomeSend = async (text: string) => {
-        setPendingPrompt(text);
-        await chat.handleCreateSession();
+        if (welcomeSendLockRef.current) return;
+        welcomeSendLockRef.current = true;
+        try {
+            const created = await chat.handleCreateSession();
+            if (created?.id) {
+                setPendingPrompt(text);
+            }
+        } finally {
+            welcomeSendLockRef.current = false;
+        }
     };
 
     const onExecuteAction: CopilotActionExecutor = async action => {

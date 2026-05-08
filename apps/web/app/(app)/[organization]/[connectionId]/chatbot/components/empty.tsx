@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
@@ -18,7 +18,7 @@ import { DatabaseSchemaSelect } from './database-schema-select';
 import { createSuggestionFormatters, generateSuggestions } from './suggestion-rules';
 
 type ChatWelcomeProps = {
-    onSend: (text: string) => void;
+    onSend: (text: string) => Promise<void> | void;
     disabled?: boolean;
 };
 
@@ -27,6 +27,7 @@ const SUGGESTION_KEYS = ['TopUsers', 'ErrorLogs', 'OrderTrends', 'TableSummary']
 export default function ChatWelcome({ onSend, disabled = false }: ChatWelcomeProps) {
     const t = useTranslations('Chatbot');
     const [input, setInput] = useState('');
+    const sendLockRef = useRef(false);
     const [activeDatabase] = useAtom(activeDatabaseAtom);
     const activeSchema = useAtomValue(activeSchemaAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
@@ -65,13 +66,21 @@ export default function ChatWelcome({ onSend, disabled = false }: ChatWelcomePro
     }, [activeSchema, sidebarConfig, tables]);
 
     const handleSubmit = (message: PromptInputMessage) => {
+        if (disabled || sendLockRef.current) return;
         const text = message.text?.trim();
         if (!text) return;
-        onSend(text);
+        sendLockRef.current = true;
+        Promise.resolve(onSend(text)).finally(() => {
+            sendLockRef.current = false;
+        });
     };
 
     const handleSuggestionClick = (suggestion: string) => {
-        onSend(suggestion);
+        if (disabled || sendLockRef.current) return;
+        sendLockRef.current = true;
+        Promise.resolve(onSend(suggestion)).finally(() => {
+            sendLockRef.current = false;
+        });
     };
     return (
         <div className="flex h-full w-full flex-col items-center justify-center p-4">
