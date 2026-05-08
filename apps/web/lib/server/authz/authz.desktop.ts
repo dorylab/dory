@@ -129,6 +129,8 @@ export async function resolveDesktopOrganizationAccessResult(organizationId: str
             await persistDesktopCloudSessionSnapshot({
                 cloudSession: session,
                 access: cloudAttempt.access,
+            }).catch(error => {
+                console.warn('[desktop-session] failed to persist cloud access snapshot:', error);
             });
         }
 
