@@ -18,6 +18,21 @@ OUT_WEB_DIR="${OUT_DIR}/apps/web"
 OUT_WEB_NEXT_NODE_MODULES_DIR="${OUT_WEB_DIR}/.next/node_modules"
 OUT_WEB_NODE_MODULES_DIR="${OUT_WEB_DIR}/node_modules"
 
+copy_node_package_to_standalone() {
+  local package_name="$1"
+  local source_dir="${ROOT_DIR}/node_modules/${package_name}"
+
+  if [[ ! -d "${source_dir}" ]]; then
+    return
+  fi
+
+  for target_node_modules_dir in "${OUT_DIR}/node_modules" "${OUT_WEB_NODE_MODULES_DIR}"; do
+    mkdir -p "$(dirname "${target_node_modules_dir}/${package_name}")"
+    rm -rf "${target_node_modules_dir:?}/${package_name}"
+    cp -a "${source_dir}" "${target_node_modules_dir}/${package_name}"
+  done
+}
+
 if [[ ! -d "${STANDALONE_SRC}" ]]; then
   echo "Error: standalone output not found: ${STANDALONE_SRC}" >&2
   exit 1
@@ -77,6 +92,13 @@ fi
 # 5) apps/web/dist-scripts (if exists)
 if [[ -d "${WEB_DIR}/dist-scripts" ]]; then
   cp -a "${WEB_DIR}/dist-scripts" "${OUT_WEB_DIR}/dist-scripts"
+fi
+
+if [[ -d "${ROOT_DIR}/node_modules/@duckdb" ]]; then
+  echo "Overlaying full DuckDB native packages into standalone output..."
+  while IFS= read -r -d '' duckdb_package_dir; do
+    copy_node_package_to_standalone "@duckdb/$(basename "${duckdb_package_dir}")"
+  done < <(find "${ROOT_DIR}/node_modules/@duckdb" -mindepth 1 -maxdepth 1 -type d -print0)
 fi
 
 BETTER_SQLITE3_DIR="${OUT_DIR}/node_modules/better-sqlite3"
