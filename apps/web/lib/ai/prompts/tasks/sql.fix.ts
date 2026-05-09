@@ -2,11 +2,13 @@ import 'server-only';
 
 import { getPromptLanguageLine } from '@/lib/ai/prompts/tasks/language';
 import type { ActionContext } from '@/lib/copilot/action/types';
+import { formatCandidateTables } from './candidate-tables';
 
 export function buildFixSqlErrorPrompt(ctx: ActionContext) {
     const dialect = ctx.dialect ?? 'unknown';
     const db = ctx.database ?? '';
     const languageLine = getPromptLanguageLine(ctx.locale);
+    const referencedTables = formatCandidateTables(ctx);
 
     return `
 You are a senior database expert. Your goal is to fix this failed SQL while keeping changes minimal.
@@ -21,6 +23,7 @@ Constraints (must follow):
 
 Engine/Dialect: ${dialect}
 Database: ${db}
+${referencedTables ? `\nReferenced tables:\n${referencedTables}\n` : ''}
 ${ctx.schemaContext ? `\nReal schema context:\n${ctx.schemaContext}\n` : ''}
 
 Original SQL:

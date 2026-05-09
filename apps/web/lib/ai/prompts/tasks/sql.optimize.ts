@@ -2,12 +2,14 @@ import 'server-only';
 
 import { getPromptLanguageLine } from '@/lib/ai/prompts/tasks/language';
 import type { ActionContext } from '@/lib/copilot/action/types';
+import { formatCandidateTables } from './candidate-tables';
 
 export function buildOptimizePerformancePrompt(ctx: ActionContext) {
     const dialect = ctx.dialect ?? 'unknown';
     const db = ctx.database ?? '';
     const errorMessage = ctx.error?.message ?? '';
     const languageLine = getPromptLanguageLine(ctx.locale);
+    const referencedTables = formatCandidateTables(ctx);
 
     return `
 You are a senior database performance expert. Your goal is to improve SQL performance without changing results.
@@ -23,6 +25,7 @@ Constraints (must follow):
 
 Engine/Dialect: ${dialect}
 Database: ${db}
+${referencedTables ? `\nReferenced tables:\n${referencedTables}\n` : ''}
 ${ctx.schemaContext ? `\nReal schema context:\n${ctx.schemaContext}\n` : ''}
 
 Original SQL:
