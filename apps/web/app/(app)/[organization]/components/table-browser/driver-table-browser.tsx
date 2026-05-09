@@ -12,6 +12,7 @@ import { TableIndexesTab } from './components/indexes';
 import { TableViewTabs } from './table-view-tabs';
 import type { TableSubTab } from './types';
 import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { supportsTableStats } from './utils';
 
 type DriverTableBrowserProps = {
     driver?: string;
@@ -29,6 +30,10 @@ const POSTGRES_SUB_TABS: TableSubTab[] = ['overview', 'data', 'structure', 'stat
 
 function normalizeTab(driver: string | undefined, tab?: TableSubTab): TableSubTab {
     if (!isPostgresFamilyConnectionType(driver) && tab === 'indexes') {
+        return DEFAULT_TAB;
+    }
+
+    if (!supportsTableStats(driver) && tab === 'stats') {
         return DEFAULT_TAB;
     }
 

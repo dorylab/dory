@@ -1,4 +1,9 @@
-import { ColumnInfo } from "./type";
+import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { ColumnInfo } from './type';
+
+export function supportsTableStats(driver?: string | null): boolean {
+    return isPostgresFamilyConnectionType(driver) || driver === 'clickhouse' || driver === 'mysql' || driver === 'mariadb';
+}
 
 export function buildColumnCacheKey(connectionId?: string, databaseName?: string, tableName?: string) {
     if (!connectionId || !databaseName || !tableName) return null;

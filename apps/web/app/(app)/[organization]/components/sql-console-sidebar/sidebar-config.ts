@@ -19,6 +19,11 @@ const SIDEBAR_CONFIG_BY_DIALECT: Record<ConnectionType, SidebarConfig> = {
         supportsSchemas: false,
         hiddenDatabases: ['information_schema'],
     },
+    duckdb: {
+        dialect: 'duckdb',
+        supportsSchemas: false,
+        hiddenDatabases: ['information_schema', 'system'],
+    },
     mariadb: {
         dialect: 'mariadb',
         supportsSchemas: false,

@@ -58,6 +58,7 @@ const SQL_DIALECT_CONFIGS: Record<ConnectionDialect, SqlDialectConfig> = {
 
 const SQL_DIALECT_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, ConnectionDialect>> = {
     clickhouse: 'clickhouse',
+    duckdb: 'duckdb',
     mariadb: 'mysql',
     mysql: 'mysql',
     neon: 'postgres',

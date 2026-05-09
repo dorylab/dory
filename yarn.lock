@@ -2374,6 +2374,84 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@duckdb/node-api@npm:^1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-api@npm:1.5.2-r.1"
+  dependencies:
+    "@duckdb/node-bindings": "npm:1.5.2-r.1"
+  checksum: 10c0/130333a0543b9278493cd8f85eec903bd58fdfd71c2c13f0f574173d814bee716df13cab2f087b408f04131a844e224f566c588f583e3da393d9b783b1450888
+  languageName: node
+  linkType: hard
+
+"@duckdb/node-bindings-darwin-arm64@npm:1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-bindings-darwin-arm64@npm:1.5.2-r.1"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@duckdb/node-bindings-darwin-x64@npm:1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-bindings-darwin-x64@npm:1.5.2-r.1"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@duckdb/node-bindings-linux-arm64@npm:1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-bindings-linux-arm64@npm:1.5.2-r.1"
+  conditions: os=linux & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@duckdb/node-bindings-linux-x64@npm:1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-bindings-linux-x64@npm:1.5.2-r.1"
+  conditions: os=linux & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@duckdb/node-bindings-win32-arm64@npm:1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-bindings-win32-arm64@npm:1.5.2-r.1"
+  conditions: os=win32 & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@duckdb/node-bindings-win32-x64@npm:1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-bindings-win32-x64@npm:1.5.2-r.1"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@duckdb/node-bindings@npm:1.5.2-r.1":
+  version: 1.5.2-r.1
+  resolution: "@duckdb/node-bindings@npm:1.5.2-r.1"
+  dependencies:
+    "@duckdb/node-bindings-darwin-arm64": "npm:1.5.2-r.1"
+    "@duckdb/node-bindings-darwin-x64": "npm:1.5.2-r.1"
+    "@duckdb/node-bindings-linux-arm64": "npm:1.5.2-r.1"
+    "@duckdb/node-bindings-linux-x64": "npm:1.5.2-r.1"
+    "@duckdb/node-bindings-win32-arm64": "npm:1.5.2-r.1"
+    "@duckdb/node-bindings-win32-x64": "npm:1.5.2-r.1"
+  dependenciesMeta:
+    "@duckdb/node-bindings-darwin-arm64":
+      optional: true
+    "@duckdb/node-bindings-darwin-x64":
+      optional: true
+    "@duckdb/node-bindings-linux-arm64":
+      optional: true
+    "@duckdb/node-bindings-linux-x64":
+      optional: true
+    "@duckdb/node-bindings-win32-arm64":
+      optional: true
+    "@duckdb/node-bindings-win32-x64":
+      optional: true
+  checksum: 10c0/abecbadd590d0a2d366640f1b04e0be205a577ca1119ecf3961d7f4229dd481ec80f36ef6d046b9ac7677762530911f0794a47e0a5c61465cf7bb0e11d1d0c04
+  languageName: node
+  linkType: hard
+
 "@ecies/ciphers@npm:^0.2.5":
   version: 0.2.6
   resolution: "@ecies/ciphers@npm:0.2.6"
@@ -23102,6 +23180,7 @@ __metadata:
     "@dnd-kit/modifiers": "npm:^9.0.0"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
     "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
     "@eslint/eslintrc": "npm:^3"

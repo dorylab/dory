@@ -29,6 +29,7 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
         form.setValue('connection.httpPort', nextDefaults.httpPort, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.database', nextDefaults.database, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.path', currentConnection.path ?? nextDefaults.path ?? null, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.duckdbMode', nextDefaults.duckdbMode, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.ssl', nextDefaults.ssl, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.description', currentConnection.description ?? nextDefaults.description, {
             shouldDirty: true,
@@ -50,15 +51,14 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
             'connection.httpPort',
             'connection.database',
             'connection.path',
+            'connection.duckdbMode',
             'connection.ssl',
         ]);
     };
 
     return (
         <div className="space-y-4">
-            
             <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] items-start">
-                
                 <FormField
                     control={control}
                     name="connection.name"
@@ -76,7 +76,6 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
                     )}
                 />
 
-                
                 <FormField
                     control={control}
                     name="connection.type"

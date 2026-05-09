@@ -8,6 +8,7 @@ import {
     normalizeClickhouseConnectionForSubmit,
     validateClickhouseConnection,
 } from './clickhouse';
+import { createDuckDbConnectionDefaults, DuckDbConnectionFields, normalizeDuckDbConnectionForForm, normalizeDuckDbConnectionForSubmit, validateDuckDbConnection } from './duckdb';
 import {
     createMariaDbConnectionDefaults,
     MariaDbConnectionFields,
@@ -26,7 +27,7 @@ import {
 import { createMysqlConnectionDefaults, MysqlConnectionFields, normalizeMysqlConnectionForForm, normalizeMysqlConnectionForSubmit, validateMysqlConnection } from './mysql';
 import { createSqliteConnectionDefaults, normalizeSqliteConnectionForForm, normalizeSqliteConnectionForSubmit, SqliteConnectionFields, validateSqliteConnection } from './sqlite';
 
-export type SupportedConnectionDriver = 'clickhouse' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite';
+export type SupportedConnectionDriver = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite';
 
 type DriverDefinition = {
     label: string;
@@ -45,6 +46,14 @@ const DRIVERS: Record<SupportedConnectionDriver, DriverDefinition> = {
         normalizeForForm: normalizeClickhouseConnectionForForm,
         normalizeForSubmit: normalizeClickhouseConnectionForSubmit,
         validate: validateClickhouseConnection,
+    },
+    duckdb: {
+        label: 'DuckDB',
+        FormComponent: DuckDbConnectionFields,
+        createDefaults: createDuckDbConnectionDefaults,
+        normalizeForForm: normalizeDuckDbConnectionForForm,
+        normalizeForSubmit: normalizeDuckDbConnectionForSubmit,
+        validate: validateDuckDbConnection,
     },
     postgres: {
         label: 'PostgreSQL',
@@ -102,6 +111,9 @@ export function getConnectionDriver(type?: string): DriverDefinition {
     }
     if (type === 'postgres') {
         return DRIVERS.postgres;
+    }
+    if (type === 'duckdb') {
+        return DRIVERS.duckdb;
     }
     if (type === 'neon') {
         return DRIVERS.neon;

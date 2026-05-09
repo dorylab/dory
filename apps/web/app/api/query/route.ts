@@ -13,13 +13,13 @@ import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { getPostHogClient } from '@/lib/posthog-server';
 import { getPostHogServerProperties } from '@/lib/posthog-config';
 
+export const runtime = 'nodejs';
 
-const MAX_STATEMENTS = 100; 
+const MAX_STATEMENTS = 100;
 const DEFAULT_STOP_ON_ERROR = false;
 function preciseDateNow(): Date {
     return new Date(performance.timeOrigin + performance.now());
 }
-
 
 function createDatabaseNameSchema(t: (key: string, values?: Record<string, unknown>) => string) {
     return z
@@ -29,7 +29,6 @@ function createDatabaseNameSchema(t: (key: string, values?: Record<string, unkno
         .regex(/^[a-zA-Z0-9_.-]+$/, t('Api.Query.Errors.DatabaseNameInvalid'));
 }
 
-
 function parseSqlOp(s: string): string {
     const first = s.trim().split(/\s+/)[0]?.toUpperCase() || 'SQL';
     if (['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'REPLACE'].includes(first)) return first;
@@ -38,26 +37,18 @@ function parseSqlOp(s: string): string {
     return first;
 }
 
-
 function makeTitle(s: string): string {
     const op = parseSqlOp(s);
     const preview = s.trim().slice(0, 40).replace(/\s+/g, ' ');
     return `${op}: ${preview}`;
 }
 
-
 function nowEpochMsFromPerf(): number {
     return performance.timeOrigin + performance.now();
 }
 
-
-async function executeOne(
-    connection: BaseConnection,
-    statement: string,
-    context: { database?: string },
-    options?: { queryId?: string },
-) {
-    const startedAt = preciseDateNow(); 
+async function executeOne(connection: BaseConnection, statement: string, context: { database?: string }, options?: { queryId?: string }) {
+    const startedAt = preciseDateNow();
     const perfStart = performance.now();
 
     try {
@@ -67,13 +58,12 @@ async function executeOne(
         });
         const rows = result.rows ?? [];
 
-        const finishedAt = preciseDateNow(); 
+        const finishedAt = preciseDateNow();
         const durationMs = performance.now() - perfStart;
 
         const isArrayRows = Array.isArray(rows);
         const affectedRows = !isArrayRows && rows && typeof rows === 'object' && 'affectedRows' in rows ? (rows as any).affectedRows : null;
         const rowCount = result.rowCount ?? (isArrayRows ? rows.length : affectedRows != null ? 1 : 0);
-
 
         return {
             ok: true as const,
@@ -100,7 +90,7 @@ async function executeOne(
         };
     } catch (err: any) {
         console.log('SQL statement failed', err);
-        const finishedAt = preciseDateNow(); 
+        const finishedAt = preciseDateNow();
         const durationMs = performance.now() - perfStart;
 
         return {
@@ -139,17 +129,15 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
     const connectionId = req.headers.get(X_CONNECTION_ID_KEY);
     const data = await req.json();
 
-    
-    const userId: string | undefined = data.userId; 
-    const tabId: string | undefined = data.tabId; 
-    const source: string | undefined = data.source; 
+    const userId: string | undefined = data.userId;
+    const tabId: string | undefined = data.tabId;
+    const source: string | undefined = data.source;
 
     const rawDatabase = data.database;
-    let database: string | undefined =
-        typeof rawDatabase === 'string' ? rawDatabase.trim() : undefined;
+    let database: string | undefined = typeof rawDatabase === 'string' ? rawDatabase.trim() : undefined;
     const sqlText = String(data.sql ?? '');
     const stopOnError: boolean = data.stopOnError ?? DEFAULT_STOP_ON_ERROR;
-    const sessionId: string = String(data.sessionId || randomUUID()); 
+    const sessionId: string = String(data.sessionId || randomUUID());
 
     if (!connectionId) {
         return Response.json({ error: t('Api.Query.Errors.MissingConnectionId') }, { status: 400 });
@@ -185,7 +173,6 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
     try {
         console.log('Executing SQL:', { database, sqlText });
 
-        
         const statements = splitMultiSQL(sqlText).filter(s => !!s.trim());
         if (!statements.length) {
             const nowPerf = performance.now();
@@ -200,7 +187,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
                         connectionId,
                         database: database ?? null,
                         sqlText,
-                        status: 'success', 
+                        status: 'success',
                         errorMessage: null,
                         startedAt: nowEpoch, // epoch ms
                         finishedAt: nowEpoch, // epoch ms
@@ -231,7 +218,6 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
             );
         }
 
-        
         const sessT0 = performance.now();
         let overallStartedAt = Math.round(performance.timeOrigin + sessT0);
 
@@ -241,13 +227,11 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
         let hitError = false;
         let firstErrorMsg: string | null = null;
 
-        
         for (let i = 0; i < statements.length; i++) {
             const s = statements[i];
 
             const execOne = await executeOne(connection, s, { database }, { queryId: sessionId });
 
-            
             const qrs = {
                 sessionId,
                 setIndex: i,
@@ -264,7 +248,6 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
             }
         }
 
-        
         const sessT1 = performance.now();
         let overallFinishedAt = Math.round(performance.timeOrigin + sessT1);
         const overallDuration = Math.max(0, Math.round(sessT1 - sessT0));
@@ -273,7 +256,6 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
             overallFinishedAt = overallStartedAt + overallDuration;
         }
 
-        
         const status: 'success' | 'error' = hitError ? 'error' : 'success';
         const session = {
             sessionId,
@@ -281,12 +263,12 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
             tabId: tabId ?? null,
             connectionId,
             database: database ?? null,
-            sqlText, 
+            sqlText,
             status,
             errorMessage: hitError ? firstErrorMsg : null,
-            startedAt: overallStartedAt, 
-            finishedAt: overallFinishedAt, 
-            durationMs: overallDuration, 
+            startedAt: overallStartedAt,
+            finishedAt: overallFinishedAt,
+            durationMs: overallDuration,
             resultSetCount: queryResultSets.length,
             stopOnError,
             source: source ?? null,

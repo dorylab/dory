@@ -11,8 +11,8 @@ import type { BreadcrumbItem, ExplorerBaseParams, ExplorerDriver, ExplorerListKi
 function normalizeExplorerResourceForDriver(driver: ExplorerDriver, resource?: ExplorerResource): ExplorerResource | undefined {
     switch (driver) {
         case 'postgres':
-        case 'duckdb':
             return resolvePostgresExplorerResource(resource);
+        case 'duckdb':
         case 'mysql':
         case 'mariadb':
             return resolveMysqlExplorerResource(resource);

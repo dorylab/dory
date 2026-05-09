@@ -22,6 +22,7 @@ import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer/build-path';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { cn } from '@/lib/utils';
+import type { ConnectionListItem } from '@/types/connections';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     initialUser?: User | null;
@@ -31,6 +32,36 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 const GITHUB_REPO_URL = 'https://github.com/dorylab/dory';
 const SIDEBAR_STAR_NOTIFICATION_KEY = 'dory:sidebar:star-notification:v1';
 
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+}
+
+function getExplorerDefaultDatabase(connection?: ConnectionListItem['connection'] | null) {
+    if (!connection) return null;
+
+    const database = connection.database?.trim();
+    if (connection.type !== 'duckdb') {
+        return database || null;
+    }
+
+    const options = parseConnectionOptions(connection.options);
+    if (options.mode === 'motherduck') {
+        return database || null;
+    }
+
+    return null;
+}
+
 export function AppSidebar({ initialUser = null, organizationId, ...props }: AppSidebarProps) {
     const params = useParams<{ organization: string; connectionId?: string }>();
     const resolvedUser = initialUser ?? null;
@@ -38,7 +69,7 @@ export function AppSidebar({ initialUser = null, organizationId, ...props }: App
     const organization = params.organization;
     const connectionId = params.connectionId;
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const defaultDatabase = currentConnection && currentConnection.connection.id === connectionId ? currentConnection.connection.database : null;
+    const defaultDatabase = currentConnection && currentConnection.connection.id === connectionId ? getExplorerDefaultDatabase(currentConnection.connection) : null;
     const currentConnectionType = currentConnection && currentConnection.connection.id === connectionId ? currentConnection.connection.type : null;
     const supportsOperationalPages = currentConnectionType === 'clickhouse';
     const explorerUrl =

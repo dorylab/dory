@@ -26,7 +26,7 @@ type NextWebpackOptionsShape = {
 
 const nextConfig = {
     output: 'standalone',
-    serverExternalPackages: ['@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron'],
+    serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron'],
     outputFileTracingIncludes: {
         '/*': ['./registry/**/*', './public/resources/demo.sqlite'],
     },
@@ -64,7 +64,7 @@ const nextConfig = {
     webpack(config: NextWebpackConfigShape, options: NextWebpackOptionsShape) {
         config.resolve.alias['jotai'] = path.resolve(__dirname, 'node_modules/jotai');
         if (options.isServer) {
-            config.externals.push('ssh2', 'better-sqlite3');
+            config.externals.push('ssh2', 'better-sqlite3', '@duckdb/node-api');
         }
         if (!options.isServer) {
             config.resolve.fallback = {

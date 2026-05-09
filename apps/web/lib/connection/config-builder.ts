@@ -99,10 +99,18 @@ export function buildStoredConnectionConfig(
 ): BaseConfig {
     const type = resolveConnectionType(connection.type ?? connection.engine ?? 'clickhouse');
 
-    if (type === 'sqlite') {
-        const normalizedPath = resolveStoredSqlitePath(connection.path);
+    if (type === 'sqlite' || type === 'duckdb') {
+        const options = parseConnectionOptions(connection.options) ?? {};
+        const isMotherDuck = type === 'duckdb' && options.mode === 'motherduck';
+        const isDuckDb = type === 'duckdb';
+        const normalizedPath = isMotherDuck ? undefined : resolveStoredSqlitePath(connection.path);
         if (!normalizedPath) {
-            throw createError('missing_path');
+            if (!isMotherDuck) {
+                throw createError('missing_path');
+            }
+        }
+        if (isMotherDuck && !identity.password?.trim()) {
+            throw createError('missing_password');
         }
 
         return {
@@ -110,8 +118,9 @@ export function buildStoredConnectionConfig(
             type,
             host: '',
             path: normalizedPath,
-            database: identity.database ?? connection.database ?? 'main',
-            options: parseConnectionOptions(connection.options) ?? undefined,
+            database: isDuckDb ? (identity.database ?? connection.database ?? undefined) : (identity.database ?? connection.database ?? 'main'),
+            password: isMotherDuck ? (identity.password ?? undefined) : undefined,
+            options,
             configVersion: connection.configVersion ?? undefined,
             updatedAt: connection.updatedAt instanceof Date ? connection.updatedAt.getTime() : (connection.updatedAt ?? undefined),
         };
@@ -143,26 +152,32 @@ export function buildStoredConnectionConfig(
     };
 }
 
-export function buildTestConnectionConfig(
-    payload: TestConnectionPayload & { ssh?: TestSshWithSecrets | null },
-    createError: ErrorFactory = defaultErrorFactory,
-): BaseConfig {
+export function buildTestConnectionConfig(payload: TestConnectionPayload & { ssh?: TestSshWithSecrets | null }, createError: ErrorFactory = defaultErrorFactory): BaseConfig {
     const { connection, ssh, identity } = payload;
     const type = resolveConnectionType(connection.type ?? connection.engine ?? 'clickhouse');
 
-    if (type === 'sqlite') {
-        const normalizedPath = resolveStoredSqlitePath(connection.path);
+    if (type === 'sqlite' || type === 'duckdb') {
+        const options = parseConnectionOptions(connection.options) ?? {};
+        const isMotherDuck = type === 'duckdb' && options.mode === 'motherduck';
+        const isDuckDb = type === 'duckdb';
+        const normalizedPath = isMotherDuck ? undefined : resolveStoredSqlitePath(connection.path);
         if (!normalizedPath) {
-            throw createError('missing_path');
+            if (!isMotherDuck) {
+                throw createError('missing_path');
+            }
+        }
+        if (isMotherDuck && !identity.password?.trim()) {
+            throw createError('missing_password');
         }
 
         return {
-            id: connection.id || connection.name ? `test-${connection.id ?? connection.name}` : 'test-sqlite',
+            id: connection.id || connection.name ? `test-${connection.id ?? connection.name}` : `test-${type}`,
             type,
             host: '',
             path: normalizedPath,
-            database: connection.database ?? 'main',
-            options: parseConnectionOptions(connection.options) ?? undefined,
+            database: isDuckDb ? (connection.database ?? undefined) : (connection.database ?? 'main'),
+            password: isMotherDuck ? (identity.password ?? undefined) : undefined,
+            options,
         };
     }
 
