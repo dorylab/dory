@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
 
@@ -13,9 +13,7 @@ import { IconBrandGithub } from '@tabler/icons-react';
 import { authClient, signInViaGithub, signInViaGoogle } from '@/lib/auth-client';
 import { InputPassword } from '@/components/originui/input-password';
 import { authFetch } from '@/lib/client/auth-fetch';
-import { useCloudFeatureAvailability } from '@/lib/client/use-cloud-features';
 import { useTranslations } from 'next-intl';
-import { runtime } from '@/lib/runtime/runtime';
 
 type SignInFormProps = React.ComponentProps<'div'> & {
     callbackURL?: string;
@@ -43,10 +41,9 @@ export function SignInForm({
     const [err, setErr] = useState<string | null>(null);
     const [msg, setMsg] = useState<string | null>(null);
     const [secondaryActionLoading, setSecondaryActionLoading] = useState(false);
-    const { isOffline: isDesktopOffline } = useCloudFeatureAvailability();
     const { data: session, refetch: refetchSession } = authClient.useSession();
     const callbackURL = callbackURLOverride || searchParams?.get('callbackURL') || '/';
-    const canShowDemoOption = showDemoOption && runtime !== 'desktop';
+    const canShowDemoOption = showDemoOption;
 
     async function recoverAnonymousSessionIfNeeded() {
         if (!session?.user?.isAnonymous && !resumeAnonymousSession) {
@@ -66,152 +63,25 @@ export function SignInForm({
         return true;
     }
 
-    useEffect(() => {
-        if (!window.authBridge?.onCallback) return;
-        const unsubscribe = window.authBridge.onCallback(async deepLink => {
-            try {
-                const url = new URL(deepLink);
-                const path = url.pathname && url.pathname !== '/' ? url.pathname : `/${url.hostname}`;
-                const token = url.searchParams.get('token');
-
-                if (path === '/reset-password') {
-                    if (!token) {
-                        setErr(t('SignIn.MissingToken'));
-                        return;
-                    }
-                    router.replace(`/reset-password?token=${encodeURIComponent(token)}`);
-                    return;
-                }
-
-                const ticket = url.searchParams.get('ticket');
-                const error = url.searchParams.get('error');
-
-                if (error) {
-                    setErr(t('SignIn.AuthFailed', { error }));
-                    return;
-                }
-
-                if (!ticket) {
-                    setErr(t('SignIn.MissingToken'));
-                    return;
-                }
-
-                const consumeRes = await fetch('/api/electron/auth/consume', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        ticket,
-                        anonymousUserId: session?.user?.isAnonymous ? session.user.id : null,
-                        anonymousActiveOrganizationId: session?.user?.isAnonymous
-                            ? ((session.session as { activeOrganizationId?: string | null } | undefined)?.activeOrganizationId ?? null)
-                            : null,
-                    }),
-                });
-
-                if (!consumeRes.ok) {
-                    const data = await consumeRes.json().catch(() => null);
-                    throw new Error(data?.error ?? t('SignIn.AuthFailed', { error: 'consume_failed' }));
-                }
-
-                setMsg(t('SignIn.SuccessRefreshing'));
-                window.location.assign(callbackURL);
-            } catch (e) {
-                setErr(t('SignIn.InvalidCallback'));
-            }
-        });
-
-        return () => {
-            unsubscribe?.();
-        };
-    }, [callbackURL, refetchSession, router, t]);
-
-    async function signInViaGithubElectron() {
-        if (isDesktopOffline) {
-            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
-            return;
-        }
-        setErr(null);
-        setMsg(null);
-        try {
-            await recoverAnonymousSessionIfNeeded();
-            const res = await authFetch('/api/electron/auth/start/github', { method: 'GET' });
-            console.log('GitHub OAuth start response:', res);
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data?.url) {
-                throw new Error(data?.message || t('SignIn.GithubStartFailed'));
-            }
-            await window.authBridge?.openExternal(data.url);
-        } catch (e: any) {
-            setErr(e?.message ?? t('SignIn.GithubStartFailed'));
-        }
-    }
-
-    async function signInViaGoogleElectron() {
-        if (isDesktopOffline) {
-            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
-            return;
-        }
-        setErr(null);
-        setMsg(null);
-        try {
-            await recoverAnonymousSessionIfNeeded();
-            const res = await authFetch('/api/electron/auth/start/google', { method: 'GET' });
-            console.log('Google OAuth start response:', res);
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok || !data?.url) {
-                throw new Error(data?.message || t('SignIn.GoogleStartFailed'));
-            }
-            await window.authBridge?.openExternal(data.url);
-        } catch (e: any) {
-            setErr(e?.message ?? t('SignIn.GoogleStartFailed'));
-        }
-    }
-
     async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
         setErr(null);
         setMsg(null);
-        if (isDesktopOffline) {
-            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
-            return;
-        }
         setLoading(true);
         try {
-            if (window.authBridge?.openExternal) {
-                await recoverAnonymousSessionIfNeeded();
-                const res = await fetch('/api/electron/auth/sign-in/email', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password: pwd }),
-                });
-                const data = await res.json().catch(() => null);
-                if (!res.ok) {
-                    const message = typeof data?.error === 'string' ? data.error : t('SignIn.LoginFailedRetry');
-                    setErr(message);
-                    posthog.capture('user_sign_in_failed', { method: 'email', error: message });
-                } else {
-                    posthog.identify(email, { email });
-                    posthog.capture('user_signed_in', { method: 'email' });
-                    await refetchSession();
-                    router.refresh();
-                    router.push(callbackURL);
-                }
+            await recoverAnonymousSessionIfNeeded();
+            const { error } = await authClient.signIn.email({
+                email,
+                password: pwd,
+                callbackURL,
+            });
+            if (error) {
+                setErr(error.message ?? t('SignIn.LoginFailedRetry'));
+                posthog.capture('user_sign_in_failed', { method: 'email', error: error.message });
             } else {
-                await recoverAnonymousSessionIfNeeded();
-                const { error } = await authClient.signIn.email({
-                    email,
-                    password: pwd,
-                    callbackURL,
-                });
-                if (error) {
-                    setErr(error.message ?? t('SignIn.LoginFailedRetry'));
-                    posthog.capture('user_sign_in_failed', { method: 'email', error: error.message });
-                } else {
-                    //Success: Better Auth will handle the callback; for SSR/CSR consistency, it will also perform a local jump.
-                    posthog.identify(email, { email });
-                    posthog.capture('user_signed_in', { method: 'email' });
-                    router.push(callbackURL);
-                }
+                posthog.identify(email, { email });
+                posthog.capture('user_signed_in', { method: 'email' });
+                router.push(callbackURL);
             }
         } catch (e: any) {
             setErr(e?.message ?? t('SignIn.NetworkErrorRetry'));
@@ -223,10 +93,6 @@ export function SignInForm({
     }
 
     async function onForgotPassword() {
-        if (isDesktopOffline) {
-            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
-            return;
-        }
         if (!email) {
             setErr(t('SignIn.ForgotPasswordEmailRequired'));
             return;
@@ -235,14 +101,7 @@ export function SignInForm({
         setMsg(null);
         setLoading(true);
         try {
-            const redirectTo = window.authBridge?.openExternal ? 'dory://reset-password' : `${window.location.origin}/reset-password`;
-            console.log('[auth] request-password-reset start', {
-                email,
-                origin: window.location.origin,
-                redirectTo,
-                runtime,
-                cloudApi: process.env.NEXT_PUBLIC_DORY_CLOUD_API_URL,
-            });
+            const redirectTo = `${window.location.origin}/reset-password`;
             const res = await authFetch('/api/auth/request-password-reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -253,11 +112,6 @@ export function SignInForm({
                 }),
             });
             const data = await res.json().catch(() => null);
-            console.log('[auth] request-password-reset response', {
-                ok: res.ok,
-                status: res.status,
-                data,
-            });
             if (!res.ok) {
                 const message = typeof data?.error === 'string' ? data.error : t('SignIn.ResetEmailFailed');
                 setErr(message);
@@ -362,12 +216,6 @@ export function SignInForm({
                                         {msg}
                                     </div>
                                 ) : null}
-                                {isDesktopOffline ? (
-                                    <div className="rounded-md border border-amber-300/40 bg-amber-50 p-3 text-sm text-amber-800" data-testid="offline-cloud-warning">
-                                        {t('SignIn.CloudFeaturesUnavailableOffline')}
-                                    </div>
-                                ) : null}
-
                                 <div className="grid gap-3">
                                     <Label htmlFor="email">{t('SignIn.Email')}</Label>
                                     <Input
@@ -384,14 +232,14 @@ export function SignInForm({
                                 <div className="grid gap-3">
                                     <div className="flex items-center">
                                         <Label htmlFor="password">{t('SignIn.Password')}</Label>
-                                        <button type="button" onClick={onForgotPassword} disabled={isDesktopOffline} className="ml-auto text-sm underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50">
+                                        <button type="button" onClick={onForgotPassword} className="ml-auto text-sm underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50">
                                             {t('SignIn.ForgotPassword')}
                                         </button>
                                     </div>
                                     <InputPassword name="password" id="password" required value={pwd} onChange={e => setPwd(e.target.value)} autoComplete="current-password" />
                                 </div>
 
-                                <Button type="submit" className="w-full" disabled={loading || secondaryActionLoading || isDesktopOffline}>
+                                <Button type="submit" className="w-full" disabled={loading || secondaryActionLoading}>
                                     {loading ? t('SignIn.Submitting') : t('SignIn.Submit')}
                                 </Button>
 
@@ -434,17 +282,12 @@ export function SignInForm({
                                         variant="outline"
                                         type="button"
                                         className="w-full"
-                                        disabled={isDesktopOffline}
                                         onClick={() => {
-                                            if (window.authBridge?.openExternal) {
-                                                void signInViaGithubElectron();
-                                            } else {
-                                                void recoverAnonymousSessionIfNeeded().then(() => {
-                                                    signInViaGithub(callbackURL);
-                                                }).catch((error: unknown) => {
-                                                    setErr(error instanceof Error ? error.message : t('SignIn.GithubStartFailed'));
-                                                });
-                                            }
+                                            void recoverAnonymousSessionIfNeeded().then(() => {
+                                                signInViaGithub(callbackURL);
+                                            }).catch((error: unknown) => {
+                                                setErr(error instanceof Error ? error.message : t('SignIn.GithubStartFailed'));
+                                            });
                                         }}
                                     >
                                         <IconBrandGithub size={30} />
@@ -455,17 +298,12 @@ export function SignInForm({
                                         variant="outline"
                                         type="button"
                                         className="w-full"
-                                        disabled={isDesktopOffline}
                                         onClick={() => {
-                                            if (window.authBridge?.openExternal) {
-                                                void signInViaGoogleElectron();
-                                            } else {
-                                                void recoverAnonymousSessionIfNeeded().then(() => {
-                                                    signInViaGoogle(callbackURL);
-                                                }).catch((error: unknown) => {
-                                                    setErr(error instanceof Error ? error.message : t('SignIn.GoogleStartFailed'));
-                                                });
-                                            }
+                                            void recoverAnonymousSessionIfNeeded().then(() => {
+                                                signInViaGoogle(callbackURL);
+                                            }).catch((error: unknown) => {
+                                                setErr(error instanceof Error ? error.message : t('SignIn.GoogleStartFailed'));
+                                            });
                                         }}
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">

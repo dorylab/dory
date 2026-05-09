@@ -2,11 +2,10 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
-import { SignInForm } from '../components/SignInForm';
+import { SignInForm } from '@/app/(auth)/components/SignInForm';
 import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from '@/lib/auth/anonymous-recovery';
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { getRuntimeForServer } from '@/lib/runtime/runtime';
 // import { BubbleBackground } from '@/components/animate-ui/components/backgrounds/bubble';
 import { HeroBackground } from '../components/bg';
 import { RuntimeHint } from '../components/runtime-hint';
@@ -46,7 +45,6 @@ export default async function SignInPage({
     const { callbackURL } = await searchParams;
     const recoveryToken = cookieStore.get(getAnonymousRecoveryCookieName())?.value;
     const session = await getSessionFromRequest();
-    const runtime = getRuntimeForServer() ?? 'web';
     const resumeAnonymousSession = shouldProxyAuthRequest()
         ? Boolean(recoveryToken)
         : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
@@ -72,7 +70,6 @@ export default async function SignInPage({
                 <SignInForm
                     resumeAnonymousSession={resumeAnonymousSession}
                     showGuestOption={false}
-                    showDemoOption={runtime !== 'desktop'}
                 />
             </div>
             {/* <div className="absolute z-10 inset-0 h-full w-full bg-[#0f172a]">
