@@ -347,8 +347,8 @@ ipcMain.handle('filesystem:select-sqlite-file', async () => {
     properties: ['openFile'],
     filters: [
       {
-        name: 'SQLite Database',
-        extensions: ['sqlite', 'db', 'sqlite3'],
+        name: 'Database File',
+        extensions: ['sqlite', 'db', 'sqlite3', 'duckdb'],
       },
       {
         name: 'All Files',
