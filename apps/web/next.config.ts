@@ -4,6 +4,17 @@ import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin';
 import path from 'path';
 
 const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
+const runtime = process.env.DORY_RUNTIME?.trim() || process.env.NEXT_PUBLIC_DORY_RUNTIME?.trim() || 'web';
+const isDesktopRuntime = runtime === 'desktop';
+const desktopRuntimeAliases: Record<string, string> = isDesktopRuntime
+    ? {
+          '@/lib/auth/session': './lib/auth/session.desktop.ts',
+          '@/lib/auth/auth-proxy': './lib/auth/auth-proxy.desktop.ts',
+          '@/components/session-recovery-sync': './components/session-recovery-sync.desktop.tsx',
+          '@/app/(auth)/components/SignInForm': './app/(auth)/components/SignInForm.desktop.tsx',
+      }
+    : {};
+const desktopRuntimeWebpackAliases = Object.fromEntries(Object.entries(desktopRuntimeAliases).map(([key, value]) => [key, path.resolve(__dirname, value)]));
 
 type NextWebpackConfigShape = {
     resolve: {
@@ -61,8 +72,12 @@ const nextConfig = {
         { source: '/ingest/:path*', destination: 'https://us.i.posthog.com/:path*' },
     ],
     skipTrailingSlashRedirect: true,
+    turbopack: {
+        resolveAlias: desktopRuntimeAliases,
+    },
     webpack(config: NextWebpackConfigShape, options: NextWebpackOptionsShape) {
         config.resolve.alias['jotai'] = path.resolve(__dirname, 'node_modules/jotai');
+        Object.assign(config.resolve.alias, desktopRuntimeWebpackAliases);
         if (options.isServer) {
             config.externals.push('ssh2', 'better-sqlite3', '@duckdb/node-api');
         }

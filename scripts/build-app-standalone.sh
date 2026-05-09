@@ -9,7 +9,7 @@ ELECTRON_DIR="${ROOT_DIR}/apps/electron"
 cd "${ROOT_DIR}"
 
 echo "Running build..."
-yarn run build
+DORY_RUNTIME=desktop NEXT_PUBLIC_DORY_RUNTIME=desktop yarn run build
 
 STANDALONE_SRC="${WEB_DIR}/.next/standalone"
 STANDALONE_WEB_SRC="${STANDALONE_SRC}/apps/web"
