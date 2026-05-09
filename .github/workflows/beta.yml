@@ -211,7 +211,7 @@ jobs:
 
       - name: Install Vercel CLI
         if: ${{ inputs.deploy_web }}
-        run: npm install --global vercel@latest
+        run: npm install --global vercel@53.2.0
 
       - name: Resolve or create beta Vercel project
         if: ${{ inputs.deploy_web }}
