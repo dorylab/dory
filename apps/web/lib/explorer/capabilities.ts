@@ -53,11 +53,11 @@ export const EXPLORER_CAPABILITIES: Record<ExplorerDriver, DriverCapabilities> =
     },
     duckdb: {
         driver: 'duckdb',
-        supportsSchema: true,
+        supportsSchema: false,
         supportsDatabase: true,
         supportsCatalog: false,
-        listKinds: ['schemas', 'tables', 'views', 'functions', 'sequences'],
-        objectKinds: ['database', 'schema', 'table', 'view', 'function', 'sequence'],
+        listKinds: ['tables', 'views'],
+        objectKinds: ['database', 'table', 'view'],
     },
     sqlite: {
         driver: 'sqlite',

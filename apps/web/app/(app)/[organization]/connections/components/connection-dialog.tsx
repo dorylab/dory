@@ -62,10 +62,13 @@ export function ConnectionDialog({
 
     const { control, handleSubmit, reset } = form;
     const connectionType = useWatch({ control, name: 'connection.type' });
+    const duckDbMode = useWatch({ control, name: 'connection.duckdbMode' });
     const isSqlite = connectionType === 'sqlite';
     const isNeon = connectionType === 'neon';
-    const hidesIdentityForm = isSqlite || isNeon;
-    const hidesSshForm = isSqlite || isNeon;
+    const isDuckDb = connectionType === 'duckdb';
+    const isMotherDuck = isDuckDb && duckDbMode === 'motherduck';
+    const hidesIdentityForm = isSqlite || isNeon || isDuckDb;
+    const hidesSshForm = isSqlite || isNeon || isDuckDb;
 
     const isEditMode = mode === 'Edit' && Boolean(connectionItem?.connection?.id);
 
@@ -94,6 +97,18 @@ export function ConnectionDialog({
                 username: fallbackIdentity?.username,
                 database: fallbackIdentity?.database,
             });
+        }
+
+        if (isDuckDb) {
+            return {
+                id: identityValues?.id,
+                name: identityValues?.name ?? 'DuckDB',
+                username: 'duckdb',
+                role: identityValues?.role ?? null,
+                password: isMotherDuck ? (identityValues?.password ?? null) : null,
+                isDefault: true,
+                database: isMotherDuck ? form.getValues('connection.database')?.trim?.() || null : null,
+            };
         }
 
         if (!isSqlite) {

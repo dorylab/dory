@@ -26,10 +26,12 @@ export const ConnectionDialogFormSchema = z
             ssl: z.boolean().default(false),
             database: z.string().optional().nullable(),
             path: z.string().optional().nullable(),
+            duckdbMode: z.enum(['local', 'motherduck']).optional(),
             environment: z.string().optional(),
             tags: z.string().optional(),
         }),
         identity: z.object({
+            id: z.string().optional().nullable(),
             name: z.string().optional(),
             username: z.string().optional().nullable(),
             role: z.string().optional().nullable(),
@@ -64,6 +66,33 @@ export const ConnectionDialogFormSchema = z
                     code: 'custom',
                     path: ['connection', 'path'],
                     message: 'SQLite path must be absolute',
+                });
+            }
+            return;
+        }
+
+        if (value.connection.type === 'duckdb') {
+            const mode = value.connection.duckdbMode === 'motherduck' ? 'motherduck' : 'local';
+            if (mode === 'local') {
+                const normalizedPath = value.connection.path?.trim() ?? '';
+                if (!normalizedPath) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['connection', 'path'],
+                        message: 'Please provide a DuckDB file path',
+                    });
+                } else if (!isAbsolutePath(normalizedPath)) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['connection', 'path'],
+                        message: 'DuckDB path must be absolute',
+                    });
+                }
+            } else if (!value.identity.id && !value.identity.password?.trim()) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['identity', 'password'],
+                    message: 'Please provide a MotherDuck token',
                 });
             }
             return;

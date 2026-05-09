@@ -14,6 +14,10 @@ export const DatasourceTypesWithDBEngine = [
         engine: 'clickhouse',
     },
     {
+        type: 'duckdb',
+        engine: 'duckdb',
+    },
+    {
         type: 'mysql',
         engine: 'mysql',
     },

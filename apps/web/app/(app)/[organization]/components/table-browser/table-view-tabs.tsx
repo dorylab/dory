@@ -8,6 +8,7 @@ import TableStats from './components/stats';
 import { TableOverview } from './components/overview';
 import TableDataPreview from './components/data-preview';
 import type { TableSubTab } from './types';
+import { supportsTableStats } from './utils';
 
 type TableViewTabsProps = {
     connectionId?: string;
@@ -21,10 +22,7 @@ type TableViewTabsProps = {
 
 export function TableViewTabs({ connectionId, databaseName, tableName, driver, activeSubTab, initialSubTab = 'overview', onSubTabChange }: TableViewTabsProps) {
     const t = useTranslations('TableBrowser');
-    const subTabs = useMemo<TableSubTab[]>(
-        () => (driver === 'sqlite' ? ['overview', 'data', 'structure'] : ['overview', 'data', 'structure', 'stats']),
-        [driver],
-    );
+    const subTabs = useMemo<TableSubTab[]>(() => (supportsTableStats(driver) ? ['overview', 'data', 'structure', 'stats'] : ['overview', 'data', 'structure']), [driver]);
     const [currentTab, setCurrentTab] = useState<TableSubTab>(activeSubTab ?? initialSubTab);
 
     useEffect(() => {
@@ -61,7 +59,7 @@ export function TableViewTabs({ connectionId, databaseName, tableName, driver, a
                 <TabsContent value="structure" className="h-full">
                     <TableStructure databaseName={databaseName} tableName={tableName} />
                 </TabsContent>
-                {driver !== 'sqlite' ? (
+                {supportsTableStats(driver) ? (
                     <TabsContent value="stats" className="h-full">
                         <TableStats databaseName={databaseName} tableName={tableName} driver={driver} />
                     </TabsContent>
