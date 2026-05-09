@@ -197,16 +197,6 @@ See the latest roadmap here:
 
 ---
 
-## 🚀 Getting Started
-
-> Docker one-click deployment
-
-> Install on macOS with Homebrew: `brew install dorylab/dory/dory`
-
-> Desktop client: https://github.com/dorylab/dory/releases  
-
----
-
 <h3>
 Your data stays yours.
 Except for AI requests sent through Cloudflare Gateway,
