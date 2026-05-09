@@ -2,12 +2,14 @@ import 'server-only';
 
 import { getPromptLanguageLine } from '@/lib/ai/prompts/tasks/language';
 import type { ActionContext } from '@/lib/copilot/action/types';
+import { formatCandidateTables } from './candidate-tables';
 
 export function buildRewriteSqlPrompt(ctx: ActionContext) {
     const dialect = ctx.dialect ?? 'unknown';
     const db = ctx.database ?? '';
     const errorHint = ctx.error?.message ? `Recent error/hint: ${ctx.error.message}` : '';
     const languageLine = getPromptLanguageLine(ctx.locale);
+    const referencedTables = formatCandidateTables(ctx);
 
     return `
 You are a senior database engineer. Your goal is to rewrite SQL for clarity while keeping results equivalent.
@@ -22,6 +24,7 @@ Constraints (must follow):
 
 Engine/Dialect: ${dialect}
 Database: ${db}
+${referencedTables ? `\nReferenced tables:\n${referencedTables}\n` : ''}
 ${ctx.schemaContext ? `\nReal schema context:\n${ctx.schemaContext}\n` : ''}
 
 Original SQL:

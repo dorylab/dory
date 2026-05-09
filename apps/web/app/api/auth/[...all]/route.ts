@@ -7,7 +7,14 @@ import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy'
 import { deleteAnonymousUserLocally } from '@/lib/auth/anonymous';
 import { buildAnonymousDeleteResponse, isLocalAnonymousDeleteRequest } from '@/lib/auth/anonymous-delete';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
-import { appendClearDesktopSessionCookieHeader } from '@/lib/auth/desktop-session-recovery';
+import {
+    appendClearDesktopSessionCookieHeader,
+    buildDesktopSessionRecoveryCookie,
+    persistDesktopCloudSessionSnapshot,
+    type CloudSessionLike,
+    type OrganizationAccessPayload,
+} from '@/lib/auth/desktop-session-recovery';
+import { fetchDesktopCloud } from '@/lib/server/desktop-cloud';
 
 function getSetCookies(headers: Headers): string[] {
     const anyHeaders = headers as unknown as { getSetCookie?: () => string[] };
@@ -94,9 +101,60 @@ function withDesktopSessionCleanup(req: Request, res: Response): Response {
     });
 }
 
+async function getCloudOrganizationAccess(organizationId: string): Promise<OrganizationAccessPayload> {
+    const cloudResponse = await fetchDesktopCloud(`/api/organization/access?organizationId=${encodeURIComponent(organizationId)}`);
+    if (cloudResponse.state !== 'available' || !cloudResponse.response.ok) {
+        return null;
+    }
+
+    const payload = (await cloudResponse.response.json().catch(() => null)) as
+        | { code?: number; data?: { access?: OrganizationAccessPayload } }
+        | null;
+
+    return payload?.code === 0 ? (payload.data?.access ?? null) : null;
+}
+
+async function withDesktopSessionMirror(req: Request, res: Response): Promise<Response> {
+    const pathname = new URL(req.url).pathname;
+    if (!pathname.endsWith('/get-session') || !res.ok) {
+        return withDesktopSessionCleanup(req, res);
+    }
+
+    const cloudSessionPayload = (await res.clone().json().catch(() => null)) as CloudSessionLike | null;
+    const userId = cloudSessionPayload?.user?.id ?? null;
+    if (!cloudSessionPayload || !userId) {
+        return withDesktopSessionCleanup(req, res);
+    }
+
+    const activeOrganizationId = cloudSessionPayload.session?.activeOrganizationId ?? null;
+    const access = activeOrganizationId ? await getCloudOrganizationAccess(activeOrganizationId) : null;
+    await persistDesktopCloudSessionSnapshot({ cloudSession: cloudSessionPayload, access }).catch(error => {
+        console.warn('[desktop-session] failed to persist cloud session snapshot:', error);
+    });
+
+    const headers = new Headers(res.headers);
+    headers.append(
+        'set-cookie',
+        await buildDesktopSessionRecoveryCookie({
+            userId,
+            activeOrganizationId,
+            requestUrl: req.url,
+        }),
+    );
+
+    return withDesktopSessionCleanup(
+        req,
+        new Response(res.body, {
+            status: res.status,
+            statusText: res.statusText,
+            headers,
+        }),
+    );
+}
+
 export async function GET(req: Request) {
     if (shouldProxyAuthRequest()) {
-        return withDesktopSessionCleanup(req, await proxyAuthRequest(req));
+        return withDesktopSessionMirror(req, await proxyAuthRequest(req));
     }
     const auth = await getAuth();
     const res = await auth.handler(req);

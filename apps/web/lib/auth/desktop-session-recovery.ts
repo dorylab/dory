@@ -12,9 +12,10 @@ const DESKTOP_SESSION_COOKIE_NAME = 'dory.desktop_session_token';
 const DESKTOP_SESSION_COOKIE_TTL_SECONDS = 60 * 60 * 24 * 30;
 const DESKTOP_SESSION_COOKIE_VERSION = 1;
 
-type CloudSessionLike = {
+export type CloudSessionLike = {
     session?: {
         activeOrganizationId?: string | null;
+        [key: string]: unknown;
     } | null;
     user?: {
         id?: string | null;
@@ -23,10 +24,11 @@ type CloudSessionLike = {
         image?: string | null;
         emailVerified?: boolean;
         isAnonymous?: boolean;
+        [key: string]: unknown;
     } | null;
 };
 
-type OrganizationAccessPayload = {
+export type OrganizationAccessPayload = {
     organization?: {
         id?: string | null;
         slug?: string | null;
@@ -73,6 +75,10 @@ function buildCookieValue(options: { name: string; value: string; maxAge?: numbe
     }
 
     return parts.join('; ');
+}
+
+function buildDesktopEmailConflictAlias(userId: string) {
+    return `desktop-conflict-${userId}@local.invalid`;
 }
 
 function rewriteCookieSecurity(value: string, isSecureRequest: boolean): string {
@@ -277,13 +283,26 @@ async function ensureLocalDesktopUserState(input: {
     }
 
     const now = new Date();
+    const email = user?.email ?? `${userId}@local.invalid`;
+    const name = user?.name ?? user?.email ?? userId;
+    const [existingUserWithEmail] = await db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email)).limit(1);
+
+    if (existingUserWithEmail && existingUserWithEmail.id !== userId) {
+        await db
+            .update(schema.user)
+            .set({
+                email: buildDesktopEmailConflictAlias(existingUserWithEmail.id),
+                updatedAt: now,
+            })
+            .where(eq(schema.user.id, existingUserWithEmail.id));
+    }
 
     await db
         .insert(schema.user)
         .values({
             id: userId,
-            name: user?.name ?? user?.email ?? userId,
-            email: user?.email ?? `${userId}@local.invalid`,
+            name,
+            email,
             image: user?.image ?? null,
             emailVerified: Boolean(user?.emailVerified),
             isAnonymous: false,
@@ -293,8 +312,8 @@ async function ensureLocalDesktopUserState(input: {
         .onConflictDoUpdate({
             target: schema.user.id,
             set: {
-                name: user?.name ?? user?.email ?? userId,
-                email: user?.email ?? `${userId}@local.invalid`,
+                name,
+                email,
                 image: user?.image ?? null,
                 emailVerified: Boolean(user?.emailVerified),
                 isAnonymous: false,
@@ -389,6 +408,25 @@ function buildDesktopRecoveryCookie(recoveryToken: string, requestUrl?: string |
         maxAge: DESKTOP_SESSION_COOKIE_TTL_SECONDS,
         secure: getSecureCookieFlag(requestUrl),
     });
+}
+
+export async function buildDesktopSessionRecoveryCookie(input: { userId: string; activeOrganizationId?: string | null; requestUrl?: string | null }) {
+    const recoveryToken = await issueDesktopSessionRecoveryToken({
+        userId: input.userId,
+        activeOrganizationId: input.activeOrganizationId ?? null,
+    });
+    return buildDesktopRecoveryCookie(recoveryToken, input.requestUrl);
+}
+
+export async function persistDesktopCloudSessionSnapshot(input: {
+    cloudSession: CloudSessionLike;
+    access: OrganizationAccessPayload;
+}) {
+    if (!input.cloudSession.user?.id) {
+        return;
+    }
+
+    await ensureLocalDesktopUserState(input);
 }
 
 async function buildLocalSessionCookie(sessionToken: string, requestUrl?: string | null) {

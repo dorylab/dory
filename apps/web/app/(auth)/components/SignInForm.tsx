@@ -171,6 +171,10 @@ export function SignInForm({
         e.preventDefault();
         setErr(null);
         setMsg(null);
+        if (isDesktopOffline) {
+            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
+            return;
+        }
         setLoading(true);
         try {
             if (window.authBridge?.openExternal) {
@@ -336,6 +340,32 @@ export function SignInForm({
         }
     }
 
+    async function onOfflineContinue() {
+        setErr(null);
+        setMsg(null);
+        setSecondaryActionLoading(true);
+
+        try {
+            const response = await fetch('/api/electron/auth/offline/anonymous', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok || !payload?.organizationSlug) {
+                throw new Error(typeof payload?.error === 'string' ? payload.error : t('SignIn.Guest.StartFailed'));
+            }
+
+            await refetchSession();
+            router.refresh();
+            router.push(`/${payload.organizationSlug}/connections`);
+        } catch (nextError) {
+            setErr(nextError instanceof Error ? nextError.message : t('SignIn.Guest.StartFailed'));
+        } finally {
+            setSecondaryActionLoading(false);
+        }
+    }
+
     return (
         <>
             <div className={cn('flex min-w-0 flex-col gap-6', className)} {...props}>
@@ -387,9 +417,28 @@ export function SignInForm({
                                     <InputPassword name="password" id="password" required value={pwd} onChange={e => setPwd(e.target.value)} autoComplete="current-password" />
                                 </div>
 
-                                <Button type="submit" className="w-full" disabled={loading || secondaryActionLoading}>
+                                <Button type="submit" className="w-full" disabled={loading || secondaryActionLoading || isDesktopOffline}>
                                     {loading ? t('SignIn.Submitting') : t('SignIn.Submit')}
                                 </Button>
+
+                                {isDesktopOffline ? (
+                                    <Button
+                                        type="button"
+                                        className="w-full"
+                                        variant="secondary"
+                                        disabled={loading || secondaryActionLoading}
+                                        onClick={() => {
+                                            void onOfflineContinue();
+                                        }}
+                                        data-testid="offline-guest-sign-in"
+                                    >
+                                        {secondaryActionLoading
+                                            ? t('SignIn.Submitting')
+                                            : resumeAnonymousSession
+                                              ? t('SignIn.Guest.ResumeAction')
+                                              : t('SignIn.Offline.Action')}
+                                    </Button>
+                                ) : null}
 
                                 {showGuestOption ? (
                                     <Button

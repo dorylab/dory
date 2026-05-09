@@ -120,6 +120,9 @@
                 "Cancel": "返回",
                 "StartFailed": "启动访客工作区失败"
             },
+            "Offline": {
+                "Action": "离线继续"
+            },
             "Demo": {
                 "Action": "以演示账号登录",
                 "StartFailed": "以演示账号登录失败"
