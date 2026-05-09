@@ -1,9 +1,11 @@
 import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 import { cn } from '@/lib/utils';
 import { SignInForm } from '../components/SignInForm';
 import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from '@/lib/auth/anonymous-recovery';
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
+import { getSessionFromRequest } from '@/lib/auth/session';
 import { getRuntimeForServer } from '@/lib/runtime/runtime';
 // import { BubbleBackground } from '@/components/animate-ui/components/backgrounds/bubble';
 import { HeroBackground } from '../components/bg';
@@ -35,13 +37,23 @@ export const dynamic = 'force-dynamic';
 //     variable: '--font-manrope',
 //     display: 'swap',
 // });
-export default async function SignInPage() {
+export default async function SignInPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ callbackURL?: string }>;
+}) {
     const cookieStore = await cookies();
+    const { callbackURL } = await searchParams;
     const recoveryToken = cookieStore.get(getAnonymousRecoveryCookieName())?.value;
+    const session = await getSessionFromRequest();
     const runtime = getRuntimeForServer() ?? 'web';
     const resumeAnonymousSession = shouldProxyAuthRequest()
         ? Boolean(recoveryToken)
         : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
+
+    if (session) {
+        redirect(callbackURL && callbackURL !== '/sign-in' ? callbackURL : '/');
+    }
 
     return (
         <div

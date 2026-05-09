@@ -4,6 +4,8 @@ import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin';
 import path from 'path';
 
 const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
+const runtime = process.env.DORY_RUNTIME?.trim() || process.env.NEXT_PUBLIC_DORY_RUNTIME?.trim() || 'web';
+const isDesktopRuntime = runtime === 'desktop';
 
 type NextWebpackConfigShape = {
     resolve: {
@@ -63,6 +65,11 @@ const nextConfig = {
     skipTrailingSlashRedirect: true,
     webpack(config: NextWebpackConfigShape, options: NextWebpackOptionsShape) {
         config.resolve.alias['jotai'] = path.resolve(__dirname, 'node_modules/jotai');
+        if (isDesktopRuntime) {
+            config.resolve.alias['@/lib/auth/session'] = path.resolve(__dirname, 'lib/auth/session.desktop.ts');
+            config.resolve.alias['@/lib/auth/auth-proxy'] = path.resolve(__dirname, 'lib/auth/auth-proxy.desktop.ts');
+            config.resolve.alias['@/components/session-recovery-sync'] = path.resolve(__dirname, 'components/session-recovery-sync.desktop.tsx');
+        }
         if (options.isServer) {
             config.externals.push('ssh2', 'better-sqlite3', '@duckdb/node-api');
         }

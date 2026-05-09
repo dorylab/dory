@@ -6,7 +6,6 @@ import { cache } from 'react';
 import { createSessionResolver } from '@dory/auth-core';
 import { getAuth } from '../auth';
 import { createAuthProxyHeaders, shouldProxyAuthRequest } from './auth-proxy';
-import { readDesktopSessionRecoveryPayload, resolveDesktopRecoveredSession } from './desktop-session-recovery';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { getRuntimeForServer } from '@/lib/runtime/runtime';
 
@@ -44,26 +43,11 @@ function normalizeSessionCookieHeader(headers: Headers): Headers {
 async function resolveSessionFromHeaders(reqHeaders: Headers, url: string | null) {
     const normalizedHeaders = normalizeSessionCookieHeader(reqHeaders);
 
-    if (shouldProxyAuthRequest()) {
-        const recoveryPayload = await readDesktopSessionRecoveryPayload(normalizedHeaders);
-        if (recoveryPayload?.userId) {
-            const recoveredSession = await resolveDesktopRecoveredSession(normalizedHeaders);
-            if (recoveredSession) {
-                return recoveredSession;
-            }
-        }
-    }
-
     const session = await resolveSession({
         headers: normalizedHeaders,
         url,
     });
-
-    if (session || !shouldProxyAuthRequest()) {
-        return session;
-    }
-
-    return resolveDesktopRecoveredSession(normalizedHeaders);
+    return session;
 }
 
 const getSessionFromCurrentRequest = cache(async () => {
