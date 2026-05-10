@@ -55,6 +55,27 @@ docker run -d --name dory \
 
 ```
 
+For a local smoke test, the Docker image can be built and started with:
+
+```bash
+docker build --build-arg VERSION=$(git rev-parse HEAD) -t dory-local:test .
+
+docker run --rm --name dory-smoke \
+  -p 3000:3000 \
+  -e TRUSTED_ORIGINS="http://localhost:3000" \
+  -e DS_SECRET_KEY="$(openssl rand -base64 32 | tr -d '\n')" \
+  -e BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
+  -e BETTER_AUTH_URL="http://localhost:3000" \
+  dory-local:test
+```
+
+If you want a fixed bootstrap login in Docker, add:
+
+```bash
+-e DORY_INIT_USER_EMAIL=your-login@example.com \
+-e DORY_INIT_USER_PASSWORD=your-password
+```
+
 To enable email verification, set `RESEND_API_KEY` to a valid [resend](https://resend.com) key and `EMAIL_FROM` to a validated email.
 
   

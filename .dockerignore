@@ -8,6 +8,15 @@ dist
 coverage
 dist-scripts
 *.tsbuildinfo
+**/node_modules
+**/.next
+**/out
+**/dist
+**/.cache
+**/.turbo
+**/coverage
+**/dist-scripts
+**/*.tsbuildinfo
 
 # package managers
 .pnpm-store
@@ -15,22 +24,32 @@ pnpm-debug.log*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+**/.pnpm-store
 
 # env / secrets
 .env
 .env.*
 !.env.example
+**/.env
+**/.env.*
+!**/.env.example
 
 # runtime data
 data
 logs
 localdata
+**/logs
+**/localdata
 
 # misc
 .DS_Store
 .git
 *.tgz
 *.zip
+**/.DS_Store
+**/*.tgz
+**/*.zip
 
 # optional: if you never need sourcemaps in image context
 *.map
+**/*.map
