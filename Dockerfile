@@ -24,8 +24,10 @@ COPY . .
 
 # Build application and bootstrap script
 RUN yarn run build \
- && mkdir -p apps/web/dist-scripts \
- && bun build apps/web/scripts/bootstrap.ts --target=node --format=esm --outfile=apps/web/dist-scripts/bootstrap.mjs \
+ && cd apps/web \
+ && mkdir -p dist-scripts \
+ && bun build scripts/bootstrap.ts --target=node --format=esm --outfile=dist-scripts/bootstrap.mjs \
+ && cd /app \
  && cp -rn node_modules/@electric-sql/pglite/dist/. apps/web/dist-scripts/ \
  && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.data apps/web/dist-scripts/ \
  && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.wasm apps/web/dist-scripts/ \

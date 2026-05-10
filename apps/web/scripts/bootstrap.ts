@@ -5,11 +5,13 @@ import { fileURLToPath } from 'node:url';
 
 import { migratePgliteDB } from '../lib/database/pglite/migrate-pglite';
 import { getDatabaseProvider } from '../lib/database/provider';
-import { DEFAULT_PGLITE_DB_PATH, DESKTOP_PGLITE_DB_PATH } from '@/shared/data/app.data';
-import { ensureFileUrl } from '@/lib/database/pglite/url';
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
-import { resolveDemoSqlitePath } from '@/lib/demo/paths';
+import { ensureFileUrl } from '../lib/database/pglite/url';
+import { isDesktopRuntime } from '../lib/runtime/runtime';
+import { resolveDemoSqlitePath } from '../lib/demo/paths';
 import { resetPgliteClient } from '../lib/database/postgres/client/pglite';
+
+const DEFAULT_PGLITE_DB_PATH = '/app/data/dory';
+const DESKTOP_PGLITE_DB_PATH = './data/dory';
 
 
 async function ensureDirForFile(filePath: string) {

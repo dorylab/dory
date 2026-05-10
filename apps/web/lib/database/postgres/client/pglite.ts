@@ -4,9 +4,11 @@ import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import * as schemas from '../schemas';
 import type { PostgresDBClient } from '@/types';
-import { DEFAULT_PGLITE_DB_PATH, DESKTOP_PGLITE_DB_PATH } from '@/shared/data/app.data';
 import { extractFilePath } from '@/lib/database/pglite/url';
 import { isDesktopRuntime } from '@/lib/runtime/runtime';
+
+const DEFAULT_PGLITE_DB_PATH = '/app/data/dory';
+const DESKTOP_PGLITE_DB_PATH = './data/dory';
 
 const globalForPglite = globalThis as typeof globalThis & {
     __pgliteDbPromise?: Promise<PostgresDBClient>;
