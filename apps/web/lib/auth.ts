@@ -23,6 +23,7 @@ import { canManageOrganizationBilling } from './billing/authz';
 import { buildDefaultOrganizationValues, linkAnonymousOrganizationToUser } from './auth/anonymous';
 import { isAnonymousUser } from './auth/anonymous-user';
 import { appendClearAnonymousRecoveryCookieHeader } from './auth/anonymous-recovery';
+import { ensureConfiguredInitUser } from './auth/init-user';
 
 const REQUIRE_EMAIL_VERIFICATION = parseEnvFlag(process.env.NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION);
 
@@ -646,6 +647,8 @@ function createAuth() {
                 },
             },
         });
+
+        await ensureConfiguredInitUser(auth as any);
 
         return auth;
     })();
