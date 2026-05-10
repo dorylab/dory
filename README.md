@@ -171,7 +171,10 @@ Native ClickHouse user and role management UI.
 | MySQL      | ✅ Supported         |
 | MariaDB    | ✅ Supported         |
 | SQLite     | ✅ Supported         |
-| DuckDB     | 🚧 Planned           |
+| DuckDB     | ✅ Supported         |
+| SQL Server | 🚧 Planned           |
+| Oracle     | 🚧 Planned           |
+| Snowflake  | 🚧 Planned           |
 
 ---
 
