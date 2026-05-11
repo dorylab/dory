@@ -58,8 +58,8 @@ docker run -d --name dory \
 If you want a fixed bootstrap login in Docker, add:
 
 ```bash
--e DORY_INIT_USER_EMAIL=your-login@example.com \
--e DORY_INIT_USER_PASSWORD=your-password
+-e DORY_INIT_USER_EMAIL=admin@getdory.dev \
+-e DORY_INIT_USER_PASSWORD=admin
 ```
 
 To enable email verification, set `RESEND_API_KEY` to a valid [resend](https://resend.com) key and `EMAIL_FROM` to a validated email.
