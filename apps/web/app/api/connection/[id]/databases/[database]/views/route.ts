@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
 import { resolveCatalogContext } from '../../_utils';
-import { hasMetadataCapability } from '@/lib/connection/base/types';
+import { hasMetadataCapability } from '@dory/drivers/types';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
 export async function GET(req: NextRequest, context: { params: Promise<{ database: string }> }) {

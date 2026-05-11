@@ -24,12 +24,12 @@ export async function resolveOrganizationAccess(organizationId: string, userId: 
     const now = Date.now();
 
     if (cached && cached.expiresAt > now) {
-        console.log('[authz] resolveOrganizationAccess:cache-hit', {
-            organizationId,
-            userId,
-            proxy,
-            expiresInMs: cached.expiresAt - now,
-        });
+        // console.log('[authz] resolveOrganizationAccess:cache-hit', {
+        //     organizationId,
+        //     userId,
+        //     proxy,
+        //     expiresInMs: cached.expiresAt - now,
+        // });
         return cached.value;
     }
 

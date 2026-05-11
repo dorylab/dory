@@ -18,7 +18,7 @@ import { editorSelectionByTabAtom } from '../../sql-console.store';
 import { useTranslations } from 'next-intl';
 import type { ConnectionType } from '@/types/connections';
 import { getSqlDialectConfigForConnectionType, getSqlDialectParser, type SqlDialectParser } from '@/lib/sql/sql-dialect';
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 
 const MAX_SQL_LEN_FOR_PARSE = 20000;
 

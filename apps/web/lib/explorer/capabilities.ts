@@ -1,5 +1,5 @@
 import type { ExplorerDriver, ExplorerListKind, ExplorerObjectKind } from './types';
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 
 export type DriverCapabilities = {
     driver: ExplorerDriver;

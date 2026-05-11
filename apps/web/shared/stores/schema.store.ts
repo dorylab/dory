@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import type { ConnectionSchemaMap } from '@/lib/connection/base/types';
+import type { ConnectionSchemaMap } from '@dory/drivers/types';
 
 export interface TableSchema {
     name: string;

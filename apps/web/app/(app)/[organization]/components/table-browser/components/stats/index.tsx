@@ -11,7 +11,7 @@ import { TableHealthReportCard } from './components/ai-insight';
 import PostgresTableStatsView from './postgres-stats';
 import { useTableStatsQuery } from '../table-queries';
 import { useTranslations } from 'next-intl';
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 // import TTLCard from './components/ttl-card';
 
 type TableStatsProps = {

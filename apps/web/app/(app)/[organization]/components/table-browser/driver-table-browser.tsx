@@ -11,7 +11,7 @@ import TableDataPreview from './components/data-preview';
 import { TableIndexesTab } from './components/indexes';
 import { TableViewTabs } from './table-view-tabs';
 import type { TableSubTab } from './types';
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import { supportsTableStats } from './utils';
 
 type DriverTableBrowserProps = {

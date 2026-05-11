@@ -5,7 +5,7 @@ import z from 'zod';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
-import { hasTableInfoCapability } from '@/lib/connection/base/types';
+import { hasTableInfoCapability } from '@dory/drivers/types';
 import { TableIndexInfo } from '@/types/table-info';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';

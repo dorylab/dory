@@ -3,15 +3,11 @@ import { ErrorCodes } from '@/lib/errors';
 import { ResponseUtil } from '@/lib/result';
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
 import { splitMultiSQL } from '@/lib/utils/split-multi-sql';
-import { BaseConnection } from '@/lib/connection/base/base-connection';
+import { BaseConnection } from '@dory/drivers/core';
 import { withAutomationHandler } from '../../with-automation-handler';
 import { parseSqlOp, MAX_STATEMENTS } from '../../utils';
 
-async function executeStatement(
-    connection: BaseConnection,
-    statement: string,
-    context: { database?: string },
-) {
+async function executeStatement(connection: BaseConnection, statement: string, context: { database?: string }) {
     const perfStart = performance.now();
     try {
         const result = await connection.queryWithContext(statement, {

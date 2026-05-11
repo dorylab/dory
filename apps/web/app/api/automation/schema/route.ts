@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ErrorCodes } from '@/lib/errors';
 import { ResponseUtil } from '@/lib/result';
 import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
-import { hasMetadataCapability } from '@/lib/connection/base/types';
+import { hasMetadataCapability } from '@dory/drivers/types';
 import { withAutomationHandler } from '../with-automation-handler';
 
 /**

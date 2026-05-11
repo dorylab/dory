@@ -2,7 +2,7 @@ import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { ErrorCodes } from '@/lib/errors';
 import { ResponseUtil } from '@/lib/result';
 import { NextRequest, NextResponse } from 'next/server';
-import { BaseConnection } from '../connection/base/base-connection';
+import { BaseConnection } from '@dory/drivers/core';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { getOrCreateConnectionPool } from '../connection/connection-service';
 import { translate } from '@/lib/i18n/i18n';
@@ -30,17 +30,9 @@ function resolveLocale(req: NextRequest, explicitLocale?: Locale): Locale {
     return routing.defaultLocale;
 }
 
-export async function ensureConnection(
-    req: NextRequest,
-    options?: EnsureConnectionOptions,
-): Promise<
-    | BaseConnection
-    | { response: NextResponse }
-> {
+export async function ensureConnection(req: NextRequest, options?: EnsureConnectionOptions): Promise<BaseConnection | { response: NextResponse }> {
     const locale = resolveLocale(req, options?.locale);
-    const connectionId =
-        req.headers.get(X_CONNECTION_ID_KEY) ??
-        req.headers.get(X_CONNECTION_ID_KEY.toLowerCase());
+    const connectionId = req.headers.get(X_CONNECTION_ID_KEY) ?? req.headers.get(X_CONNECTION_ID_KEY.toLowerCase());
 
     if (!connectionId) {
         return {

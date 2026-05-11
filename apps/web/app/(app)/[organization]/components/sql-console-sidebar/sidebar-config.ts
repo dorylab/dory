@@ -1,6 +1,6 @@
 import type { ConnectionType } from '@/types/connections';
 import type { SidebarConfig } from './types';
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 
 const DEFAULT_CONFIG: SidebarConfig = {
     dialect: 'default',

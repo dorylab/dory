@@ -1,30 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
+import '@/lib/drivers/register-database-drivers';
+
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import type { ConnectionSsh } from '@/types/connections';
-import { UnsupportedTypeError } from '@/lib/connection/base/errors';
-import { BaseConfig } from '@/lib/connection/base/types';
-import { CONNECTION_REQUEST_TIMEOUT_MS, withConnectionTimeout } from '@/lib/connection/defaults';
-import { getDatasourcePool, destroyDatasourcePool, ensureDatasourcePool } from '@/lib/connection/pool-store';
-import { buildStoredConnectionConfig, pickConnectionIdentity } from '@/lib/connection/config-builder';
+import { UnsupportedTypeError } from '@dory/drivers/core';
+import { BaseConfig } from '@dory/drivers/types';
+import { CONNECTION_REQUEST_TIMEOUT_MS, withConnectionTimeout } from '@dory/drivers/core';
+import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
+import { buildStoredConnectionConfig, pickConnectionIdentity } from '@dory/drivers/config';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError, getConnectionErrorCode } from '@/app/api/connection/utils';
+import { resolveStoredSqlitePath } from '@/lib/demo/paths';
+
 export const runtime = 'nodejs';
+
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
 
 async function ensurePoolWithLatest(config: BaseConfig) {
-    const existing = await getDatasourcePool(config.id);
+    const existing = await getDriverPool(config.id);
     const needRefresh =
         existing &&
         ((config.configVersion && existing.config.configVersion !== config.configVersion) ||
             (config.updatedAt && existing.config.updatedAt !== config.updatedAt));
 
     if (needRefresh) {
-        await destroyDatasourcePool(config.id);
+        await destroyDriverPool(config.id);
     }
 
-    return ensureDatasourcePool(config);
+    return ensureDriverPool(config);
 }
 
 export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId }) => {
@@ -85,6 +90,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
             { ...identity, password: plainPassword },
             sshConfig,
             code => createConnectionError(code as ConnectionErrorCode),
+            resolveStoredSqlitePath,
         );
 
         const { health } = await withConnectionTimeout(
@@ -116,10 +122,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         console.error('[connection] connect failed', error);
 
         if (error instanceof UnsupportedTypeError) {
-            return NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.ERROR, message: t('Api.Connection.Errors.UnsupportedType') }),
-                { status: 400 },
-            );
+            return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.ERROR, message: t('Api.Connection.Errors.UnsupportedType') }), { status: 400 });
         }
 
         const code = getConnectionErrorCode(error);
@@ -130,9 +133,9 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
                 ? t('Api.Connection.Errors.MissingHost')
                 : code === CONNECTION_ERROR_CODES.missingPath
                   ? t('Api.Connection.Errors.MissingPath')
-                : code === CONNECTION_ERROR_CODES.missingUsername
-                  ? t('Api.Connection.Errors.MissingUsername')
-                  : messageFromError ?? fallbackMessage;
+                  : code === CONNECTION_ERROR_CODES.missingUsername
+                    ? t('Api.Connection.Errors.MissingUsername')
+                    : (messageFromError ?? fallbackMessage);
 
         if (connectionId) {
             const tookMs = Date.now() - startedAt;
@@ -147,9 +150,6 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
                 .catch(err => console.error('[connection] failed to record last check (connect)', err));
         }
 
-        return NextResponse.json(
-            ResponseUtil.error({ code: ErrorCodes.ERROR, message }),
-            { status: 500 },
-        );
+        return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.ERROR, message }), { status: 500 });
     }
 });

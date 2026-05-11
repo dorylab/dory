@@ -1,4 +1,4 @@
-import { BaseConnection } from '@/lib/connection/base/base-connection';
+import { BaseConnection } from '@dory/drivers/core';
 import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
 
 type ColumnInfo = {
