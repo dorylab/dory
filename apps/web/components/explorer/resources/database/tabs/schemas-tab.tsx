@@ -12,7 +12,7 @@ import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
 import type { ResponseObject } from '@/types';
-import type { DatabaseMeta } from '@/lib/connection/base/types';
+import type { DatabaseMeta } from '@dory/drivers/types';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
 

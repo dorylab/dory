@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import z from 'zod';
-import { hasMetadataCapability, TableColumnInfo } from '@/lib/connection/base/types';
+import { hasMetadataCapability, TableColumnInfo } from '@dory/drivers/types';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
@@ -31,10 +31,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         const tableParam = (await context?.params)?.table;
 
         if (!datasourceId) {
-            return NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }),
-                { status: 400 },
-            );
+            return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }), { status: 400 });
         }
 
         const safeDecode = (value: string | null | undefined) => {

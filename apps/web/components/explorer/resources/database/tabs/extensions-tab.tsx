@@ -6,7 +6,7 @@ import { Search } from 'lucide-react';
 import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { authFetch } from '@/lib/client/auth-fetch';
-import type { DatabaseExtensionMeta } from '@/lib/connection/base/types';
+import type { DatabaseExtensionMeta } from '@dory/drivers/types';
 import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
@@ -86,8 +86,7 @@ export function ExtensionsTab(props: ExtensionsTabProps) {
                 accessorKey: 'comment',
                 header: 'Comment',
                 meta: { className: 'text-left', cellClassName: 'text-left text-muted-foreground' },
-                cell: ({ row }) =>
-                    row.original.comment ? <OverflowTooltip text={row.original.comment} className="block max-w-90 truncate text-muted-foreground" /> : '-',
+                cell: ({ row }) => (row.original.comment ? <OverflowTooltip text={row.original.comment} className="block max-w-90 truncate text-muted-foreground" /> : '-'),
             },
         ],
         [],

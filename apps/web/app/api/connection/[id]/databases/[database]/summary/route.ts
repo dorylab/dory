@@ -3,11 +3,11 @@ import { z } from 'zod';
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
-import { hasMetadataCapability } from '@/lib/connection/base/types';
+import { hasMetadataCapability } from '@dory/drivers/types';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 
 export const runtime = 'nodejs';
 

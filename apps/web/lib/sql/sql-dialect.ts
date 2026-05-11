@@ -1,7 +1,7 @@
 import type { ConnectionDialect } from '@/types';
 import type { ConnectionType } from '@/types/connections';
 import type { SqlLanguage } from 'sql-formatter';
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 
 export type SqlDialectParser = {
     getSuggestionAtCaretPosition?: (sql: string, caretPos: { lineNumber: number; column: number }) => unknown;

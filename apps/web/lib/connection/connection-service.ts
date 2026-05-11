@@ -1,15 +1,18 @@
 import { getDBService } from '@/lib/database';
-import { ensureDatasourcePool, getDatasourcePool, type DatasourcePoolEntry } from './pool-store';
+import '@/lib/drivers/register-database-drivers';
+
+import { ensureDriverPool, getDriverPool, type DriverPoolEntry } from '@dory/drivers/core';
+import { buildStoredConnectionConfig, pickConnectionIdentity } from '@dory/drivers/config';
 import type { ConnectionSsh } from '@/types/connections';
-import { buildStoredConnectionConfig, pickConnectionIdentity } from './config-builder';
+import { resolveStoredSqlitePath } from '@/lib/demo/paths';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
 
 export async function getOrCreateConnectionPool(
     organizationId: string,
     connectionId: string,
-): Promise<DatasourcePoolEntry | undefined> {
-    const existing = await getDatasourcePool(connectionId);
+): Promise<DriverPoolEntry | undefined> {
+    const existing = await getDriverPool(connectionId);
     if (existing) return existing;
 
     const db = await getDBService();
@@ -28,6 +31,12 @@ export async function getOrCreateConnectionPool(
           ? ({ enabled: true, ...sshSecrets } as SshWithSecrets)
           : null;
 
-    const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig);
-    return ensureDatasourcePool(config);
+    const config = buildStoredConnectionConfig(
+        record.connection,
+        { ...identity, password: plainPassword },
+        sshConfig,
+        undefined,
+        resolveStoredSqlitePath,
+    );
+    return ensureDriverPool(config);
 }

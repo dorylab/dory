@@ -2328,6 +2328,24 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/drivers@npm:0.1.0, @dory/drivers@workspace:packages/drivers":
+  version: 0.0.0-use.local
+  resolution: "@dory/drivers@workspace:packages/drivers"
+  dependencies:
+    "@clickhouse/client": "npm:^1.18.2"
+    "@duckdb/node-api": "npm:^1.5.2-r.1"
+    "@types/better-sqlite3": "npm:^7.6.13"
+    "@types/node": "npm:^25.5.2"
+    "@types/pg": "npm:^8.20.0"
+    better-sqlite3: "npm:^12.8.0"
+    mysql2: "npm:^3.20.0"
+    pg: "npm:^8.20.0"
+    ssh2: "npm:^1.17.0"
+    ssh2-no-cpu-features: "npm:^2.0.0"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
 "@dotenvx/dotenvx@npm:1.31.0":
   version: 1.31.0
   resolution: "@dotenvx/dotenvx@npm:1.31.0"
@@ -23180,6 +23198,7 @@ __metadata:
     "@dnd-kit/modifiers": "npm:^9.0.0"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@dory/drivers": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
     "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"

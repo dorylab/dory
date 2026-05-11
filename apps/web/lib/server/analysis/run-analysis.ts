@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { BaseConnection } from '@/lib/connection/base/base-connection';
+import type { BaseConnection } from '@dory/drivers/core';
 import { translate } from '@/lib/i18n/i18n';
 import { routing, type Locale } from '@/lib/i18n/routing';
 import type {

@@ -1,10 +1,13 @@
-import { HealthInfo } from '@/lib/connection/base/types';
-import { withConnectionTimeout } from '@/lib/connection/defaults';
-import { createProvider } from '@/lib/connection/factory';
+import { HealthInfo } from '@dory/drivers/types';
+import '@/lib/drivers/register-database-drivers';
+
+import { withConnectionTimeout } from '@dory/drivers/core';
+import { createDriver } from '@dory/drivers/core';
 import { getDBService } from '@/lib/database';
 import { TestConnectionPayload } from '@/types/connections';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/app/api/connection/utils';
-import { buildTestConnectionConfig } from '@/lib/connection/config-builder';
+import { buildTestConnectionConfig } from '@dory/drivers/config';
+import { resolveStoredSqlitePath } from '@/lib/demo/paths';
 
 type SSHConfigWithSecrets = NonNullable<TestConnectionPayload['ssh']> & {
     password?: string | null;
@@ -43,15 +46,17 @@ export async function testConnectService(organizationId: string, payload: TestCo
 
     const testPassword = payload?.identity?.password ?? plainPassword;
     const resolvedSsh = await resolveSshSecrets(organizationId, payload, db);
-    const config = buildTestConnectionConfig({ ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh }, code =>
-        createConnectionError(code as ConnectionErrorCode),
+    const config = buildTestConnectionConfig(
+        { ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh },
+        code => createConnectionError(code as ConnectionErrorCode),
+        resolveStoredSqlitePath,
     );
-    let provider = null as Awaited<ReturnType<typeof createProvider>> | null;
+    let provider = null as Awaited<ReturnType<typeof createDriver>> | null;
 
     try {
         const result = await withConnectionTimeout(
             (async () => {
-                provider = await createProvider(config);
+                provider = await createDriver(config);
                 return provider.ping();
             })(),
             payload.timeout,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { runAnalysis } from '@/lib/server/analysis/run-analysis';
-import type { BaseConnection } from '@/lib/connection/base/base-connection';
+import type { BaseConnection } from '@dory/drivers/core';
 import type { RunAnalysisRequest } from '@/lib/analysis/types';
 
 function makeConnection(rows: Array<Record<string, unknown>>, columns: Array<{ name: string; type: string | null }>): Pick<BaseConnection, 'queryWithContext'> {

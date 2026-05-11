@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import z from 'zod';
 import { logger } from '@/lib/logger';
-import { BaseConnection } from '@/lib/connection/base/base-connection';
+import { BaseConnection } from '@dory/drivers/core';
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';

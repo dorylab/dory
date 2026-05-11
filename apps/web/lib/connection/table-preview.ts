@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import type { BaseConnection } from '@/lib/connection/base/base-connection';
-import { hasTableInfoCapability } from '@/lib/connection/base/types';
+import type { BaseConnection } from '@dory/drivers/core';
+import { hasTableInfoCapability } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 
 type BuildTablePreviewPayloadParams = {
@@ -34,18 +34,7 @@ function buildPreviewSqlText(database: string, table: string): string {
     return `TABLE PREVIEW ${database}.${table}`;
 }
 
-export async function buildTablePreviewPayload({
-    connection,
-    connectionId,
-    database,
-    table,
-    limit,
-    offset,
-    sessionId,
-    tabId,
-    userId,
-    source,
-}: BuildTablePreviewPayloadParams) {
+export async function buildTablePreviewPayload({ connection, connectionId, database, table, limit, offset, sessionId, tabId, userId, source }: BuildTablePreviewPayloadParams) {
     const tableInfo = connection.capabilities.tableInfo;
     if (!hasTableInfoCapability(tableInfo, 'preview')) {
         throw new Error('Table preview is not supported for this connection');

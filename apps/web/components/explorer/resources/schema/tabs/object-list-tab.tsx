@@ -15,7 +15,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
 import type { ResponseObject } from '@/types';
 import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
-import type { DatabaseObjectRow } from '@/lib/connection/base/types';
+import type { DatabaseObjectRow } from '@dory/drivers/types';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
 
 type ObjectListTabProps = {

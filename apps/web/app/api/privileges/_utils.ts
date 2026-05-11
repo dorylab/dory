@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
-import type { BaseConnection } from '@/lib/connection/base/base-connection';
-import type { ClickhousePrivilegesImpl } from '@/lib/connection/drivers/clickhouse/capabilities/privileges';
+import type { BaseConnection } from '@dory/drivers/core';
+import type { ClickhousePrivilegesImpl } from '@dory/drivers/database/clickhouse/privileges';
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
@@ -29,10 +29,7 @@ export async function resolvePrivilegesConnection(
 ): Promise<{ response?: NextResponse; resolved?: ResolvedPrivilegesConnection }> {
     const locale = await getApiLocale();
     const organizationId = options?.organizationId ?? resolveCurrentOrganizationId(await getSessionFromRequest(req));
-    const connectionId =
-        req.headers.get(X_CONNECTION_ID_KEY) ??
-        req.headers.get(X_CONNECTION_ID_KEY.toLowerCase()) ??
-        req.nextUrl.searchParams.get('connectionId');
+    const connectionId = req.headers.get(X_CONNECTION_ID_KEY) ?? req.headers.get(X_CONNECTION_ID_KEY.toLowerCase()) ?? req.nextUrl.searchParams.get('connectionId');
 
     if (!connectionId) {
         return {
@@ -93,11 +90,7 @@ export async function resolvePrivilegesConnection(
     };
 }
 
-export async function handlePrivilegesError(
-    error: unknown,
-    fallbackMessage?: string,
-    status = 500,
-): Promise<NextResponse> {
+export async function handlePrivilegesError(error: unknown, fallbackMessage?: string, status = 500): Promise<NextResponse> {
     const locale = await getApiLocale();
     if (error instanceof Error) {
         if (error.message === 'USER_NOT_FOUND') {

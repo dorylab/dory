@@ -1,4 +1,4 @@
-import { isPostgresFamilyConnectionType } from '@/lib/connection/postgres-family';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import { ColumnInfo } from './type';
 
 export function supportsTableStats(driver?: string | null): boolean {
@@ -10,12 +10,7 @@ export function buildColumnCacheKey(connectionId?: string, databaseName?: string
     return `${connectionId}::${databaseName}::${tableName}`;
 }
 
-export function computeColumnsHash(
-    connectionId: string | undefined,
-    databaseName: string,
-    tableName: string,
-    columns: ColumnInfo[],
-) {
+export function computeColumnsHash(connectionId: string | undefined, databaseName: string, tableName: string, columns: ColumnInfo[]) {
     const payload = {
         connectionId: connectionId ?? 'unknown',
         databaseName,

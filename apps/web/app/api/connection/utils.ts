@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getDBService } from '@/lib/database';
+import '@/lib/drivers/register-database-drivers';
 
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@/lib/errors';
 import type { ConnectionSsh } from '@/types/connections';
-import { BaseConfig } from '@/lib/connection/base/types';
-import { getDatasourcePool, destroyDatasourcePool, ensureDatasourcePool } from '@/lib/connection/pool-store';
-import { buildStoredConnectionConfig, pickConnectionIdentity } from '@/lib/connection/config-builder';
+import { BaseConfig } from '@dory/drivers/types';
+import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
+import { buildStoredConnectionConfig, pickConnectionIdentity } from '@dory/drivers/config';
+import { resolveStoredSqlitePath } from '@/lib/demo/paths';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
 
@@ -70,17 +72,17 @@ export function normalizeOptions(raw: unknown): string | Record<string, unknown>
 }
 
 async function ensurePoolWithLatest(config: BaseConfig) {
-    const existing = await getDatasourcePool(config.id);
+    const existing = await getDriverPool(config.id);
     const needRefresh =
         existing &&
         ((config.configVersion && existing.config.configVersion !== config.configVersion) ||
             (config.updatedAt && existing.config.updatedAt !== config.updatedAt));
 
     if (needRefresh) {
-        await destroyDatasourcePool(config.id);
+        await destroyDriverPool(config.id);
     }
 
-    return ensureDatasourcePool(config);
+    return ensureDriverPool(config);
 }
 
 export async function ensureConnectionPoolForUser(userId: string, organizationId: string, connectionId: string, identityId?: string | null) {
@@ -110,6 +112,7 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
         { ...identity, password: plainPassword },
         sshConfig,
         code => createConnectionError(code as ConnectionErrorCode),
+        resolveStoredSqlitePath,
     );
     const entry = await ensurePoolWithLatest(config);
 

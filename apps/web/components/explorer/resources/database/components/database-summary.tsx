@@ -19,7 +19,7 @@ import type { ExplorerBaseParams } from '@/lib/explorer/types';
 import { cn } from '@/lib/utils';
 import { splitQualifiedName } from '@/components/explorer/core/explorer-store';
 import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
-import type { DatabaseSummary as DatabaseSummaryData, DatabaseSummaryRecommendation, DatabaseSummaryTable } from '@/lib/connection/base/types';
+import type { DatabaseSummary as DatabaseSummaryData, DatabaseSummaryRecommendation, DatabaseSummaryTable } from '@dory/drivers/types';
 import type { ResponseObject } from '@/types';
 
 type DatabaseSummaryProps = {
@@ -116,10 +116,7 @@ function CompactLine({ label, value }: { label: string; value: ReactNode }) {
 
 function QuickActionTile({ href, label }: { href: string; label: string }) {
     return (
-        <Link
-            href={href}
-            className="group rounded-xl border border-border/70 bg-background/70 p-4 transition-colors hover:bg-background"
-        >
+        <Link href={href} className="group rounded-xl border border-border/70 bg-background/70 p-4 transition-colors hover:bg-background">
             <div className="text-sm font-medium leading-snug">{label}</div>
             <div className="mt-3 text-xs text-muted-foreground transition-colors group-hover:text-foreground/80">Open</div>
         </Link>
@@ -337,7 +334,7 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
 
     const primaryTitle = summary?.schemaName ?? schema ?? summary?.databaseName ?? databaseName;
     const primaryCaption = schema
-                ? t('Schema in database', { database: (summary?.databaseName ?? databaseName) || '—' })
+        ? t('Schema in database', { database: (summary?.databaseName ?? databaseName) || '—' })
         : catalogName
           ? t('Database in catalog', { catalog: catalogName })
           : summaryDescription;
@@ -543,68 +540,66 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
                 </SectionCard>
 
                 <SectionCard title={t('Quick access')} description={t('Quick access description')}>
-                            {loading ? (
-                                <div className="grid gap-4 xl:items-start xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-                                    <Skeleton className="h-56 rounded-2xl" />
-                                    <Skeleton className="h-56 rounded-2xl" />
+                    {loading ? (
+                        <div className="grid gap-4 xl:items-start xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+                            <Skeleton className="h-56 rounded-2xl" />
+                            <Skeleton className="h-56 rounded-2xl" />
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 xl:items-start xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+                            <div className="rounded-2xl bg-muted/35 p-5 xl:max-w-sm xl:self-start">
+                                <div className="space-y-1">
+                                    <div className="text-sm font-medium">{t('Quick Actions')}</div>
+                                    <p className="text-sm text-muted-foreground">{t('Quick Actions description')}</p>
                                 </div>
-                            ) : (
-                                <div className="grid gap-4 xl:items-start xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
-                                    <div className="rounded-2xl bg-muted/35 p-5 xl:max-w-sm xl:self-start">
-                                        <div className="space-y-1">
-                                            <div className="text-sm font-medium">{t('Quick Actions')}</div>
-                                            <p className="text-sm text-muted-foreground">{t('Quick Actions description')}</p>
-                                        </div>
-                                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                                            {quickActions.map(action =>
-                                                action.href ? (
-                                                    <QuickActionTile key={action.label} href={action.href} label={action.label} />
-                                                ) : (
-                                                    <div key={action.label} className="rounded-xl border border-border/60 bg-background/40 p-4 text-sm text-muted-foreground">
-                                                        {action.label}
-                                                    </div>
-                                                ),
-                                            )}
-                                        </div>
+                                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                                    {quickActions.map(action =>
+                                        action.href ? (
+                                            <QuickActionTile key={action.label} href={action.href} label={action.label} />
+                                        ) : (
+                                            <div key={action.label} className="rounded-xl border border-border/60 bg-background/40 p-4 text-sm text-muted-foreground">
+                                                {action.label}
+                                            </div>
+                                        ),
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 xl:grid-cols-2">
+                                <div className="rounded-2xl bg-muted/35 p-5">
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium">{t('Start Here')}</div>
+                                        <p className="text-sm text-muted-foreground">{t('Start Here description')}</p>
                                     </div>
+                                    <div className="mt-4">{renderRecommendationList(summary?.startHere ?? [], emptyTables ? t('No tables found') : t('No recommendations'))}</div>
+                                </div>
 
-                                    <div className="grid gap-4 xl:grid-cols-2">
-                                        <div className="rounded-2xl bg-muted/35 p-5">
-                                            <div className="space-y-1">
-                                                <div className="text-sm font-medium">{t('Start Here')}</div>
-                                                <p className="text-sm text-muted-foreground">{t('Start Here description')}</p>
-                                            </div>
-                                            <div className="mt-4">
-                                                {renderRecommendationList(summary?.startHere ?? [], emptyTables ? t('No tables found') : t('No recommendations'))}
-                                            </div>
-                                        </div>
+                                <div className="rounded-2xl bg-muted/35 p-5">
+                                    <div className="space-y-1">
+                                        <div className="text-sm font-medium">{t('Largest Tables')}</div>
+                                        <p className="text-sm text-muted-foreground">{t('Largest Tables description')}</p>
+                                    </div>
+                                    <div className="mt-4 space-y-4">
+                                        {renderTableStatsList(summary?.topTablesByBytes ?? [], t('No tables found'))}
 
-                                        <div className="rounded-2xl bg-muted/35 p-5">
-                                            <div className="space-y-1">
-                                                <div className="text-sm font-medium">{t('Largest Tables')}</div>
-                                                <p className="text-sm text-muted-foreground">{t('Largest Tables description')}</p>
-                                            </div>
-                                            <div className="mt-4 space-y-4">
-                                                {renderTableStatsList(summary?.topTablesByBytes ?? [], t('No tables found'))}
-
-                                                {summary?.recentTables?.length ? (
-                                                    <div className="space-y-3 border-t border-border/60 pt-4">
-                                                        <div className="text-sm font-medium">{t('Recently Updated')}</div>
-                                                        {summary.recentTables.slice(0, 3).map(item => (
-                                                            <div key={item.name} className="rounded-xl bg-background/70 p-3">
-                                                                <div className="max-w-full text-sm font-medium">{renderTableLink(item.name)}</div>
-                                                                <div className="mt-1 text-xs text-muted-foreground">
-                                                                    {t('Updated')} {renderNullableText(formatTimestamp(item.lastUpdatedAt, locale), nullTooltip)}
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                        {summary?.recentTables?.length ? (
+                                            <div className="space-y-3 border-t border-border/60 pt-4">
+                                                <div className="text-sm font-medium">{t('Recently Updated')}</div>
+                                                {summary.recentTables.slice(0, 3).map(item => (
+                                                    <div key={item.name} className="rounded-xl bg-background/70 p-3">
+                                                        <div className="max-w-full text-sm font-medium">{renderTableLink(item.name)}</div>
+                                                        <div className="mt-1 text-xs text-muted-foreground">
+                                                            {t('Updated')} {renderNullableText(formatTimestamp(item.lastUpdatedAt, locale), nullTooltip)}
+                                                        </div>
                                                     </div>
-                                                ) : null}
+                                                ))}
                                             </div>
-                                        </div>
+                                        ) : null}
                                     </div>
                                 </div>
-                            )}
+                            </div>
+                        </div>
+                    )}
                 </SectionCard>
             </div>
         </TooltipProvider>

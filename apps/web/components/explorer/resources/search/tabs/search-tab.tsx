@@ -8,7 +8,7 @@ import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { buildExplorerObjectPath, buildExplorerSchemaPath } from '@/lib/explorer/build-path';
 import type { ExplorerBaseParams } from '@/lib/explorer/types';
-import type { DatabaseFunctionMeta, DatabaseMeta, DatabaseObjectRow } from '@/lib/connection/base/types';
+import type { DatabaseFunctionMeta, DatabaseMeta, DatabaseObjectRow } from '@dory/drivers/types';
 import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -212,4 +212,3 @@ export function SearchResourceTab({ baseParams, database, placeholder, emptyText
         </TooltipProvider>
     );
 }
-

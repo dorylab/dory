@@ -9,7 +9,7 @@ import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
 import type { ResponseObject } from '@/types';
-import type { DatabaseFunctionMeta } from '@/lib/connection/base/types';
+import type { DatabaseFunctionMeta } from '@dory/drivers/types';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
 
@@ -110,4 +110,3 @@ export function FunctionListResourceTab(props: FunctionListResourceTabProps) {
         </TooltipProvider>
     );
 }
-
