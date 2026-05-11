@@ -38,15 +38,9 @@ export function SettingsModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={cn('p-0 gap-0 overflow-hidden', 'sm:max-w-[960px] w-[960px] h-[600px]', 'rounded-2xl')}>
-                <div className="grid grid-cols-[280px_1fr] h-full">
-                    <SettingsSidebar
-                        active={activeCategory}
-                        query={query}
-                        onQueryChange={setQuery}
-                        onSelect={onActiveCategoryChange ?? (() => undefined)}
-                        filtered={filtered}
-                    />
+            <DialogContent className={cn('p-0 gap-0 overflow-hidden', 'sm:max-w-[960px] w-[960px] h-[600px] min-h-0', 'rounded-2xl')}>
+                <div className="grid h-full min-h-0 overflow-hidden grid-cols-[280px_minmax(0,1fr)]">
+                    <SettingsSidebar active={activeCategory} query={query} onQueryChange={setQuery} onSelect={onActiveCategoryChange ?? (() => undefined)} filtered={filtered} />
                     <SettingsContent active={activeCategory} />
                 </div>
             </DialogContent>

@@ -17,5 +17,6 @@ export const invitation = activeSchemas.invitation;
 export const subscription = activeSchemas.subscription;
 export const organizations = activeSchemas?.organizations;
 export const ai_schema_cache = activeSchemas?.aiSchemaCache;
+export const mcpAccessTokens = activeSchemas?.mcpAccessTokens;
 
 export type ActiveDBSchema = typeof activeSchemas.schema;

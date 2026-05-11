@@ -16,19 +16,19 @@ export function SettingsContent({ active }: { active: CategoryKey }) {
     const TitleIcon = meta?.icon ?? MonitorCog;
 
     return (
-        <section className="h-full">
-            <div className="px-6 pt-5">
+        <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+            <div className="shrink-0 px-6 pt-5">
                 <DialogTitle className="text-base font-semibold flex items-center gap-2">
                     <TitleIcon className="h-4 w-4" />
                     {meta?.title ?? t('Title')}
                 </DialogTitle>
-                <DialogDescription className={meta?.description ? 'text-sm text-muted-foreground mt-1' : 'sr-only'}>
-                    {meta?.description ?? t('Description')}
-                </DialogDescription>
+                <DialogDescription className={meta?.description ? 'text-sm text-muted-foreground mt-1' : 'sr-only'}>{meta?.description ?? t('Description')}</DialogDescription>
             </div>
-            <Separator className="my-4" />
-            <ScrollArea className="h-[calc(600px-64px)] px-6 pb-6">
-                <PanelByKey keyName={active} />
+            <Separator className="my-4 shrink-0" />
+            <ScrollArea className="h-0 min-h-0 flex-1">
+                <div className="px-6 pb-6">
+                    <PanelByKey keyName={active} />
+                </div>
             </ScrollArea>
         </section>
     );

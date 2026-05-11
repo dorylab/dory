@@ -1,11 +1,12 @@
 import type { ElementType } from 'react';
-import { Palette, Info, Code, Database } from 'lucide-react';
+import { Palette, Info, Code, Database, Bot } from 'lucide-react';
 
 export type CategoryKey =
     | 'appearance'
     | 'editor'
     | 'notifications'
     | 'data'
+    | 'agentAccess'
     | 'shortcuts'
     | 'security'
     | 'about';
@@ -41,6 +42,13 @@ export function getCategories(t: (key: string) => string): Array<{
             icon: Database,
             title: t('Categories.Data.Title'),
             description: t('Categories.Data.Description'),
+        },
+        {
+            key: 'agentAccess',
+            label: t('Categories.AgentAccess.Label'),
+            icon: Bot,
+            title: t('Categories.AgentAccess.Title'),
+            description: t('Categories.AgentAccess.Description'),
         },
         // { key: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
         {

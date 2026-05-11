@@ -4322,7 +4322,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@modelcontextprotocol/sdk@npm:^1.26.0":
+"@modelcontextprotocol/sdk@npm:^1.26.0, @modelcontextprotocol/sdk@npm:^1.29.0":
   version: 1.29.0
   resolution: "@modelcontextprotocol/sdk@npm:1.29.0"
   dependencies:
@@ -23281,6 +23281,7 @@ __metadata:
     "@faker-js/faker": "npm:^10.4.0"
     "@hookform/resolvers": "npm:^5.2.2"
     "@ianvs/prettier-plugin-sort-imports": "npm:^4.7.1"
+    "@modelcontextprotocol/sdk": "npm:^1.29.0"
     "@monaco-editor/react": "npm:^4.7.0"
     "@opennextjs/cloudflare": "npm:^1.18.0"
     "@paper-design/shaders-react": "npm:^0.0.72"

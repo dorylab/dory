@@ -25,14 +25,14 @@ export function SettingsSidebar({
     const t = useTranslations('DoryUI.Settings');
 
     return (
-        <aside className="border-r bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="p-3">
+        <aside className="flex h-full min-h-0 flex-col border-r bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="shrink-0 p-3">
                 <div className="relative">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input value={query} onChange={e => onQueryChange(e.target.value)} placeholder={t('SearchPlaceholder')} className="pl-8 h-8" />
                 </div>
             </div>
-            <ScrollArea className="h-[calc(600px-56px)]">
+            <ScrollArea className="h-0 min-h-0 flex-1">
                 <div className="px-2 py-1">
                     {filtered.map(({ key, label, icon: Icon, tag }) => {
                         const activeItem = active === key;

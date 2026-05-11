@@ -158,5 +158,16 @@
     "bps": true,
     "folderMillis": 1775064413388,
     "hash": "c645e6c65c2200c70cc36b161acf697d63796db70e2b376a4427f131bd6337bb"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"mcp_access_tokens\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"name\" text NOT NULL,\n\t\"token_prefix\" text NOT NULL,\n\t\"token_hash\" text NOT NULL,\n\t\"scopes\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n\t\"enabled\" boolean DEFAULT true NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"last_used_at\" timestamp with time zone,\n\t\"revoked_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_mcp_access_tokens_hash\" ON \"mcp_access_tokens\" USING btree (\"token_hash\");",
+      "\nCREATE INDEX \"idx_mcp_access_tokens_organization_created\" ON \"mcp_access_tokens\" USING btree (\"organization_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_mcp_access_tokens_organization_active\" ON \"mcp_access_tokens\" USING btree (\"organization_id\",\"enabled\",\"revoked_at\") WHERE \"mcp_access_tokens\".\"revoked_at\" IS NULL;"
+    ],
+    "bps": true,
+    "folderMillis": 1778517567589,
+    "hash": "a9a2b1a0613767c83cbcfe482306f631163c5a88763cd8257c5877526c6fe2c6"
   }
 ]
