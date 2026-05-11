@@ -1,6 +1,6 @@
 'use client';
 
-import type { OrganizationRole } from '@/types/organization';
+import type { OrganizationRole } from '@dory/shared/types/organization';
 
 type FetchMethod = 'GET' | 'POST';
 const REQUEST_TIMEOUT_MS = 10000;

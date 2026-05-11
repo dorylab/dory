@@ -1,31 +1,37 @@
 import 'server-only';
 
 import { z } from 'zod';
-import type { AnalysisOutcome, ResultContext } from '@/lib/analysis/types';
+import type { AnalysisOutcome, ResultContext } from '@dory/analysis/types';
 import { runLLMJson } from '@/lib/copilot/action/server/llm-json';
-import type { Locale } from '@/lib/i18n/routing';
+import type { Locale } from '@dory/i18n/routing';
+
+const aiTextSchema = z.union([z.string(), z.number(), z.boolean()]).transform(value => String(value));
+const optionalAiTextSchema = z
+    .union([z.string(), z.number(), z.boolean(), z.null()])
+    .optional()
+    .transform(value => (value == null ? undefined : String(value)));
 
 const aiOutcomeSchema = z.object({
     analysisState: z.enum(['invalid', 'weak', 'good', 'actionable']).optional(),
-    summary: z.string().min(1),
-    headline: z.string().min(1),
-    limitations: z.array(z.string().min(1)).max(5).optional(),
-    keyFindings: z.array(z.string().min(1)).min(1).max(5),
+    summary: aiTextSchema.pipe(z.string().min(1)),
+    headline: aiTextSchema.pipe(z.string().min(1)),
+    limitations: z.array(aiTextSchema.pipe(z.string().min(1))).max(5).optional(),
+    keyFindings: z.array(aiTextSchema.pipe(z.string().min(1))).min(1).max(5),
     recordHighlights: z
         .array(
             z.object({
-                label: z.string().min(1),
-                value: z.string().min(1),
-                note: z.string().optional(),
+                label: aiTextSchema.pipe(z.string().min(1)),
+                value: aiTextSchema.pipe(z.string().min(1)),
+                note: optionalAiTextSchema,
             }),
         )
         .max(5),
     sections: z
         .array(
             z.object({
-                id: z.string().min(1),
-                title: z.string().min(1),
-                items: z.array(z.string().min(1)).min(1).max(5),
+                id: aiTextSchema.pipe(z.string().min(1)),
+                title: aiTextSchema.pipe(z.string().min(1)),
+                items: z.array(aiTextSchema.pipe(z.string().min(1))).min(1).max(5),
             }),
         )
         .max(4),

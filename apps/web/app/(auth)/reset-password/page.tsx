@@ -2,7 +2,7 @@
 import { ResetPasswordForm } from '../components/ResetPasswordForm';
 import { HeroBackground } from '../components/bg';
 import { RuntimeHint } from '../components/runtime-hint';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 export default function ResetPasswordPage() {
     return (

@@ -1,0 +1,29 @@
+{
+    "name": "@dory/i18n",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "./src/index.ts",
+    "types": "./src/index.ts",
+    "exports": {
+        ".": "./src/index.ts",
+        "./translate": "./src/i18n.ts",
+        "./routing": "./src/routing.ts",
+        "./server": "./src/server-locale.ts",
+        "./client": "./src/client-locale.ts",
+        "./locale-storage": "./src/locale-storage.ts",
+        "./navigation": "./src/navigation.ts",
+        "./request": "./src/request.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "next": "16.2.3",
+        "next-intl": "^4.9.2"
+    },
+    "devDependencies": {
+        "@types/node": "^25.5.2",
+        "typescript": "^6.0.2"
+    }
+}

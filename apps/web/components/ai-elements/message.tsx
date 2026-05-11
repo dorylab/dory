@@ -11,7 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/registry/new-york-v4/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { cjk } from "@streamdown/cjk";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";

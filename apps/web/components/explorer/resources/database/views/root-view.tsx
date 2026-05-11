@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { useDatabases } from '@/hooks/use-databases';
 import { buildExplorerDatabasePath } from '@/lib/explorer/build-path';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 
 type RootViewProps = {

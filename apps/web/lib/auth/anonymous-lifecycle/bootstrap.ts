@@ -1,7 +1,8 @@
+import { ensureOrganizationDefaults } from '@/lib/demo/organization-defaults';
 import { eq } from 'drizzle-orm';
 import { createProvisionedOrganization } from '@/lib/auth/organization-provisioning';
-import { getDBService } from '@/lib/database';
-import { schema } from '@/lib/database/schema';
+import { getDBService } from '@dory/database';
+import { schema } from '@dory/database/schema';
 import { AuthSessionLike, buildAnonymousOrganizationValues, findFirstActiveOrganizationIdForUser, getDb } from './common';
 
 export async function bootstrapAnonymousOrganization(params: { auth: any; session: AuthSessionLike; headers?: Headers }) {
@@ -48,7 +49,7 @@ export async function bootstrapAnonymousOrganization(params: { auth: any; sessio
     }
 
     const dbService = await getDBService();
-    await dbService.organizations.ensureOrganizationDefaults(userId, organization.id, dbService.connections);
+    await ensureOrganizationDefaults(dbService, userId, organization.id);
 
     await db
         .update(schema.session)

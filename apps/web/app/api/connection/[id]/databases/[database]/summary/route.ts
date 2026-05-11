@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { hasMetadataCapability } from '@dory/drivers/types';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { withUserAndOrganizationHandler } from '../../utils/with-organization-handler';
 import { handleApiError } from '../../utils/handle-error';
 import { parseJsonBody } from '../../utils/parse-json';

@@ -9,7 +9,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
-import type { ClickHouseRole, ClickHouseUser } from '@/types/privileges';
+import type { ClickHouseRole, ClickHouseUser } from '@dory/shared/types/privileges';
 import {
     fetchClickHouseRoles,
     fetchClickHouseUser,

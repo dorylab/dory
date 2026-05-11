@@ -1,4 +1,4 @@
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 function toAuthOrigin(url: string): string | null {
     try {

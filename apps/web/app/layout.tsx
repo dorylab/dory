@@ -6,11 +6,12 @@ import { Analytics } from '@/components/analytics';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/registry/new-york-v4/ui/sonner';
 
+import './themes.css';
 import './globals.css';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { ActiveThemeProvider } from '@/components/active-theme';
 import { ElectronLocaleSync } from '@/components/electron-locale-sync';
 import { FontSizeProvider } from '@/components/font-size-provider';

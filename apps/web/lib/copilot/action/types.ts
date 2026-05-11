@@ -1,5 +1,5 @@
-import { ConnectionDialect } from '@/types';
-import { Locale } from '@/lib/i18n/routing';
+import { ConnectionDialect } from '@dory/shared';
+import { Locale } from '@dory/i18n/routing';
 
 export type ActionIntent = 'fix-sql-error' | 'optimize-performance' | 'rewrite-sql' | 'to-aggregation';
 

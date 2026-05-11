@@ -1,7 +1,7 @@
 'use client';
 
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
-import type { PaginationState, QueryInsightsFilters, QueryListKey } from '@/types/monitoring';
+import type { PaginationState, QueryInsightsFilters, QueryListKey } from '@dory/shared/types/monitoring';
 import { DEFAULT_FILTERS, DEFAULT_PAGINATION } from './constants';
 
 const queryInsightsFiltersAtom = atom<QueryInsightsFilters>(DEFAULT_FILTERS);

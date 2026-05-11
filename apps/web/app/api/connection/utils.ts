@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getDBService } from '@/lib/database';
+import { getDBService } from '@dory/database';
 import '@/lib/drivers/register-database-drivers';
 
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
-import type { ConnectionSsh } from '@/types/connections';
+import { ErrorCodes } from '@dory/shared/errors';
+import type { ConnectionSsh } from '@dory/shared/types/connections';
 import { BaseConfig } from '@dory/drivers/types';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
 import { buildStoredConnectionConfig, pickConnectionIdentity } from '@dory/drivers/config';

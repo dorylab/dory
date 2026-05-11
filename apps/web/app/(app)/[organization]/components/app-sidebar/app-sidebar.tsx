@@ -21,8 +21,8 @@ import { useAtomValue } from 'jotai';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer/build-path';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { cn } from '@/lib/utils';
-import type { ConnectionListItem } from '@/types/connections';
+import { cn } from '@dory/web-utils';
+import type { ConnectionListItem } from '@dory/shared/types/connections';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     initialUser?: User | null;

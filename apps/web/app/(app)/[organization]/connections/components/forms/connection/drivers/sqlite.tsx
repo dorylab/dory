@@ -5,7 +5,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { FieldHelp } from './shared';
 import { useTranslations } from 'next-intl';
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 function isAbsolutePath(value: string) {
     return /^(\/|[a-zA-Z]:[\\/])/.test(value);

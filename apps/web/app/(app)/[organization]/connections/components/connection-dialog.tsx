@@ -15,7 +15,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl } from '@/registry/ne
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 
-import type { ConnectionListItem } from '@/types/connections';
+import type { ConnectionListItem } from '@dory/shared/types/connections';
 
 import SSHConnectionForm from './forms/ssh/ssh-form';
 import ConnectionForm from './forms/connection';

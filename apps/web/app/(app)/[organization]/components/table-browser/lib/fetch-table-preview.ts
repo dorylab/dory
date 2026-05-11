@@ -1,5 +1,5 @@
 import { authFetch } from '@/lib/client/auth-fetch';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 
 type FetchTablePreviewParams = {
     connectionId: string;

@@ -21,10 +21,20 @@
         "paths": {
             "@/www/*": ["../www/*"],
             "@/*": ["./*"],
+            "@dory/analysis": ["../../packages/analysis/src/index.ts"],
+            "@dory/analysis/*": ["../../packages/analysis/src/*"],
             "@dory/auth-core": ["../../packages/auth-core/src/index.ts"],
+            "@dory/database": ["../../packages/database/src/index.ts"],
+            "@dory/database/*": ["../../packages/database/src/*"],
             "@dory/drivers": ["../../packages/drivers/src/index.ts"],
             "@dory/drivers/*": ["../../packages/drivers/src/*/index.ts", "../../packages/drivers/src/*"],
             "@dory/drivers/database/clickhouse/privileges": ["../../packages/drivers/src/database/clickhouse/capabilities/privileges.ts"],
+            "@dory/i18n": ["../../packages/i18n/src/index.ts"],
+            "@dory/i18n/*": ["../../packages/i18n/src/*"],
+            "@dory/shared": ["../../packages/shared/src/index.ts"],
+            "@dory/shared/*": ["../../packages/shared/src/*"],
+            "@dory/web-utils": ["../../packages/web-utils/src/index.ts"],
+            "@dory/web-utils/*": ["../../packages/web-utils/src/*"],
             "react": ["./node_modules/@types/react"]
         }
     },

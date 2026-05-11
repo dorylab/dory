@@ -1,10 +1,10 @@
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
-import type { PostgresDBClient } from '@/types';
-import { getServerLocale } from '@/lib/i18n/server-locale';
-import { translate } from '@/lib/i18n/i18n';
-import { getClient } from '@/lib/database/postgres/client';
-import type { OrganizationProvisioningKind } from '@/lib/database/postgres/schemas';
-import { schema } from '@/lib/database/schema';
+import type { PostgresDBClient } from '@dory/shared';
+import { getServerLocale } from '@dory/i18n/server';
+import { translate } from '@dory/i18n/translate';
+import { getClient } from '@dory/database/postgres/client';
+import type { OrganizationProvisioningKind } from '@dory/database/postgres/schemas';
+import { schema } from '@dory/database/schema';
 
 export type AuthSessionLike = {
     session?: {

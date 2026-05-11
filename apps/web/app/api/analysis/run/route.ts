@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale } from '@/app/api/utils/i18n';
-import { ensureConnection } from '@/lib/utils/ensure-connection';
+import { ensureConnection } from '@/lib/server/ensure-connection';
 import { ResponseUtil } from '@/lib/result';
 import { runAnalysis } from '@/lib/server/analysis/run-analysis';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 
 export const runtime = 'nodejs';
 

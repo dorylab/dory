@@ -1,7 +1,7 @@
 import { TabResult } from '@/lib/client/type';
 import type { ActionIntent } from '@/lib/copilot/action/types';
-import type { AnalysisWorkspaceState, AnalysisResultRef } from '@/lib/analysis/types';
-import type { ResultAction } from '@/lib/analysis/result-actions';
+import type { AnalysisWorkspaceState, AnalysisResultRef } from '@dory/analysis/types';
+import type { ResultAction } from '@dory/analysis/core/result-actions';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
 import { atom } from 'jotai';
 import { atomWithStorage, createJSONStorage } from 'jotai/utils';

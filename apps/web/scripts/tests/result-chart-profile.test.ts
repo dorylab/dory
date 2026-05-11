@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildResultAutoChartProfile } from '../../lib/analysis/result-chart-profile';
+import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
 
 test('auto-buckets dense time columns', () => {
     const rows = Array.from({ length: 72 }, (_, index) => ({

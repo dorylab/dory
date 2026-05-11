@@ -1,7 +1,7 @@
 // ai/compile-system.ts
 
-import { translate } from '@/lib/i18n/i18n';
-import { routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { routing } from '@dory/i18n/routing';
 import { SystemSpec } from './types/system-spec';
 
 function lines(...chunks: Array<string | undefined | null | false>) {

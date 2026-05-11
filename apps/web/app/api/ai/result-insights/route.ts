@@ -4,7 +4,7 @@ import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { buildResultInsightsPrompt } from '@/lib/ai/prompts';
 import { runLLMJson } from '@/lib/copilot/action/server/llm-json';
-import type { Locale } from '@/lib/i18n/routing';
+import type { Locale } from '@dory/i18n/routing';
 
 export const runtime = 'nodejs';
 

@@ -6,7 +6,7 @@ import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-re
 import { Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
 import {

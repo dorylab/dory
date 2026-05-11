@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { schema } from '@/lib/database/schema';
-import type { PostgresDBClient } from '@/types';
+import { schema } from '@dory/database/schema';
+import type { PostgresDBClient } from '@dory/shared';
 import { findOwnedOrganizationIdsForUser, getDb } from './common';
 
 export const anonymousDeleteCleanupTableCoverage = {

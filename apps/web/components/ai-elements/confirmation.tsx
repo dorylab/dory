@@ -2,7 +2,7 @@
 
 import { Alert, AlertDescription } from "@/registry/new-york-v4/ui/alert";
 import { Button } from "@/registry/new-york-v4/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import type { ToolUIPart } from "ai";
 import {
   type ComponentProps,

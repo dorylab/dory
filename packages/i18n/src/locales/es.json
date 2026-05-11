@@ -1,0 +1,3100 @@
+{
+    "Common": {
+        "loading": "Cargando...",
+        "error": "Ocurrió un error",
+        "notFound": "No encontrado",
+        "backToHome": "Volver al inicio",
+        "ok": "Aceptar",
+        "cancel": "Cancelar",
+        "save": "Guardar",
+        "edit": "Editar",
+        "delete": "Eliminar",
+        "close": "Cerrar",
+        "search": "Buscar",
+        "refresh": "Actualizar",
+        "yes": "Sí",
+        "no": "No",
+        "confirm": "Confirmar",
+        "next": "Siguiente",
+        "previous": "Anterior",
+        "apply": "Aplicar",
+        "settings": "Configuración",
+        "help": "Ayuda",
+        "version": "Versión",
+        "language": "Idioma",
+        "username": "Usuario",
+        "password": "Contraseña",
+        "login": "Iniciar sesión",
+        "logout": "Cerrar sesión",
+        "welcome": "Bienvenido",
+        "welcomeMessage": "Bienvenido a OpenDB",
+        "welcomeDescription": "Esta es una herramienta de gestión de bases de datos de código abierto compatible con varios tipos de bases de datos.",
+        "loadingData": "Cargando datos...",
+        "noData": "No hay datos disponibles",
+        "connectionError": "Error de conexión",
+        "connectionSuccess": "Conexión correcta",
+        "connectionFailed": "La conexión falló",
+        "connectionTimeout": "La conexión agotó el tiempo",
+        "connectionLost": "Se perdió la conexión",
+        "connectionClosed": "La conexión se cerró",
+        "connectionEstablished": "Conexión establecida",
+        "connectionRefused": "Conexión rechazada",
+        "connectionReset": "Conexión restablecida",
+        "connectionClosedByServer": "El servidor cerró la conexión",
+        "connectionErrorDetails": "Detalles del error de conexión",
+        "connectionErrorRetry": "Error de conexión, inténtalo de nuevo"
+    },
+    "NotFoundPage": {
+        "title": "La página que buscas no existe",
+        "description": "Es posible que el enlace esté desactualizado o que la página se haya movido. Puedes volver a la página principal para seguir navegando.",
+        "backToHome": "Volver al inicio",
+        "contactSupport": "Contactar con soporte"
+    },
+    "Auth": {
+        "EmailVerifyRequired": "Se requiere verificación por correo. Verifica tu correo electrónico.",
+        "SignInFailed": "Error al iniciar sesión",
+        "SignUp": {
+            "HasAccount": "¿Ya tienes una cuenta?",
+            "GoToSignIn": "Iniciar sesión",
+            "BrandName": "Acme Inc.",
+            "Title": "Crear una cuenta",
+            "AlreadyHaveAccount": "¿Ya tienes una cuenta?",
+            "SignIn": "Iniciar sesión",
+            "Name": "Nombre",
+            "NamePlaceholder": "Tu nombre",
+            "Email": "Correo electrónico",
+            "EmailPlaceholder": "m@example.com",
+            "Password": "Contraseña",
+            "Submitting": "Registrando…",
+            "Submit": "Registrarse",
+            "Or": "O",
+            "ContinueWithApple": "Continuar con Apple",
+            "ContinueWithGoogle": "Continuar con Google",
+            "ContinueAgreement": "Al hacer clic en continuar, aceptas nuestros",
+            "Terms": "Términos del servicio",
+            "And": "y",
+            "Privacy": "Política de privacidad",
+            "VerifyMatchPattern": "verify|unverified"
+        },
+        "SignIn": {
+            "AuthFailed": "La autorización falló: {error}",
+            "MissingToken": "No se encontró el token de inicio de sesión. Inténtalo de nuevo.",
+            "SuccessRefreshing": "Inicio de sesión correcto. Actualizando…",
+            "InvalidCallback": "Enlace de devolución no válido. Inténtalo de nuevo.",
+            "GithubStartFailed": "No se pudo iniciar el acceso con GitHub",
+            "GoogleStartFailed": "No se pudo iniciar el acceso con Google",
+            "GoogleNotSupportedDesktop": "El inicio de sesión con Google todavía no está disponible en la app de escritorio.",
+            "LoginFailedRetry": "El inicio de sesión falló. Inténtalo más tarde.",
+            "NetworkErrorRetry": "Error de red. Inténtalo más tarde.",
+            "CloudFeaturesUnavailableOffline": "Las acciones de inicio de sesión y recuperación que dependen de la nube no están disponibles mientras la app de escritorio está sin conexión.",
+            "ForgotPasswordEmailRequired": "Introduce tu correo antes de hacer clic en “¿Olvidaste tu contraseña?”.",
+            "ResetEmailFailed": "No se pudo enviar el correo de restablecimiento",
+            "ResetEmailSent": "Correo de restablecimiento enviado. Revisa tu bandeja de entrada.",
+            "SendFailedRetry": "El envío falló. Inténtalo más tarde.",
+            "Title": "Bienvenido de nuevo",
+            "Description": "Inicia sesión en tu cuenta de Dory",
+            "Email": "Correo electrónico",
+            "EmailPlaceholder": "m@example.com",
+            "Password": "Contraseña",
+            "ForgotPassword": "¿Olvidaste tu contraseña?",
+            "Submitting": "Iniciando sesión…",
+            "Submit": "Entrar",
+            "DemoEnter": "Entrar como demo",
+            "OrContinueWith": "O continuar con",
+            "LoginWithGithub": "Entrar con GitHub",
+            "LoginWithGoogle": "Entrar con Google",
+            "LoginWithMeta": "Entrar con Meta",
+            "NoAccount": "¿No tienes una cuenta?",
+            "SignUp": "Registrarse",
+            "Guest": {
+                "Action": "Continuar como invitado",
+                "ResumeAction": "Abrir espacio de invitado existente",
+                "Tooltip": "Ideal para quienes visitan por primera vez. Si más tarde inicias sesión, mantendremos tu espacio de trabajo de invitado actual en tu cuenta.",
+                "ConfirmTitle": "¿Crear un espacio de trabajo temporal?",
+                "ConfirmDescription": "Crearemos un espacio de trabajo de invitado para ti de inmediato. Si más tarde inicias sesión, mantendremos este espacio de trabajo en tu cuenta.",
+                "Confirm": "Crear espacio de trabajo de invitado",
+                "Cancel": "Volver",
+                "StartFailed": "No se pudo iniciar el espacio de trabajo de invitado"
+            },
+            "Demo": {
+                "Action": "Entrar como demo",
+                "StartFailed": "No se pudo iniciar sesión como demo"
+            },
+            "ContinueAgreement": "Al hacer clic en continuar, aceptas nuestros",
+            "Terms": "Términos del servicio",
+            "And": "y",
+            "Privacy": "Política de privacidad"
+        },
+        "VerifyEmail": {
+            "ResendFailed": "El reenvío falló. Inténtalo más tarde.",
+            "Sent": "Correo de verificación enviado. Revisa tu bandeja de entrada.",
+            "NetworkError": "Error de red. Inténtalo más tarde.",
+            "Title": "Verifica tu correo",
+            "DescriptionPrefix": "Hemos enviado un correo de verificación a",
+            "DescriptionSuffix": "Haz clic en el enlace del correo para completar la verificación.",
+            "EmailLabel": "Correo del destinatario",
+            "Change": "Cambiar",
+            "Hint": "¿No lo recibiste? Revisa tu carpeta de spam o promociones, o haz clic más tarde en “Reenviar correo de verificación”.",
+            "OpenMailApp": "Abrir la app de correo",
+            "ResendCooldown": "Reenviar ({seconds}s)",
+            "Resend": "Reenviar correo de verificación"
+        },
+        "TeamName": "Organización de {name}",
+        "TeamDefaultName": "Predeterminado",
+        "AnonymousWorkspace": {
+            "Name": "Espacio de trabajo de invitado",
+            "LinkedName": "Espacio de trabajo de invitado importado"
+        },
+        "Emails": {
+            "ResetPassword": {
+                "Subject": "Restablece tu contraseña",
+                "Text": "Haz clic en el enlace para restablecer tu contraseña: {url}",
+                "Intro": "Haz clic en el botón de abajo para restablecer tu contraseña.",
+                "BrandName": "Dory",
+                "Button": "Restablecer contraseña",
+                "Fallback": "Si el botón no funciona, copia y pega este enlace en tu navegador:"
+            },
+            "VerifyEmail": {
+                "Subject": "Verifica tu dirección de correo",
+                "Text": "Haz clic en el enlace para verificar tu correo: {url}",
+                "Intro": "Haz clic en el botón de abajo para verificar tu dirección de correo.",
+                "BrandName": "Dory",
+                "Button": "Verificar correo",
+                "Fallback": "Si el botón no funciona, copia y pega este enlace en tu navegador:"
+            }
+        },
+        "ResetPassword": {
+            "Title": "Restablece tu contraseña",
+            "Description": "Introduce una nueva contraseña para tu cuenta.",
+            "NewPassword": "Nueva contraseña",
+            "ConfirmPassword": "Confirmar contraseña",
+            "Submitting": "Restableciendo…",
+            "Submit": "Restablecer contraseña",
+            "GoToSignIn": "Volver al inicio de sesión",
+            "InvalidLink": "El enlace de restablecimiento no es válido o ha caducado.",
+            "MissingToken": "Falta el token de restablecimiento. Usa el enlace de tu correo.",
+            "PasswordRequired": "Introduce y confirma tu nueva contraseña.",
+            "PasswordMismatch": "Las contraseñas no coinciden.",
+            "Failed": "El restablecimiento falló. Inténtalo de nuevo.",
+            "NetworkError": "Error de red. Inténtalo más tarde.",
+            "Success": "Contraseña restablecida correctamente. Ya puedes iniciar sesión."
+        }
+    },
+    "HomePage": {
+        "title": "Hola",
+        "about": "Ir a la página Acerca de"
+    },
+    "Connections": {
+        "Connections": "Conexiones",
+        "All Connections": "Todas las conexiones",
+        "about": "acerca de",
+        "Search": {
+            "placeholder": "Buscar conexiones",
+            "emptyTitle": "No hay conexiones coincidentes",
+            "emptyDescription": "No pudimos encontrar conexiones para \"{query}\".",
+            "emptyHint": "Prueba otra palabra clave o borra la búsqueda"
+        },
+        "Empty": {
+            "title": "Conecta tu base de datos",
+            "description": "Añade una conexión para empezar a explorar.",
+            "supportHint": "Actualmente compatible con ClickHouse · Más motores próximamente",
+            "feature1": "Ejecuta consultas SQL y explora esquemas",
+            "feature2": "Haz preguntas en lenguaje natural y obtén respuestas",
+            "feature3": "Guarda resultados, gráficos e ideas para más tarde",
+            "loadDemo": "Cargar datos de demostración"
+        },
+        "Connecting": "Conectando...",
+        "Refresh Connection": "Actualizar conexión",
+        "Confirm": "Confirmar",
+        "Connected": "Conectado",
+        "Disconnected": "Desconectado",
+        "Unknown": "Desconocido",
+        "Last check": "Última comprobación: {time}",
+        "Latency": "Latencia: {latency}ms",
+        "title": "Conexiones",
+        "description": "Añade y gestiona conexiones de base de datos",
+        "Add Connection": "Añadir conexión",
+        "Create Connection": "Crear conexión",
+        "Connection name": "Nombre de la conexión",
+        "Host": "Servidor",
+        "Port": "Puerto",
+        "Database": "Base de datos",
+        "User": "Usuario",
+        "Password": "Contraseña",
+        "Connect": "Conectar",
+        "Cancel": "Cancelar",
+        "Delete": "Eliminar",
+        "Test": "Probar",
+        "Connection Info": "Información de la conexión",
+        "Authentication Info": "Autenticación",
+        "Enable": "Habilitar",
+        "Testing Connection": "Probando conexión...",
+        "Saving": "Guardando...",
+        "Creating": "Creando...",
+        "Save Changes": "Guardar cambios",
+        "Fix Form Errors Before Testing": "Corrige los errores del formulario antes de probar la conexión",
+        "Placeholder": "Marcador de posición",
+        "Missing connection id": "Falta el ID de conexión",
+        "Connection failed": "La conexión falló",
+        "Request error": "Error de solicitud",
+        "Connection created": "Conexión creada",
+        "Create connection failed": "No se pudo crear la conexión",
+        "Connection updated": "Conexión actualizada",
+        "Update connection failed": "No se pudo actualizar la conexión",
+        "Connection deleted": "Conexión eliminada",
+        "Delete connection failed": "No se pudo eliminar la conexión",
+        "Connection test success": "La prueba de conexión fue exitosa, versión: {version}",
+        "Connection test failed": "La prueba de conexión falló",
+        "Delete Dialog Title": "¿Estás absolutamente seguro?",
+        "Delete Dialog Description": "Esta acción no se puede deshacer. Eliminará permanentemente tu fuente de datos y quitará sus datos de nuestros servidores.",
+        "Loading connections": "Cargando conexiones...",
+        "No connections yet": "Todavía no hay conexiones",
+        "Connect to": "Conectar a {name}",
+        "Unknown host": "Host desconocido",
+        "Unnamed connection": "Conexión sin nombre",
+        "Add connection to get started": "Añade una nueva conexión para empezar",
+        "Identities": "Identidades",
+        "Default Identity": "Identidad predeterminada",
+        "Connection name is required": "El nombre de la conexión es obligatorio",
+        "Host is required": "El host es obligatorio",
+        "Close & Edit": "Cerrar y editar",
+        "refreshConnection": "Actualizar conexión",
+        "ConnectionContent": {
+            "Create": {
+                "title": "Crear conexión",
+                "description": "Crear una nueva conexión"
+            },
+            "Edit": {
+                "title": "Editar conexión",
+                "description": "Editar conexión"
+            },
+            "Refresh Connection": "Actualizar conexión",
+            "Delete": "Eliminar conexión",
+            "Database": "Base de datos",
+            "General": "General",
+            "Connection Name": "Nombre de la conexión",
+            "Connection Name Placeholder": "Dale un nombre descriptivo a tu conexión",
+            "Type": "Tipo",
+            "Select Database Type": "Selecciona el tipo de base de datos",
+            "Host": "Servidor",
+            "Port": "Puerto",
+            "HTTP Port": "Puerto HTTP",
+            "User": "Usuario",
+            "Password": "Contraseña",
+            "Database Username": "Nombre de usuario de la base de datos",
+            "Database Username Placeholder": "p. ej. readonly_user",
+            "Password Optional": "Contraseña (opcional)",
+            "Data Directory": "Directorio de datos",
+            "Database File": "Archivo de base de datos",
+            "Select Directory": "Introduce la ruta absoluta a tu directorio de datos o archivo",
+            "Select File Placeholder": "Introduce la ruta absoluta a tu archivo .sqlite/.db",
+            "Choose": "Elegir",
+            "Clear": "Limpiar",
+            "SSH": "SSH",
+            "SSL": "SSL",
+            "Cancel": "Cancelar",
+            "Save": "Guardar",
+            "TestConnection": "Probar conexión",
+            "Use SSH tunnel": "Usar túnel SSH",
+            "Hostname or IP address": "Nombre de host o dirección IP",
+            "SSH Host": "Host SSH",
+            "SSH Port": "Puerto SSH",
+            "SSH User": "Usuario SSH",
+            "Authentication Method": "Método de autenticación",
+            "SSH Password": "Contraseña SSH",
+            "Private Key": "Clave privada",
+            "Public Key": "Clave pública",
+            "Passphrase": "Frase de paso",
+            "Private Key Passphrase": "Frase de paso de la clave privada",
+            "Private Key Passphrase (optional)": "Frase de paso de la clave privada (opcional)",
+            "SSH Private Key": "Clave privada SSH",
+            "SSH Private Key Placeholder": "Pega tu clave privada en formato PEM",
+            "Select File": "Seleccionar archivo",
+            "Use SSL": "Usar SSL",
+            "Please upload": "Sube tu archivo de clave privada",
+            "Please enter your password": "Introduce tu contraseña"
+        },
+        "Api": {
+            "AddFailed": "No se pudo crear la conexión",
+            "UpdateRequiresId": "updateConnection requiere un id",
+            "UpdateFailed": "No se pudo actualizar la conexión",
+            "ListFailed": "No se pudieron obtener las conexiones",
+            "DeleteFailed": "No se pudo eliminar la conexión",
+            "DetailFailed": "No se pudieron obtener los detalles de la conexión",
+            "DetailNotFound": "No se encontraron los detalles de la conexión",
+            "TestFailed": "La prueba de conexión falló",
+            "ConnectFailed": "La conexión falló"
+        }
+    },
+    "SQLConsoleSidebar": {
+        "Select database": "Seleccionar base de datos",
+        "Select schema": "Seleccionar esquema",
+        "Search databases": "Buscar bases de datos...",
+        "Search schemas": "Buscar esquemas...",
+        "Databases": "Bases de datos",
+        "Schemas": "Esquemas",
+        "No results": "No se encontraron resultados",
+        "Filter tables": "Filtrar tablas",
+        "Refresh tables": "Actualizar tablas",
+        "No matching tables found": "No se encontraron tablas coincidentes",
+        "Collapse": "Contraer",
+        "Expand": "Expandir",
+        "Columns": "columnas",
+        "Insert select for": "Insertar SELECT para {table}"
+    },
+    "CatalogSchemaSidebar": {
+        "Filter tables or views": "Filtrar tablas o vistas",
+        "No matching objects found": "No se encontraron objetos coincidentes",
+        "No matching items": "No hay elementos coincidentes",
+        "Tables": "Tablas",
+        "Materialized views": "Vistas materializadas",
+        "Views": "Vistas",
+        "Functions": "Funciones",
+        "System": "Sistema",
+        "Loading schemas": "Cargando esquemas",
+        "No schemas": "No hay esquemas",
+        "No tables": "No hay tablas",
+        "No materialized views": "No hay vistas materializadas",
+        "No views": "No hay vistas",
+        "No functions": "No hay funciones",
+        "Collapse": "Contraer",
+        "Expand": "Expandir"
+    },
+    "TableBrowser": {
+        "Tabs": {
+            "overview": "Resumen",
+            "data": "Vista previa de datos",
+            "structure": "Estructura",
+            "stats": "Estadísticas"
+        },
+        "Select table to browse schema": "Selecciona una tabla para explorar su esquema.",
+        "Select table tab to browse schema": "Selecciona una pestaña de tabla para explorar su esquema.",
+        "Select table to view overview": "Selecciona una tabla para ver el resumen.",
+        "Summary": "Resumen",
+        "Updated at": "actualizado {time}",
+        "Regenerate": "Regenerar",
+        "Toggle detailed description": "Alternar descripción detallada",
+        "Key highlights": "Puntos clave",
+        "No highlights yet": "Todavía no hay puntos destacados.",
+        "Query snippets": "Fragmentos de consulta",
+        "SQL example": "Ejemplo SQL",
+        "No SQL snippets yet": "Todavía no hay fragmentos SQL.",
+        "Semantic layer": "Capa semántica",
+        "Semantic metrics": "Métricas",
+        "Semantic dimensions": "Dimensiones",
+        "Semantic time": "Tiempo",
+        "Semantic geo": "Geo",
+        "Semantic keys": "Claves",
+        "Schema overview": "Resumen del esquema",
+        "Structure": "Estructura",
+        "Columns": "Columnas",
+        "Primary key": "Clave primaria",
+        "Partition key": "Clave de partición",
+        "Sorting key": "Clave de ordenación",
+        "Engine": "Motor",
+        "Data": "Datos",
+        "Row count": "Cantidad de filas",
+        "Compressed size": "Tamaño comprimido",
+        "Uncompressed size": "Tamaño sin comprimir",
+        "Partitions": "Particiones",
+        "Compression ratio": "Ratio de compresión",
+        "No table preview": "No hay vista previa de la tabla",
+        "Loading preview": "Cargando vista previa...",
+        "No data": "No hay datos",
+        "Refresh": "Actualizar",
+        "Failed to load data preview": "No se pudo cargar la vista previa de los datos",
+        "Pagination": {
+            "Previous": "Anterior",
+            "Next": "Siguiente",
+            "PageOf": "Página {current} de ~{total}",
+            "PageOfExact": "Página {current} de {total}",
+            "PageUnknown": "Página {current}",
+            "RowsPerPage": "Filas por página",
+            "ShowingRange": "{start}–{end} de ~{total}",
+            "ShowingRangeExact": "{start}–{end} de {total}",
+            "ShowingCount": "{count} filas"
+        },
+        "Column name": "Nombre",
+        "Column type": "Tipo",
+        "Nullable": "Acepta nulos",
+        "Yes": "Sí",
+        "No": "No",
+        "Default": "Predeterminado",
+        "Comment": "Comentario",
+        "Tags": "Etiquetas",
+        "Search columns": "Buscar columnas",
+        "No matching columns": "No hay columnas coincidentes",
+        "No columns found": "No se encontraron columnas",
+        "Select table to view columns": "Selecciona una tabla para ver sus columnas",
+        "Constraints": "Restricciones",
+        "Defined constraints": "Restricciones definidas",
+        "Unnamed constraint": "Restricción sin nombre",
+        "No expression provided": "No se proporcionó ninguna expresión",
+        "No constraints found": "No se encontraron restricciones para esta tabla",
+        "DDL": "DDL",
+        "DDL not available": "-- DDL no disponible",
+        "Properties": "Propiedades",
+        "Sampling key": "Clave de muestreo",
+        "Storage policy": "Política de almacenamiento",
+        "Fallback summary": "La tabla {table} contiene {count} columnas",
+        "Fallback current table": "tabla actual",
+        "Fallback unknown count": "algunas",
+        "Fallback database": "base de datos {database}",
+        "Fallback example columns": "Columnas de ejemplo: {columns}",
+        "Fallback engine": "motor {engine}",
+        "Fallback partition": "partición {partition}",
+        "Fallback comment": "Comentario: {comment}",
+        "Fallback summary separator": ", ",
+        "Fallback no summary": "No hay resumen de tabla disponible",
+        "Fallback detail separator": ". ",
+        "Fallback detail engine": "Motor {engine}, ",
+        "Fallback detail partition": "Clave de partición {partition}, ",
+        "Fallback detail sorting": "Clave de ordenación {sorting}, ",
+        "Fallback detail common queries metrics": "Las consultas comunes filtran por rangos de tiempo y agregan métricas numéricas.",
+        "Fallback detail common queries generic": "Las consultas comunes incluyen filtrado y navegación paginada.",
+        "Fallback detail": "{summary}. Las consultas comunes incluyen filtrado, exploración por rangos de tiempo y agregaciones. Si tienes claves de partición u ordenación, inclúyelas en los filtros para un mejor rendimiento.",
+        "Fallback column description": "Campo {name}, tipo {type}{required}",
+        "Fallback unknown type": "desconocido",
+        "Fallback required": " (obligatorio)",
+        "Fallback snippet title": "Vista rápida",
+        "Fallback snippet aggregate by dimension": "Agregar por dimensión",
+        "Fallback snippet time range filter": "Filtro por rango de tiempo",
+        "SemanticMatchers": {
+            "PrimaryKey": "clave primaria",
+            "Identifier": "identificador",
+            "Key": "clave",
+            "Time": "tiempo",
+            "Date": "fecha",
+            "Timestamp": "marca de tiempo",
+            "Geo": "geo",
+            "Address": "dirección",
+            "Metric": "métrica",
+            "Amount": "importe",
+            "Measure": "medida",
+            "Numeric": "numérico",
+            "Dimension": "dimensión",
+            "Category": "categoría",
+            "Status": "estado",
+            "Label": "etiqueta",
+            "Name": "nombre"
+        }
+    },
+    "PostgresExplorer": {
+        "Tabs": {
+            "summary": "Resumen",
+            "schemas": "Esquemas",
+            "search": "Buscar",
+            "extensions": "Extensiones",
+            "tables": "Tablas",
+            "views": "Vistas",
+            "functions": "Funciones",
+            "sequences": "Secuencias",
+            "overview": "Resumen",
+            "data": "Data",
+            "structure": "Estructura",
+            "stats": "Estadísticas",
+            "indexes": "Índices"
+        },
+        "Schemas": {
+            "SearchPlaceholder": "Buscar esquemas",
+            "Empty": "No hay esquemas",
+            "FilteredEmpty": "No hay esquemas coincidentes"
+        },
+        "Search": {
+            "Placeholder": "Buscar esquemas, tablas, vistas, funciones o secuencias",
+            "Empty": "No hay objetos coincidentes"
+        },
+        "Extensions": {
+            "SearchPlaceholder": "Buscar extensiones",
+            "Empty": "No hay extensiones",
+            "FilteredEmpty": "No hay extensiones coincidentes"
+        },
+        "Tables": {
+            "SearchPlaceholder": "Buscar tablas",
+            "Empty": "No hay tablas",
+            "FilteredEmpty": "No hay tablas coincidentes"
+        },
+        "Views": {
+            "SearchPlaceholder": "Buscar vistas",
+            "Empty": "No hay vistas",
+            "FilteredEmpty": "No hay vistas coincidentes"
+        },
+        "Functions": {
+            "SearchPlaceholder": "Buscar funciones",
+            "Empty": "No hay funciones",
+            "FilteredEmpty": "No hay funciones coincidentes"
+        },
+        "Sequences": {
+            "SearchPlaceholder": "Buscar secuencias",
+            "Empty": "No hay secuencias",
+            "FilteredEmpty": "No hay secuencias coincidentes"
+        },
+        "Indexes": {
+            "Empty": "No hay índices"
+        }
+    },
+    "TableStats": {
+        "No available connection": "No se encontró ninguna conexión disponible.",
+        "Select table to view stats": "Selecciona una tabla para ver las estadísticas.",
+        "Failed to load stats": "No se pudieron cargar las estadísticas de la tabla",
+        "Stats insights": "Ideas de estadísticas",
+        "Last updated": "(última actualización {time})",
+        "Stats insights description": "Comprobaciones de salud y sugerencias de optimización de particiones para la tabla.",
+        "Reanalyze": "Volver a analizar",
+        "Insights failed": "Las ideas de IA fallaron",
+        "Fallback insight 1": "✓ Table has 20,000,000 rows with good compression (0.55x)",
+        "Fallback insight 2": "✓ Only 1 partition currently, which may affect partition pruning performance",
+        "Fallback insight 3": "✓ Parts count is 2, healthy",
+        "Fallback insight 4": "✓ No active mutations",
+        "Fallback suggestion": "Sugerencia: considera particionar por fecha para mejorar las consultas filtradas por tiempo",
+        "Partitions": "Particiones",
+        "Partitions description": "Particiones activas con recuento de filas y tamaños.",
+        "Partition count": "Número de particiones",
+        "No active partitions": "No hay particiones activas.",
+        "Rows": "Filas",
+        "Compressed": "Comprimido",
+        "Uncompressed": "Sin comprimir",
+        "Ratio": "Relación: {ratio}",
+        "Rows count": "{count} filas",
+        "Storage health": "Salud del almacenamiento",
+        "Storage health description": "Tamaños de partes y mutaciones en curso.",
+        "Part count": "Número de partes",
+        "Avg part size": "Tamaño medio de parte",
+        "Max part size": "Tamaño máximo de parte",
+        "Active mutations": "Mutaciones activas",
+        "No active mutations": "No hay mutaciones activas.",
+        "Mutation": "Mutación {id}",
+        "Progress percent": "Progreso: {percent}%",
+        "Progress unknown": "Progreso: N/D",
+        "Parts progress": "({done} / {total} partes)",
+        "Created at": "Creado en {time}",
+        "Size and rows": "Tamaño y filas",
+        "Size and rows description": "Recuento de filas y huella comprimida/sin comprimir.",
+        "Row count": "Cantidad de filas",
+        "Data size": "Tamaño de datos",
+        "Compressed / Uncompressed": "Comprimido / Sin comprimir",
+        "Compression ratio": "Ratio de compresión",
+        "TTL": "TTL",
+        "TTL description": "Regla de tiempo de vida de la tabla, si está configurada.",
+        "No TTL rule configured": "No hay ninguna regla TTL configurada."
+    },
+    "PostgresTableStats": {
+        "No available connection": "No se encontró ninguna conexión disponible.",
+        "Select table to view stats": "Selecciona una tabla para ver las estadísticas.",
+        "Failed to load stats": "No se pudieron cargar las estadísticas de la tabla",
+        "Size": "Tamaño",
+        "Size description": "Tamaño total de la tabla en disco y recuento estimado de filas.",
+        "Total size": "Tamaño total",
+        "Row estimate": "Estimación de filas",
+        "Index usage": "Uso de índices",
+        "Index usage description": "Recuentos de escaneos y métricas de acceso a tuplas por índice.",
+        "No indexes": "No se encontraron índices.",
+        "Index scans": "Scans",
+        "Tuple reads": "Tuplas leídas",
+        "Tuple fetches": "Tuplas obtenidas",
+        "Index size": "Tamaño del índice",
+        "Vacuum health": "Salud de VACUUM",
+        "Vacuum health description": "Última actividad de autovacuum/analyze y estadísticas de inflación de tuplas.",
+        "No vacuum data": "No hay estadísticas de VACUUM disponibles.",
+        "Last vacuum": "Último vacuum",
+        "Last autovacuum": "Último autovacuum",
+        "Last analyze": "Último analyze",
+        "Last autoanalyze": "Último autoanalyze",
+        "Live tuples": "Tuplas vivas",
+        "Dead tuples": "Tuplas muertas",
+        "Mods since analyze": "Cambios desde analyze",
+        "Total indexes": "Índices totales",
+        "Used indexes": "Usados",
+        "Unused indexes": "No usados",
+        "Total index size": "Tamaño total de índices",
+        "All": "Todos",
+        "Kind": "Tipo",
+        "Index": "Índice",
+        "Primary key": "Primario",
+        "Secondary": "Secundario",
+        "Insight": "Idea",
+        "Constraint index": "Índice de restricción",
+        "Actively used": "Usado activamente",
+        "Rarely used": "Poco usado",
+        "No usage recorded insight": "Sin uso registrado",
+        "Scans tooltip": "Número de veces que este índice se usó para escanear la tabla. Un valor de 0 significa que el índice no se ha utilizado desde el último reinicio de estadísticas.",
+        "Tuple reads tooltip": "Número de entradas del índice devueltas por escaneos sobre este índice.",
+        "Tuple fetches tooltip": "Número de filas vivas de la tabla obtenidas mediante este índice.",
+        "Stats reset notice": "Las estadísticas pueden reiniciarse por VACUUM, ANALYZE o un reinicio del servidor."
+    },
+    "Catalog": {
+        "Catalog": "Catálogo",
+        "Databases": "Bases de datos",
+        "Select database description": "Selecciona una base de datos para ver los detalles.",
+        "Catalog list unsupported": "La lista de bases de datos no es compatible con este catálogo.",
+        "Database count": "{count} bases de datos",
+        "Only default catalog supported": "Solo el catálogo predeterminado admite listados de bases de datos.",
+        "No databases": "No hay bases de datos disponibles.",
+        "Open": "Abrir",
+        "Name": "Nombre",
+        "Engine": "Motor",
+        "Data size": "Tamaño de datos",
+        "Row count": "Cantidad de filas",
+        "Last updated": "Última actualización",
+        "Search tables placeholder": "Buscar tablas / comentarios",
+        "No matching tables": "No hay tablas coincidentes",
+        "No tables": "No hay tablas",
+        "Search views placeholder": "Buscar vistas / comentarios",
+        "No matching views": "No hay vistas coincidentes",
+        "No views": "No hay vistas",
+        "Search materialized views placeholder": "Buscar vistas materializadas / comentarios",
+        "No matching materialized views": "No hay vistas materializadas coincidentes",
+        "No materialized views": "No hay vistas materializadas",
+        "Failed to fetch tables": "No se pudieron obtener las tablas",
+        "Failed to fetch views": "No se pudieron obtener las vistas",
+        "Failed to fetch materialized views": "No se pudieron obtener las vistas materializadas",
+        "Tabs": {
+            "summary": "Resumen",
+            "tables": "Tablas",
+            "views": "Vistas",
+            "materialized-views": "Vistas materializadas"
+        }
+    },
+    "CatalogSummary": {
+        "Null tooltip": "Esta fuente de datos no está disponible, no tiene permisos o es una estimación.",
+        "Summary placeholder": "Conjunto de datos de NYC Taxi centrado en viajes, tarifas y análisis a nivel de pasajero.",
+        "Unknown engine": "Desconocido",
+        "Updated": "Actualizado",
+        "Functions": "Funciones",
+        "Owner": "Propietario",
+        "Open table": "Abrir tabla",
+        "Size": "Tamaño",
+        "Rows": "Filas",
+        "Failed to fetch summary": "No se pudo obtener el resumen",
+        "Summary unavailable": "Los datos del resumen no están disponibles en este momento.",
+        "Failed to save summary": "No se pudo guardar el resumen",
+        "Failed to save summary note": "No se pudo guardar la nota del resumen.",
+        "Database Summary": "Resumen de la base de datos",
+        "Schema Summary": "Resumen del esquema",
+        "Summary unavailable description": "Los datos del resumen no están disponibles temporalmente.",
+        "Failed to load summary": "No se pudo cargar el resumen",
+        "Retry": "Reintentar",
+        "Database summary description": "Datos clave, estructura y siguientes pasos para esta base de datos.",
+        "Schema summary description": "Datos clave, estructura y siguientes pasos para este esquema.",
+        "Overview": "Resumen",
+        "Overview description": "Datos clave de este esquema de un vistazo.",
+        "Insights": "Ideas",
+        "Insights description": "Una lectura rápida de escala, forma y complejidad de exploración.",
+        "Quick access": "Acceso rápido",
+        "Quick access description": "Ve directamente a los siguientes pasos más útiles.",
+        "Schema in database": "Esquema en {database}",
+        "Database in catalog": "Base de datos en {catalog}",
+        "Object mix": "Composición de objetos",
+        "Object mix headline": "{tables} tablas, {views} vistas",
+        "Object mix support": "{materializedViews} vistas materializadas, {functions} funciones",
+        "Object mix note": "Una composición compacta para una primera exploración.",
+        "Table scale": "Escala de tablas",
+        "Column shape": "Forma de las columnas",
+        "No table size signal": "Sin información de tamaño de tabla",
+        "No table size note": "Los detalles del tamaño de tabla no están disponibles ahora mismo.",
+        "All tables are small": "Todas las tablas son pequeñas",
+        "Mostly small tables": "La mayoría de las tablas son pequeñas",
+        "Mixed table sizes": "Hay tamaños de tabla mixtos",
+        "Medium large counts": "{medium} medianas, {large} grandes",
+        "Good for quick exploration": "Bueno para una exploración rápida",
+        "Start with the largest tables": "Empieza por las tablas más grandes",
+        "Avg columns insight": "Promedio de {value} columnas / tabla",
+        "Max columns insight": "Máximo {value} columnas",
+        "Widest insight": "Más ancha: {table}",
+        "Identity": "Identidad",
+        "Identity description": "Confirma el contexto del esquema antes de profundizar en tablas individuales.",
+        "Database": "Base de datos",
+        "Catalog": "Catálogo",
+        "Schema": "Esquema",
+        "Engine": "Motor",
+        "Cluster / Endpoint": "Clúster / Endpoint",
+        "Size & Activity": "Tamaño y actividad",
+        "Structure": "Estructura",
+        "Structure description": "Un perfil estructural de tipos de objetos, escala de tablas y complejidad de columnas.",
+        "Object Type Distribution": "Distribución de tipos de objeto",
+        "Table Size Distribution": "Distribución del tamaño de tablas",
+        "Column Complexity": "Complejidad de columnas",
+        "Small tables": "Tablas pequeñas (<1k filas)",
+        "Medium tables": "Tablas medianas (1k-100k filas)",
+        "Large tables": "Tablas grandes (>100k filas)",
+        "Avg columns per table": "Promedio de columnas por tabla",
+        "Max columns": "Máximo de columnas",
+        "Widest table": "Tabla más ancha",
+        "Highlights": "Puntos destacados",
+        "Highlights description": "Tablas clave, estructura de relaciones y señales de nombres que conviene explorar primero.",
+        "Core Tables": "Tablas principales",
+        "Core Tables description": "Recomendaciones basadas en reglas para las tablas más centrales de este esquema.",
+        "Largest Tables": "Tablas más grandes",
+        "Largest Tables description": "Tablas con la mayor huella de almacenamiento.",
+        "Tables": "Tablas",
+        "Views": "Vistas",
+        "Materialized Views": "Vistas materializadas",
+        "Total Size": "Tamaño total",
+        "Rows (est)": "Filas (est.)",
+        "Last Updated": "Última actualización",
+        "Last Queried": "Última consulta",
+        "Relationships": "Relaciones",
+        "Relationships description": "Densidad de claves foráneas y rutas representativas de JOIN.",
+        "Foreign key links": "Enlaces de claves foráneas",
+        "Detected Patterns": "Patrones detectados",
+        "Detected Patterns description": "Grupos ligeros de nombres y sugerencias de particionado detectados a partir de nombres de tablas.",
+        "Entry Points": "Puntos de entrada",
+        "Entry Points description": "Formas rápidas de empezar a explorar este esquema sin adivinar.",
+        "Quick Actions": "Acciones rápidas",
+        "Quick Actions description": "Atajos a los siguientes pasos más útiles.",
+        "Quick Action Explore largest table": "Explorar la tabla más grande",
+        "Quick Action Show recent changes": "Mostrar cambios recientes",
+        "Quick Action Analyze relationships": "Analizar relaciones",
+        "Quick Action Browse tables": "Explorar tablas",
+        "Quick Action Browse views": "Explorar vistas",
+        "Quick Action Browse functions": "Explorar funciones",
+        "Quick Action Browse sequences": "Explorar secuencias",
+        "Start Here": "Empieza aquí",
+        "Start Here description": "Tablas recomendadas para inspeccionar primero en este esquema.",
+        "One-line summary": "Resumen en una línea",
+        "Edit": "Editar",
+        "Saving": "Guardando...",
+        "Save": "Guardar",
+        "Cancel": "Cancelar",
+        "Top by Size": "Top por tamaño",
+        "Top by Size description": "Tablas más grandes por tamaño de almacenamiento.",
+        "Top by Rows": "Top por filas",
+        "Top by Rows description": "Tablas más grandes por filas estimadas.",
+        "Recently Updated": "Actualizadas recientemente",
+        "Recently Updated description": "Últimos cambios detectados en tablas.",
+        "No recent updates found": "No se encontraron actualizaciones recientes.",
+        "No relationships found": "No se encontraron relaciones.",
+        "No patterns detected": "No se detectaron patrones.",
+        "No recommendations": "No hay recomendaciones disponibles.",
+        "No tables found": "No se encontraron tablas.",
+        "Create or Import": "Crear o importar",
+        "RecommendationReasons": {
+            "centralAndHighRowVolume": "Central en las relaciones y con alto volumen de filas",
+            "centralAndHighStorage": "Central en las relaciones y con gran huella de almacenamiento",
+            "centralInRelationships": "Central en las relaciones",
+            "highRowVolume": "Alto volumen de filas",
+            "largeStorageFootprint": "Gran huella de almacenamiento",
+            "recentlyUpdated": "Actualizada recientemente",
+            "goodStartingPoint": "Buen punto de partida"
+        }
+    },
+    "Chatbot": {
+        "Close": "Cerrar",
+        "EmptyState": "Selecciona una sesión o crea una nueva.",
+        "Welcome": {
+            "Heading": "Pregunta cualquier cosa sobre tus datos",
+            "Subheading": "La IA genera SQL, ejecuta consultas y visualiza resultados al instante",
+            "Suggestions": {
+                "TopUsers": "Mostrar los 10 usuarios principales por importe de pedido",
+                "ErrorLogs": "Errores de las últimas 24 horas",
+                "OrderTrends": "Tendencias diarias de pedidos de este mes",
+                "TableSummary": "Resumen de todas las tablas con recuentos de filas"
+            },
+            "DynamicSuggestions": {
+                "OrderTrend": "Mostrar tendencias diarias de {table}",
+                "TopUsers": "Mostrar los 10 usuarios más activos de {table}",
+                "ErrorLogs": "Mostrar errores de las últimas 24 horas en {table}",
+                "PopularProducts": "Mostrar los productos más populares de {table}",
+                "PaymentSummary": "Mostrar el resumen de pagos de {table}",
+                "RecentTrend": "Mostrar la tendencia de {table} en los últimos 7 días",
+                "TopRecordsByColumn": "Mostrar los 10 registros principales de {table} por {column}",
+                "BreakdownByColumn": "Mostrar el desglose de {table} por {column}"
+            }
+        },
+        "AuthRequired": {
+            "Title": "Inicia sesión para usar Chatbot",
+            "Description": "Los espacios de trabajo de invitado permiten explorar la app, pero Chatbot requiere una cuenta completa.",
+            "Hint": "Después de iniciar sesión, tu espacio de trabajo actual seguirá contigo.",
+            "WorkspaceNotice": "Cuando inicies sesión, tu espacio de trabajo de invitado actual se mantendrá en tu cuenta.",
+            "SignIn": "Iniciar sesión",
+            "SheetTitle": "Continuar con una cuenta",
+            "SheetDescription": "Vincula este espacio de trabajo de invitado a una cuenta completa de Dory.",
+            "SignInTab": "Iniciar sesión",
+            "SignUpTab": "Crear cuenta"
+        },
+        "Typing": "Generando",
+        "Input": {
+            "GlobalPlaceholder": "Usa @ para mencionar tablas y preguntar sobre la base de datos; Shift + Enter para una nueva línea",
+            "CopilotPlaceholder": "Pregunta sobre este SQL o deja que la IA lo corrija o reescriba; Shift + Enter para una nueva línea",
+            "SentWithAttachments": "Enviado con archivos adjuntos",
+            "WelcomePlaceholder": "Pregunta sobre tus datos… Prueba: \"Los 10 usuarios principales por ingresos la semana pasada\""
+        },
+        "Sessions": {
+            "Title": "Sesiones",
+            "SelectPlaceholder": "Seleccionar sesión",
+            "Empty": "Todavía no hay sesiones. Haz clic en el botón de la derecha para iniciar un nuevo chat.",
+            "New": "Nueva sesión",
+            "Refresh": "Actualizar sesiones",
+            "Rename": "Renombrar",
+            "Delete": "Eliminar",
+            "RenamePlaceholder": "Introduce un nuevo nombre de sesión",
+            "Untitled": "Sesión sin título",
+            "DefaultRename": "Nuevo chat",
+            "DeleteDialogTitle": "Eliminar sesión",
+            "DeleteDialogDescription": "¿Seguro que quieres eliminar \"{title}\"? Esta acción no se puede deshacer.",
+            "Cancel": "Cancelar",
+            "ConfirmDelete": "Eliminar",
+            "DeleteSuccess": "Sesión eliminada",
+            "CopilotAutoCreate": "Las sesiones de Copilot se crean automáticamente para la pestaña actual",
+            "NoMatches": "No hay sesiones coincidentes",
+            "SearchPlaceholder": "Buscar sesiones",
+            "Groups": {
+                "Today": "Hoy",
+                "Last7Days": "Últimos 7 días",
+                "Earlier": "Anterior"
+            }
+        },
+        "Errors": {
+            "FetchSessions": "No se pudieron obtener las sesiones",
+            "FetchSessionDetail": "No se pudieron obtener los detalles de la sesión",
+            "FetchCopilotSession": "No se pudo obtener la sesión de Copilot",
+            "CreateSession": "No se pudo crear la sesión",
+            "RenameSession": "No se pudo renombrar la sesión",
+            "DeleteSession": "No se pudo eliminar la sesión",
+            "SessionNotFoundRename": "No se encontró la sesión. No se puede renombrar.",
+            "SessionNotFoundDelete": "No se encontró la sesión. No se puede eliminar.",
+            "SessionNameRequired": "El nombre de la sesión no puede estar vacío",
+            "CopilotRenameUnsupported": "Las sesiones de Copilot no se pueden renombrar",
+            "CopilotDeleteUnsupported": "Las sesiones de Copilot no se pueden eliminar (las gestiona la pestaña actual)",
+            "CreateCopilotSession": "No se pudo crear la sesión de Copilot",
+            "SessionNotSelected": "No hay una sesión seleccionada",
+            "RequestFailed": "La solicitud falló",
+            "SendFailed": "No se pudo enviar el mensaje",
+            "SqlExecutionFailed": "La ejecución SQL falló",
+            "ToolErrorUnknown": "Error de herramienta desconocido",
+            "UnknownTool": "desconocido",
+            "CopySqlFailed": "No se pudo copiar el SQL",
+            "CacheSqlFailed": "No se pudo guardar el SQL en caché local"
+        },
+        "Tools": {
+            "Call": "Llamada de herramienta: {name}",
+            "Failed": "La herramienta falló",
+            "ResultRaw": "Resultado de la herramienta (sin procesar)",
+            "ToolLabel": "Herramienta",
+            "MessageLabel": "Mensaje",
+            "ReplaceSql": "Reemplazar SQL",
+            "NewTab": "Nueva pestaña",
+            "ProcessNotes": "Notas",
+            "Names": {
+                "Tool": "Herramienta",
+                "SqlRunner": "Ejecutor SQL",
+                "ChartBuilder": "Generador de gráficos"
+            },
+            "Status": {
+                "Error": "Error",
+                "Running": "En ejecución",
+                "Completed": "Completado"
+            },
+            "Steps": {
+                "RunSql": "Ejecutar SQL",
+                "InspectSchema": "Inspeccionar esquema",
+                "ListTables": "Listar tablas",
+                "ValidateTimestampParsing": "Validar análisis de timestamp",
+                "CheckTimeRange": "Comprobar rango de tiempo",
+                "ReviewRecentRows": "Revisar filas recientes",
+                "FilterErrorLogs": "Filtrar registros de error",
+                "CountRows": "Contar filas",
+                "QueryData": "Consultar datos",
+                "InsertData": "Insertar datos",
+                "UpdateData": "Actualizar datos",
+                "DeleteData": "Eliminar datos",
+                "CreateObject": "Crear objeto",
+                "DropObject": "Eliminar objeto",
+                "BuildChart": "Crear gráfico",
+                "BuildChartWithType": "Crear gráfico {chartType}",
+                "RunTool": "Ejecutar herramienta"
+            }
+        },
+        "Actions": {
+            "Copy": "Copiar",
+            "Retry": "Reintentar"
+        },
+        "TableSelect": {
+            "SelectDatabaseFirst": "Selecciona primero una base de datos",
+            "SelectTable": "Seleccionar tabla",
+            "SearchTables": "Buscar tablas...",
+            "NoMatches": "No hay tablas coincidentes",
+            "GroupHeading": "Tablas"
+        },
+        "TableMention": {
+            "Heading": "Tablas"
+        }
+    },
+    "Welcome": {
+        "Badge": "Modo anónimo",
+        "Title": "Empieza con un espacio de trabajo anónimo y mejora solo cuando necesites Chatbot.",
+        "Description": "Explora Dory de inmediato sin crear una cuenta. Crearemos un espacio de trabajo temporal para ti y conservaremos los datos de tu organización cuando más tarde inicies sesión.",
+        "CardTitle": "Entra en Dory al instante",
+        "CardDescription": "Crea una cuenta anónima y un espacio de trabajo personal con un solo clic.",
+        "Start": "Empezar con una cuenta anónima",
+        "Resume": "Continuar en el espacio de trabajo anónimo",
+        "Starting": "Preparando espacio de trabajo…",
+        "Hint": "Puedes seguir navegando de forma anónima. Cuando necesites Chatbot, inicia sesión y vincularemos este espacio de trabajo con tu cuenta real.",
+        "HaveAccount": "¿Ya tienes una cuenta?",
+        "SignIn": "Iniciar sesión",
+        "Highlights": {
+            "Instant": "Sin barrera de registro antes del primer uso.",
+            "Private": "Espacio de trabajo temporal limitado a tu sesión.",
+            "Upgrade": "Inicia sesión más tarde sin perder tu organización."
+        },
+        "Errors": {
+            "StartFailed": "No se pudo iniciar el espacio de trabajo anónimo. Inténtalo de nuevo."
+        }
+    },
+    "Monitoring": {
+        "Tabs": {
+            "Overview": "Resumen",
+            "QueryLogs": "Registros de consultas",
+            "SlowQueries": "Consultas lentas",
+            "ErrorQueries": "Consultas con error"
+        },
+        "Summary": {
+            "TotalQueries": "Consultas totales",
+            "SlowQueries": "Consultas lentas",
+            "ErrorQueries": "Consultas con error",
+            "ActiveUsers": "Usuarios activos",
+            "SlowThreshold": "Duración ≥ {threshold} ms",
+            "ErrorQueriesDescription": "Consultas fallidas"
+        },
+        "TimeRange": {
+            "1h": "Última hora",
+            "6h": "Últimas 6 horas",
+            "24h": "Últimas 24 horas",
+            "7d": "Últimos 7 días"
+        },
+        "Filters": {
+            "QueryTypePlaceholder": "Tipo de consulta",
+            "QueryTypeAll": "Todos los tipos",
+            "QueryTypeOther": "Otro",
+            "DynamicThreshold": "Umbral dinámico",
+            "FixedThreshold": "Umbral fijo",
+            "DynamicThresholdHelp": "Usa el P95 de las consultas recientes como umbral de consulta lenta",
+            "DynamicThresholdCurrent": "Actual ~ {value} ms",
+            "DurationAtLeast": "Duración ≥"
+        },
+        "Actions": {
+            "Reset": "Restablecer",
+            "Apply": "Aplicar",
+            "Close": "Cerrar"
+        },
+        "Empty": {
+            "NoData": "No hay datos",
+            "NoQueries": "No hay datos de consultas",
+            "NoSlowQueries": "No hay consultas lentas",
+            "NoErrorQueries": "No hay consultas con error"
+        },
+        "Columns": {
+            "QueryId": "ID de consulta",
+            "Time": "Hora",
+            "Duration": "Duración",
+            "User": "Usuario",
+            "Database": "Base de datos",
+            "ReadRowsBytes": "Filas / bytes leídos",
+            "ReadRows": "Filas leídas",
+            "ReadBytes": "Bytes leídos",
+            "WrittenBytes": "Bytes escritos",
+            "MemoryUsage": "Uso de memoria",
+            "Sql": "SQL",
+            "ErrorMessage": "Mensaje de error",
+            "IP": "IP"
+        },
+        "Common": {
+            "EmptyValue": "—",
+            "DurationMs": "{value} ms",
+            "ReadRows": "{value} filas",
+            "DbPrefix": "BD: {value}",
+            "Error": "Error"
+        },
+        "Units": {
+            "Milliseconds": "ms",
+            "MsTick": "{value} ms"
+        },
+        "Charts": {
+            "P50Duration": "Duración P50",
+            "P95Duration": "Duración P95",
+            "QPM": "QPM",
+            "ErrorCount": "Cantidad de errores",
+            "SlowQueries": "Consultas lentas",
+            "QueryLatencyTitle": "Latencia de consultas",
+            "QueryLatencyDescription": "Tendencia de latencia de consultas (P50 / P95)",
+            "QueryThroughputTitle": "Rendimiento de consultas",
+            "QueryThroughputDescription": "Tendencia de QPM (consultas por minuto)",
+            "ErrorCountTitle": "Cantidad de errores",
+            "ErrorCountDescription": "Tendencia de solicitudes con error",
+            "SlowQueriesTitle": "Consultas lentas",
+            "SlowQueriesDescription": "Tendencia del conteo de consultas lentas",
+            "Both": "Ambos"
+        },
+        "RecentQueries": {
+            "Title": "Consultas recientes",
+            "Description": "Consultas ejecutadas recientemente (se actualiza con filtros)",
+            "ViewAll": "Ver todo"
+        },
+        "SqlDetails": {
+            "Title": "Detalles SQL"
+        },
+        "Errors": {
+            "RequestFailed": "La solicitud falló",
+            "FetchUsers": "No se pudieron obtener los usuarios",
+            "FetchDatabases": "No se pudieron obtener las bases de datos"
+        }
+    },
+    "SqlConsole": {
+        "Layout": {
+            "InitFailed": "No se pudo inicializar la base de datos local"
+        },
+        "Errors": {
+            "InvalidSessionData": "Datos de sesión no válidos",
+            "QueryCanceled": "Consulta cancelada",
+            "ChatHandoffReadFailed": "No se pudo leer el SQL desde el chat",
+            "ExecuteFailed": "La ejecución falló",
+            "AiFix": "Corrección con IA"
+        },
+        "Tabs": {
+            "NewQuery": "Nueva consulta",
+            "UntitledQuery": "Consulta sin título",
+            "ChatQuery": "Consulta de chat",
+            "Rename": "Renombrar",
+            "GenerateAiTitle": "Generar título con IA",
+            "Close": "Cerrar",
+            "CloseOthers": "Cerrar las demás",
+            "NoActiveTab": "No hay pestaña activa",
+            "CloseTabAria": "Cerrar pestaña",
+            "AddTabAria": "Añadir pestaña",
+            "RenameDialogTitle": "Renombrar pestaña",
+            "RenameDialogDescription": "Introduce un nuevo nombre para esta pestaña.",
+            "RenamePlaceholder": "Nombre de la pestaña"
+        },
+        "Actions": {
+            "Cancel": "Cancelar",
+            "Save": "Guardar",
+            "Apply": "Aplicar",
+            "Reset": "Restablecer",
+            "ResetDefault": "Restablecer valores predeterminados",
+            "Close": "Cerrar"
+        },
+        "Empty": {
+            "Brand": "SQL Console",
+            "ActionRunSelection": "Ejecutar selección",
+            "ActionSave": "Guardar consulta",
+            "ActionNewTab": "Nueva pestaña",
+            "ActionToggleCopilot": "Abrir Copilot",
+            "ActionFormat": "Formatear SQL",
+            "ShortcutRunSelection": "Ejecutar selección: Cmd/Ctrl+Enter",
+            "ShortcutSave": "Guardar consulta: Cmd/Ctrl+S",
+            "ShortcutNewTab": "Nueva pestaña: Cmd/Ctrl+Option/Alt+L",
+            "ShortcutToggleCopilot": "Abrir Copilot: Cmd/Ctrl+I",
+            "ShortcutFormat": "Formatear SQL: Shift+Cmd/Ctrl+F",
+            "NewConsole": "Nueva consola",
+            "OrDivider": "o",
+            "AskAI": "Pedir a la IA que escriba SQL"
+        },
+        "Editor": {
+            "NoActiveTab": "No hay pestaña activa",
+            "NotSqlTab": "Esta pestaña no es un editor SQL",
+            "Completion": {
+                "Keyword": "palabra clave",
+                "Table": "tabla",
+                "Database": "base de datos",
+                "Column": "columna de {table}"
+            }
+        },
+        "InlineAsk": {
+            "Badge": "Ask AI",
+            "Placeholder": "Describe lo que quieres...",
+            "EditorPlaceholder": "Press / to ask AI",
+            "EnterHint": "Enter para generar",
+            "EnterKeyLabel": "Enter",
+            "EscapeHint": "Esc para cancelar",
+            "Generating": "Generando SQL...",
+            "Submit": "Generar SQL",
+            "Errors": {
+                "GenerateFailed": "No se pudo generar el SQL. Prueba con una instrucción más específica."
+            },
+            "Success": {
+                "Applied": "El SQL se escribió en el editor"
+            }
+        },
+        "ContextMenu": {
+            "Copy": "Copiar",
+            "Paste": "Pegar",
+            "Cut": "Cortar",
+            "FormatGroup": "Formato",
+            "Format": "Formatear SQL",
+            "ToggleCase": "Cambiar mayúsculas/minúsculas",
+            "ExecuteSelection": "Ejecutar selección",
+            "ExecuteSQL": "Ejecutar SQL"
+        },
+        "Copilot": {
+            "Errors": {
+                "NoActiveTab": "No hay pestaña activa",
+                "NotSqlTab": "La pestaña activa no es SQL",
+                "ActionFailed": "La acción falló",
+                "UnknownAction": "Intención de acción desconocida: {intent}",
+                "RequiresError": "Esta acción requiere un error de ejecución",
+                "NotApplicable": "Esta acción no aplica al contexto actual",
+                "UnsupportedSurface": "Solo se admite la superficie SQL",
+                "InvalidRequest": "Cuerpo de solicitud no válido",
+                "InternalError": "Error interno",
+                "MissingAiEnv": "Falta la configuración de IA. Define DORY_AI_API_KEY y DORY_AI_URL."
+            },
+            "Success": {
+                "ReplaceSql": "SQL reemplazado",
+                "NewTab": "Nueva pestaña creada"
+            },
+            "NewTabTitle": "Consulta con IA",
+            "ToggleOpen": "Abrir panel de IA",
+            "ToggleClose": "Cerrar panel de IA",
+            "ToggleAria": "Alternar panel de IA",
+            "ToggleLabel": "AI",
+            "Context": {
+                "SqlTitle": "Contexto SQL",
+                "EditorTitle": "Contexto del editor",
+                "SqlLabel": "SQL",
+                "SqlEmpty": "No hay SQL disponible",
+                "SelectionLabel": "Selección",
+                "None": "Ninguno",
+                "CopyLabel": "Copiar {label}",
+                "InferredTitle": "Contexto inferido",
+                "DatabaseLabel": "Base de datos",
+                "SchemaLabel": "Esquema",
+                "TablesLabel": "Tablas",
+                "ConfidenceLabel": "Confianza",
+                "EmptyValue": "—",
+                "TableFactsTitle": "Datos de la tabla",
+                "RowCountLabel": "Cantidad de filas",
+                "ColumnCountLabel": "Columnas",
+                "StatusLabel": "Estado",
+                "ProfileLabel": "Perfil",
+                "ProfileReady": "Listo",
+                "ProfilePending": "Pendiente",
+                "ResultSetTitle": "Contexto del conjunto de resultados",
+                "ResultKindLabel": "Tipo",
+                "ChartLabel": "Gráfico",
+                "ProfileColumnsLabel": "Columnas del perfil",
+                "DistinctShort": "distintos {value}",
+                "TopShareShort": "principal {value}",
+                "PrimaryKeyLabel": "Clave primaria",
+                "TableLabel": "Tabla",
+                "RawCopilot": "Contexto bruto de Copilot",
+                "RawBundle": "Paquete de contexto bruto",
+                "CopyJson": "Copiar JSON",
+                "NotReady": "El contexto no está listo"
+            },
+            "Action": {
+                "SqlPreview": "Vista previa de SQL",
+                "ResultTitle": "Resultado",
+                "RunningWithTitle": "Ejecutando: {title}",
+                "Running": "Ejecutando",
+                "UndoApply": "Deshacer aplicación",
+                "EmptyResult": "Sin resultado",
+                "Apply": "Aplicar",
+                "Copy": "Copiar"
+            },
+            "Actions": {
+                "Title": "Acciones",
+                "SqlTitle": "Acciones SQL",
+                "SqlDescription": "Corrige, optimiza o reescribe el SQL actual.",
+                "Empty": "No hay acciones disponibles",
+                "RequiresLastRun": "Requiere la última ejecución SQL",
+                "RequiresError": "Requiere un error de ejecución",
+                "NotApplicable": "No aplica al contexto actual",
+                "NoExecutionInfo": "No hay información de ejecución disponible",
+                "RunFailed": "La ejecución falló",
+                "MissingAiEnv": "Falta la configuración de IA. Define DORY_AI_API_KEY y DORY_AI_URL."
+            },
+            "QuickActions": {
+                "FixSqlError": {
+                    "Title": "Corregir errores SQL",
+                    "Description": "Revisar sintaxis / columnas / funciones"
+                },
+                "OptimizePerformance": {
+                    "Title": "Optimizar rendimiento",
+                    "Description": "Reducir escaneos completos / simplificar filtros"
+                },
+                "RewriteSql": {
+                    "Title": "Reescribir SQL",
+                    "Description": "Mejorar legibilidad / estructura"
+                },
+                "ToAggregation": {
+                    "Title": "Convertir a agregación",
+                    "Description": "Generar SQL agregado por dimensiones"
+                }
+            },
+            "ActionResults": {
+                "FixSqlError": {
+                    "MissingErrorTitle": "Falta información del error",
+                    "MissingErrorDescription": "No se detectó un error de ejecución SQL; no se pudo corregir.",
+                    "FailedTitle": "La corrección automática falló",
+                    "FailedDescription": "No se pudo generar una corrección fiable: {message}",
+                    "MissingAliasTitle": "Añadir alias a la tabla sin alias",
+                    "MissingAliasDescription": "El error hace referencia al identificador de expresión de tabla \"{ident}\". Se añadió el alias \"{alias}\" a \"{ident}\" en FROM para que coincida con las referencias posteriores."
+                },
+                "OptimizePerformance": {
+                    "MissingSqlTitle": "Falta SQL para optimizar",
+                    "MissingSqlDescription": "No hay texto SQL disponible para optimizar.",
+                    "FailedTitle": "La optimización automática falló",
+                    "FailedDescription": "No se pudo generar una optimización fiable: {message}"
+                },
+                "RewriteSql": {
+                    "MissingSqlTitle": "Falta SQL para reescribir",
+                    "MissingSqlDescription": "No hay texto SQL disponible para reescribir.",
+                    "FailedTitle": "La reescritura automática falló",
+                    "FailedDescription": "No se pudo generar una reescritura fiable: {message}"
+                },
+                "ToAggregation": {
+                    "MissingSqlTitle": "Falta SQL para agregar",
+                    "MissingSqlDescription": "No hay texto SQL disponible para generar una consulta agregada.",
+                    "FailedTitle": "La generación de agregación falló",
+                    "FailedDescription": "No se pudo generar una agregación fiable: {message}"
+                }
+            },
+            "Ask": {
+                "ActionLabels": {
+                    "FixSql": "Corregir SQL",
+                    "Optimize": "Optimizar",
+                    "Rewrite": "Reescribir",
+                    "ToAggregation": "Convertir a agregación",
+                    "Default": "Preguntar a Copilot"
+                },
+                "AppliedLabel": "{action} aplicado",
+                "AppliedDescription": "Tu SQL se ha actualizado en el editor.",
+                "GoToActions": "Ir a Acciones"
+            },
+            "Panel": {
+                "NoSqlTab": "Selecciona una pestaña SQL para usar Copilot.",
+                "UnsupportedTab": "Copilot no es compatible con pestañas de tipo {type}.",
+                "TabAsk": "Preguntar",
+                "TabAction": "Acción",
+                "TabContext": "Contexto"
+            }
+        },
+        "SavedQueries": {
+            "AccountRequiredTitle": "Inicia sesión para guardar consultas",
+            "LoadFailed": "No se pudieron cargar las consultas guardadas",
+            "Loading": "Cargando consultas guardadas...",
+            "Empty": "No hay consultas guardadas",
+            "Title": "Consultas guardadas",
+            "SearchPlaceholder": "Buscar consultas guardadas",
+            "SearchEmpty": "No hay consultas guardadas coincidentes",
+            "MoreActions": "Más acciones",
+            "Rename": "Renombrar",
+            "RenameTitle": "Renombrar consulta guardada",
+            "RenamePlaceholder": "Introduce un nuevo nombre",
+            "Delete": "Eliminar",
+            "DeleteTitle": "¿Eliminar consulta guardada?",
+            "DeleteDescription": "Esto eliminará permanentemente \"{name}\".",
+            "Cancel": "Cancelar",
+            "Save": "Guardar",
+            "Saving": "Guardando...",
+            "Deleting": "Eliminando...",
+            "OverrideTitle": "¿Reemplazar la consulta actual?",
+            "OverrideDescription": "Esto reemplazará el SQL en la pestaña actual.",
+            "Override": "Reemplazar",
+            "Folders": {
+                "CreateFolder": "Nueva carpeta",
+                "FolderName": "Nombre de la carpeta",
+                "FolderNamePlaceholder": "Introduce el nombre de la carpeta",
+                "CreateTitle": "Crear carpeta",
+                "RenameTitle": "Renombrar carpeta",
+                "RenamePlaceholder": "Introduce un nuevo nombre",
+                "DeleteFolder": "Eliminar carpeta",
+                "DeleteFolderConfirm": "Las consultas de esta carpeta se moverán al nivel raíz. ¿Continuar?",
+                "DeleteFolderTitle": "¿Eliminar carpeta?",
+                "DeleteFolderDescription": "Las consultas de \"{name}\" se moverán al nivel raíz.",
+                "MoveToFolder": "Mover a carpeta",
+                "MoveToRoot": "Sin carpeta (raíz)",
+                "Rename": "Renombrar",
+                "EmptyFolder": "No hay consultas en esta carpeta"
+            }
+        },
+        "SaveSql": {
+            "Title": "Guardar consulta",
+            "NameLabel": "Nombre",
+            "NamePlaceholder": "Nombre de la consulta",
+            "DescriptionLabel": "Descripción",
+            "DescriptionPlaceholder": "Añade una descripción (opcional)",
+            "FolderLabel": "Carpeta",
+            "FolderPlaceholder": "Selecciona una carpeta",
+            "FolderGroupLabel": "Carpetas",
+            "RootFolderLabel": "Sin carpeta (raíz)",
+            "FolderEmpty": "No se encontraron carpetas",
+            "LoadingFolders": "Cargando carpetas...",
+            "Saving": "Guardando...",
+            "Success": "Guardado",
+            "Errors": {
+                "SqlRequired": "El SQL no puede estar vacío",
+                "TitleRequired": "El nombre no puede estar vacío",
+                "LoadFoldersFailed": "No se pudieron cargar las carpetas",
+                "SaveFailed": "No se pudo guardar el SQL"
+            }
+        },
+        "Settings": {
+            "Title": "Configuración de resultados",
+            "Description": "Configura la visualización de resultados",
+            "DebugMode": "Modo de depuración",
+            "DebugHint": "Mostrar metadatos de depuración en el pie del resultado",
+            "RowBudgetLabel": "Límite de filas",
+            "RowsTitle": "Filas: {value}",
+            "RowBudgetHint": "Limita las filas renderizadas en la interfaz por rendimiento."
+        },
+        "ResultStatus": {
+            "Running": "Ejecutando",
+            "Displaying": "Mostrando",
+            "Failed": "Falló",
+            "Finished": "Finalizado",
+            "ExecMs": "Ejecución: {value} ms",
+            "LimitNotice": "Límite: {value}",
+            "Returned": "Devueltas: {value}",
+            "Affected": "Afectadas: {value}",
+            "Shown": "Mostradas: {value}",
+            "LimitSuffix": " / límite {value}",
+            "Truncated": "Truncado",
+            "SqlPreviewLabel": "Vista previa de SQL",
+            "SqlPreviewAria": "Mostrar vista previa de SQL"
+        },
+        "Results": {
+            "SelectTab": "Selecciona una pestaña para ver resultados",
+            "RunQueryFirst": "Ejecuta primero la consulta",
+            "NoResults": "Sin resultados",
+            "Overview": "Resumen",
+            "Table": "Tabla",
+            "Charts": "Gráficos",
+            "ResultTab": "Resultado {index}",
+            "WaitingForResults": "Esperando resultados...",
+            "DownloadCsvTitle": "Descargar CSV"
+        },
+        "Insights": {
+            "Title": "Insights",
+            "Beta": "Beta",
+            "Subtitle": "Una capa ligera de explicación para el resultado actual.",
+            "Loading": {
+                "DurationHint": "Suele tardar unos 10 segundos. El resultado se actualiza automáticamente.",
+                "Scenarios": {
+                    "generic": {
+                        "Title": "Analizando resultado...",
+                        "CheckingLabel": "Estamos revisando:",
+                        "Checks": {
+                            "First": "Valores anómalos",
+                            "Second": "Distribuciones de cola larga",
+                            "Third": "Problemas estructurales"
+                        }
+                    },
+                    "logs": {
+                        "Title": "Analizando datos de logs...",
+                        "CheckingLabel": "Estamos revisando:",
+                        "Checks": {
+                            "First": "Errores concentrados",
+                            "Second": "Tiempos de respuesta anómalos",
+                            "Third": "Volatilidad o picos"
+                        }
+                    },
+                    "metrics": {
+                        "Title": "Analizando distribución de datos...",
+                        "CheckingLabel": "Estamos revisando:",
+                        "Checks": {
+                            "First": "Valores extremos",
+                            "Second": "Segmentación clara",
+                            "Third": "Si el promedio representa bien"
+                        }
+                    },
+                    "structure": {
+                        "Title": "Entendiendo la estructura de datos...",
+                        "CheckingLabel": "Estamos analizando:",
+                        "Checks": {
+                            "First": "Tipos de campos y distribuciones",
+                            "Second": "Posibles métricas clave",
+                            "Third": "Rutas de análisis disponibles"
+                        }
+                    }
+                }
+            },
+            "Kinds": {
+                "SingleValue": "Valor único",
+                "TimeSeries": "Serie temporal",
+                "AggregatedTable": "Tabla agregada",
+                "DetailTable": "Tabla detallada",
+                "Unknown": "Desconocido"
+            },
+            "Charts": {
+                "Table": "Mejor en tabla",
+                "Bar": "Apto para barras",
+                "Line": "Apto para líneas",
+                "Pie": "Apto para pastel",
+                "Metric": "Apto para métricas",
+                "Scatter": "Apto para dispersión",
+                "Unknown": "Apto para explorar"
+            },
+            "QuickSummary": {
+                "SectionTitle": "Quick Summary",
+                "Description": "La forma básica de este resultado.",
+                "Title": "{kind} · {rows} filas · {columns} columnas · {chartStatus}",
+                "ChartReady": "Listo para gráficos",
+                "ExplorationReady": "Listo para explorar",
+                "TimeDetail": "Tiempo principal: {column} ({grain})",
+                "ChartHint": "Siguiente vista sugerida: {chart}"
+            },
+            "TimeGrain": {
+                "Detail": "{grain}",
+                "EventLevel": "nivel de evento",
+                "second": "nivel de segundo",
+                "minute": "nivel de minuto",
+                "hour": "nivel de hora",
+                "day": "nivel de día",
+                "week": "nivel de semana",
+                "month": "nivel de mes",
+                "quarter": "nivel de trimestre",
+                "year": "nivel de año"
+            },
+            "KeyInsights": {
+                "SectionTitle": "Key Insights",
+                "Description": "Lo que más conviene revisar primero en este resultado.",
+                "Empty": "Aún no destaca un patrón claro. Prueba con filtros o gráficos.",
+                "Refresh": "Actualizar insights"
+            },
+            "Card": {
+                "CurrentResult": "resultado actual",
+                "OutlierHeadline": "Advertencia: {column} tiene valores inusualmente altos",
+                "OutlierMaxLine": "El valor máximo llega a {value}, lo que parece inusualmente alto.",
+                "LongTailLine": "La distribución tiene cola larga, con p50 en {p50} y p95 en {p95}.",
+                "RiskHeadline": "Advertencia: {column} muestra una concentración riesgosa",
+                "RiskLine": "{value} representa aproximadamente {share} del resultado actual.",
+                "LowInformationHeadline": "{column} no tiene variación útil en este resultado",
+                "LowInformationLine": "{count} filas se concentran en {value} ({share}), así que este campo no aporta información para analizar distribución.",
+                "DimensionHeadline": "Advertencia: {column} está muy concentrada",
+                "DimensionLine": "{value} destaca como el segmento dominante."
+            },
+            "Decision": {
+                "OutlierTitle": "Un pequeño conjunto de filas altas en {column} está elevando el resultado",
+                "OutlierImpact": "El análisis basado en promedios puede ser engañoso si no revisas esas filas primero.",
+                "RiskTitle": "{column} apunta a un segmento de riesgo concentrado",
+                "RiskImpact": "El siguiente paso debería aislar ese segmento antes de resumir todo el resultado.",
+                "LowInformationTitle": "{column} no aporta suficiente señal analítica",
+                "LowInformationImpact": "Seguir con este campo no explicará el resultado; cambia a una dimensión más rica.",
+                "ConcentrationTitle": "{column} está concentrando el resultado actual",
+                "ConcentrationImpact": "Esta concentración puede ocultar diferencias entre segmentos; conviene desglosarla antes de concluir.",
+                "TrendTitle": "{column} debería guiar la siguiente revisión temporal",
+                "TrendImpact": "Una vista de tendencia puede mostrar si el resultado es estable o depende de un periodo concreto.",
+                "DefaultImpact": "Usa la primera acción recomendada para convertir este resultado en un siguiente resultado más preciso."
+            },
+            "Messages": {
+                "PrimaryCategory": "{column} está dominada por {value}, con cerca de {share}.",
+                "LowInformationDimension": "{column} no tiene suficiente variación: {count} filas se concentran en {value} ({share}). Conviene cambiar de dimensión.",
+                "RiskCategory": "{value} representa cerca de {share} en {column}; conviene revisarlo primero.",
+                "TopDimension": "{value} es uno de los valores más activos en {column} ({count} filas).",
+                "TopMessage": "Un mensaje frecuente es “{value}” ({count} filas).",
+                "TimeTrend": "Este resultado encaja bien con una tendencia temporal sobre {column} para detectar picos y cambios.",
+                "MeasureSpread": "{column} muestra dispersión visible, con p50 cerca de {p50} y p95 cerca de {p95}.",
+                "HighCardinality": "{column} parece tener alta cardinalidad, por lo que sirve mejor para filtrar que para resumir.",
+                "SpikePattern": "{bucket} destaca como un pico, con {value} frente a una línea base cercana a {baseline}.",
+                "DropPattern": "{bucket} cae por debajo del nivel habitual, con {value} frente a una base cercana a {baseline}.",
+                "OutlierPattern": "{column} contiene valores extremos, incluido un valor de muestra cercano a {value}.",
+                "CorrelationPattern": "En esta muestra, {left} y {right} tienden a moverse juntos (correlación {correlation})."
+            },
+            "KeyColumns": {
+                "SectionTitle": "Key Columns",
+                "Description": "Columnas que probablemente usarás después.",
+                "Time": "Time",
+                "Measure": "Measure",
+                "Dimensions": "Dimensions",
+                "Identifier": "Identifier",
+                "Empty": "No detectado"
+            },
+            "RecommendedActions": {
+                "SectionTitle": "Recommended Actions",
+                "Description": "Direcciones para seguir analizando desde aquí.",
+                "FirstStep": "Primer paso sugerido",
+                "Empty": "Aún no hay una acción lista para ejecutar."
+            },
+            "MainFinding": {
+                "Label": "Hallazgo principal",
+                "Recommendation": "Siguiente paso recomendado: enfocarse primero en la señal más fuerte.",
+                "RecommendationWithAction": "Siguiente paso recomendado: {action}.",
+                "MeansLabel": "Esto significa:",
+                "PriorityHint": "Paso recomendado 1"
+            },
+            "Levels": {
+                "primary": "Principal",
+                "secondary": "Secundario",
+                "info": "Información"
+            },
+            "Actions": {
+                "InspectOutliers": "Ver muestras anómalas",
+                "InspectHighValueRows": "Ver filas altas de {column}",
+                "FindHighestRows": "Encontrar las filas más altas de {column}",
+                "LocateSlowRequests": "Localizar solicitudes lentas",
+                "AnalyzeSource": "Analizar origen",
+                "AnalyzeByColumn": "Analizar por {column}",
+                "ViewDistribution": "Ver distribución",
+                "ViewColumnDistribution": "Ver distribución de {column}",
+                "GroupByService": "Agrupar por {column}",
+                "ViewTimeTrend": "Ver tendencia temporal",
+                "ViewTimeTrendByColumn": "Ver tendencia de {column}",
+                "FilterOutliers": "Filtrar filas anómalas",
+                "ExcludeHighValueRows": "Excluir filas altas de {column}",
+                "TopMessages": "Ver valores principales",
+                "PatternFollowUp": "Seguir este patrón",
+                "ExplainResult": "Explicar este resultado"
+            },
+            "ActionPrompts": {
+                "CurrentResult": "el resultado actual",
+                "TimeErrorTrend": "Usa el resultado y SQL actuales ({sql}) para proponer la siguiente consulta que analice la tendencia de errores en el tiempo con {timeColumn}. Explica cómo conviene agrupar los datos y por qué.",
+                "ServiceErrorBreakdown": "Usa el resultado y SQL actuales ({sql}) para proponer la siguiente consulta que descomponga los errores por {serviceColumn}. Mantén la recomendación concreta y útil.",
+                "TopMessages": "Usa el resultado y SQL actuales ({sql}) para proponer la siguiente consulta que revise los valores principales de {messageColumn}. Indica también la mejor vista para revisar el resultado.",
+                "PatternFollowUp": "Usa el resultado y SQL actuales ({sql}) para investigar este patrón: {pattern}. Enfócate en las columnas {columns} y sugiere la siguiente consulta con una breve justificación.",
+                "ExplainResult": "Explica en lenguaje natural qué significa este resultado, qué destaca y qué conviene preguntar después. Basa la respuesta en el resultado y SQL actuales ({sql})."
+            },
+            "Source": {
+                "Llm": "Reescrito con IA",
+                "Rules": "Basado en análisis por reglas"
+            },
+            "Profile": {
+                "Title": "Profile (Advanced)",
+                "Description": "Señales detalladas y estadísticas de columnas usadas para generar los insights.",
+                "SignalsTitle": "Quick Signals",
+                "NullRatio": "Proporción nula",
+                "DuplicateRows": "Filas duplicadas",
+                "ChartReadiness": "Apto para gráficos",
+                "RowCount": "Filas",
+                "Yes": "Sí",
+                "No": "No",
+                "HighlightedColumns": "Roles de columnas clave",
+                "ColumnStatsTitle": "Column Stats",
+                "ColumnStatLine": "Distinct {distinct} · Null {nulls}"
+            },
+            "Analysis": {
+                "Empty": "Selecciona un resultado para empezar el análisis.",
+                "CurrentInsightTitle": "Insight actual",
+                "CurrentInsightDescription": "El problema activo y sus puntos de entrada listos para ejecutar.",
+                "AvailableActionsTitle": "Acciones de análisis",
+                "AvailableActionsDescription": "Continúa desde el resultado actual y convierte los datos en una conclusión.",
+                "ProcessTitle": "Proceso de análisis",
+                "ProcessDescription": "Flujo de ejecución explicable para el análisis seleccionado.",
+                "ResultTitle": "Resultado del análisis",
+                "ResultDescription": "Hallazgos clave, ejemplos y evidencia de apoyo.",
+                "NextActionsTitle": "Siguientes acciones",
+                "NextActionsDescription": "Continúa la cadena de análisis con otra acción predefinida.",
+                "HistoryTitle": "Historial",
+                "HistoryDescription": "Sesiones de análisis recientes para la cadena actual de resultados.",
+                "RunningTitle": "Analizando: {title}",
+                "RunningDescription": "Ejecutando la acción de análisis seleccionada.",
+                "LoadingStatus": "Loading",
+                "LoadingTitle": "Analizando",
+                "LoadingDescription": "Generando la conclusión y el resultado. Esta página se actualizará automáticamente.",
+                "ResultPending": "Los resultados del análisis aparecerán aquí tras la ejecución.",
+                "RecordHighlightsTitle": "Registros principales",
+                "OpenResult": "Abrir resultado",
+                "NoNextActions": "Todavía no hay acciones de seguimiento disponibles.",
+                "Starting": "Iniciando análisis...",
+                "ClickToRun": "Haz clic para ejecutar",
+                "StepLabel": "Paso {index}. {title}",
+                "ActionPageSubtitle": "Explica, analiza, genera y continúa.",
+                "ConclusionTitle": "Conclusión del análisis",
+                "ConclusionDescription": "El juicio principal de este paso y por qué importa.",
+                "WhyRunTitle": "Por qué este análisis",
+                "KeyFindingsTitle": "Hallazgos clave",
+                "SupportingDetailsTitle": "Detalles de apoyo",
+                "GeneratedSqlTitle": "SQL generado",
+                "GeneratedSqlDescription": "SQL usado para reproducir este resultado de análisis.",
+                "VisualResultTitle": "Vista previa del resultado",
+                "VisualResultEmpty": "No hay filas de resultado que se puedan graficar directamente para este análisis.",
+                "CopySql": "Copiar SQL",
+                "ApplyResult": "Aplicar resultado",
+                "NoGeneratedSql": "No hay SQL generado para este análisis.",
+                "SqlCopied": "SQL copiado.",
+                "LimitationsTitle": "Limitaciones",
+                "AiDecision": {
+                    "DefaultLabel": "Continuar análisis recomendado",
+                    "DefaultDescription": "La IA eligió el siguiente paso de análisis a partir del Profile.",
+                    "InvalidTitle": "This result is not analyzable yet",
+                    "InvalidDescription": "The result is empty or lacks usable fields. Adjust the SQL or expand the range first.",
+                    "AdjustQueryLabel": "Adjust query range",
+                    "InvalidGoal": "Collect analyzable data before continuing.",
+                    "InvalidResultTitle": "Analysis blocked",
+                    "InvalidReason": "The current result does not have enough evidence for continued analysis.",
+                    "GroupByTitle": "Group by {column}",
+                    "TimeTrendTitle": "Trend by {column}",
+                    "LowDensityDescription": "{column} has low information density. Move to a more useful aggregation.",
+                    "NextAxisDescription": "Based on the Profile, {column} is a better next analysis axis.",
+                    "GroupByLabel": "Continue: group by {column}",
+                    "TimeTrendLabel": "Continue: view {column} trend",
+                    "GroupByGoal": "Identify which {column} contributes the most activity.",
+                    "TimeTrendGoal": "Check whether activity clusters over {column}.",
+                    "GroupByResultTitle": "{column} breakdown",
+                    "TimeTrendResultTitle": "{column} trend",
+                    "LowDensityReason": "{column} has information density {density} and top value share {share}.",
+                    "NextAxisReason": "Choose {column} as the highest-value next analysis dimension."
+                },
+                "Steps": {
+                    "InspectProfile": "Leer señales del Profile",
+                    "RunNextSql": "Ejecutar SQL recomendado",
+                    "SummarizeNextStep": "Resumir el siguiente resultado",
+                    "InspectAxis": "Confirm time field",
+                    "BucketSeries": "Aggregate by time",
+                    "SummarizeTrend": "Summarize trend",
+                    "PickSource": "Identify source field",
+                    "GroupSource": "Group by source",
+                    "SummarizeSource": "Summarize source",
+                    "PickDimension": "Identify key dimension",
+                    "PickField": "Identify text field",
+                    "RankValues": "Rank top values",
+                    "SummarizeValues": "Summarize top values",
+                    "FindPeak": "Find maximum value",
+                    "ExtractTop": "Extract top 20 rows",
+                    "SummarizeOutliers": "Summarize samples",
+                    "ScanDistribution": "Scan distribution",
+                    "MeasureTail": "Measure tail and peaks",
+                    "SummarizeDistribution": "Summarize distribution",
+                    "FindThreshold": "Find anomaly threshold",
+                    "FilterRows": "Filter anomalous rows",
+                    "SummarizeFiltered": "Summarize filtered result",
+                    "InspectPattern": "Inspect pattern",
+                    "CompareSegments": "Compare segments",
+                    "SummarizePattern": "Summarize pattern",
+                    "InspectResult": "Inspect current result",
+                    "RunAnalysis": "Run analysis query",
+                    "SummarizeAnalysis": "Summarize analysis",
+                    "AdjustQuery": "Adjust query",
+                    "SummarizeLimitation": "Summarize limitation"
+                },
+                "FallbackActions": {
+                    "ViewTrendByColumn": "Ver tendencia por {column}",
+                    "AnalyzeByColumn": "Analizar por {column}",
+                    "ViewDistributionByColumn": "Ver distribución de {column}",
+                    "InspectHighRowsByColumn": "Revisar filas altas de {column}"
+                },
+                "Server": {
+                    "ContinueRecommendedAnalysis": "Continuar análisis recomendado",
+                    "RunRecommendedAnalysis": "Ejecutar análisis recomendado",
+                    "RecommendedAnalysisGoal": "Avanzar al siguiente paso útil después de la confirmación.",
+                    "RecommendedAnalysisDescription": "Ejecutar el SQL recomendado confirmado y resumir si el resultado es más útil.",
+                    "ReadOnlySelectError": "El SQL recomendado debe ser una única sentencia SELECT de solo lectura.",
+                    "FirstGroup": "Grupo principal",
+                    "NoRecommendedRowsLimitation": "El SQL recomendado no devolvió filas. Ajusta la dirección o amplía el rango.",
+                    "LeaderSummaryWithValue": "{leader} es el grupo más destacado de este resultado, con {value} registros.",
+                    "LeaderSummary": "{leader} es el grupo que conviene revisar primero.",
+                    "NoRecommendedRowsSummary": "El SQL recomendado no devolvió un resultado analizable.",
+                    "LeaderHeadline": "{leader} merece atención primero",
+                    "NoRecommendedRowsHeadline": "El siguiente análisis no devolvió resultados",
+                    "LeaderFindingWithValue": "{leader} aportó {value} registros",
+                    "LeaderFinding": "{leader} quedó en primer lugar",
+                    "CandidateGroupsFinding": "Este paso devolvió {count} grupos candidatos",
+                    "NoUsableRowsFinding": "No se devolvió ningún resultado utilizable",
+                    "RecommendedSqlResultTitle": "Resultado del SQL recomendado",
+                    "Steps": {
+                        "InspectProfile": "Leer señales del Profile",
+                        "RunNextSql": "Ejecutar SQL recomendado",
+                        "SummarizeNextStep": "Resumir el siguiente resultado"
+                    },
+                    "ActionResultNoRowsLimitation": "The recommended action returned no analyzable result.",
+                    "ActionResultNoRowsSummary": "The recommended action returned no rows, so no next-step judgment can be formed.",
+                    "ActionDistributionSummary": "{column} ranges from {minValue} to {maxValue}, with an average of {avgValue}. Use this result to judge concentration, skew, or boundary outliers.",
+                    "ActionDistributionHeadline": "{column} distribution calculated",
+                    "ActionDistributionAverageFinding": "{column} average is {avgValue}",
+                    "ActionDistributionRangeFinding": "{column} ranges from {minValue} to {maxValue}",
+                    "ActionDistributionRowsFinding": "Statistics cover {totalRows} rows",
+                    "DistributionStatisticsTitle": "Distribution statistics",
+                    "FirstItem": "First item",
+                    "ActionLeaderSummaryWithValue": "The leading result for {title} is {leader}, with value {value}.",
+                    "ActionLeaderSummary": "The leading result for {title} is {leader}.",
+                    "ActionCompletedHeadline": "{title} completed",
+                    "ResultDetailsTitle": "Result details",
+                    "OutlierHeadlineWithValue": "Found {value} as the highest value",
+                    "OutlierHeadline": "Outlier samples located",
+                    "OutlierMaxFinding": "{column} highest value is {value}",
+                    "OutlierRowsReturnedFinding": "Highest-value samples returned",
+                    "OutlierRowsCountFinding": "Extracted {count} anomalous candidate rows",
+                    "NoOutlierRowsFinding": "No displayable anomalous samples were returned",
+                    "SourceHeadline": "Main source is {value}",
+                    "NoSourceHeadline": "No anomaly source found",
+                    "SourceTopFinding": "{value} has the highest row count at {count}",
+                    "SourceGroupsFinding": "Returned {count} source groups",
+                    "NoSourceGroupsFinding": "No usable source groups were returned",
+                    "ServiceHeadline": "{value} is the main anomaly source",
+                    "NoServiceHeadline": "No service source found",
+                    "ServiceTopFinding": "{value} has the highest total_rows",
+                    "ServiceSortedFinding": "Top {count} services sorted",
+                    "NoServiceGroupsFinding": "No service group results were returned",
+                    "DistributionHeadline": "Distribution maximum is {value}",
+                    "NoDistributionHeadline": "No distribution result generated",
+                    "DistributionRangeFinding": "Maximum {maxValue} is clearly above minimum {minValue}",
+                    "DistributionAverageFinding": "Average is about {avgValue}",
+                    "NoDistributionSummaryFinding": "No distribution summary was returned",
+                    "TrendHeadline": "Trend covers {count} time buckets",
+                    "NoTrendHeadline": "No trend data returned",
+                    "TrendBucketRangeFinding": "Starts at {first}, ends at {last}",
+                    "TrendPointCountFinding": "Returned {count} time points",
+                    "NoTrendDataFinding": "No trend data was returned",
+                    "FilteredHeadline": "Filtered {count} anomalous rows",
+                    "NoFilteredHeadline": "No rows matched the anomaly condition",
+                    "FilteredReadyFinding": "Anomaly subset is ready for continued analysis",
+                    "FilteredSizeFinding": "Current subset size is {count} rows",
+                    "NoFilteredRowsFinding": "No matching anomaly subset was returned",
+                    "LowVarianceLimitation": "{value} covers every returned row in the current result, so this field has no variance.",
+                    "LowVarianceSummary": "{count} / {total} rows are {value}. Continuing on this field adds no information gain; move to a richer participant, repository, or time dimension.",
+                    "LowVarianceHeadline": "Current result lacks field diversity",
+                    "LowVarianceAllRowsFinding": "{value} covers all returned rows",
+                    "LowVarianceNotUsefulFinding": "This field distribution is not useful as the next analysis target",
+                    "LowVarianceNextStepFinding": "Move directly to aggregation or time trend analysis",
+                    "NoTopValuesLimitation": "No top values were returned, so the distribution cannot be explained further.",
+                    "TopValueHeadline": "{value} is the most common value",
+                    "NoTopValuesHeadline": "No top values returned",
+                    "TopValueFinding": "Top value is {value}",
+                    "TopValueCountFinding": "Frequency is {count}",
+                    "NoTopValuesFinding": "No top values were returned",
+                    "PatternHeadline": "{value} remains the main group",
+                    "NoPatternHeadline": "No pattern comparison result returned",
+                    "PatternComparedFinding": "Pattern-related group comparison completed",
+                    "NoPatternRowsFinding": "No pattern comparison rows were returned"
+                },
+                "Kinds": {
+                    "trend": "Tendencia",
+                    "topk": "Valores frecuentes",
+                    "drilldown": "Desglose",
+                    "distribution": "Distribución",
+                    "compare": "Comparar"
+                },
+                "StepStatus": {
+                    "pending": "Pendiente",
+                    "running": "En ejecución",
+                    "done": "Completado",
+                    "error": "Error"
+                },
+                "Errors": {
+                    "RunFailed": "No se pudo ejecutar el análisis."
+                },
+                "SuggestionDescriptions": {
+                    "ViewTimeTrend": "Break the result down over time to check whether it clusters in specific periods.",
+                    "GroupByService": "Break down by service or source to find the largest contributor.",
+                    "AnalyzeSource": "Break down by the most relevant dimension to locate the main source.",
+                    "TopMessages": "Find the most frequent content to see what drives this result.",
+                    "InspectOutliers": "Review the highest-value samples to understand where outliers come from.",
+                    "ViewDistribution": "Quantify the main measure distribution, tail, and concentration.",
+                    "FilterOutliers": "Narrow the result to the anomalous subset for continued analysis.",
+                    "PatternFollowUp": "Follow up on the strongest pattern and compare related segments.",
+                    "Default": "Continue drilling into the current result.",
+                    "ViewTimeTrendWithColumn": "Check whether the issue changes over {column}.",
+                    "GroupByColumn": "Identify which {column} contributes the most.",
+                    "TopMessagesWithColumn": "Find the most frequent {column} values to see what drives this result.",
+                    "ViewDistributionWithColumn": "Find the highest values and quantify the long tail for {column}.",
+                    "InspectOutliersWithColumn": "Review the highest rows for {column}.",
+                    "FilterOutliersWithColumn": "Keep abnormal rows and continue analyzing them by {column}."
+                },
+                "SuggestionGoals": {
+                    "TopMessages": "See which text values appear most often.",
+                    "Default": "Continue the current analysis.",
+                    "ViewTimeTrend": "Inspect change over time.",
+                    "GroupByService": "Locate the source of the anomaly.",
+                    "AnalyzeSource": "Find the segment behind the issue.",
+                    "ViewDistribution": "Understand the distribution shape.",
+                    "InspectOutliers": "Locate anomalous rows.",
+                    "FilterOutliers": "Focus on abnormal rows only."
+                },
+                "ResultTitles": {
+                    "TopMessages": "Top values",
+                    "Default": "Analysis result",
+                    "TimeTrend": "Time trend",
+                    "SourceBreakdown": "Source breakdown",
+                    "SourceAnalysis": "Source analysis",
+                    "Distribution": "Distribution",
+                    "OutlierSamples": "Outlier samples",
+                    "FilteredAnomalySet": "Filtered anomaly set"
+                },
+                "Actions": {
+                    "ViewTimeTrend": "View time trend",
+                    "GroupByColumn": "Group by {column}",
+                    "AnalyzeSource": "Analyze source",
+                    "TopMessages": "View top values",
+                    "ViewDistribution": "View distribution",
+                    "InspectOutliers": "View anomalous samples",
+                    "FilterOutliers": "Filter anomalous rows",
+                    "GroupByService": "Agrupar por {column}",
+                    "PatternFollowUp": "Seguir este patrón"
+                },
+                "SuggestionTitles": {
+                    "ViewTimeTrend": "Trend {column} over time",
+                    "GroupByColumn": "Break down by {column}",
+                    "AnalyzeSource": "Analyze likely source",
+                    "TopMessages": "View top values in {column}",
+                    "ViewDistribution": "Profile {column} distribution",
+                    "InspectOutliers": "Inspect outliers in {column}",
+                    "FilterOutliers": "Filter high {column} rows"
+                }
+            }
+        },
+        "Overview": {
+            "Status": "Estado",
+            "Sql": "SQL",
+            "Message": "Mensaje",
+            "Duration": "Duración",
+            "Rows": "Filas",
+            "Empty": "Sin resultados",
+            "StatusRunning": "Ejecutando",
+            "StatusSuccess": "Correcto",
+            "StatusError": "Error",
+            "StatusCanceled": "Cancelado",
+            "DurationMs": "{value} ms",
+            "RowsAffected": "{value} filas",
+            "ViewResult": "Ver resultado",
+            "OpenResult": "Abrir resultado",
+            "CopySql": "Copiar SQL",
+            "CopyError": "Copiar error"
+        },
+        "Common": {
+            "NotAvailable": "N/D",
+            "EmptyValue": "—",
+            "Error": "Error"
+        },
+        "ResultMeta": {
+            "RowsReturned": "{value} filas devueltas",
+            "RowsAffected": "{value} filas afectadas",
+            "AriaLabel": "Conjunto de resultados {index}",
+            "Title": "Resultado {index} ({status})",
+            "Started": "Inicio",
+            "Finished": "Fin",
+            "Scan": "Escaneado",
+            "Cache": "Caché",
+            "CacheHit": "acierto",
+            "CacheMiss": "fallo",
+            "Source": "Origen",
+            "Truncated": "Truncado",
+            "CopyTitle": "Copiar metadatos",
+            "Copied": "Copiado",
+            "CopyMeta": "Copiar metadatos"
+        },
+        "Toolbar": {
+            "RunSelected": "Ejecutar selección",
+            "Run": "Ejecutar",
+            "Limit": "Límite",
+            "Saved": "Guardado",
+            "SaveQuery": "Guardar consulta",
+            "Stop": "Detener"
+        },
+        "AnonymousWorkspaceAlert": {
+            "Title": "No has iniciado sesión, así que el contenido del espacio de trabajo no se puede guardar",
+            "Description": "Este es un espacio de trabajo de invitado. Inicia sesión o crea una cuenta para guardar consultas y otro contenido del espacio de trabajo sin perder tus datos actuales de invitado.",
+            "Action": "Inicia sesión para continuar"
+        },
+        "Refresh": "Actualizar",
+        "Sidebar": {
+            "Tables": "Tablas",
+            "SavedQueries": "Consultas guardadas"
+        },
+        "VTable": {
+            "Header": {
+                "RowNumberTitle": "Número de fila"
+            },
+            "RowIndexHint": "Haz clic para seleccionar; Shift para ampliar; Cmd/Ctrl+C para copiar filas; clic derecho para el menú",
+            "Filter": {
+                "EditHint": "Haz clic para editar el filtro",
+                "CaseSensitiveSuffix": " (Aa)",
+                "RemoveAria": "Quitar filtro",
+                "RemoveTitle": "Quitar",
+                "ClearAll": "Limpiar",
+                "Title": "Filtro de columna",
+                "TitleWithColumn": "Filtro de columna: {column}",
+                "Remove": "Quitar",
+                "Operator": "Operador",
+                "Value": "Valor",
+                "PlaceholderDate": "Selecciona o introduce una fecha",
+                "PlaceholderText": "Introduce un valor de filtro",
+                "CaseSensitive": "Distinguir mayúsculas y minúsculas",
+                "Cancel": "Cancelar",
+                "Apply": "Aplicar",
+                "Op": {
+                    "IsTrue": "Es verdadero",
+                    "IsFalse": "Es falso",
+                    "On": "En (fecha)",
+                    "Before": "Antes de",
+                    "After": "Después de",
+                    "Empty": "Está vacío",
+                    "NotEmpty": "No está vacío",
+                    "Contains": "Contiene",
+                    "Equals": "Igual a",
+                    "StartsWith": "Empieza con",
+                    "EndsWith": "Termina con",
+                    "Regex": "Regex"
+                }
+            },
+            "Context": {
+                "ViewCell": "Ver celda",
+                "ViewRowDetails": "Ver detalles de la fila",
+                "Copy": "Copiar",
+                "CopyWithHeaders": "Copiar con encabezados",
+                "FilterByValue": "Filtrar por este valor",
+                "DownloadCsv": "Descargar CSV"
+            },
+            "Search": {
+                "FilteredTotalAria": "Filtrado / Total",
+                "Placeholder": "Buscar (Ctrl/Cmd+F para enfocar)",
+                "ClearAria": "Limpiar búsqueda"
+            },
+            "Inspector": {
+                "ResizeTitle": "Arrastra para cambiar el tamaño",
+                "TitleCell": "Inspector de celda",
+                "TitleRow": "Detalles de la fila",
+                "CopyJson": "Copiar JSON",
+                "CopiedJson": "JSON copiado",
+                "CopyRow": "Copiar fila",
+                "CopiedRow": "Fila copiada",
+                "Close": "Cerrar",
+                "RowWithColumn": "Fila {row} · {column}",
+                "RowOnly": "Fila {row}",
+                "ViewJson": "Ver JSON",
+                "ViewTable": "Ver tabla",
+                "FilterPlaceholder": "Filtrar campos..."
+            }
+        },
+        "Debug": {
+            "Duration": "Duración",
+            "Started": "Inicio",
+            "Finished": "Fin",
+            "Cache": "Caché",
+            "CacheHit": "acierto",
+            "CacheMiss": "fallo",
+            "Source": "Origen",
+            "Scanned": "Escaneado: {rows} filas / {bytes}",
+            "Truncated": "Truncado (primeras {count} filas)",
+            "Status": "Estado",
+            "Session": "Sesión",
+            "Set": "Conjunto",
+            "Rows": "Filas",
+            "StorageKey": "Clave de almacenamiento",
+            "CopyMetaTitle": "Copiar metadatos de depuración",
+            "CopyMeta": "Copiar metadatos"
+        },
+        "JsonPreview": {
+            "Truncated": "/* truncado por rendimiento */",
+            "RenderFailed": "// Error al renderizar JSON"
+        }
+    },
+    "Privileges": {
+        "Title": "Privilegios",
+        "Description": "Gestiona usuarios y roles de ClickHouse y configura el acceso.",
+        "Tabs": {
+            "Users": "Usuarios",
+            "Roles": "Roles"
+        },
+        "Empty": {
+            "NoConnection": "Conecta una fuente de datos para gestionar privilegios."
+        },
+        "Actions": {
+            "Add": "Añadir",
+            "Edit": "Editar",
+            "Delete": "Eliminar",
+            "Create": "Crear",
+            "SaveChanges": "Guardar cambios",
+            "Cancel": "Cancelar",
+            "Confirm": "Confirmar",
+            "ConfirmDelete": "Confirmar eliminación",
+            "Revoke": "Revocar",
+            "BackToList": "Volver a la lista"
+        },
+        "Common": {
+            "EmptyValue": "—"
+        },
+        "Labels": {
+            "User": "Usuario",
+            "Role": "Rol"
+        },
+        "Dialogs": {
+            "DeleteUser": {
+                "Title": "Confirmar eliminación",
+                "Description": "Esto eliminará al usuario {name}. Esta acción no se puede deshacer."
+            },
+            "DeleteRole": {
+                "Title": "Confirmar eliminación",
+                "Description": "Esto eliminará el rol {name}. Esta acción no se puede deshacer."
+            }
+        },
+        "Errors": {
+            "FetchUsers": "No se pudieron obtener los usuarios",
+            "FetchRoles": "No se pudieron obtener los roles",
+            "FetchClusters": "No se pudieron obtener los clústeres",
+            "FetchUser": "No se pudo obtener el usuario",
+            "FetchRole": "No se pudo obtener el rol",
+            "CreateUser": "No se pudo crear el usuario",
+            "UpdateUser": "No se pudo actualizar el usuario",
+            "DeleteUser": "No se pudo eliminar el usuario",
+            "CreateRole": "No se pudo crear el rol",
+            "UpdateRole": "No se pudo actualizar el rol",
+            "DeleteRole": "No se pudo eliminar el rol",
+            "GrantGlobalFailed": "No se pudieron otorgar los privilegios globales",
+            "RevokeGlobalFailed": "No se pudieron revocar los privilegios globales",
+            "GrantScopedFailed": "No se pudieron otorgar los privilegios",
+            "RevokeScopedFailed": "No se pudieron revocar los privilegios",
+            "UserNotSpecified": "No se especificó el usuario",
+            "RoleNotSpecified": "No se especificó el rol"
+        },
+        "Toasts": {
+            "UserCreated": "Usuario creado",
+            "UserCreateFailed": "No se pudo crear el usuario",
+            "UserUpdated": "Usuario actualizado",
+            "UserUpdateFailed": "No se pudo actualizar el usuario",
+            "UserDeleted": "Usuario eliminado",
+            "UserDeleteFailed": "No se pudo eliminar el usuario",
+            "RoleCreated": "Rol creado",
+            "RoleCreateFailed": "No se pudo crear el rol",
+            "RoleUpdated": "Rol actualizado",
+            "RoleUpdateFailed": "No se pudo actualizar el rol",
+            "RoleDeleted": "Rol eliminado",
+            "RoleDeleteFailed": "No se pudo eliminar el rol",
+            "FetchDatabasesFailed": "No se pudieron obtener las bases de datos",
+            "FetchTablesFailed": "No se pudieron obtener las tablas",
+            "FetchViewsFailed": "No se pudieron obtener las vistas",
+            "GlobalGranted": "Privilegios globales otorgados",
+            "GlobalGrantFailed": "No se pudieron otorgar los privilegios globales",
+            "GlobalRevoked": "Privilegios globales revocados",
+            "GlobalRevokeFailed": "No se pudieron revocar los privilegios globales",
+            "ScopedGranted": "Privilegios otorgados",
+            "ScopedGrantFailed": "No se pudieron otorgar los privilegios",
+            "ScopedRevoked": "Privilegios revocados",
+            "ScopedRevokeFailed": "No se pudieron revocar los privilegios",
+            "SelectDatabase": "Selecciona una base de datos",
+            "SelectObject": "Selecciona un objeto"
+        },
+        "Users": {
+            "Title": "Usuarios",
+            "Add": "Añadir usuario",
+            "Loading": "Cargando usuarios...",
+            "Empty": "No hay usuarios",
+            "Columns": {
+                "UserName": "Nombre de usuario",
+                "DefaultRole": "Rol predeterminado",
+                "GrantedRoles": "Roles otorgados",
+                "Actions": "Acciones"
+            }
+        },
+        "Roles": {
+            "Title": "Roles",
+            "Add": "Añadir rol",
+            "Loading": "Cargando roles...",
+            "Empty": "No hay roles",
+            "Columns": {
+                "RoleName": "Nombre del rol",
+                "PrivilegeCount": "Privilegios",
+                "GrantedUsers": "Usuarios otorgados",
+                "Actions": "Acciones"
+            }
+        },
+        "UserDialog": {
+            "CreateTitle": "Crear usuario",
+            "EditTitle": "Editar usuario {name}",
+            "NameLabel": "Nombre de usuario",
+            "NamePlaceholder": "e.g. readonly_user",
+            "PasswordLabel": "Contraseña",
+            "PasswordPlaceholderCreate": "Déjalo vacío para crear un usuario sin contraseña",
+            "PasswordPlaceholderEdit": "Déjalo vacío para eliminar la contraseña",
+            "PasswordHintCreate": "Opcional. Si lo dejas vacío se crea un usuario sin contraseña.",
+            "PasswordHintEdit": "Completa para actualizar la contraseña. Déjalo vacío para eliminarla.",
+            "AllowedHostsLabel": "Hosts permitidos",
+            "AllowedHostsPlaceholder": "Separa varios hosts con comas o saltos de línea. Déjalo vacío para permitir cualquier host.",
+            "RolesLabel": "Roles otorgados",
+            "RolesPlaceholder": "Selecciona los roles a otorgar",
+            "RolesSearchPlaceholder": "Buscar roles...",
+            "RolesEmpty": "No hay roles coincidentes",
+            "DefaultRoleLabel": "Rol predeterminado",
+            "DefaultRolePlaceholder": "Selecciona el rol predeterminado (opcional)",
+            "DefaultRoleNone": "Sin rol predeterminado",
+            "OnClusterLabel": "En clúster",
+            "OnClusterDescription": "Aplica esta operación en todo el clúster seleccionado.",
+            "ClusterLabel": "Clúster",
+            "ClusterPlaceholder": "Selecciona un clúster",
+            "ClusterDescription": "Elige un clúster para aplicar los comandos ON CLUSTER.",
+            "ClusterLoading": "Cargando clústeres...",
+            "ClusterMissing": "No se detectó configuración de clúster; se usará Este nodo.",
+            "Errors": {
+                "NameRequired": "El nombre de usuario es obligatorio"
+            }
+        },
+        "RoleDialog": {
+            "CreateTitle": "Crear rol",
+            "EditTitle": "Editar rol {name}",
+            "NameLabel": "Nombre del rol",
+            "NamePlaceholder": "e.g. readonly",
+            "OnClusterLabel": "En clúster",
+            "OnClusterDescription": "Ejecuta este cambio en todo el clúster seleccionado.",
+            "ClusterLabel": "Clúster",
+            "ClusterPlaceholder": "Selecciona un clúster",
+            "ClusterDescription": "Elige un clúster para aplicar los comandos ON CLUSTER.",
+            "ClusterLoading": "Cargando clústeres...",
+            "ClusterMissing": "No se detectó configuración de clúster; se usará Este nodo.",
+            "Errors": {
+                "NameRequired": "El nombre del rol es obligatorio"
+            }
+        },
+        "GlobalGrantDialog": {
+            "Title": "Otorgar privilegios globales",
+            "Description": "Selecciona los privilegios globales que quieres otorgar a este {entity}.",
+            "Empty": "No hay privilegios globales disponibles."
+        },
+        "GlobalRevokeDialog": {
+            "Title": "Revocar privilegios globales",
+            "Description": "Selecciona los privilegios globales a revocar.",
+            "Empty": "No hay privilegios para revocar."
+        },
+        "GlobalPrivileges": {
+            "Title": "Privilegios globales",
+            "GlobalLabel": "Global",
+            "Columns": {
+                "Name": "Nombre",
+                "Actions": "Acciones"
+            },
+            "AllGranted": "Este {entity} tiene TODOS los privilegios globales.",
+            "Empty": "No hay privilegios globales."
+        },
+        "PrivilegeDetails": {
+            "Title": "Detalles de privilegios",
+            "AddPrivilege": "Añadir privilegio",
+            "EmptyEntity": "Este {entity} no tiene registros de privilegios.",
+            "EmptyScoped": "No hay privilegios a nivel de base de datos o tabla.",
+            "Columns": {
+                "Name": "Nombre"
+            }
+        },
+        "ScopedGrantDialog": {
+            "Title": "Otorgar privilegios con alcance",
+            "Description": "Otorga privilegios para una base de datos, tabla o vista. Se permiten varias selecciones.",
+            "Tabs": {
+                "Database": "Base de datos",
+                "Table": "Tabla",
+                "View": "Vista"
+            },
+            "DatabaseLabel": "Base de datos",
+            "DatabasePlaceholder": "Selecciona una base de datos",
+            "TableLabel": "Tabla",
+            "ViewLabel": "Vista",
+            "ObjectPlaceholderTable": "Selecciona una tabla",
+            "ObjectPlaceholderView": "Selecciona una vista",
+            "PrivilegesLabel": "Privilegios (selección múltiple)"
+        },
+        "ScopedRevokeDialog": {
+            "Title": "Revocar privilegios con alcance",
+            "Description": "Selecciona los privilegios a revocar. Se permiten varias selecciones.",
+            "ObjectLabel": "Objeto:",
+            "Empty": "No hay privilegios para revocar."
+        },
+        "UserPage": {
+            "Title": "Privilegios del usuario",
+            "Description": "Ver y analizar el alcance de privilegios de un usuario.",
+            "Empty": {
+                "NoConnection": "Conecta una fuente de datos para ver los privilegios del usuario."
+            },
+            "Loading": "Cargando privilegios...",
+            "LoadFailed": "No se pudo cargar la información del usuario.",
+            "Fields": {
+                "DefaultRoles": "Roles predeterminados",
+                "GrantedRoles": "Roles otorgados",
+                "HostRestriction": "Restricción de host",
+                "AnyHost": "Cualquier host",
+                "NotConfigured": "No configurado",
+                "AuthType": "Tipo de autenticación"
+            }
+        },
+        "RolePage": {
+            "Title": "Privilegios del rol",
+            "Description": "Ver y gestionar el alcance de privilegios de un rol.",
+            "Empty": {
+                "NoConnection": "Conecta una fuente de datos para ver los privilegios del rol."
+            },
+            "Loading": "Cargando detalles del rol...",
+            "LoadFailed": "No se pudo cargar la información del rol.",
+            "Fields": {
+                "GrantedUsers": "Usuarios otorgados",
+                "GrantedRoles": "Roles otorgados",
+                "PrivilegeCount": "Cantidad de privilegios"
+            }
+        }
+    },
+    "Utils": {
+        "FormatType": {
+            "Unknown": "Unknown"
+        },
+        "EnsureConnection": {
+            "MissingConnectionId": "Missing Connection ID",
+            "ConnectionNotFound": "Connection not found or closed"
+        },
+        "SshTunnel": {
+            "Disabled": "SSH tunnel is disabled",
+            "MissingHost": "SSH host is required",
+            "MissingDependency": "SSH dependency is not installed",
+            "MissingPassword": "SSH password is required",
+            "MissingPrivateKey": "SSH private key is required",
+            "MissingAgent": "SSH agent is not available"
+        },
+        "Connection": {
+            "CancelUnsupported": "Canceling queries is not supported for this connection"
+        },
+        "Clickhouse": {
+            "MissingQueryId": "Missing query ID; unable to cancel the query",
+            "NamedParamsOnly": "ClickHouse driver only supports named parameters",
+            "ParseJsonFailedNoResult": "Failed to parse JSON; this may be a DDL/INSERT statement without result sets"
+        }
+    },
+    "Client": {
+        "Errors": {
+            "InvalidRequest": "Invalid request",
+            "InvalidConnection": "Invalid connection",
+            "RequestFailed": "Request failed"
+        },
+        "Pglite": {
+            "DbNotInitialized": "Database not initialized",
+            "UserNotInitialized": "User not initialized",
+            "BrowserOnly": "PGlite only runs in browser",
+            "InvalidInstance": "Invalid PGlite drizzle instance: missing dialect.migrate or session",
+            "MigrationFailed": "[PGlite migrate] Migration failed. The old database will be discarded and a new version will be created."
+        }
+    },
+    "Api": {
+        "Errors": {
+            "BodyParseFailed": "No se pudo analizar el cuerpo de la solicitud",
+            "InvalidParams": "Parámetros no válidos",
+            "MissingOrganizationContext": "Falta el contexto de la organización o no hay autenticación",
+            "InternalError": "Error interno del servidor",
+            "Unauthorized": "No autorizado"
+        },
+        "ElectronAuthFinalize": {
+            "Title": "Inicio de sesión completado",
+            "Description": "Te estamos redirigiendo de vuelta a Dory. Puedes cerrar esta página cuando termine.",
+            "OpenApp": "Volver a Dory",
+            "ClosePage": "Cerrar página",
+            "Hint": "Si la aplicación no se abre automáticamente, haz clic en \"Volver a Dory\"."
+        },
+        "Connection": {
+            "Errors": {
+                "Unauthorized": "No autorizado o con permisos insuficientes",
+                "FetchCatalogFailed": "No se pudo obtener el contexto del catálogo",
+                "NotFound": "Conexión no encontrada o permisos insuficientes",
+                "MissingHost": "A la conexión le falta información del host",
+                "MissingPath": "A la conexión le falta la ruta del archivo SQLite",
+                "MissingConnectionId": "Falta el ID de conexión",
+                "MissingUsername": "Falta el nombre de usuario",
+                "MissingIdentity": "No se encontró una identidad disponible",
+                "MissingIdentityInfo": "Falta información de identidad",
+                "MissingPassword": "Falta la contraseña de la identidad",
+                "MissingSshPassword": "Falta la contraseña SSH",
+                "MissingSshPrivateKey": "Falta la clave privada SSH",
+                "UnsupportedType": "Este tipo de base de datos todavía no es compatible",
+                "ConnectFailed": "La conexión falló",
+                "SchemaReadFailed": "No se pudo leer el esquema",
+                "TestFailed": "La prueba de conexión falló"
+            },
+            "Validation": {
+                "DatabaseRequired": "El nombre de la base de datos es obligatorio",
+                "TableRequired": "El nombre de la tabla es obligatorio"
+            },
+            "Databases": {
+                "Errors": {
+                    "ListFailed": "No se pudieron obtener las bases de datos",
+                    "DetailFailed": "No se pudieron obtener los detalles de la base de datos",
+                    "SummaryFailed": "No se pudo obtener el resumen de la base de datos",
+                    "TablesFailed": "No se pudieron obtener las tablas"
+                }
+            },
+            "Tables": {
+                "Errors": {
+                    "ColumnsFailed": "No se pudieron obtener las columnas",
+                    "PropertiesFailed": "No se pudieron obtener las propiedades de la tabla",
+                    "StatsFailed": "No se pudieron obtener las estadísticas de la tabla",
+                    "DdlFailed": "No se pudo obtener el DDL de la tabla",
+                    "PreviewFailed": "No se pudo obtener la vista previa de la tabla"
+                }
+            }
+        },
+        "SqlConsole": {
+            "Tabs": {
+                "MissingConnectionContext": "Falta el contexto de conexión",
+                "TabIdMismatch": "tabId no coincide con state.tabId",
+                "DatabaseNotInitialized": "La base de datos no está inicializada",
+                "MissingTabId": "Falta tabId"
+            },
+            "SavedQueries": {
+                "NotFound": "Consulta guardada no encontrada o permisos insuficientes",
+                "MissingId": "Falta el ID de la consulta guardada"
+            },
+            "SavedQueryFolders": {
+                "MissingId": "Falta el ID de la carpeta"
+            }
+        },
+        "Query": {
+            "Errors": {
+                "MissingConnectionId": "Falta el ID de conexión",
+                "DatabaseNameRequired": "El nombre de la base de datos es obligatorio",
+                "DatabaseNameTooLong": "El nombre de la base de datos es demasiado largo",
+                "DatabaseNameInvalid": "El formato del nombre de la base de datos no es válido",
+                "ConnectionFailed": "No se pudo conectar a la base de datos",
+                "TooManyStatements": "Se permiten como máximo {max} sentencias por solicitud; se recibieron {count}",
+                "MissingSessionId": "Falta sessionId; no se puede cancelar la consulta",
+                "DatasourceNotFound": "Fuente de datos no encontrada o conexión cerrada",
+                "CancelNotSupported": "La fuente de datos actual no admite cancelar consultas"
+            }
+        },
+        "Monitoring": {
+            "Errors": {
+                "QueryFailed": "La consulta falló"
+            }
+        },
+        "Chat": {
+            "Errors": {
+                "MissingSessionId": "Falta el ID de sesión",
+                "SessionNotFound": "Sesión no encontrada",
+                "FetchSessionFailed": "No se pudieron obtener los detalles de la sesión",
+                "InvalidTitle": "Título no válido",
+                "InvalidMetadata": "Metadatos no válidos",
+                "MissingUpdatePayload": "Falta la carga útil de actualización",
+                "UpdateSessionFailed": "No se pudo actualizar la sesión",
+                "DeleteSessionFailed": "No se pudo eliminar la sesión",
+                "MissingTabId": "Falta tabId",
+                "FetchCopilotSessionFailed": "No se pudo obtener la sesión de Copilot",
+                "InvalidSessionType": "Tipo de sesión no válido",
+                "ConnectionIdRequired": "Se requiere el ID de conexión",
+                "ListSessionsFailed": "No se pudieron obtener las sesiones",
+                "CopilotCreationNotAllowed": "Las sesiones de Copilot no se pueden crear desde este endpoint",
+                "CreateSessionFailed": "No se pudo crear la sesión",
+                "FullAccountRequired": "Inicia sesión para usar Chatbot."
+            },
+            "Tools": {
+                "Rag": {
+                    "Description": "Recupera los fragmentos de documentos más relevantes para la pregunta del usuario y devuelve pasajes de contexto para responder."
+                }
+            },
+            "Prompt": {
+                "SchemaContextTitle": "[Contexto de datos actual]",
+                "DatabaseContextTitle": "[Contexto de base de datos]",
+                "CopilotContextTitle": "[Contexto actual de Copilot]"
+            },
+            "ChartBuilder": {
+                "Description": "Devuelve una configuración de gráfico basada en los datos proporcionados.\n\nUso:\n1. Especifica chartType (bar/line/area/pie).\n2. data es un arreglo de filas del resultado de la consulta.\n3. Si no tienes claro xKey / yKeys / categoryKey / valueKey, déjalos vacíos y la herramienta los inferirá:\n   - Línea/área: prioriza un campo temporal para x y campos numéricos para y.\n   - Barras: prioriza un campo categórico para x y campos numéricos para y.\n   - Circular: elige un campo categórico como categoryKey y un campo numérico como valueKey.\n4. La herramienta infiere columnas temporales/numéricas/categóricas y establece options.xKeyType/sortBy cuando corresponde.",
+                "Errors": {
+                    "DataRequired": "Los datos del gráfico no pueden estar vacíos",
+                    "YKeyRequired": "El campo del eje y no puede estar vacío"
+                }
+            },
+            "SqlRunner": {
+                "Description": "Una herramienta para ejecutar consultas SQL de solo lectura en la conexión actual de base de datos.\nUso:\n- Solo acepta una sentencia SELECT / SHOW / DESCRIBE / DESC / EXPLAIN; no INSERT/UPDATE/DELETE.\n- Para preguntas sobre consultas, agregaciones, informes o métricas, genera primero el SQL, llama a esta herramienta y responde con base en los resultados.\n- Debe respetar el dialecto actual de la base de datos.\n- Si el esquema no está claro, usa primero el contexto de esquema proporcionado y luego consultas de metadatos apropiadas para ese dialecto.\n- No uses la sintaxis exclusiva de MySQL DESCRIBE / SHOW COLUMNS en PostgreSQL.",
+                "SqlRequired": "El SQL no puede estar vacío",
+                "MissingConnection": "Falta información de conexión a la base de datos; no se puede ejecutar la consulta.",
+                "ReadOnlyOnly": "Solo se permiten consultas de solo lectura (SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA). No incluyas sentencias de escritura o actualización.",
+                "SelectAllNotAllowed": "No se permite usar SELECT * en el SQL generado por el chatbot. Selecciona solo las columnas necesarias para responder.",
+                "OrderByIndexMissing": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, y no se confirmó que tengan índice. Reduce las columnas seleccionadas o revisa los índices primero.",
+                "OrderByIndexUnknown": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, pero no se pudo confirmar si tienen índice. Reduce las columnas seleccionadas o revisa los índices primero.",
+                "ExecuteFailed": "La ejecución SQL falló"
+            }
+        },
+        "Ai": {
+            "SchemaExplanations": {
+                "InvalidParams": "Parámetros de solicitud no válidos",
+                "Fallback name": "columna",
+                "Fallback type": "tipo desconocido",
+                "Fallback summary": "{name}, tipo: {type}",
+                "Fallback required": "obligatorio",
+                "Fallback nullable": "admite nulos",
+                "Fallback comment": "comentario: {comment}",
+                "Fallback separator": ", ",
+                "Fallback default": "columna {name}"
+            },
+            "TableStats": {
+                "Suggestions": {
+                    "Healthy": "La tabla se ve sana en general; no se necesitan optimizaciones especiales.",
+                    "Critical": "Recomendación prioritaria: {message}",
+                    "Warn": "Recomendación: {message}",
+                    "Default": "Considera una optimización adicional según los patrones de carga."
+                },
+                "Errors": {
+                    "MissingStats": "No se proporcionaron estadísticas de la tabla.",
+                    "AnalyzeFailed": "El análisis falló."
+                },
+                "Issues": {
+                    "RowCountUnknown": "Cantidad de filas desconocida",
+                    "RowCountSmall": "Volumen de datos pequeño (filas < 1M)",
+                    "RowCountMedium": "Volumen de datos moderado (1M–100M filas)",
+                    "RowCountLarge": "Volumen de datos grande (> 100M filas)",
+                    "RowCountHuge": "Volumen de datos muy grande (> 1B filas)",
+                    "TotalSizeLarge": "Gran tamaño en disco de la tabla (> 50GB)",
+                    "TotalSizeHuge": "Tamaño en disco muy grande de la tabla (> 200GB)",
+                    "PartitionTooFew": "Demasiadas pocas particiones para una tabla grande; la poda de particiones es limitada",
+                    "PartitionTooMany": "Demasiadas particiones pueden añadir sobrecarga de metadatos",
+                    "PartitionSkewed": "Sesgo severo de particiones; una partición contiene la mayor parte de los datos",
+                    "PartsTooMany": "Demasiadas partes; considera fusionar archivos pequeños",
+                    "PartsTooManyCritical": "Un número extremadamente alto de partes puede perjudicar consultas y fusiones",
+                    "PartsManySmallTable": "Una tabla pequeña tiene demasiadas partes; puede haber escrituras pequeñas frecuentes",
+                    "PartsFewLargeTable": "Una tabla grande tiene pocas partes; las fusiones parecen saludables",
+                    "PartSizeTooSmall": "El tamaño medio de las partes es demasiado pequeño; hay demasiados archivos pequeños",
+                    "PartSizeTooLarge": "Se detectó una parte muy grande; puede afectar fusiones y rendimiento",
+                    "PartFragmented": "Los tamaños de las partes son desiguales; hay riesgo de fragmentación",
+                    "CompressionUnknown": "La relación de compresión es desconocida; no se puede evaluar",
+                    "CompressionExcellent": "Compresión excelente (ratio < 0.40)",
+                    "CompressionGood": "Buena compresión (ratio 0.40–0.80)",
+                    "CompressionPoor": "Compresión limitada (ratio > 0.80); revisa tipos/codificación",
+                    "CompressionInconsistent": "Estadísticas de compresión inconsistentes (compressed > uncompressed)",
+                    "TtlConfigured": "El ciclo de vida TTL está configurado",
+                    "TtlMissing": "Una tabla grande sin TTL puede acumular datos históricos",
+                    "ActiveMutations": "Hay {count} mutaciones activas",
+                    "TooManyActiveMutations": "Muchas mutaciones activas pueden afectar los recursos del clúster",
+                    "StatsInconsistent": "Se detectaron estadísticas inconsistentes"
+                },
+                "Details": {
+                    "RowCountMissing": "rowCount falta o no se puede analizar",
+                    "RowCount": "rowCount={rowCount}",
+                    "CompressedSize": "compressedSize≈{size} GB",
+                    "PartitionCount": "rowCount={rowCount}, partitionCount={partitionCount}",
+                    "PartitionOnlyCount": "partitionCount={partitionCount}",
+                    "MaxPartitionRatio": "máx. proporción de partición≈{ratio}%",
+                    "PartCount": "partCount={partCount}",
+                    "RowPartCount": "rowCount={rowCount}, partCount={partCount}",
+                    "PartSizeSmall": "avgPartSize≈{avgSize} MB, partCount={partCount}",
+                    "PartMaxSize": "maxPartSize≈{maxSize} GB",
+                    "PartSizeRatio": "máx./prom.≈{ratio}",
+                    "CompressionRatio": "compressionRatio={ratio}",
+                    "CompressionBytes": "compressedBytes={compressedBytes}, uncompressedBytes={uncompressedBytes}",
+                    "TtlExpression": "ttl={ttl}",
+                    "ActiveMutations": "activeMutations={count}",
+                    "CompressedBytes": "compressedBytes={compressedBytes}",
+                    "UncompressedBytes": "uncompressedBytes={uncompressedBytes}"
+                }
+            }
+        },
+        "Privileges": {
+            "Errors": {
+                "MissingConnectionId": "Falta el ID de conexión",
+                "NotClickhouse": "La fuente de datos actual no admite la gestión de privilegios de ClickHouse",
+                "Fallback": "La operación falló. Inténtalo de nuevo más tarde",
+                "ConnectionUnavailable": "La conexión actual no está disponible. Inténtalo de nuevo más tarde",
+                "UserNotFound": "Usuario no encontrado",
+                "RoleNotFound": "Rol no encontrado"
+            },
+            "Users": {
+                "ListFailed": "No se pudieron obtener los usuarios",
+                "NameRequired": "El nombre de usuario es obligatorio",
+                "CreateFailed": "No se pudo crear el usuario",
+                "DetailFailed": "No se pudieron obtener los detalles del usuario",
+                "UpdateFailed": "No se pudo actualizar el usuario",
+                "DeleteFailed": "No se pudo eliminar el usuario",
+                "GrantGlobalFailed": "No se pudieron otorgar los privilegios globales",
+                "RevokeGlobalFailed": "No se pudieron revocar los privilegios globales",
+                "GrantScopedFailed": "No se pudieron otorgar los privilegios con alcance",
+                "RevokeScopedFailed": "No se pudieron revocar los privilegios con alcance"
+            },
+            "Roles": {
+                "ListFailed": "No se pudieron obtener los roles",
+                "NameRequired": "El nombre del rol es obligatorio",
+                "CreateFailed": "No se pudo crear el rol",
+                "DetailFailed": "No se pudieron obtener los detalles del rol",
+                "UpdateFailed": "No se pudo actualizar el rol",
+                "DeleteFailed": "No se pudo eliminar el rol",
+                "GrantGlobalFailed": "No se pudieron otorgar los privilegios globales",
+                "RevokeGlobalFailed": "No se pudieron revocar los privilegios globales",
+                "GrantScopedFailed": "No se pudieron otorgar los privilegios con alcance",
+                "RevokeScopedFailed": "No se pudieron revocar los privilegios con alcance"
+            },
+            "Targets": {
+                "DatabaseRequired": "La base de datos es obligatoria",
+                "UnsupportedType": "Tipo no compatible",
+                "FetchFailed": "No se pudieron obtener los objetivos de privilegios"
+            },
+            "Clusters": {
+                "FetchFailed": "No se pudieron obtener los metadatos del clúster"
+            }
+        }
+    },
+    "Ai": {
+        "PromptLanguage": "Responde en español.",
+        "SystemLanguage": {
+            "Auto": "Responde en el idioma del usuario.",
+            "En": "Responde en inglés por defecto.",
+            "Zh": "Responde en chino simplificado por defecto."
+        },
+        "SchemaExplanations": {
+            "InvalidParams": "Parámetros de solicitud no válidos",
+            "Fallback name": "columna",
+            "Fallback type": "tipo desconocido",
+            "Fallback summary": "{name}, tipo: {type}",
+            "Fallback required": "obligatorio",
+            "Fallback nullable": "admite nulos",
+            "Fallback comment": "comentario: {comment}",
+            "Fallback separator": "; ",
+            "Fallback default": "columna {name}"
+        },
+        "SchemaTags": {
+            "InvalidParams": "Parámetros de solicitud no válidos",
+            "MissingConnectionContext": "Falta el contexto de conexión",
+            "MissingOrganizationIdFallback": "Falta organizationId; se usarán etiquetas heurísticas locales",
+            "Tags": {
+                "PrimaryKey": "clave primaria",
+                "Identifier": "identificador",
+                "Key": "clave",
+                "Time": "tiempo",
+                "Name": "nombre",
+                "Dimension": "dimensión",
+                "Description": "descripción",
+                "Status": "estado",
+                "Type": "tipo",
+                "Code": "código",
+                "Address": "dirección",
+                "Amount": "importe",
+                "Metric": "métrica",
+                "Geo": "geo",
+                "Contact": "contacto",
+                "Network": "red",
+                "Boolean": "booleano",
+                "Enum": "enum",
+                "Array": "array",
+                "Required": "obligatorio",
+                "Nullable": "admite nulos",
+                "Column": "columna",
+                "LowCardinality": "baja cardinalidad",
+                "Json": "JSON"
+            },
+            "Summary": {
+                "Tags": "Etiquetas: {tags}",
+                "Comment": "Comentario: {comment}",
+                "Separator": ", "
+            }
+        },
+        "TableStats": {
+            "Suggestions": {
+                "Healthy": "La tabla se ve sana en general; no se necesitan optimizaciones especiales.",
+                "Critical": "Recomendación prioritaria: {message}",
+                "Warn": "Recomendación: {message}",
+                "Default": "Considera una optimización adicional según los patrones de carga."
+            },
+            "Errors": {
+                "MissingStats": "No se proporcionaron estadísticas de la tabla.",
+                "AnalyzeFailed": "El análisis falló."
+            },
+            "Issues": {
+                "RowCountUnknown": "Cantidad de filas desconocida",
+                "RowCountSmall": "Volumen de datos pequeño (filas < 1M)",
+                "RowCountMedium": "Volumen de datos moderado (1M–100M filas)",
+                "RowCountLarge": "Volumen de datos grande (> 100M filas)",
+                "RowCountHuge": "Volumen de datos muy grande (> 1B filas)",
+                "TotalSizeLarge": "Gran tamaño en disco de la tabla (> 50GB)",
+                "TotalSizeHuge": "Tamaño en disco muy grande de la tabla (> 200GB)",
+                "PartitionTooFew": "Demasiadas pocas particiones para una tabla grande; la poda de particiones es limitada",
+                "PartitionTooMany": "Demasiadas particiones pueden añadir sobrecarga de metadatos",
+                "PartitionSkewed": "Sesgo severo de particiones; una partición contiene la mayor parte de los datos",
+                "PartsTooMany": "Demasiadas partes; considera fusionar archivos pequeños",
+                "PartsTooManyCritical": "Un número extremadamente alto de partes puede perjudicar consultas y fusiones",
+                "PartsManySmallTable": "Una tabla pequeña tiene demasiadas partes; puede haber escrituras pequeñas frecuentes",
+                "PartsFewLargeTable": "Una tabla grande tiene pocas partes; las fusiones parecen saludables",
+                "PartSizeTooSmall": "El tamaño medio de las partes es demasiado pequeño; hay demasiados archivos pequeños",
+                "PartSizeTooLarge": "Se detectó una parte muy grande; puede afectar fusiones y rendimiento",
+                "PartFragmented": "Los tamaños de las partes son desiguales; hay riesgo de fragmentación",
+                "CompressionUnknown": "La relación de compresión es desconocida; no se puede evaluar",
+                "CompressionExcellent": "Compresión excelente (ratio < 0.40)",
+                "CompressionGood": "Buena compresión (ratio 0.40–0.80)",
+                "CompressionPoor": "Compresión limitada (ratio > 0.80); revisa tipos/codificación",
+                "CompressionInconsistent": "Estadísticas de compresión inconsistentes (compressed > uncompressed)",
+                "TtlConfigured": "El ciclo de vida TTL está configurado",
+                "TtlMissing": "Una tabla grande sin TTL puede acumular datos históricos",
+                "ActiveMutations": "Hay {count} mutaciones activas",
+                "TooManyActiveMutations": "Muchas mutaciones activas pueden afectar los recursos del clúster",
+                "StatsInconsistent": "Se detectaron estadísticas inconsistentes"
+            },
+            "Details": {
+                "RowCountMissing": "rowCount falta o no se puede analizar",
+                "RowCount": "rowCount={rowCount}",
+                "CompressedSize": "compressedSize≈{size} GB",
+                "PartitionCount": "rowCount={rowCount}, partitionCount={partitionCount}",
+                "PartitionOnlyCount": "partitionCount={partitionCount}",
+                "MaxPartitionRatio": "máx. proporción de partición≈{ratio}%",
+                "PartCount": "partCount={partCount}",
+                "RowPartCount": "rowCount={rowCount}, partCount={partCount}",
+                "PartSizeSmall": "avgPartSize≈{avgSize} MB, partCount={partCount}",
+                "PartMaxSize": "maxPartSize≈{maxSize} GB",
+                "PartSizeRatio": "máx./prom.≈{ratio}",
+                "CompressionRatio": "compressionRatio={ratio}",
+                "CompressionBytes": "compressedBytes={compressedBytes}, uncompressedBytes={uncompressedBytes}",
+                "TtlExpression": "ttl={ttl}",
+                "ActiveMutations": "activeMutations={count}",
+                "CompressedBytes": "compressedBytes={compressedBytes}",
+                "UncompressedBytes": "uncompressedBytes={uncompressedBytes}"
+            }
+        }
+    },
+    "DoryUI": {
+        "Select": {
+            "Placeholder": "Seleccionar",
+            "Empty": "No se encontraron coincidencias",
+            "All": "Todos",
+            "SearchPlaceholder": "Buscar..."
+        },
+        "DatabaseSelect": {
+            "All": "Todas las bases de datos",
+            "Placeholder": "Seleccionar base de datos",
+            "Empty": "No se encontraron bases de datos",
+            "GroupLabel": "Bases de datos"
+        },
+        "DatabaseUserSelect": {
+            "All": "Todos los usuarios",
+            "Placeholder": "Seleccionar usuario",
+            "Empty": "No se encontraron usuarios",
+            "GroupLabel": "Usuarios"
+        },
+        "Table": {
+            "Empty": "No hay datos",
+            "Loading": "Cargando..."
+        },
+        "Pagination": {
+            "Total": "Total de {total} registros",
+            "PerPage": "Por página",
+            "PageSizePlaceholder": "Tamaño de página",
+            "Records": "registros",
+            "First": "Primera página",
+            "Previous": "Página anterior",
+            "Next": "Página siguiente",
+            "Last": "Última página",
+            "PageStatus": "Página {current} / {total}"
+        },
+        "PageHeader": {
+            "Back": "Volver"
+        },
+        "AssistantFallback": {
+            "Title": "Error de respuesta",
+            "Description": "El asistente no devolvió contenido utilizable. Inténtalo de nuevo más tarde o ajusta tu prompt.",
+            "MissingAiEnvTitle": "Falta la configuración de IA",
+            "MissingAiEnvDescription": "Define DORY_AI_API_KEY y DORY_AI_URL para habilitar las funciones de IA."
+        },
+        "CodeReview": {
+            "Header": "Vista previa de SQL",
+            "Preview": "Vista previa",
+            "Diff": "Diferencia",
+            "Apply": "Aplicar",
+            "Applied": "Aplicado"
+        },
+        "CopyButton": {
+            "Copy": "Copiar",
+            "Copied": "¡Copiado!"
+        },
+        "SqlResult": {
+            "Title": "SQL",
+            "Actions": {
+                "Run": "Ejecutar",
+                "OpenInEditor": "Abrir en el editor",
+                "DownloadCsv": "Descargar CSV",
+                "CopyResults": "Copiar resultados",
+                "ResultsCopied": "¡Resultados copiados!",
+                "More": "Más acciones"
+            },
+            "Status": {
+                "Success": "Listo",
+                "Failed": "Falló",
+                "Blocked": "Bloqueado"
+            },
+            "Notice": {
+                "ReadOnlyRestriction": "Esta conexión solo permite consultas de solo lectura. Las sentencias CREATE / INSERT / UPDATE / DELETE deben ejecutarse manualmente en el editor SQL."
+            },
+            "FollowUp": {
+                "Button": "Continuar con este resultado",
+                "Tooltip": "Haz una pregunta de seguimiento basada en este resultado",
+                "ErrorPrompt": "Analiza y corrige este error de ejecución SQL.\\n\\nSQL:\\n{sql}\\n\\nError: {error}{metaLine}",
+                "SuccessPrompt": "Basándote en este resultado SQL, continúa analizando y aporta más ideas o sugerencias de optimización.\\n\\nSQL:\\n{sql}{metaLine}"
+            },
+            "Copied": "¡SQL copiado!",
+            "Copy": "Copiar",
+            "CopyTooltip": "Copiar SQL",
+            "ChartTooltip": "Generar un gráfico a partir de este resultado",
+            "RunInConsole": "Ejecutar en la consola SQL",
+            "Collapse": "Contraer resultado",
+            "Expand": "Expandir resultado",
+            "Meta": {
+                "Database": "Base de datos: {database}",
+                "RowCount": "Filas: {rowCount}",
+                "Duration": "Duración: {durationMs} ms",
+                "Timestamp": "Hora: {timestamp}",
+                "Line": "Meta: {meta}",
+                "Separator": ", "
+            },
+            "UnknownError": "Error desconocido",
+            "Truncated": "Solo se muestran las primeras {count} filas. Ejecuta manualmente para ver todos los resultados.",
+            "NoRows": "La consulta se ejecutó pero no devolvió datos.",
+            "ExecutionFailed": "La ejecución falló: {error}",
+            "AutoChart": {
+                "Title": "Visualización automática",
+                "Description": "Gráfico generado automáticamente a partir de la vista previa de la consulta"
+            },
+            "ChartUnavailable": "Este resultado no puede visualizarse automáticamente. Elige manualmente.",
+            "ColumnPlaceholder": "(columna)"
+        },
+        "ChartResult": {
+            "Title": "Gráfico",
+            "NoData": "No se proporcionaron datos para visualizar.",
+            "AutoGenerated": "Generado automáticamente",
+            "Meta": {
+                "Series": "{count} series",
+                "Points": "{count} puntos"
+            },
+            "FollowUp": {
+                "Button": "Continuar con este resultado",
+                "Title": "Título del gráfico: {title}",
+                "Description": "Descripción: {description}",
+                "ChartType": "Tipo de gráfico: {chartType}",
+                "XKey": "Campo del eje X: {xKey}",
+                "SeriesItem": "{label} (campo: {key})",
+                "Separator": ", ",
+                "YKeys": "Campos del eje Y/series: {yKeys}",
+                "CategoryKey": "Campo de categoría: {categoryKey}",
+                "ValueKey": "Campo de valor: {valueKey}",
+                "AutoGenerated": "Este gráfico se generó automáticamente.",
+                "Prompt": "Sigue analizando este resultado del gráfico, por ejemplo tendencias, anomalías, implicaciones de negocio y si se necesitan más desgloses o vistas de datos."
+            },
+            "Errors": {
+                "MissingAxis": "Falta xKey o yKeys.",
+                "MissingPieKeys": "Falta la categoría o el valor.",
+                "UnsupportedType": "Tipo de gráfico no compatible: {chartType}"
+            },
+            "Collapse": "Contraer gráfico",
+            "Expand": "Expandir gráfico"
+        },
+        "ModeToggle": {
+            "ToggleTheme": "Cambiar tema",
+            "Light": "Claro",
+            "Dark": "Oscuro",
+            "System": "Sistema"
+        },
+        "LocaleToggle": {
+            "ToggleLanguage": "Cambiar idioma",
+            "Current": "Actual"
+        },
+        "Settings": {
+            "Title": "Configuración",
+            "Description": "Configuración de la aplicación",
+            "SearchPlaceholder": "Buscar ajustes",
+            "Categories": {
+                "Appearance": {
+                    "Label": "Apariencia",
+                    "Title": "Tema y apariencia",
+                    "Description": "Controla el aspecto visual de la aplicación.",
+                    "Tag": "Tema"
+                },
+                "Editor": {
+                    "Label": "Editor",
+                    "Title": "Ajustes del editor",
+                    "Description": "Personaliza la apariencia y el comportamiento del editor SQL.",
+                    "Tag": "SQL"
+                },
+                "Data": {
+                    "Label": "Datos",
+                    "Title": "Gestión de datos",
+                    "Description": "Exporta e importa los datos del espacio de trabajo."
+                },
+                "About": {
+                    "Label": "Acerca de",
+                    "Title": "Acerca de",
+                    "Description": "Versión, licencias y créditos."
+                }
+            },
+            "Appearance": {
+                "ModeLabel": "Modo de apariencia",
+                "ModeDescription": "Seguir el sistema o forzar claro/oscuro.",
+                "LanguageLabel": "Idioma",
+                "LanguageDescription": "Elige el idioma de la interfaz.",
+                "ThemeLabel": "Tema de color",
+                "ThemeDescription": "Predeterminado / Azul / Verde / Ámbar / …",
+                "FontSizeLabel": "Tamaño de fuente",
+                "FontSizeDescription": "Ajusta el tamaño del texto de toda la interfaz."
+            },
+            "ThemeMode": {
+                "System": "Sistema",
+                "Light": "Claro",
+                "Dark": "Oscuro"
+            },
+            "FontSize": {
+                "Small": "Pequeño",
+                "Default": "Predeterminado",
+                "Large": "Grande"
+            },
+            "ColorTheme": {
+                "Placeholder": "Selecciona un tema",
+                "Groups": {
+                    "Default": "Predeterminado",
+                    "Scaled": "Escalado",
+                    "Monospaced": "Monoespaciado"
+                },
+                "Options": {
+                    "default": "Predeterminado",
+                    "blue": "Azul",
+                    "green": "Verde",
+                    "amber": "Ámbar",
+                    "liquid": "Líquido",
+                    "mono": "Monoespaciado"
+                }
+            },
+            "Language": {
+                "Placeholder": "Selecciona un idioma"
+            },
+            "Editor": {
+                "ThemeLabel": "Tema del editor",
+                "ThemeDescription": "Elige un tema de color para el editor SQL.",
+                "FontFamilyLabel": "Familia tipográfica",
+                "FontFamilyDescription": "Elige una fuente para el editor.",
+                "CustomFontLabel": "Fuente personalizada",
+                "CustomFontDescription": "Introduce un valor CSS de font-family.",
+                "CustomFontPlaceholder": "p. ej. \"JetBrains Mono\", monospace",
+                "FontSizeLabel": "Tamaño de fuente",
+                "FontSizeDescription": "Ajusta el tamaño del texto del editor.",
+                "LineHeightLabel": "Altura de línea",
+                "LineHeightDescription": "Controla el multiplicador del espaciado de línea (1.1-2.2).",
+                "QueryLimitLabel": "Límite de consulta predeterminado",
+                "QueryLimitDescription": "Define el LIMIT predeterminado para las ejecuciones SQL.",
+                "LineNumbersLabel": "Números de línea",
+                "LineNumbersDescription": "Muestra u oculta los números de línea.",
+                "MinimapLabel": "Minimapa",
+                "MinimapDescription": "Muestra el minimapa de código a la derecha.",
+                "WordWrapLabel": "Ajuste de línea",
+                "WordWrapDescription": "Ajusta las líneas largas dentro del editor.",
+                "CodeFoldingLabel": "Plegado de código",
+                "CodeFoldingDescription": "Habilita los controles de plegado de código.",
+                "ThemeOptions": {
+                    "auto": "Automático (seguir la app)",
+                    "github-light": "GitHub Claro",
+                    "github-dark": "GitHub Oscuro",
+                    "vs": "VS Claro",
+                    "vs-dark": "VS Oscuro"
+                },
+                "FontFamilyOptions": {
+                    "monaco": "Monaco",
+                    "menlo": "Menlo",
+                    "consolas": "Consolas",
+                    "jetbrains-mono": "JetBrains Mono",
+                    "fira-code": "Fira Code",
+                    "source-code-pro": "Source Code Pro",
+                    "custom": "Personalizada"
+                }
+            },
+            "Data": {
+                "ExportLabel": "Exportar espacio de trabajo",
+                "ExportDescription": "Descarga conexiones y consultas guardadas como un archivo JSON. No se incluyen contraseñas ni claves.",
+                "ExportAction": "Exportar",
+                "ImportLabel": "Importar espacio de trabajo",
+                "ImportDescription": "Importa conexiones y consultas guardadas desde un archivo JSON exportado previamente.",
+                "ImportAction": "Importar",
+                "ExportSuccess": "Espacio de trabajo exportado correctamente.",
+                "ExportFailed": "La exportación falló",
+                "ExportFailedRetry": "La exportación falló. Inténtalo de nuevo.",
+                "ImportFailed": "La importación falló",
+                "ImportFailedRetry": "La importación falló. Inténtalo de nuevo.",
+                "InvalidJson": "Archivo JSON no válido.",
+                "ImportSummary": {
+                    "Connections": "{count} conexión(es)",
+                    "Folders": "{count} carpeta(s)",
+                    "Queries": "{count} consulta(s)",
+                    "QueriesSkipped": "{count} consulta(s) omitida(s)",
+                    "Separator": ", ",
+                    "Success": "Importado: {summary}.",
+                    "Empty": "No hay nada que importar."
+                }
+            },
+            "About": {
+                "Subtitle": "Estudio de datos de nueva generación",
+                "Version": "Versión",
+                "GitHub": "GitHub",
+                "Footer": "© 2026 Dory Lab"
+            }
+        },
+        "QueryClient": {
+            "Error": "Algo salió mal: {message}"
+        },
+        "LiquidGlassCard": {
+            "Title": "Diseño de Tanya",
+            "Subtitle": "Diseñadora de producto enfocada en simplicidad y usabilidad.",
+            "Follow": "Seguir"
+        },
+        "Logo": {
+            "AriaLabel": "Logotipo de Dory"
+        }
+    },
+    "Database": {
+        "Errors": {
+            "UnsupportedDbType": "DB_TYPE no compatible: {dbType}",
+            "MissingDatabaseUrl": "DATABASE_URL (o POSTGRES_URL) es obligatorio para el proveedor postgres",
+            "PgliteInvalidInstance": "Instancia drizzle de PGlite no válida: falta dialect.migrate o session",
+            "PgliteMigrationFailed": "[PGlite migrate] La migración falló. La base de datos anterior se descartará y se creará una nueva versión.",
+            "ConnectionFailed": "La conexión a la base de datos falló",
+            "InitFailed": "La inicialización de la base de datos falló. Revisa la configuración o el estado de la conexión.",
+            "NotInitialized": "La base de datos no está inicializada",
+            "ConnectionCreateFailed": "No se pudo crear la conexión",
+            "NotOrganizationMember": "No eres miembro de la organización",
+            "NotAdmin": "No tienes privilegios de administrador",
+            "ConnectionIdentityCreateFailed": "No se pudo crear la identidad de conexión",
+            "ConnectionIdentityUpdateFailed": "No se pudo actualizar la identidad de conexión: registro no encontrado o permisos insuficientes",
+            "ConnectionDuplicateName": "Ya existe una conexión con el mismo nombre",
+            "ConnectionNotFound": "Conexión no encontrada o permisos insuficientes",
+            "ConnectionIdentityInvalid": "La información de identidad de conexión está incompleta",
+            "ConnectionIdentityUpdateRequiresId": "Actualizar la identidad requiere un id",
+            "ConnectionIdentityMissingId": "Falta el id de identidad",
+            "ConnectionIdentityNameRequired": "El nombre es obligatorio",
+            "ConnectionIdentityUsernameRequired": "El nombre de usuario es obligatorio",
+            "SaveQueryFailed": "No se pudo guardar la consulta",
+            "SavedQueryNotFound": "Consulta guardada no encontrada o permisos insuficientes",
+            "CreateFolderFailed": "No se pudo crear la carpeta",
+            "FolderNotFound": "Carpeta no encontrada o permisos insuficientes",
+            "FolderLimitReached": "Se alcanzó el número máximo de carpetas",
+            "ChatSessionNotFound": "Sesión no encontrada",
+            "ChatSessionForbidden": "No tienes acceso a esta sesión",
+            "ChatSessionArchived": "La sesión está archivada y no se puede modificar",
+            "ChatCopilotSessionFailed": "No se pudo obtener o crear la sesión de Copilot",
+            "ChatGlobalSessionFailed": "No se pudo crear u obtener la sesión global",
+            "ChatUpdateSessionNotFound": "Sesión no encontrada",
+            "ChatInsertMessageFailed": "No se pudo escribir el mensaje"
+        },
+        "Logs": {
+            "InitFailed": "La inicialización de la base de datos falló:",
+            "AiSchemaCacheInitFailed": "[postgres] No se pudo inicializar el repositorio de caché de esquemas de IA:",
+            "ChatRepoInitFailed": "[postgres] No se pudo inicializar el repositorio de chat:",
+            "QueryAuditWriteFailed": "[pg] No se pudo escribir queryAudit:"
+        }
+    },
+    "ErrorCodes": {
+        "ERROR": "Error interno del servidor",
+        "BAD_REQUEST": "Solicitud incorrecta",
+        "INVALID_PARAMS": "Parámetros no válidos",
+        "UNAUTHORIZED": "No autorizado",
+        "FORBIDDEN": "Prohibido",
+        "NOT_FOUND": "No encontrado",
+        "CONFLICT": "Conflicto",
+        "VALIDATION_ERROR": "La validación falló",
+        "DATABASE_ERROR": "Error de base de datos",
+        "TIMEOUT": "Tiempo de espera agotado",
+        "Unknown": "Error desconocido"
+    },
+    "AppSidebar": {
+        "SQLConsole": "Consola SQL",
+        "Explorer": "Explorador",
+        "Schema": "Esquema",
+        "Chatbot": "Asistente",
+        "Monitoring": "Monitoreo",
+        "Privileges": "Privilegios",
+        "GetHelp": "Ayuda",
+        "StarNotificationTitle": "¿Te gusta Dory?",
+        "StarNotificationDescription": "Dale una estrella en GitHub para ayudar a que más gente descubra el proyecto.",
+        "StarNotificationAction": "Dar estrella en GitHub",
+        "DismissStarNotification": "Cerrar aviso de estrella de GitHub",
+        "OrganizationSetting": "Configuración de la organización",
+        "LogOut": "Cerrar sesión",
+        "Update": "Actualizar",
+        "Updating": "Actualizando...",
+        "UpdateVersion": "Versión {version}",
+        "UpdateTooltip": "Haz clic para reiniciar la app y actualizar a {version}",
+        "UpdateTooltipUnknown": "Haz clic para reiniciar la app y actualizar a la última versión",
+        "GuestSession": {
+            "Name": "Invitado",
+            "Subtitle": "Espacio de trabajo temporal",
+            "Exit": "Volver a iniciar sesión",
+            "Title": "¿Eliminar el espacio de invitado?",
+            "Description": "Esto elimina permanentemente la cuenta de invitado y todos los datos del espacio de trabajo en este dispositivo. No se puede deshacer.",
+            "SignIn": "Iniciar sesión",
+            "DeleteAction": "Eliminar espacio de invitado",
+            "Confirm": "Eliminar espacio",
+            "Cancel": "Mantener espacio",
+            "DeleteFailed": "No se pudo eliminar la sesión de invitado. Inténtalo de nuevo."
+        }
+    },
+    "OrganizationSettings": {
+        "Title": "Configuración de la organización",
+        "Description": "Gestiona los detalles y el acceso de la organización.",
+        "Nav": {
+            "Organization": "Organización",
+            "Billing": "Planes y suscripciones"
+        },
+        "Organization": {
+            "CardTitle": "Detalles",
+            "CardDescription": "Actualiza el nombre público y el slug usados en la URL de la organización.",
+            "Fields": {
+                "Name": "Nombre",
+                "Slug": "Slug",
+                "OrganizationId": "ID de organización"
+            },
+            "Loading": "Cargando...",
+            "Saving": "Guardando...",
+            "SaveChanges": "Guardar cambios",
+            "ReadOnlyHint": "Tu rol actual no permite actualizar la configuración de la organización.",
+            "Toasts": {
+                "Updated": "Organización actualizada",
+                "UpdateFailed": "No se pudo actualizar la organización"
+            },
+            "Errors": {
+                "SlugRequired": "El slug es obligatorio",
+                "SlugInvalid": "El slug solo puede contener letras minúsculas, números y guiones"
+            }
+        },
+        "Billing": {
+            "Title": "Planes y suscripciones",
+            "Description": "Revisa el plan actual de la organización, mejora a Pro o gestiona la facturación en Stripe.",
+            "UnavailableDescription": "No se puede cargar la facturación de la organización.",
+            "CurrentPlan": "Plan actual",
+            "Loading": "Cargando...",
+            "LoadingBillingStatus": "Cargando el estado de facturación...",
+            "UpgradeToPro": "Obtener acceso anticipado",
+            "ManageBilling": "Gestionar facturación",
+            "Redirecting": "Redirigiendo...",
+            "Opening": "Abriendo...",
+            "DesktopUpgradeToPro": "Suscribirse en el navegador",
+            "OpeningBrowser": "Abriendo el navegador...",
+            "RefreshBillingStatus": "Actualizar estado",
+            "Refreshing": "Actualizando...",
+            "RefreshComplete": "Estado de facturación actualizado",
+            "DesktopCloudUnavailable": "Conéctate a Dory Cloud antes de suscribirte desde la app de escritorio.",
+            "ReadOnlyHint": "Solo los propietarios de la organización pueden mejorar, cancelar o gestionar la facturación. Tu rol actual es de solo lectura aquí.",
+            "NoSubscription": "Sin suscripción",
+            "NotAvailable": "N/D",
+            "CancellationScheduled": "La cancelación está programada para {date}.",
+            "Plan": {
+                "Pro": "Pro",
+                "Hobby": "Hobby"
+            },
+            "Hobby": {
+                "Title": "Hobby (Gratis)",
+                "Price": "$0/mo",
+                "Features": {
+                    "ConnectPopularDatabases": "Conecta bases de datos populares",
+                    "SqlEditorAndQueryResults": "Editor SQL + resultados de consulta",
+                    "BasicCharts": "Gráficos básicos",
+                    "AiQuotaIncluded": "Cuota de IA incluida",
+                    "SavePersonalQueries": "Guarda consultas personales",
+                    "CommunitySupport": "Soporte comunitario"
+                }
+            },
+            "Pro": {
+                "Title": "Pro (Recomendado)",
+                "Price": "Starting at $9/mo",
+                "Features": {
+                    "UnlimitedDatabaseConnections": "Conexiones ilimitadas a bases de datos",
+                    "HigherAiQuotaAndFasterResponses": "Mayor cuota de IA y respuestas más rápidas",
+                    "AiSqlGenerationExplainOptimize": "Generación de SQL con IA + explain + optimize",
+                    "EarlyAccessToUpcomingFeatures": "Acceso anticipado a próximas funciones",
+                    "AdvancedChartsAndExports": "Gráficos avanzados y exportación",
+                    "PrioritySupport": "Soporte prioritario"
+                }
+            },
+            "Details": {
+                "Plan": "Plan",
+                "SubscriptionStatus": "Estado de la suscripción",
+                "StripeSubscriptionId": "ID de suscripción de Stripe",
+                "CurrentPeriodEnd": "Fin del período actual"
+            },
+            "Status": {
+                "CancelAtPeriodEnd": "Pro seguirá activo hasta {date}. La cancelación está programada al final del período de facturación actual.",
+                "NoSubscription": "No hay ninguna suscripción de pago activa para esta organización.",
+                "Canceled": "La suscripción de pago ha sido cancelada. La organización permanece en Hobby.",
+                "Inactive": "La última suscripción de pago no está activa. La organización permanece en Hobby hasta que Stripe informe una suscripción Pro activa o en prueba.",
+                "Reported": "Stripe informa que el estado más reciente de la suscripción es {status}."
+            },
+            "Errors": {
+                "OrganizationNotFound": "Organización no encontrada",
+                "CheckoutFailed": "No se pudo iniciar el checkout",
+                "NoManageableSubscription": "No se encontró una suscripción gestionable",
+                "PortalFailed": "No se pudo abrir el portal de facturación",
+                "LoadBillingFailed": "No se pudo cargar el estado de facturación.",
+                "LoadOrganizationFailed": "No se pudieron cargar los detalles de la organización.",
+                "UnresolvedFromUrl": "No se pudo resolver la organización actual a partir de esta URL."
+            }
+        }
+    },
+    "Routes": {
+        "SQL Console": "Consola SQL"
+    },
+    "Offline": {
+        "DesktopBanner": "Estás sin conexión. Dory está usando los datos locales del escritorio y las funciones exclusivas de la nube no están disponibles temporalmente."
+    }
+}

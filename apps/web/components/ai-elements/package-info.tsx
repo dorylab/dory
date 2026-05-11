@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/registry/new-york-v4/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { ArrowRightIcon, MinusIcon, PackageIcon, PlusIcon } from "lucide-react";
 import { createContext, type HTMLAttributes, useContext } from "react";
 

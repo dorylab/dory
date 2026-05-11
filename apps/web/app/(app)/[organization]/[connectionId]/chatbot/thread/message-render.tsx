@@ -15,7 +15,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { buildAutoChartFromSql } from '@/components/@dory/ui/ai/utils/auto-charts';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { useTranslations } from 'next-intl';
 import { useStickToBottomContext } from 'use-stick-to-bottom';
 

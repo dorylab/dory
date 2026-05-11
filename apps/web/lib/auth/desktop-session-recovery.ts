@@ -3,8 +3,8 @@ import { serializeSignedCookie } from 'better-call';
 import { eq } from 'drizzle-orm';
 import { getAuth } from '@/lib/auth';
 import { createAuthProxyHeaders } from '@/lib/auth/auth-proxy';
-import { schema } from '@/lib/database/schema';
-import { getClient } from '@/lib/database/postgres/client';
+import { schema } from '@dory/database/schema';
+import { getClient } from '@dory/database/postgres/client';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { isOrganizationRole, type OrganizationRoleKey } from '@/lib/auth/organization-ac';
 

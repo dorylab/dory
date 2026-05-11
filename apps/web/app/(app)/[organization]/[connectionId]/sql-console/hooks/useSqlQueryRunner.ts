@@ -6,12 +6,12 @@ import { useDB } from '@/lib/client/use-pglite';
 import { useQuery } from '@/hooks/use-query';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { fetchTablePreview } from '../../../components/table-browser/lib/fetch-table-preview';
-import { SQLTab } from '@/types/tabs';
+import { SQLTab } from '@dory/shared/types/tabs';
 import { runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
 import { SQLEditorHandle } from '../components/sql-editor';
 import { useTranslations } from 'next-intl';
-import { enforceSelectLimit } from '@/lib/utils/enforce-select-limit';
-import { splitMultiSQL } from '@/lib/utils/split-multi-sql';
+import { enforceSelectLimit } from '@dory/shared/utils/enforce-select-limit';
+import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
 
 type RequestAITabTitle = (tab: SQLTab, options?: { force?: boolean; sqlTextOverride?: string }) => Promise<void> | void;
 

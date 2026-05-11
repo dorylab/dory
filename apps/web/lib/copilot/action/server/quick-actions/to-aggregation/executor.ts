@@ -4,8 +4,8 @@ import { buildToAggregationPrompt } from '@/lib/ai/prompts';
 import { ToAggregationOutputSchema } from './schema';
 import { isMissingAiEnvError, runLLMJson } from '../../llm-json';
 import { ActionContext, ActionResult } from '../../../types';
-import { translate } from '@/lib/i18n/i18n';
-import { routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { routing } from '@dory/i18n/routing';
 
 export async function executeToAggregation(ctx: ActionContext): Promise<ActionResult> {
     const locale = ctx.locale ?? routing.defaultLocale;

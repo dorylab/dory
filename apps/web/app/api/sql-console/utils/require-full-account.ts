@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { translateApi } from '@/app/api/utils/i18n';
 

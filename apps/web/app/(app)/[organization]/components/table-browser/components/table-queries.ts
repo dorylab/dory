@@ -2,10 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useColumns } from '@/hooks/use-columns';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
-import type { TableStats, TablePropertiesRow } from '@/types/table-info';
+import type { TableStats, TablePropertiesRow } from '@dory/shared/types/table-info';
 import type { TableProperties } from './structure/properties-section';
 import type { ColumnInfo } from '../type';
 

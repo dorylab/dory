@@ -1,8 +1,8 @@
 import { getAuth } from '@/lib/auth';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
-import { schema } from '@/lib/database/schema';
-import { getClient } from '@/lib/database/postgres/client';
-import type { PostgresDBClient } from '@/types';
+import { schema } from '@dory/database/schema';
+import { getClient } from '@dory/database/postgres/client';
+import type { PostgresDBClient } from '@dory/shared';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { randomUUID } from 'crypto';
 import { eq } from 'drizzle-orm';

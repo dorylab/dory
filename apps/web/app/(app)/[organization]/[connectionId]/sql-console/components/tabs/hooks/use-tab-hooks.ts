@@ -8,9 +8,9 @@ import { useTranslations } from 'next-intl';
 
 import { activeTabIdAtom, currentConnectionAtom, tabsAtom } from '@/shared/stores/app.store';
 import { currentTabResultAtom, sessionIdByTabAtom } from '../../../sql-console.store';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
-import { TabPayload, UITabPayload } from '@/types/tabs';
+import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
 
 const ACTIVE_KEY = (connectionId?: string | null) => `sqlconsole:activeTabId:${connectionId ?? 'default'}`;

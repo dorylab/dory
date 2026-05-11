@@ -6,7 +6,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/registry/new-york-v4/ui/collapsible";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { ChevronRightIcon } from "lucide-react";
 import {
   type ComponentProps,

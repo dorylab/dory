@@ -1,5 +1,5 @@
-import { formatTypeForPrompt } from '@/lib/utils/format-type-for-prompt';
-import type { TablePropertiesRow } from '@/types/table-info';
+import { formatTypeForPrompt } from '@dory/shared/utils/format-type-for-prompt';
+import type { TablePropertiesRow } from '@dory/shared/types/table-info';
 import { getPromptLanguageLine } from '@/lib/ai/prompts/tasks/language';
 
 type PromptColumnInput = {

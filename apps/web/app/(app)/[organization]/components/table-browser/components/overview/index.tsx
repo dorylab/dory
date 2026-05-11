@@ -23,8 +23,8 @@ import {
     useTablePropertiesQuery,
     useTableStatsQuery,
 } from '../table-queries';
-import { translate } from '@/lib/i18n/i18n';
-import { routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { routing } from '@dory/i18n/routing';
 
 type TableOverviewProps = {
     databaseName?: string;

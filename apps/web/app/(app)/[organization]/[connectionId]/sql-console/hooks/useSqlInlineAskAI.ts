@@ -3,7 +3,7 @@
 import { useCallback } from 'react';
 
 import { authFetch } from '@/lib/client/auth-fetch';
-import type { ConnectionType } from '@/types/connections';
+import type { ConnectionType } from '@dory/shared/types/connections';
 import type { CopilotEnvelopeV1 } from '../../chatbot/copilot/types/copilot-envelope';
 
 type GenerateSqlFromPromptInput = {

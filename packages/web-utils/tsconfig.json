@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": ["ES2022", "DOM", "WebWorker"],
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "isolatedModules": true,
+        "resolveJsonModule": true,
+        "types": ["node"],
+        "paths": {
+            "@dory/shared": ["../shared/src/index.ts"],
+            "@dory/shared/*": ["../shared/src/*"],
+            "@dory/i18n": ["../i18n/src/index.ts"],
+            "@dory/i18n/*": ["../i18n/src/*"],
+            "@dory/drivers": ["../drivers/src/index.ts"],
+            "@dory/drivers/*": ["../drivers/src/*/index.ts", "../drivers/src/*"]
+        }
+    },
+    "include": ["src/**/*.ts", "src/**/*.tsx", "../../apps/web/global.d.ts"],
+    "exclude": ["node_modules"]
+}

@@ -7,7 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/registry/new-york-v4/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { BookmarkIcon, type LucideProps } from "lucide-react";
 import type { ComponentProps, HTMLAttributes } from "react";
 

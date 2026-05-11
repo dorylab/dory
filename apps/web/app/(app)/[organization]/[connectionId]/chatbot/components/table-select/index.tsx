@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { Button } from "@/registry/new-york-v4/ui/button";
 import { Popover } from "@/registry/new-york-v4/ui/popover";
 import { PopoverContent, PopoverTrigger } from "@radix-ui/react-popover";

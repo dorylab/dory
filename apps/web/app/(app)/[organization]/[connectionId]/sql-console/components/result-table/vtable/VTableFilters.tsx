@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Filter, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { ColumnFilterPopover } from './ColumnFIlter';

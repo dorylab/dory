@@ -5,7 +5,7 @@ import * as SelectPrimitive from "@radix-ui/react-select"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 import { cva } from "class-variance-authority"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@dory/web-utils"
 
 function Select({
   ...props

@@ -2,7 +2,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { currentConnectionAtom, databasesAtom } from '@/shared/stores/app.store';
 import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 

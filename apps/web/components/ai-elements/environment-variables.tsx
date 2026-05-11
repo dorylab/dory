@@ -3,7 +3,7 @@
 import { Badge } from "@/registry/new-york-v4/ui/badge";
 import { Button } from "@/registry/new-york-v4/ui/button";
 import { Switch } from "@/registry/new-york-v4/ui/switch";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { CheckIcon, CopyIcon, EyeIcon, EyeOffIcon } from "lucide-react";
 import {
   type ComponentProps,

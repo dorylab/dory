@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 
 type SchemaOption = {
     value: string;

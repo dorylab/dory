@@ -3,8 +3,8 @@ import '@/lib/drivers/register-database-drivers';
 
 import { withConnectionTimeout } from '@dory/drivers/core';
 import { createDriver } from '@dory/drivers/core';
-import { getDBService } from '@/lib/database';
-import { TestConnectionPayload } from '@/types/connections';
+import { getDBService } from '@dory/database';
+import { TestConnectionPayload } from '@dory/shared/types/connections';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/app/api/connection/utils';
 import { buildTestConnectionConfig } from '@dory/drivers/config';
 import { resolveStoredSqlitePath } from '@/lib/demo/paths';

@@ -17,7 +17,7 @@ import { useTranslations } from 'next-intl';
 import { SqlResultPart, SqlResultBodyProps, SqlResultCardProps } from './type';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { getSqlResultActionStyles } from './style';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 export function SqlStatementBlock({ sql, onCopy, actions, className }: { sql: string; onCopy: (sql: string) => void; actions?: React.ReactNode; className?: string }) {
     if (!sql.trim()) return null;

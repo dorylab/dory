@@ -1,5 +1,5 @@
 import { createAccessControl } from 'better-auth/plugins';
-import type { OrganizationPermissionMap, OrganizationRole } from '@/types/organization';
+import type { OrganizationPermissionMap, OrganizationRole } from '@dory/shared/types/organization';
 
 export const organizationAc = createAccessControl({
     organization: ['read', 'update', 'delete'],

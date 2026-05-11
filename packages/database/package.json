@@ -1,0 +1,39 @@
+{
+    "name": "@dory/database",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "./src/index.ts",
+    "types": "./src/index.ts",
+    "exports": {
+        ".": "./src/index.ts",
+        "./schema": "./src/schema.ts",
+        "./provider": "./src/provider.ts",
+        "./i18n": "./src/i18n.ts",
+        "./types": "./src/types/index.ts",
+        "./utils": "./src/utils.ts",
+        "./postgres/client": "./src/postgres/client/index.ts",
+        "./postgres/client/pg": "./src/postgres/client/pg.ts",
+        "./postgres/client/pglite": "./src/postgres/client/pglite.ts",
+        "./postgres/schemas": "./src/postgres/schemas/index.ts",
+        "./postgres/schemas/*": "./src/postgres/schemas/*.ts",
+        "./postgres/impl/*": "./src/postgres/impl/*/index.ts",
+        "./postgres/migrate": "./src/postgres/migrate.ts",
+        "./pglite/*": "./src/pglite/*.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@dory/shared": "0.1.0",
+        "@electric-sql/pglite": "^0.4.3",
+        "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17",
+        "drizzle-orm": "^0.45.2",
+        "pg": "^8.20.0"
+    },
+    "devDependencies": {
+        "@types/node": "^25.5.2",
+        "@types/pg": "^8.20.0",
+        "typescript": "^6.0.2"
+    }
+}

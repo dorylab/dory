@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getTableColumns } from 'drizzle-orm';
-import { schema } from '../../lib/database/postgres/schemas';
+import { schema } from '@dory/database/postgres/schemas';
 import {
     anonymousOwnershipMigrations,
     anonymousOwnershipNoMigratePolicies,
     getAnonymousOwnershipTablePolicies,
-} from '../../lib/database/postgres/impl/organization/anonymous-resource-merge';
+} from '@dory/database/postgres/impl/organization/anonymous-resource-merge';
 
 const ownershipColumnNames = new Set(['organizationId', 'userId', 'createdByUserId']);
 

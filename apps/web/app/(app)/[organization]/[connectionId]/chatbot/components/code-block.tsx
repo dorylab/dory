@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/registry/new-york-v4/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import { createContext, useContext, useState } from "react";

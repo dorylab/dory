@@ -1,4 +1,4 @@
-import { getDBService } from '@/lib/database';
+import { getDBService } from '@dory/database';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 import type { OrganizationAccess } from './types';
 

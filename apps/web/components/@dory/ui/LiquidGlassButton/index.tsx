@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Image from 'next/image';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Check, Users, MessageSquare } from 'lucide-react';

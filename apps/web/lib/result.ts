@@ -1,5 +1,5 @@
-import { ResponseObject, ResponseObjectCode } from '@/types';
-import { ErrorCodes } from './errors';
+import { ResponseObject, ResponseObjectCode } from '@dory/shared';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ZodError } from 'zod';
 
 export const ResponseUtil = {

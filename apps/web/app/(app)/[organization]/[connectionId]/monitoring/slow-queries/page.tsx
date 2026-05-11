@@ -4,8 +4,8 @@ import * as React from 'react';
 import { AlertCircle } from 'lucide-react';
 import { ColumnDef, ColumnFiltersState, SortingState, VisibilityState, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table';
 
-import { cn } from '@/lib/utils';
-import type { QueryInsightsRow } from '@/types/monitoring';
+import { cn } from '@dory/web-utils';
+import type { QueryInsightsRow } from '@dory/shared/types/monitoring';
 import { formatBytes, formatNumber } from '../utils';
 import { useQueryInsightsFiltersValue, useSetQueryInsightsLoading } from '../state';
 import { useQueryInsightsPagination } from '../hooks/use-monitoring-pagination';

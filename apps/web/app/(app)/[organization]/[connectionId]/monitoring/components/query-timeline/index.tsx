@@ -8,7 +8,7 @@ import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '
 import { ToggleGroup, ToggleGroupItem } from '@/registry/new-york-v4/ui/toggle-group';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 
-import type { QueryTimelinePoint, TimeRange } from '@/types/monitoring';
+import type { QueryTimelinePoint, TimeRange } from '@dory/shared/types/monitoring';
 import { fillTimelineBuckets, formatNumber } from '../../utils';
 import { useLocale, useTranslations } from 'next-intl';
 

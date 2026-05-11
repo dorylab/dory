@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { TableStats } from '@/types/table-info';
+import { TableStats } from '@dory/shared/types/table-info';
 import { useTranslations } from 'next-intl';
 
 type TTLCardProps = {

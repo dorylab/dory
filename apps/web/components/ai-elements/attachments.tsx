@@ -6,7 +6,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/registry/new-york-v4/ui/hover-card";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import type { FileUIPart, SourceDocumentUIPart } from "ai";
 import {
   FileTextIcon,

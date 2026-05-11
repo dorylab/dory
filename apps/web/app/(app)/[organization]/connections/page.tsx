@@ -16,7 +16,7 @@ import { useConnectConnection } from './hooks/use-connect-connection';
 import { useConnections, useDeleteConnection } from './hooks/use-connections';
 import { DeleteDialog } from './components/delete-dialog';
 
-import type { ConnectionListItem } from '@/types/connections';
+import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 
 export default function ConnectionsPage() {

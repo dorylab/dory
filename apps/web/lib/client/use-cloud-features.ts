@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { env } from 'next-runtime-env';
-import { normalizeRuntime } from '@/lib/runtime/runtime';
+import { normalizeRuntime } from '@dory/shared/runtime';
 
 function hasCloudBaseUrl() {
     return Boolean((env('NEXT_PUBLIC_DORY_CLOUD_API_URL') ?? '').trim());

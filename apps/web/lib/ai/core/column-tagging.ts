@@ -1,8 +1,8 @@
-import { ColumnInput, SchemaTag, SchemaTagResponse } from '@/types';
+import { ColumnInput, SchemaTag, SchemaTagResponse } from '@dory/shared';
 import { uniqueTags } from './clean-json';
 export { buildColumnTaggingPrompt } from '@/lib/ai/prompts/tasks/schema.tag';
-import { translate } from '@/lib/i18n/i18n';
-import { Locale, routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { Locale, routing } from '@dory/i18n/routing';
 
 const TAG_KEYS = [
     'PrimaryKey',

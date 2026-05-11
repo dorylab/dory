@@ -1,4 +1,4 @@
-import type { RolePrivilege } from '@/types/privileges';
+import type { RolePrivilege } from '@dory/shared/types/privileges';
 
 export type PrivilegeNodeType = 'root' | 'database' | 'table' | 'view' | 'column';
 

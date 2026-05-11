@@ -1,3 +1,4 @@
+import { ensureOrganizationDefaults } from '@/lib/demo/organization-defaults';
 import { serializeSignedCookie } from 'better-call';
 import { eq } from 'drizzle-orm';
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,11 +15,11 @@ import {
     findFirstActiveOrganizationIdForUser,
 } from '@/lib/auth/anonymous-lifecycle/common';
 import { buildSessionOrganizationPatch } from '@/lib/auth/migration-state';
-import { getDBService } from '@/lib/database';
-import { getClient } from '@/lib/database/postgres/client';
-import { schema } from '@/lib/database/schema';
-import { newEntityId } from '@/lib/id';
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+import { getDBService } from '@dory/database';
+import { getClient } from '@dory/database/postgres/client';
+import { schema } from '@dory/database/schema';
+import { newEntityId } from '@dory/shared/id';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -77,7 +78,7 @@ async function recoverOfflineAnonymousUser(req: NextRequest) {
     }
 
     const dbService = await getDBService();
-    await dbService.organizations.ensureOrganizationDefaults(recoverableUser.userId, organization.id, dbService.connections);
+    await ensureOrganizationDefaults(dbService, recoverableUser.userId, organization.id);
     const { ctx, session } = await createSessionForOfflineAnonymousUser(recoverableUser.userId, organization.id);
 
     return {
@@ -136,7 +137,7 @@ async function createOfflineAnonymousUser() {
     });
 
     const dbService = await getDBService();
-    await dbService.organizations.ensureOrganizationDefaults(userId, organization.id, dbService.connections);
+    await ensureOrganizationDefaults(dbService, userId, organization.id);
     const { ctx, session } = await createSessionForOfflineAnonymousUser(userId, organization.id);
 
     return {

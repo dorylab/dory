@@ -1,7 +1,7 @@
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
-import { splitMultiSQL } from '@/lib/utils/split-multi-sql';
+import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import z from 'zod';

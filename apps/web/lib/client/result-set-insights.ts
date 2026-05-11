@@ -1,5 +1,5 @@
 import type { ActionIntent } from '@/lib/copilot/action/types';
-import type { ResultAction } from '@/lib/analysis/result-actions';
+import type { ResultAction } from '@dory/analysis/core/result-actions';
 import type { ResultColumnMeta, ResultSetStatsV1 } from './result-set-ai';
 
 type InsightTranslate = (key: string, values?: Record<string, string | number>) => string;

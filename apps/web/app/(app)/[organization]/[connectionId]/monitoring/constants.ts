@@ -1,4 +1,4 @@
-import { PaginationState, QueryInsightsFilters, TimeRange } from '@/types/monitoring';
+import { PaginationState, QueryInsightsFilters, TimeRange } from '@dory/shared/types/monitoring';
 
 export const DEFAULT_FILTERS: QueryInsightsFilters = {
   user: 'all',

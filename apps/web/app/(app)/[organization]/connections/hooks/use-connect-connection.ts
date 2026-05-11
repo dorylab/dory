@@ -10,8 +10,8 @@ import posthog from 'posthog-js';
 import { connectConnection } from '../api';
 import { connectionLoadingAtom } from '../states';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import type { ResponseObject } from '@/types';
-import type { ConnectionListItem } from '@/types/connections';
+import type { ResponseObject } from '@dory/shared';
+import type { ConnectionListItem } from '@dory/shared/types/connections';
 
 type ConnectParams = {
     payload: ConnectionListItem;

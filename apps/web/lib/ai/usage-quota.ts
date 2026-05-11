@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 
-import { getDBService } from '@/lib/database';
-import { getClient } from '@/lib/database/postgres/client';
+import { getDBService } from '@dory/database';
+import { getClient } from '@dory/database/postgres/client';
 import { isOrganizationEligibleForAiQuotaExemption } from '@/lib/organization/metadata';
-import { user } from '@/lib/database/postgres/schemas';
+import { user } from '@dory/database/postgres/schemas';
 import { normalizeOrganizationBillingStatus } from '@/lib/billing/normalize';
 import type { OrganizationPlan } from '@/lib/billing/types';
 

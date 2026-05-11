@@ -1,7 +1,7 @@
 import 'server-only';
 
-import type { ConnectionDialect } from '@/types';
-import type { Locale } from '@/lib/i18n/routing';
+import type { ConnectionDialect } from '@dory/shared';
+import type { Locale } from '@dory/i18n/routing';
 import { hydrateActionContext } from './hydrate-action-context';
 import { executeGenerateSql } from './quick-actions/generate-sql/executor';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import type { DynamicToolUIPart, ToolUIPart } from 'ai';
 import { CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, CircleIcon, ClockIcon, XCircleIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';

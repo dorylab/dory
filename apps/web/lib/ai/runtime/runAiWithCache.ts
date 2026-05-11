@@ -1,5 +1,5 @@
-import type { AiSchemaCacheRepository } from '@/lib/database/postgres/impl/ai-schema-cache';
-import { getDBService } from '@/lib/database';
+import type { AiSchemaCacheRepository } from '@dory/database/postgres/impl/ai-schema-cache';
+import { getDBService } from '@dory/database';
 
 export type RunAiWithCacheOptions<TNormalized, TPayload> = {
     organizationId: string;

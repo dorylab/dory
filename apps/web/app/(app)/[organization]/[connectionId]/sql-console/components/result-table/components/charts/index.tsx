@@ -12,7 +12,7 @@ import {
     RESULT_AUTO_CHART_NONE_VALUE,
     type ResultAutoChartFilterSpec,
     type ResultAutoChartState,
-} from '@/lib/analysis/result-chart-profile';
+} from '@dory/analysis/core/result-chart-profile';
 import type { ResultSetStatsV1 } from '@/lib/client/type';
 import { cn } from '@/registry/new-york-v4/lib/utils';
 import { type ChartConfig } from '@/registry/new-york-v4/ui/chart';

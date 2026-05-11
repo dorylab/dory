@@ -6,7 +6,7 @@ import { env } from 'next-runtime-env';
 import posthog from 'posthog-js';
 import { Analytics as VercelAnalytics } from '@vercel/analytics/react';
 import { posthogBaseProperties } from '@/lib/posthog-config';
-import { normalizeRuntime } from '@/lib/runtime/runtime';
+import { normalizeRuntime } from '@dory/shared/runtime';
 
 export function Analytics() {
     const pathname = usePathname();

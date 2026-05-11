@@ -7,8 +7,8 @@ import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@/types';
-import type { TableIndexInfo } from '@/types/table-info';
+import type { ResponseObject } from '@dory/shared';
+import type { TableIndexInfo } from '@dory/shared/types/table-info';
 import { formatBytes } from '../stats/components/formatters';
 
 type TableIndexesTabProps = {

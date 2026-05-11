@@ -1,4 +1,4 @@
-import { QueryListKey } from "@/types/monitoring";
+import { QueryListKey } from "@dory/shared/types/monitoring";
 import { PaginationState } from "@tanstack/react-table";
 import { useAtom } from "jotai";
 import React from "react";

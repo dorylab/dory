@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 
-import { getConnectionIdFromRequest } from '@/lib/utils/request';
+import { getConnectionIdFromRequest } from '@dory/web-utils/request';
 import { BadRequestError } from './parse-json';
 
 const normalizeConnectionId = (value?: string | null) => {

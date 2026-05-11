@@ -1,9 +1,9 @@
 // lib/api/handle-error.ts
 import { NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { BadRequestError, ValidationError } from './parse-json';
-import { ConnectionDuplicateNameError, ConnectionIdentityValidationError, ConnectionNotFoundError } from '@/lib/database/postgres/impl/connections';
+import { ConnectionDuplicateNameError, ConnectionIdentityValidationError, ConnectionNotFoundError } from '@dory/database/postgres/impl/connections';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 export async function handleApiError(err: any): Promise<NextResponse> {

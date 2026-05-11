@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
-import type { ChatSessionRecord, ChatSessionType } from '@/types';
+import { ErrorCodes } from '@dory/shared/errors';
+import type { ChatSessionRecord, ChatSessionType } from '@dory/shared';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 

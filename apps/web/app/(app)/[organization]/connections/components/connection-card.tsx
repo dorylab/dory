@@ -3,7 +3,7 @@
 import { MotionHighlight } from '@/components/animate-ui/effects/motion-highlight';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
-import { ConnectionCheckStatus, ConnectionListItem } from '@/types/connections';
+import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
 import { Edit2, Trash2, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';

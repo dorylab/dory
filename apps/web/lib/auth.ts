@@ -1,3 +1,4 @@
+import { ensureOrganizationDefaults } from '@/lib/demo/organization-defaults';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { anonymous, jwt, organization } from 'better-auth/plugins';
@@ -6,18 +7,18 @@ import { dash, sentinel } from '@better-auth/infra';
 import Stripe from 'stripe';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import { createCachedAsyncFactory } from '@dory/auth-core';
-import type { PostgresDBClient } from '../types';
-import { getDBService } from './database';
-import { getClient } from './database/postgres/client';
-import { getDatabaseProvider } from './database/provider';
-import { schema } from './database/schema';
+import type { PostgresDBClient } from '@dory/shared';
+import { getDBService } from '@dory/database';
+import { getClient } from '@dory/database/postgres/client';
+import { getDatabaseProvider } from '@dory/database/provider';
+import { schema } from '@dory/database/schema';
 import { sendEmail } from './email';
 import { parseEnvFlag } from './env';
 import { resolveOrganizationIdForSession, shouldCreateDefaultOrganization } from './auth/migration-state';
 import { createProvisionedOrganization } from './auth/organization-provisioning';
-import { translate } from './i18n/i18n';
-import { getServerLocale } from './i18n/server-locale';
-import { isBillingEnabledForServer, isDesktopRuntime } from './runtime/runtime';
+import { translate } from '@dory/i18n/translate';
+import { getServerLocale } from '@dory/i18n/server';
+import { isBillingEnabledForServer, isDesktopRuntime } from '@dory/shared/runtime';
 import { organizationAc, organizationRoles } from './auth/organization-ac';
 import { canManageOrganizationBilling } from './billing/authz';
 import { buildDefaultOrganizationValues, linkAnonymousOrganizationToUser } from './auth/anonymous';
@@ -307,7 +308,7 @@ function createAuth() {
                         },
                         afterCreateOrganization: async ({ organization, user }) => {
                             const dbService = await getDBService();
-                            await dbService.organizations.ensureOrganizationDefaults(user.id, organization.id, dbService.connections);
+                            await ensureOrganizationDefaults(dbService, user.id, organization.id);
                         },
                     },
                     sendInvitationEmail: async ({ id, email, role, organization, inviter }) => {

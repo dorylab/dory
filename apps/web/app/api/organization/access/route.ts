@@ -1,6 +1,6 @@
 import { withUserHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { NextResponse } from 'next/server';
 import { resolveOrganizationAccess } from '@/lib/server/authz';

@@ -14,7 +14,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/registry/new-york-v4/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { ChevronsUpDownIcon } from "lucide-react";
 import {
   type ComponentProps,

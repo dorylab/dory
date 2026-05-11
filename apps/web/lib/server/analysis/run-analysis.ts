@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { BaseConnection } from '@dory/drivers/core';
-import { translate } from '@/lib/i18n/i18n';
-import { routing, type Locale } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { routing, type Locale } from '@dory/i18n/routing';
 import type {
     AnalysisOutcome,
     AnalysisQueryPayload,
@@ -13,9 +13,35 @@ import type {
     ResultContextColumn,
     RunAnalysisRequest,
     RunAnalysisResponse,
-} from '@/lib/analysis/types';
-import { actionToSql, type ResultAction } from '@/lib/analysis/result-actions';
-import { enhanceAnalysisSummaryWithAi } from './ai-summary';
+} from '@dory/analysis/types';
+import { actionToSql, type ResultAction } from '@dory/analysis/core/result-actions';
+
+type AnalysisSummaryCore = Omit<AnalysisOutcome, 'artifacts' | 'followups'>;
+
+async function enhanceAnalysisSummary(params: {
+    locale: Locale;
+    organizationId?: string | null;
+    userId?: string | null;
+    sql: string;
+    suggestion: {
+        title: string;
+        goal: string;
+        description: string;
+        resultTitle: string;
+    };
+    context: ResultContext;
+    columns: Array<{ name: string; type: string | null }>;
+    rows: Array<Record<string, unknown>>;
+    rowCount: number;
+    fallback: AnalysisSummaryCore;
+}): Promise<AnalysisSummaryCore> {
+    try {
+        const { enhanceAnalysisSummaryWithAi } = await import('./ai-summary');
+        return enhanceAnalysisSummaryWithAi(params);
+    } catch {
+        return params.fallback;
+    }
+}
 
 function nowIso() {
     return new Date().toISOString();
@@ -1017,7 +1043,7 @@ export async function runAnalysis(params: {
             context: params.request.context.resultContext,
         });
         const rowCount = result.rowCount ?? rows.length;
-        const outcomeCore = await enhanceAnalysisSummaryWithAi({
+        const outcomeCore = await enhanceAnalysisSummary({
             locale,
             organizationId: params.organizationId ?? null,
             userId: params.userId ?? null,

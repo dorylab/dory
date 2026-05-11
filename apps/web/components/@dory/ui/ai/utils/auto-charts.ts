@@ -1,6 +1,6 @@
-import { buildResultAutoChartProfile, toChartResultPart } from '@/lib/analysis/result-chart-profile';
-import { getClientLocale } from '@/lib/i18n/client-locale';
-import { translate } from '@/lib/i18n/i18n';
+import { buildResultAutoChartProfile, toChartResultPart } from '@dory/analysis/core/result-chart-profile';
+import { getClientLocale } from '@dory/i18n/client';
+import { translate } from '@dory/i18n/translate';
 
 import { ChartResultPart } from '../charts-result';
 import { SqlResultPart } from '../sql-result/type';

@@ -1,4 +1,4 @@
-import { SQLTab } from "@/types/tabs";
+import { SQLTab } from "@dory/shared/types/tabs";
 
 
 export const DEFAULT_ACTIVE_TAB: SQLTab = {

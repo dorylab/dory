@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import type { BaseConnection } from '@dory/drivers/core';
 import type { ClickhousePrivilegesImpl } from '@dory/drivers/database/clickhouse/privileges';

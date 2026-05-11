@@ -38,7 +38,7 @@ import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { authClient } from '@/lib/auth-client';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { useAtomValue } from 'jotai';
 import { useLocale, useTranslations } from 'next-intl';
 import { currentConnectionAtom } from '@/shared/stores/app.store';

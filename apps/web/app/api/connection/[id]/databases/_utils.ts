@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 

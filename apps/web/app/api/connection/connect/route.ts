@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import '@/lib/drivers/register-database-drivers';
 
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
-import type { ConnectionSsh } from '@/types/connections';
+import { ErrorCodes } from '@dory/shared/errors';
+import type { ConnectionSsh } from '@dory/shared/types/connections';
 import { UnsupportedTypeError } from '@dory/drivers/core';
 import { BaseConfig } from '@dory/drivers/types';
 import { CONNECTION_REQUEST_TIMEOUT_MS, withConnectionTimeout } from '@dory/drivers/core';

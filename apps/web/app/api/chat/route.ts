@@ -6,7 +6,7 @@ import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { isMissingAiEnvError } from '@/lib/ai/errors';
 
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { getDBService } from '@/lib/database';
+import { getDBService } from '@dory/database';
 import { buildSchemaContext, buildSchemaContextForTables, getDefaultSchemaSampleLimits } from '@/lib/ai/prompts';
 import { fetchCloudUiMessageStream, type CloudStreamRequest } from '@/lib/ai/cloud-client';
 import { buildCloudToolDeclarations } from '@/lib/ai/cloud-tools';
@@ -14,7 +14,7 @@ import { createSqlRunnerTool, isManualExecutionRequiredSqlResult } from './sql-r
 import { createChartBuilderTool } from './chart-builder';
 import { buildDialectSqlPrompt, MAX_HISTORY_MESSAGES, SYSTEM_PROMPT } from '@/lib/ai/prompts';
 import { buildUserLanguageInstruction, extractMessageText, normalizeMessage } from './utils';
-import { newEntityId } from '@/lib/id';
+import { newEntityId } from '@dory/shared/id';
 import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import { getApiLocale } from '@/app/api/utils/i18n';
@@ -23,7 +23,7 @@ import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
-import type { ConnectionType } from '@/types/connections';
+import type { ConnectionType } from '@dory/shared/types/connections';
 
 export const runtime = 'nodejs';
 

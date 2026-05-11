@@ -1,9 +1,9 @@
 import { getAuth } from '@/lib/auth';
 import { appendClearAnonymousRecoveryCookieHeader } from '@/lib/auth/anonymous-recovery';
 import { buildSessionOrganizationPatch } from '@/lib/auth/migration-state';
-import { getDBService } from '@/lib/database';
-import { getClient } from '@/lib/database/postgres/client';
-import { schema } from '@/lib/database/schema';
+import { getDBService } from '@dory/database';
+import { getClient } from '@dory/database/postgres/client';
+import { schema } from '@dory/database/schema';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { ensureDemoConnection } from '@/lib/demo/ensure-demo-connection';
 import { serializeSignedCookie } from 'better-call';

@@ -1,5 +1,5 @@
 // lib/ai/stats-rules.ts
-import type { TableStats } from '@/types/table-info';
+import type { TableStats } from '@dory/shared/types/table-info';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 

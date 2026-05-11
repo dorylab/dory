@@ -10,7 +10,7 @@ import { activeSessionIdAtom, localDataLoadingAtom, runningTabsAtom } from '../.
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCsvDownload } from './hooks/use-csv-download';
 import { useDB } from '@/lib/client/use-pglite';
-import { MetaState } from '@/types/sql-console';
+import { MetaState } from '@dory/shared/types/sql-console';
 import { Toolbar } from './Toolbar';
 import type { ExecMeta } from './Toolbar';
 import { makeCacheKey, hydrateFromCache, touchCache, RESULTS_CACHE } from './hooks/useResultsCache';

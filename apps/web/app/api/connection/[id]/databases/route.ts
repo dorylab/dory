@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { headers } from 'next/headers';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '../../utils';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';

@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { SignInForm } from '@/app/(auth)/components/SignInForm';
 import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from '@/lib/auth/anonymous-recovery';
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';

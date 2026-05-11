@@ -8,7 +8,7 @@ import type { CopilotActionExecutor } from '../../../chatbot/copilot/action-brid
 import type { CopilotEnvelopeV1 } from '../../../chatbot/copilot/types/copilot-envelope';
 import type { useChatSessions } from '../../../chatbot/core/session-controller';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
 import { useTranslations } from 'next-intl';

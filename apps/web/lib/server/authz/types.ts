@@ -1,4 +1,4 @@
-import type { OrganizationPermissionMap, OrganizationRole } from '@/types/organization';
+import type { OrganizationPermissionMap, OrganizationRole } from '@dory/shared/types/organization';
 
 export type OrganizationAccessRole = OrganizationRole | null;
 export type OrganizationAccessSource = 'desktop_cloud' | 'desktop_local_fallback' | 'desktop_session_fallback' | 'local';

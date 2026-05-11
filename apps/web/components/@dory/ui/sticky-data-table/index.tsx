@@ -3,7 +3,7 @@
 import * as React from 'react';
 import type { Table, Row } from '@tanstack/react-table';
 import { flexRender } from '@tanstack/react-table';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { useTranslations } from 'next-intl';
 
 type ColumnMeta = {

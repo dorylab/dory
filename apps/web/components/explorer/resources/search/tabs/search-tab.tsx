@@ -13,7 +13,7 @@ import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
 

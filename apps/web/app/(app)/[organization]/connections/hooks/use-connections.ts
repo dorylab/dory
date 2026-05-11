@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
 import { isSuccess } from '@/lib/result';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 
 import {
     addConnection,
@@ -20,7 +20,7 @@ import {
     updateConnection,
 } from '../api';
 import { connectionsAtom, searchResultAtom } from '../states';
-import { ConnectionListItem, CreateConnectionPayload } from '@/types/connections';
+import { ConnectionListItem, CreateConnectionPayload } from '@dory/shared/types/connections';
 
 const CONNECTIONS_QUERY_KEY = ['connections'] as const;
 

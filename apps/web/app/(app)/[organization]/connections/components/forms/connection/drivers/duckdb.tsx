@@ -6,7 +6,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { FieldHelp } from './shared';
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 type DuckDbMode = 'local' | 'motherduck';
 

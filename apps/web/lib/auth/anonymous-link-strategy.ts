@@ -1,4 +1,4 @@
-import type { OrganizationProvisioningKind } from '@/lib/database/postgres/schemas';
+import type { OrganizationProvisioningKind } from '@dory/database/postgres/schemas';
 
 export type AnonymousLinkOrganizationRecord = {
     id: string;

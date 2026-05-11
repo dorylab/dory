@@ -3,7 +3,7 @@
 import { useCallback, useEffect } from 'react';
 import type { SqlResultManualExecutionMode } from '@/components/@dory/ui/ai/sql-result/type';
 import { useTranslations } from 'next-intl';
-import { SQLTab } from '@/types/tabs';
+import { SQLTab } from '@dory/shared/types/tabs';
 import { UpdateTab } from '../types';
 
 export function useSqlChatHandoff({

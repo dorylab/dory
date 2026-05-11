@@ -17,7 +17,7 @@ import {
     updateClickHouseRoleApi,
     updateClickHouseUserApi,
 } from './request';
-import type { ClickHouseRole, ClickHouseUser, RolePrivilege } from '@/types/privileges';
+import type { ClickHouseRole, ClickHouseUser, RolePrivilege } from '@dory/shared/types/privileges';
 import {
     Tabs,
     TabsContent,

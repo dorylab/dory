@@ -3,7 +3,7 @@
 import { ChevronDown, ChevronRight, Layers, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { ObjectGroup } from './object-group';
 import { DEFAULT_GROUP_STATE } from './types';
 import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';

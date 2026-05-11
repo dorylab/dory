@@ -1,7 +1,7 @@
 import { generateText, runAiWithCache } from '@/lib/ai/gateway';
 
-import { computeSchemaHash } from '@/lib/utils/compute-schema-hash';
-import type { TablePropertiesRow } from '@/types/table-info';
+import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
+import type { TablePropertiesRow } from '@dory/shared/types/table-info';
 import {
     buildFallbackSummary,
     buildFallbackDetail,

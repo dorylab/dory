@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { ChevronRight, Folder, GripVertical, MoreHorizontal } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 export type FolderData = {
     id: string;

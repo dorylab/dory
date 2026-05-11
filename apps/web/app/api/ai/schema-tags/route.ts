@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import provider from '@/lib/ai/provider';
 import { heuristicTagging } from '@/lib/ai/core/column-tagging';
-import { getConnectionIdFromRequest } from '@/lib/utils/request';
+import { getConnectionIdFromRequest } from '@dory/web-utils/request';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';

@@ -15,7 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/registry/new-york-v4/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import type { ComponentProps, ReactNode } from "react";
 
 export type ModelSelectorProps = ComponentProps<typeof Dialog>;

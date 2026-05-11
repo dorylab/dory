@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
-import { schema } from '@/lib/database/schema';
-import { mergeAnonymousOrganizationIntoExistingOrganization, migrateAnonymousOrganizationOwnership } from '@/lib/database/postgres/impl/organization/anonymous-resource-merge';
+import { schema } from '@dory/database/schema';
+import { mergeAnonymousOrganizationIntoExistingOrganization, migrateAnonymousOrganizationOwnership } from '@dory/database/postgres/impl/organization/anonymous-resource-merge';
 import { resolveAnonymousOrganizationLinkDecision } from '../anonymous-link-strategy';
 import {
     findAnonymousOrganizationIdsForLink,

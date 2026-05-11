@@ -1,10 +1,10 @@
 // app/api/ai/table-summary/route.ts
 import provider from '@/lib/ai/provider';
-import type { TablePropertiesRow } from '@/types/table-info';
+import type { TablePropertiesRow } from '@dory/shared/types/table-info';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale } from '@/app/api/utils/i18n';
 import { buildFallbackSummary, buildFallbackDetail, buildFallbackHighlights, buildFallbackSnippets } from '@/lib/ai/core/table-summary';
-import { ColumnInput } from '@/types';
+import { ColumnInput } from '@dory/shared';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
 

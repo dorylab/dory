@@ -1,5 +1,5 @@
 // components/form/error-placeholder.tsx
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { FormMessage } from '@/registry/new-york-v4/ui/form';
 import { get } from 'lodash-es';
 import { useTranslations } from 'next-intl';

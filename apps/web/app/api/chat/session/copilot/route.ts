@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
-import { DatabaseError } from '@/lib/errors/DatabaseError';
-import type { ChatSessionRecord } from '@/types';
+import { ErrorCodes } from '@dory/shared/errors';
+import { DatabaseError } from '@dory/shared/errors/DatabaseError';
+import type { ChatSessionRecord } from '@dory/shared';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 

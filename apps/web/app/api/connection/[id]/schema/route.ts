@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { ensureConnectionPoolForUser } from '../../utils';
 import { hasMetadataCapability } from '@dory/drivers/types';

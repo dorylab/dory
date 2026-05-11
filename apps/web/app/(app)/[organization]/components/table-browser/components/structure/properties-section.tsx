@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { TablePropertiesRow } from '@/types/table-info';
+import { TablePropertiesRow } from '@dory/shared/types/table-info';
 import { useTranslations } from 'next-intl';
 
 export type TableProperties = TablePropertiesRow;

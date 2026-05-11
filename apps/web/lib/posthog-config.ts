@@ -1,4 +1,4 @@
-import { getRuntimeForServer } from '@/lib/runtime/runtime';
+import { getRuntimeForServer } from '@dory/shared/runtime';
 
 export const posthogEnvironment = process.env.NODE_ENV ?? 'development';
 

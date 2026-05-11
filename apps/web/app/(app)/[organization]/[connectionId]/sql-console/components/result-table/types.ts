@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react';
-import type { MetaState } from '@/types/sql-console';
+import type { MetaState } from '@dory/shared/types/sql-console';
 
 export type ResultRow = { tabId: string; rid: number; rowData: any };
 

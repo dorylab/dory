@@ -7,7 +7,7 @@ import {
   InputGroupInput,
   InputGroupText,
 } from "@/registry/new-york-v4/ui/input-group";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import {
   type ComponentProps,

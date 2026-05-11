@@ -1,6 +1,6 @@
 // app/api/ai/table-stats-insights/route.ts
 import { NextRequest } from 'next/server';
-import type { TableStats } from '@/types/table-info';
+import type { TableStats } from '@dory/shared/types/table-info';
 import { TableIssue, analyzeTableStats } from './stats-rules';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
