@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useTranslations } from 'next-intl';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Dialog, DialogContent } from '@/registry/new-york-v4/ui/dialog';
 import { getCategories } from './types';
 import type { CategoryKey } from './types';

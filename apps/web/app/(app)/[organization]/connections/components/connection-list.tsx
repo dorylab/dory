@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useAtomValue } from 'jotai';
 
 import ConnectionCard from './connection-card';
-import { ConnectionListItem } from '@/types/connections';
+import { ConnectionListItem } from '@dory/shared/types/connections';
 import { connectionErrorAtom, connectionsErrorAtom } from '../states';
 
 type Props = {

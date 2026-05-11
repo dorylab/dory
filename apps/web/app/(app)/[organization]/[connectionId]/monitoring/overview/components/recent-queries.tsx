@@ -1,12 +1,12 @@
 'use client';
 
 import { ArrowUpRight, AlertCircle } from 'lucide-react';
-import type { QueryInsightsRow } from '@/types/monitoring';
+import type { QueryInsightsRow } from '@dory/shared/types/monitoring';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { formatBytes, formatNumber } from '../../utils';
 import { useLocale, useTranslations } from 'next-intl';
 

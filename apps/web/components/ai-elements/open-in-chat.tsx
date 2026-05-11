@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/registry/new-york-v4/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import {
   ChevronDownIcon,
   ExternalLinkIcon,

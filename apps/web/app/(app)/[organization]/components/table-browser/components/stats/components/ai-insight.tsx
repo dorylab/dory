@@ -6,7 +6,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { CheckCircle2, Loader2, RotateCw } from 'lucide-react';
-import type { TableStats } from '@/types/table-info';
+import type { TableStats } from '@dory/shared/types/table-info';
 import { tableQueryKeys } from '../../table-queries';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { useTranslations } from 'next-intl';

@@ -8,10 +8,10 @@ import { USE_CLOUD_AI } from '@/app/config/app';
 import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { runInlineAskSqlGeneration, type InlineAskInput } from '@/lib/copilot/action/server/inline-ask';
-import { translate } from '@/lib/i18n/i18n';
-import { getServerLocale } from '@/lib/i18n/server-locale';
+import { translate } from '@dory/i18n/translate';
+import { getServerLocale } from '@dory/i18n/server';
 import { normalizeSqlDialect } from '@/lib/sql/sql-dialect';
-import type { ConnectionType } from '@/types/connections';
+import type { ConnectionType } from '@dory/shared/types/connections';
 
 export const runtime = 'nodejs';
 

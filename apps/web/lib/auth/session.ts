@@ -7,7 +7,7 @@ import { createSessionResolver } from '@dory/auth-core';
 import { getAuth } from '../auth';
 import { createAuthProxyHeaders, shouldProxyAuthRequest } from './auth-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
-import { getRuntimeForServer } from '@/lib/runtime/runtime';
+import { getRuntimeForServer } from '@dory/shared/runtime';
 
 const resolveSession = createSessionResolver({
     getAuth,

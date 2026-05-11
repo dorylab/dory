@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 
 type InlineAskOverlayProps = {

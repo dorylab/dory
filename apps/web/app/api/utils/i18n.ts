@@ -1,6 +1,6 @@
-import { translate } from '@/lib/i18n/i18n';
-import { Locale } from '@/lib/i18n/routing';
-import { getServerLocale } from '@/lib/i18n/server-locale';
+import { translate } from '@dory/i18n/translate';
+import { Locale } from '@dory/i18n/routing';
+import { getServerLocale } from '@dory/i18n/server';
 
 export async function getApiLocale(): Promise<Locale> {
     return await getServerLocale();

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { anonymousDeleteCleanupTableCoverage, anonymousMergeCleanupTableCoverage } from '../../lib/auth/anonymous';
-import { anonymousOwnershipNoMigratePolicies } from '../../lib/database/postgres/impl/organization/anonymous-resource-merge';
+import { anonymousOwnershipNoMigratePolicies } from '@dory/database/postgres/impl/organization/anonymous-resource-merge';
 
 const cleanupTables: Set<string> = new Set([
     ...anonymousDeleteCleanupTableCoverage.connectionIdentityScoped,

@@ -2,7 +2,7 @@
 
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { ChevronDown, ChevronRight, Loader2, Table } from 'lucide-react';
 import type { SidebarTableItem, TableColumn } from './types';
 

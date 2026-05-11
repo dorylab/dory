@@ -9,7 +9,7 @@ import { Label } from '@/registry/new-york-v4/ui/label';
 import { InputPassword } from '@/components/originui/input-password';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { useTranslations } from 'next-intl';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 export function ResetPasswordForm({ className, ...props }: React.ComponentProps<'div'>) {
     const t = useTranslations('Auth');

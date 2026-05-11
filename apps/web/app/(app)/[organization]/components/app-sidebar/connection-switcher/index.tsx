@@ -20,7 +20,7 @@ import {
 } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer/build-path';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import {
@@ -31,7 +31,7 @@ import {
     connectionOpenAtom,
     connectionStatusAtom,
 } from '../../../connections/states';
-import { ConnectionCheckStatus, ConnectionIdentity, ConnectionListIdentity, ConnectionListItem } from '@/types/connections';
+import { ConnectionCheckStatus, ConnectionIdentity, ConnectionListIdentity, ConnectionListItem } from '@dory/shared/types/connections';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { useConnectConnection } from '../../../connections/hooks/use-connect-connection';
 import { useConnections } from '../../../connections/hooks/use-connections';

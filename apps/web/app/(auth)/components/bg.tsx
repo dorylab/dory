@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 
 import { AuroraBackground } from '@/components/ui/aurora-background';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 export function HeroBackground({
     className,

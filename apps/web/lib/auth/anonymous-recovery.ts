@@ -2,8 +2,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { getAuth } from '@/lib/auth';
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
-import { getClient } from '@/lib/database/postgres/client';
-import { schema } from '@/lib/database/schema';
+import { getClient } from '@dory/database/postgres/client';
+import { schema } from '@dory/database/schema';
 
 const ANONYMOUS_RECOVERY_COOKIE_NAME = 'dory.anonymous_recovery';
 const ANONYMOUS_RECOVERY_COOKIE_TTL_SECONDS = 60 * 60 * 24 * 180;

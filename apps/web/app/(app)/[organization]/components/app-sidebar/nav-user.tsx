@@ -15,7 +15,7 @@ import { User } from 'better-auth';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { getOrganizationBillingStatus } from '@/lib/billing/api';
 import { getOrganizationAccess } from '@/lib/organization/api';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 function PlanBadge({ label, plan }: { label: string; plan: 'hobby' | 'pro' }) {
     return (

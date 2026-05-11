@@ -1,9 +1,9 @@
 import { generateText, runAiWithCache } from '@/lib/ai/gateway';
 
-import { computeSchemaHash } from '@/lib/utils/compute-schema-hash';
+import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import { cleanJson } from '../../core/clean-json';
 import { buildColumnTaggingPrompt, heuristicTagging, normalizeAIResult } from '../../core/column-tagging';
-import { ColumnInput, SchemaTag, SchemaTagResponse } from '@/types';
+import { ColumnInput, SchemaTag, SchemaTagResponse } from '@dory/shared';
 import { getEffectiveModelBundle } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 

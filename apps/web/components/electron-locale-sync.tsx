@@ -9,9 +9,9 @@ import {
     readLocaleCookie,
     writeLocaleCookie,
     type ElectronLocale,
-} from '@/lib/i18n/locale-storage';
-import type { Locale } from '@/lib/i18n/routing';
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+} from '@dory/i18n/locale-storage';
+import type { Locale } from '@dory/i18n/routing';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export function ElectronLocaleSync() {
     const router = useRouter();

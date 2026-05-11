@@ -1,7 +1,7 @@
 import { cleanJson } from './clean-json';
 export { buildSchemaExplanationPrompt } from '@/lib/ai/prompts/tasks/schema.explain';
-import { translate } from '@/lib/i18n/i18n';
-import { Locale, routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { Locale, routing } from '@dory/i18n/routing';
 
 export type ColumnInput = {
     name: string;

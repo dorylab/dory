@@ -2,7 +2,7 @@ import type { CopilotContextSQL, CopilotResultSetContext } from './types/copilot
 import type { CopilotFixInput } from './types/copilot-fix-input';
 import type { CopilotEnvelopeMeta, CopilotEnvelopeV1 } from './types/copilot-envelope';
 import { inferSqlDraftContext } from './infer-sql-context';
-import { ConnectionDialect } from '@/types';
+import { ConnectionDialect } from '@dory/shared';
 import { normalizeSqlDialect } from '@/lib/sql/sql-dialect';
 
 const TRUNCATION_SUFFIX = '…(truncated)';

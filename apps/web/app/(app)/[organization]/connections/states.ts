@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import { ConnectionListItem } from '@/types/connections';
+import { ConnectionListItem } from '@dory/shared/types/connections';
 
 export const connectionsAtom = atom<ConnectionListItem[]>([]);
 

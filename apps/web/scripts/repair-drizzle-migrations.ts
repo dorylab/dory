@@ -17,7 +17,7 @@ async function main() {
 
     const journalPath = path.resolve(
         process.cwd(),
-        'lib/database/postgres/migrations/meta/_journal.json',
+        '../../packages/database/src/postgres/migrations/meta/_journal.json',
     );
     const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
         entries: JournalEntry[];

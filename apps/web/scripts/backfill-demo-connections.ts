@@ -1,7 +1,8 @@
+import { ensureOrganizationDefaults } from '../lib/demo/organization-defaults';
 import 'dotenv/config';
-import { getDBService } from '@/lib/database';
-import { getClient } from '@/lib/database/postgres/client';
-import { organizations } from '@/lib/database/postgres/schemas/organizations/organizations';
+import { getDBService } from '@dory/database';
+import { getClient } from '@dory/database/postgres/client';
+import { organizations } from '@dory/database/postgres/schemas/organizations/organizations';
 
 async function main() {
     const client = await getClient();
@@ -21,11 +22,7 @@ async function main() {
 
     for (const organization of rows) {
         try {
-            const result = await db.organizations.ensureOrganizationDefaults(
-                organization.ownerUserId,
-                organization.id,
-                db.connections,
-            );
+            const result = await ensureOrganizationDefaults(db, organization.ownerUserId, organization.id);
             if (result === 'created') created += 1;
             if (result === 'updated') updated += 1;
             if (result === 'exists') exists += 1;

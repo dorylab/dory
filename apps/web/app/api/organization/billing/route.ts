@@ -4,7 +4,7 @@ import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { getOrganizationBillingStatus } from '@/lib/billing/server';
 import { canManageOrganizationBilling } from '@/lib/billing/authz';
 import { proxyCloudRequest, shouldProxyCloudRequest } from '@/lib/auth/auth-proxy';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
 

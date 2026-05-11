@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import type { HTMLAttributes } from "react";
 
 interface LoaderIconProps {

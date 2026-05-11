@@ -5,7 +5,7 @@ import {
   ButtonGroup,
   ButtonGroupText,
 } from "@/registry/new-york-v4/ui/button-group";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import type { Experimental_SpeechResult as SpeechResult } from "ai";
 import {
   MediaControlBar,

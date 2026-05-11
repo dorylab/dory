@@ -11,7 +11,7 @@ import type { CopilotResultSetContext } from '../../../chatbot/copilot/types/cop
 import type { CopilotFixInput } from '../../../chatbot/copilot/types/copilot-fix-input';
 import type { ActionIntent, ActionResult } from '@/lib/copilot/action/types';
 import { useSqlCopilotExecutor } from '../../hooks/useSqlCopilotExecutor';
-import type { UITabPayload } from '@/types/tabs';
+import type { UITabPayload } from '@dory/shared/types/tabs';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/registry/new-york-v4/ui/button';

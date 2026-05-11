@@ -12,11 +12,11 @@ import { useTables } from '@/hooks/use-tables';
 import { activeDatabaseAtom } from '@/shared/stores/app.store';
 import { buildSqlEditorOptions, SqlEditorSettings } from '@/shared/stores/sql-editor-settings.store';
 import { useAtomValue, useSetAtom } from 'jotai';
-import type { UITabPayload } from '@/types/tabs';
+import type { UITabPayload } from '@dory/shared/types/tabs';
 import { buildColumnPrefix, normalizeTableName, resolveTableFromAliasInSql } from './utils';
 import { editorSelectionByTabAtom } from '../../sql-console.store';
 import { useTranslations } from 'next-intl';
-import type { ConnectionType } from '@/types/connections';
+import type { ConnectionType } from '@dory/shared/types/connections';
 import { getSqlDialectConfigForConnectionType, getSqlDialectParser, type SqlDialectParser } from '@/lib/sql/sql-dialect';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 

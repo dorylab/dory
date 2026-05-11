@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { getDBService } from '@/lib/database';
-import { ErrorCodes } from '@/lib/errors';
+import { getDBService } from '@dory/database';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
 

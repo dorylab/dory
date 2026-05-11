@@ -8,7 +8,7 @@ import { createAuthProxyHeaders, shouldProxyAuthRequest } from './auth-proxy.des
 import { readDesktopSessionRecoveryPayload, resolveDesktopRecoveredSession } from './desktop-session-recovery';
 import { resolveDesktopSessionFromHeaders } from './session-resolution';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
-import { getRuntimeForServer } from '@/lib/runtime/runtime';
+import { getRuntimeForServer } from '@dory/shared/runtime';
 
 const resolveSession = createSessionResolver({
     getAuth,

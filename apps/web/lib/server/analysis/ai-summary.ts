@@ -3,7 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 import type { AnalysisOutcome, ResultContext } from '@/lib/analysis/types';
 import { runLLMJson } from '@/lib/copilot/action/server/llm-json';
-import type { Locale } from '@/lib/i18n/routing';
+import type { Locale } from '@dory/i18n/routing';
 
 const aiOutcomeSchema = z.object({
     analysisState: z.enum(['invalid', 'weak', 'good', 'actionable']).optional(),

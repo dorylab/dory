@@ -1,9 +1,9 @@
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import * as schemas from './schemas';
-import { DBClient } from '@/types';
-import { translate } from '@/lib/i18n/i18n';
-import { getClientLocale } from '@/lib/i18n/client-locale';
+import { DBClient } from '@dory/shared';
+import { translate } from '@dory/i18n/translate';
+import { getClientLocale } from '@dory/i18n/client';
 
 const PGLITE_BASE_DIR = 'idb://dory';
 const PGLITE_SCHEMA_VERSION_KEY = 'dory_pglite_schema_version';

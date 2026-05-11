@@ -6,7 +6,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator,
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Plus, Loader2, FileText, X, Sparkles, Pencil, CircleOff, Table as TableIcon } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/registry/new-york-v4/ui/scroll-area';
-import { SQLTab } from '@/types/tabs';
+import { SQLTab } from '@dory/shared/types/tabs';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
 

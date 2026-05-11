@@ -2,8 +2,8 @@ import 'server-only';
 
 import type { CopilotFixInput } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
 import { ActionContext } from '../types';
-import { Locale, routing } from '@/lib/i18n/routing';
-import { translate } from '@/lib/i18n/i18n';
+import { Locale, routing } from '@dory/i18n/routing';
+import { translate } from '@dory/i18n/translate';
 
 export function toActionContext(
     input: CopilotFixInput,

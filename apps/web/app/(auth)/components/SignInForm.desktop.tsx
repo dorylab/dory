@@ -11,7 +11,7 @@ import { InputPassword } from '@/components/originui/input-password';
 import { authClient } from '@/lib/auth-client';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { useCloudFeatureAvailability } from '@/lib/client/use-cloud-features';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Input } from '@/registry/new-york-v4/ui/input';

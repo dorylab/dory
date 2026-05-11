@@ -4,13 +4,13 @@ import * as React from 'react';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
-import type { PostgresIndexUsageStat } from '@/types/table-info';
+import type { PostgresIndexUsageStat } from '@dory/shared/types/table-info';
 import MetricItem from './metric-item';
 import { formatBytes, formatNumber } from './formatters';
 import { useTranslations } from 'next-intl';
 import { ArrowUp, ArrowDown, ArrowUpDown, Info, KeyRound } from 'lucide-react';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 type Props = {
     indexUsage: PostgresIndexUsageStat[] | null | undefined;

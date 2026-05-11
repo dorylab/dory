@@ -1,8 +1,8 @@
 import type { MigrationConfig } from 'drizzle-orm/migrator';
 import migrations from './migrations.json';
 import { getDBClient, bumpPgliteSchemaVersion } from './client';
-import { translate } from '@/lib/i18n/i18n';
-import { getClientLocale } from '@/lib/i18n/client-locale';
+import { translate } from '@dory/i18n/translate';
+import { getClientLocale } from '@dory/i18n/client';
 
 async function runDrizzleMigrate(db: any) {
     const dialect = db?.dialect;

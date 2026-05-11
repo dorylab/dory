@@ -11,7 +11,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useDatabases } from '@/hooks/use-databases';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { getDriverCapabilities } from '@/lib/explorer/capabilities';

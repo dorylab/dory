@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { isBillingAvailableRuntimeValue, normalizeRuntime } from '../../lib/runtime/runtime';
+import { isBillingAvailableRuntimeValue, normalizeRuntime } from '@dory/shared/runtime';
 
 test('normalizeRuntime resolves known runtime values', () => {
     assert.equal(normalizeRuntime('desktop'), 'desktop');

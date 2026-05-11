@@ -1,5 +1,5 @@
 import { ENABLE_COMPRESSION } from '@/app/config/sql-console';
-import { encodeRow } from '../utils/binary-codec';
+import { encodeRow } from '@dory/web-utils/binary-codec';
 import dayjs from 'dayjs';
 // Estimate total bytes for a batch (used for adaptive chunk sizing)
 export function estimateBytes(rows: Array<{ rowData: any }>, compress = ENABLE_COMPRESSION): number {

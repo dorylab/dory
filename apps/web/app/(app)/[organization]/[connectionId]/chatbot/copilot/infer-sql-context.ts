@@ -1,4 +1,4 @@
-import { ConnectionDialect } from '@/types';
+import { ConnectionDialect } from '@dory/shared';
 import type { CopilotContextSQL } from './types/copilot-context-sql';
 import { getSqlDialectParser } from '@/lib/sql/sql-dialect';
 

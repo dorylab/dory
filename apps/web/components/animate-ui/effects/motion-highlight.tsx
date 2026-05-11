@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { AnimatePresence, Transition, motion } from 'motion/react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 type MotionHighlightMode = 'children' | 'parent';
 

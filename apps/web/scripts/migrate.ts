@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { getClient } from '../lib/database/postgres/client';
-import { getDatabaseProvider } from '../lib/database/provider';
+import { getClient } from '@dory/database/postgres/client';
+import { getDatabaseProvider } from '@dory/database/provider';
 
 (async () => {
     console.log('[Init] Initializing database connection...');
@@ -21,7 +21,7 @@ import { getDatabaseProvider } from '../lib/database/provider';
     console.log('[Init] Running database migrations...');
 
     if (provider === 'postgres') {
-        const { migrateDB } = await import('../lib/database/postgres/migrate');
+        const { migrateDB } = await import('@dory/database/postgres/migrate');
         await migrateDB();
     } else {
         console.warn(`[Init] Unrecognized database provider: ${provider}`);

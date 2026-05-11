@@ -4,7 +4,7 @@ import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organizatio
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 
-import type { ClickHouseUser } from '@/types/privileges';
+import type { ClickHouseUser } from '@dory/shared/types/privileges';
 import type { FormMode, UserFormValues } from '../types';
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';

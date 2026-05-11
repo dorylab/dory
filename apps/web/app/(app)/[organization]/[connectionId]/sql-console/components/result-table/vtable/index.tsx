@@ -1,5 +1,5 @@
 'use client';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { GridCellProps, AutoSizer, MultiGrid, MultiGridProps } from 'react-virtualized';
 import { ColumnFilterPopover } from './ColumnFIlter';

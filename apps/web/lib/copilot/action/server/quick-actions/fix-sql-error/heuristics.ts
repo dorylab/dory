@@ -1,8 +1,8 @@
 import 'server-only';
 
 import { ActionContext, ActionResult } from '../../../types';
-import { translate } from '@/lib/i18n/i18n';
-import { routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { routing } from '@dory/i18n/routing';
 
 export function tryHeuristicFix(ctx: ActionContext): ActionResult | null {
     const locale = ctx.locale ?? routing.defaultLocale;

@@ -1,4 +1,4 @@
-import type { PostgresDBClient } from '@/types';
+import type { PostgresDBClient } from '@dory/shared';
 import { createProvisionedOrganization } from './organization-provisioning';
 import { buildDefaultOrganizationValues, findFirstActiveOrganizationIdForUser, getDb } from './anonymous-lifecycle/common';
 

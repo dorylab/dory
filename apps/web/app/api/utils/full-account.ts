@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
-import { Locale } from '@/lib/i18n/routing';
+import { ErrorCodes } from '@dory/shared/errors';
+import { Locale } from '@dory/i18n/routing';
 import { translateApi } from './i18n';
 
 type SessionLike = {

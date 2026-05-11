@@ -1,4 +1,4 @@
-import { ConnectionDialect } from '@/types';
+import { ConnectionDialect } from '@dory/shared';
 import type { CopilotEnvelopeMeta } from './copilot-envelope';
 
 export type CopilotFixInput = {

@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
-import { getClient } from '@/lib/database/postgres/client';
-import { schema } from '@/lib/database/schema';
-import type { PostgresDBClient } from '@/types';
-import type { OrganizationProvisioningKind } from '@/lib/database/postgres/schemas';
+import { getClient } from '@dory/database/postgres/client';
+import { schema } from '@dory/database/schema';
+import type { PostgresDBClient } from '@dory/shared';
+import type { OrganizationProvisioningKind } from '@dory/database/postgres/schemas';
 
 type CreateProvisionedOrganizationParams = {
     auth: any;

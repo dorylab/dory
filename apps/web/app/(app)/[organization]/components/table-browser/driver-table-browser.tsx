@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
-import type { SQLTab } from '@/types/tabs';
+import type { SQLTab } from '@dory/shared/types/tabs';
 import { TableOverview } from './components/overview';
 import TableStats from './components/stats';
 import TableStructure from './components/structure';

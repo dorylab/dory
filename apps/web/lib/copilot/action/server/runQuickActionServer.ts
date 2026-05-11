@@ -8,8 +8,8 @@ import { fixSqlError } from './quick-actions/fix-sql-error';
 import { optimizePerformance } from './quick-actions/optimize-performance';
 import { rewriteSql } from './quick-actions/rewrite-sql';
 import { toAggregation } from './quick-actions/to-aggregation';
-import { translate } from '@/lib/i18n/i18n';
-import { Locale, routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { Locale, routing } from '@dory/i18n/routing';
 
 export type QuickActionServer = {
     intent: ActionIntent;

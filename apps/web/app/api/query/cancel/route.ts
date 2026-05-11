@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';

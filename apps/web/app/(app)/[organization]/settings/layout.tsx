@@ -1,6 +1,6 @@
 import type React from 'react';
 import { getTranslations } from 'next-intl/server';
-import { isBillingSettingsVisibleForServer } from '@/lib/runtime/runtime';
+import { isBillingSettingsVisibleForServer } from '@dory/shared/runtime';
 import { OrganizationSettingsTabs } from './organization-settings-tabs';
 
 export default async function OrganizationSettingsLayout({ children, params }: { children: React.ReactNode; params: Promise<{ organization: string }> }) {

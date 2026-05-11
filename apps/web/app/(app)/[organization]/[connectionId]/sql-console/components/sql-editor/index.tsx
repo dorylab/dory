@@ -6,7 +6,7 @@ import { useTheme } from 'next-themes';
 
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { resolveSqlEditorTheme, sqlEditorSettingsAtom } from '@/shared/stores/sql-editor-settings.store';
-import type { UITabPayload } from '@/types/tabs';
+import type { UITabPayload } from '@dory/shared/types/tabs';
 import { useDebouncedTabSave } from './use-debounced-tab-save';
 import { useMonacoTheme } from './use-monaco-theme';
 import { useSqlMonacoEditor } from './use-sql-monaco-editor';

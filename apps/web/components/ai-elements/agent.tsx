@@ -7,7 +7,7 @@ import {
   AccordionTrigger,
 } from "@/registry/new-york-v4/ui/accordion";
 import { Badge } from "@/registry/new-york-v4/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import type { Tool } from "ai";
 import { BotIcon } from "lucide-react";
 import type { ComponentProps } from "react";

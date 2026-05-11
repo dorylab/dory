@@ -3,7 +3,7 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/registry/new-york-v4/ui/accordion';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { TablePartitionStat, TableStats } from '@/types/table-info';
+import { TablePartitionStat, TableStats } from '@dory/shared/types/table-info';
 import MetricItem from './metric-item';
 import { calcRatio, formatBytes, formatNumber } from './formatters';
 import { useTranslations } from 'next-intl';

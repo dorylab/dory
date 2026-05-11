@@ -1,6 +1,6 @@
 import localFont from "next/font/local"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@dory/web-utils"
 
 const fontSans = localFont({
   src: [

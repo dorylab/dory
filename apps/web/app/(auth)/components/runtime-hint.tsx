@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useEnvContext } from 'next-runtime-env';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 type RuntimeHintProps = {
     className?: string;

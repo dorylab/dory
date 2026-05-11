@@ -7,7 +7,7 @@ import {
   HoverCardTrigger,
 } from "@/registry/new-york-v4/ui/hover-card";
 import { Progress } from "@/registry/new-york-v4/ui/progress";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import type { LanguageModelUsage } from "ai";
 import { type ComponentProps, createContext, useContext } from "react";
 import { getUsage } from "tokenlens";

@@ -1,7 +1,7 @@
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { getDBService } from '@/lib/database';
+import { getDBService } from '@dory/database';
 import { resolveDesktopOrganizationAccessResult } from '@/lib/server/authz/authz.desktop';
 import { fetchDesktopCloud } from '@/lib/server/desktop-cloud';
 import { resolveOrganizationAccess } from '@/lib/server/authz';

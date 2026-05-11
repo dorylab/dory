@@ -8,7 +8,7 @@ import sql from 'react-syntax-highlighter/dist/esm/languages/prism/sql';
 import json from 'react-syntax-highlighter/dist/esm/languages/prism/json';
 import { useTheme } from 'next-themes';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { studioPrismDarkTheme, studioPrismLightTheme } from './studio-prism-theme';
 

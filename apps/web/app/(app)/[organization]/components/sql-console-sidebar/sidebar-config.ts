@@ -1,4 +1,4 @@
-import type { ConnectionType } from '@/types/connections';
+import type { ConnectionType } from '@dory/shared/types/connections';
 import type { SidebarConfig } from './types';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 

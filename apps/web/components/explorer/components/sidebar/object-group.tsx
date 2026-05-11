@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import type { GroupState, SidebarListTarget, SidebarObjectKind, SidebarObjectTarget, SidebarSelection, SidebarListKind, TargetOption } from './types';
 
 export type GroupConfig = {

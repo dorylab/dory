@@ -4,7 +4,7 @@ import { useCallback, useEffect } from 'react';
 import type { MutableRefObject, RefObject } from 'react';
 import type * as Monaco from 'monaco-editor';
 import { format as formatSql } from 'sql-formatter';
-import type { ConnectionType } from '@/types/connections';
+import type { ConnectionType } from '@dory/shared/types/connections';
 import { getSqlDialectConfigForConnectionType } from '@/lib/sql/sql-dialect';
 
 interface UseSqlEditorActionsProps {

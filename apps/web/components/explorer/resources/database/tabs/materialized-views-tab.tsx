@@ -10,7 +10,7 @@ import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';

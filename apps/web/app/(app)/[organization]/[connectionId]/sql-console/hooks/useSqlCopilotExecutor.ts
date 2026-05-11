@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner';
 
-import type { UITabPayload } from '@/types/tabs';
+import type { UITabPayload } from '@dory/shared/types/tabs';
 import { CopilotActionExecutor } from '../../chatbot/copilot/action-bridge';
 import { useTranslations } from 'next-intl';
 

@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": ["ES2022", "DOM"],
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "isolatedModules": true,
+        "resolveJsonModule": true,
+        "types": ["node"],
+        "paths": {
+            "@dory/database": ["./src/index.ts"],
+            "@dory/database/*": ["./src/*"],
+            "@dory/shared": ["../shared/src/index.ts"],
+            "@dory/shared/*": ["../shared/src/*"]
+        }
+    },
+    "include": ["src/**/*.ts", "src/**/*.json"],
+    "exclude": ["node_modules"]
+}

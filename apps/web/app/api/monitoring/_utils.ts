@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import z from 'zod';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
-import type { QueryInsightsFilters } from '@/types/monitoring';
+import { ErrorCodes } from '@dory/shared/errors';
+import type { QueryInsightsFilters } from '@dory/shared/types/monitoring';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 export const QueryInsightsFiltersSchema: z.ZodType<QueryInsightsFilters> = z.object({

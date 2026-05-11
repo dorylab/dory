@@ -1,5 +1,5 @@
-import type { ConnectionDialect } from '@/types';
-import type { ConnectionType } from '@/types/connections';
+import type { ConnectionDialect } from '@dory/shared';
+import type { ConnectionType } from '@dory/shared/types/connections';
 import type { SqlLanguage } from 'sql-formatter';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 

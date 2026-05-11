@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export function SessionRecoverySync() {
     const router = useRouter();

@@ -2328,6 +2328,21 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/database@npm:0.1.0, @dory/database@workspace:packages/database":
+  version: 0.0.0-use.local
+  resolution: "@dory/database@workspace:packages/database"
+  dependencies:
+    "@dory/shared": "npm:0.1.0"
+    "@electric-sql/pglite": "npm:^0.4.3"
+    "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
+    "@types/node": "npm:^25.5.2"
+    "@types/pg": "npm:^8.20.0"
+    drizzle-orm: "npm:^0.45.2"
+    pg: "npm:^8.20.0"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
 "@dory/drivers@npm:0.1.0, @dory/drivers@workspace:packages/drivers":
   version: 0.0.0-use.local
   resolution: "@dory/drivers@workspace:packages/drivers"
@@ -2342,6 +2357,46 @@ __metadata:
     pg: "npm:^8.20.0"
     ssh2: "npm:^1.17.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
+"@dory/i18n@npm:0.1.0, @dory/i18n@workspace:packages/i18n":
+  version: 0.0.0-use.local
+  resolution: "@dory/i18n@workspace:packages/i18n"
+  dependencies:
+    "@types/node": "npm:^25.5.2"
+    next: "npm:16.2.3"
+    next-intl: "npm:^4.9.2"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
+"@dory/shared@npm:0.1.0, @dory/shared@workspace:packages/shared":
+  version: 0.0.0-use.local
+  resolution: "@dory/shared@workspace:packages/shared"
+  dependencies:
+    "@types/pg": "npm:^8.20.0"
+    drizzle-orm: "npm:^0.45.2"
+    pg: "npm:^8.20.0"
+    typescript: "npm:^6.0.2"
+    uuid: "npm:^14.0.0"
+  languageName: unknown
+  linkType: soft
+
+"@dory/web-utils@npm:0.1.0, @dory/web-utils@workspace:packages/web-utils":
+  version: 0.0.0-use.local
+  resolution: "@dory/web-utils@workspace:packages/web-utils"
+  dependencies:
+    "@dory/drivers": "npm:0.1.0"
+    "@dory/i18n": "npm:0.1.0"
+    "@dory/shared": "npm:0.1.0"
+    "@types/node": "npm:^25.5.2"
+    "@types/pako": "npm:^2.0.4"
+    clsx: "npm:^2.1.1"
+    next: "npm:16.2.3"
+    pako: "npm:^2.1.0"
+    tailwind-merge: "npm:^3.5.0"
     typescript: "npm:^6.0.2"
   languageName: unknown
   linkType: soft
@@ -23198,7 +23253,11 @@ __metadata:
     "@dnd-kit/modifiers": "npm:^9.0.0"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@dory/database": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"
+    "@dory/i18n": "npm:0.1.0"
+    "@dory/shared": "npm:0.1.0"
+    "@dory/web-utils": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
     "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"

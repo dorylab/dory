@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
-import { splitMultiSQL } from '@/lib/utils/split-multi-sql';
+import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
 import { BaseConnection } from '@dory/drivers/core';
 import { withAutomationHandler } from '../../with-automation-handler';
 import { parseSqlOp, MAX_STATEMENTS } from '../../utils';

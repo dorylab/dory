@@ -1,8 +1,8 @@
-import type { TablePropertiesRow } from '@/types/table-info';
+import type { TablePropertiesRow } from '@dory/shared/types/table-info';
 import { cleanJson } from './clean-json';
 export { buildColumnLinesForPrompt, buildTableSummaryPrompt } from '@/lib/ai/prompts/tasks/schema.summary';
-import { translate } from '@/lib/i18n/i18n';
-import { Locale, routing } from '@/lib/i18n/routing';
+import { translate } from '@dory/i18n/translate';
+import { Locale, routing } from '@dory/i18n/routing';
 
 export type ColumnInput = {
     name: string;

@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import { createAuthProxyHeaders } from '@/lib/auth/auth-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { getDesktopCloudStateFromFlags } from '@/lib/runtime/cloud-capabilities';
-import { getRuntimeForServer } from '@/lib/runtime/runtime';
+import { getRuntimeForServer } from '@dory/shared/runtime';
 
 export type DesktopCloudState = 'available' | 'not_configured' | 'unreachable';
 

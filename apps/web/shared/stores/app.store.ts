@@ -1,8 +1,9 @@
 import { atom, Getter } from 'jotai';
 import { atomWithStorage, createJSONStorage } from 'jotai/utils';
 import { DEFAULT_ACTIVE_TAB } from '../data/app.data';
-import { ConnectionListItem } from '@/types/connections';
-import { UITabPayload } from '@/types/tabs';
+import { ConnectionListItem } from '@dory/shared/types/connections';
+import { UITabPayload } from '@dory/shared/types/tabs';
+import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
 
 // DB State
 const sessionStorageJSON = createJSONStorage(() => sessionStorage);

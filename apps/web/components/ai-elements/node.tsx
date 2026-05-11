@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/registry/new-york-v4/ui/card";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { Handle, Position } from "@xyflow/react";
 import type { ComponentProps } from "react";
 

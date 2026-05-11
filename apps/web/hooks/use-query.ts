@@ -1,7 +1,7 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { useCallback, useState } from 'react';
 import { isSuccess } from '@/lib/result';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { toast } from 'sonner';

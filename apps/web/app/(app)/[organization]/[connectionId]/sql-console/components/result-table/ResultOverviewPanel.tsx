@@ -8,7 +8,7 @@ import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import type { ResultColumnMeta, ResultSetStatsV1 } from '@/lib/client/type';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import {
     buildInsights,
     buildInsightRewriteRequest,

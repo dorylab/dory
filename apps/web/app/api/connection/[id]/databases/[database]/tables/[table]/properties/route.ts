@@ -3,9 +3,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import z from 'zod';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
-import { TablePropertiesRow } from '@/types/table-info';
+import { TablePropertiesRow } from '@dory/shared/types/table-info';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 

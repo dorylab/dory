@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/registry/new-york-v4/ui/radio-grou
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 export default function SSHConnectionForm(props: { form: UseFormReturn<any> }) {
     const { form } = props;

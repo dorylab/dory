@@ -2,7 +2,7 @@
 
 import type { ElementType } from 'react';
 import { useTranslations } from 'next-intl';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Badge } from '@/registry/new-york-v4/ui/badge';

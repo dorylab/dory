@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import type { QueryInsightsFilters, QueryInsightsSummary, QueryTimelinePoint, QueryInsightsRow } from '@/types/monitoring';
+import type { QueryInsightsFilters, QueryInsightsSummary, QueryTimelinePoint, QueryInsightsRow } from '@dory/shared/types/monitoring';
 import { fetchQueryInsightsSummary, fetchQueryInsightsTimeline, fetchQueryInsightsRecentQueries, QueryListPagination, fetchQueryInsightsRows, fetchQueryInsightsSlowQueries, fetchQueryInsightsErrorQueries } from '../api';
 import { useTranslations } from 'next-intl';
 

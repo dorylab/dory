@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { debounce } from 'lodash-es';
 import type { DebouncedFunc } from 'lodash-es';
 
-import type { UITabPayload } from '@/types/tabs';
+import type { UITabPayload } from '@dory/shared/types/tabs';
 
 type UpdateTab = (tabId: string, patch: Partial<UITabPayload>) => void;
 

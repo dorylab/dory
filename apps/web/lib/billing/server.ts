@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getDBService } from '@/lib/database';
+import { getDBService } from '@dory/database';
 import { normalizeOrganizationBillingStatus } from './normalize';
 
 export async function getOrganizationBillingStatus(referenceId: string, canManageBilling: boolean) {

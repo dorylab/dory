@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
-import { cn } from '@/lib/utils';
-import type { QueryInsightsFilters, QueryInsightsSummary } from '@/types/monitoring';
+import { cn } from '@dory/web-utils';
+import type { QueryInsightsFilters, QueryInsightsSummary } from '@dory/shared/types/monitoring';
 import { useLocale, useTranslations } from 'next-intl';
 import { formatNumber } from '../../utils';
 

@@ -1,4 +1,4 @@
-import { QueryInsightsFilters } from '@/types/monitoring';
+import { QueryInsightsFilters } from '@dory/shared/types/monitoring';
 
 
 export function formatBytes(bytes: number): string {
@@ -35,7 +35,7 @@ export function getTimeRangeLabel(
     }
 }
 
-import type { QueryTimelinePoint, TimeRange } from '@/types/monitoring';
+import type { QueryTimelinePoint, TimeRange } from '@dory/shared/types/monitoring';
 import { TIME_RANGE_BUCKET_MS } from './constants';
 
 export function fillTimelineBuckets(points: QueryTimelinePoint[], timeRange: TimeRange): QueryTimelinePoint[] {

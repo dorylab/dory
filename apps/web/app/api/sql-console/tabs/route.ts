@@ -1,7 +1,7 @@
 
-import { bodySchema } from '@/lib/database/postgres/impl/sql-console/tabs/tab-states/zod';
-import { getConnectionIdFromRequest } from '@/lib/utils/request';
-import { TabResultMetaPayload } from '@/types/tabs';
+import { bodySchema } from '@dory/database/postgres/impl/sql-console/tabs/tab-states/zod';
+import { getConnectionIdFromRequest } from '@dory/web-utils/request';
+import { TabResultMetaPayload } from '@dory/shared/types/tabs';
 import { NextResponse } from 'next/server';
 import z from 'zod';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';

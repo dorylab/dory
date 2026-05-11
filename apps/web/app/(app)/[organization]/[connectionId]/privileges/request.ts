@@ -1,6 +1,6 @@
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import type {
     ClickHouseRole,
     ClickHouseUser,
@@ -8,7 +8,7 @@ import type {
     CreateUserPayload,
     UpdateRolePayload,
     UpdateUserPayload,
-} from '@/types/privileges';
+} from '@dory/shared/types/privileges';
 
 type RequestOptions = {
     connectionId?: string;

@@ -3,7 +3,7 @@ import createNextIntlPlugin from 'next-intl/plugin';
 import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin';
 import path from 'path';
 
-const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const runtime = process.env.DORY_RUNTIME?.trim() || process.env.NEXT_PUBLIC_DORY_RUNTIME?.trim() || 'web';
 const isDesktopRuntime = runtime === 'desktop';
 const desktopRuntimeAliases: Record<string, string> = isDesktopRuntime
@@ -37,9 +37,18 @@ type NextWebpackOptionsShape = {
 
 const nextConfig = {
     output: 'standalone',
+    transpilePackages: ['@dory/database', '@dory/i18n', '@dory/shared', '@dory/web-utils'],
     serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron'],
+    outputFileTracingRoot: path.join(__dirname, '../../'),
     outputFileTracingIncludes: {
-        '/*': ['./registry/**/*', './public/resources/demo.sqlite'],
+        '/*': [
+            './registry/**/*',
+            './public/resources/demo.sqlite',
+            '../../packages/database/src/pglite/migrations.json',
+            '../../packages/database/src/postgres/migrations/**/*',
+            '../../packages/database/src/pglite/migrations/**/*',
+            '../../packages/i18n/src/locales/*.json',
+        ],
     },
     logging: {
         fetches: {

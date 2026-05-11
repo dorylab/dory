@@ -1,8 +1,8 @@
 // lib/api/with-organization-handler.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { getDBService } from '@/lib/database';
-import { ErrorCodes } from '@/lib/errors';
+import { getDBService } from '@dory/database';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { canManageOrganization, canWriteWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';

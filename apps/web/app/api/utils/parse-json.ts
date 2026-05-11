@@ -1,7 +1,7 @@
 // lib/api/parse-json.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { z, ZodSchema } from 'zod';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { translateApi, getApiLocale } from '@/app/api/utils/i18n';
 

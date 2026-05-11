@@ -3,7 +3,7 @@
 import { Boxes, ChevronDown, ChevronRight, Database, Eye, FolderTree, Layers, Loader2, Sigma, Table } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 import { ObjectGroup } from './object-group';
 import type { GroupConfig } from './object-group';

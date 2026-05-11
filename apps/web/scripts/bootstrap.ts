@@ -3,12 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { migratePgliteDB } from '../lib/database/pglite/migrate-pglite';
-import { getDatabaseProvider } from '../lib/database/provider';
-import { ensureFileUrl } from '../lib/database/pglite/url';
-import { isDesktopRuntime } from '../lib/runtime/runtime';
+import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
+import { getDatabaseProvider } from '@dory/database/provider';
+import { ensureFileUrl } from '@dory/database/pglite/url';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 import { resolveDemoSqlitePath } from '../lib/demo/paths';
-import { resetPgliteClient } from '../lib/database/postgres/client/pglite';
+import { resetPgliteClient } from '@dory/database/postgres/client/pglite';
 
 const DEFAULT_PGLITE_DB_PATH = '/app/data/dory';
 const DESKTOP_PGLITE_DB_PATH = './data/dory';

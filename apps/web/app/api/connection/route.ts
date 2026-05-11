@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { handleApiError } from '../utils/handle-error';
 import { parseJsonBody } from '../utils/parse-json';
 import { withManagedOrganizationHandler, withOrganizationHandler } from '../utils/with-organization-handler';

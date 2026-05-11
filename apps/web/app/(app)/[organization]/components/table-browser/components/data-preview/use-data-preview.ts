@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { SQLTab } from '@/types/tabs';
+import { SQLTab } from '@dory/shared/types/tabs';
 
 type DataPreviewManagerProps = {
     tabs: SQLTab[];

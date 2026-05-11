@@ -3,21 +3,21 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { and, eq, gt, asc, sql } from 'drizzle-orm';
-import type { DBClient } from '@/types';
+import type { DBClient } from '@dory/shared';
 import { getDBClient } from './pglite/client';
 
 // ====== Table schema (new) ======
 import { querySession, queryResultSet, queryResultPage } from './pglite/schemas';
 
 // Utilities and types
-import { createWorkerPool } from '../utils/worker-pool';
+import { createWorkerPool } from '@dory/web-utils/worker-pool';
 import { estimateBytes, isQuotaLikeError, idleYield, sleep, toDate3 } from './utils';
 import type { DBHook, ResultSetMeta, TabResult } from './type';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { dataVersionAtom, bumpDataVersionAtom } from './client.store';
-import { encodeRows, toArrayBuffer, decodeRow } from '../utils/binary-codec';
-import { translate } from '@/lib/i18n/i18n';
-import { getClientLocale } from '@/lib/i18n/client-locale';
+import { encodeRows, toArrayBuffer, decodeRow } from '@dory/web-utils/binary-codec';
+import { translate } from '@dory/i18n/translate';
+import { getClientLocale } from '@dory/i18n/client';
 import { profileResultSet, type ResultSetStatsV1, type ResultSetViewState } from './result-set-ai';
 
 // ---------------- Concurrency and pagination params ----------------

@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { OverviewItem } from './types';
 import { useLocale, useTranslations } from 'next-intl';
 

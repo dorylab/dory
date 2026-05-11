@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { SQLTab } from '@/types/tabs';
+import { SQLTab } from '@dory/shared/types/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { useTranslations } from 'next-intl';

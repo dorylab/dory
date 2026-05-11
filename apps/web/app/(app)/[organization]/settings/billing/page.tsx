@@ -3,7 +3,7 @@ import {
     isBillingManagementAvailableForServer,
     isBillingSettingsVisibleForServer,
     isDesktopBillingHandoffRuntimeForServer,
-} from '@/lib/runtime/runtime';
+} from '@dory/shared/runtime';
 import BillingSettingsPageClient from './page.client';
 
 export default async function OrganizationBillingSettingsPage({ params }: { params: Promise<{ organization: string }> }) {

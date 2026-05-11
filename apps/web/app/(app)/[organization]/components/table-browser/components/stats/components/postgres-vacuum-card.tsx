@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import type { PostgresVacuumHealth } from '@/types/table-info';
+import type { PostgresVacuumHealth } from '@dory/shared/types/table-info';
 import MetricItem from './metric-item';
 import { formatNumber } from './formatters';
 import { useTranslations } from 'next-intl';

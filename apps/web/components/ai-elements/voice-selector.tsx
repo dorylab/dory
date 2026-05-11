@@ -19,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/registry/new-york-v4/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import {
   CircleSmallIcon,
   LoaderCircleIcon,

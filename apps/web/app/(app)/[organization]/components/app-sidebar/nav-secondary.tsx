@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/registry/new-york-v4/ui/sidebar';
 import { SidebarSettingsEntry, SidebarThemeEntry } from './nav-settings';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 export function NavSecondary({
     items,

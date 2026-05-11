@@ -8,7 +8,7 @@ import {
   type SpringOptions,
 } from 'motion/react';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 
 type BubbleColors = {
   first: string;

@@ -8,9 +8,9 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { ToggleGroup, ToggleGroupItem } from '@/registry/new-york-v4/ui/toggle-group';
 import { RefreshCcw, RotateCcw } from 'lucide-react';
-import type { TimeRange, QueryType } from '@/types/monitoring';
-import type { ClickHouseUser } from '@/types/privileges';
-import type { ResponseObject } from '@/types';
+import type { TimeRange, QueryType } from '@dory/shared/types/monitoring';
+import type { ClickHouseUser } from '@dory/shared/types/privileges';
+import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { useAtomValue } from 'jotai';

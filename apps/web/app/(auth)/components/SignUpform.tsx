@@ -1,7 +1,7 @@
 'use client';
 import { Loader2 } from 'lucide-react';
 import posthog from 'posthog-js';
-import { cn } from '@/lib/utils';
+import { cn } from '@dory/web-utils';
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Button } from '@/registry/new-york-v4/ui/button';

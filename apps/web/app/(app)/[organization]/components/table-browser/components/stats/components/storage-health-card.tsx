@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { TableMutationInfo, TableStats } from '@/types/table-info';
+import { TableMutationInfo, TableStats } from '@dory/shared/types/table-info';
 import MetricItem from './metric-item';
 import { formatBytes, formatNumber } from './formatters';
 import { useTranslations } from 'next-intl';

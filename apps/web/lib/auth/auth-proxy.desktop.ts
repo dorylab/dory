@@ -1,5 +1,5 @@
 import 'server-only';
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 
 export function shouldProxyAuthRequest(): boolean {

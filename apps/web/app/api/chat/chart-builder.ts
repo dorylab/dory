@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { translateApi } from '@/app/api/utils/i18n';
 import { buildResultAutoChartProfile, toChartResultPart } from '@/lib/analysis/result-chart-profile';
-import { Locale } from '@/lib/i18n/routing';
+import { Locale } from '@dory/i18n/routing';
 
 function createChartInputSchema(locale: Locale) {
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);

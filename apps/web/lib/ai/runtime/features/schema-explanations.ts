@@ -1,6 +1,6 @@
 import { generateText, runAiWithCache } from '@/lib/ai/gateway';
 
-import { computeSchemaHash } from '@/lib/utils/compute-schema-hash';
+import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import {
     buildSchemaExplanationPrompt,
     normalizeSchemaExplanationPayload,

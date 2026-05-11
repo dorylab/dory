@@ -7,7 +7,7 @@ import {
   CollapsibleTrigger,
 } from "@/registry/new-york-v4/ui/collapsible";
 import { ScrollArea } from "@/registry/new-york-v4/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { ChevronDownIcon, PaperclipIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 

@@ -361,11 +361,11 @@ function buildTraceRecord(args: {
     };
 }
 
-let aiUsageDepsPromise: Promise<typeof import('@/lib/database')> | null = null;
+let aiUsageDepsPromise: Promise<typeof import('@dory/database')> | null = null;
 
 async function getAiUsageDeps() {
     if (!aiUsageDepsPromise) {
-        aiUsageDepsPromise = import('@/lib/database');
+        aiUsageDepsPromise = import('@dory/database');
     }
     return aiUsageDepsPromise;
 }

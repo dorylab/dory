@@ -3,11 +3,11 @@ import 'dotenv/config'; // Equivalent to dotenv.config(), but more reliable
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { migratePgliteDB } from '@/lib/database/pglite/migrate-pglite';
-import { getDatabaseProvider } from '@/lib/database/provider';
-import { ensureFileUrl, extractFilePath } from '@/lib/database/pglite/url';
+import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
+import { getDatabaseProvider } from '@dory/database/provider';
+import { ensureFileUrl, extractFilePath } from '@dory/database/pglite/url';
 import { resolveDemoSqlitePath } from '@/lib/demo/paths';
-import { resetPgliteClient } from '@/lib/database/postgres/client/pglite';
+import { resetPgliteClient } from '@dory/database/postgres/client/pglite';
 
 async function ensureDirForFile(filePath: string) {
     const dir = path.dirname(filePath);

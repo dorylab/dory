@@ -1,9 +1,9 @@
-import { getDBService } from '@/lib/database';
+import { getDBService } from '@dory/database';
 import '@/lib/drivers/register-database-drivers';
 
 import { ensureDriverPool, getDriverPool, type DriverPoolEntry } from '@dory/drivers/core';
 import { buildStoredConnectionConfig, pickConnectionIdentity } from '@dory/drivers/config';
-import type { ConnectionSsh } from '@/types/connections';
+import type { ConnectionSsh } from '@dory/shared/types/connections';
 import { resolveStoredSqlitePath } from '@/lib/demo/paths';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };

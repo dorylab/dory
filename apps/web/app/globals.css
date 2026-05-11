@@ -4,8 +4,6 @@
 
 @import 'react-day-picker/dist/style.css';
 
-@import './themes.css';
-
 @custom-variant dark (&:is(.dark *));
 
 @custom-variant fixed (&:is(.layout-fixed *));

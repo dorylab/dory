@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 import type * as Monaco from 'monaco-editor';
 
-import type { UITabPayload } from '@/types/tabs';
+import type { UITabPayload } from '@dory/shared/types/tabs';
 
 export function useSyncEditorContent(
     editorRef: MutableRefObject<Monaco.editor.IStandaloneCodeEditor | null>,

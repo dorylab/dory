@@ -1,9 +1,9 @@
 import { isSuccess } from '@/lib/result';
-import type { ResponseObject } from '@/types';
-import { ConnectionListItem, CreateConnectionPayload } from '@/types/connections';
+import type { ResponseObject } from '@dory/shared';
+import { ConnectionListItem, CreateConnectionPayload } from '@dory/shared/types/connections';
 import { authFetch } from '@/lib/client/auth-fetch';
-import { translate } from '@/lib/i18n/i18n';
-import { getClientLocale } from '@/lib/i18n/client-locale';
+import { translate } from '@dory/i18n/translate';
+import { getClientLocale } from '@dory/i18n/client';
 
 async function fetchJsonResponse<T>(
     input: RequestInfo,

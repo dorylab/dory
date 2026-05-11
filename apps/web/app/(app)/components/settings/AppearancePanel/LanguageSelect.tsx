@@ -4,9 +4,9 @@ import * as React from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { normalizeLocale, webLocaleToElectronLocale, writeLocaleCookie } from '@/lib/i18n/locale-storage';
-import type { Locale } from '@/lib/i18n/routing';
-import { isDesktopRuntime } from '@/lib/runtime/runtime';
+import { normalizeLocale, webLocaleToElectronLocale, writeLocaleCookie } from '@dory/i18n/locale-storage';
+import type { Locale } from '@dory/i18n/routing';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 const LANGUAGE_OPTIONS: Array<{ locale: Locale; label: string }> = [
     { locale: 'en', label: 'English' },

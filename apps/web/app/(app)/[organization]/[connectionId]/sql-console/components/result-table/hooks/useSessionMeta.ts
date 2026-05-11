@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { SessionStatus } from "../types";
+import { SessionStatus } from '../types';
 import { makeCacheKey, touchCache, RESULTS_CACHE } from "./useResultsCache";
 
 export function useSessionMeta(params: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/registry/new-york-v4/ui/button";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { ArrowDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 import { useCallback } from "react";

@@ -15,6 +15,11 @@ COPY apps/web/package.json ./apps/web/
 COPY apps/electron/package.json ./apps/electron/
 COPY apps/admin/package.json ./apps/admin/
 COPY packages/auth-core/package.json ./packages/auth-core/
+COPY packages/database/package.json ./packages/database/
+COPY packages/drivers/package.json ./packages/drivers/
+COPY packages/i18n/package.json ./packages/i18n/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/web-utils/package.json ./packages/web-utils/
 
 # Install dependencies (this layer is cached unless dependency files change)
 RUN yarn install --immutable

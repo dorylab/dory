@@ -1,0 +1,162 @@
+[
+  {
+    "sql": [
+      "CREATE TABLE \"tabs\" (\n\t\"tab_id\" text PRIMARY KEY NOT NULL,\n\t\"tab_type\" text DEFAULT 'sql' NOT NULL,\n\t\"tab_name\" text DEFAULT 'New Query' NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"database_name\" text,\n\t\"table_name\" text,\n\t\"active_sub_tab\" text DEFAULT 'data' NOT NULL,\n\t\"content\" text DEFAULT '' NOT NULL,\n\t\"state\" text,\n\t\"result_meta\" text,\n\t\"order_index\" integer DEFAULT 0 NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"account\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"account_id\" text NOT NULL,\n\t\"provider_id\" text NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"access_token\" text,\n\t\"refresh_token\" text,\n\t\"id_token\" text,\n\t\"access_token_expires_at\" timestamp with time zone,\n\t\"refresh_token_expires_at\" timestamp with time zone,\n\t\"scope\" text,\n\t\"password\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"invitation\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"email\" text NOT NULL,\n\t\"role\" text NOT NULL,\n\t\"status\" text DEFAULT 'pending' NOT NULL,\n\t\"expires_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"inviter_id\" text NOT NULL\n);\n",
+      "\nCREATE TABLE \"jwks\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"alg\" text,\n\t\"crv\" text,\n\t\"public_key\" text NOT NULL,\n\t\"private_key\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"expires_at\" timestamp with time zone\n);\n",
+      "\nCREATE TABLE \"session\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"expires_at\" timestamp with time zone NOT NULL,\n\t\"token\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"ip_address\" text,\n\t\"user_agent\" text,\n\t\"user_id\" text NOT NULL,\n\t\"active_organization_id\" text,\n\tCONSTRAINT \"session_token_unique\" UNIQUE(\"token\")\n);\n",
+      "\nCREATE TABLE \"user\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"name\" text NOT NULL,\n\t\"email\" text NOT NULL,\n\t\"email_verified\" boolean NOT NULL,\n\t\"image\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"user_email_unique\" UNIQUE(\"email\")\n);\n",
+      "\nCREATE TABLE \"verification\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"identifier\" text NOT NULL,\n\t\"value\" text NOT NULL,\n\t\"expires_at\" timestamp with time zone NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"chat_messages\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"session_id\" text NOT NULL,\n\t\"user_id\" text,\n\t\"connection_id\" text,\n\t\"role\" text NOT NULL,\n\t\"parts\" jsonb NOT NULL,\n\t\"metadata\" jsonb,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"chat_session_state\" (\n\t\"session_id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text,\n\t\"active_tab_id\" text,\n\t\"active_database\" text,\n\t\"active_schema\" text,\n\t\"editor_context\" jsonb,\n\t\"last_run_summary\" jsonb,\n\t\"stable_context\" jsonb,\n\t\"revision\" integer DEFAULT 0 NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL\n);\n",
+      "\nCREATE TABLE \"chat_sessions\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"type\" text DEFAULT 'copilot' NOT NULL,\n\t\"tab_id\" text,\n\t\"connection_id\" text,\n\t\"active_database\" text,\n\t\"active_schema\" text,\n\t\"title\" text,\n\t\"settings\" jsonb,\n\t\"metadata\" jsonb,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL,\n\t\"archived_at\" timestamp with time zone,\n\t\"last_message_at\" timestamp with time zone,\n\tCONSTRAINT \"uq_chat_sessions_id_organization\" UNIQUE(\"id\",\"organization_id\"),\n\tCONSTRAINT \"ck_chat_sessions_type_tab\" CHECK (((\"chat_sessions\".\"type\" = 'copilot' AND \"chat_sessions\".\"tab_id\" IS NOT NULL) OR (\"chat_sessions\".\"type\" <> 'copilot' AND \"chat_sessions\".\"tab_id\" IS NULL)))\n);\n",
+      "\nCREATE TABLE \"query_audit\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"tab_id\" text,\n\t\"user_id\" text NOT NULL,\n\t\"source\" text NOT NULL,\n\t\"connection_id\" text,\n\t\"connection_name\" text,\n\t\"database_name\" text,\n\t\"query_id\" text,\n\t\"sql_text\" text NOT NULL,\n\t\"status\" text NOT NULL,\n\t\"error_message\" text,\n\t\"duration_ms\" integer,\n\t\"rows_read\" integer,\n\t\"bytes_read\" integer,\n\t\"rows_written\" integer,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"extra_json\" jsonb\n);\n",
+      "\nCREATE TABLE \"members\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"role\" text DEFAULT 'member' NOT NULL,\n\t\"status\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"joined_at\" timestamp with time zone\n);\n",
+      "\nCREATE TABLE \"organizations\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"name\" text NOT NULL,\n\t\"owner_user_id\" text NOT NULL,\n\t\"slug\" text,\n\t\"logo\" text,\n\t\"metadata\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"connection_identities\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"created_by_user_id\" text,\n\t\"connection_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"source\" text DEFAULT 'local' NOT NULL,\n\t\"cloud_id\" text,\n\t\"sync_status\" text DEFAULT 'local_only' NOT NULL,\n\t\"last_synced_at\" timestamp with time zone,\n\t\"remote_updated_at\" timestamp with time zone,\n\t\"sync_error\" text,\n\t\"name\" text NOT NULL,\n\t\"username\" text NOT NULL,\n\t\"role\" text,\n\t\"options\" text DEFAULT '{}' NOT NULL,\n\t\"is_default\" boolean DEFAULT false NOT NULL,\n\t\"database\" text,\n\t\"enabled\" boolean DEFAULT true NOT NULL,\n\t\"status\" text DEFAULT 'active' NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL,\n\t\"deleted_at\" timestamp with time zone\n);\n",
+      "\nCREATE TABLE \"connection_identity_secrets\" (\n\t\"identity_id\" text PRIMARY KEY NOT NULL,\n\t\"password_encrypted\" text,\n\t\"vault_ref\" text,\n\t\"secret_ref\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL\n);\n",
+      "\nCREATE TABLE \"connection_ssh\" (\n\t\"connection_id\" text PRIMARY KEY NOT NULL,\n\t\"enabled\" boolean DEFAULT false NOT NULL,\n\t\"host\" text,\n\t\"port\" integer,\n\t\"username\" text,\n\t\"auth_method\" text,\n\t\"password_encrypted\" text,\n\t\"private_key_encrypted\" text,\n\t\"passphrase_encrypted\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL,\n\tCONSTRAINT \"chk_connection_ssh_port\" CHECK (\"connection_ssh\".\"port\" IS NULL OR (\"connection_ssh\".\"port\" BETWEEN 1 AND 65535))\n);\n",
+      "\nCREATE TABLE \"connections\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"created_by_user_id\" text,\n\t\"organization_id\" text NOT NULL,\n\t\"source\" text DEFAULT 'local' NOT NULL,\n\t\"cloud_id\" text,\n\t\"sync_status\" text DEFAULT 'local_only' NOT NULL,\n\t\"last_synced_at\" timestamp with time zone,\n\t\"remote_updated_at\" timestamp with time zone,\n\t\"sync_error\" text,\n\t\"type\" text NOT NULL,\n\t\"engine\" text NOT NULL,\n\t\"name\" text DEFAULT 'Untitled connection' NOT NULL,\n\t\"description\" text,\n\t\"host\" text NOT NULL,\n\t\"port\" integer NOT NULL,\n\t\"http_port\" integer,\n\t\"database\" text,\n\t\"options\" text DEFAULT '{}' NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"config_version\" integer DEFAULT 1 NOT NULL,\n\t\"validation_errors\" text DEFAULT '{}',\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL,\n\t\"deleted_at\" timestamp with time zone,\n\t\"last_used_at\" timestamp with time zone,\n\t\"last_check_status\" text DEFAULT 'unknown' NOT NULL,\n\t\"last_check_at\" timestamp with time zone,\n\t\"last_check_latency_ms\" integer,\n\t\"last_check_error\" text,\n\t\"environment\" text DEFAULT '',\n\t\"tags\" text DEFAULT '' NOT NULL,\n\tCONSTRAINT \"chk_connections_port\" CHECK (\"connections\".\"port\" IS NULL OR (\"connections\".\"port\" BETWEEN 1 AND 65535)),\n\tCONSTRAINT \"chk_connections_http_port\" CHECK (\"connections\".\"http_port\" IS NULL OR (\"connections\".\"http_port\" BETWEEN 1 AND 65535))\n);\n",
+      "\nCREATE TABLE \"ai_schema_cache\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"catalog\" text DEFAULT 'default' NOT NULL,\n\t\"database_name\" text,\n\t\"table_name\" text,\n\t\"feature\" text NOT NULL,\n\t\"db_type\" text,\n\t\"schema_hash\" text NOT NULL,\n\t\"model\" text NOT NULL,\n\t\"prompt_version\" integer DEFAULT 1 NOT NULL,\n\t\"payload\" jsonb NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"saved_queries\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"title\" text NOT NULL,\n\t\"description\" text,\n\t\"sql_text\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"context\" jsonb DEFAULT '{}'::jsonb NOT NULL,\n\t\"tags\" text[] DEFAULT '{}'::text[] NOT NULL,\n\t\"folder_id\" text,\n\t\"position\" integer DEFAULT 0 NOT NULL,\n\t\"work_id\" uuid,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"archived_at\" timestamp with time zone\n);\n",
+      "\nCREATE TABLE \"saved_query_folders\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"user_id\" text NOT NULL,\n\t\"name\" text NOT NULL,\n\t\"position\" integer DEFAULT 0 NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"ai_usage_events\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"request_id\" text NOT NULL,\n\t\"organization_id\" text,\n\t\"user_id\" text,\n\t\"feature\" text,\n\t\"model\" text,\n\t\"prompt_version\" integer,\n\t\"algo_version\" integer,\n\t\"status\" text DEFAULT 'ok' NOT NULL,\n\t\"error_code\" text,\n\t\"error_message\" text,\n\t\"gateway\" text,\n\t\"provider\" text,\n\t\"cost_micros\" integer,\n\t\"trace_id\" text,\n\t\"span_id\" text,\n\t\"input_tokens\" integer,\n\t\"output_tokens\" integer,\n\t\"reasoning_tokens\" integer,\n\t\"cached_input_tokens\" integer,\n\t\"total_tokens\" integer,\n\t\"usage_json\" jsonb,\n\t\"latency_ms\" integer,\n\t\"from_cache\" boolean DEFAULT false NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\tCONSTRAINT \"ck_ai_usage_events_status\" CHECK (\"ai_usage_events\".\"status\" in ('ok', 'error', 'aborted'))\n);\n",
+      "\nCREATE TABLE \"ai_usage_traces\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"request_id\" text NOT NULL,\n\t\"organization_id\" text,\n\t\"user_id\" text,\n\t\"feature\" text,\n\t\"model\" text,\n\t\"input_text\" text,\n\t\"output_text\" text,\n\t\"input_json\" jsonb,\n\t\"output_json\" jsonb,\n\t\"redacted\" boolean DEFAULT true NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"expires_at\" timestamp with time zone DEFAULT now() + interval '180 days' NOT NULL\n);\n",
+      "\nCREATE TABLE \"sync_operations\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"entity_type\" text DEFAULT 'connection' NOT NULL,\n\t\"entity_id\" text NOT NULL,\n\t\"operation\" text NOT NULL,\n\t\"payload\" text DEFAULT '{}' NOT NULL,\n\t\"status\" text DEFAULT 'pending' NOT NULL,\n\t\"retry_count\" integer DEFAULT 0 NOT NULL,\n\t\"last_attempt_at\" timestamp with time zone,\n\t\"synced_at\" timestamp with time zone,\n\t\"error_message\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_invitation_organization_id\" ON \"invitation\" USING btree (\"organization_id\");",
+      "\nCREATE INDEX \"idx_invitation_email\" ON \"invitation\" USING btree (\"email\");",
+      "\nCREATE INDEX \"idx_invitation_status\" ON \"invitation\" USING btree (\"status\");",
+      "\nCREATE INDEX \"idx_chat_messages_session_time\" ON \"chat_messages\" USING btree (\"organization_id\",\"session_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_chat_messages_session_id\" ON \"chat_messages\" USING btree (\"organization_id\",\"session_id\",\"id\");",
+      "\nCREATE INDEX \"idx_chat_messages_organization_conn_time\" ON \"chat_messages\" USING btree (\"organization_id\",\"connection_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_chat_state_organization_conn\" ON \"chat_session_state\" USING btree (\"organization_id\",\"connection_id\");",
+      "\nCREATE INDEX \"idx_chat_state_organization_tab\" ON \"chat_session_state\" USING btree (\"organization_id\",\"active_tab_id\");",
+      "\nCREATE INDEX \"idx_chat_state_organization_updated\" ON \"chat_session_state\" USING btree (\"organization_id\",\"updated_at\");",
+      "\nCREATE INDEX \"idx_chat_sessions_list\" ON \"chat_sessions\" USING btree (\"organization_id\",\"user_id\",\"archived_at\",\"last_message_at\");",
+      "\nCREATE INDEX \"idx_chat_sessions_organization_user_type\" ON \"chat_sessions\" USING btree (\"organization_id\",\"user_id\",\"type\");",
+      "\nCREATE INDEX \"idx_chat_sessions_organization_conn\" ON \"chat_sessions\" USING btree (\"organization_id\",\"connection_id\");",
+      "\nCREATE INDEX \"idx_chat_sessions_organization_db\" ON \"chat_sessions\" USING btree (\"organization_id\",\"active_database\");",
+      "\nCREATE UNIQUE INDEX \"uidx_chat_sessions_copilot_tab\" ON \"chat_sessions\" USING btree (\"organization_id\",\"user_id\",\"tab_id\") WHERE \"chat_sessions\".\"type\" = 'copilot';",
+      "\nCREATE INDEX \"idx_organization_created\" ON \"query_audit\" USING btree (\"organization_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_source_created\" ON \"query_audit\" USING btree (\"source\",\"created_at\");",
+      "\nCREATE INDEX \"idx_query_id\" ON \"query_audit\" USING btree (\"query_id\");",
+      "\nCREATE UNIQUE INDEX \"members_organization_id_user_id_unique\" ON \"members\" USING btree (\"organization_id\",\"user_id\");",
+      "\nCREATE INDEX \"idx_members_organization\" ON \"members\" USING btree (\"organization_id\");",
+      "\nCREATE INDEX \"idx_members_user\" ON \"members\" USING btree (\"user_id\");",
+      "\nCREATE UNIQUE INDEX \"organizations_slug_unique\" ON \"organizations\" USING btree (\"slug\");",
+      "\nCREATE UNIQUE INDEX \"uniq_conn_identity_connection_name\" ON \"connection_identities\" USING btree (\"connection_id\",\"name\") WHERE \"connection_identities\".\"deleted_at\" IS NULL;",
+      "\nCREATE UNIQUE INDEX \"uniq_conn_identity_cloud_id\" ON \"connection_identities\" USING btree (\"cloud_id\") WHERE \"connection_identities\".\"cloud_id\" IS NOT NULL;",
+      "\nCREATE UNIQUE INDEX \"uniq_conn_identity_default_per_connection\" ON \"connection_identities\" USING btree (\"connection_id\") WHERE \"connection_identities\".\"is_default\" = true AND \"connection_identities\".\"deleted_at\" IS NULL;",
+      "\nCREATE INDEX \"idx_conn_identity_connection_id\" ON \"connection_identities\" USING btree (\"connection_id\");",
+      "\nCREATE INDEX \"idx_conn_identity_created_by_user_id\" ON \"connection_identities\" USING btree (\"created_by_user_id\");",
+      "\nCREATE INDEX \"idx_conn_identity_organization_id\" ON \"connection_identities\" USING btree (\"organization_id\");",
+      "\nCREATE INDEX \"idx_conn_identity_enabled\" ON \"connection_identities\" USING btree (\"enabled\");",
+      "\nCREATE INDEX \"idx_conn_identity_sync_status\" ON \"connection_identities\" USING btree (\"sync_status\");",
+      "\nCREATE INDEX \"idx_conn_identity_organization_cloud_id\" ON \"connection_identities\" USING btree (\"organization_id\",\"cloud_id\");",
+      "\nCREATE UNIQUE INDEX \"uniq_connections_organization_name\" ON \"connections\" USING btree (\"organization_id\",\"name\") WHERE \"connections\".\"deleted_at\" IS NULL;",
+      "\nCREATE UNIQUE INDEX \"uniq_connections_cloud_id\" ON \"connections\" USING btree (\"cloud_id\") WHERE \"connections\".\"cloud_id\" IS NOT NULL;",
+      "\nCREATE INDEX \"idx_connections_organization_id_status\" ON \"connections\" USING btree (\"organization_id\",\"status\");",
+      "\nCREATE INDEX \"idx_connections_created_by_user_id\" ON \"connections\" USING btree (\"created_by_user_id\");",
+      "\nCREATE INDEX \"idx_connections_sync_status\" ON \"connections\" USING btree (\"sync_status\");",
+      "\nCREATE INDEX \"idx_connections_organization_cloud_id\" ON \"connections\" USING btree (\"organization_id\",\"cloud_id\");",
+      "\nCREATE INDEX \"idx_connections_organization_env\" ON \"connections\" USING btree (\"organization_id\",\"environment\");",
+      "\nCREATE UNIQUE INDEX \"uniq_ai_cache_organization_conn_catalog_feature_schema_model_prompt\" ON \"ai_schema_cache\" USING btree (\"organization_id\",\"connection_id\",\"catalog\",\"feature\",\"schema_hash\",\"model\",\"prompt_version\");",
+      "\nCREATE INDEX \"idx_ai_cache_organization_conn\" ON \"ai_schema_cache\" USING btree (\"organization_id\",\"connection_id\");",
+      "\nCREATE INDEX \"idx_ai_cache_catalog_db_table\" ON \"ai_schema_cache\" USING btree (\"catalog\",\"database_name\",\"table_name\");",
+      "\nCREATE INDEX \"idx_ai_cache_schema_hash\" ON \"ai_schema_cache\" USING btree (\"schema_hash\");",
+      "\nCREATE INDEX \"idx_saved_queries_organization_user\" ON \"saved_queries\" USING btree (\"organization_id\",\"user_id\");",
+      "\nCREATE INDEX \"idx_saved_queries_updated_at\" ON \"saved_queries\" USING btree (\"updated_at\");",
+      "\nCREATE INDEX \"idx_saved_queries_folder_id\" ON \"saved_queries\" USING btree (\"folder_id\");",
+      "\nCREATE INDEX \"idx_saved_query_folders_organization_user\" ON \"saved_query_folders\" USING btree (\"organization_id\",\"user_id\");",
+      "\nCREATE UNIQUE INDEX \"uidx_ai_usage_events_request_id\" ON \"ai_usage_events\" USING btree (\"request_id\");",
+      "\nCREATE INDEX \"idx_ai_usage_events_organization_created\" ON \"ai_usage_events\" USING btree (\"organization_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_ai_usage_events_organization_created_total\" ON \"ai_usage_events\" USING btree (\"organization_id\",\"created_at\",\"total_tokens\");",
+      "\nCREATE INDEX \"idx_ai_usage_events_organization_user_created\" ON \"ai_usage_events\" USING btree (\"organization_id\",\"user_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_ai_usage_events_feature_created\" ON \"ai_usage_events\" USING btree (\"feature\",\"created_at\");",
+      "\nCREATE INDEX \"idx_ai_usage_events_organization_feature_created\" ON \"ai_usage_events\" USING btree (\"organization_id\",\"feature\",\"created_at\");",
+      "\nCREATE UNIQUE INDEX \"uidx_ai_usage_traces_request_id\" ON \"ai_usage_traces\" USING btree (\"request_id\");",
+      "\nCREATE INDEX \"idx_ai_usage_traces_organization_created\" ON \"ai_usage_traces\" USING btree (\"organization_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_ai_usage_traces_organization_user_created\" ON \"ai_usage_traces\" USING btree (\"organization_id\",\"user_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_ai_usage_traces_expires_at\" ON \"ai_usage_traces\" USING btree (\"expires_at\");",
+      "\nCREATE INDEX \"idx_sync_operations_organization_status\" ON \"sync_operations\" USING btree (\"organization_id\",\"status\");",
+      "\nCREATE INDEX \"idx_sync_operations_entity\" ON \"sync_operations\" USING btree (\"entity_type\",\"entity_id\");",
+      "\nCREATE INDEX \"idx_sync_operations_created_at\" ON \"sync_operations\" USING btree (\"created_at\");"
+    ],
+    "bps": true,
+    "folderMillis": 1774064729618,
+    "hash": "ec4a940e87ccdaa0ae6d2f8701f26a77ffc601fc6a0b12baac7b3fc433e5a51b"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"user\" ADD COLUMN \"last_active_at\" timestamp with time zone;"
+    ],
+    "bps": true,
+    "folderMillis": 1774065386733,
+    "hash": "1347543c5ed1479fd6e88ca40c2f1b2d9a26ec89b06a792385f4b99d3c068628"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"account\" ADD CONSTRAINT \"account_user_id_user_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"user\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"session\" ADD CONSTRAINT \"session_user_id_user_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"user\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"members\" ADD CONSTRAINT \"members_user_id_user_id_fk\" FOREIGN KEY (\"user_id\") REFERENCES \"public\".\"user\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"members\" ADD CONSTRAINT \"members_organization_id_organizations_id_fk\" FOREIGN KEY (\"organization_id\") REFERENCES \"public\".\"organizations\"(\"id\") ON DELETE cascade ON UPDATE no action;",
+      "\nALTER TABLE \"organizations\" ADD CONSTRAINT \"organizations_owner_user_id_user_id_fk\" FOREIGN KEY (\"owner_user_id\") REFERENCES \"public\".\"user\"(\"id\") ON DELETE restrict ON UPDATE no action;"
+    ],
+    "bps": true,
+    "folderMillis": 1774112951843,
+    "hash": "39f6a2a2536b4a36ea2fd566e1a5cebc699e8427f88a82bae2a8253aafcb69ac"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"subscription\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"plan\" text NOT NULL,\n\t\"reference_id\" text NOT NULL,\n\t\"stripe_customer_id\" text,\n\t\"stripe_subscription_id\" text,\n\t\"status\" text DEFAULT 'incomplete' NOT NULL,\n\t\"period_start\" timestamp with time zone,\n\t\"period_end\" timestamp with time zone,\n\t\"trial_start\" timestamp with time zone,\n\t\"trial_end\" timestamp with time zone,\n\t\"cancel_at_period_end\" boolean DEFAULT false,\n\t\"cancel_at\" timestamp with time zone,\n\t\"canceled_at\" timestamp with time zone,\n\t\"ended_at\" timestamp with time zone,\n\t\"seats\" integer,\n\t\"billing_interval\" text,\n\t\"stripe_schedule_id\" text,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nALTER TABLE \"user\" ADD COLUMN \"stripe_customer_id\" text;",
+      "\nALTER TABLE \"organizations\" ADD COLUMN \"stripe_customer_id\" text;",
+      "\nCREATE INDEX \"idx_subscription_reference_id\" ON \"subscription\" USING btree (\"reference_id\");",
+      "\nCREATE INDEX \"idx_subscription_stripe_subscription_id\" ON \"subscription\" USING btree (\"stripe_subscription_id\");",
+      "\nCREATE INDEX \"idx_subscription_stripe_customer_id\" ON \"subscription\" USING btree (\"stripe_customer_id\");"
+    ],
+    "bps": true,
+    "folderMillis": 1774155701241,
+    "hash": "d5413333c9f8ca8a0c05a95db4e1361d026eb06f17ec7269919e047fbcfc30ee"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"saved_query_folders\" ADD COLUMN \"connection_id\" text;",
+      "\nUPDATE \"saved_query_folders\" AS \"folders\"\nSET \"connection_id\" = \"folder_connections\".\"connection_id\"\nFROM (\n    SELECT\n        \"folder_id\",\n        min(\"connection_id\") AS \"connection_id\"\n    FROM \"saved_queries\"\n    WHERE \"folder_id\" IS NOT NULL\n    GROUP BY \"folder_id\"\n) AS \"folder_connections\"\nWHERE \"folders\".\"id\" = \"folder_connections\".\"folder_id\";",
+      "\nUPDATE \"saved_query_folders\" AS \"folders\"\nSET \"connection_id\" = COALESCE(\n    (\n        SELECT \"saved_queries\".\"connection_id\"\n        FROM \"saved_queries\"\n        WHERE \"saved_queries\".\"organization_id\" = \"folders\".\"organization_id\"\n          AND \"saved_queries\".\"user_id\" = \"folders\".\"user_id\"\n        ORDER BY \"saved_queries\".\"updated_at\" DESC NULLS LAST, \"saved_queries\".\"created_at\" DESC NULLS LAST\n        LIMIT 1\n    ),\n    (\n        SELECT \"connections\".\"id\"\n        FROM \"connections\"\n        WHERE \"connections\".\"organization_id\" = \"folders\".\"organization_id\"\n          AND \"connections\".\"deleted_at\" IS NULL\n        ORDER BY \"connections\".\"updated_at\" DESC NULLS LAST, \"connections\".\"created_at\" DESC NULLS LAST, \"connections\".\"id\" ASC\n        LIMIT 1\n    ),\n    \"folders\".\"id\"\n)\nWHERE \"folders\".\"connection_id\" IS NULL;",
+      "\nUPDATE \"saved_queries\" AS \"queries\"\nSET \"folder_id\" = NULL,\n    \"updated_at\" = NOW()\nFROM \"saved_query_folders\" AS \"folders\"\nWHERE \"queries\".\"folder_id\" = \"folders\".\"id\"\n  AND \"queries\".\"connection_id\" <> \"folders\".\"connection_id\";",
+      "\nALTER TABLE \"saved_query_folders\" ALTER COLUMN \"connection_id\" SET NOT NULL;",
+      "\nCREATE INDEX \"idx_saved_query_folders_connection_id\" ON \"saved_query_folders\" USING btree (\"connection_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1774367010423,
+    "hash": "9a2a9241dd708fa08461678f152ff3f1f62efc0331b467ff8eafb45bc3712a92"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"user\" ADD COLUMN \"is_anonymous\" boolean DEFAULT false NOT NULL;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1774538755994,
+    "hash": "651a13178dfa1d12a979e0fae46abc2c081ace29c9f3f36864d2242a8f64fead"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"connections\" ALTER COLUMN \"host\" DROP NOT NULL;",
+      "\nALTER TABLE \"connections\" ALTER COLUMN \"port\" DROP NOT NULL;",
+      "\nALTER TABLE \"connections\" ADD COLUMN IF NOT EXISTS \"path\" text;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1775056342854,
+    "hash": "ca59157dbf0d5427016db81ebc0f3d1df841cc1aaf1b343638e1918f491226e4"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"organizations\" ADD COLUMN \"provisioning_kind\" text;"
+    ],
+    "bps": true,
+    "folderMillis": 1775064413388,
+    "hash": "c645e6c65c2200c70cc36b161acf697d63796db70e2b376a4427f131bd6337bb"
+  }
+]

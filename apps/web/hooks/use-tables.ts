@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { useEffect } from 'react';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom, tablesAtom } from '@/shared/stores/app.store';

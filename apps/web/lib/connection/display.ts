@@ -1,4 +1,4 @@
-import type { ConnectionListItem } from '@/types/connections';
+import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { isDemoSqliteConnectionPath } from '@/lib/demo/connection-path';
 
 export function getConnectionLocationLabel(connection?: ConnectionListItem['connection'] | null) {

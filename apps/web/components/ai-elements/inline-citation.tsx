@@ -12,7 +12,7 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/registry/new-york-v4/ui/hover-card";
-import { cn } from "@/lib/utils";
+import { cn } from "@dory/web-utils";
 import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
 import {
   type ComponentProps,

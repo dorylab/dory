@@ -13,7 +13,7 @@ import type { ExplorerBaseParams, ExplorerObjectKind } from '@/lib/explorer/type
 import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@/types';
+import type { ResponseObject } from '@dory/shared';
 import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 import type { DatabaseObjectRow } from '@dory/drivers/types';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';

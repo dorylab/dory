@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ErrorCodes } from '@/lib/errors';
+import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
 import { hasMetadataCapability } from '@dory/drivers/types';

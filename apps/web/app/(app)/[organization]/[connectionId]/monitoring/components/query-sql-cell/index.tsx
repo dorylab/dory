@@ -2,7 +2,7 @@
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription, DrawerFooter, DrawerClose, Drawer } from '@/registry/new-york-v4/ui/drawer';
-import { QueryInsightsRow } from '@/types/monitoring';
+import { QueryInsightsRow } from '@dory/shared/types/monitoring';
 import { AlertCircle } from 'lucide-react';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { formatNumber, formatBytes } from '../../utils';

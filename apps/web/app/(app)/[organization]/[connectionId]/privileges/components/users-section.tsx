@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import type { ClickHouseUser } from '@/types/privileges';
+import type { ClickHouseUser } from '@dory/shared/types/privileges';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { Button } from '@/registry/new-york-v4/ui/button';

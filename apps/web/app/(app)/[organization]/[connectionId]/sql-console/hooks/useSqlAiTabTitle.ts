@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { SQLTab, UITabPayload } from '@/types/tabs';
+import { SQLTab, UITabPayload } from '@dory/shared/types/tabs';
 import { shouldAutoNameTab } from '../utils';
 import { UpdateTab } from '../types';
 import { authFetch } from '@/lib/client/auth-fetch';
