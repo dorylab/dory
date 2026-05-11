@@ -1,4 +1,20 @@
-import type { ResultColumnMeta, ResultSetStatsV1 } from '@/lib/client/result-set-ai';
+export type ResultAutoChartColumnInput = {
+    name?: unknown;
+    normalizedType?: unknown;
+    semanticRole?: unknown;
+    type?: unknown;
+    dbType?: unknown;
+};
+
+export type ResultAutoChartStatsInput = {
+    summary?: {
+        recommendedChart?: 'table' | 'bar' | 'line' | 'pie' | 'metric' | 'scatter' | null;
+        isGoodForChart?: boolean;
+        primaryTimeColumn?: string | null;
+        primaryMeasureColumns?: string[] | null;
+        primaryDimensionColumns?: string[] | null;
+    } | null;
+} | null;
 
 export type ResultAutoChartType = 'bar' | 'line' | 'pie' | 'scatter' | 'histogram' | 'heatmap';
 export type ResultAutoChartMetricKind = 'count' | 'count_true' | 'sum' | 'avg' | 'max' | 'min' | 'count_distinct';
@@ -90,7 +106,7 @@ export type ResultAutoChartPart = {
     };
 };
 
-type RawColumn = Partial<ResultColumnMeta> & {
+type RawColumn = Partial<ResultAutoChartColumnInput> & {
     normalizedType?: unknown;
     semanticRole?: unknown;
     type?: unknown;
@@ -510,7 +526,7 @@ function pickBestMetricKey(metricColumn: ResultAutoChartColumnProfile | undefine
     return metricColumn.isBooleanLike ? `count_true:${metricColumn.name}` : `sum:${metricColumn.name}`;
 }
 
-function getSuggestedState(columnProfiles: ResultAutoChartColumnProfile[], resultStats?: ResultSetStatsV1 | null): ResultAutoChartState {
+function getSuggestedState(columnProfiles: ResultAutoChartColumnProfile[], resultStats?: ResultAutoChartStatsInput): ResultAutoChartState {
     const summary = resultStats?.summary;
     const primaryTimeColumn = summary?.primaryTimeColumn ?? undefined;
     const primaryMeasureColumn = summary?.primaryMeasureColumns?.[0];
@@ -1009,7 +1025,7 @@ export function aggregateAutoChart(params: {
 export function buildResultAutoChartProfile(params: {
     rows: Array<ResultAutoChartRow | Record<string, unknown>>;
     columns?: unknown;
-    stats?: ResultSetStatsV1 | null;
+    stats?: ResultAutoChartStatsInput;
     overrides?: ResultAutoChartOverrides;
 }): ResultAutoChartProfile {
     const rows = normalizeRows(params.rows);
@@ -1040,7 +1056,7 @@ export function buildResultAutoChartProfile(params: {
         ...profileBase,
         aggregated,
         emptyReason,
-        confidence: emptyReason ? 0.2 : params.stats?.summary.isGoodForChart ? 0.95 : 0.75,
+        confidence: emptyReason ? 0.2 : params.stats?.summary?.isGoodForChart ? 0.95 : 0.75,
     };
 }
 

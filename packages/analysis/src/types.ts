@@ -1,7 +1,24 @@
-import type { ResultColumnMeta } from '@/lib/client/type';
-import type { ResultSetStatsV1 } from '@/lib/client/result-set-ai';
-import type { InsightAction, InsightItem, InsightStructuredFinding, InsightStructuredSignal, StructuredInsightView } from '@/lib/client/result-set-insights';
-import type { ResultAction } from './result-actions';
+import type { ResultAction } from './core/result-actions';
+
+export type ResultContextColumnInput = {
+    name: string;
+    type?: string | null;
+    dbType?: string | null;
+    normalizedType: string;
+    semanticRole?: string;
+};
+
+export type ResultContextStatsInput = {
+    columns?: Record<
+        string,
+        {
+            distinctRatio?: number | null;
+            entropy?: number | null;
+            topValueShare?: number | null;
+            informationDensity?: 'none' | 'low' | 'medium' | 'high';
+        }
+    >;
+} | null;
 
 export type AnalysisResultRef = {
     sessionId: string;
@@ -133,7 +150,7 @@ export type AnalysisWorkspace = {
     lastSelectedSessionId?: string;
 };
 
-export type InsightViewModel = StructuredInsightView;
+export type InsightViewModel = Record<string, unknown>;
 
 export type InsightAnalysisWorkbench = {
     resultContext: ResultContext;
@@ -212,16 +229,23 @@ export type RunAnalysisResponse = {
     query: AnalysisQueryPayload;
 };
 
-export type InsightActionAnalysis = Extract<InsightAction, { kind: 'analysis-suggestion' }>;
+export type InsightActionAnalysis = {
+    id: string;
+    label: string;
+    kind: 'analysis-suggestion';
+    suggestionId: string;
+    action?: ResultAction;
+    sqlPreview?: string;
+};
 
 export type InsightSignalsPayload = {
-    signals: InsightStructuredSignal[];
-    findings: InsightStructuredFinding[];
-    items: InsightItem[];
+    signals: unknown[];
+    findings: unknown[];
+    items: unknown[];
     narrative: string;
 };
 
-export function toResultContextColumns(columns: ResultColumnMeta[] | null | undefined, stats?: ResultSetStatsV1 | null): ResultContextColumn[] {
+export function toResultContextColumns(columns: ResultContextColumnInput[] | null | undefined, stats?: ResultContextStatsInput): ResultContextColumn[] {
     return (columns ?? []).map(column => ({
         name: column.name,
         dataType: column.type ?? column.dbType ?? column.normalizedType,

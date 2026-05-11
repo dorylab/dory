@@ -2322,6 +2322,14 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@dory/analysis@npm:0.1.0, @dory/analysis@workspace:packages/analysis":
+  version: 0.0.0-use.local
+  resolution: "@dory/analysis@workspace:packages/analysis"
+  dependencies:
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
 "@dory/auth-core@npm:0.1.0, @dory/auth-core@workspace:packages/auth-core":
   version: 0.0.0-use.local
   resolution: "@dory/auth-core@workspace:packages/auth-core"
@@ -21041,6 +21049,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"server-only@npm:0.0.1":
+  version: 0.0.1
+  resolution: "server-only@npm:0.0.1"
+  checksum: 10c0/4704f0ef85da0be981af6d4ed8e739d39bcfd265b9c246a684060acda5642d0fdc6daffc2308e71e2682c5f508090978802eae0a77623c9b90a49f9ae68048d6
+  languageName: node
+  linkType: hard
+
 "set-cookie-parser@npm:^3.0.1":
   version: 3.1.0
   resolution: "set-cookie-parser@npm:3.1.0"
@@ -23253,6 +23268,7 @@ __metadata:
     "@dnd-kit/modifiers": "npm:^9.0.0"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@dory/analysis": "npm:0.1.0"
     "@dory/database": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
@@ -23394,6 +23410,7 @@ __metadata:
     recharts: "npm:^3.8.1"
     resend: "npm:^6.10.0"
     rimraf: "npm:^6.1.3"
+    server-only: "npm:0.0.1"
     shadcn: "npm:^4.1.2"
     shiki: "npm:^4.0.2"
     sonner: "npm:^2.0.7"

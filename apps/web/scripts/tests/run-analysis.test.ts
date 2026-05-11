@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { runAnalysis } from '@/lib/server/analysis/run-analysis';
 import type { BaseConnection } from '@dory/drivers/core';
-import type { RunAnalysisRequest } from '@/lib/analysis/types';
+import type { RunAnalysisRequest } from '@dory/analysis/types';
 
 function makeConnection(rows: Array<Record<string, unknown>>, columns: Array<{ name: string; type: string | null }>): Pick<BaseConnection, 'queryWithContext'> {
     return {
@@ -74,6 +74,7 @@ async function testDistributionAnalysis() {
         ) as BaseConnection,
         connectionId: 'conn_123',
         tabId: 'tab_1',
+        locale: 'zh',
     });
 
     assert.equal(response.session.status, 'done');
@@ -97,6 +98,7 @@ async function testTrendAnalysis() {
         ) as BaseConnection,
         connectionId: 'conn_123',
         tabId: 'tab_1',
+        locale: 'zh',
     });
 
     assert.equal(response.session.status, 'done');
@@ -113,11 +115,12 @@ async function testErrorStateWhenMeasureMissing() {
         connection: makeConnection([], []) as BaseConnection,
         connectionId: 'conn_123',
         tabId: 'tab_1',
+        locale: 'zh',
     });
 
     assert.equal(response.session.status, 'error');
     assert.ok(response.session.steps.some(step => step.status === 'error'));
-    assert.equal(response.session.outcome?.headline, '分析执行失败');
+    assert.equal(response.session.outcome?.headline, '分析执行失败。');
 }
 
 await testDistributionAnalysis();

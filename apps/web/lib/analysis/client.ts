@@ -1,5 +1,5 @@
 import { authFetch } from '@/lib/client/auth-fetch';
-import type { RunAnalysisRequest, RunAnalysisResponse } from './types';
+import type { RunAnalysisRequest, RunAnalysisResponse } from '@dory/analysis/types';
 
 type ApiEnvelope<T> = {
     code: number;

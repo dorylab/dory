@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { profileResultSet } from '@/lib/client/result-set-ai';
 import { buildInsightDraft, buildInsights, buildStructuredInsightView } from '@/lib/client/result-set-insights';
 import { buildAnalysisSuggestions } from '@/lib/analysis/suggestions';
-import { buildResultContext } from '@/lib/analysis/result-context';
+import { buildResultContext } from '@dory/analysis/result-context';
 
 function translate(key: string, values?: Record<string, string | number>) {
     return `${key}${values ? ` ${JSON.stringify(values)}` : ''}`;

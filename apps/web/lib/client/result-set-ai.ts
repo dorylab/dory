@@ -1,6 +1,6 @@
 'use client';
 
-import { buildResultAutoChartProfile, type ResultAutoChartProfile } from '@/lib/analysis/result-chart-profile';
+import { buildResultAutoChartProfile, type ResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
 
 export type NormalizedColumnType = 'string' | 'integer' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'array' | 'unknown';
 
