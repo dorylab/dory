@@ -2781,6 +2781,11 @@
                     "Title": "数据管理",
                     "Description": "导出和导入工作区数据。"
                 },
+                "AgentAccess": {
+                    "Label": "MCP",
+                    "Title": "MCP",
+                    "Description": "允许可信 Agent 通过 MCP 调用 Dory。"
+                },
                 "About": {
                     "Label": "关于",
                     "Title": "关于",
@@ -2887,6 +2892,47 @@
                     "Success": "已导入：{summary}。",
                     "Empty": "没有可导入的数据。"
                 }
+            },
+            "AgentAccess": {
+                "Loading": "正在加载 MCP 设置...",
+                "LoadFailed": "加载 MCP 设置失败。",
+                "SaveFailed": "更新 MCP 设置失败。",
+                "CreateFailed": "创建 MCP token 失败。",
+                "RevokeFailed": "撤销 MCP token 失败。",
+                "EnableLabel": "启用 MCP",
+                "EnableDescription": "允许可信 Agent 通过 Dory MCP endpoint 调用当前组织。",
+                "EndpointLabel": "Endpoint",
+                "EndpointDescription": "在 Codex 或其他 MCP client 中使用这个 URL。",
+                "Copy": "复制",
+                "Copied": "已复制",
+                "DeleteToken": "删除 token",
+                "TokensTitle": "访问 token",
+                "TokenNamePlaceholder": "Client 名称",
+                "CreateToken": "创建",
+                "TokenCreated": "Token 已创建。",
+                "TokenOnce": "现在复制这个 token。它之后不会再次显示。",
+                "NoTokens": "还没有 MCP token。",
+                "LastUsedAt": "最后使用：{date}",
+                "RevokedAt": "已撤销：{date}",
+                "SetupTitle": "MCP 配置方法",
+                "SetupDescription": "所有 MCP client 都可以用 endpoint 加 Dory MCP token 连接。",
+                "SetupTabs": {
+                    "General": "通用"
+                },
+                "General": {
+                    "Endpoint": "Endpoint",
+                    "Authorization": "HTTP header",
+                    "JsonTitle": "通用 JSON 配置"
+                },
+                "Codex": {
+                    "CliTitle": "Codex CLI",
+                    "TomlTitle": "config.toml"
+                },
+                "ClaudeCode": {
+                    "CliTitle": "Claude Code CLI",
+                    "JsonTitle": ".mcp.json"
+                },
+                "Refresh": "刷新"
             },
             "About": {
                 "Subtitle": "新一代数据工作台",

@@ -6,6 +6,7 @@ import { DataPanel } from './DataPanel';
 import { ShortcutsPanel } from './ShortcutsPanel';
 import { SecurityPanel } from './SecurityPanel';
 import { AboutPanel } from './AboutPanel';
+import { AgentAccessPanel } from './AgentAccessPanel';
 
 export function PanelByKey({ keyName }: { keyName: CategoryKey }) {
     switch (keyName) {
@@ -17,6 +18,8 @@ export function PanelByKey({ keyName }: { keyName: CategoryKey }) {
             return <NotificationsPanel />;
         case 'data':
             return <DataPanel />;
+        case 'agentAccess':
+            return <AgentAccessPanel />;
         case 'shortcuts':
             return <ShortcutsPanel />;
         case 'security':

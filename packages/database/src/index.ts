@@ -10,6 +10,7 @@ import { PostgresSavedQueryFoldersRepository } from './postgres/impl/sql-console
 import { PostgresAiUsageRepository } from './postgres/impl/ai-usage';
 import { PostgresSyncOperationsRepository } from './postgres/impl/sync-operations';
 import { PostgresBillingRepository } from './postgres/impl/billing';
+import { PostgresMcpRepository } from './postgres/impl/mcp';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -29,6 +30,7 @@ export type PostgresDBService = {
     aiUsage: AiUsageRepository;
     syncOperations: PostgresSyncOperationsRepository;
     billing: PostgresBillingRepository;
+    mcp: PostgresMcpRepository;
 };
 
 /**
@@ -80,6 +82,9 @@ export async function getDBService(): Promise<DBService> {
             const billingRepo = new PostgresBillingRepository();
             await billingRepo.init();
 
+            const mcpRepo = new PostgresMcpRepository();
+            await mcpRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
@@ -92,6 +97,7 @@ export async function getDBService(): Promise<DBService> {
                 aiUsage: aiUsageRepo,
                 syncOperations: syncOperationsRepo,
                 billing: billingRepo,
+                mcp: mcpRepo,
             };
             break;
         }

@@ -2779,6 +2779,11 @@
                     "Title": "Data Management",
                     "Description": "Export and import workspace data."
                 },
+                "AgentAccess": {
+                    "Label": "MCP",
+                    "Title": "MCP",
+                    "Description": "Let trusted agents call Dory through MCP."
+                },
                 "About": {
                     "Label": "About",
                     "Title": "About",
@@ -2885,6 +2890,47 @@
                     "Success": "Imported: {summary}.",
                     "Empty": "Nothing to import."
                 }
+            },
+            "AgentAccess": {
+                "Loading": "Loading MCP settings...",
+                "LoadFailed": "Failed to load MCP settings.",
+                "SaveFailed": "Failed to update MCP settings.",
+                "CreateFailed": "Failed to create MCP token.",
+                "RevokeFailed": "Failed to revoke MCP token.",
+                "EnableLabel": "Enable MCP",
+                "EnableDescription": "Allow trusted agents to call this organization through the Dory MCP endpoint.",
+                "EndpointLabel": "Endpoint",
+                "EndpointDescription": "Use this URL in Codex or another MCP client.",
+                "Copy": "Copy",
+                "Copied": "Copied",
+                "DeleteToken": "Delete token",
+                "TokensTitle": "Access tokens",
+                "TokenNamePlaceholder": "Client name",
+                "CreateToken": "Create",
+                "TokenCreated": "Token created.",
+                "TokenOnce": "Copy this token now. It will not be shown again.",
+                "NoTokens": "No MCP tokens yet.",
+                "LastUsedAt": "Last used: {date}",
+                "RevokedAt": "Revoked: {date}",
+                "SetupTitle": "MCP setup",
+                "SetupDescription": "Use the endpoint with a Dory MCP token in any MCP client.",
+                "SetupTabs": {
+                    "General": "General"
+                },
+                "General": {
+                    "Endpoint": "Endpoint",
+                    "Authorization": "HTTP header",
+                    "JsonTitle": "Generic JSON config"
+                },
+                "Codex": {
+                    "CliTitle": "Codex CLI",
+                    "TomlTitle": "config.toml"
+                },
+                "ClaudeCode": {
+                    "CliTitle": "Claude Code CLI",
+                    "JsonTitle": ".mcp.json"
+                },
+                "Refresh": "Refresh"
             },
             "About": {
                 "Subtitle": "Next-generation Data Studio",

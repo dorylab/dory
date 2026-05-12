@@ -57,6 +57,13 @@
       "when": 1775064413388,
       "tag": "0007_empty_supernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1778517567589,
+      "tag": "0008_wandering_abomination",
+      "breakpoints": true
     }
   ]
 }
