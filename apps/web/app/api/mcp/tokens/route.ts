@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { withManagedOrganizationHandler } from '@/app/api/utils/with-organization-handler';
+import { withOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
 import { generateMcpToken, MCP_DEFAULT_SCOPES } from '@/lib/server/mcp/auth';
@@ -13,7 +13,17 @@ const bodySchema = z.object({
     scopes: z.array(z.enum(MCP_DEFAULT_SCOPES)).optional(),
 });
 
-export const POST = withManagedOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+export const POST = withOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+    if (!userId) {
+        return NextResponse.json(
+            ResponseUtil.error({
+                code: ErrorCodes.UNAUTHORIZED,
+                message: 'Unauthorized',
+            }),
+            { status: 401 },
+        );
+    }
+
     const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
     if (!parsed.success) {
         return NextResponse.json(

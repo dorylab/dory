@@ -25,6 +25,7 @@ export const mcpAccessTokens = pgTable(
     t => [
         uniqueIndex('uidx_mcp_access_tokens_hash').on(t.tokenHash),
         index('idx_mcp_access_tokens_organization_created').on(t.organizationId, t.createdAt),
+        index('idx_mcp_access_tokens_organization_user_created').on(t.organizationId, t.createdByUserId, t.createdAt),
         index('idx_mcp_access_tokens_organization_active')
             .on(t.organizationId, t.enabled, t.revokedAt)
             .where(sql`${t.revokedAt} IS NULL`),

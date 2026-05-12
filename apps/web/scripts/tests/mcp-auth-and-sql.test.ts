@@ -1,8 +1,51 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { generateMcpToken, hashMcpToken, hasMcpScope, isAllowedMcpOrigin, MCP_DEFAULT_SCOPES, MCP_TOKEN_PREFIX } from '../../lib/server/mcp/auth';
+import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
+import type { OrganizationAccess } from '../../lib/server/authz';
+import { buildMcpAuthContextForToken, generateMcpToken, hashMcpToken, hasMcpScope, isAllowedMcpOrigin, MCP_DEFAULT_SCOPES, MCP_TOKEN_PREFIX } from '../../lib/server/mcp/auth';
 import { getReadonlyMcpStatements } from '../../lib/server/mcp/sql-safety';
 import { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '../../lib/server/mcp/tools';
+
+function createAccess(overrides: Partial<OrganizationAccess> = {}): OrganizationAccess {
+    return {
+        source: 'local' as const,
+        organizationId: 'org',
+        userId: 'owner-user',
+        isMember: true,
+        role: 'member' as const,
+        permissions: {
+            organization: { read: true, update: false, delete: false },
+            member: { read: true, create: false, update: false, delete: false },
+            invitation: { read: true, create: false, cancel: false },
+            workspace: { read: true, write: true },
+            connection: { read: true, create: false, update: false, delete: false },
+        },
+        organization: {
+            id: 'org',
+            slug: 'org',
+            name: 'Org',
+        },
+        ...overrides,
+    };
+}
+
+function createTokenRecord(overrides: Partial<McpAccessTokenRecord> = {}): McpAccessTokenRecord {
+    return {
+        id: 'token-id',
+        organizationId: 'org',
+        name: 'MCP Client',
+        tokenPrefix: 'dory_mcp_abc12345',
+        tokenHash: 'hash',
+        scopes: ['connections:read'],
+        enabled: true,
+        createdByUserId: 'owner-user',
+        lastUsedAt: null,
+        revokedAt: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        ...overrides,
+    };
+}
 
 test('generateMcpToken returns one-time token metadata without storing the raw token', () => {
     const generated = generateMcpToken();
@@ -24,10 +67,58 @@ test('connections:read remains compatible with schema read tools', () => {
         organizationId: 'org',
         userId: 'user',
         scopes: ['connections:read'],
+        access: createAccess({ userId: 'user' }),
     };
 
     assert.equal(hasMcpScope(context, 'schema:read'), true);
     assert.equal(hasMcpScope(context, 'saved_queries:read'), false);
+});
+
+test('MCP auth context uses the personal token owner as the execution user', async () => {
+    const result = await buildMcpAuthContextForToken(createTokenRecord(), {
+        resolveAccess: async (organizationId, userId) => createAccess({ organizationId, userId }),
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.context.organizationId, 'org');
+    assert.equal(result.context.userId, 'owner-user');
+    assert.equal(result.context.tokenId, 'token-id');
+    assert.deepEqual(result.context.scopes, ['connections:read']);
+});
+
+test('MCP auth context rejects tokens whose owner no longer has organization access', async () => {
+    const result = await buildMcpAuthContextForToken(createTokenRecord(), {
+        resolveAccess: async () => null,
+    });
+
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 403);
+});
+
+test('MCP auth context rejects token owners without workspace or connection read access', async () => {
+    const noWorkspace = await buildMcpAuthContextForToken(createTokenRecord(), {
+        resolveAccess: async () =>
+            createAccess({
+                permissions: {
+                    ...createAccess().permissions,
+                    workspace: { read: false, write: false },
+                },
+            }),
+    });
+    assert.equal(noWorkspace.ok, false);
+
+    const noConnection = await buildMcpAuthContextForToken(createTokenRecord(), {
+        resolveAccess: async () =>
+            createAccess({
+                permissions: {
+                    ...createAccess().permissions,
+                    connection: { read: false, create: false, update: false, delete: false },
+                },
+            }),
+    });
+    assert.equal(noConnection.ok, false);
 });
 
 test('isAllowedMcpOrigin accepts same-origin and localhost calls', () => {

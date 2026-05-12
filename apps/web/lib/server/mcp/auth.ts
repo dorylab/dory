@@ -1,5 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { getDBService } from '@dory/database';
+import type { OrganizationAccess } from '@/lib/server/authz';
+import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'saved_queries:read', 'monitoring:read'] as const;
@@ -9,6 +11,7 @@ export type McpAuthContext = {
     organizationId: string;
     userId: string;
     scopes: string[];
+    access: OrganizationAccess;
 };
 
 export type McpAuthResult =
@@ -90,6 +93,48 @@ export function extractBearerToken(req: Request): string | null {
     return match?.[1]?.trim() || null;
 }
 
+type McpTokenAccessResult =
+    | {
+          ok: true;
+          context: McpAuthContext;
+      }
+    | {
+          ok: false;
+          status: number;
+          message: string;
+      };
+
+type McpTokenAccessDeps = {
+    resolveAccess?: (organizationId: string, userId: string) => Promise<OrganizationAccess | null>;
+};
+
+async function resolveDefaultMcpTokenAccess(organizationId: string, userId: string) {
+    const { resolveOrganizationAccess } = await import('@/lib/server/authz');
+    return resolveOrganizationAccess(organizationId, userId);
+}
+
+export async function buildMcpAuthContextForToken(record: McpAccessTokenRecord, deps: McpTokenAccessDeps = {}): Promise<McpTokenAccessResult> {
+    const access = await (deps.resolveAccess ?? resolveDefaultMcpTokenAccess)(record.organizationId, record.createdByUserId);
+    if (!access?.isMember || !access.permissions.workspace.read || !access.permissions.connection.read) {
+        return {
+            ok: false,
+            status: 403,
+            message: 'MCP token owner no longer has access to this organization.',
+        };
+    }
+
+    return {
+        ok: true,
+        context: {
+            tokenId: record.id,
+            organizationId: record.organizationId,
+            userId: record.createdByUserId,
+            scopes: Array.isArray(record.scopes) ? record.scopes : [],
+            access,
+        },
+    };
+}
+
 export async function authenticateMcpRequest(req: Request): Promise<McpAuthResult> {
     if (!isAllowedMcpOrigin(req)) {
         return {
@@ -118,26 +163,12 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
         };
     }
 
-    const enabled = await db.mcp.isOrganizationEnabled(record.organizationId);
-    if (!enabled) {
-        return {
-            ok: false,
-            status: 403,
-            message: 'MCP is disabled for this organization.',
-        };
-    }
+    const context = await buildMcpAuthContextForToken(record);
+    if (!context.ok) return context;
 
     await db.mcp.markTokenUsed(record.id);
 
-    return {
-        ok: true,
-        context: {
-            tokenId: record.id,
-            organizationId: record.organizationId,
-            userId: record.createdByUserId,
-            scopes: Array.isArray(record.scopes) ? record.scopes : [],
-        },
-    };
+    return context;
 }
 
 export function hasMcpScope(context: McpAuthContext, scope: string) {
