@@ -1,12 +1,13 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check, Copy, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { authFetch } from '@/lib/client/auth-fetch';
@@ -109,7 +110,7 @@ export function AgentAccessPanel() {
         };
     }, [settings?.endpoint]);
 
-    const loadSettings = async () => {
+    const loadSettings = useCallback(async () => {
         setLoading(true);
         setMessage(null);
         try {
@@ -120,11 +121,11 @@ export function AgentAccessPanel() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [t]);
 
     useEffect(() => {
         void loadSettings();
-    }, []);
+    }, [loadSettings]);
 
     const updateEnabled = async (enabled: boolean) => {
         setSaving(true);
@@ -199,15 +200,7 @@ export function AgentAccessPanel() {
             <Check className="h-3.5 w-3.5" />
         </>
     );
-
-    if (loading) {
-        return (
-            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('Loading')}
-            </div>
-        );
-    }
+    const isInitialLoading = loading && !settings;
 
     return (
         <div className="space-y-6">
@@ -215,26 +208,37 @@ export function AgentAccessPanel() {
                 <Switch checked={settings?.enabled ?? false} disabled={saving || !settings} onCheckedChange={updateEnabled} />
             </SettingsRow>
 
-            <SettingsRow label={t('EndpointLabel')} description={t('EndpointDescription')}>
-                <CopyButton
-                    text={settings?.endpoint ?? ''}
-                    variant="outline"
-                    size="icon"
-                    className="h-7 w-7"
-                    disabled={!settings?.endpoint}
-                    aria-label={t('Copy')}
-                    title={t('Copy')}
-                    label={copyLabel}
-                    copiedLabel={copiedLabel}
-                />
-            </SettingsRow>
-            {settings?.endpoint ? <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{settings.endpoint}</pre> : null}
+            <div className="space-y-1.5">
+                <SettingsRow label={t('EndpointLabel')} description={t('EndpointDescription')}>
+                    <CopyButton
+                        text={settings?.endpoint ?? ''}
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7"
+                        disabled={!settings?.endpoint}
+                        aria-label={t('Copy')}
+                        title={t('Copy')}
+                        label={copyLabel}
+                        copiedLabel={copiedLabel}
+                    />
+                </SettingsRow>
+                {isInitialLoading ? (
+                    <Skeleton className="h-9 w-full" />
+                ) : settings?.endpoint ? (
+                    <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{settings.endpoint}</pre>
+                ) : null}
+            </div>
 
             <div className="space-y-3">
-                <div className="text-sm font-medium">{t('TokensTitle')}</div>
+                <div className="flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium">{t('TokensTitle')}</div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadSettings} disabled={loading} aria-label={t('Refresh')} title={t('Refresh')}>
+                        <RotateCcw className={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+                    </Button>
+                </div>
                 <div className="flex gap-2">
-                    <Input value={tokenName} onChange={event => setTokenName(event.target.value)} placeholder={t('TokenNamePlaceholder')} />
-                    <Button size="sm" onClick={createToken} disabled={creating}>
+                    <Input value={tokenName} onChange={event => setTokenName(event.target.value)} placeholder={t('TokenNamePlaceholder')} disabled={!settings} />
+                    <Button size="sm" onClick={createToken} disabled={creating || !settings}>
                         {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                         {t('CreateToken')}
                     </Button>
@@ -258,7 +262,12 @@ export function AgentAccessPanel() {
                     </div>
                 ) : null}
                 <div className="divide-y rounded-md border">
-                    {(settings?.tokens ?? []).length === 0 ? (
+                    {isInitialLoading ? (
+                        <>
+                            <TokenSkeleton />
+                            <TokenSkeleton />
+                        </>
+                    ) : (settings?.tokens ?? []).length === 0 ? (
                         <div className="px-3 py-4 text-sm text-muted-foreground">{t('NoTokens')}</div>
                     ) : (
                         settings!.tokens.map(token => (
@@ -287,7 +296,18 @@ export function AgentAccessPanel() {
                 </div>
             </div>
 
-            {setupSnippets ? (
+            {isInitialLoading ? (
+                <div className="space-y-3">
+                    <div>
+                        <div className="text-sm font-medium">{t('SetupTitle')}</div>
+                        <div className="mt-2">
+                            <Skeleton className="h-4 w-72" />
+                        </div>
+                    </div>
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-32 w-full" />
+                </div>
+            ) : setupSnippets ? (
                 <div className="space-y-3">
                     <div>
                         <div className="text-sm font-medium">{t('SetupTitle')}</div>
@@ -335,10 +355,18 @@ export function AgentAccessPanel() {
                     {message.text}
                 </div>
             ) : null}
+        </div>
+    );
+}
 
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadSettings} disabled={loading} aria-label={t('Refresh')} title={t('Refresh')}>
-                <RotateCcw className="h-3.5 w-3.5" />
-            </Button>
+function TokenSkeleton() {
+    return (
+        <div className="flex items-center justify-between gap-3 px-3 py-3">
+            <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-3 w-36" />
+            </div>
+            <Skeleton className="h-7 w-7" />
         </div>
     );
 }

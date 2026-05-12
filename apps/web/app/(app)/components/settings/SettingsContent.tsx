@@ -1,10 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { MonitorCog } from 'lucide-react';
 import { DialogTitle, DialogDescription } from '@/registry/new-york-v4/ui/dialog';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
-import { MonitorCog } from 'lucide-react';
 import type { CategoryKey } from './types';
 import { getCategories } from './types';
 import { PanelByKey } from './PanelByKey';
