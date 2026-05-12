@@ -1,4 +1,4 @@
-import { notarize } from 'electron-notarize';
+import { notarize } from '@electron/notarize';
 import { config as dotenvConfig } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
