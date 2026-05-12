@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { getDBService } from '@dory/database';
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
-export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run'] as const;
+export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'saved_queries:read', 'monitoring:read'] as const;
 
 export type McpAuthContext = {
     tokenId: string;
@@ -65,7 +65,9 @@ export function isAllowedMcpOrigin(req: Request): boolean {
         return false;
     }
 
-    const trusted = parseCsvEnv('TRUSTED_ORIGINS').map(normalizeOrigin).filter((item): item is string => Boolean(item));
+    const trusted = parseCsvEnv('TRUSTED_ORIGINS')
+        .map(normalizeOrigin)
+        .filter((item): item is string => Boolean(item));
     return trusted.includes(origin);
 }
 
@@ -139,5 +141,9 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
 }
 
 export function hasMcpScope(context: McpAuthContext, scope: string) {
+    if (scope === 'schema:read' && context.scopes.includes('connections:read')) {
+        return true;
+    }
+
     return context.scopes.includes(scope);
 }

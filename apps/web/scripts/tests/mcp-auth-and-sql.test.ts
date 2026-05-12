@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { generateMcpToken, hashMcpToken, isAllowedMcpOrigin, MCP_DEFAULT_SCOPES, MCP_TOKEN_PREFIX } from '../../lib/server/mcp/auth';
+import { generateMcpToken, hashMcpToken, hasMcpScope, isAllowedMcpOrigin, MCP_DEFAULT_SCOPES, MCP_TOKEN_PREFIX } from '../../lib/server/mcp/auth';
 import { getReadonlyMcpStatements } from '../../lib/server/mcp/sql-safety';
+import { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '../../lib/server/mcp/tools';
 
 test('generateMcpToken returns one-time token metadata without storing the raw token', () => {
     const generated = generateMcpToken();
@@ -14,7 +15,19 @@ test('generateMcpToken returns one-time token metadata without storing the raw t
 });
 
 test('default MCP scopes cover v1 read and analysis capabilities', () => {
-    assert.deepEqual([...MCP_DEFAULT_SCOPES], ['connections:read', 'query:read', 'analysis:run']);
+    assert.deepEqual([...MCP_DEFAULT_SCOPES], ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'saved_queries:read', 'monitoring:read']);
+});
+
+test('connections:read remains compatible with schema read tools', () => {
+    const context = {
+        tokenId: 'token',
+        organizationId: 'org',
+        userId: 'user',
+        scopes: ['connections:read'],
+    };
+
+    assert.equal(hasMcpScope(context, 'schema:read'), true);
+    assert.equal(hasMcpScope(context, 'saved_queries:read'), false);
 });
 
 test('isAllowedMcpOrigin accepts same-origin and localhost calls', () => {
@@ -64,4 +77,91 @@ test('getReadonlyMcpStatements accepts supported read-only SQL prefixes', () => 
 test('getReadonlyMcpStatements rejects write operations and mixed multi-statements', () => {
     assert.throws(() => getReadonlyMcpStatements('INSERT INTO users VALUES (1)'), /Only read-only SQL is allowed/);
     assert.throws(() => getReadonlyMcpStatements('SELECT * FROM users; DROP TABLE users;'), /Only read-only SQL is allowed/);
+});
+
+test('normalizeMonitoringFilters applies monitoring defaults and clamps min duration', () => {
+    assert.deepEqual(normalizeMonitoringFilters(null), {
+        search: '',
+        user: 'all',
+        database: 'all',
+        queryType: 'all',
+        minDurationMs: 0,
+        timeRange: '1h',
+    });
+
+    assert.deepEqual(
+        normalizeMonitoringFilters({
+            search: 'timeout',
+            user: 'app',
+            database: 'warehouse',
+            queryType: 'select',
+            minDurationMs: 123.7,
+            timeRange: '24h',
+        }),
+        {
+            search: 'timeout',
+            user: 'app',
+            database: 'warehouse',
+            queryType: 'select',
+            minDurationMs: 123,
+            timeRange: '24h',
+        },
+    );
+});
+
+test('clampMcpLimit returns defaults and enforces max', () => {
+    assert.equal(clampMcpLimit(undefined, 25, 100), 25);
+    assert.equal(clampMcpLimit(0, 25, 100), 1);
+    assert.equal(clampMcpLimit(12.8, 25, 100), 12);
+    assert.equal(clampMcpLimit(120, 25, 100), 100);
+});
+
+test('matchSchemaSearch matches table and column metadata', () => {
+    assert.equal(
+        matchSchemaSearch(
+            {
+                kind: 'table',
+                database: 'analytics',
+                name: 'orders',
+                comment: 'Customer purchases',
+                totalBytes: null,
+                totalRows: null,
+                lastModified: null,
+            },
+            'purchase',
+        ),
+        true,
+    );
+
+    assert.equal(
+        matchSchemaSearch(
+            {
+                kind: 'column',
+                database: 'analytics',
+                table: 'orders',
+                name: 'created_at',
+                type: 'timestamp',
+                comment: null,
+                isPrimaryKey: null,
+            },
+            'timestamp',
+        ),
+        true,
+    );
+
+    assert.equal(
+        matchSchemaSearch(
+            {
+                kind: 'column',
+                database: 'analytics',
+                table: 'orders',
+                name: 'created_at',
+                type: 'timestamp',
+                comment: null,
+                isPrimaryKey: null,
+            },
+            'invoice',
+        ),
+        false,
+    );
 });
