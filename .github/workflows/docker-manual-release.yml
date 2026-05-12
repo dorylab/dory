@@ -1,0 +1,155 @@
+name: docker-manual-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: "Commit, branch, or tag to build."
+        required: true
+        default: main
+        type: string
+      release_version:
+        description: "Version to bake into package files, with or without v prefix."
+        required: true
+        type: string
+      release_channel:
+        description: "Image channel to publish."
+        required: true
+        default: test
+        type: choice
+        options:
+          - test
+          - stable
+      image_name:
+        description: "Docker image name."
+        required: true
+        default: dorylab/dory
+        type: string
+      no_cache:
+        description: "Build without Docker layer cache."
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: docker-manual-release-${{ inputs.git_ref }}-${{ inputs.release_version }}-${{ inputs.release_channel }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout requested ref
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.git_ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve build metadata
+        id: meta
+        run: |
+          set -euo pipefail
+
+          RAW_VERSION="${{ inputs.release_version }}"
+          VERSION="${RAW_VERSION#v}"
+          TAG="v$VERSION"
+          CHANNEL="${{ inputs.release_channel }}"
+          FULL_SHA="$(git rev-parse HEAD)"
+          SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+          CREATED="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
+            echo "Invalid release_version: $RAW_VERSION. Expected semver, with or without v prefix." >&2
+            exit 1
+          fi
+
+          if [ "$CHANNEL" = "stable" ]; then
+            FLOATING_TAG="latest"
+          else
+            FLOATING_TAG="test"
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "floating_tag=$FLOATING_TAG" >> "$GITHUB_OUTPUT"
+          echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "created=$CREATED" >> "$GITHUB_OUTPUT"
+
+          echo "Building ${{ inputs.image_name }}:$TAG from $FULL_SHA"
+
+      - name: Apply package version for image build
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}" node -e "
+          const fs = require('fs');
+          const targets = [
+            'package.json',
+            'apps/admin/package.json',
+            'apps/electron/package.json',
+            'apps/web/package.json',
+          ];
+          const version = process.env.VERSION;
+          for (const target of targets) {
+            const data = JSON.parse(fs.readFileSync(target, 'utf8'));
+            data.version = version;
+            const indent = target === 'package.json' ? 2 : 4;
+            fs.writeFileSync(target, JSON.stringify(data, null, indent) + '\n');
+          }
+          "
+
+      - name: Verify Docker build context
+        run: |
+          set -euo pipefail
+          git status --short
+          nl -ba Dockerfile | sed -n '1,35p'
+
+          if grep -n 'COPY .*\.yarnrc\.yml\|COPY .*\.yarn/releases' Dockerfile; then
+            echo "Dockerfile still copies repository Yarn release files." >&2
+            exit 1
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          no-cache: ${{ inputs.no_cache }}
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ inputs.image_name }}:${{ steps.meta.outputs.tag }}
+            ${{ inputs.image_name }}:${{ steps.meta.outputs.floating_tag }}
+            ${{ inputs.image_name }}:sha-${{ steps.meta.outputs.short_sha }}
+          labels: |
+            org.opencontainers.image.title=dory
+            org.opencontainers.image.description=Self-hosted data workspace for SQL, notebooks, and local-first workflows.
+            org.opencontainers.image.url=https://github.com/dorylab/dory
+            org.opencontainers.image.source=https://github.com/dorylab/dory
+            org.opencontainers.image.version=${{ steps.meta.outputs.tag }}
+            org.opencontainers.image.created=${{ steps.meta.outputs.created }}
+            org.opencontainers.image.revision=${{ steps.meta.outputs.full_sha }}
+          cache-from: type=registry,ref=${{ inputs.image_name }}:buildcache
+          cache-to: type=registry,ref=${{ inputs.image_name }}:buildcache,mode=max
+          build-args: |
+            VERSION=${{ steps.meta.outputs.full_sha }}
+            BUILD_DATE=${{ steps.meta.outputs.created }}
+            GIT_COMMIT=${{ steps.meta.outputs.full_sha }}
+            GIT_BRANCH=${{ inputs.git_ref }}
+            GIT_TAG=${{ steps.meta.outputs.tag }}
+            RELEASE_CHANNEL=${{ inputs.release_channel }}
