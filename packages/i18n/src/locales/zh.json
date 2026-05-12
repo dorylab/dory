@@ -2784,7 +2784,7 @@
                 "AgentAccess": {
                     "Label": "MCP",
                     "Title": "MCP",
-                    "Description": "允许可信 Agent 通过 MCP 调用 Dory。"
+                    "Description": "使用你的个人 MCP token 连接可信 Agent。"
                 },
                 "About": {
                     "Label": "关于",
@@ -2899,23 +2899,23 @@
                 "SaveFailed": "更新 MCP 设置失败。",
                 "CreateFailed": "创建 MCP token 失败。",
                 "RevokeFailed": "撤销 MCP token 失败。",
-                "EnableLabel": "启用 MCP",
-                "EnableDescription": "允许可信 Agent 通过 Dory MCP endpoint 调用当前组织。",
+                "EnableLabel": "个人 MCP",
+                "EnableDescription": "为你信任的 MCP client 创建个人 token。",
                 "EndpointLabel": "Endpoint",
-                "EndpointDescription": "在 Codex 或其他 MCP client 中使用这个 URL。",
+                "EndpointDescription": "在 Codex 或其他 MCP client 中配合你的个人 MCP token 使用这个 URL。",
                 "Copy": "复制",
                 "Copied": "已复制",
                 "DeleteToken": "删除 token",
-                "TokensTitle": "访问 token",
+                "TokensTitle": "个人访问 token",
                 "TokenNamePlaceholder": "Client 名称",
                 "CreateToken": "创建",
                 "TokenCreated": "Token 已创建。",
-                "TokenOnce": "现在复制这个 token。它之后不会再次显示。",
-                "NoTokens": "还没有 MCP token。",
+                "TokenOnce": "现在复制这个个人 token。它之后不会再次显示。",
+                "NoTokens": "你还没有 MCP token。",
                 "LastUsedAt": "最后使用：{date}",
                 "RevokedAt": "已撤销：{date}",
                 "SetupTitle": "MCP 配置方法",
-                "SetupDescription": "所有 MCP client 都可以用 endpoint 加 Dory MCP token 连接。",
+                "SetupDescription": "这些 token 属于你的用户账号，请不要分享；当你被移出组织后，访问会自动失效。",
                 "SetupTabs": {
                     "General": "通用"
                 },

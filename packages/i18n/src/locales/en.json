@@ -2782,7 +2782,7 @@
                 "AgentAccess": {
                     "Label": "MCP",
                     "Title": "MCP",
-                    "Description": "Let trusted agents call Dory through MCP."
+                    "Description": "Connect trusted agents to Dory with your personal MCP tokens."
                 },
                 "About": {
                     "Label": "About",
@@ -2897,23 +2897,23 @@
                 "SaveFailed": "Failed to update MCP settings.",
                 "CreateFailed": "Failed to create MCP token.",
                 "RevokeFailed": "Failed to revoke MCP token.",
-                "EnableLabel": "Enable MCP",
-                "EnableDescription": "Allow trusted agents to call this organization through the Dory MCP endpoint.",
+                "EnableLabel": "Personal MCP",
+                "EnableDescription": "Create personal tokens for MCP clients you trust.",
                 "EndpointLabel": "Endpoint",
-                "EndpointDescription": "Use this URL in Codex or another MCP client.",
+                "EndpointDescription": "Use this URL with your personal MCP token in Codex or another MCP client.",
                 "Copy": "Copy",
                 "Copied": "Copied",
                 "DeleteToken": "Delete token",
-                "TokensTitle": "Access tokens",
+                "TokensTitle": "Personal access tokens",
                 "TokenNamePlaceholder": "Client name",
                 "CreateToken": "Create",
                 "TokenCreated": "Token created.",
-                "TokenOnce": "Copy this token now. It will not be shown again.",
-                "NoTokens": "No MCP tokens yet.",
+                "TokenOnce": "Copy this personal token now. It will not be shown again.",
+                "NoTokens": "You have no MCP tokens yet.",
                 "LastUsedAt": "Last used: {date}",
                 "RevokedAt": "Revoked: {date}",
                 "SetupTitle": "MCP setup",
-                "SetupDescription": "Use the endpoint with a Dory MCP token in any MCP client.",
+                "SetupDescription": "These tokens belong to your user account. Do not share them; access ends when your organization membership is removed.",
                 "SetupTabs": {
                     "General": "General"
                 },

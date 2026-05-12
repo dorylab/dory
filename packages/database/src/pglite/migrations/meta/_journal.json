@@ -64,6 +64,13 @@
       "when": 1778517567589,
       "tag": "0008_wandering_abomination",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778574691122,
+      "tag": "0009_personal_mcp_tokens",
+      "breakpoints": true
     }
   ]
 }

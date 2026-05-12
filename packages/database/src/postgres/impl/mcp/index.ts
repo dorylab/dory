@@ -83,6 +83,14 @@ export class PostgresMcpRepository {
         return this.db.select().from(mcpAccessTokens).where(eq(mcpAccessTokens.organizationId, organizationId)).orderBy(mcpAccessTokens.createdAt);
     }
 
+    async listTokensForUser(organizationId: string, userId: string): Promise<McpAccessTokenRecord[]> {
+        return this.db
+            .select()
+            .from(mcpAccessTokens)
+            .where(and(eq(mcpAccessTokens.organizationId, organizationId), eq(mcpAccessTokens.createdByUserId, userId)))
+            .orderBy(mcpAccessTokens.createdAt);
+    }
+
     async createToken(input: McpAccessTokenCreateInput): Promise<McpAccessTokenRecord> {
         const [created] = await this.db
             .insert(mcpAccessTokens)
@@ -142,6 +150,15 @@ export class PostgresMcpRepository {
         const rows = await this.db
             .delete(mcpAccessTokens)
             .where(and(eq(mcpAccessTokens.organizationId, organizationId), eq(mcpAccessTokens.id, id)))
+            .returning({ id: mcpAccessTokens.id });
+
+        return rows.length > 0;
+    }
+
+    async deleteTokenForUser(organizationId: string, userId: string, id: string): Promise<boolean> {
+        const rows = await this.db
+            .delete(mcpAccessTokens)
+            .where(and(eq(mcpAccessTokens.organizationId, organizationId), eq(mcpAccessTokens.createdByUserId, userId), eq(mcpAccessTokens.id, id)))
             .returning({ id: mcpAccessTokens.id });
 
         return rows.length > 0;

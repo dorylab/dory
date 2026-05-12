@@ -1,13 +1,23 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { withManagedOrganizationHandler } from '@/app/api/utils/with-organization-handler';
+import { withOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
 
 export const runtime = 'nodejs';
 
 export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
-    return withManagedOrganizationHandler(async ({ db, organizationId }) => {
+    return withOrganizationHandler(async ({ db, organizationId, userId }) => {
+        if (!userId) {
+            return NextResponse.json(
+                ResponseUtil.error({
+                    code: ErrorCodes.UNAUTHORIZED,
+                    message: 'Unauthorized',
+                }),
+                { status: 401 },
+            );
+        }
+
         const { id } = await context.params;
         if (!id) {
             return NextResponse.json(
@@ -19,7 +29,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ id: 
             );
         }
 
-        const deleted = await db.mcp.deleteToken(organizationId, id);
+        const deleted = await db.mcp.deleteTokenForUser(organizationId, userId, id);
         if (!deleted) {
             return NextResponse.json(
                 ResponseUtil.error({

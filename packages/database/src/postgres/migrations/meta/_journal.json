@@ -64,6 +64,13 @@
       "when": 1778517719696,
       "tag": "0008_curved_clint_barton",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1778574691122,
+      "tag": "0009_personal_mcp_tokens",
+      "breakpoints": true
     }
   ]
 }

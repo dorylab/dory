@@ -8,7 +8,6 @@ import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { SettingsRow } from './SettingsRow';
@@ -25,7 +24,6 @@ type McpTokenRecord = {
 };
 
 type McpSettingsPayload = {
-    enabled: boolean;
     endpoint: string;
     defaultScopes: string[];
     tokens: McpTokenRecord[];
@@ -53,7 +51,6 @@ export function AgentAccessPanel() {
     const t = useTranslations('DoryUI.Settings.AgentAccess');
     const [settings, setSettings] = useState<McpSettingsPayload | null>(null);
     const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
     const [creating, setCreating] = useState(false);
     const [tokenName, setTokenName] = useState('MCP Client');
     const [newToken, setNewToken] = useState<string | null>(null);
@@ -127,25 +124,6 @@ export function AgentAccessPanel() {
         void loadSettings();
     }, [loadSettings]);
 
-    const updateEnabled = async (enabled: boolean) => {
-        setSaving(true);
-        setMessage(null);
-        try {
-            const payload = await readJson<{ enabled: boolean }>(
-                await authFetch('/api/mcp/settings', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enabled }),
-                }),
-            );
-            setSettings(current => (current ? { ...current, enabled: payload.enabled } : current));
-        } catch (error) {
-            setMessage({ type: 'error', text: error instanceof Error ? error.message : t('SaveFailed') });
-        } finally {
-            setSaving(false);
-        }
-    };
-
     const createToken = async () => {
         setCreating(true);
         setMessage(null);
@@ -204,10 +182,6 @@ export function AgentAccessPanel() {
 
     return (
         <div className="space-y-6">
-            <SettingsRow label={t('EnableLabel')} description={t('EnableDescription')}>
-                <Switch checked={settings?.enabled ?? false} disabled={saving || !settings} onCheckedChange={updateEnabled} />
-            </SettingsRow>
-
             <div className="space-y-1.5">
                 <SettingsRow label={t('EndpointLabel')} description={t('EndpointDescription')}>
                     <CopyButton

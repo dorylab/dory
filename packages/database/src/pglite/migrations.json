@@ -169,5 +169,13 @@
     "bps": true,
     "folderMillis": 1778517567589,
     "hash": "a9a2b1a0613767c83cbcfe482306f631163c5a88763cd8257c5877526c6fe2c6"
+  },
+  {
+    "sql": [
+      "CREATE INDEX \"idx_mcp_access_tokens_organization_user_created\" ON \"mcp_access_tokens\" USING btree (\"organization_id\",\"created_by_user_id\",\"created_at\");"
+    ],
+    "bps": true,
+    "folderMillis": 1778574691122,
+    "hash": "f6317b19edb35c0bd8f2c3a77f5552afa07b7451b3131e6c3dadeeca4acac7bd"
   }
 ]
