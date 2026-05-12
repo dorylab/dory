@@ -8,8 +8,10 @@ import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
+import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 import { SettingsRow } from './SettingsRow';
 
 type McpTokenRecord = {
@@ -27,6 +29,13 @@ type McpSettingsPayload = {
     endpoint: string;
     defaultScopes: string[];
     tokens: McpTokenRecord[];
+};
+
+type McpProxyState = {
+    enabled: boolean;
+    running: boolean;
+    endpoint: string;
+    error: string | null;
 };
 
 const TOKEN_PLACEHOLDER = 'dory_mcp_...';
@@ -50,21 +59,25 @@ async function readJson<T>(res: Response): Promise<T> {
 export function AgentAccessPanel() {
     const t = useTranslations('DoryUI.Settings.AgentAccess');
     const [settings, setSettings] = useState<McpSettingsPayload | null>(null);
+    const [mcpProxy, setMcpProxy] = useState<McpProxyState | null>(null);
     const [loading, setLoading] = useState(true);
+    const [proxyBusy, setProxyBusy] = useState(false);
     const [creating, setCreating] = useState(false);
     const [tokenName, setTokenName] = useState('MCP Client');
     const [newToken, setNewToken] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const isDesktop = isDesktopRuntime();
+    const effectiveEndpoint = mcpProxy?.enabled && mcpProxy.running && mcpProxy.endpoint ? mcpProxy.endpoint : settings?.endpoint;
 
     const setupSnippets = useMemo(() => {
-        if (!settings?.endpoint) return '';
+        if (!effectiveEndpoint) return '';
         const authorizationHeader = `Bearer ${TOKEN_PLACEHOLDER}`;
         const genericJson = JSON.stringify(
             {
                 mcpServers: {
                     dory: {
                         type: 'http',
-                        url: settings.endpoint,
+                        url: effectiveEndpoint,
                         headers: {
                             Authorization: authorizationHeader,
                         },
@@ -76,17 +89,17 @@ export function AgentAccessPanel() {
         );
         const codexCli = [
             `export ${TOKEN_ENV_VAR}="${TOKEN_PLACEHOLDER}"`,
-            `codex mcp add dory --url ${settings.endpoint} --bearer-token-env-var ${TOKEN_ENV_VAR}`,
+            `codex mcp add dory --url ${effectiveEndpoint} --bearer-token-env-var ${TOKEN_ENV_VAR}`,
             'codex mcp list',
         ].join('\n');
-        const codexToml = [`[mcp_servers.dory]`, `url = "${settings.endpoint}"`, `bearer_token_env_var = "${TOKEN_ENV_VAR}"`].join('\n');
-        const claudeCli = [`claude mcp add --transport http dory ${settings.endpoint} \\`, `  --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}"`, 'claude mcp list'].join('\n');
+        const codexToml = [`[mcp_servers.dory]`, `url = "${effectiveEndpoint}"`, `bearer_token_env_var = "${TOKEN_ENV_VAR}"`].join('\n');
+        const claudeCli = [`claude mcp add --transport http dory ${effectiveEndpoint} \\`, `  --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}"`, 'claude mcp list'].join('\n');
         const claudeJson = JSON.stringify(
             {
                 mcpServers: {
                     dory: {
                         type: 'http',
-                        url: settings.endpoint,
+                        url: effectiveEndpoint,
                         headers: {
                             Authorization: `Bearer \${${TOKEN_ENV_VAR}}`,
                         },
@@ -97,7 +110,7 @@ export function AgentAccessPanel() {
             2,
         );
         return {
-            endpoint: settings.endpoint,
+            endpoint: effectiveEndpoint,
             genericJson,
             codexCli,
             codexToml,
@@ -105,20 +118,44 @@ export function AgentAccessPanel() {
             claudeJson,
             authorizationHeader,
         };
-    }, [settings?.endpoint]);
+    }, [effectiveEndpoint]);
+
+    const loadMcpProxyState = useCallback(async () => {
+        if (!isDesktop || typeof window === 'undefined' || !window.mcpBridge) {
+            setMcpProxy(null);
+            return null;
+        }
+
+        const state = await window.mcpBridge.getState();
+        setMcpProxy(state);
+        return state;
+    }, [isDesktop]);
 
     const loadSettings = useCallback(async () => {
         setLoading(true);
         setMessage(null);
         try {
-            const payload = await readJson<McpSettingsPayload>(await authFetch('/api/mcp/settings'));
+            const settingsPromise = authFetch('/api/mcp/settings').then(readJson<McpSettingsPayload>);
+            const proxyPromise = loadMcpProxyState().catch(error => {
+                setMcpProxy(current =>
+                    current
+                        ? {
+                              ...current,
+                              running: false,
+                              error: error instanceof Error ? error.message : String(error),
+                          }
+                        : current,
+                );
+                return null;
+            });
+            const [payload] = await Promise.all([settingsPromise, proxyPromise]);
             setSettings(payload);
         } catch (error) {
             setMessage({ type: 'error', text: error instanceof Error ? error.message : t('LoadFailed') });
         } finally {
             setLoading(false);
         }
-    }, [t]);
+    }, [loadMcpProxyState, t]);
 
     useEffect(() => {
         void loadSettings();
@@ -167,6 +204,24 @@ export function AgentAccessPanel() {
         }
     };
 
+    const toggleMcpProxy = async (enabled: boolean) => {
+        if (typeof window === 'undefined' || !window.mcpBridge) return;
+        setProxyBusy(true);
+        setMessage(null);
+        try {
+            const state = enabled ? await window.mcpBridge.start() : await window.mcpBridge.stop();
+            setMcpProxy(state);
+            if (state.error) {
+                setMessage({ type: 'error', text: state.error });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: error instanceof Error ? error.message : t('ProxyStartFailed') });
+            await loadMcpProxyState().catch(() => undefined);
+        } finally {
+            setProxyBusy(false);
+        }
+    };
+
     const copyLabel = (
         <>
             <Copy className="h-3.5 w-3.5" />
@@ -182,14 +237,36 @@ export function AgentAccessPanel() {
 
     return (
         <div className="space-y-6">
+            {isDesktop ? (
+                <div className="space-y-2">
+                    <SettingsRow label={t('ProxyLabel')} description={t('ProxyDescription')}>
+                        {mcpProxy ? (
+                            <Switch
+                                checked={mcpProxy.enabled}
+                                disabled={proxyBusy || loading || typeof window === 'undefined' || !window.mcpBridge}
+                                onCheckedChange={checked => {
+                                    void toggleMcpProxy(checked);
+                                }}
+                                aria-label={t('ProxyLabel')}
+                            />
+                        ) : (
+                            <Skeleton className="h-5 w-8 rounded-full" />
+                        )}
+                    </SettingsRow>
+                    {mcpProxy?.enabled && !mcpProxy.running ? (
+                        <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">{mcpProxy.error ?? t('ProxyStopped')}</div>
+                    ) : null}
+                </div>
+            ) : null}
+
             <div className="space-y-1.5">
                 <SettingsRow label={t('EndpointLabel')} description={t('EndpointDescription')}>
                     <CopyButton
-                        text={settings?.endpoint ?? ''}
+                        text={effectiveEndpoint ?? ''}
                         variant="outline"
                         size="icon"
                         className="h-7 w-7"
-                        disabled={!settings?.endpoint}
+                        disabled={!effectiveEndpoint}
                         aria-label={t('Copy')}
                         title={t('Copy')}
                         label={copyLabel}
@@ -198,8 +275,8 @@ export function AgentAccessPanel() {
                 </SettingsRow>
                 {isInitialLoading ? (
                     <Skeleton className="h-9 w-full" />
-                ) : settings?.endpoint ? (
-                    <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{settings.endpoint}</pre>
+                ) : effectiveEndpoint ? (
+                    <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{effectiveEndpoint}</pre>
                 ) : null}
             </div>
 

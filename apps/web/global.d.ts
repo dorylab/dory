@@ -22,6 +22,13 @@ type UpdateBridgeState = {
   version: string | null;
 };
 
+type McpBridgeState = {
+  enabled: boolean;
+  running: boolean;
+  endpoint: string;
+  error: string | null;
+};
+
 interface Window {
   authBridge?: AuthBridge;
   localeBridge?: {
@@ -38,6 +45,11 @@ interface Window {
     getState: () => Promise<UpdateBridgeState>;
     restartAndInstall: () => Promise<boolean>;
     onStateChanged: (callback: (state: UpdateBridgeState) => void) => () => void;
+  };
+  mcpBridge?: {
+    getState: () => Promise<McpBridgeState>;
+    start: () => Promise<McpBridgeState>;
+    stop: () => Promise<McpBridgeState>;
   };
   logBridge?: {
     log: (level: 'info' | 'warn' | 'error', ...args: unknown[]) => void;
