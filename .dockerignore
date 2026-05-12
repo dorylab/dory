@@ -19,6 +19,8 @@ dist-scripts
 **/*.tsbuildinfo
 
 # package managers
+.yarn
+.yarnrc.yml
 .pnpm-store
 pnpm-debug.log*
 npm-debug.log*

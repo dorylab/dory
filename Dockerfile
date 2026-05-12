@@ -7,11 +7,12 @@ RUN corepack enable \
 
 ARG VERSION
 ENV VERSION="${VERSION}" \
-    CI=true
+    CI=true \
+    YARN_NODE_LINKER=node-modules \
+    YARN_ENABLE_SCRIPTS=true
 
 # Copy dependency files first for better caching (includes all workspaces)
-COPY package.json yarn.lock .yarnrc.yml ./
-COPY .yarn/releases/yarn-4.14.1.cjs ./.yarn/releases/yarn-4.14.1.cjs
+COPY package.json yarn.lock ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/electron/package.json ./apps/electron/
 COPY apps/admin/package.json ./apps/admin/
