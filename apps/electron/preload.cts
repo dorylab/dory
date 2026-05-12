@@ -44,6 +44,12 @@ contextBridge.exposeInMainWorld('localeBridge', {
     },
 });
 
+contextBridge.exposeInMainWorld('mcpBridge', {
+    getState: () => ipcRenderer.invoke('mcp:get-state') as Promise<{ enabled: boolean; running: boolean; endpoint: string; error: string | null }>,
+    start: () => ipcRenderer.invoke('mcp:start') as Promise<{ enabled: boolean; running: boolean; endpoint: string; error: string | null }>,
+    stop: () => ipcRenderer.invoke('mcp:stop') as Promise<{ enabled: boolean; running: boolean; endpoint: string; error: string | null }>,
+});
+
 contextBridge.exposeInMainWorld('updateBridge', {
     getState: () => ipcRenderer.invoke('updater:get-state') as Promise<{ readyToInstall: boolean; version: string | null }>,
     restartAndInstall: () => ipcRenderer.invoke('updater:restart-and-install') as Promise<boolean>,

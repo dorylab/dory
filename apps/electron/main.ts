@@ -6,6 +6,7 @@ import { ensureDirectoryExists } from './main/filesystem.js';
 import { createMainI18n } from './main/i18n.js';
 import { getStoredLocale, registerLocaleIpc } from './main/locale.js';
 import { getMainLogFilePath, setupMainLogger } from './main/logger.js';
+import { createMcpProxyManager } from './main/mcp-proxy.js';
 import { registerProtocolClient } from './main/protocol.js';
 import { createStandaloneServerManager } from './main/server.js';
 import { setUpdaterLocale, setupUpdater } from './main/updater.js';
@@ -46,6 +47,11 @@ const serverManager = createStandaloneServerManager({
   isDev,
   userDataPath: getUserDataPath(),
   databasePath,
+  log,
+  logWarn,
+  logError,
+});
+const mcpProxyManager = createMcpProxyManager({
   log,
   logWarn,
   logError,
@@ -238,6 +244,11 @@ async function launch() {
       const targetUrl = await serverManager.getAppUrl();
       log('[electron] launch targetUrl:', targetUrl);
       loadMainWindowUrl(targetUrl, log);
+      if (mcpProxyManager.isEnabled()) {
+        await mcpProxyManager.start(targetUrl, { persist: false }).catch(error => {
+          logError('[electron] failed to restore MCP proxy:', error);
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logError('[electron] launch error:', error);
@@ -332,6 +343,7 @@ if (!gotLock) {
 app.on('before-quit', () => {
   log('[electron] before-quit');
   setMainWindowQuitting(true);
+  mcpProxyManager.stop({ persist: false });
   serverManager.stopStandaloneServer();
 });
 
@@ -362,6 +374,19 @@ ipcMain.handle('filesystem:select-sqlite-file', async () => {
   }
 
   return result.filePaths[0] ?? null;
+});
+
+ipcMain.handle('mcp:get-state', async () => {
+  return mcpProxyManager.getState();
+});
+
+ipcMain.handle('mcp:start', async () => {
+  const targetUrl = await serverManager.getAppUrl();
+  return mcpProxyManager.start(targetUrl);
+});
+
+ipcMain.handle('mcp:stop', async () => {
+  return mcpProxyManager.stop();
 });
 
 ipcMain.on('log:renderer', (_event, level: string, ...args: unknown[]) => {
