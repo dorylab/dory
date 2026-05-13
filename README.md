@@ -51,16 +51,17 @@ docker run -d --name dory \
   -e DORY_AI_API_KEY=your_api_key_here \
   -e DORY_AI_URL=https://api.openai.com/v1 \
   -e NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false \
+  -e DORY_INIT_USER_EMAIL=admin@getdory.dev \
+  -e DORY_INIT_USER_PASSWORD=admin \
   dorylab/dory:latest
 
 ```
 
-If you want a fixed bootstrap login in Docker, add:
+Then:
 
-```bash
--e DORY_INIT_USER_EMAIL=admin@getdory.dev \
--e DORY_INIT_USER_PASSWORD=admin
-```
+`Username: admin@getdory.dev`
+
+`Password: admin`
 
 To enable email verification, set `RESEND_API_KEY` to a valid [resend](https://resend.com) key and `EMAIL_FROM` to a validated email.
 
