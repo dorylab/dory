@@ -41,7 +41,7 @@ export function ConnectionsEmptyState({ searchQuery, showSearchEmpty, onAddConne
 
                         {!showSearchEmpty && onAddLocalFiles && (
                             <Button variant="secondary" className="w-full sm:w-auto" onClick={onAddLocalFiles}>
-                                Local Files
+                                Open Files
                             </Button>
                         )}
 

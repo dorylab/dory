@@ -1,12 +1,12 @@
 'use client';
 
-import * as React from 'react';
 import { useMemo, useState } from 'react';
-import { Database, FileSearch, Loader2 } from 'lucide-react';
+import { ChevronDown, Database, FileSearch, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Label } from '@/registry/new-york-v4/ui/label';
@@ -27,7 +27,7 @@ function defaultDatasetName(filePath: string) {
         .filter(Boolean)
         .pop()
         ?.replace(/\.[^.]+$/, '');
-    return name || 'Local Files';
+    return name || 'Open Files';
 }
 
 export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDialogProps) {
@@ -37,6 +37,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
     const [selectedRelations, setSelectedRelations] = useState<Set<string>>(new Set());
     const [inspecting, setInspecting] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
 
     const relations = inspectResult?.relations ?? [];
     const canCreate = Boolean(inspectResult && datasetName.trim() && selectedRelations.size > 0);
@@ -52,6 +53,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
         setSelectedRelations(new Set());
         setInspecting(false);
         setCreating(false);
+        setAdvancedOpen(false);
     };
 
     const handleOpenChange = (nextOpen: boolean) => {
@@ -81,6 +83,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
             setInspectResult(result.data);
             setDatasetName(current => current || defaultDatasetName(trimmedPath));
             setSelectedRelations(new Set(result.data.relations.map(relation => relation.relationName)));
+            setAdvancedOpen(false);
         } catch (error: any) {
             toast.error(error?.message ?? 'Failed to inspect local file');
         } finally {
@@ -130,13 +133,13 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
                 relations: selectedRelationList,
             });
             if (!isSuccess(result)) {
-                throw new Error(result.message || 'Failed to create Local Files dataset');
+                throw new Error(result.message || 'Failed to create Open Files dataset');
             }
-            toast.success('Local Files dataset created.');
+            toast.success('Open Files dataset created.');
             onSuccess?.();
             handleOpenChange(false);
         } catch (error: any) {
-            toast.error(error?.message ?? 'Failed to create Local Files dataset');
+            toast.error(error?.message ?? 'Failed to create Open Files dataset');
         } finally {
             setCreating(false);
         }
@@ -148,52 +151,68 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Database className="h-5 w-5" />
-                        Local Files
+                        Open Files
                     </DialogTitle>
                 </DialogHeader>
 
                 <div className="space-y-5">
                     <div className="space-y-2">
-                        <Label htmlFor="local-files-path">File Asset</Label>
+                        <Label htmlFor="local-files-path">File Path</Label>
                         <div className="flex gap-2">
                             <Input id="local-files-path" placeholder="/data/sales.xlsx" value={filePath} onChange={event => setFilePath(event.target.value)} />
                             <Button type="button" variant="secondary" onClick={handleInspect} disabled={inspecting || creating}>
                                 {inspecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
-                                Inspect
+                                Preview
                             </Button>
                         </div>
                     </div>
 
                     {inspectResult ? (
                         <>
-                            <div className="space-y-2">
-                                <Label htmlFor="local-files-dataset-name">Dataset name</Label>
-                                <Input id="local-files-dataset-name" value={datasetName} onChange={event => setDatasetName(event.target.value)} />
-                            </div>
-
                             <div className="space-y-3">
-                                <div>
-                                    <h3 className="text-sm font-medium">Relations</h3>
-                                    <p className="text-muted-foreground text-xs">
-                                        Dataset source · {inspectResult.source.sourceType.toUpperCase()} · {inspectResult.source.sizeBytes.toLocaleString()} bytes
-                                    </p>
-                                </div>
-                                <div className="border-border max-h-72 overflow-auto rounded-md border">
+                                <p className="text-sm font-medium">Found {relations.length.toLocaleString()} sheets in this file</p>
+                                <div className="space-y-2">
                                     {relations.map(relation => (
-                                        <div
-                                            key={`${relation.sheetName ?? relation.duckdbPath}:${relation.relationName}`}
-                                            className="grid grid-cols-[auto_minmax(0,1fr)_minmax(160px,220px)] items-center gap-3 border-b px-3 py-2 last:border-b-0"
-                                        >
+                                        <Label key={`${relation.sheetName ?? relation.duckdbPath}:sheet`} className="flex min-w-0 items-center gap-3 text-sm font-normal">
                                             <Checkbox
                                                 checked={selectedRelations.has(relation.relationName)}
                                                 onCheckedChange={checked => updateRelation(relation.relationName, checked === true)}
                                             />
-                                            <Label className="min-w-0 truncate text-sm">{relation.sheetName || relation.duckdbPath}</Label>
-                                            <Input value={relation.relationName} onChange={event => updateRelationName(relation, event.target.value)} />
-                                        </div>
+                                            <span className="min-w-0 truncate">{relation.sheetName || relation.duckdbPath}</span>
+                                        </Label>
                                     ))}
                                 </div>
                             </div>
+
+                            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="border-border rounded-md border">
+                                <CollapsibleTrigger asChild>
+                                    <Button type="button" variant="ghost" className="group flex h-10 w-full justify-between px-3 text-sm font-medium">
+                                        Advanced options
+                                        <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+                                    </Button>
+                                </CollapsibleTrigger>
+                                <CollapsibleContent className="space-y-4 border-t px-3 py-3">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="local-files-dataset-name">Workspace Name</Label>
+                                        <Input id="local-files-dataset-name" value={datasetName} onChange={event => setDatasetName(event.target.value)} />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium">Customize table names</p>
+                                        <div className="space-y-2">
+                                            {relations.map(relation => (
+                                                <div
+                                                    key={`${relation.sheetName ?? relation.duckdbPath}:table-name`}
+                                                    className="grid grid-cols-[minmax(0,1fr)_minmax(160px,220px)] items-center gap-3"
+                                                >
+                                                    <Label className="text-muted-foreground min-w-0 truncate text-sm font-normal">{relation.sheetName || relation.duckdbPath}</Label>
+                                                    <Input value={relation.relationName} onChange={event => updateRelationName(relation, event.target.value)} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
                         </>
                     ) : null}
                 </div>
@@ -204,7 +223,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
                     </Button>
                     <Button type="button" onClick={handleCreate} disabled={!canCreate || creating || inspecting}>
                         {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        Create Connection
+                        Open
                     </Button>
                 </DialogFooter>
             </DialogContent>

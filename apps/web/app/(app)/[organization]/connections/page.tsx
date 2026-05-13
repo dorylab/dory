@@ -88,7 +88,7 @@ export default function ConnectionsPage() {
                     {!showEmptyState && (
                         <div className="flex gap-2">
                             <Button className="cursor-pointer" variant="secondary" disabled={isLoading} onClick={() => setLocalFilesOpen(true)}>
-                                Local Files
+                                Open Files
                             </Button>
                             <Button className="cursor-pointer" disabled={isLoading} onClick={handleNewConnection} data-testid="add-connection">
                                 {t('Add Connection')}

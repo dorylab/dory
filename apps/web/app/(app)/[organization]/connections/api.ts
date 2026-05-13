@@ -158,6 +158,6 @@ export async function createLocalFiles(params: LocalFilesCreateRequest): Promise
             body: JSON.stringify(params),
             headers: { 'Content-Type': 'application/json' },
         },
-        'Failed to create Local Files dataset',
+        'Failed to create Open Files dataset',
     );
 }
