@@ -71,6 +71,13 @@
       "when": 1778574691122,
       "tag": "0009_personal_mcp_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1778648400000,
+      "tag": "0010_local_files",
+      "breakpoints": true
     }
   ]
 }

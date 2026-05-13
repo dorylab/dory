@@ -18,5 +18,9 @@ export const subscription = activeSchemas.subscription;
 export const organizations = activeSchemas?.organizations;
 export const ai_schema_cache = activeSchemas?.aiSchemaCache;
 export const mcpAccessTokens = activeSchemas?.mcpAccessTokens;
+export const fileAssets = activeSchemas?.fileAssets;
+export const datasets = activeSchemas?.datasets;
+export const datasetRelations = activeSchemas?.datasetRelations;
+export const datasetRelationColumns = activeSchemas?.datasetRelationColumns;
 
 export type ActiveDBSchema = typeof activeSchemas.schema;

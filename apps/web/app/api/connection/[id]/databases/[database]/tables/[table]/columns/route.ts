@@ -16,7 +16,7 @@ const buildColumnSchema = (t: (key: string) => string) =>
     });
 
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string; database: string; table: string }> }) {
-    return withUserAndOrganizationHandler(async ({ userId, organizationId }) => {
+    return withUserAndOrganizationHandler(async ({ db, userId, organizationId }) => {
         const locale = await getApiLocale();
         const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
         const columnSchema = buildColumnSchema(t);
@@ -61,6 +61,19 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
         const { database, table } = parsed.data;
 
         try {
+            const snapshotColumns = await db.localFiles.getColumnSnapshotsForConnectionRelation(organizationId, datasourceId, table);
+            if (snapshotColumns?.length) {
+                return NextResponse.json(
+                    ResponseUtil.success<TableColumnInfo[]>(
+                        snapshotColumns.map(column => ({
+                            columnName: column.columnName,
+                            columnType: column.columnType,
+                            defaultExpression: null,
+                        })),
+                    ),
+                );
+            }
+
             const { entry } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
             const metadata = entry.instance.capabilities.metadata;
             if (!hasMetadataCapability(metadata, 'getTableColumns')) {

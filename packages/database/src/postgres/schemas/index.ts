@@ -12,6 +12,7 @@ import * as savedQueryFoldersSchema from './saved-query-folders';
 import * as aiUsageSchema from './ai-usage';
 import * as syncOperationsSchema from './sync-operations';
 import * as mcpSchema from './mcp';
+import * as localFilesSchema from './local-files';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -27,6 +28,7 @@ export * from './saved-query-folders';
 export * from './ai-usage';
 export * from './sync-operations';
 export * from './mcp';
+export * from './local-files';
 
 export const schema = {
     ...tabsSchema,
@@ -43,6 +45,7 @@ export const schema = {
     ...aiUsageSchema,
     ...syncOperationsSchema,
     ...mcpSchema,
+    ...localFilesSchema,
 };
 
 export type DBSchema = typeof schema;

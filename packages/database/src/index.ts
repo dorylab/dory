@@ -11,6 +11,7 @@ import { PostgresAiUsageRepository } from './postgres/impl/ai-usage';
 import { PostgresSyncOperationsRepository } from './postgres/impl/sync-operations';
 import { PostgresBillingRepository } from './postgres/impl/billing';
 import { PostgresMcpRepository } from './postgres/impl/mcp';
+import { PostgresLocalFilesRepository } from './postgres/impl/local-files';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -31,6 +32,7 @@ export type PostgresDBService = {
     syncOperations: PostgresSyncOperationsRepository;
     billing: PostgresBillingRepository;
     mcp: PostgresMcpRepository;
+    localFiles: PostgresLocalFilesRepository;
 };
 
 /**
@@ -85,6 +87,9 @@ export async function getDBService(): Promise<DBService> {
             const mcpRepo = new PostgresMcpRepository();
             await mcpRepo.init();
 
+            const localFilesRepo = new PostgresLocalFilesRepository();
+            await localFilesRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
@@ -98,6 +103,7 @@ export async function getDBService(): Promise<DBService> {
                 syncOperations: syncOperationsRepo,
                 billing: billingRepo,
                 mcp: mcpRepo,
+                localFiles: localFilesRepo,
             };
             break;
         }

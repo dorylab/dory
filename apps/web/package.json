@@ -56,6 +56,7 @@
         "@dory/analysis": "0.1.0",
         "@dory/database": "0.1.0",
         "@dory/drivers": "0.1.0",
+        "@dory/files": "0.1.0",
         "@dory/i18n": "0.1.0",
         "@dory/shared": "0.1.0",
         "@dory/web-utils": "0.1.0",
