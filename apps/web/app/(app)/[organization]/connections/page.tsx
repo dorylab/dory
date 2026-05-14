@@ -23,6 +23,8 @@ import { currentConnectionAtom } from '@/shared/stores/app.store';
 export default function ConnectionsPage() {
     const t = useTranslations('Connections');
     const [localFilesOpen, setLocalFilesOpen] = useState(false);
+    const [localFilesMode, setLocalFilesMode] = useState<'create' | 'edit'>('create');
+    const [localFilesConnection, setLocalFilesConnection] = useState<ConnectionListItem | null>(null);
 
     const connectLoadings = useAtomValue(connectionLoadingAtom);
     const setOpen = useSetAtom(connectionOpenAtom);
@@ -50,6 +52,23 @@ export default function ConnectionsPage() {
         setOpen(true);
     };
 
+    const openLocalFilesCreate = () => {
+        setLocalFilesMode('create');
+        setLocalFilesConnection(null);
+        setLocalFilesOpen(true);
+    };
+
+    const isLocalFilesConnection = (connectionItem: ConnectionListItem) => {
+        const connection = connectionItem.connection;
+        if (connection.type !== 'duckdb') return false;
+        try {
+            const options = JSON.parse(connection.options || '{}') as Record<string, unknown>;
+            return options.managedBy === 'local-files' && options.mode === 'localFilesDataset';
+        } catch {
+            return false;
+        }
+    };
+
     useEffect(() => {
         if (connectionsRes.data && connectionsRes.data.length > 0) {
             setSearchResult(connectionsRes.data);
@@ -63,6 +82,12 @@ export default function ConnectionsPage() {
     }
 
     function onEdit(connectionItem: ConnectionListItem) {
+        if (isLocalFilesConnection(connectionItem)) {
+            setLocalFilesMode('edit');
+            setLocalFilesConnection(connectionItem);
+            setLocalFilesOpen(true);
+            return;
+        }
         setStatus('Edit');
         setCurrentConnection(connectionItem);
         setOpen(true);
@@ -87,7 +112,7 @@ export default function ConnectionsPage() {
                     </div>
                     {!showEmptyState && (
                         <div className="flex gap-2">
-                            <Button className="cursor-pointer" variant="secondary" disabled={isLoading} onClick={() => setLocalFilesOpen(true)}>
+                            <Button className="cursor-pointer" variant="secondary" disabled={isLoading} onClick={openLocalFilesCreate}>
                                 Open Files
                             </Button>
                             <Button className="cursor-pointer" disabled={isLoading} onClick={handleNewConnection} data-testid="add-connection">
@@ -105,7 +130,7 @@ export default function ConnectionsPage() {
                             searchQuery={searchQuery}
                             showSearchEmpty={showSearchEmpty}
                             onAddConnection={handleNewConnection}
-                            onAddLocalFiles={() => setLocalFilesOpen(true)}
+                            onAddLocalFiles={openLocalFilesCreate}
                         />
                     )
                 )}
@@ -130,7 +155,19 @@ export default function ConnectionsPage() {
                     setCurrentConnection(null);
                 }}
             />
-            <LocalFilesDialog open={localFilesOpen} onOpenChange={setLocalFilesOpen} onSuccess={() => connectionsRes.refetch?.()} />
+            <LocalFilesDialog
+                open={localFilesOpen}
+                mode={localFilesMode}
+                connectionItem={localFilesConnection}
+                onOpenChange={openState => {
+                    if (!openState) {
+                        setLocalFilesMode('create');
+                        setLocalFilesConnection(null);
+                    }
+                    setLocalFilesOpen(openState);
+                }}
+                onSuccess={() => connectionsRes.refetch?.()}
+            />
         </div>
     );
 }

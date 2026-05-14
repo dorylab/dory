@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Database, FileSearch, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -12,13 +12,16 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { isSuccess } from '@/lib/result';
 import type { LocalFileRelationManifest, LocalFilesInspectResponse } from '@dory/shared/types/local-files';
+import type { ConnectionListItem } from '@dory/shared/types/connections';
 
-import { createLocalFiles, inspectLocalFiles } from '../api';
+import { createLocalFiles, getLocalFilesDataset, inspectLocalFiles, updateLocalFiles } from '../api';
 
 type LocalFilesDialogProps = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSuccess?: () => void;
+    mode?: 'create' | 'edit';
+    connectionItem?: ConnectionListItem | null;
 };
 
 function defaultDatasetName(filePath: string) {
@@ -30,17 +33,35 @@ function defaultDatasetName(filePath: string) {
     return name || 'Open Files';
 }
 
-export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDialogProps) {
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+}
+
+export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create', connectionItem }: LocalFilesDialogProps) {
     const [filePath, setFilePath] = useState('');
     const [datasetName, setDatasetName] = useState('');
+    const [datasetId, setDatasetId] = useState<string | null>(null);
     const [inspectResult, setInspectResult] = useState<LocalFilesInspectResponse | null>(null);
     const [selectedRelations, setSelectedRelations] = useState<Set<string>>(new Set());
     const [inspecting, setInspecting] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [loadingDataset, setLoadingDataset] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
 
     const relations = inspectResult?.relations ?? [];
-    const canCreate = Boolean(inspectResult && datasetName.trim() && selectedRelations.size > 0);
+    const isEditMode = mode === 'edit';
+    const busy = inspecting || creating || loadingDataset;
+    const canSave = Boolean(inspectResult && datasetName.trim() && selectedRelations.size > 0 && (!isEditMode || datasetId));
 
     const selectedRelationList = useMemo(() => {
         return relations.filter(relation => selectedRelations.has(relation.relationName));
@@ -49,19 +70,64 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
     const reset = () => {
         setFilePath('');
         setDatasetName('');
+        setDatasetId(null);
         setInspectResult(null);
         setSelectedRelations(new Set());
         setInspecting(false);
         setCreating(false);
+        setLoadingDataset(false);
         setAdvancedOpen(false);
     };
 
     const handleOpenChange = (nextOpen: boolean) => {
-        if (!nextOpen && !creating && !inspecting) {
+        if (!nextOpen && !busy) {
             reset();
         }
         onOpenChange(nextOpen);
     };
+
+    useEffect(() => {
+        if (!open || !isEditMode || !connectionItem?.connection?.id) return;
+
+        let cancelled = false;
+        setLoadingDataset(true);
+        const options = parseConnectionOptions(connectionItem.connection.options);
+        const optionDatasetId = typeof options.datasetId === 'string' ? options.datasetId : undefined;
+
+        getLocalFilesDataset({
+            connectionId: connectionItem.connection.id,
+            datasetId: optionDatasetId,
+        })
+            .then(result => {
+                if (cancelled) return;
+                if (!isSuccess(result) || !result.data) {
+                    throw new Error(result.message || 'Failed to load Open Files dataset');
+                }
+                setDatasetId(result.data.dataset.id);
+                setFilePath(result.data.source.path);
+                setDatasetName(result.data.dataset.name);
+                setInspectResult({
+                    source: result.data.source,
+                    relations: result.data.relations,
+                });
+                setSelectedRelations(new Set(result.data.relations.map(relation => relation.relationName)));
+                setAdvancedOpen(false);
+            })
+            .catch((error: any) => {
+                if (!cancelled) {
+                    toast.error(error?.message ?? 'Failed to load Open Files dataset');
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setLoadingDataset(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [connectionItem?.connection?.id, connectionItem?.connection?.options, isEditMode, open]);
 
     const handleInspect = async () => {
         const trimmedPath = filePath.trim();
@@ -120,26 +186,28 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
         });
     };
 
-    const handleCreate = async () => {
-        if (!inspectResult || !canCreate) return;
+    const handleSave = async () => {
+        if (!inspectResult || !canSave) return;
         setCreating(true);
         try {
-            const result = await createLocalFiles({
+            const payload = {
                 name: datasetName.trim(),
                 source: {
-                    backend: 'serverPath',
+                    backend: 'serverPath' as const,
                     filePath: filePath.trim(),
                 },
                 relations: selectedRelationList,
-            });
+            };
+            const result = isEditMode && datasetId ? await updateLocalFiles(datasetId, payload) : await createLocalFiles(payload);
             if (!isSuccess(result)) {
-                throw new Error(result.message || 'Failed to create Open Files dataset');
+                throw new Error(result.message || `Failed to ${isEditMode ? 'update' : 'create'} Open Files dataset`);
             }
-            toast.success('Open Files dataset created.');
+            toast.success(`Open Files dataset ${isEditMode ? 'updated' : 'created'}.`);
             onSuccess?.();
-            handleOpenChange(false);
+            reset();
+            onOpenChange(false);
         } catch (error: any) {
-            toast.error(error?.message ?? 'Failed to create Open Files dataset');
+            toast.error(error?.message ?? `Failed to ${isEditMode ? 'update' : 'create'} Open Files dataset`);
         } finally {
             setCreating(false);
         }
@@ -157,15 +225,27 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
 
                 <div className="space-y-5">
                     <div className="space-y-2">
+                        <Label htmlFor="local-files-dataset-name">Name</Label>
+                        <Input id="local-files-dataset-name" value={datasetName} onChange={event => setDatasetName(event.target.value)} />
+                    </div>
+
+                    <div className="space-y-2">
                         <Label htmlFor="local-files-path">File Path</Label>
                         <div className="flex gap-2">
                             <Input id="local-files-path" placeholder="/data/sales.xlsx" value={filePath} onChange={event => setFilePath(event.target.value)} />
-                            <Button type="button" variant="secondary" onClick={handleInspect} disabled={inspecting || creating}>
+                            <Button type="button" variant="secondary" onClick={handleInspect} disabled={busy}>
                                 {inspecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
                                 Preview
                             </Button>
                         </div>
                     </div>
+
+                    {loadingDataset ? (
+                        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading Open Files dataset
+                        </div>
+                    ) : null}
 
                     {inspectResult ? (
                         <>
@@ -193,11 +273,6 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
                                 </CollapsibleTrigger>
                                 <CollapsibleContent className="space-y-4 border-t px-3 py-3">
                                     <div className="space-y-2">
-                                        <Label htmlFor="local-files-dataset-name">Workspace Name</Label>
-                                        <Input id="local-files-dataset-name" value={datasetName} onChange={event => setDatasetName(event.target.value)} />
-                                    </div>
-
-                                    <div className="space-y-2">
                                         <p className="text-sm font-medium">Customize table names</p>
                                         <div className="space-y-2">
                                             {relations.map(relation => (
@@ -218,12 +293,12 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess }: LocalFilesDi
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={creating || inspecting}>
+                    <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={busy}>
                         Cancel
                     </Button>
-                    <Button type="button" onClick={handleCreate} disabled={!canCreate || creating || inspecting}>
+                    <Button type="button" onClick={handleSave} disabled={!canSave || busy}>
                         {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                        Open
+                        {isEditMode ? 'Save Changes' : 'Open'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

@@ -196,7 +196,7 @@
         "Search": {
             "placeholder": "搜索数据源...",
             "emptyTitle": "未找到匹配的数据源",
-            "emptyDescription": "未找到符合 \"{query}\" 的连接。",
+            "emptyDescription": "未找到符合 \"{query}\" 的数据源。",
             "emptyHint": "尝试其他关键词，或清空搜索"
         },
         "Empty": {
@@ -215,8 +215,8 @@
         "Last check": "上次检查：{time}",
         "Latency": "延迟：{latency}ms",
         "Refresh Connection": "刷新连接",
-        "title": "数据库连接",
-        "description": "管理你的数据库连接",
+        "title": "数据源",
+        "description": "管理你的数据源",
         "Add Connection": "添加连接",
         "Create Connection": "创建连接",
         "Connection Name": "连接名称",
@@ -265,11 +265,11 @@
         "ConnectionContent": {
             "Create": {
                 "title": "创建连接",
-                "description": "创建一个新的数据库连接"
+                "description": "创建一个新的数据源"
             },
             "Edit": {
                 "title": "编辑连接",
-                "description": "编辑数据库连接"
+                "description": "编辑数据源"
             },
             "Delete": "删除连接",
             "General": "常规",

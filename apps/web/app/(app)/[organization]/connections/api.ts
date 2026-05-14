@@ -1,7 +1,13 @@
 import { isSuccess } from '@/lib/result';
 import type { ResponseObject } from '@dory/shared';
 import { ConnectionListItem, CreateConnectionPayload } from '@dory/shared/types/connections';
-import type { LocalFilesCreateRequest, LocalFilesInspectRequest, LocalFilesInspectResponse } from '@dory/shared/types/local-files';
+import type {
+    LocalFilesCreateRequest,
+    LocalFilesDatasetDetailResponse,
+    LocalFilesInspectRequest,
+    LocalFilesInspectResponse,
+    LocalFilesUpdateRequest,
+} from '@dory/shared/types/local-files';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { translate } from '@dory/i18n/translate';
 import { getClientLocale } from '@dory/i18n/client';
@@ -159,5 +165,31 @@ export async function createLocalFiles(params: LocalFilesCreateRequest): Promise
             headers: { 'Content-Type': 'application/json' },
         },
         'Failed to create Open Files dataset',
+    );
+}
+
+export async function getLocalFilesDataset(params: { connectionId?: string; datasetId?: string }): Promise<ResponseObject<LocalFilesDatasetDetailResponse>> {
+    const searchParams = new URLSearchParams();
+    if (params.connectionId) searchParams.set('connectionId', params.connectionId);
+    if (params.datasetId) searchParams.set('datasetId', params.datasetId);
+
+    return fetchJsonResponse<LocalFilesDatasetDetailResponse>(
+        `/api/local-files?${searchParams.toString()}`,
+        {
+            method: 'GET',
+        },
+        'Failed to load Open Files dataset',
+    );
+}
+
+export async function updateLocalFiles(datasetId: string, params: LocalFilesUpdateRequest): Promise<ResponseObject<unknown>> {
+    return fetchJsonResponse<unknown>(
+        `/api/local-files?datasetId=${encodeURIComponent(datasetId)}`,
+        {
+            method: 'PATCH',
+            body: JSON.stringify(params),
+            headers: { 'Content-Type': 'application/json' },
+        },
+        'Failed to update Open Files dataset',
     );
 }

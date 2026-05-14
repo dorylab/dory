@@ -4,7 +4,7 @@ import { MotionHighlight } from '@/components/animate-ui/effects/motion-highligh
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
-import { Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Edit2, Trash2, Loader2, FileSpreadsheet, FileText, FileArchive } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
@@ -19,12 +19,48 @@ type Props = {
     onDeleteRequest?: (connection: ConnectionListItem) => void;
 };
 
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+}
+
+function getLocalFilesMeta(connection: ConnectionListItem['connection']) {
+    if (connection.type !== 'duckdb') return null;
+    const options = parseConnectionOptions(connection.options);
+    if (options.managedBy !== 'local-files' || options.mode !== 'localFilesDataset') return null;
+
+    const sourceType = typeof options.sourceType === 'string' ? options.sourceType : null;
+    const sourcePath = typeof options.sourcePath === 'string' ? options.sourcePath : null;
+    return {
+        sourceType,
+        sourcePath,
+    };
+}
+
+function getFileIcon(sourceType?: string | null) {
+    if (sourceType === 'excel' || sourceType === 'csv') return FileSpreadsheet;
+    if (sourceType === 'parquet') return FileArchive;
+    return FileText;
+}
+
 export default function ConnectionCard({ connectionItem, id, connectLoading, errorMessage, onEdit, onConnect, onDeleteRequest }: Props) {
     const t = useTranslations('Connections');
     const hasMounted = useHasMounted();
 
     const connection = connectionItem.connection;
     const locationLabel = getConnectionLocationLabel(connection);
+    const localFilesMeta = getLocalFilesMeta(connection);
+    const isLocalFiles = Boolean(localFilesMeta);
+    const FileIcon = getFileIcon(localFilesMeta?.sourceType);
     const lastCheckStatus = (connection?.lastCheckStatus ?? 'unknown') as ConnectionCheckStatus;
     const lastCheckError = connection?.lastCheckError;
     const lastCheckAt = connection?.lastCheckAt ? new Date(connection.lastCheckAt) : null;
@@ -90,7 +126,14 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
 
             >
                 <div className="mb-2 flex items-center justify-between">
-                    <p className="mb-1 min-h-6 text-base font-medium">{connectionItem?.connection.name}</p>
+                    <div className="flex min-w-0 items-center gap-3">
+                        {isLocalFiles ? (
+                            <div className="bg-muted text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
+                                <FileIcon className="h-4 w-4" />
+                            </div>
+                        ) : null}
+                        <p className="mb-1 min-h-6 truncate text-base font-medium">{connectionItem?.connection.name}</p>
+                    </div>
                     {connectLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -100,7 +143,16 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                     )}
                 </div>
 
-                <p className="mb-1 min-h-6 text-base font-medium">{connectionItem?.identities[0].username}</p>
+                {isLocalFiles ? (
+                    <div className="mb-1 flex min-h-6 items-center gap-2">
+                        <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium uppercase">
+                            {localFilesMeta?.sourceType ?? 'file'}
+                        </span>
+                        <span className="text-muted-foreground text-sm">Open Files</span>
+                    </div>
+                ) : (
+                    <p className="mb-1 min-h-6 text-base font-medium">{connectionItem?.identities[0].username}</p>
+                )}
 
                 <Tooltip>
                     <TooltipTrigger asChild>

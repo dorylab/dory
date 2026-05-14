@@ -177,10 +177,13 @@ export async function getDuckDbDatabases(handle: DuckDbConnectionHandle) {
         .map(name => ({ label: name, value: name }));
 }
 
-export async function getDuckDbTables(handle: DuckDbConnectionHandle, database?: string | null, tableType?: 'BASE TABLE' | 'VIEW') {
+export async function getDuckDbTables(handle: DuckDbConnectionHandle, database?: string | null, tableType?: 'BASE TABLE' | 'VIEW', schema?: string | null) {
     const clauses: string[] = [];
     if (database?.trim()) {
         clauses.push(`table_catalog = ${quoteLiteral(database.trim())}`);
+    }
+    if (schema?.trim()) {
+        clauses.push(`table_schema = ${quoteLiteral(schema.trim())}`);
     }
     if (tableType) {
         clauses.push(`table_type = ${quoteLiteral(tableType)}`);

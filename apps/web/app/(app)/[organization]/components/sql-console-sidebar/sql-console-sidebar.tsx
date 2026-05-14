@@ -18,6 +18,27 @@ import { TableList } from './table-list';
 import type { SQLConsoleSidebarProps, SidebarOption, SidebarTableItem, TableColumn } from './types';
 import { buildScopedTableKey, getInitialDatabase, isHiddenDatabase, matchesFilter, normalizeOption, toSidebarTableItem } from './utils';
 
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw !== 'string') return {};
+    try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+        return {};
+    }
+}
+
+function isLocalFilesDatasetConnection(options: Record<string, unknown>) {
+    return options.managedBy === 'local-files' && options.mode === 'localFilesDataset';
+}
+
+function getOpenFilesTableLabel(tableName: string) {
+    const parts = tableName.split('.');
+    return parts[parts.length - 1] || tableName;
+}
+
 export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable, selectedDatabase, onSelectDatabase }: SQLConsoleSidebarProps) {
     const [localFilter, setFilter] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -26,6 +47,10 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
     const currentConnection = useAtomValue(currentConnectionAtom);
     const t = useTranslations('SQLConsoleSidebar');
     const sidebarConfig = useMemo(() => getSidebarConfig(currentConnection?.connection?.type), [currentConnection?.connection?.type]);
+    const isLocalFilesDataset = useMemo(
+        () => isLocalFilesDatasetConnection(parseConnectionOptions(currentConnection?.connection?.options)),
+        [currentConnection?.connection?.options],
+    );
 
     const { databases } = useDatabases();
 
@@ -90,6 +115,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
         return (tables ?? [])
             .map(table => toSidebarTableItem(table, sidebarConfig))
             .filter((table): table is SidebarTableItem => Boolean(table))
+            .map(table => (isLocalFilesDataset ? { ...table, label: getOpenFilesTableLabel(table.value) } : table))
             .map(table => ({
                 ...table,
                 key: buildScopedTableKey(activeDatabase, table.value),
@@ -102,7 +128,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
                 return table.schemaName === activeSchema;
             })
             .filter(table => matchesFilter(table.value, table.label, normalizedFilter));
-    }, [activeSchema, deferredFilter, sidebarConfig, tables]);
+    }, [activeSchema, deferredFilter, isLocalFilesDataset, sidebarConfig, tables]);
 
     const handleDatabaseChange = (database: string) => {
         setActiveDatabase(database);
@@ -173,7 +199,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
 
     return (
         <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 p-3">
-            <DatabaseSelect value={activeDatabase} databases={databaseOptions} onChange={handleDatabaseChange} />
+            {!isLocalFilesDataset && <DatabaseSelect value={activeDatabase} databases={databaseOptions} onChange={handleDatabaseChange} />}
 
             {sidebarConfig.supportsSchemas && <SchemaSelect value={activeSchema} schemas={schemaOptions} onChange={setActiveSchema} />}
 

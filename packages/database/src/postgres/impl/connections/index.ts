@@ -185,9 +185,33 @@ export class PostgresConnectionsRepository {
                 identities: identitiesMap.get(row.id) ?? [],
                 ssh: sshMap.get(row.id) ?? null,
             };
-        });
+        }).filter(item => !this.isHiddenManagedConnection(item.connection));
 
         return result;
+    }
+
+    private parseConnectionOptions(raw: unknown): Record<string, unknown> {
+        if (!raw) return {};
+        if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+        if (typeof raw === 'string') {
+            try {
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+            } catch {
+                return {};
+            }
+        }
+        return {};
+    }
+
+    private isHiddenManagedConnection(connection: { type?: string | null; options?: string | null }) {
+        const options = this.parseConnectionOptions(connection.options);
+        if (connection.type !== 'duckdb' || options.managedBy !== 'local-files') return false;
+        if (options.mode === 'localFilesWorkspace') return true;
+        if (options.mode === 'localFilesDataset') {
+            return typeof options.datasetId !== 'string' || !options.datasetId;
+        }
+        return false;
     }
 
     /* -------------------- Detail: single connection -------------------- */
@@ -304,6 +328,20 @@ export class PostgresConnectionsRepository {
             }
         }
         return updatedConnection;
+    }
+
+    async patchConnectionFields(organizationId: string, connectionId: string, payload: Partial<typeof connections.$inferInsert>): Promise<ConnectionListItem> {
+        const [updatedConnection] = await this.db
+            .update(connections)
+            .set(payload)
+            .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
+            .returning();
+
+        if (!updatedConnection) {
+            throw new ConnectionNotFoundError();
+        }
+
+        return this.toConnectionListItem(this.db, organizationId, updatedConnection);
     }
 
     async delete(organizationId: string, connectionId: string): Promise<any> {

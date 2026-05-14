@@ -5,6 +5,14 @@ import { getDuckDbDatabases, getDuckDbTableColumns, getDuckDbTables } from '../d
 
 export type DuckDbMetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
 
+function getLocalFilesSchema(datasource: DuckDbDatasource) {
+    const options = datasource.config.options;
+    if (!options || typeof options !== 'object' || Array.isArray(options)) return null;
+    if ((options as Record<string, unknown>).managedBy !== 'local-files' || (options as Record<string, unknown>).mode !== 'localFilesDataset') return null;
+    const schemaName = (options as Record<string, unknown>).schemaName;
+    return typeof schemaName === 'string' && schemaName.trim() ? schemaName.trim() : null;
+}
+
 export function createDuckDbMetadataCapability(datasource: DuckDbDatasource): DuckDbMetadataAPI {
     return {
         async getDatabases() {
@@ -14,7 +22,7 @@ export function createDuckDbMetadataCapability(datasource: DuckDbDatasource): Du
             return getDuckDbTableColumns(datasource.getHandle(), database, table);
         },
         async getTables(database) {
-            const tables = await getDuckDbTables(datasource.getHandle(), database);
+            const tables = await getDuckDbTables(datasource.getHandle(), database, undefined, getLocalFilesSchema(datasource));
             return tables.map(table => ({
                 label: table.database && !database ? `${table.database}.${table.name}` : table.name,
                 value: table.name,
@@ -23,7 +31,7 @@ export function createDuckDbMetadataCapability(datasource: DuckDbDatasource): Du
             }));
         },
         async getTablesOnly(database): Promise<DatabaseObjectRow[]> {
-            const tables = await getDuckDbTables(datasource.getHandle(), database, 'BASE TABLE');
+            const tables = await getDuckDbTables(datasource.getHandle(), database, 'BASE TABLE', getLocalFilesSchema(datasource));
             return tables.map(table => ({
                 name: table.name,
                 engine: 'duckdb',
@@ -31,7 +39,7 @@ export function createDuckDbMetadataCapability(datasource: DuckDbDatasource): Du
             }));
         },
         async getViews(database): Promise<DatabaseObjectRow[]> {
-            const views = await getDuckDbTables(datasource.getHandle(), database, 'VIEW');
+            const views = await getDuckDbTables(datasource.getHandle(), database, 'VIEW', getLocalFilesSchema(datasource));
             return views.map(view => ({
                 name: view.name,
                 engine: 'duckdb',

@@ -54,6 +54,26 @@ export type LocalFilesCreateRequest = {
     mode?: LocalFileRelationMode;
 };
 
+export type LocalFilesDatasetDetailResponse = {
+    dataset: {
+        id: string;
+        connectionId: string;
+        name: string;
+        schemaName: string;
+        status: string;
+        refreshStatus: string;
+    };
+    source: LocalFileSourceStat;
+    relations: LocalFileRelationManifest[];
+};
+
+export type LocalFilesUpdateRequest = {
+    name: string;
+    source: LocalFileSourceDescriptor;
+    relations: LocalFileRelationManifest[];
+    mode?: LocalFileRelationMode;
+};
+
 export type LocalFilesRefreshRequest = {
     datasetId: string;
 };

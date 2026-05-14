@@ -1,8 +1,29 @@
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { isDemoSqliteConnectionPath } from '@/lib/demo/connection-path';
 
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+}
+
 export function getConnectionLocationLabel(connection?: ConnectionListItem['connection'] | null) {
     if (!connection) return null;
+
+    if (connection.type === 'duckdb') {
+        const options = parseConnectionOptions(connection.options);
+        if (options.managedBy === 'local-files' && options.mode === 'localFilesDataset' && typeof options.sourcePath === 'string') {
+            return options.sourcePath;
+        }
+    }
 
     if (connection.type === 'sqlite') {
         const normalizedPath = connection.path?.trim();
