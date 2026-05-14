@@ -47,6 +47,27 @@ function parseConnectionOptions(raw: unknown): Record<string, unknown> {
     return {};
 }
 
+function relationIdentity(relation: Pick<LocalFileRelationManifest, 'sourceType' | 'sheetName' | 'duckdbPath' | 'relationName'>) {
+    return [relation.sourceType, relation.sheetName ?? '', relation.duckdbPath, relation.relationName].join('::');
+}
+
+function mergeInspectedRelationsWithSaved(inspectedRelations: LocalFileRelationManifest[], savedRelations: LocalFileRelationManifest[]) {
+    const savedBySheet = new Map<string, LocalFileRelationManifest>();
+    for (const relation of savedRelations) {
+        savedBySheet.set(relation.sheetName ?? relation.duckdbPath, relation);
+    }
+
+    return inspectedRelations.map(relation => {
+        const saved = savedBySheet.get(relation.sheetName ?? relation.duckdbPath);
+        if (!saved) return relation;
+        return {
+            ...relation,
+            relationName: saved.relationName,
+            mode: saved.mode ?? relation.mode,
+        };
+    });
+}
+
 export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create', connectionItem }: LocalFilesDialogProps) {
     const [filePath, setFilePath] = useState('');
     const [datasetName, setDatasetName] = useState('');
@@ -98,19 +119,31 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
             connectionId: connectionItem.connection.id,
             datasetId: optionDatasetId,
         })
-            .then(result => {
+            .then(async result => {
                 if (cancelled) return;
                 if (!isSuccess(result) || !result.data) {
                     throw new Error(result.message || 'Failed to load Open Files dataset');
                 }
+                const inspectResult = await inspectLocalFiles({
+                    source: {
+                        backend: 'serverPath',
+                        filePath: result.data.source.path,
+                    },
+                });
+                if (cancelled) return;
+                if (!isSuccess(inspectResult) || !inspectResult.data) {
+                    throw new Error(inspectResult.message || 'Failed to inspect local file');
+                }
+                const relations = mergeInspectedRelationsWithSaved(inspectResult.data.relations, result.data.relations);
+                const savedRelationKeys = new Set(result.data.relations.map(relation => relationIdentity(relation)));
                 setDatasetId(result.data.dataset.id);
                 setFilePath(result.data.source.path);
                 setDatasetName(result.data.dataset.name);
                 setInspectResult({
-                    source: result.data.source,
-                    relations: result.data.relations,
+                    source: inspectResult.data.source,
+                    relations,
                 });
-                setSelectedRelations(new Set(result.data.relations.map(relation => relation.relationName)));
+                setSelectedRelations(new Set(relations.filter(relation => savedRelationKeys.has(relationIdentity(relation))).map(relation => relation.relationName)));
                 setAdvancedOpen(false);
             })
             .catch((error: any) => {
@@ -280,7 +313,9 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
                                                     key={`${relation.sheetName ?? relation.duckdbPath}:table-name`}
                                                     className="grid grid-cols-[minmax(0,1fr)_minmax(160px,220px)] items-center gap-3"
                                                 >
-                                                    <Label className="text-muted-foreground min-w-0 truncate text-sm font-normal">{relation.sheetName || relation.duckdbPath}</Label>
+                                                    <Label className="text-muted-foreground min-w-0 truncate text-sm font-normal">
+                                                        {relation.sheetName || relation.duckdbPath}
+                                                    </Label>
                                                     <Input value={relation.relationName} onChange={event => updateRelationName(relation, event.target.value)} />
                                                 </div>
                                             ))}
