@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { useDatabases } from '@/hooks/use-databases';
 import { buildExplorerDatabasePath } from '@/lib/explorer/build-path';
+import { isLocalFilesDataset } from '@/lib/explorer/local-files';
 import { cn } from '@dory/web-utils';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 
@@ -30,23 +31,24 @@ export function RootView({ organization, connectionId, catalog }: RootViewProps)
     const currentConnection = useAtomValue(currentConnectionAtom);
 
     const items = useMemo(() => (Array.isArray(databases) ? (databases as DatabaseItem[]) : []), [databases]);
-    const preferredDatabase =
-        currentConnection && currentConnection.connection.id === connectionId ? currentConnection.connection.database : null;
+    const isLocalFilesExplorer = currentConnection?.connection.id === connectionId && isLocalFilesDataset(currentConnection.connection.options);
+    const preferredDatabase = currentConnection && currentConnection.connection.id === connectionId ? currentConnection.connection.database : null;
 
     useEffect(() => {
+        if (isLocalFilesExplorer && items[0]?.value) {
+            setActiveDatabase(items[0].value);
+            router.replace(buildExplorerDatabasePath({ organization, connectionId, catalog }, items[0].value));
+            return;
+        }
         if (!preferredDatabase || items.length === 0) return;
         const matched = items.find(db => db.value === preferredDatabase);
         if (!matched) return;
         setActiveDatabase(matched.value);
         router.replace(buildExplorerDatabasePath({ organization, connectionId, catalog }, matched.value));
-    }, [catalog, connectionId, items, preferredDatabase, router, setActiveDatabase, organization]);
+    }, [catalog, connectionId, isLocalFilesExplorer, items, preferredDatabase, router, setActiveDatabase, organization]);
 
     if (items.length === 0) {
-        return (
-            <div className="flex h-55 items-center justify-center rounded-lg border border-dashed m-6 text-sm text-muted-foreground">
-                No databases found.
-            </div>
-        );
+        return <div className="flex h-55 items-center justify-center rounded-lg border border-dashed m-6 text-sm text-muted-foreground">No databases found.</div>;
     }
 
     return (
@@ -70,20 +72,12 @@ export function RootView({ organization, connectionId, catalog }: RootViewProps)
                             onClick={() => setActiveDatabase(db.value)}
                             className="block"
                         >
-                            <Card
-                                className={cn(
-                                    'h-full transition-colors',
-                                    isActive ? 'border-primary/50 bg-primary/5' : 'hover:border-foreground/20 hover:bg-muted/30',
-                                )}
-                            >
+                            <Card className={cn('h-full transition-colors', isActive ? 'border-primary/50 bg-primary/5' : 'hover:border-foreground/20 hover:bg-muted/30')}>
                                 <CardContent className="p-4">
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex min-w-0 items-center gap-3">
                                             <div
-                                                className={cn(
-                                                    'flex h-9 w-9 items-center justify-center rounded-md bg-muted/50 text-muted-foreground',
-                                                    isActive && 'text-primary',
-                                                )}
+                                                className={cn('flex h-9 w-9 items-center justify-center rounded-md bg-muted/50 text-muted-foreground', isActive && 'text-primary')}
                                             >
                                                 <Database className="h-4 w-4" />
                                             </div>

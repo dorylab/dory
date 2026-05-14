@@ -20,6 +20,7 @@ import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components
 
 type DatabaseTableRow = {
     name: string;
+    label?: string | null;
     engine?: string | null;
     sizeBytes?: number | null;
     rowCount?: number | null;
@@ -31,6 +32,8 @@ type DatabaseTableRow = {
 
 type DatabaseTableApiRow = {
     name: string;
+    label?: string | null;
+    value?: string | null;
     engine?: string | null;
     totalBytes?: number | null;
     totalRows?: number | null;
@@ -122,7 +125,8 @@ export default function DatabaseTables({ catalog, database }: DatabaseTablesProp
                 throw new Error(res.message || t('Failed to fetch tables'));
             }
             const nextRows = (res.data ?? []).map(item => ({
-                name: item.name,
+                name: item.value || item.name,
+                label: item.label ?? item.name,
                 engine: item.engine ?? null,
                 sizeBytes: toNumberOrNull(item.totalBytes ?? null),
                 rowCount: toNumberOrNull(item.totalRows ?? null),
@@ -168,18 +172,16 @@ export default function DatabaseTables({ catalog, database }: DatabaseTablesProp
                               },
                           )
                         : null;
+                    const displayName = row.original.label || row.original.name;
                     return (
                         <div>
                             <div className="flex items-center gap-2">
                                 {href ? (
-                                    <Link
-                                        href={href}
-                                        className="block max-w-[300px] truncate font-medium text-foreground hover:underline"
-                                    >
-                                        <OverflowTooltip text={row.original.name} className="block max-w-[300px] truncate font-medium" />
+                                    <Link href={href} className="block max-w-[300px] truncate font-medium text-foreground hover:underline">
+                                        <OverflowTooltip text={displayName} className="block max-w-[300px] truncate font-medium" />
                                     </Link>
                                 ) : (
-                                    <OverflowTooltip text={row.original.name} className="block max-w-[300px] truncate font-medium text-foreground" />
+                                    <OverflowTooltip text={displayName} className="block max-w-[300px] truncate font-medium text-foreground" />
                                 )}
                                 {row.original.recentQueries ? (
                                     <Tooltip>
@@ -235,7 +237,7 @@ export default function DatabaseTables({ catalog, database }: DatabaseTablesProp
         if (!keyword) return rows;
 
         return rows.filter(row => {
-            const nameHit = row.name.toLowerCase().includes(keyword);
+            const nameHit = row.name.toLowerCase().includes(keyword) || (row.label ?? '').toLowerCase().includes(keyword);
             const commentHit = (row.comment ?? '').toLowerCase().includes(keyword);
             return nameHit || commentHit;
         });

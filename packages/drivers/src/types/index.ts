@@ -83,6 +83,9 @@ export type TableColumnInfo = {
 
 export type DatabaseObjectRow = {
     name: string;
+    label?: string;
+    value?: string;
+    schema?: string;
     engine?: string | null;
     totalBytes?: number | null;
     totalRows?: number | null;

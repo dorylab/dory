@@ -55,6 +55,10 @@ const resolveTableName = (table: any) => {
     return (table?.value ?? table?.label ?? table?.name ?? table?.tableName ?? table?.table ?? '').toString();
 };
 
+const resolveTableDisplayName = (table: any) => {
+    return (table?.label ?? table?.value ?? table?.name ?? table?.tableName ?? table?.table ?? '').toString();
+};
+
 const resolveDatabaseName = (database: any) => {
     return (database?.value ?? database?.label ?? database?.name ?? database?.databaseName ?? '').toString();
 };
@@ -233,11 +237,13 @@ const registerDtSqlCompletion = (
                     if (tables.length && !isCrossDbPrefix) {
                         for (const table of tables) {
                             const tableName = resolveTableName(table);
+                            const tableDisplayName = resolveTableDisplayName(table) || tableName;
                             if (!tableName) continue;
 
                             if (isPostgres) {
                                 const qualifiedTable = resolveSchemaQualifiedTable(tableName);
                                 const normalizedTableName = qualifiedTable.tableName.toLowerCase();
+                                const normalizedDisplayName = tableDisplayName.toLowerCase();
 
                                 if (hasQualifierPrefix) {
                                     const typedTableParts = typedTablePrefix.split('.');
@@ -245,20 +251,25 @@ const registerDtSqlCompletion = (
                                     const tablePrefix = typedTableParts.slice(1).join('.').toLowerCase();
 
                                     if (qualifiedTable.schemaName.toLowerCase() !== schemaPrefix) continue;
-                                    if (tablePrefix && !normalizedTableName.startsWith(tablePrefix)) continue;
-                                } else if (normalizedPrefix && !tableName.toLowerCase().startsWith(normalizedPrefix)) {
+                                    if (tablePrefix && !normalizedTableName.startsWith(tablePrefix) && !normalizedDisplayName.startsWith(tablePrefix)) continue;
+                                } else if (normalizedPrefix && !tableName.toLowerCase().startsWith(normalizedPrefix) && !normalizedDisplayName.startsWith(normalizedPrefix)) {
                                     continue;
                                 }
-                            } else if (!hasQualifierPrefix && normalizedPrefix && !tableName.toLowerCase().startsWith(normalizedPrefix)) {
+                            } else if (
+                                !hasQualifierPrefix &&
+                                normalizedPrefix &&
+                                !tableName.toLowerCase().startsWith(normalizedPrefix) &&
+                                !tableDisplayName.toLowerCase().startsWith(normalizedPrefix)
+                            ) {
                                 continue;
                             }
 
                             items.push({
-                                label: tableName,
+                                label: tableDisplayName,
                                 kind: monaco.languages.CompletionItemKind.Class,
                                 insertText: tableName,
                                 detail: t('Editor.Completion.Table'),
-                                sortText: '1_' + tableName,
+                                sortText: '1_' + tableDisplayName,
                                 range,
                             });
                         }

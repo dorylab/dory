@@ -1,5 +1,6 @@
 'use client';
 
+import { formatLocalFilesBreadcrumbLabel } from '@/lib/explorer/local-files';
 import { buildExplorerBreadcrumbs, getExplorerHeaderBadgeLabel } from '@/lib/explorer/routing';
 import type { ExplorerBaseParams, ExplorerResolvedRoute } from '@/lib/explorer/types';
 import { ExplorerHeader } from './explorer-header';
@@ -10,15 +11,29 @@ import { RootView } from './resources/database/views/root-view';
 type ExplorerRouterProps = {
     baseParams: ExplorerBaseParams;
     route: ExplorerResolvedRoute;
+    isLocalFilesExplorer?: boolean;
+    localFilesSchemaName?: string | null;
 };
 
-export function ExplorerRouter({ baseParams, route }: ExplorerRouterProps) {
+function formatBreadcrumbsForDisplay(breadcrumbs: ReturnType<typeof buildExplorerBreadcrumbs>, isLocalFilesExplorer?: boolean, localFilesSchemaName?: string | null) {
+    return breadcrumbs
+        .filter((item, index) => {
+            if (!isLocalFilesExplorer) return true;
+            return index !== 1;
+        })
+        .map(item => ({
+            ...item,
+            label: isLocalFilesExplorer ? formatLocalFilesBreadcrumbLabel(item.label, localFilesSchemaName) : item.label,
+        }));
+}
+
+export function ExplorerRouter({ baseParams, route, isLocalFilesExplorer, localFilesSchemaName }: ExplorerRouterProps) {
     const paramsWithCatalog = {
         ...baseParams,
         catalog: route.catalog,
     };
     const routeKey = `${route.pageType}:${route.normalizedSlug.join('/')}`;
-    const breadcrumbs = buildExplorerBreadcrumbs(paramsWithCatalog, route.resource);
+    const breadcrumbs = formatBreadcrumbsForDisplay(buildExplorerBreadcrumbs(paramsWithCatalog, route.resource), isLocalFilesExplorer, localFilesSchemaName);
     const badgeLabel = getExplorerHeaderBadgeLabel(route.resource);
     const views = getExplorerViewRegistry(route);
     const NamespaceComponent = views.namespace;
@@ -47,11 +62,7 @@ export function ExplorerRouter({ baseParams, route }: ExplorerRouterProps) {
                     />
                 ) : null}
                 {route.pageType === 'object' && route.resource ? (
-                    <ObjectComponent
-                        key={routeKey}
-                        catalog={route.catalog}
-                        resource={route.resource as Extract<typeof route.resource, { kind: 'object' }>}
-                    />
+                    <ObjectComponent key={routeKey} catalog={route.catalog} resource={route.resource as Extract<typeof route.resource, { kind: 'object' }>} />
                 ) : null}
                 {route.pageType === 'notFound' ? <ObjectNotFound /> : null}
             </div>
