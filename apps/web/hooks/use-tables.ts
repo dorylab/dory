@@ -52,14 +52,34 @@ export function useTables(databases: string) {
 
         const encodedDb = encodeURIComponent(requestedDatabase);
         const request = (async () => {
-            const response = await authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/tables`, {
+            const requestInit = {
                 method: 'GET',
                 headers: {
                     'X-Connection-ID': requestedConnectionId,
                 },
-            });
-            const res = (await response.json()) as ResponseObject<any>;
-            if (isSuccess(res)) {
+            };
+            const [tablesResponse, viewsResponse] = await Promise.all([
+                authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/tables`, requestInit),
+                authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/views`, requestInit),
+            ]);
+            const tablesResult = (await tablesResponse.json()) as ResponseObject<any[]>;
+            const viewsResult = (await viewsResponse.json().catch(() => null)) as ResponseObject<any[]> | null;
+
+            if (isSuccess(tablesResult)) {
+                const merged = new Map<string, any>();
+                for (const item of tablesResult.data ?? []) {
+                    const key = String(item?.value ?? item?.name ?? item?.label ?? '');
+                    if (key) merged.set(key, item);
+                }
+                if (viewsResult && isSuccess(viewsResult)) {
+                    for (const item of viewsResult.data ?? []) {
+                        const key = String(item?.value ?? item?.name ?? item?.label ?? '');
+                        if (key && !merged.has(key)) {
+                            merged.set(key, item);
+                        }
+                    }
+                }
+
                 setTablesState(prev => {
                     if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
                         return prev;
@@ -68,7 +88,7 @@ export function useTables(databases: string) {
                     return {
                         connectionId: requestedConnectionId,
                         database: requestedDatabase,
-                        items: res.data ?? [],
+                        items: [...merged.values()],
                     };
                 });
             }

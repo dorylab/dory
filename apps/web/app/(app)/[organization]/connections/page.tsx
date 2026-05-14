@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -15,12 +15,14 @@ import { connectionDeleteAtom, connectionLoadingAtom, connectionOpenAtom, connec
 import { useConnectConnection } from './hooks/use-connect-connection';
 import { useConnections, useDeleteConnection } from './hooks/use-connections';
 import { DeleteDialog } from './components/delete-dialog';
+import { LocalFilesDialog } from './components/local-files-dialog';
 
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 
 export default function ConnectionsPage() {
     const t = useTranslations('Connections');
+    const [localFilesOpen, setLocalFilesOpen] = useState(false);
 
     const connectLoadings = useAtomValue(connectionLoadingAtom);
     const setOpen = useSetAtom(connectionOpenAtom);
@@ -48,7 +50,6 @@ export default function ConnectionsPage() {
         setOpen(true);
     };
 
-    
     useEffect(() => {
         if (connectionsRes.data && connectionsRes.data.length > 0) {
             setSearchResult(connectionsRes.data);
@@ -57,7 +58,6 @@ export default function ConnectionsPage() {
         }
     }, [connectionsRes.data, setSearchResult]);
 
-    
     function onConnect(payload: ConnectionListItem, navigateToConsole?: boolean) {
         connectMutation.mutate({ payload, navigateToConsole });
     }
@@ -86,9 +86,14 @@ export default function ConnectionsPage() {
                         <ConnectionSearch />
                     </div>
                     {!showEmptyState && (
-                        <Button className="cursor-pointer" disabled={isLoading} onClick={handleNewConnection} data-testid="add-connection">
-                            {t('Add Connection')}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button className="cursor-pointer" variant="secondary" disabled={isLoading} onClick={() => setLocalFilesOpen(true)}>
+                                Local Files
+                            </Button>
+                            <Button className="cursor-pointer" disabled={isLoading} onClick={handleNewConnection} data-testid="add-connection">
+                                {t('Add Connection')}
+                            </Button>
+                        </div>
                     )}
                 </div>
 
@@ -96,12 +101,16 @@ export default function ConnectionsPage() {
                     <ConnectionList items={connectionItems} connectLoadings={connectLoadings} onConnect={onConnect} onEdit={onEdit} onDeleteRequest={onDelete} />
                 ) : (
                     showEmptyState && (
-                        <ConnectionsEmptyState searchQuery={searchQuery} showSearchEmpty={showSearchEmpty} onAddConnection={handleNewConnection} />
+                        <ConnectionsEmptyState
+                            searchQuery={searchQuery}
+                            showSearchEmpty={showSearchEmpty}
+                            onAddConnection={handleNewConnection}
+                            onAddLocalFiles={() => setLocalFilesOpen(true)}
+                        />
                     )
                 )}
             </div>
 
-            
             <DeleteDialog
                 open={deleteOpen}
                 onCancel={() => setDeleteOpen(false)}
@@ -114,13 +123,14 @@ export default function ConnectionsPage() {
                         return;
                     }
                     deleteConnectionMutation.mutateAsync(current.connection.id!);
-                    
+
                     // deleteConnection(targetId)
                     //   .then(() => connectionsRes.refetch?.())
-                    
+
                     setCurrentConnection(null);
                 }}
             />
+            <LocalFilesDialog open={localFilesOpen} onOpenChange={setLocalFilesOpen} onSuccess={() => connectionsRes.refetch?.()} />
         </div>
     );
 }

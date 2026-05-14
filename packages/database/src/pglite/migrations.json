@@ -172,10 +172,39 @@
   },
   {
     "sql": [
-      "CREATE INDEX \"idx_mcp_access_tokens_organization_user_created\" ON \"mcp_access_tokens\" USING btree (\"organization_id\",\"created_by_user_id\",\"created_at\");"
+      "CREATE INDEX \"idx_mcp_access_tokens_organization_user_created\" ON \"mcp_access_tokens\" USING btree (\"organization_id\",\"created_by_user_id\",\"created_at\");\n"
     ],
     "bps": true,
     "folderMillis": 1778574691122,
     "hash": "f6317b19edb35c0bd8f2c3a77f5552afa07b7451b3131e6c3dadeeca4acac7bd"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"file_assets\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"created_by_user_id\" text,\n    \"backend\" text NOT NULL,\n    \"source_type\" text NOT NULL,\n    \"path\" text NOT NULL,\n    \"storage_key\" text,\n    \"size_bytes\" text,\n    \"mtime_ms\" text,\n    \"status\" text DEFAULT 'ready' NOT NULL,\n    \"metadata\" text DEFAULT '{}' NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"deleted_at\" timestamp with time zone\n);\n",
+      "\nCREATE TABLE \"datasets\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"created_by_user_id\" text,\n    \"connection_id\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"schema_name\" text NOT NULL,\n    \"status\" text DEFAULT 'ready' NOT NULL,\n    \"refresh_status\" text DEFAULT 'idle' NOT NULL,\n    \"last_refresh_at\" timestamp with time zone,\n    \"last_refresh_error\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"deleted_at\" timestamp with time zone\n);\n",
+      "\nCREATE TABLE \"dataset_relations\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"dataset_id\" text NOT NULL,\n    \"file_asset_id\" text NOT NULL,\n    \"source_type\" text NOT NULL,\n    \"sheet_name\" text,\n    \"relation_name\" text NOT NULL,\n    \"mode\" text DEFAULT 'virtual' NOT NULL,\n    \"duckdb_schema\" text NOT NULL,\n    \"duckdb_relation\" text NOT NULL,\n    \"physical_table_name\" text,\n    \"source_fingerprint\" text,\n    \"last_source_fingerprint\" text,\n    \"schema_drift_status\" text DEFAULT 'unknown' NOT NULL,\n    \"refresh_strategy\" text DEFAULT 'manual' NOT NULL,\n    \"read_sql\" text NOT NULL,\n    \"status\" text DEFAULT 'ready' NOT NULL,\n    \"last_refresh_at\" timestamp with time zone,\n    \"last_refresh_error\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"deleted_at\" timestamp with time zone\n);\n",
+      "\nCREATE TABLE \"dataset_refresh_operations\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"dataset_id\" text NOT NULL,\n    \"relation_id\" text,\n    \"operation_type\" text DEFAULT 'refresh' NOT NULL,\n    \"status\" text DEFAULT 'running' NOT NULL,\n    \"reason\" text DEFAULT 'manual' NOT NULL,\n    \"source_fingerprint\" text,\n    \"previous_source_fingerprint\" text,\n    \"schema_drift_status\" text DEFAULT 'unknown' NOT NULL,\n    \"error\" text,\n    \"started_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"finished_at\" timestamp with time zone,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"dataset_relation_columns\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"dataset_id\" text NOT NULL,\n    \"relation_id\" text NOT NULL,\n    \"column_name\" text NOT NULL,\n    \"column_type\" text NOT NULL,\n    \"nullable\" text,\n    \"detected_semantic\" text,\n    \"sample_values\" text DEFAULT '[]' NOT NULL,\n    \"summary\" text DEFAULT '{}' NOT NULL,\n    \"ordinal_position\" integer DEFAULT 0 NOT NULL,\n    \"refreshed_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_file_assets_organization\" ON \"file_assets\" USING btree (\"organization_id\");\n",
+      "\nCREATE INDEX \"idx_file_assets_org_backend_path\" ON \"file_assets\" USING btree (\"organization_id\",\"backend\",\"path\");\n",
+      "\nCREATE UNIQUE INDEX \"uniq_datasets_organization_schema\" ON \"datasets\" USING btree (\"organization_id\",\"schema_name\") WHERE \"datasets\".\"deleted_at\" IS NULL;\n",
+      "\nCREATE INDEX \"idx_datasets_organization\" ON \"datasets\" USING btree (\"organization_id\");\n",
+      "\nCREATE INDEX \"idx_datasets_connection\" ON \"datasets\" USING btree (\"connection_id\");\n",
+      "\nCREATE UNIQUE INDEX \"uniq_dataset_relations_name\" ON \"dataset_relations\" USING btree (\"dataset_id\",\"relation_name\") WHERE \"dataset_relations\".\"deleted_at\" IS NULL;\n",
+      "\nCREATE INDEX \"idx_dataset_relations_organization\" ON \"dataset_relations\" USING btree (\"organization_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_relations_dataset\" ON \"dataset_relations\" USING btree (\"dataset_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_relations_file_asset\" ON \"dataset_relations\" USING btree (\"file_asset_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_refresh_ops_organization\" ON \"dataset_refresh_operations\" USING btree (\"organization_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_refresh_ops_dataset\" ON \"dataset_refresh_operations\" USING btree (\"dataset_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_refresh_ops_relation\" ON \"dataset_refresh_operations\" USING btree (\"relation_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_refresh_ops_status\" ON \"dataset_refresh_operations\" USING btree (\"status\");\n",
+      "\nCREATE UNIQUE INDEX \"uniq_dataset_relation_columns_name\" ON \"dataset_relation_columns\" USING btree (\"relation_id\",\"column_name\");\n",
+      "\nCREATE INDEX \"idx_dataset_relation_columns_organization\" ON \"dataset_relation_columns\" USING btree (\"organization_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_relation_columns_dataset\" ON \"dataset_relation_columns\" USING btree (\"dataset_id\");\n",
+      "\nCREATE INDEX \"idx_dataset_relation_columns_relation\" ON \"dataset_relation_columns\" USING btree (\"relation_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1778648400000,
+    "hash": "b58d96b8037473a03788135e50fab5420654d12b30617d9660243793fbe01138"
   }
 ]

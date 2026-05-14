@@ -1,15 +1,12 @@
 import { isSuccess } from '@/lib/result';
 import type { ResponseObject } from '@dory/shared';
 import { ConnectionListItem, CreateConnectionPayload } from '@dory/shared/types/connections';
+import type { LocalFilesCreateRequest, LocalFilesInspectRequest, LocalFilesInspectResponse } from '@dory/shared/types/local-files';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { translate } from '@dory/i18n/translate';
 import { getClientLocale } from '@dory/i18n/client';
 
-async function fetchJsonResponse<T>(
-    input: RequestInfo,
-    init: RequestInit,
-    errorMessage: string,
-): Promise<ResponseObject<T>> {
+async function fetchJsonResponse<T>(input: RequestInfo, init: RequestInit, errorMessage: string): Promise<ResponseObject<T>> {
     const response = await authFetch(input, init);
     const result = await response.json().catch(e => {
         console.error('Failed to parse JSON response', e);
@@ -30,7 +27,6 @@ function translateConnectionsApi(key: string) {
     return translate(getClientLocale(), key);
 }
 
-
 export async function addConnection(params: CreateConnectionPayload): Promise<ResponseObject<ConnectionListItem>> {
     const res = await fetchJsonResponse<ConnectionListItem>(
         '/api/connection',
@@ -45,10 +41,7 @@ export async function addConnection(params: CreateConnectionPayload): Promise<Re
     return res;
 }
 
-
-export async function updateConnection(
-    params: CreateConnectionPayload & { id?: string },
-): Promise<ResponseObject<ConnectionListItem>> {
+export async function updateConnection(params: CreateConnectionPayload & { id?: string }): Promise<ResponseObject<ConnectionListItem>> {
     const id = params.id ?? params.connection?.id;
 
     if (!id) {
@@ -68,13 +61,8 @@ export async function updateConnection(
     return res;
 }
 
-
 export async function getConnections(): Promise<{ data: ConnectionListItem[] }> {
-    const res = await fetchJsonResponse<ConnectionListItem[]>(
-        '/api/connection',
-        { method: 'GET' },
-        translateConnectionsApi('Connections.Api.ListFailed'),
-    );
+    const res = await fetchJsonResponse<ConnectionListItem[]>('/api/connection', { method: 'GET' }, translateConnectionsApi('Connections.Api.ListFailed'));
 
     if (!isSuccess(res)) {
         throw new Error(res.message || translateConnectionsApi('Connections.Api.ListFailed'));
@@ -82,7 +70,6 @@ export async function getConnections(): Promise<{ data: ConnectionListItem[] }> 
 
     return { data: res.data ?? [] };
 }
-
 
 export async function deleteConnection(id: string): Promise<ResponseObject<null>> {
     const res = await fetchJsonResponse<null>(
@@ -99,7 +86,6 @@ export async function deleteConnection(id: string): Promise<ResponseObject<null>
 
     return res;
 }
-
 
 export async function getConnectionDetail(id: string): Promise<{ data: ConnectionListItem }> {
     const res = await fetchJsonResponse<ConnectionListItem>(
@@ -120,10 +106,7 @@ export async function getConnectionDetail(id: string): Promise<{ data: Connectio
     return { data: detail };
 }
 
-
-export async function testConnection(
-    params: CreateConnectionPayload & { timeout?: number },
-): Promise<ResponseObject<unknown>> {
+export async function testConnection(params: CreateConnectionPayload & { timeout?: number }): Promise<ResponseObject<unknown>> {
     const res = await fetchJsonResponse<unknown>(
         '/api/connection/test',
         {
@@ -136,7 +119,6 @@ export async function testConnection(
 
     return res;
 }
-
 
 export async function connectConnection(params: ConnectionListItem): Promise<ResponseObject<unknown>> {
     const res = await fetchJsonResponse<unknown>(
@@ -154,4 +136,28 @@ export async function connectConnection(params: ConnectionListItem): Promise<Res
     }
 
     return res;
+}
+
+export async function inspectLocalFiles(params: LocalFilesInspectRequest): Promise<ResponseObject<LocalFilesInspectResponse>> {
+    return fetchJsonResponse<LocalFilesInspectResponse>(
+        '/api/local-files/inspect',
+        {
+            method: 'POST',
+            body: JSON.stringify(params),
+            headers: { 'Content-Type': 'application/json' },
+        },
+        'Failed to inspect local file',
+    );
+}
+
+export async function createLocalFiles(params: LocalFilesCreateRequest): Promise<ResponseObject<unknown>> {
+    return fetchJsonResponse<unknown>(
+        '/api/local-files/create',
+        {
+            method: 'POST',
+            body: JSON.stringify(params),
+            headers: { 'Content-Type': 'application/json' },
+        },
+        'Failed to create Local Files dataset',
+    );
 }

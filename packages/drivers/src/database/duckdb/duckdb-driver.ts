@@ -29,7 +29,7 @@ export function isMotherDuckConfig(config: BaseConfig): boolean {
     return parseOptions(config).mode === 'motherduck';
 }
 
-function assertAbsoluteExistingPath(filePath?: string): string {
+function assertAbsoluteExistingPath(filePath: string | undefined, options: Record<string, unknown>): string {
     const normalized = filePath?.trim();
     if (!normalized) {
         throw new Error('DuckDB path is required');
@@ -38,7 +38,11 @@ function assertAbsoluteExistingPath(filePath?: string): string {
         throw new Error('DuckDB path must be absolute');
     }
     if (!fs.existsSync(normalized)) {
-        throw new Error('DuckDB file does not exist');
+        if (options.createIfMissing === true) {
+            fs.mkdirSync(path.dirname(normalized), { recursive: true });
+        } else {
+            throw new Error('DuckDB file does not exist');
+        }
     }
     return normalized;
 }
@@ -70,6 +74,7 @@ function resolveDuckDbInstanceOptions(config: BaseConfig): Record<string, string
 }
 
 export function resolveDuckDbDatabasePath(config: BaseConfig): { mode: DuckDbMode; path: string } {
+    const options = parseOptions(config);
     if (isMotherDuckConfig(config)) {
         return {
             mode: 'motherduck',
@@ -79,7 +84,7 @@ export function resolveDuckDbDatabasePath(config: BaseConfig): { mode: DuckDbMod
 
     return {
         mode: 'local',
-        path: assertAbsoluteExistingPath(config.path),
+        path: assertAbsoluteExistingPath(config.path, options),
     };
 }
 
