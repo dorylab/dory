@@ -7,9 +7,9 @@
 
 **Dory is an AI-native Data Workspace for modern databases.**  
 
-> The AI-powered Data Studio you’ve been waiting for.
+> The AI-powered Data Studio you've been waiting for.
 
-It combines intelligent SQL editing, context-aware AI assistance, conversational database exploration, and deep operational integration across modern databases into a single unified studio — helping engineers and analysts write, understand, and manage data more efficiently.
+It combines intelligent SQL editing, context-aware AI assistance, conversational database exploration, and deep operational integration across modern databases into a single unified studio — helping you explore, monitor, and manage your data with the power of AI.
 
 <!-- > Explore data with SQL and AI, together. -->
 
@@ -19,11 +19,12 @@ It combines intelligent SQL editing, context-aware AI assistance, conversational
   <a href="https://github.com/dorylab/dory/releases"><b>🍎 Download for macOS</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/releases"><b>Download for Windows</b></a> &nbsp; • &nbsp;
   <a href="#quick-start"><b>📦 Quick Start</b></a> &nbsp; • &nbsp;
+  <a href="https://docs.getdory.dev/en/docs/deploy/self-hosting"><b>🏠 Self-Hosting</b></a> &nbsp; • &nbsp;
   <a href="./docs/contributing.md"><b>🤝 Contributing</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/stargazers"><b>⭐ Star</b></a>
 </p>
 
-**No signup required. Click “Enter as Demo” to start instantly.**
+**No signup required. Click "Enter as Demo" to start instantly.**
 
 **👇 Live Playground: https://app.getdory.dev**
 
@@ -64,6 +65,8 @@ Then:
 `Password: admin`
 
 To enable email verification, set `RESEND_API_KEY` to a valid [resend](https://resend.com) key and `EMAIL_FROM` to a validated email.
+
+For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://docs.getdory.dev/en/docs/deploy/self-hosting).
 
   
 ### 🧠 Supported AI Providers
@@ -124,7 +127,7 @@ AI that understands your database — not just text completion.
 - Quickly locate field meanings and query ideas  
 
 ---
-<img alt="image" src="https://github.com/user-attachments/assets/4397055f-7c74-4505-90dc-8d822845b670" />
+<img alt="image" src="https://github.com/user-attachments/assets/4397055f7c74-4505-90dc-8d822845b670" />
 
 ### 📈 ClickHouse Monitoring (Deep Integration)
 
