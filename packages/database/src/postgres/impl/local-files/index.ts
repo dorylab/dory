@@ -130,6 +130,99 @@ export class PostgresLocalFilesRepository {
         };
     }
 
+    async getDatasetByConnectionId(organizationId: string, connectionId: string) {
+        const [dataset] = await this.db
+            .select()
+            .from(datasets)
+            .where(and(eq(datasets.organizationId, organizationId), eq(datasets.connectionId, connectionId), isNull(datasets.deletedAt)))
+            .limit(1);
+        if (!dataset) return null;
+        return this.getDataset(organizationId, dataset.id);
+    }
+
+    async replaceDatasetSourceAndRelations(
+        organizationId: string,
+        datasetId: string,
+        input: {
+            fileAsset: LocalFileAssetCreateInput;
+            dataset: Pick<DatasetCreateInput, 'name'>;
+            relations: Omit<DatasetRelationCreateInput, 'datasetId' | 'fileAssetId'>[];
+        },
+    ) {
+        return this.db.transaction(async tx => {
+            const [dataset] = await tx
+                .update(datasets)
+                .set({
+                    name: input.dataset.name,
+                    refreshStatus: 'idle',
+                    lastRefreshError: null,
+                })
+                .where(and(eq(datasets.organizationId, organizationId), eq(datasets.id, datasetId), isNull(datasets.deletedAt)))
+                .returning();
+
+            if (!dataset) {
+                throw new DatabaseError('Local Files dataset not found', 404);
+            }
+
+            const existingRelations = await tx
+                .select()
+                .from(datasetRelations)
+                .where(and(eq(datasetRelations.organizationId, organizationId), eq(datasetRelations.datasetId, datasetId), isNull(datasetRelations.deletedAt)));
+
+            const existingAssetIds = [...new Set(existingRelations.map(relation => relation.fileAssetId))];
+            const [fileAsset] = existingAssetIds.length
+                ? await tx
+                      .update(fileAssets)
+                      .set({
+                          backend: input.fileAsset.backend,
+                          sourceType: input.fileAsset.sourceType,
+                          path: input.fileAsset.path,
+                          storageKey: input.fileAsset.storageKey ?? null,
+                          sizeBytes: input.fileAsset.sizeBytes ?? null,
+                          mtimeMs: input.fileAsset.mtimeMs ?? null,
+                          status: 'ready',
+                          metadata: input.fileAsset.metadata ?? '{}',
+                      })
+                      .where(and(eq(fileAssets.organizationId, organizationId), eq(fileAssets.id, existingAssetIds[0])))
+                      .returning()
+                : await tx.insert(fileAssets).values(input.fileAsset).returning();
+
+            if (!fileAsset) {
+                throw new DatabaseError('Failed to update local file asset', 500);
+            }
+
+            const existingRelationIds = existingRelations.map(relation => relation.id);
+            if (existingRelationIds.length) {
+                await tx.delete(datasetRelationColumns).where(inArray(datasetRelationColumns.relationId, existingRelationIds));
+                await tx
+                    .update(datasetRelations)
+                    .set({
+                        deletedAt: new Date(),
+                    })
+                    .where(inArray(datasetRelations.id, existingRelationIds));
+            }
+
+            const relationRows = input.relations.length
+                ? await tx
+                      .insert(datasetRelations)
+                      .values(
+                          input.relations.map(relation => ({
+                              ...relation,
+                              datasetId,
+                              fileAssetId: fileAsset.id,
+                          })),
+                      )
+                      .returning()
+                : [];
+
+            return {
+                fileAsset,
+                dataset,
+                relations: relationRows,
+            };
+        });
+    }
+
     async replaceColumnSnapshots(relationId: string, columns: DatasetRelationColumnSnapshotInput[]) {
         await this.db.transaction(async tx => {
             await tx.delete(datasetRelationColumns).where(eq(datasetRelationColumns.relationId, relationId));

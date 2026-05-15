@@ -4,9 +4,10 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { useQueries } from '@tanstack/react-query';
 import { useAtom, useAtomValue } from 'jotai';
 import { useParams } from 'next/navigation';
-import { Search } from 'lucide-react';
+import { Eye, Loader2, Search, Table } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { cn } from '@dory/web-utils';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
@@ -15,9 +16,11 @@ import type { ResponseObject } from '@dory/shared';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { getDriverCapabilities } from '@/lib/explorer/capabilities';
+import { isLocalFilesDataset } from '@/lib/explorer/local-files';
 import { isSuccess } from '@/lib/result';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import { ExplorerSidebarTree } from './explorer-sidebar-tree';
+import { buildLocalFilesSidebarModel } from './local-files-sidebar';
 import { DEFAULT_GROUP_STATE, EMPTY_DATABASE_OBJECTS } from './types';
 import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';
 
@@ -105,11 +108,9 @@ export function ExplorerSidebar({
     const params = useParams<{ connectionId?: string | string[] }>();
     const connectionId = resolveParam(params?.connectionId) ?? currentConnection?.connection?.id;
     const connectionType = currentConnection?.connection?.type;
+    const isLocalFilesExplorer = currentConnection?.connection?.id === connectionId && isLocalFilesDataset(currentConnection?.connection?.options);
     const sidebarConfig = useMemo(() => getSidebarConfig(connectionType), [connectionType]);
-    const supportedGroupKeys = useMemo(
-        () => GROUP_KEYS.filter(group => getDriverCapabilities(connectionType).listKinds.includes(group)),
-        [connectionType],
-    );
+    const supportedGroupKeys = useMemo(() => GROUP_KEYS.filter(group => getDriverCapabilities(connectionType).listKinds.includes(group)), [connectionType]);
     const supportsSchemas = sidebarConfig.supportsSchemas;
     const defaultSchemaName = sidebarConfig.defaultSchemaName ?? 'public';
     const showCatalog = false; // For now, we are hiding the catalog level as it's not commonly used and adds extra complexity to the UI. We can revisit this decision in the future if needed.
@@ -202,7 +203,8 @@ export function ExplorerSidebar({
                     }
                 },
                 enabled: (() => {
-                    if (!connectionId || !expandedDatabases.has(entry.value)) return false;
+                    if (!connectionId || (!isLocalFilesExplorer && !expandedDatabases.has(entry.value))) return false;
+                    if (isLocalFilesExplorer) return true;
                     if (!supportsSchemas) {
                         return true;
                     }
@@ -259,7 +261,7 @@ export function ExplorerSidebar({
         });
 
         return next;
-    }, [databaseEntries, expandedSchemas, groupQueries, supportedGroupKeys]);
+    }, [databaseEntries, expandedSchemas, groupQueries, isLocalFilesExplorer, supportedGroupKeys]);
 
     const databaseSchemas = useMemo(() => {
         const next: Record<string, SchemaNode[]> = {};
@@ -340,6 +342,25 @@ export function ExplorerSidebar({
             return next;
         });
     }, [selectedDatabase]);
+
+    useEffect(() => {
+        if (!isLocalFilesExplorer) return;
+        const database = selectedDatabase ?? databaseEntries[0]?.value;
+        if (!database) return;
+
+        setExpandedGroups(prev => {
+            const current = prev[database] ?? DEFAULT_GROUP_STATE;
+            if (current.views || current.tables) return prev;
+            return {
+                ...prev,
+                [database]: {
+                    ...current,
+                    tables: true,
+                    views: true,
+                },
+            };
+        });
+    }, [databaseEntries, isLocalFilesExplorer, selectedDatabase]);
 
     useEffect(() => {
         if (!selectedDatabase) return;
@@ -473,6 +494,15 @@ export function ExplorerSidebar({
         [schemaObjectsByDatabase],
     );
 
+    const localFilesModel = buildLocalFilesSidebarModel({
+        selectedDatabase,
+        selectedObject,
+        databaseEntries,
+        databaseObjects,
+        loadingGroups,
+        normalizedFilter: normalized,
+    });
+
     return (
         <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 p-3">
             <div className="relative">
@@ -503,56 +533,106 @@ export function ExplorerSidebar({
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                    <ExplorerSidebarTree
-                        catalogName={catalogName}
-                        groupKeys={supportedGroupKeys}
-                        showCatalog={showCatalog}
-                        expandedCatalog={expandedCatalog}
-                        filteredDatabases={filteredDatabases}
-                        expandedDatabases={expandedDatabases}
-                        expandedGroups={expandedGroups}
-                        expandedSchemas={expandedSchemas}
-                        databaseObjects={databaseObjects}
-                        databaseSchemas={databaseSchemas}
-                        loadingGroups={loadingGroups}
-                        loadingSchemas={loadingSchemas}
-                        supportsSchemas={supportsSchemas}
-                        normalized={normalized}
-                        hasAnyResults={hasAnyResults}
-                        selectedDatabase={selectedDatabase}
-                        selectedSchema={selectedSchema}
-                        selectedList={selectedList}
-                        selectedObject={selectedObject}
-                        onToggleCatalog={() => setExpandedCatalog(prev => !prev)}
-                        onToggleDatabase={toggleDatabase}
-                        onToggleGroup={toggleGroup}
-                        onToggleSchema={toggleSchema}
-                        onSelectDatabase={dbName => {
-                            skipAutoExpandRef.current = true;
-                            setActiveDatabase(dbName);
+                    ) : isLocalFilesExplorer ? (
+                        localFilesModel.database ? (
+                            <div className="space-y-1">
+                                {localFilesModel.loading ? (
+                                    <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        Loading
+                                    </div>
+                                ) : null}
+                                {!localFilesModel.loading && localFilesModel.items.length
+                                    ? localFilesModel.items.map(item => {
+                                          const Icon = item.objectKind === 'table' ? Table : Eye;
 
-                            onSelectDatabase?.(dbName);
-                        }}
-                        onSelectSchema={target => {
-                            setActiveDatabase(target.database);
-                            onSelectSchema?.(target);
-                        }}
-                        onSelectList={target => {
-                            setActiveDatabase(target.database);
-                            onSelectList?.(target);
-                        }}
-                        onSelectObject={target => {
-                            setActiveDatabase(target.database);
-                            onSelectObject?.(target);
-                        }}
-                        onOpenObject={target => {
-                            setActiveDatabase(target.database);
-                            onOpenObject?.(target);
-                        }}
-                        filterEntries={filterEntries}
-                        getSchemaObjects={getSchemaObjects}
-                    />
+                                          return (
+                                              <button
+                                                  key={item.key}
+                                                  type="button"
+                                                  className={cn(
+                                                      'flex w-full cursor-pointer items-center gap-2 truncate rounded px-2 py-1 text-left text-sm',
+                                                      item.selected
+                                                          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                                                          : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                                  )}
+                                                  onClick={() => {
+                                                      setActiveDatabase(item.target.database);
+                                                      onSelectObject?.(item.target);
+                                                  }}
+                                                  onDoubleClick={() => {
+                                                      setActiveDatabase(item.target.database);
+                                                      onOpenObject?.(item.target);
+                                                  }}
+                                                  title={item.label}
+                                              >
+                                                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                                                  <span className="truncate">{item.label}</span>
+                                              </button>
+                                          );
+                                      })
+                                    : null}
+                                {!localFilesModel.loading && !localFilesModel.items.length ? (
+                                    <div className="px-2 py-1.5 text-xs text-muted-foreground" aria-live="polite">
+                                        {t('No matching objects found')}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : (
+                            <div className="px-2 py-1.5 text-xs text-muted-foreground" aria-live="polite">
+                                {t('No matching objects found')}
+                            </div>
+                        )
+                    ) : (
+                        <ExplorerSidebarTree
+                            catalogName={catalogName}
+                            groupKeys={supportedGroupKeys}
+                            showCatalog={showCatalog}
+                            expandedCatalog={expandedCatalog}
+                            filteredDatabases={filteredDatabases}
+                            expandedDatabases={expandedDatabases}
+                            expandedGroups={expandedGroups}
+                            expandedSchemas={expandedSchemas}
+                            databaseObjects={databaseObjects}
+                            databaseSchemas={databaseSchemas}
+                            loadingGroups={loadingGroups}
+                            loadingSchemas={loadingSchemas}
+                            supportsSchemas={supportsSchemas}
+                            normalized={normalized}
+                            hasAnyResults={hasAnyResults}
+                            selectedDatabase={selectedDatabase}
+                            selectedSchema={selectedSchema}
+                            selectedList={selectedList}
+                            selectedObject={selectedObject}
+                            onToggleCatalog={() => setExpandedCatalog(prev => !prev)}
+                            onToggleDatabase={toggleDatabase}
+                            onToggleGroup={toggleGroup}
+                            onToggleSchema={toggleSchema}
+                            onSelectDatabase={dbName => {
+                                skipAutoExpandRef.current = true;
+                                setActiveDatabase(dbName);
+
+                                onSelectDatabase?.(dbName);
+                            }}
+                            onSelectSchema={target => {
+                                setActiveDatabase(target.database);
+                                onSelectSchema?.(target);
+                            }}
+                            onSelectList={target => {
+                                setActiveDatabase(target.database);
+                                onSelectList?.(target);
+                            }}
+                            onSelectObject={target => {
+                                setActiveDatabase(target.database);
+                                onSelectObject?.(target);
+                            }}
+                            onOpenObject={target => {
+                                setActiveDatabase(target.database);
+                                onOpenObject?.(target);
+                            }}
+                            filterEntries={filterEntries}
+                            getSchemaObjects={getSchemaObjects}
+                        />
                     )}
                 </div>
             </ScrollArea>

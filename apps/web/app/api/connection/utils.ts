@@ -4,10 +4,10 @@ import '@/lib/drivers/register-database-drivers';
 
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
-import type { ConnectionSsh } from '@dory/shared/types/connections';
+import type { ConnectionListItem, ConnectionSsh } from '@dory/shared/types/connections';
 import { BaseConfig } from '@dory/drivers/types';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
-import { buildStoredConnectionConfig, pickConnectionIdentity } from '@dory/drivers/config';
+import { buildStoredConnectionConfig, parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
 import { resolveStoredSqlitePath } from '@/lib/demo/paths';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
@@ -71,12 +71,48 @@ export function normalizeOptions(raw: unknown): string | Record<string, unknown>
     return null;
 }
 
+function isLocalFilesDatasetOptions(options: unknown) {
+    return Boolean(
+        options &&
+            typeof options === 'object' &&
+            !Array.isArray(options) &&
+            (options as Record<string, unknown>).managedBy === 'local-files' &&
+            (options as Record<string, unknown>).mode === 'localFilesDataset',
+    );
+}
+
+async function withLocalFilesSchema(organizationId: string, record: ConnectionListItem): Promise<ConnectionListItem> {
+    const options = parseConnectionOptions(record.connection.options) ?? {};
+    if (!isLocalFilesDatasetOptions(options) || typeof options.schemaName === 'string') {
+        return record;
+    }
+
+    const db = await getDBService();
+    const dataset = await db.localFiles.getDatasetByConnectionId(organizationId, record.connection.id);
+    if (!dataset?.dataset.schemaName) {
+        return record;
+    }
+
+    return {
+        ...record,
+        connection: {
+            ...record.connection,
+            options: JSON.stringify({
+                ...options,
+                datasetId: typeof options.datasetId === 'string' ? options.datasetId : dataset.dataset.id,
+                schemaName: dataset.dataset.schemaName,
+            }),
+        },
+    };
+}
+
 async function ensurePoolWithLatest(config: BaseConfig) {
     const existing = await getDriverPool(config.id);
     const needRefresh =
         existing &&
         ((config.configVersion && existing.config.configVersion !== config.configVersion) ||
-            (config.updatedAt && existing.config.updatedAt !== config.updatedAt));
+            (config.updatedAt && existing.config.updatedAt !== config.updatedAt) ||
+            JSON.stringify(existing.config.options ?? {}) !== JSON.stringify(config.options ?? {}));
 
     if (needRefresh) {
         await destroyDriverPool(config.id);
@@ -87,7 +123,7 @@ async function ensurePoolWithLatest(config: BaseConfig) {
 
 export async function ensureConnectionPoolForUser(userId: string, organizationId: string, connectionId: string, identityId?: string | null) {
     const db = await getDBService();
-    const record = await db.connections.getById(organizationId, connectionId);
+    const record = await db.connections.getById(organizationId, connectionId).then(item => (item ? withLocalFilesSchema(organizationId, item) : item));
 
     if (!record) {
         throw createConnectionError(CONNECTION_ERROR_CODES.notFound);

@@ -376,6 +376,28 @@ ipcMain.handle('filesystem:select-sqlite-file', async () => {
   return result.filePaths[0] ?? null;
 });
 
+ipcMain.handle('filesystem:select-local-file', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: [
+      {
+        name: 'Data Files',
+        extensions: ['csv', 'tsv', 'parquet', 'json', 'jsonl', 'ndjson', 'xlsx', 'xlsm'],
+      },
+      {
+        name: 'All Files',
+        extensions: ['*'],
+      },
+    ],
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  return result.filePaths[0] ?? null;
+});
+
 ipcMain.handle('mcp:get-state', async () => {
   return mcpProxyManager.getState();
 });

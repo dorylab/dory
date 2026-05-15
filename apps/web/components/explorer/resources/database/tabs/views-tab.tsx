@@ -18,6 +18,7 @@ import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components
 
 type DatabaseViewRow = {
     name: string;
+    label?: string | null;
     engine?: string | null;
     sizeBytes?: number | null;
     rowCount?: number | null;
@@ -29,13 +30,14 @@ type DatabaseViewRow = {
 
 type DatabaseViewApiRow = {
     name: string;
+    label?: string | null;
+    value?: string | null;
     engine?: string | null;
     totalBytes?: number | null;
     totalRows?: number | null;
     comment?: string | null;
     lastModified?: string | null;
 };
-
 
 const resolveParam = (value?: string | string[]) => (Array.isArray(value) ? value[0] : value);
 
@@ -54,7 +56,6 @@ const formatTimestampWithLocale = (value: string | null | undefined, locale: str
         timeStyle: 'short',
     }).format(date);
 };
-
 
 type DatabaseViewsProps = {
     database?: string | null;
@@ -95,7 +96,8 @@ export default function DatabaseViews({ database }: DatabaseViewsProps) {
                 throw new Error(res.message || t('Failed to fetch views'));
             }
             const nextRows = (res.data ?? []).map(item => ({
-                name: item.name,
+                name: item.value || item.name,
+                label: item.label ?? item.name,
                 engine: item.engine ?? null,
                 sizeBytes: toNumberOrNull(item.totalBytes ?? null),
                 rowCount: toNumberOrNull(item.totalRows ?? null),
@@ -126,26 +128,29 @@ export default function DatabaseViews({ database }: DatabaseViewsProps) {
                 accessorKey: 'name',
                 header: t('Name'),
                 meta: { className: 'w-[300px] text-left', cellClassName: 'text-left' },
-                cell: ({ row }) => (
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <OverflowTooltip text={row.original.name} className="block max-w-[300px] truncate font-medium text-foreground" />
-                            {row.original.recentQueries ? (
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <span className="inline-flex size-2 rounded-full bg-sky-300/60" />
-                                    </TooltipTrigger>
-                                    <TooltipContent className="text-xs">{row.original.recentQueries}</TooltipContent>
-                                </Tooltip>
+                cell: ({ row }) => {
+                    const displayName = row.original.label || row.original.name;
+                    return (
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <OverflowTooltip text={displayName} className="block max-w-[300px] truncate font-medium text-foreground" />
+                                {row.original.recentQueries ? (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <span className="inline-flex size-2 rounded-full bg-sky-300/60" />
+                                        </TooltipTrigger>
+                                        <TooltipContent className="text-xs">{row.original.recentQueries}</TooltipContent>
+                                    </Tooltip>
+                                ) : null}
+                            </div>
+                            {row.original.comment ? (
+                                <OverflowTooltip text={row.original.comment} className="block max-w-[300px] truncate text-[11px] text-muted-foreground">
+                                    {row.original.comment}
+                                </OverflowTooltip>
                             ) : null}
                         </div>
-                        {row.original.comment ? (
-                            <OverflowTooltip text={row.original.comment} className="block max-w-[300px] truncate text-[11px] text-muted-foreground">
-                                {row.original.comment}
-                            </OverflowTooltip>
-                        ) : null}
-                    </div>
-                ),
+                    );
+                },
             },
             {
                 accessorKey: 'engine',
@@ -183,7 +188,7 @@ export default function DatabaseViews({ database }: DatabaseViewsProps) {
         if (!keyword) return rows;
 
         return rows.filter(row => {
-            const nameHit = row.name.toLowerCase().includes(keyword);
+            const nameHit = row.name.toLowerCase().includes(keyword) || (row.label ?? '').toLowerCase().includes(keyword);
             const commentHit = (row.comment ?? '').toLowerCase().includes(keyword);
             return nameHit || commentHit;
         });

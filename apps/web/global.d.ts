@@ -58,5 +58,6 @@ interface Window {
     platform: string;
     isPackaged: boolean;
     selectSqliteFile?: () => Promise<string | null>;
+    selectLocalFile?: () => Promise<string | null>;
   };
 }

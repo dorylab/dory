@@ -165,7 +165,7 @@ function readZipEntry(buffer: Buffer, entry: ZipEntry) {
 
 function extractWorkbookSheets(workbookXml: string): string[] {
     const sheets: string[] = [];
-    const sheetRegex = /<sheet\b[^>]*\bname=(["'])(.*?)\1[^>]*\/?>/g;
+    const sheetRegex = /<(?:[A-Za-z_][\w.-]*:)?sheet\b[^>]*\bname=(["'])(.*?)\1[^>]*\/?>/g;
     for (const match of workbookXml.matchAll(sheetRegex)) {
         if (match[2]) {
             sheets.push(decodeXml(match[2]));

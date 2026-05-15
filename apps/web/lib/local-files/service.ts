@@ -6,12 +6,15 @@ import type { DBService } from '@dory/database';
 import type { BaseConnection } from '@dory/drivers/core';
 import type {
     DatasetColumnSnapshot,
+    LocalFilesDatasetDetailResponse,
     LocalFileRelationManifest,
     LocalFileRelationMode,
     LocalFilesCreateRequest,
     LocalFilesInspectRequest,
     LocalFilesRefreshRequest,
+    LocalFilesUpdateRequest,
 } from '@dory/shared/types/local-files';
+import { newEntityId } from '@dory/shared/id';
 import { getRuntimeForServer, isDesktopRuntime } from '@dory/shared/runtime';
 
 import { getOrCreateConnectionPool } from '@/lib/connection/connection-service';
@@ -38,7 +41,7 @@ type RefreshRelationInput = {
     manifest: LocalFileRelationManifest;
 };
 
-const WORKSPACE_CONNECTION_OPTION_MODE = 'localFilesWorkspace';
+const DATASET_CONNECTION_OPTION_MODE = 'localFilesDataset';
 
 function assertSelfHostedNodeRuntime() {
     if (isDesktopRuntime()) {
@@ -62,13 +65,45 @@ function physicalTableName(relationName: string) {
     return `_${normalizeRelationName(relationName)}_cache`;
 }
 
+function sourceDescriptorFromPath(backend: string, filePath: string) {
+    if (backend !== 'serverPath') {
+        throw new Error(`Unsupported file backend: ${backend}`);
+    }
+    return {
+        backend: 'serverPath' as const,
+        filePath,
+    };
+}
+
+function localFilesConnectionOptions(input: { datasetId?: string | null; schemaName?: string | null; sourcePath: string; sourceType: string }) {
+    return JSON.stringify({
+        mode: DATASET_CONNECTION_OPTION_MODE,
+        managedBy: 'local-files',
+        createIfMissing: true,
+        datasetId: input.datasetId ?? null,
+        schemaName: input.schemaName ?? null,
+        sourcePath: input.sourcePath,
+        sourceType: input.sourceType,
+    });
+}
+
 function getStorageRoot() {
     return process.env.DORY_LOCAL_FILES_STORAGE_DIR?.trim() || path.join(process.cwd(), 'localdata', 'local-files');
 }
 
-function getWorkspacePath(organizationId: string) {
+function getWorkspacePath(organizationId: string, connectionId?: string) {
     const safeOrganizationId = organizationId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (connectionId) {
+        const safeConnectionId = connectionId.replace(/[^a-zA-Z0-9_-]/g, '_');
+        return path.join(getStorageRoot(), safeOrganizationId, 'datasets', safeConnectionId, 'workspace.duckdb');
+    }
     return path.join(getStorageRoot(), safeOrganizationId, 'workspace.duckdb');
+}
+
+function schemaNameForDataset(name: string, connectionId: string, explicitSchemaName?: string) {
+    const base = normalizeDatasetSchemaName(explicitSchemaName || name);
+    const suffix = connectionId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toLowerCase();
+    return normalizeDatasetSchemaName(`${base}_${suffix || 'dataset'}`);
 }
 
 function parseOptions(raw: unknown): Record<string, unknown> {
@@ -89,9 +124,21 @@ function safeJsonStringify(value: unknown) {
     return JSON.stringify(value, (_key, item) => (typeof item === 'bigint' ? item.toString() : item));
 }
 
-function isLocalFilesWorkspaceConnection(connection: { type?: string | null; options?: string | null }) {
+export function isLocalFilesDatasetConnection(connection: { type?: string | null; options?: string | null }) {
     if (connection.type !== 'duckdb') return false;
-    return parseOptions(connection.options).mode === WORKSPACE_CONNECTION_OPTION_MODE;
+    const options = parseOptions(connection.options);
+    return options.managedBy === 'local-files' && options.mode === DATASET_CONNECTION_OPTION_MODE;
+}
+
+async function cleanupIncompleteLocalFilesConnection(ctx: LocalFilesContext, name: string) {
+    const existingConnections = await ctx.db.connections.list(ctx.organizationId);
+    const incompleteConnection = existingConnections.find(item => {
+        if (item.connection.name !== name || !isLocalFilesDatasetConnection(item.connection)) return false;
+        const options = parseOptions(item.connection.options);
+        return typeof options.datasetId !== 'string' || !options.datasetId;
+    });
+    if (!incompleteConnection?.connection.id) return;
+    await ctx.db.connections.delete(ctx.organizationId, incompleteConnection.connection.id);
 }
 
 function inferSemantic(columnName: string, columnType: string): string | null {
@@ -105,55 +152,6 @@ function inferSemantic(columnName: string, columnType: string): string | null {
     if (name.includes('amount') || name.includes('price') || name.includes('cost') || name.includes('revenue')) return 'money';
     if (type.includes('int') || type.includes('double') || type.includes('decimal') || type.includes('float')) return 'numeric';
     return null;
-}
-
-async function ensureWorkspaceConnection(ctx: LocalFilesContext) {
-    const existing = (await ctx.db.connections.list(ctx.organizationId)).find(item => isLocalFilesWorkspaceConnection(item.connection));
-    if (existing) {
-        await fs.mkdir(path.dirname(existing.connection.path ?? getWorkspacePath(ctx.organizationId)), { recursive: true });
-        return existing;
-    }
-
-    const workspacePath = getWorkspacePath(ctx.organizationId);
-    await fs.mkdir(path.dirname(workspacePath), { recursive: true });
-
-    return ctx.db.connections.create(ctx.userId, ctx.organizationId, {
-        connection: {
-            type: 'duckdb',
-            engine: 'duckdb',
-            name: `Local Files Workspace ${ctx.organizationId.slice(0, 8)}`,
-            description: 'Dory-managed DuckDB workspace for Local Files datasets',
-            host: null,
-            port: null,
-            httpPort: null,
-            database: null,
-            path: workspacePath,
-            options: JSON.stringify({
-                mode: WORKSPACE_CONNECTION_OPTION_MODE,
-                createIfMissing: true,
-                managedBy: 'local-files',
-            }),
-            status: 'Connected',
-            environment: 'local-files',
-            tags: 'local-files,managed',
-        },
-        identities: [
-            {
-                name: 'DuckDB',
-                username: 'duckdb',
-                role: null,
-                isDefault: true,
-                database: null,
-            },
-        ],
-        ssh: {
-            enabled: false,
-            host: null,
-            port: null,
-            username: null,
-            authMethod: null,
-        },
-    } as any);
 }
 
 async function getWorkspaceConnection(ctx: LocalFilesContext, connectionId: string): Promise<BaseConnection> {
@@ -200,6 +198,14 @@ async function materializeRelation(connection: BaseConnection, schemaName: strin
     }
 
     await connection.command(`CREATE OR REPLACE VIEW ${qualifiedRelation(schemaName, relationName)} AS ${buildReadSql({ ...relation, relationName })}`);
+}
+
+async function dropRelation(connection: BaseConnection, schemaName: string, relation: { relationName: string; mode?: string | null; physicalTableName?: string | null }) {
+    const relationName = normalizeRelationName(relation.relationName);
+    await connection.command(`DROP VIEW IF EXISTS ${qualifiedRelation(schemaName, relationName)}`);
+    if (relation.mode === 'cached') {
+        await connection.command(`DROP TABLE IF EXISTS ${qualifiedRelation(schemaName, relation.physicalTableName ?? physicalTableName(relationName))}`);
+    }
 }
 
 function parseNullable(value: string | undefined): boolean | null {
@@ -354,19 +360,242 @@ export async function inspectLocalFiles(ctx: LocalFilesContext, request: LocalFi
 export async function createLocalFilesDataset(ctx: LocalFilesContext, request: LocalFilesCreateRequest) {
     assertSelfHostedNodeRuntime();
     const source = await statSource(request.source);
-    const workspace = await ensureWorkspaceConnection(ctx);
-    const connection = await getWorkspaceConnection(ctx, workspace.connection.id);
+    const connectionId = newEntityId();
+    const workspacePath = getWorkspacePath(ctx.organizationId, connectionId);
+    await fs.mkdir(path.dirname(workspacePath), { recursive: true });
+    await cleanupIncompleteLocalFilesConnection(ctx, request.name.trim());
+    let visibleConnection = await ctx.db.connections.create(ctx.userId, ctx.organizationId, {
+        connection: {
+            id: connectionId,
+            type: 'duckdb',
+            engine: 'duckdb',
+            name: request.name.trim(),
+            description: 'Open Files dataset',
+            host: null,
+            port: null,
+            httpPort: null,
+            database: null,
+            path: workspacePath,
+            options: localFilesConnectionOptions({
+                sourcePath: source.path,
+                sourceType: source.sourceType,
+            }),
+            status: 'Connected',
+            environment: 'local-files',
+            tags: 'local-files',
+        },
+        identities: [
+            {
+                name: 'DuckDB',
+                username: 'duckdb',
+                role: null,
+                isDefault: true,
+                database: null,
+            },
+        ],
+        ssh: {
+            enabled: false,
+            host: null,
+            port: null,
+            username: null,
+            authMethod: null,
+        },
+    } as any);
+
+    try {
+        const connection = await getWorkspaceConnection(ctx, visibleConnection.connection.id);
+        await loadDuckDbExtensions(connection);
+
+        const schemaName = schemaNameForDataset(request.name, visibleConnection.connection.id, request.schemaName);
+        const requestedMode: LocalFileRelationMode = request.mode ?? 'virtual';
+        const relations = request.relations.map(relation => ({
+            ...relation,
+            relationName: normalizeRelationName(relation.relationName),
+            mode: relation.mode ?? requestedMode,
+        }));
+
+        const created = await ctx.db.localFiles.createDatasetWithRelations({
+            fileAsset: {
+                organizationId: ctx.organizationId,
+                createdByUserId: ctx.userId,
+                backend: source.backend,
+                sourceType: source.sourceType,
+                path: source.path,
+                sizeBytes: String(source.sizeBytes),
+                mtimeMs: String(Math.round(source.mtimeMs)),
+            },
+            dataset: {
+                organizationId: ctx.organizationId,
+                createdByUserId: ctx.userId,
+                connectionId: visibleConnection.connection.id,
+                name: request.name.trim(),
+                schemaName,
+            },
+            relations: relations.map(relation => ({
+                organizationId: ctx.organizationId,
+                sourceType: relation.sourceType,
+                sheetName: relation.sheetName ?? null,
+                relationName: relation.relationName,
+                mode: relation.mode,
+                duckdbSchema: schemaName,
+                duckdbRelation: relation.relationName,
+                physicalTableName: relation.mode === 'cached' ? physicalTableName(relation.relationName) : null,
+                sourceFingerprint: relation.sourceFingerprint,
+                lastSourceFingerprint: null,
+                schemaDriftStatus: 'unknown',
+                refreshStrategy: 'manual',
+                readSql: buildReadSql(relation),
+            })),
+        });
+
+        for (const createdRelation of created.relations) {
+            const manifest = relations.find(relation => relation.relationName === createdRelation.relationName);
+            if (!manifest) continue;
+            await runRefreshPipeline(
+                ctx,
+                connection,
+                {
+                    id: createdRelation.id,
+                    datasetId: created.dataset.id,
+                    schemaName,
+                    relationName: createdRelation.relationName,
+                    previousSourceFingerprint: null,
+                    manifest,
+                },
+                'create',
+            );
+        }
+        await ctx.db.localFiles.markDatasetRefresh(ctx.organizationId, created.dataset.id, { status: 'success' });
+        await ctx.db.localFiles.markRelationsRefreshed(
+            created.relations.map(relation => relation.id),
+            { status: 'ready' },
+        );
+        visibleConnection = await ctx.db.connections.patchConnectionFields(ctx.organizationId, visibleConnection.connection.id, {
+            options: localFilesConnectionOptions({
+                datasetId: created.dataset.id,
+                schemaName: created.dataset.schemaName,
+                sourcePath: source.path,
+                sourceType: source.sourceType,
+            }),
+        });
+
+        return {
+            connection: visibleConnection,
+            dataset: created.dataset,
+            fileAsset: created.fileAsset,
+            relations: created.relations,
+        };
+    } catch (error) {
+        await ctx.db.connections.delete(ctx.organizationId, visibleConnection.connection.id).catch(cleanupError => {
+            console.warn('[local-files] failed to clean up incomplete dataset connection:', cleanupError);
+        });
+        throw error;
+    }
+}
+
+function toDatasetDetail(record: {
+    dataset: {
+        id: string;
+        connectionId: string;
+        name: string;
+        schemaName: string;
+        status: string;
+        refreshStatus: string;
+    };
+    relations: Array<{
+        fileAssetId: string;
+        sourceType: string;
+        sheetName: string | null;
+        relationName: string;
+        mode: string;
+        sourceFingerprint: string | null;
+    }>;
+    fileAssets: Array<{
+        id: string;
+        backend: string;
+        sourceType: string;
+        path: string;
+        sizeBytes: string | null;
+        mtimeMs: string | null;
+    }>;
+}): LocalFilesDatasetDetailResponse {
+    const firstAsset = record.fileAssets[0];
+    if (!firstAsset) {
+        throw new Error('Local Files source asset not found');
+    }
+    const assetById = new Map(record.fileAssets.map(asset => [asset.id, asset]));
+    const source: LocalFilesDatasetDetailResponse['source'] = {
+        backend: firstAsset.backend as LocalFilesDatasetDetailResponse['source']['backend'],
+        path: firstAsset.path,
+        sizeBytes: Number(firstAsset.sizeBytes ?? 0),
+        mtimeMs: Number(firstAsset.mtimeMs ?? 0),
+        sourceType: firstAsset.sourceType as LocalFilesDatasetDetailResponse['source']['sourceType'],
+    };
+
+    return {
+        dataset: {
+            id: record.dataset.id,
+            connectionId: record.dataset.connectionId,
+            name: record.dataset.name,
+            schemaName: record.dataset.schemaName,
+            status: record.dataset.status,
+            refreshStatus: record.dataset.refreshStatus,
+        },
+        source,
+        relations: record.relations.map(relation => {
+            const asset = assetById.get(relation.fileAssetId) ?? firstAsset;
+            return {
+                sourceType: relation.sourceType as LocalFileRelationManifest['sourceType'],
+                source: sourceDescriptorFromPath(asset.backend, asset.path),
+                duckdbPath: asset.path,
+                sheetName: relation.sheetName ?? undefined,
+                relationName: relation.relationName,
+                mode: relation.mode as LocalFileRelationMode,
+                sourceFingerprint: relation.sourceFingerprint ?? '',
+            };
+        }),
+    };
+}
+
+export async function getLocalFilesDataset(ctx: LocalFilesContext, request: { datasetId?: string | null; connectionId?: string | null }) {
+    assertSelfHostedNodeRuntime();
+    const record =
+        (request.connectionId ? await ctx.db.localFiles.getDatasetByConnectionId(ctx.organizationId, request.connectionId) : null) ??
+        (request.datasetId ? await ctx.db.localFiles.getDataset(ctx.organizationId, request.datasetId) : null);
+    if (!record) {
+        throw new Error('Local Files dataset not found');
+    }
+    return toDatasetDetail(record);
+}
+
+export async function updateLocalFilesDataset(ctx: LocalFilesContext, datasetId: string, request: LocalFilesUpdateRequest) {
+    assertSelfHostedNodeRuntime();
+    const existing = await ctx.db.localFiles.getDataset(ctx.organizationId, datasetId);
+    if (!existing) {
+        throw new Error('Local Files dataset not found');
+    }
+
+    const source = await statSource(request.source);
+    const connection = await getWorkspaceConnection(ctx, existing.dataset.connectionId);
     await loadDuckDbExtensions(connection);
 
-    const schemaName = normalizeDatasetSchemaName(request.schemaName || request.name);
+    for (const relation of existing.relations) {
+        await dropRelation(connection, existing.dataset.schemaName, relation);
+    }
+
     const requestedMode: LocalFileRelationMode = request.mode ?? 'virtual';
+    const sourceFingerprint = fingerprintSourceStat(source);
     const relations = request.relations.map(relation => ({
         ...relation,
+        source: request.source,
+        duckdbPath: source.path,
+        sourceFingerprint,
+        sourceType: source.sourceType,
         relationName: normalizeRelationName(relation.relationName),
         mode: relation.mode ?? requestedMode,
     }));
 
-    const created = await ctx.db.localFiles.createDatasetWithRelations({
+    const updated = await ctx.db.localFiles.replaceDatasetSourceAndRelations(ctx.organizationId, datasetId, {
         fileAsset: {
             organizationId: ctx.organizationId,
             createdByUserId: ctx.userId,
@@ -377,11 +606,7 @@ export async function createLocalFilesDataset(ctx: LocalFilesContext, request: L
             mtimeMs: String(Math.round(source.mtimeMs)),
         },
         dataset: {
-            organizationId: ctx.organizationId,
-            createdByUserId: ctx.userId,
-            connectionId: workspace.connection.id,
             name: request.name.trim(),
-            schemaName,
         },
         relations: relations.map(relation => ({
             organizationId: ctx.organizationId,
@@ -389,7 +614,7 @@ export async function createLocalFilesDataset(ctx: LocalFilesContext, request: L
             sheetName: relation.sheetName ?? null,
             relationName: relation.relationName,
             mode: relation.mode,
-            duckdbSchema: schemaName,
+            duckdbSchema: existing.dataset.schemaName,
             duckdbRelation: relation.relationName,
             physicalTableName: relation.mode === 'cached' ? physicalTableName(relation.relationName) : null,
             sourceFingerprint: relation.sourceFingerprint,
@@ -400,34 +625,43 @@ export async function createLocalFilesDataset(ctx: LocalFilesContext, request: L
         })),
     });
 
-    for (const createdRelation of created.relations) {
-        const manifest = relations.find(relation => relation.relationName === createdRelation.relationName);
+    for (const updatedRelation of updated.relations) {
+        const manifest = relations.find(relation => relation.relationName === updatedRelation.relationName);
         if (!manifest) continue;
         await runRefreshPipeline(
             ctx,
             connection,
             {
-                id: createdRelation.id,
-                datasetId: created.dataset.id,
-                schemaName,
-                relationName: createdRelation.relationName,
+                id: updatedRelation.id,
+                datasetId: updated.dataset.id,
+                schemaName: updated.dataset.schemaName,
+                relationName: updatedRelation.relationName,
                 previousSourceFingerprint: null,
                 manifest,
             },
-            'create',
+            'manual',
         );
     }
-    await ctx.db.localFiles.markDatasetRefresh(ctx.organizationId, created.dataset.id, { status: 'success' });
+    await ctx.db.localFiles.markDatasetRefresh(ctx.organizationId, updated.dataset.id, { status: 'success' });
     await ctx.db.localFiles.markRelationsRefreshed(
-        created.relations.map(relation => relation.id),
+        updated.relations.map(relation => relation.id),
         { status: 'ready' },
     );
+    const connectionItem = await ctx.db.connections.patchConnectionFields(ctx.organizationId, updated.dataset.connectionId, {
+        name: updated.dataset.name,
+        options: localFilesConnectionOptions({
+            datasetId: updated.dataset.id,
+            schemaName: updated.dataset.schemaName,
+            sourcePath: source.path,
+            sourceType: source.sourceType,
+        }),
+    });
 
     return {
-        connection: workspace,
-        dataset: created.dataset,
-        fileAsset: created.fileAsset,
-        relations: created.relations,
+        connection: connectionItem,
+        dataset: updated.dataset,
+        fileAsset: updated.fileAsset,
+        relations: updated.relations,
     };
 }
 
