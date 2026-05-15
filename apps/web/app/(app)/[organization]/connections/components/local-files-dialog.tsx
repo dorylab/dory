@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, Database, FileSearch, Loader2 } from 'lucide-react';
+import { ChevronDown, Database, FileSearch, FolderOpen, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
@@ -79,6 +80,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
     const [loadingDataset, setLoadingDataset] = useState(false);
     const [advancedOpen, setAdvancedOpen] = useState(false);
 
+    const canPickFile = isDesktopRuntime() && typeof window !== 'undefined' && typeof window.electron?.selectLocalFile === 'function';
     const relations = inspectResult?.relations ?? [];
     const isEditMode = mode === 'edit';
     const busy = inspecting || creating || loadingDataset;
@@ -162,12 +164,13 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
         };
     }, [connectionItem?.connection?.id, connectionItem?.connection?.options, isEditMode, open]);
 
-    const handleInspect = async () => {
-        const trimmedPath = filePath.trim();
+    const handleInspect = async (nextFilePath?: string) => {
+        const trimmedPath = (nextFilePath ?? filePath).trim();
         if (!trimmedPath) {
             toast.error('Enter a server-accessible file path.');
             return;
         }
+        setFilePath(trimmedPath);
         setInspecting(true);
         try {
             const result = await inspectLocalFiles({
@@ -187,6 +190,18 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
             toast.error(error?.message ?? 'Failed to inspect local file');
         } finally {
             setInspecting(false);
+        }
+    };
+
+    const handleChooseFile = async () => {
+        try {
+            const selectedPath = await window.electron?.selectLocalFile?.();
+            if (!selectedPath) {
+                return;
+            }
+            await handleInspect(selectedPath);
+        } catch (error: any) {
+            toast.error(error?.message ?? 'Failed to choose local file');
         }
     };
 
@@ -266,7 +281,13 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
                         <Label htmlFor="local-files-path">File Path</Label>
                         <div className="flex gap-2">
                             <Input id="local-files-path" placeholder="/data/sales.xlsx" value={filePath} onChange={event => setFilePath(event.target.value)} />
-                            <Button type="button" variant="secondary" onClick={handleInspect} disabled={busy}>
+                            {canPickFile ? (
+                                <Button type="button" variant="outline" onClick={handleChooseFile} disabled={busy}>
+                                    <FolderOpen className="h-4 w-4" />
+                                    Choose
+                                </Button>
+                            ) : null}
+                            <Button type="button" variant="secondary" onClick={() => handleInspect()} disabled={busy}>
                                 {inspecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
                                 Preview
                             </Button>
