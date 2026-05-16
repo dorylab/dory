@@ -2496,6 +2496,13 @@
             "Clusters": {
                 "FetchFailed": "Failed to fetch cluster metadata"
             }
+        },
+        "Mcp": {
+            "StreamableGetDisabled": "MCP Streamable HTTP GET is not enabled in Dory v1.",
+            "SettingsPatchUnsupported": "MCP settings are managed per user token. PATCH is not supported.",
+            "InvalidTokenPayload": "Invalid MCP token payload.",
+            "MissingTokenId": "Missing MCP token id.",
+            "TokenNotFound": "MCP token not found."
         }
     },
     "Ai": {
@@ -2909,6 +2916,7 @@
                 "Copied": "Copied",
                 "DeleteToken": "Delete token",
                 "TokensTitle": "Personal access tokens",
+                "DefaultTokenName": "MCP Client",
                 "TokenNamePlaceholder": "Client name",
                 "CreateToken": "Create",
                 "TokenCreated": "Token created.",

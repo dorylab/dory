@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { ResponseUtil } from '@/lib/result';
 import { getDefaultMcpScopes, serializeMcpToken } from '@/lib/server/mcp/settings';
@@ -22,5 +23,6 @@ export const GET = withUserAndOrganizationHandler(async ({ req, db, organization
 });
 
 export async function PATCH() {
-    return NextResponse.json({ error: 'MCP settings are managed per user token. PATCH is not supported.' }, { status: 405 });
+    const locale = await getApiLocale();
+    return NextResponse.json({ error: translateApi('Api.Mcp.SettingsPatchUnsupported', undefined, locale) }, { status: 405 });
 }

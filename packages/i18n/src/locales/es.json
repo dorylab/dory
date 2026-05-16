@@ -2495,6 +2495,13 @@
             "Clusters": {
                 "FetchFailed": "No se pudieron obtener los metadatos del clúster"
             }
+        },
+        "Mcp": {
+            "StreamableGetDisabled": "MCP Streamable HTTP GET no está habilitado en Dory v1.",
+            "SettingsPatchUnsupported": "Los ajustes de MCP se gestionan por token de usuario. PATCH no está soportado.",
+            "InvalidTokenPayload": "Carga del token MCP no válida.",
+            "MissingTokenId": "Falta el id del token MCP.",
+            "TokenNotFound": "No se encontró el token MCP."
         }
     },
     "Ai": {
@@ -2782,6 +2789,11 @@
                     "Label": "Acerca de",
                     "Title": "Acerca de",
                     "Description": "Versión, licencias y créditos."
+                },
+                "AgentAccess": {
+                    "Label": "MCP",
+                    "Title": "MCP",
+                    "Description": "Conecta agentes de confianza a Dory con tus tokens MCP personales."
                 }
             },
             "Appearance": {
@@ -2890,6 +2902,52 @@
                 "Version": "Versión",
                 "GitHub": "GitHub",
                 "Footer": "© 2026 Dory Lab"
+            },
+            "AgentAccess": {
+                "Loading": "Cargando ajustes de MCP...",
+                "LoadFailed": "No se pudieron cargar los ajustes de MCP.",
+                "SaveFailed": "No se pudieron actualizar los ajustes de MCP.",
+                "CreateFailed": "No se pudo crear el token MCP.",
+                "RevokeFailed": "No se pudo revocar el token MCP.",
+                "EnableLabel": "MCP personal",
+                "EnableDescription": "Crea tokens personales para clientes MCP de confianza.",
+                "ProxyLabel": "Endpoint MCP local",
+                "ProxyDescription": "Ejecuta un endpoint MCP localhost fijo para clientes de escritorio.",
+                "ProxyStopped": "El endpoint MCP local está habilitado, pero no se está ejecutando.",
+                "ProxyStartFailed": "No se pudo actualizar el endpoint MCP local.",
+                "EndpointLabel": "Endpoint",
+                "EndpointDescription": "Usa esta URL con tu token MCP personal en Codex u otro cliente MCP.",
+                "Copy": "Copiar",
+                "Copied": "Copiado",
+                "DeleteToken": "Eliminar token",
+                "TokensTitle": "Tokens de acceso personal",
+                "DefaultTokenName": "Cliente MCP",
+                "TokenNamePlaceholder": "Nombre del cliente",
+                "CreateToken": "Crear",
+                "TokenCreated": "Token creado.",
+                "TokenOnce": "Copia este token personal ahora. No se volverá a mostrar.",
+                "NoTokens": "Todavía no tienes tokens MCP.",
+                "LastUsedAt": "Último uso: {date}",
+                "RevokedAt": "Revocado: {date}",
+                "SetupTitle": "Configuración de MCP",
+                "SetupDescription": "Estos tokens pertenecen a tu cuenta de usuario. No los compartas; el acceso termina cuando se elimina tu membresía de la organización.",
+                "SetupTabs": {
+                    "General": "General"
+                },
+                "General": {
+                    "Endpoint": "Endpoint",
+                    "Authorization": "Cabecera HTTP",
+                    "JsonTitle": "Configuración JSON genérica"
+                },
+                "Codex": {
+                    "CliTitle": "Codex CLI",
+                    "TomlTitle": "config.toml"
+                },
+                "ClaudeCode": {
+                    "CliTitle": "Claude Code CLI",
+                    "JsonTitle": ".mcp.json"
+                },
+                "Refresh": "Actualizar"
             }
         },
         "QueryClient": {

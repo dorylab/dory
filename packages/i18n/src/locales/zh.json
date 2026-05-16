@@ -2498,6 +2498,13 @@
             "Clusters": {
                 "FetchFailed": "获取集群信息失败"
             }
+        },
+        "Mcp": {
+            "StreamableGetDisabled": "Dory v1 未启用 MCP Streamable HTTP GET。",
+            "SettingsPatchUnsupported": "MCP 设置按用户 token 管理，不支持 PATCH。",
+            "InvalidTokenPayload": "无效的 MCP token 请求内容。",
+            "MissingTokenId": "缺少 MCP token id。",
+            "TokenNotFound": "未找到 MCP token。"
         }
     },
     "Ai": {
@@ -2911,6 +2918,7 @@
                 "Copied": "已复制",
                 "DeleteToken": "删除 token",
                 "TokensTitle": "个人访问 token",
+                "DefaultTokenName": "MCP Client",
                 "TokenNamePlaceholder": "Client 名称",
                 "CreateToken": "创建",
                 "TokenCreated": "Token 已创建。",

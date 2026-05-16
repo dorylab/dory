@@ -63,7 +63,8 @@ export function AgentAccessPanel() {
     const [loading, setLoading] = useState(true);
     const [proxyBusy, setProxyBusy] = useState(false);
     const [creating, setCreating] = useState(false);
-    const [tokenName, setTokenName] = useState('MCP Client');
+    const defaultTokenName = t('DefaultTokenName');
+    const [tokenName, setTokenName] = useState(defaultTokenName);
     const [newToken, setNewToken] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const isDesktop = isDesktopRuntime();
@@ -170,7 +171,7 @@ export function AgentAccessPanel() {
                 await authFetch('/api/mcp/tokens', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: tokenName.trim() || 'MCP Client' }),
+                    body: JSON.stringify({ name: tokenName.trim() || defaultTokenName }),
                 }),
             );
             setNewToken(payload.token);

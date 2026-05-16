@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { authenticateMcpRequest } from '@/lib/server/mcp/auth';
 import { handleDoryMcpRequest } from '@/lib/server/mcp/server';
 
@@ -19,7 +20,8 @@ function jsonError(message: string, status: number) {
 }
 
 export async function GET() {
-    return NextResponse.json({ error: 'MCP Streamable HTTP GET is not enabled in Dory v1.' }, { status: 405 });
+    const locale = await getApiLocale();
+    return NextResponse.json({ error: translateApi('Api.Mcp.StreamableGetDisabled', undefined, locale) }, { status: 405 });
 }
 
 export async function POST(req: Request) {

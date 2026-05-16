@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
@@ -14,11 +15,14 @@ const bodySchema = z.object({
 });
 
 export const POST = withOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+    const locale = await getApiLocale();
+    const t = (key: string) => translateApi(key, undefined, locale);
+
     if (!userId) {
         return NextResponse.json(
             ResponseUtil.error({
                 code: ErrorCodes.UNAUTHORIZED,
-                message: 'Unauthorized',
+                message: t('Api.Errors.Unauthorized'),
             }),
             { status: 401 },
         );
@@ -29,7 +33,7 @@ export const POST = withOrganizationHandler(async ({ req, db, organizationId, us
         return NextResponse.json(
             ResponseUtil.error({
                 code: ErrorCodes.VALIDATION_ERROR,
-                message: parsed.error.issues[0]?.message ?? 'Invalid MCP token payload.',
+                message: parsed.error.issues[0]?.message ?? t('Api.Mcp.InvalidTokenPayload'),
             }),
             { status: 400 },
         );

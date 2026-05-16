@@ -2495,6 +2495,13 @@
             "Clusters": {
                 "FetchFailed": "クラスターのメタデータ取得に失敗しました"
             }
+        },
+        "Mcp": {
+            "StreamableGetDisabled": "Dory v1 では MCP Streamable HTTP GET は有効化されていません。",
+            "SettingsPatchUnsupported": "MCP 設定はユーザーごとのトークンで管理されます。PATCH はサポートされていません。",
+            "InvalidTokenPayload": "MCP トークンのリクエスト内容が無効です。",
+            "MissingTokenId": "MCP トークン ID がありません。",
+            "TokenNotFound": "MCP トークンが見つかりません。"
         }
     },
     "Ai": {
@@ -2782,6 +2789,11 @@
                     "Label": "情報",
                     "Title": "情報",
                     "Description": "バージョン、ライセンス、クレジット。"
+                },
+                "AgentAccess": {
+                    "Label": "MCP",
+                    "Title": "MCP",
+                    "Description": "個人用 MCP トークンで信頼済みエージェントを Dory に接続します。"
                 }
             },
             "Appearance": {
@@ -2890,6 +2902,52 @@
                 "Version": "バージョン",
                 "GitHub": "GitHub",
                 "Footer": "© 2026 Dory Lab"
+            },
+            "AgentAccess": {
+                "Loading": "MCP 設定を読み込んでいます...",
+                "LoadFailed": "MCP 設定の読み込みに失敗しました。",
+                "SaveFailed": "MCP 設定の更新に失敗しました。",
+                "CreateFailed": "MCP トークンの作成に失敗しました。",
+                "RevokeFailed": "MCP トークンの取り消しに失敗しました。",
+                "EnableLabel": "個人用 MCP",
+                "EnableDescription": "信頼する MCP クライアント向けの個人用トークンを作成します。",
+                "ProxyLabel": "ローカル MCP エンドポイント",
+                "ProxyDescription": "デスクトップクライアント向けに固定の localhost MCP エンドポイントを起動します。",
+                "ProxyStopped": "ローカル MCP エンドポイントは有効ですが実行されていません。",
+                "ProxyStartFailed": "ローカル MCP エンドポイントの更新に失敗しました。",
+                "EndpointLabel": "エンドポイント",
+                "EndpointDescription": "Codex などの MCP クライアントで、個人用 MCP トークンと一緒にこの URL を使用します。",
+                "Copy": "コピー",
+                "Copied": "コピー済み",
+                "DeleteToken": "トークンを削除",
+                "TokensTitle": "個人用アクセストークン",
+                "DefaultTokenName": "MCP クライアント",
+                "TokenNamePlaceholder": "クライアント名",
+                "CreateToken": "作成",
+                "TokenCreated": "トークンを作成しました。",
+                "TokenOnce": "この個人用トークンを今すぐコピーしてください。再表示されません。",
+                "NoTokens": "MCP トークンはまだありません。",
+                "LastUsedAt": "最終使用: {date}",
+                "RevokedAt": "取り消し済み: {date}",
+                "SetupTitle": "MCP セットアップ",
+                "SetupDescription": "これらのトークンはあなたのユーザーアカウントに紐づきます。共有しないでください。組織メンバーから外れるとアクセスは失効します。",
+                "SetupTabs": {
+                    "General": "一般"
+                },
+                "General": {
+                    "Endpoint": "エンドポイント",
+                    "Authorization": "HTTP ヘッダー",
+                    "JsonTitle": "汎用 JSON 設定"
+                },
+                "Codex": {
+                    "CliTitle": "Codex CLI",
+                    "TomlTitle": "config.toml"
+                },
+                "ClaudeCode": {
+                    "CliTitle": "Claude Code CLI",
+                    "JsonTitle": ".mcp.json"
+                },
+                "Refresh": "更新"
             }
         },
         "QueryClient": {
