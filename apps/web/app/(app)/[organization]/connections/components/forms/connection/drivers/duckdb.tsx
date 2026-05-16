@@ -5,7 +5,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/regi
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { FieldHelp } from './shared';
+import { applySelectedLocalDatabasePath, FieldHelp } from './shared';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 
 type DuckDbMode = 'local' | 'motherduck';
@@ -155,10 +155,7 @@ export function DuckDbConnectionFields({ form }: { form: UseFormReturn<any> }) {
                                                 if (!selectedPath) {
                                                     return;
                                                 }
-                                                form.setValue('connection.path', selectedPath, {
-                                                    shouldDirty: true,
-                                                    shouldValidate: true,
-                                                });
+                                                applySelectedLocalDatabasePath(form, selectedPath);
                                             }}
                                         >
                                             Choose

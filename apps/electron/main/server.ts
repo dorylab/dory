@@ -179,7 +179,7 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
         if (pendingServerUrlPromise) return pendingServerUrlPromise;
 
         if (isDev) {
-            cachedServerUrl = process.env.ELECTRON_START_URL ?? 'http://127.0.0.1:3000';
+            cachedServerUrl = process.env.ELECTRON_START_URL ?? 'http://localhost:3000';
             return cachedServerUrl;
         }
 
@@ -235,16 +235,9 @@ function readDesktopSecrets(filePath: string, logWarn: LogFn): Partial<Record<'B
 function ensureDesktopSecrets(userDataPath: string, logWarn: LogFn): DesktopSecrets {
     const secretsFilePath = path.join(userDataPath, DESKTOP_SECRETS_FILE_NAME);
     const existingSecrets = readDesktopSecrets(secretsFilePath, logWarn);
-    const betterAuthSecret = isValidBase64Secret(existingSecrets.BETTER_AUTH_SECRET)
-        ? existingSecrets.BETTER_AUTH_SECRET
-        : randomBytes(32).toString('base64');
-    const dsSecretKey = isValidBase64Secret(existingSecrets.DS_SECRET_KEY)
-        ? existingSecrets.DS_SECRET_KEY
-        : randomBytes(32).toString('base64');
-    const shouldPersist =
-        betterAuthSecret !== existingSecrets.BETTER_AUTH_SECRET ||
-        dsSecretKey !== existingSecrets.DS_SECRET_KEY ||
-        !fs.existsSync(secretsFilePath);
+    const betterAuthSecret = isValidBase64Secret(existingSecrets.BETTER_AUTH_SECRET) ? existingSecrets.BETTER_AUTH_SECRET : randomBytes(32).toString('base64');
+    const dsSecretKey = isValidBase64Secret(existingSecrets.DS_SECRET_KEY) ? existingSecrets.DS_SECRET_KEY : randomBytes(32).toString('base64');
+    const shouldPersist = betterAuthSecret !== existingSecrets.BETTER_AUTH_SECRET || dsSecretKey !== existingSecrets.DS_SECRET_KEY || !fs.existsSync(secretsFilePath);
 
     if (shouldPersist) {
         try {
@@ -282,6 +275,7 @@ function createDesktopServerEnv(options: DesktopServerEnvOptions): NodeJS.Proces
         HOSTNAME: options.hostname,
         NODE_ENV: 'production',
         PGLITE_DB_PATH: options.databasePath,
+        DORY_DEMO_RESOURCE_CACHE_DIR: path.join(options.userDataPath, 'demo-resources'),
         BETTER_AUTH_SECRET: desktopSecrets.betterAuthSecret,
         DS_SECRET_KEY: desktopSecrets.dsSecretKey,
         NEXT_TELEMETRY_DISABLED: process.env.NEXT_TELEMETRY_DISABLED || '1',

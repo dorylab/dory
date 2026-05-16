@@ -6,8 +6,7 @@ import { createDriver } from '@dory/drivers/core';
 import { getDBService } from '@dory/database';
 import { TestConnectionPayload } from '@dory/shared/types/connections';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/app/api/connection/utils';
-import { buildTestConnectionConfig } from '@dory/drivers/config';
-import { resolveStoredSqlitePath } from '@/lib/demo/paths';
+import { buildTestConnectionConfig } from '@/lib/connection/config';
 
 type SSHConfigWithSecrets = NonNullable<TestConnectionPayload['ssh']> & {
     password?: string | null;
@@ -46,10 +45,8 @@ export async function testConnectService(organizationId: string, payload: TestCo
 
     const testPassword = payload?.identity?.password ?? plainPassword;
     const resolvedSsh = await resolveSshSecrets(organizationId, payload, db);
-    const config = buildTestConnectionConfig(
-        { ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh },
-        code => createConnectionError(code as ConnectionErrorCode),
-        resolveStoredSqlitePath,
+    const config = buildTestConnectionConfig({ ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh }, code =>
+        createConnectionError(code as ConnectionErrorCode),
     );
     let provider = null as Awaited<ReturnType<typeof createDriver>> | null;
 

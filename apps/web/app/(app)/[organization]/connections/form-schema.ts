@@ -14,6 +14,11 @@ function isAbsolutePath(value: string) {
     return /^(\/|[a-zA-Z]:[\\/])/.test(value);
 }
 
+function getLowerPathExtension(value: string) {
+    const match = value.trim().match(/\.([^.\\/]+)$/);
+    return match?.[1]?.toLowerCase() ?? '';
+}
+
 export const ConnectionDialogFormSchema = z
     .object({
         connection: z.object({
@@ -55,6 +60,7 @@ export const ConnectionDialogFormSchema = z
 
         if (value.connection.type === 'sqlite') {
             const normalizedPath = value.connection.path?.trim() ?? '';
+            const extension = getLowerPathExtension(normalizedPath);
             if (!normalizedPath) {
                 ctx.addIssue({
                     code: 'custom',
@@ -67,6 +73,12 @@ export const ConnectionDialogFormSchema = z
                     path: ['connection', 'path'],
                     message: 'SQLite path must be absolute',
                 });
+            } else if (extension === 'duckdb') {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['connection', 'path'],
+                    message: 'This is a DuckDB file. Change the connection type to DuckDB.',
+                });
             }
             return;
         }
@@ -75,6 +87,7 @@ export const ConnectionDialogFormSchema = z
             const mode = value.connection.duckdbMode === 'motherduck' ? 'motherduck' : 'local';
             if (mode === 'local') {
                 const normalizedPath = value.connection.path?.trim() ?? '';
+                const extension = getLowerPathExtension(normalizedPath);
                 if (!normalizedPath) {
                     ctx.addIssue({
                         code: 'custom',
@@ -86,6 +99,12 @@ export const ConnectionDialogFormSchema = z
                         code: 'custom',
                         path: ['connection', 'path'],
                         message: 'DuckDB path must be absolute',
+                    });
+                } else if (extension === 'sqlite' || extension === 'sqlite3') {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['connection', 'path'],
+                        message: 'This is a SQLite file. Change the connection type to SQLite.',
                     });
                 }
             } else if (!value.identity.id && !value.identity.password?.trim()) {

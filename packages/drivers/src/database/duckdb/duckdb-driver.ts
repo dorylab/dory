@@ -69,6 +69,9 @@ function resolveDuckDbInstanceOptions(config: BaseConfig): Record<string, string
         }
         instanceOptions.motherduck_token = token;
     }
+    if (typeof options.access_mode === 'string' && !instanceOptions.access_mode) {
+        instanceOptions.access_mode = options.access_mode;
+    }
 
     return Object.keys(instanceOptions).length ? instanceOptions : undefined;
 }

@@ -2,19 +2,19 @@ import { getDBService } from '@dory/database';
 import '@/lib/drivers/register-database-drivers';
 
 import { destroyDriverPool, ensureDriverPool, getDriverPool, type DriverPoolEntry } from '@dory/drivers/core';
-import { buildStoredConnectionConfig, parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
+import { parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
 import type { ConnectionListItem, ConnectionSsh } from '@dory/shared/types/connections';
-import { resolveStoredSqlitePath } from '@/lib/demo/paths';
+import { buildStoredConnectionConfig } from '@/lib/connection/config';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
 
 function isLocalFilesDatasetOptions(options: unknown) {
     return Boolean(
         options &&
-            typeof options === 'object' &&
-            !Array.isArray(options) &&
-            (options as Record<string, unknown>).managedBy === 'local-files' &&
-            (options as Record<string, unknown>).mode === 'localFilesDataset',
+        typeof options === 'object' &&
+        !Array.isArray(options) &&
+        (options as Record<string, unknown>).managedBy === 'local-files' &&
+        (options as Record<string, unknown>).mode === 'localFilesDataset',
     );
 }
 
@@ -43,10 +43,7 @@ async function withLocalFilesSchema(organizationId: string, record: ConnectionLi
     };
 }
 
-export async function getOrCreateConnectionPool(
-    organizationId: string,
-    connectionId: string,
-): Promise<DriverPoolEntry | undefined> {
+export async function getOrCreateConnectionPool(organizationId: string, connectionId: string): Promise<DriverPoolEntry | undefined> {
     const existing = await getDriverPool(connectionId);
     if (existing && !isLocalFilesDatasetOptions(existing.config.options)) return existing;
 
@@ -60,19 +57,9 @@ export async function getOrCreateConnectionPool(
     const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
 
     const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
-    const sshConfig: SshWithSecrets | null = record.ssh
-        ? { ...record.ssh, ...(sshSecrets ?? {}) }
-        : sshSecrets
-          ? ({ enabled: true, ...sshSecrets } as SshWithSecrets)
-          : null;
+    const sshConfig: SshWithSecrets | null = record.ssh ? { ...record.ssh, ...(sshSecrets ?? {}) } : sshSecrets ? ({ enabled: true, ...sshSecrets } as SshWithSecrets) : null;
 
-    const config = buildStoredConnectionConfig(
-        record.connection,
-        { ...identity, password: plainPassword },
-        sshConfig,
-        undefined,
-        resolveStoredSqlitePath,
-    );
+    const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig);
     if (existing) {
         const currentOptions = JSON.stringify(existing.config.options ?? {});
         const nextOptions = JSON.stringify(config.options ?? {});

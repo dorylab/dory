@@ -21,10 +21,7 @@ function rewriteSetCookie(value: string, isSecureRequest: boolean): string {
     const parts = value.split(';');
     const [nameValue, ...attrs] = parts;
     const normalizedAttrs = attrs.map(attr => attr.trim());
-    const isClearingCookie =
-        /=\s*$/.test(nameValue) ||
-        normalizedAttrs.some(attr => /^max-age=0$/i.test(attr)) ||
-        normalizedAttrs.some(attr => /^expires=/i.test(attr));
+    const isClearingCookie = /=\s*$/.test(nameValue) || normalizedAttrs.some(attr => /^max-age=0$/i.test(attr)) || normalizedAttrs.some(attr => /^expires=/i.test(attr));
 
     let rewrittenNameValue = nameValue;
     if (!isSecureRequest && /^__Secure-/i.test(nameValue)) {
@@ -51,6 +48,9 @@ export async function POST(req: Request) {
         const response = await proxyAuthRequest(req);
         const mirror = response.ok ? await mirrorCloudSessionToDesktop(req, response.headers) : null;
         if (!mirror) {
+            if (response.ok) {
+                return NextResponse.json({ error: 'Failed to create a local desktop session. Please try again.' }, { status: 502 });
+            }
             return response;
         }
 
@@ -75,7 +75,10 @@ export async function POST(req: Request) {
         asResponse: true,
     });
 
-    const payload = await response.clone().json().catch(() => null);
+    const payload = await response
+        .clone()
+        .json()
+        .catch(() => null);
     const res = NextResponse.json(payload ?? { ok: response.ok }, { status: response.status });
     const isSecureRequest = new URL(req.url).protocol === 'https:';
 

@@ -7,8 +7,8 @@ import { ErrorCodes } from '@dory/shared/errors';
 import type { ConnectionListItem, ConnectionSsh } from '@dory/shared/types/connections';
 import { BaseConfig } from '@dory/drivers/types';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
-import { buildStoredConnectionConfig, parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
-import { resolveStoredSqlitePath } from '@/lib/demo/paths';
+import { parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
+import { buildStoredConnectionConfig } from '@/lib/connection/config';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
 
@@ -74,10 +74,10 @@ export function normalizeOptions(raw: unknown): string | Record<string, unknown>
 function isLocalFilesDatasetOptions(options: unknown) {
     return Boolean(
         options &&
-            typeof options === 'object' &&
-            !Array.isArray(options) &&
-            (options as Record<string, unknown>).managedBy === 'local-files' &&
-            (options as Record<string, unknown>).mode === 'localFilesDataset',
+        typeof options === 'object' &&
+        !Array.isArray(options) &&
+        (options as Record<string, unknown>).managedBy === 'local-files' &&
+        (options as Record<string, unknown>).mode === 'localFilesDataset',
     );
 }
 
@@ -137,28 +137,15 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
     const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
 
     const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
-    const sshConfig: SshWithSecrets | null = record.ssh
-        ? { ...record.ssh, ...(sshSecrets ?? {}) }
-        : sshSecrets
-          ? ({ enabled: true, ...sshSecrets } as SshWithSecrets)
-          : null;
+    const sshConfig: SshWithSecrets | null = record.ssh ? { ...record.ssh, ...(sshSecrets ?? {}) } : sshSecrets ? ({ enabled: true, ...sshSecrets } as SshWithSecrets) : null;
 
-    const config = buildStoredConnectionConfig(
-        record.connection,
-        { ...identity, password: plainPassword },
-        sshConfig,
-        code => createConnectionError(code as ConnectionErrorCode),
-        resolveStoredSqlitePath,
-    );
+    const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig, code => createConnectionError(code as ConnectionErrorCode));
     const entry = await ensurePoolWithLatest(config);
 
     return { entry, config, identity };
 }
 
-export function mapConnectionErrorToResponse(
-    error: unknown,
-    messages: { notFound: string; missingHost: string; missingPath?: string; fallback: string },
-) {
+export function mapConnectionErrorToResponse(error: unknown, messages: { notFound: string; missingHost: string; missingPath?: string; fallback: string }) {
     const code = getConnectionErrorCode(error);
 
     if (code === CONNECTION_ERROR_CODES.notFound) {
@@ -170,10 +157,7 @@ export function mapConnectionErrorToResponse(
     }
 
     if (code === CONNECTION_ERROR_CODES.missingPath) {
-        return NextResponse.json(
-            ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: messages.missingPath ?? messages.fallback }),
-            { status: 400 },
-        );
+        return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: messages.missingPath ?? messages.fallback }), { status: 400 });
     }
 
     return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.ERROR, message: messages.fallback }), { status: 500 });

@@ -125,15 +125,11 @@ export function SignInForm({
         }
     }
 
-    async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault();
+    async function submitEmailPassword() {
+        if (loading) return;
+
         setErr(null);
         setMsg(null);
-
-        if (isDesktopOffline) {
-            setErr(t('SignIn.CloudFeaturesUnavailableOffline'));
-            return;
-        }
 
         setLoading(true);
         try {
@@ -153,6 +149,13 @@ export function SignInForm({
             posthog.identify(email, { email });
             posthog.capture('user_signed_in', { method: 'email' });
             await refetchSession();
+            const sessionRes = await fetch('/api/electron/auth/session', { cache: 'no-store' });
+            const sessionPayload = await sessionRes.json().catch(() => null);
+            if (!sessionRes.ok || !sessionPayload?.session) {
+                setErr(t('SignIn.LoginFailedRetry'));
+                posthog.capture('user_sign_in_failed', { method: 'email', error: 'desktop_session_missing_after_sign_in' });
+                return;
+            }
             router.refresh();
             router.push(callbackURL);
         } catch (e: any) {
@@ -162,6 +165,11 @@ export function SignInForm({
         } finally {
             setLoading(false);
         }
+    }
+
+    function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        void submitEmailPassword();
     }
 
     async function onForgotPassword() {
@@ -228,20 +236,33 @@ export function SignInForm({
 
                             <div className="grid gap-3">
                                 <Label htmlFor="email">{t('SignIn.Email')}</Label>
-                                <Input id="email" type="email" placeholder={t('SignIn.EmailPlaceholder')} required value={email} onChange={e => setEmail(e.target.value.trim())} autoComplete="email" />
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    placeholder={t('SignIn.EmailPlaceholder')}
+                                    required
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value.trim())}
+                                    autoComplete="email"
+                                />
                             </div>
 
                             <div className="grid gap-3">
                                 <div className="flex items-center">
                                     <Label htmlFor="password">{t('SignIn.Password')}</Label>
-                                    <button type="button" onClick={onForgotPassword} disabled={isDesktopOffline} className="ml-auto text-sm underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50">
+                                    <button
+                                        type="button"
+                                        onClick={onForgotPassword}
+                                        disabled={isDesktopOffline}
+                                        className="ml-auto text-sm underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:no-underline disabled:opacity-50"
+                                    >
                                         {t('SignIn.ForgotPassword')}
                                     </button>
                                 </div>
                                 <InputPassword name="password" id="password" required value={pwd} onChange={e => setPwd(e.target.value)} autoComplete="current-password" />
                             </div>
 
-                            <Button type="submit" className="w-full" disabled={loading || isDesktopOffline}>
+                            <Button type="button" className="w-full" disabled={loading} onClick={() => void submitEmailPassword()}>
                                 {loading ? t('SignIn.Submitting') : t('SignIn.Submit')}
                             </Button>
 

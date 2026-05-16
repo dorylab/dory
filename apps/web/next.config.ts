@@ -44,6 +44,7 @@ const nextConfig = {
         '/*': [
             './registry/**/*',
             './public/resources/demo.sqlite',
+            './public/resources/demo.duckdb',
             '../../packages/database/src/pglite/migrations.json',
             '../../packages/database/src/postgres/migrations/**/*',
             '../../packages/database/src/pglite/migrations/**/*',

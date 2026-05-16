@@ -4,6 +4,33 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
 
+export function inferLocalDatabaseTypeFromPath(filePath: string | null | undefined): 'duckdb' | 'sqlite' | null {
+    const extension = filePath
+        ?.trim()
+        .match(/\.([^.\\/]+)$/)?.[1]
+        ?.toLowerCase();
+    if (extension === 'duckdb') return 'duckdb';
+    if (extension === 'sqlite' || extension === 'sqlite3') return 'sqlite';
+    return null;
+}
+
+export function applySelectedLocalDatabasePath(form: UseFormReturn<any>, selectedPath: string) {
+    const inferredType = inferLocalDatabaseTypeFromPath(selectedPath);
+    if (inferredType === 'duckdb') {
+        form.setValue('connection.type', 'duckdb', { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.duckdbMode', 'local', { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.database', '', { shouldDirty: true, shouldValidate: false });
+    } else if (inferredType === 'sqlite') {
+        form.setValue('connection.type', 'sqlite', { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.database', 'main', { shouldDirty: true, shouldValidate: false });
+    }
+
+    form.setValue('connection.path', selectedPath, {
+        shouldDirty: true,
+        shouldValidate: true,
+    });
+}
+
 export function FieldHelp({ text }: { text: string }) {
     return (
         <Tooltip>
