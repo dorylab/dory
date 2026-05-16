@@ -53,7 +53,7 @@ function main() {
         modelName: options.model,
     })
         .then((notes) => {
-            const normalized = notes.trim();
+            const normalized = sanitizeReleaseNotes(notes).trim();
 
             if (outputPath) {
                 ensureParentDir(outputPath);
@@ -263,6 +263,7 @@ async function generateReleaseNotes(args: {
             'Group related work into short sections such as Features, Improvements, Fixes, Docs, and Internal.',
             'Keep the output concise and scannable.',
             'Avoid mentioning commit hashes unless they add value.',
+            'Do not include badges, images, download buttons, SourceForge links, or third-party promotional blocks.',
         ].join(' '),
         prompt,
     });
@@ -291,6 +292,7 @@ function buildPrompt(args: {
         '- Mention user-visible fixes and improvements first.',
         '- Include a brief "Internal" or "Maintenance" section only if there is meaningful engineering work.',
         '- Exclude empty sections.',
+        '- Do not include badges, images, HTML image tags, download buttons, SourceForge links, or third-party promotional blocks.',
         '',
         'Commits:',
     ];
@@ -322,6 +324,22 @@ function formatCommitForPrompt(commit: CommitInfo) {
 
 function collapseWhitespace(value: string) {
     return value.replace(/\s+/g, ' ').trim();
+}
+
+function sanitizeReleaseNotes(notes: string) {
+    return notes
+        .split('\n')
+        .filter((line) => {
+            const normalizedLine = line.toLowerCase();
+            if (normalizedLine.includes('sourceforge')) return false;
+            if (normalizedLine.includes('trusted for open source')) return false;
+            if (normalizedLine.includes('download now') && /!\[|<img|sourceforge|download/i.test(line)) return false;
+            if (/!\[[^\]]*download[^\]]*\]\([^)]*\)/i.test(line)) return false;
+            if (/<img\b[^>]*(sourceforge|download now)[^>]*>/i.test(line)) return false;
+            return true;
+        })
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n');
 }
 
 function git(args: string[]) {
