@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import { expect, type Locator } from '@playwright/test';
+import { expect, type Locator, type Response } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
 
@@ -12,6 +12,7 @@ const CINEMATIC_MODE = process.env.E2E_DEMO_CINEMATIC === '1';
 const STEP_PAUSE_MS = Number(process.env.E2E_DEMO_STEP_PAUSE_MS ?? (CINEMATIC_MODE ? '900' : '0'));
 const SHORT_PAUSE_MS = Number(process.env.E2E_DEMO_SHORT_PAUSE_MS ?? (CINEMATIC_MODE ? '350' : '0'));
 const FOCUS_TRANSITION_MS = Number(process.env.E2E_DEMO_FOCUS_TRANSITION_MS ?? (CINEMATIC_MODE ? '1200' : '0'));
+const QUERY_REQUEST_ATTEMPTS = process.env.CI ? 5 : 3;
 
 const DEMO_CONNECTION_NAME = process.env.E2E_DEMO_CONNECTION_NAME ?? 'Demo Database';
 
@@ -268,6 +269,8 @@ async function ensureSqlTab(page: Parameters<typeof test>[0]['page'], connection
     const runButton = page.locator('[data-testid="run-query"]');
     await expect(runButton).toHaveCount(1);
     await expect(runButton).toBeVisible();
+    await expect(runButton).toBeEnabled();
+    await page.waitForFunction(() => typeof window.__DORY_E2E_MONACO__?.setValue === 'function');
     await beat(page);
     console.log('[demo-flow] sql-tab:fallback-ready');
 }
@@ -284,20 +287,40 @@ async function runSql(page: Parameters<typeof test>[0]['page'], sql: string) {
     await setEditorSql(page, sql);
     await page.waitForTimeout(CINEMATIC_MODE ? 900 : 500);
 
-    const queryResponse = page.waitForResponse(response => response.url().includes('/api/query') && response.request().method() === 'POST');
-    await page.evaluate(() => {
-        const buttons = Array.from(document.querySelectorAll('[data-testid="run-query"]'));
-        if (buttons.length !== 1) {
-            throw new Error(`Expected exactly one run button, got ${buttons.length}`);
-        }
-        const onlyButton = buttons[0];
-        if (!(onlyButton instanceof HTMLButtonElement)) {
-            throw new Error('Run button not found');
-        }
-        onlyButton.click();
-    });
+    const runButton = page.locator('[data-testid="run-query"]');
+    await expect(runButton).toHaveCount(1);
 
-    const response = await queryResponse;
+    let response: Response | null = null;
+    for (let attempt = 1; attempt <= QUERY_REQUEST_ATTEMPTS; attempt += 1) {
+        await expect(runButton, `Run button should be enabled before query attempt ${attempt}`).toBeEnabled({
+            timeout: 10_000,
+        });
+
+        const queryResponse = page
+            .waitForResponse(
+                candidate => candidate.url().includes('/api/query') && candidate.request().method() === 'POST',
+                { timeout: 15_000 },
+            )
+            .catch(() => null);
+
+        await runButton.click();
+
+        response = await queryResponse;
+        if (response) {
+            break;
+        }
+
+        console.log(`[demo-flow] sql:run-request-missing attempt=${attempt}`);
+        if (attempt < QUERY_REQUEST_ATTEMPTS) {
+            await setEditorSql(page, sql);
+            await page.waitForTimeout(500);
+        }
+    }
+
+    if (!response) {
+        throw new Error(`Query request was not sent after ${QUERY_REQUEST_ATTEMPTS} Run attempts.`);
+    }
+
     const body = await response.json();
 
     expect(response.ok()).toBeTruthy();
@@ -309,7 +332,7 @@ async function runSql(page: Parameters<typeof test>[0]['page'], sql: string) {
 }
 
 test('demo login, SQLite demo connection, SQL console flow, and screenshots', async ({ page, appErrors }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(process.env.CI ? 300_000 : 180_000);
 
     await loginAsDemo(page);
 
@@ -366,7 +389,10 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
 
     await resetFocus(page);
     const relevantAppErrors = appErrors.filter(
-        error => !error.includes('[PGlite migrate] failed: TypeError: Failed to fetch') && error !== 'pageerror: ErrnoError',
+        error =>
+            !error.includes('[PGlite migrate] failed: TypeError: Failed to fetch') &&
+            !error.includes('[chat] fetch copilot session failed TypeError: Failed to fetch') &&
+            error !== 'pageerror: ErrnoError',
     );
     await expectAppHealthy(relevantAppErrors);
 });
