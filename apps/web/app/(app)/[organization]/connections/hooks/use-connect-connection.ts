@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useSetAtom } from 'jotai';
 import { toast } from 'sonner';
@@ -8,10 +8,12 @@ import { useTranslations } from 'next-intl';
 import posthog from 'posthog-js';
 
 import { connectConnection } from '../api';
-import { connectionLoadingAtom } from '../states';
+import { connectionLoadingAtom, connectionsAtom, searchResultAtom } from '../states';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import type { ResponseObject } from '@dory/shared';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
+
+const CONNECTIONS_QUERY_KEY = ['connections'] as const;
 
 type ConnectParams = {
     payload: ConnectionListItem;
@@ -36,8 +38,34 @@ function resolveTeamId(paramsTeam: unknown, pathname: string | null): string | n
     return segments[0] ?? null;
 }
 
+type ConnectResponseData = {
+    lastCheckStatus?: 'ok' | 'error' | 'unknown';
+    lastCheckAt?: string | Date | null;
+    lastCheckLatencyMs?: number | null;
+    lastCheckError?: string | null;
+};
+
+function withConnectedStatus(payload: ConnectionListItem, data: ConnectResponseData | null | undefined): ConnectionListItem {
+    const checkedAt = data?.lastCheckAt ?? new Date().toISOString();
+    return {
+        ...payload,
+        connection: {
+            ...payload.connection,
+            lastCheckStatus: data?.lastCheckStatus ?? 'ok',
+            lastCheckAt: checkedAt instanceof Date ? checkedAt : new Date(checkedAt),
+            lastCheckLatencyMs: typeof data?.lastCheckLatencyMs === 'number' ? data.lastCheckLatencyMs : payload.connection.lastCheckLatencyMs,
+            lastCheckError: data?.lastCheckError ?? null,
+        },
+    };
+}
+
+function updateConnectionListItem(list: ConnectionListItem[] | undefined, updated: ConnectionListItem) {
+    return (list ?? []).map(item => (item.connection.id === updated.connection.id ? { ...item, ...updated } : item));
+}
+
 export function useConnectConnection() {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const pathname = usePathname();
     const params = useParams();
     const t = useTranslations('Connections');
@@ -45,12 +73,13 @@ export function useConnectConnection() {
 
     const setConnectLoadings = useSetAtom(connectionLoadingAtom);
     const setCurrentConnection = useSetAtom(currentConnectionAtom);
+    const setConnections = useSetAtom(connectionsAtom);
+    const setSearchResult = useSetAtom(searchResultAtom);
 
-    return useMutation<ResponseObject<unknown>, Error, ConnectParams>({
+    return useMutation<ResponseObject<ConnectResponseData>, Error, ConnectParams>({
         mutationFn: async ({ payload, identityId }) => {
             if (!payload?.connection?.id) throw new Error(t('Missing connection id'));
 
-            
             const requestPayload = identityId ? { ...payload, identityId } : payload;
             return connectConnection(requestPayload as ConnectionListItem & { identityId?: string | null });
         },
@@ -64,10 +93,12 @@ export function useConnectConnection() {
                 [makeLoadingKey(payload.connection.id, identityId)]: true,
             }));
         },
-        onSuccess: (_res, { payload, navigateToConsole, setCurrentImmediately }) => {
-            if (setCurrentImmediately === false) {
-                setCurrentConnection(payload);
-            }
+        onSuccess: (res, { payload, navigateToConsole, setCurrentImmediately }) => {
+            const connectedPayload = withConnectedStatus(payload, res.data);
+            setCurrentConnection(connectedPayload);
+            queryClient.setQueryData<ConnectionListItem[]>(CONNECTIONS_QUERY_KEY, list => updateConnectionListItem(list, connectedPayload));
+            setConnections(list => updateConnectionListItem(list, connectedPayload));
+            setSearchResult(list => (list ? updateConnectionListItem(list, connectedPayload) : list));
             posthog.capture('connection_opened', {
                 connection_type: payload.connection.type,
                 connection_id: payload.connection.id,

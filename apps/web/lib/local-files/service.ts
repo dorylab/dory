@@ -43,13 +43,12 @@ type RefreshRelationInput = {
 
 const DATASET_CONNECTION_OPTION_MODE = 'localFilesDataset';
 
-function assertSelfHostedNodeRuntime() {
-    if (isDesktopRuntime()) {
-        throw new Error('Local Files are only available in self-hosted web runtime');
-    }
+function assertLocalFilesRuntime() {
+    if (isDesktopRuntime()) return;
+
     const runtime = getRuntimeForServer();
     if (runtime && runtime !== 'web' && runtime !== 'docker') {
-        throw new Error('Local Files are only available in self-hosted web runtime');
+        throw new Error('Open Files are only available in desktop or self-hosted web runtime');
     }
 }
 
@@ -102,7 +101,10 @@ function getWorkspacePath(organizationId: string, connectionId?: string) {
 
 function schemaNameForDataset(name: string, connectionId: string, explicitSchemaName?: string) {
     const base = normalizeDatasetSchemaName(explicitSchemaName || name);
-    const suffix = connectionId.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toLowerCase();
+    const suffix = connectionId
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .slice(-8)
+        .toLowerCase();
     return normalizeDatasetSchemaName(`${base}_${suffix || 'dataset'}`);
 }
 
@@ -348,7 +350,7 @@ async function runRefreshPipeline(ctx: LocalFilesContext, connection: BaseConnec
 }
 
 export async function inspectLocalFiles(ctx: LocalFilesContext, request: LocalFilesInspectRequest) {
-    assertSelfHostedNodeRuntime();
+    assertLocalFilesRuntime();
     const source = await statSource(request.source);
     const relations = await inspectSource(request.source);
     return {
@@ -358,7 +360,7 @@ export async function inspectLocalFiles(ctx: LocalFilesContext, request: LocalFi
 }
 
 export async function createLocalFilesDataset(ctx: LocalFilesContext, request: LocalFilesCreateRequest) {
-    assertSelfHostedNodeRuntime();
+    assertLocalFilesRuntime();
     const source = await statSource(request.source);
     const connectionId = newEntityId();
     const workspacePath = getWorkspacePath(ctx.organizationId, connectionId);
@@ -558,7 +560,7 @@ function toDatasetDetail(record: {
 }
 
 export async function getLocalFilesDataset(ctx: LocalFilesContext, request: { datasetId?: string | null; connectionId?: string | null }) {
-    assertSelfHostedNodeRuntime();
+    assertLocalFilesRuntime();
     const record =
         (request.connectionId ? await ctx.db.localFiles.getDatasetByConnectionId(ctx.organizationId, request.connectionId) : null) ??
         (request.datasetId ? await ctx.db.localFiles.getDataset(ctx.organizationId, request.datasetId) : null);
@@ -569,7 +571,7 @@ export async function getLocalFilesDataset(ctx: LocalFilesContext, request: { da
 }
 
 export async function updateLocalFilesDataset(ctx: LocalFilesContext, datasetId: string, request: LocalFilesUpdateRequest) {
-    assertSelfHostedNodeRuntime();
+    assertLocalFilesRuntime();
     const existing = await ctx.db.localFiles.getDataset(ctx.organizationId, datasetId);
     if (!existing) {
         throw new Error('Local Files dataset not found');
@@ -666,7 +668,7 @@ export async function updateLocalFilesDataset(ctx: LocalFilesContext, datasetId:
 }
 
 export async function refreshLocalFilesDataset(ctx: LocalFilesContext, request: LocalFilesRefreshRequest) {
-    assertSelfHostedNodeRuntime();
+    assertLocalFilesRuntime();
     const record = await ctx.db.localFiles.getDataset(ctx.organizationId, request.datasetId);
     if (!record) {
         throw new Error('Local Files dataset not found');

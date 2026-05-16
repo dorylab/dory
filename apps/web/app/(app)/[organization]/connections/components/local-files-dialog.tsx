@@ -81,10 +81,11 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
     const [advancedOpen, setAdvancedOpen] = useState(false);
 
     const canPickFile = isDesktopRuntime() && typeof window !== 'undefined' && typeof window.electron?.selectLocalFile === 'function';
+    const isDesktop = isDesktopRuntime();
     const relations = inspectResult?.relations ?? [];
     const isEditMode = mode === 'edit';
     const busy = inspecting || creating || loadingDataset;
-    const canSave = Boolean(inspectResult && datasetName.trim() && selectedRelations.size > 0 && (!isEditMode || datasetId));
+    const canSave = Boolean(datasetName.trim() && filePath.trim() && (!inspectResult || selectedRelations.size > 0) && (!isEditMode || datasetId));
 
     const selectedRelationList = useMemo(() => {
         return relations.filter(relation => selectedRelations.has(relation.relationName));
@@ -199,6 +200,11 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
             if (!selectedPath) {
                 return;
             }
+            setFilePath(selectedPath);
+            setDatasetName(current => current || defaultDatasetName(selectedPath));
+            setInspectResult(null);
+            setSelectedRelations(new Set());
+            setAdvancedOpen(false);
             await handleInspect(selectedPath);
         } catch (error: any) {
             toast.error(error?.message ?? 'Failed to choose local file');
@@ -235,16 +241,36 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
     };
 
     const handleSave = async () => {
-        if (!inspectResult || !canSave) return;
+        if (!canSave) return;
         setCreating(true);
         try {
+            const trimmedPath = filePath.trim();
+            const activeInspectResult =
+                inspectResult?.source.path === trimmedPath
+                    ? inspectResult
+                    : await inspectLocalFiles({
+                          source: {
+                              backend: 'serverPath',
+                              filePath: trimmedPath,
+                          },
+                      }).then(result => {
+                          if (!isSuccess(result) || !result.data) {
+                              throw new Error(result.message || 'Failed to inspect local file');
+                          }
+                          return result.data;
+                      });
+            const activeRelations = activeInspectResult.relations;
+            const activeSelectedRelations = inspectResult?.source.path === trimmedPath ? selectedRelationList : activeRelations;
+            if (activeSelectedRelations.length === 0) {
+                throw new Error('No supported sheets or tables were found in this file.');
+            }
             const payload = {
                 name: datasetName.trim(),
                 source: {
                     backend: 'serverPath' as const,
-                    filePath: filePath.trim(),
+                    filePath: trimmedPath,
                 },
-                relations: selectedRelationList,
+                relations: activeSelectedRelations,
             };
             const result = isEditMode && datasetId ? await updateLocalFiles(datasetId, payload) : await createLocalFiles(payload);
             if (!isSuccess(result)) {
@@ -263,7 +289,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl" onPointerDownOutside={event => event.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Database className="h-5 w-5" />
@@ -287,10 +313,12 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
                                     Choose
                                 </Button>
                             ) : null}
-                            <Button type="button" variant="secondary" onClick={() => handleInspect()} disabled={busy}>
-                                {inspecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
-                                Preview
-                            </Button>
+                            {!isDesktop ? (
+                                <Button type="button" variant="secondary" onClick={() => handleInspect()} disabled={busy}>
+                                    {inspecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
+                                    Preview
+                                </Button>
+                            ) : null}
                         </div>
                     </div>
 

@@ -70,6 +70,15 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
 
     mainWindow.loadFile(loadingHtmlPath);
 
+    mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+        const levelName = level >= 3 ? 'error' : level === 2 ? 'warn' : 'info';
+        log(`[renderer:${levelName}]`, message, sourceId ? `${sourceId}:${line}` : '');
+    });
+
+    mainWindow.webContents.on('render-process-gone', (_event, details) => {
+        log('[electron] render process gone:', details.reason, details.exitCode);
+    });
+
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         shell.openExternal(url);
         return { action: 'deny' };

@@ -66,7 +66,7 @@ export default async function SignInPage({
                 <ModeToggle />
                 <RuntimeHint />
             </div>
-            <div className="z-100 w-full max-w-md">
+            <div className="relative z-20 w-full max-w-md">
                 <SignInForm
                     resumeAnonymousSession={resumeAnonymousSession}
                     showGuestOption={false}
@@ -75,7 +75,7 @@ export default async function SignInPage({
             {/* <div className="absolute z-10 inset-0 h-full w-full bg-[#0f172a]">
 
             </div> */}
-            <HeroBackground className="absolute z-10 inset-0 flex items-center justify-center" />
+            <HeroBackground className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" />
             {/* <BubbleBackground interactive={true} className="absolute z-10 inset-0 flex items-center justify-center" /> */}
         </div>
     );

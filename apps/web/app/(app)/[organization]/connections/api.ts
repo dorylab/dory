@@ -126,8 +126,18 @@ export async function testConnection(params: CreateConnectionPayload & { timeout
     return res;
 }
 
-export async function connectConnection(params: ConnectionListItem): Promise<ResponseObject<unknown>> {
-    const res = await fetchJsonResponse<unknown>(
+type ConnectConnectionResult = {
+    connectionId?: string;
+    identityId?: string | null;
+    status?: string;
+    lastCheckStatus?: 'ok' | 'error' | 'unknown';
+    lastCheckAt?: string | null;
+    lastCheckLatencyMs?: number | null;
+    lastCheckError?: string | null;
+};
+
+export async function connectConnection(params: ConnectionListItem): Promise<ResponseObject<ConnectConnectionResult>> {
+    const res = await fetchJsonResponse<ConnectConnectionResult>(
         '/api/connection/connect',
         {
             method: 'POST',

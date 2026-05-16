@@ -8,11 +8,11 @@ import { UnsupportedTypeError } from '@dory/drivers/core';
 import { BaseConfig } from '@dory/drivers/types';
 import { CONNECTION_REQUEST_TIMEOUT_MS, withConnectionTimeout } from '@dory/drivers/core';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
-import { buildStoredConnectionConfig, pickConnectionIdentity } from '@dory/drivers/config';
+import { pickConnectionIdentity } from '@dory/drivers/config';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError, getConnectionErrorCode } from '@/app/api/connection/utils';
-import { resolveStoredSqlitePath } from '@/lib/demo/paths';
+import { buildStoredConnectionConfig } from '@/lib/connection/config';
 
 export const runtime = 'nodejs';
 
@@ -21,9 +21,7 @@ type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: s
 async function ensurePoolWithLatest(config: BaseConfig) {
     const existing = await getDriverPool(config.id);
     const needRefresh =
-        existing &&
-        ((config.configVersion && existing.config.configVersion !== config.configVersion) ||
-            (config.updatedAt && existing.config.updatedAt !== config.updatedAt));
+        existing && ((config.configVersion && existing.config.configVersion !== config.configVersion) || (config.updatedAt && existing.config.updatedAt !== config.updatedAt));
 
     if (needRefresh) {
         await destroyDriverPool(config.id);
@@ -44,53 +42,33 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         // ignore, fall through with null payload
     }
 
-    const connectionId: string | undefined =
-        payload?.connectionId ?? payload?.id ?? payload?.connection?.id ?? undefined;
-    const identityId: string | null =
-        payload?.identityId ?? payload?.identity?.id ?? payload?.defaultIdentityId ?? null;
+    const connectionId: string | undefined = payload?.connectionId ?? payload?.id ?? payload?.connection?.id ?? undefined;
+    const identityId: string | null = payload?.identityId ?? payload?.identity?.id ?? payload?.defaultIdentityId ?? null;
 
     if (!connectionId) {
-        return NextResponse.json(
-            ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }),
-            { status: 400 },
-        );
+        return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }), { status: 400 });
     }
 
     try {
         const record = await db.connections.getById(organizationId, connectionId);
 
         if (!record) {
-            return NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: t('Api.Connection.Errors.NotFound') }),
-                { status: 404 },
-            );
+            return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: t('Api.Connection.Errors.NotFound') }), { status: 404 });
         }
 
         const identity = pickConnectionIdentity(record.identities, identityId);
         if (!identity) {
-            return NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingIdentity') }),
-                { status: 400 },
-            );
+            return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingIdentity') }), { status: 400 });
         }
 
         const passwordFromPayload = payload?.identity?.password ?? payload?.password ?? null;
-        const plainPassword =
-            passwordFromPayload ?? (identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null);
+        const plainPassword = passwordFromPayload ?? (identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null);
 
         const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
-        const sshConfig: SshWithSecrets | null = record.ssh
-            ? { ...record.ssh, ...(sshSecrets ?? {}) }
-            : sshSecrets
-              ? ({ enabled: true, ...sshSecrets } as SshWithSecrets)
-              : null;
+        const sshConfig: SshWithSecrets | null = record.ssh ? { ...record.ssh, ...(sshSecrets ?? {}) } : sshSecrets ? ({ enabled: true, ...sshSecrets } as SshWithSecrets) : null;
 
-        const config = buildStoredConnectionConfig(
-            record.connection,
-            { ...identity, password: plainPassword },
-            sshConfig,
-            code => createConnectionError(code as ConnectionErrorCode),
-            resolveStoredSqlitePath,
+        const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig, code =>
+            createConnectionError(code as ConnectionErrorCode),
         );
 
         const { health } = await withConnectionTimeout(
@@ -116,6 +94,10 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
                 connectionId: config.id,
                 identityId: identity.id ?? null,
                 status: 'Connected',
+                lastCheckStatus: 'ok',
+                lastCheckAt: new Date().toISOString(),
+                lastCheckLatencyMs: tookMs,
+                lastCheckError: null,
             }),
         );
     } catch (error) {

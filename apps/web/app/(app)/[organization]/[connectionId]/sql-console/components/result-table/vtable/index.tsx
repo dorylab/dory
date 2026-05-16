@@ -886,7 +886,7 @@ export default function VTable({
                 data-cell={`${r}-${colKeyName}`}
                 style={{ ...style, display: 'flex', alignItems: 'center', boxShadow: selectionEdgeShadow }}
                 className={cn(
-                    'px-2 text-sm border-b border-r last:border-r-0 cursor-pointer outline-none select-none',
+                    'px-2 text-sm border-b border-r cursor-pointer outline-none select-none',
                     'min-w-0 overflow-hidden',
                     isRowSelected && PRIMARY_SELECTION_SUBTLE_CLASS,
                     isCellSelected && PRIMARY_SELECTION_CLASS,

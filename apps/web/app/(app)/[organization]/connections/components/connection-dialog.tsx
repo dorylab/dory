@@ -249,7 +249,11 @@ export function ConnectionDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[95vh] flex flex-col" data-testid="connection-dialog">
+            <DialogContent
+                className="sm:max-w-2xl max-h-[95vh] flex flex-col"
+                data-testid="connection-dialog"
+                onPointerDownOutside={event => event.preventDefault()}
+            >
                 <DialogHeader className="shrink-0">
                     <DialogTitle>{isEditMode ? tc('Edit.title') : tc('Create.title')}</DialogTitle>
                 </DialogHeader>

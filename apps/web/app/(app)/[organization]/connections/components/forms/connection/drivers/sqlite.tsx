@@ -3,7 +3,7 @@ import { UseFormReturn } from 'react-hook-form';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { FieldHelp } from './shared';
+import { applySelectedLocalDatabasePath, FieldHelp } from './shared';
 import { useTranslations } from 'next-intl';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 
@@ -109,10 +109,7 @@ export function SqliteConnectionFields({ form }: { form: UseFormReturn<any> }) {
                                             if (!selectedPath) {
                                                 return;
                                             }
-                                            form.setValue('connection.path', selectedPath, {
-                                                shouldDirty: true,
-                                                shouldValidate: true,
-                                            });
+                                            applySelectedLocalDatabasePath(form, selectedPath);
                                         }}
                                     >
                                         {t('Choose')}
