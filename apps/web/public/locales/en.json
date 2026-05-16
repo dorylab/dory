@@ -195,13 +195,14 @@
             "emptyHint": "Try a different keyword or clear the search"
         },
         "Empty": {
-            "title": "Connect your database",
-            "description": "Add a connection to start exploring.",
+            "title": "Connect a database or open a file",
+            "description": "Dory is a modern SQL and AI data workspace. Add a database connection or open local files to start exploring.",
             "supportHint": "Currently supports ClickHouse · More engines coming soon",
             "feature1": "Run SQL queries and browse schemas",
             "feature2": "Ask questions in natural language and get answers",
             "feature3": "Save results, charts, and insights for later",
-            "loadDemo": "Load demo data"
+            "loadDemo": "Load demo data",
+            "openFiles": "Open Files"
         },
         "Connecting": "Connecting...",
         "Refresh Connection": "Refresh Connection",

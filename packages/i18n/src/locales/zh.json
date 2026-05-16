@@ -200,13 +200,14 @@
             "emptyHint": "尝试其他关键词，或清空搜索"
         },
         "Empty": {
-            "title": "连接您的数据库",
-            "description": "Dory 是面向 SQL 与 AI 的现代数据工作台，添加连接即可开始探索。",
+            "title": "连接数据库或打开文件",
+            "description": "Dory 是面向 SQL 与 AI 的现代数据工作台，添加数据库连接或打开本地文件即可开始探索。",
             "supportHint": "当前支持 ClickHouse · 更多引擎即将上线",
             "feature1": "运行 SQL 查询并浏览模式",
             "feature2": "使用自然语言提问并获取答案",
             "feature3": "保存结果、图表和洞察以供后续使用",
-            "loadDemo": "加载演示数据"
+            "loadDemo": "加载演示数据",
+            "openFiles": "Open Files"
         },
         "Confirm": "确定",
         "Connected": "已连接",

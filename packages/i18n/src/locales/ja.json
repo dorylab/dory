@@ -195,13 +195,14 @@
             "emptyHint": "別のキーワードを試すか、検索をクリアしてください"
         },
         "Empty": {
-            "title": "データベースに接続",
-            "description": "接続を追加して探索を始めましょう。",
+            "title": "データベースに接続、またはファイルを開く",
+            "description": "Dory は SQL と AI のためのモダンなデータワークスペースです。データベース接続を追加するか、ローカルファイルを開いて探索を始めましょう。",
             "supportHint": "現在は ClickHouse をサポート · 今後さらに対応予定",
             "feature1": "SQL クエリを実行し、スキーマを閲覧",
             "feature2": "自然言語で質問して回答を取得",
             "feature3": "結果、グラフ、インサイトを後で保存",
-            "loadDemo": "デモデータを読み込む"
+            "loadDemo": "デモデータを読み込む",
+            "openFiles": "Open Files"
         },
         "Connecting": "接続中...",
         "Refresh Connection": "接続を更新",
