@@ -66,7 +66,7 @@ Then:
 
 To enable email verification, set `RESEND_API_KEY` to a valid [resend](https://resend.com) key and `EMAIL_FROM` to a validated email.
 
-For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://docs.getdory.dev/en/docs/deploy/self-hosting).
+For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://www.getdory.dev/docs/deploy/self-hosting).
 
   
 ### 🧠 Supported AI Providers
