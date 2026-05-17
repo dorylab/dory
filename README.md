@@ -19,7 +19,7 @@ It combines intelligent SQL editing, context-aware AI assistance, conversational
   <a href="https://github.com/dorylab/dory/releases"><b>🍎 Download for macOS</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/releases"><b>Download for Windows</b></a> &nbsp; • &nbsp;
   <a href="#quick-start"><b>📦 Quick Start</b></a> &nbsp; • &nbsp;
-  <a href="https://docs.getdory.dev/en/docs/deploy/self-hosting"><b>🏠 Self-Hosting</b></a> &nbsp; • &nbsp;
+  <a href="https://www.getdory.dev/docs/deploy/self-hosting"><b>🏠 Self-Hosting</b></a> &nbsp; • &nbsp;
   <a href="./docs/contributing.md"><b>🤝 Contributing</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/stargazers"><b>⭐ Star</b></a>
 </p>
