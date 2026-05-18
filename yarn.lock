@@ -2374,6 +2374,24 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/ui@npm:0.1.0, @dory/ui@workspace:packages/ui":
+  version: 0.0.0-use.local
+  resolution: "@dory/ui@workspace:packages/ui"
+  dependencies:
+    "@dory/web-utils": "npm:0.1.0"
+    "@types/react": "npm:^19.2.7"
+    border-beam: "npm:1.0.1"
+    class-variance-authority: "npm:^0.7.1"
+    radix-ui: "npm:^1.4.3"
+    react: "npm:^19.2.4"
+    react-dom: "npm:^19.2.4"
+    typescript: "npm:^6.0.2"
+  peerDependencies:
+    react: ">=18.0.0"
+    react-dom: ">=18.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@dory/web-utils@npm:0.1.0, @dory/web-utils@workspace:packages/web-utils":
   version: 0.0.0-use.local
   resolution: "@dory/web-utils@workspace:packages/web-utils"
@@ -8907,7 +8925,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:*, @types/react@npm:19.2.14, @types/react@npm:^19":
+"@types/react@npm:*, @types/react@npm:19.2.14, @types/react@npm:^19, @types/react@npm:^19.2.7":
   version: 19.2.14
   resolution: "@types/react@npm:19.2.14"
   dependencies:
@@ -10319,6 +10337,16 @@ __metadata:
   version: 3.2.0
   resolution: "boolean@npm:3.2.0"
   checksum: 10c0/6a0dc9668f6f3dda42a53c181fcbdad223169c8d87b6c4011b87a8b14a21770efb2934a778f063d7ece17280f8c06d313c87f7b834bb1dd526a867ffcd00febf
+  languageName: node
+  linkType: hard
+
+"border-beam@npm:1.0.1":
+  version: 1.0.1
+  resolution: "border-beam@npm:1.0.1"
+  peerDependencies:
+    react: ">=18.0.0"
+    react-dom: ">=18.0.0"
+  checksum: 10c0/5cd4ace322c3c7cc21b33b7bcc694cb57d4965fbf51b9d22824458bcde43eca3f33b53ea9ee4236f254d5f4f9e526474ddb450e757f2f4b3a3ae14fca05da2d2
   languageName: node
   linkType: hard
 
@@ -22711,6 +22739,7 @@ __metadata:
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
+    "@dory/ui": "npm:0.1.0"
     "@dory/web-utils": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"

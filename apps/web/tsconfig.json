@@ -35,6 +35,8 @@
             "@dory/i18n/*": ["../../packages/i18n/src/*"],
             "@dory/shared": ["../../packages/shared/src/index.ts"],
             "@dory/shared/*": ["../../packages/shared/src/*"],
+            "@dory/ui": ["../../packages/ui/src/index.ts"],
+            "@dory/ui/*": ["../../packages/ui/src/*"],
             "@dory/web-utils": ["../../packages/web-utils/src/index.ts"],
             "@dory/web-utils/*": ["../../packages/web-utils/src/*"],
             "react": ["./node_modules/@types/react"]

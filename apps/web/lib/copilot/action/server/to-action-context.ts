@@ -5,11 +5,7 @@ import { ActionContext } from '../types';
 import { Locale, routing } from '@dory/i18n/routing';
 import { translate } from '@dory/i18n/translate';
 
-export function toActionContext(
-    input: CopilotFixInput,
-    locale?: Locale,
-    identity?: { organizationId?: string; userId?: string },
-): ActionContext {
+export function toActionContext(input: CopilotFixInput, locale?: Locale, identity?: { organizationId?: string; userId?: string }): ActionContext {
     if (input.surface !== 'sql') {
         const resolvedLocale = locale ?? routing.defaultLocale;
         throw new Error(translate(resolvedLocale, 'SqlConsole.Copilot.Errors.UnsupportedSurface'));
@@ -24,6 +20,9 @@ export function toActionContext(
         dialect: exec.dialect ?? 'unknown',
         sql: exec.sql,
         database: exec.database ?? undefined,
+        activeSchema: input.activeSchema ?? undefined,
+        candidateTables: input.candidateTables ?? undefined,
+        schemaContext: input.schemaContext ?? undefined,
         locale,
         model: input.model ?? null,
         error: exec.error
