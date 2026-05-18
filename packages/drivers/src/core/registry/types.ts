@@ -18,5 +18,14 @@ export type ConnectionParameterDialect =
 export type ConnectionDriverCtor = DriverCtor;
 
 export function isConnectionDriverType(value: unknown): value is ConnectionDriverType {
-    return value === 'clickhouse' || value === 'duckdb' || value === 'mariadb' || value === 'mysql' || value === 'neon' || value === 'postgres' || value === 'sqlite';
+    return (
+        value === 'clickhouse' ||
+        value === 'duckdb' ||
+        value === 'mariadb' ||
+        value === 'mysql' ||
+        value === 'neon' ||
+        value === 'postgres' ||
+        value === 'sqlite' ||
+        value === 'sqlserver'
+    );
 }

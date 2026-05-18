@@ -234,6 +234,7 @@
         "Creating": "Creating...",
         "Save Changes": "Save changes",
         "Fix Form Errors Before Testing": "Fix the form errors before testing the connection",
+        "Fix Form Errors Before Saving": "Fix the form errors before saving the connection",
         "Placeholder": "Placeholder",
         "Missing connection id": "Missing connection id",
         "Connection failed": "Connection failed",

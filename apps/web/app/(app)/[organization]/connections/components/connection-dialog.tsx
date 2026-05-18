@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { ChevronDown, ChevronUp, Loader2, Server, Shield } from 'lucide-react';
+import { ChevronDown, ChevronUp, Loader2, Lock, Server, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
@@ -45,6 +45,7 @@ export function ConnectionDialog({
     const [submitting, setSubmitting] = useState(false);
     const [testing, setTesting] = useState(false);
     const [sshOpen, setSshOpen] = useState(false);
+    const [sslOpen, setSslOpen] = useState(false);
     const currentConnection = useAtomValue(currentConnectionAtom);
     const t = useTranslations('Connections');
     const tc = useTranslations('Connections.ConnectionContent');
@@ -66,6 +67,7 @@ export function ConnectionDialog({
     const isSqlite = connectionType === 'sqlite';
     const isNeon = connectionType === 'neon';
     const isDuckDb = connectionType === 'duckdb';
+    const isSqlServer = connectionType === 'sqlserver';
     const isMotherDuck = isDuckDb && duckDbMode === 'motherduck';
     const hidesIdentityForm = isSqlite || isNeon || isDuckDb;
     const hidesSshForm = isSqlite || isNeon || isDuckDb;
@@ -146,9 +148,11 @@ export function ConnectionDialog({
             }
             reset(nextValues);
             setSshOpen(connectionItem.connection?.type === 'neon' ? false : Boolean((connectionItem as any).ssh?.enabled));
+            setSslOpen(Boolean(nextValues.connection?.encrypt));
         } else {
             reset(NEW_CONNECTION_DEFAULT_VALUES as any);
             setSshOpen(Boolean((NEW_CONNECTION_DEFAULT_VALUES as any).ssh?.enabled));
+            setSslOpen(false);
         }
     }, [open, isEditMode, connectionItem, reset]);
 
@@ -233,6 +237,11 @@ export function ConnectionDialog({
         handleSubmit(onValidTest, onInvalidTest)();
     };
 
+    const onInvalidSave = (errors: any) => {
+        console.log('save connection validation errors:', errors);
+        toast.error(t('Fix Form Errors Before Saving'));
+    };
+
     const handleClose = () => {
         if (submitting) return;
         resetDialogState();
@@ -249,17 +258,13 @@ export function ConnectionDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent
-                className="sm:max-w-2xl max-h-[95vh] flex flex-col"
-                data-testid="connection-dialog"
-                onPointerDownOutside={event => event.preventDefault()}
-            >
+            <DialogContent className="sm:max-w-2xl max-h-[95vh] flex flex-col" data-testid="connection-dialog" onPointerDownOutside={event => event.preventDefault()}>
                 <DialogHeader className="shrink-0">
                     <DialogTitle>{isEditMode ? tc('Edit.title') : tc('Create.title')}</DialogTitle>
                 </DialogHeader>
 
                 <Form {...form}>
-                    <form className="flex flex-col flex-1" onSubmit={handleSubmit(onSaveSubmit)}>
+                    <form className="flex flex-col flex-1" onSubmit={handleSubmit(onSaveSubmit, onInvalidSave)}>
                         <ScrollArea className="overflow-hidden pr-2 h-[70vh]">
                             <div className="space-y-4 pb-4">
                                 <section className="rounded-xl border border-border/70 bg-background/80 p-4 space-y-4">
@@ -279,6 +284,71 @@ export function ConnectionDialog({
                                         {!hidesIdentityForm ? <IdentityForm form={form} /> : null}
                                     </div>
                                 </section>
+
+                                {isSqlServer ? (
+                                    <section className="mt-2 rounded-xl border border-border/70 bg-background/80">
+                                        <Collapsible open={sslOpen} onOpenChange={setSslOpen}>
+                                            <div className="flex items-center justify-between px-4 py-3">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
+                                                        <Lock className="h-3 w-3 text-muted-foreground" />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">SSL</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <FormField
+                                                        control={control}
+                                                        name="connection.encrypt"
+                                                        render={({ field }) => (
+                                                            <FormItem className="flex items-center gap-2">
+                                                                <FormLabel className="text-xs text-muted-foreground">{t('Enable')}</FormLabel>
+                                                                <FormControl>
+                                                                    <Switch
+                                                                        checked={Boolean(field.value)}
+                                                                        onCheckedChange={checked => {
+                                                                            field.onChange(checked);
+                                                                            setSslOpen(checked);
+                                                                            if (!checked) {
+                                                                                form.setValue('connection.trustServerCertificate', false, {
+                                                                                    shouldDirty: true,
+                                                                                    shouldValidate: false,
+                                                                                });
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                </FormControl>
+                                                            </FormItem>
+                                                        )}
+                                                    />
+
+                                                    <CollapsibleTrigger asChild>
+                                                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:bg-muted/60">
+                                                            {sslOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                                        </Button>
+                                                    </CollapsibleTrigger>
+                                                </div>
+                                            </div>
+
+                                            <CollapsibleContent className="border-t border-border/60 bg-muted/20 px-4 py-4">
+                                                <FormField
+                                                    control={control}
+                                                    name="connection.trustServerCertificate"
+                                                    render={({ field }) => (
+                                                        <FormItem className="flex items-center justify-between rounded-lg border border-border/70 bg-background px-3 py-2">
+                                                            <FormLabel className="text-sm font-medium">Trust certificate</FormLabel>
+                                                            <FormControl>
+                                                                <Switch checked={Boolean(field.value)} onCheckedChange={field.onChange} />
+                                                            </FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </CollapsibleContent>
+                                        </Collapsible>
+                                    </section>
+                                ) : null}
 
                                 {!hidesSshForm ? (
                                     <section className="mt-2 rounded-xl border border-border/70 bg-background/80">

@@ -26,8 +26,15 @@ import {
 } from './postgres';
 import { createMysqlConnectionDefaults, MysqlConnectionFields, normalizeMysqlConnectionForForm, normalizeMysqlConnectionForSubmit, validateMysqlConnection } from './mysql';
 import { createSqliteConnectionDefaults, normalizeSqliteConnectionForForm, normalizeSqliteConnectionForSubmit, SqliteConnectionFields, validateSqliteConnection } from './sqlite';
+import {
+    createSqlServerConnectionDefaults,
+    normalizeSqlServerConnectionForForm,
+    normalizeSqlServerConnectionForSubmit,
+    SqlServerConnectionFields,
+    validateSqlServerConnection,
+} from './sqlserver';
 
-export type SupportedConnectionDriver = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite';
+export type SupportedConnectionDriver = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite' | 'sqlserver';
 
 type DriverDefinition = {
     label: string;
@@ -95,6 +102,14 @@ const DRIVERS: Record<SupportedConnectionDriver, DriverDefinition> = {
         normalizeForSubmit: normalizeSqliteConnectionForSubmit,
         validate: validateSqliteConnection,
     },
+    sqlserver: {
+        label: 'SQL Server',
+        FormComponent: SqlServerConnectionFields,
+        createDefaults: createSqlServerConnectionDefaults,
+        normalizeForForm: normalizeSqlServerConnectionForForm,
+        normalizeForSubmit: normalizeSqlServerConnectionForSubmit,
+        validate: validateSqlServerConnection,
+    },
 };
 
 export const CONNECTION_TYPE_OPTIONS = (Object.entries(DRIVERS) as Array<[SupportedConnectionDriver, DriverDefinition]>).map(([value, driver]) => ({
@@ -120,6 +135,9 @@ export function getConnectionDriver(type?: string): DriverDefinition {
     }
     if (type === 'sqlite') {
         return DRIVERS.sqlite;
+    }
+    if (type === 'sqlserver') {
+        return DRIVERS.sqlserver;
     }
     return DRIVERS.clickhouse;
 }

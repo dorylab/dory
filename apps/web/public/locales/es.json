@@ -234,6 +234,7 @@
         "Creating": "Creando...",
         "Save Changes": "Guardar cambios",
         "Fix Form Errors Before Testing": "Corrige los errores del formulario antes de probar la conexión",
+        "Fix Form Errors Before Saving": "Corrige los errores del formulario antes de guardar la conexión",
         "Placeholder": "Marcador de posición",
         "Missing connection id": "Falta el ID de conexión",
         "Connection failed": "La conexión falló",

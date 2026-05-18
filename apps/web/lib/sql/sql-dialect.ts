@@ -48,6 +48,12 @@ const SQL_DIALECT_CONFIGS: Record<ConnectionDialect, SqlDialectConfig> = {
         monacoLanguageId: 'mysql',
         formatterLanguage: 'sqlite',
     },
+    sqlserver: {
+        dialect: 'sqlserver',
+        parserKey: 'mysql',
+        monacoLanguageId: 'sql',
+        formatterLanguage: 'transactsql',
+    },
     unknown: {
         dialect: 'unknown',
         parserKey: 'mysql',
@@ -64,6 +70,7 @@ const SQL_DIALECT_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, ConnectionD
     neon: 'postgres',
     postgres: 'postgres',
     sqlite: 'sqlite',
+    sqlserver: 'sqlserver',
 };
 
 const parserCache = new Map<SqlParserKey, Promise<SqlDialectParser>>();
@@ -93,6 +100,10 @@ export const normalizeSqlDialect = (value?: string | null): ConnectionDialect =>
             return 'postgres';
         case 'sqlite':
             return 'sqlite';
+        case 'sqlserver':
+        case 'mssql':
+        case 'sql server':
+            return 'sqlserver';
         default:
             return 'unknown';
     }

@@ -238,6 +238,7 @@
         "Creating": "创建中...",
         "Save Changes": "保存修改",
         "Fix Form Errors Before Testing": "请先修正表单中的错误再测试连接",
+        "Fix Form Errors Before Saving": "请先修正表单中的错误再保存连接",
         "Placeholder": "占位",
         "Missing connection id": "缺少连接 ID",
         "Connection failed": "连接失败",

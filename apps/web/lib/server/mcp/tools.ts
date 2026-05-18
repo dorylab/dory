@@ -72,7 +72,7 @@ export function clampMcpLimit(limit: number | null | undefined, defaultValue: nu
 
 function getConnectionEngine(value?: string | null): DatabaseSummaryEngine {
     if (isPostgresFamilyConnectionType(value)) return 'postgres';
-    if (value === 'clickhouse' || value === 'duckdb' || value === 'mariadb' || value === 'mysql' || value === 'sqlite') return value;
+    if (value === 'clickhouse' || value === 'duckdb' || value === 'mariadb' || value === 'mysql' || value === 'sqlite' || value === 'sqlserver') return value;
     return 'unknown';
 }
 

@@ -234,6 +234,7 @@
         "Creating": "作成中...",
         "Save Changes": "変更を保存",
         "Fix Form Errors Before Testing": "接続をテストする前にフォームのエラーを修正してください",
+        "Fix Form Errors Before Saving": "接続を保存する前にフォームのエラーを修正してください",
         "Placeholder": "プレースホルダー",
         "Missing connection id": "接続 ID がありません",
         "Connection failed": "接続に失敗しました",

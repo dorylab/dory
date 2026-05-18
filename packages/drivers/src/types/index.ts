@@ -9,7 +9,7 @@ export * from './table-info';
 export const DEFAULT_MAX_RESULT_ROWS = 10000;
 export const DEFAULT_TABLE_PREVIEW_LIMIT = 200;
 
-export type DriverType = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite';
+export type DriverType = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite' | 'sqlserver';
 export type ConnectionType = DriverType;
 
 export interface DriverConfig {
@@ -146,7 +146,7 @@ export type DatabaseSummaryRecommendation = {
     rowsEstimate: number | null;
 };
 
-export type DatabaseSummaryEngine = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'postgres' | 'sqlite' | 'unknown';
+export type DatabaseSummaryEngine = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';
 
 export type DatabaseSummary = {
     databaseName: string;

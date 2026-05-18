@@ -33,6 +33,10 @@ export const DatasourceTypesWithDBEngine = [
         type: 'sqlite',
         engine: 'sqlite',
     },
+    {
+        type: 'sqlserver',
+        engine: 'sqlserver',
+    },
 ];
 
 export function getDBEngineViaType(type: string): string {
