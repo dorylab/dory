@@ -65,6 +65,7 @@ export function createCopilotFixInputFromExecution(execution: {
     sql: string;
     error?: { message: string; code?: string | number | null } | null;
     database?: string | null;
+    activeSchema?: string | null;
     dialect?: string;
     occurredAt?: number;
     meta?: CopilotEnvelopeMeta;
@@ -74,6 +75,7 @@ export function createCopilotFixInputFromExecution(execution: {
     return {
         surface: 'sql',
         meta: cloneMeta(execution.meta),
+        activeSchema: execution.activeSchema ?? null,
         lastExecution: {
             occurredAt: execution.occurredAt,
             dialect: normalizedDialect,

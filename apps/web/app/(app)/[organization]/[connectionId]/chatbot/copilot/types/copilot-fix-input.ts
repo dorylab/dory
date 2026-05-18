@@ -5,6 +5,13 @@ export type CopilotFixInput = {
     surface: 'sql';
     meta?: CopilotEnvelopeMeta;
     model?: string | null;
+    activeSchema?: string | null;
+    candidateTables?: Array<{
+        database?: string | null;
+        schema?: string | null;
+        name: string;
+    }> | null;
+    schemaContext?: string | null;
 
     lastExecution: {
         occurredAt?: number;

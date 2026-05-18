@@ -15,7 +15,7 @@ import type { UITabPayload } from '@dory/shared/types/tabs';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
+import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import { currentSessionMetaAtom } from '../result-table/stores/result-table.atoms';
 import { copilotPromptRequestAtom } from '../result-table/stores/copilot-prompt.atoms';
 import { copilotActionRequestAtom, copilotAnalysisRequestAtom, copilotPanelTabAtom, editorSelectionByTabAtom } from '../../sql-console.store';
@@ -43,6 +43,7 @@ type SubTabKey = 'ask' | 'action' | 'context';
 export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, addTab, setActiveTabId, onClose, editorRef }: CopilotPanelProps) {
     const t = useTranslations('SqlConsole');
     const activeDatabase = useAtomValue(activeDatabaseAtom);
+    const activeSchema = useAtomValue(activeSchemaAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
     const sessionMeta = useAtomValue(currentSessionMetaAtom);
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
@@ -182,6 +183,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
                       }
                     : null,
             database: activeDatabase || null,
+            activeSchema: activeSchema || null,
             dialect: (currentConnection as any)?.connection?.type ?? undefined,
             occurredAt: sqlTextFromResult.trim() ? (sessionFinishedAt ?? sessionStartedAt ?? undefined) : undefined,
             meta: {
@@ -195,6 +197,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         sessionErrorMessage,
         sessionErrorCode,
         activeDatabase,
+        activeSchema,
         currentConnection?.connection.id,
         sessionFinishedAt,
         sessionStartedAt,

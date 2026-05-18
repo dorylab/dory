@@ -2,7 +2,10 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 import { runQuickActionServer } from '@/lib/copilot/action/server/runQuickActionServer';
+import { hydrateActionContext } from '@/lib/copilot/action/server/hydrate-action-context';
+import { toActionContext } from '@/lib/copilot/action/server/to-action-context';
 import type { ActionIntent } from '@/lib/copilot/action/types';
+import type { ActionContext } from '@/lib/copilot/action/types';
 import type { CopilotFixInput } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-fix-input';
 import { getServerLocale } from '@dory/i18n/server';
 import { translate } from '@dory/i18n/translate';
@@ -17,6 +20,10 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
     try {
         const body = (await req.json()) as { intent?: ActionIntent; input?: CopilotFixInput; model?: string | null };
 
+        if (!body?.intent || !body?.input) {
+            return new NextResponse(translate(locale, 'SqlConsole.Copilot.Errors.InvalidRequest'), { status: 400 });
+        }
+
         if (USE_CLOUD_AI) {
             const cloudBaseUrl = getCloudApiBaseUrl();
             if (!cloudBaseUrl) {
@@ -30,13 +37,15 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             }
 
             const url = new URL('/api/copilot/action', cloudBaseUrl).toString();
+            const requestedModel = body.input?.model ?? body.model ?? null;
+            const hydratedInput = await hydrateInputForForwarding({ ...body.input, model: requestedModel }, locale, { organizationId, userId });
             const upstream = await fetch(url, {
                 method: 'POST',
                 headers: buildCloudForwardHeaders(req, cloudBaseUrl),
                 body: JSON.stringify({
                     ...body,
                     model: null,
-                    input: body.input ? { ...body.input, model: null } : body.input,
+                    input: { ...hydratedInput, model: null },
                 }),
             });
 
@@ -49,15 +58,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
         const shouldForcePresetModel = USE_CLOUD_AI;
         const requestedModel = shouldForcePresetModel ? null : (body.model ?? body.input?.model ?? null);
 
-        if (!body?.intent || !body?.input) {
-            return new NextResponse(translate(locale, 'SqlConsole.Copilot.Errors.InvalidRequest'), { status: 400 });
-        }
-
-        const result = await runQuickActionServer(
-            body.intent,
-            { ...body.input, model: requestedModel },
-            { locale, organizationId, userId },
-        );
+        const result = await runQuickActionServer(body.intent, { ...body.input, model: requestedModel }, { locale, organizationId, userId });
         return NextResponse.json(result);
     } catch (e: any) {
         const rawMessage = typeof e?.message === 'string' ? e.message : '';
@@ -76,3 +77,33 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
         return new NextResponse(message, { status: 500 });
     }
 });
+
+async function hydrateInputForForwarding(
+    input: CopilotFixInput,
+    locale: Awaited<ReturnType<typeof getServerLocale>>,
+    identity: { organizationId?: string; userId?: string },
+): Promise<CopilotFixInput> {
+    const hydrated = await hydrateActionContext(toActionContext(input, locale, identity));
+    return actionContextToInput(input, hydrated);
+}
+
+function actionContextToInput(input: CopilotFixInput, ctx: ActionContext): CopilotFixInput {
+    return {
+        ...input,
+        activeSchema: ctx.activeSchema ?? input.activeSchema ?? null,
+        candidateTables: ctx.candidateTables ?? input.candidateTables ?? null,
+        schemaContext: ctx.schemaContext ?? input.schemaContext ?? null,
+        lastExecution: {
+            ...input.lastExecution,
+            dialect: ctx.dialect,
+            database: ctx.database ?? input.lastExecution.database ?? null,
+            sql: ctx.sql,
+            error: ctx.error
+                ? {
+                      message: ctx.error.message,
+                      code: ctx.error.code ?? null,
+                  }
+                : input.lastExecution.error,
+        },
+    };
+}
