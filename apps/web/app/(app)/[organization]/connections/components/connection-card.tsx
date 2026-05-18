@@ -1,10 +1,11 @@
 'use client';
 
 import { MotionHighlight } from '@/components/animate-ui/effects/motion-highlight';
+import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
-import { Edit2, Trash2, Loader2 } from 'lucide-react';
+import { Edit2, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
@@ -140,7 +141,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                                 <p>{connectionTypeLabel}</p>
                             </TooltipContent>
                         </Tooltip>
-                        <p className="mb-1 min-h-6 truncate text-base font-medium">{connectionItem?.connection.name}</p>
+                        <OverflowTooltip text={connectionItem?.connection.name} className="mb-1 block min-h-6 min-w-0 max-w-full truncate text-base font-medium" />
                     </div>
                     {connectLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -152,23 +153,25 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                 </div>
 
                 {isLocalFiles ? (
-                    <div className="mb-1 flex min-h-6 items-center gap-2">
+                    <div className="mb-1 ml-1.5 flex min-h-6 items-center gap-2">
+                        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="text-muted-foreground text-sm">Open Files</span>
                     </div>
                 ) : (
-                    <div className="mb-1 flex min-h-6 min-w-0 items-center gap-2">
-                        {identityUsername ? <span className="truncate text-sm text-muted-foreground">{identityUsername}</span> : null}
+                    <div className="mb-1 ml-1.5 flex min-h-6 min-w-0 items-center gap-2">
+                        {identityUsername ? (
+                            <>
+                                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <OverflowTooltip text={identityUsername} className="block min-w-0 max-w-full truncate text-sm text-muted-foreground" />
+                            </>
+                        ) : null}
                     </div>
                 )}
 
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <p className="min-h-6 max-w-full truncate text-sm text-muted-foreground">{locationLabel}</p>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p className="max-w-xs break-all text-center">{locationLabel}</p>
-                    </TooltipContent>
-                </Tooltip>
+                <div className="ml-1.5 flex min-h-6 max-w-[calc(100%-0.375rem)] min-w-0 items-center gap-2">
+                    <Server className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <OverflowTooltip text={locationLabel} className="block min-w-0 max-w-full truncate text-sm text-muted-foreground" />
+                </div>
 
                 <div className='flex justify-between'>
                     
