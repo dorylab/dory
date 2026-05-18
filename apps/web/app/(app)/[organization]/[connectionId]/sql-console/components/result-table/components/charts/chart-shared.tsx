@@ -107,7 +107,7 @@ export function ChartSelect(props: { label: string; value: string; onValueChange
         <div className="flex shrink-0 items-center gap-1">
             <span className="mr-1 text-[11px] font-medium text-muted-foreground/80">{label}</span>
             <Select value={value} onValueChange={onValueChange} disabled={disabled}>
-                <SelectTrigger size="control" className="min-w-[104px] justify-between border bg-background/50 text-muted-foreground shadow-none hover:bg-background/70">
+                <SelectTrigger size="control" className="min-w-[92px] justify-between border bg-background/50 text-muted-foreground shadow-none hover:bg-background/70">
                     <SelectValue placeholder={label} />
                 </SelectTrigger>
                 <SelectContent align="start">
@@ -149,7 +149,7 @@ export function ChartCombobox(props: {
                         aria-expanded={open}
                         size="control"
                         disabled={disabled}
-                        className="min-w-[104px] justify-between border bg-background/50 text-muted-foreground shadow-none hover:bg-background/70"
+                        className="min-w-[96px] justify-between border bg-background/50 text-muted-foreground shadow-none hover:bg-background/70"
                     >
                         <span className="truncate">{displayLabel}</span>
                         <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-80" />

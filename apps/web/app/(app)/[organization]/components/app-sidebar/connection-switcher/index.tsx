@@ -3,7 +3,7 @@
 import { ChevronsUpDown, Grip, Loader2, Plus, User } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/registry/new-york-v4/ui/sidebar';
@@ -84,6 +84,8 @@ function getActiveIdentity(connection: ConnectionListItem | null): ConnectionLis
 function makeLoadingKey(connectionId: string, identityId?: string | null) {
     return identityId ? `${connectionId}:${identityId}` : connectionId;
 }
+
+const SWITCH_CONNECT_TIMEOUT_MS = 12_000;
 
 export function ConnectionSwitcher() {
     const { isMobile } = useSidebar();
@@ -240,6 +242,23 @@ export function ConnectionSwitcher() {
         return `/${organizationId}/${nextConnectionId}/sql-console`;
     };
 
+    const clearPendingConnect = useCallback(
+        (connectionItem: ConnectionListItem, loadingKey: string, options?: { clearSwitching?: boolean }) => {
+            setPendingConnection(current => (current?.connection.id === connectionItem.connection.id ? null : current));
+            setPendingIdentity(null);
+            setNavigatingConnectionId(current => (current === connectionItem.connection.id ? null : current));
+            if (options?.clearSwitching) {
+                setConnectionSwitching(current => (current?.connectionId === connectionItem.connection.id ? null : current));
+            }
+            setConnectLoadings((prev: Record<string, boolean> = {}) => {
+                const next = { ...prev };
+                delete next[loadingKey];
+                return next;
+            });
+        },
+        [setConnectLoadings, setConnectionSwitching],
+    );
+
     const startConnect = (connectionItem: ConnectionListItem, identity?: ConnectionIdentity | ConnectionListIdentity | null, targetPath?: string | null) => {
         if (!connectionItem?.connection) return;
 
@@ -258,6 +277,12 @@ export function ConnectionSwitcher() {
         setLoadingMessage(t('Connect to', { name: `${connectionItem.connection.name ?? connectionItem.connection.id}${identityLabel}` }));
         setConnectionError(null);
 
+        const timeoutId = window.setTimeout(() => {
+            clearPendingConnect(connectionItem, loadingKey, { clearSwitching: true });
+            setConnectionError(t('Connection failed'));
+            setLoadingMessage(null);
+        }, SWITCH_CONNECT_TIMEOUT_MS);
+
         connectMutation.mutate(
             {
                 payload: connectionItem,
@@ -272,15 +297,14 @@ export function ConnectionSwitcher() {
                     }
                 },
                 onError: () => {
-                    setNavigatingConnectionId(current => (current === connectionItem.connection.id ? null : current));
-                    setConnectionSwitching(current => (current?.connectionId === connectionItem.connection.id ? null : current));
-                    setPendingConnection(null);
-                    setPendingIdentity(null);
+                    clearPendingConnect(connectionItem, loadingKey, { clearSwitching: true });
+                    setLoadingMessage(null);
                 },
                 onSettled: () => {
+                    window.clearTimeout(timeoutId);
                     if (!targetPath) {
-                        setPendingConnection(null);
-                        setPendingIdentity(null);
+                        clearPendingConnect(connectionItem, loadingKey);
+                        return;
                     }
                     setConnectLoadings((prev: Record<string, boolean> = {}) => {
                         const next = { ...prev };

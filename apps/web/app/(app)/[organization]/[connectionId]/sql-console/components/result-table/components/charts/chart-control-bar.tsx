@@ -71,8 +71,8 @@ export function ChartControlBar(props: {
 
     return (
         <div className="@container/chart-control px-3 pb-2 pt-2">
-            <div className="flex items-start gap-x-3 gap-y-2">
-                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 @[860px]/chart-control:flex-nowrap">
+            <div className="flex items-start gap-x-2 gap-y-2">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-2 @[720px]/chart-control:flex-nowrap">
                     <ChartSelect
                         label="Chart"
                         value={chartState.chartType}
@@ -120,125 +120,130 @@ export function ChartControlBar(props: {
                     ) : null}
                 </div>
                 <TooltipProvider delayDuration={150}>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span
-                                aria-label={bucketHint ? 'Auto-bucketed enabled' : 'Auto-bucketed disabled'}
-                                className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/45', bucketHint && 'text-muted-foreground/65')}
-                                role="status"
-                            >
-                                <CircleDotDashed className="h-3.5 w-3.5" />
-                            </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="top">{bucketHint ?? 'Auto-bucketed disabled'}</TooltipContent>
-                    </Tooltip>
-                    <Popover>
+                    <div className="flex shrink-0 items-center gap-0.5 pt-0.5">
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        aria-label="Chart settings"
-                                        className="h-7 w-7 cursor-pointer text-muted-foreground hover:text-foreground"
-                                    >
-                                        <Settings2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                </PopoverTrigger>
+                                <span
+                                    aria-label={bucketHint ? 'Auto-bucketed enabled' : 'Auto-bucketed disabled'}
+                                    className={cn(
+                                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/45',
+                                        bucketHint && 'text-muted-foreground/65',
+                                    )}
+                                    role="status"
+                                >
+                                    <CircleDotDashed className="h-3.5 w-3.5" />
+                                </span>
                             </TooltipTrigger>
-                            <TooltipContent side="top">Settings</TooltipContent>
+                            <TooltipContent side="top">{bucketHint ?? 'Auto-bucketed disabled'}</TooltipContent>
                         </Tooltip>
-                        <PopoverContent align="end" className="w-[300px]">
-                            {supportsTimelineSlider ? (
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="space-y-0.5">
-                                        <p className="text-xs font-medium">Enable timeline slider</p>
-                                        <p className="text-[11px] text-muted-foreground">Show DataZoom timeline, Reset Zoom, and Apply Brush Filter.</p>
+                        <Popover>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            aria-label="Chart settings"
+                                            className="h-6 w-6 cursor-pointer text-muted-foreground hover:text-foreground"
+                                        >
+                                            <Settings2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">Settings</TooltipContent>
+                            </Tooltip>
+                            <PopoverContent align="end" className="w-[300px]">
+                                {supportsTimelineSlider ? (
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="space-y-0.5">
+                                            <p className="text-xs font-medium">Enable timeline slider</p>
+                                            <p className="text-[11px] text-muted-foreground">Show DataZoom timeline, Reset Zoom, and Apply Brush Filter.</p>
+                                        </div>
+                                        <Switch checked={timelineSliderEnabled} onCheckedChange={onTimelineSliderEnabledChange} />
                                     </div>
-                                    <Switch checked={timelineSliderEnabled} onCheckedChange={onTimelineSliderEnabledChange} />
+                                ) : (
+                                    <div className="space-y-0.5">
+                                        <p className="text-xs font-medium">Timeline slider unavailable</p>
+                                        <p className="text-[11px] text-muted-foreground">This chart type does not support DataZoom timeline.</p>
+                                    </div>
+                                )}
+                                <div className="my-3 h-px bg-border" />
+                                <div className="space-y-1.5">
+                                    <p className="text-xs font-medium">Chart color</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {chartColorPresetOptions.map(option => {
+                                            const selected = option.value === chartColorPreset;
+                                            return (
+                                                <Button
+                                                    key={option.value}
+                                                    type="button"
+                                                    variant={selected ? 'default' : 'outline'}
+                                                    className={cn('h-8 justify-start gap-2 px-2 text-xs', !selected && 'bg-background')}
+                                                    onClick={() => onChartColorPresetChange(option.value)}
+                                                >
+                                                    <span className="flex items-center gap-1">
+                                                        {option.preview.slice(0, 3).map((color, index) => (
+                                                            <span
+                                                                key={`${option.value}-${index}`}
+                                                                className="h-2.5 w-2.5 rounded-full border border-border/60"
+                                                                style={{ backgroundColor: color }}
+                                                            />
+                                                        ))}
+                                                    </span>
+                                                    <span className="truncate">{option.label}</span>
+                                                </Button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
-                            ) : (
-                                <div className="space-y-0.5">
-                                    <p className="text-xs font-medium">Timeline slider unavailable</p>
-                                    <p className="text-[11px] text-muted-foreground">This chart type does not support DataZoom timeline.</p>
-                                </div>
-                            )}
-                            <div className="my-3 h-px bg-border" />
-                            <div className="space-y-1.5">
-                                <p className="text-xs font-medium">Chart color</p>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {chartColorPresetOptions.map(option => {
-                                        const selected = option.value === chartColorPreset;
-                                        return (
-                                            <Button
-                                                key={option.value}
-                                                type="button"
-                                                variant={selected ? 'default' : 'outline'}
-                                                className={cn('h-8 justify-start gap-2 px-2 text-xs', !selected && 'bg-background')}
-                                                onClick={() => onChartColorPresetChange(option.value)}
-                                            >
-                                                <span className="flex items-center gap-1">
-                                                    {option.preview.slice(0, 3).map((color, index) => (
-                                                        <span
-                                                            key={`${option.value}-${index}`}
-                                                            className="h-2.5 w-2.5 rounded-full border border-border/60"
-                                                            style={{ backgroundColor: color }}
-                                                        />
-                                                    ))}
-                                                </span>
-                                                <span className="truncate">{option.label}</span>
-                                            </Button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </PopoverContent>
-                    </Popover>
-                    <DropdownMenu>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="ghost"
-                                        aria-label="More chart actions"
-                                        className="h-7 w-7 cursor-pointer text-muted-foreground hover:text-foreground"
-                                    >
-                                        <EllipsisVertical className="h-3.5 w-3.5" />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">More</TooltipContent>
-                        </Tooltip>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
-                                    <Download />
-                                    Download
-                                </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent>
-                                    <DropdownMenuItem onSelect={onCopyPng} disabled={!canExportChart}>
-                                        <Copy />
-                                        Copy PNG
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={onExportPng} disabled={!canExportChart}>
-                                        <FileImage />
-                                        PNG
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={onExportSvg} disabled={!canExportChart}>
-                                        <FileImage />
-                                        SVG
-                                    </DropdownMenuItem>
-                                </DropdownMenuSubContent>
-                            </DropdownMenuSub>
-                            <DropdownMenuItem onSelect={onResetAuto} disabled={chartStateIsAuto}>
-                                <RotateCcw />
-                                Reset chart
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                            </PopoverContent>
+                        </Popover>
+                        <DropdownMenu>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            aria-label="More chart actions"
+                                            className="h-6 w-6 cursor-pointer text-muted-foreground hover:text-foreground"
+                                        >
+                                            <EllipsisVertical className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">More</TooltipContent>
+                            </Tooltip>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger>
+                                        <Download />
+                                        Download
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent>
+                                        <DropdownMenuItem onSelect={onCopyPng} disabled={!canExportChart}>
+                                            <Copy />
+                                            Copy PNG
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={onExportPng} disabled={!canExportChart}>
+                                            <FileImage />
+                                            PNG
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={onExportSvg} disabled={!canExportChart}>
+                                            <FileImage />
+                                            SVG
+                                        </DropdownMenuItem>
+                                    </DropdownMenuSubContent>
+                                </DropdownMenuSub>
+                                <DropdownMenuItem onSelect={onResetAuto} disabled={chartStateIsAuto}>
+                                    <RotateCcw />
+                                    Reset chart
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </TooltipProvider>
             </div>
         </div>
