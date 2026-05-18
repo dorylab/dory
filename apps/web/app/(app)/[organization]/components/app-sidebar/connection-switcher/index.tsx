@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronsUpDown, Grip, Loader2, Plus, User } from 'lucide-react';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
@@ -21,7 +21,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 
 import { cn } from '@dory/web-utils';
-import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer/build-path';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import {
     connectionErrorAtom,
@@ -30,6 +29,7 @@ import {
     connectionLoadingMessageAtom,
     connectionOpenAtom,
     connectionStatusAtom,
+    connectionSwitchingAtom,
 } from '../../../connections/states';
 import { ConnectionCheckStatus, ConnectionIdentity, ConnectionListIdentity, ConnectionListItem } from '@dory/shared/types/connections';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
@@ -60,13 +60,7 @@ function getLocalFilesSourceType(connection?: ConnectionListItem['connection'] |
     return typeof options.sourceType === 'string' ? options.sourceType : null;
 }
 
-function ConnectionSourceIcon({
-    connection,
-    className,
-}: {
-    connection?: ConnectionListItem['connection'] | null;
-    className?: string;
-}) {
+function ConnectionSourceIcon({ connection, className }: { connection?: ConnectionListItem['connection'] | null; className?: string }) {
     const sourceType = getLocalFilesSourceType(connection);
     if (sourceType) {
         return <FileTypeIcon sourceType={sourceType} className={className} />;
@@ -75,11 +69,7 @@ function ConnectionSourceIcon({
     return <DatabaseTypeIcon type={connection?.type} className={className} />;
 }
 
-function getHostLabel(
-    connection: ConnectionListItem['connection'] | null,
-    isLoading: boolean,
-    t: ReturnType<typeof useTranslations>,
-) {
+function getHostLabel(connection: ConnectionListItem['connection'] | null, isLoading: boolean, t: ReturnType<typeof useTranslations>) {
     const hostWithPort = getConnectionLocationLabel(connection);
     if (hostWithPort) return hostWithPort;
     return isLoading ? t('Loading connections') : t('No connections yet');
@@ -104,7 +94,6 @@ export function ConnectionSwitcher() {
     const connectionParam = params?.connectionId ?? params?.connection;
     const organizationId = Array.isArray(teamParam) ? teamParam[0] : teamParam;
     const connectionId = Array.isArray(connectionParam) ? connectionParam[0] : connectionParam;
-    const pathname = usePathname();
     const hasMounted = useHasMounted();
 
     const [currentConnection, setCurrentConnection] = useAtom(currentConnectionAtom);
@@ -112,12 +101,14 @@ export function ConnectionSwitcher() {
     const [pendingConnection, setPendingConnection] = useState<ConnectionListItem | null>(null);
     const [pendingIdentity, setPendingIdentity] = useState<ConnectionListIdentity | null>(null);
     const [autoConnectedRouteId, setAutoConnectedRouteId] = useState<string | null>(null);
+    const [navigatingConnectionId, setNavigatingConnectionId] = useState<string | null>(null);
 
     const setConnectionListLoading = useSetAtom(connectionListLoadingAtom);
     const setLoadingMessage = useSetAtom(connectionLoadingMessageAtom);
     const setConnectionError = useSetAtom(connectionErrorAtom);
     const setConnectionOpen = useSetAtom(connectionOpenAtom);
     const setConnectionStatus = useSetAtom(connectionStatusAtom);
+    const setConnectionSwitching = useSetAtom(connectionSwitchingAtom);
 
     const connectionsQuery = useConnections();
     const connections = useMemo<ConnectionListItem[]>(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
@@ -188,7 +179,10 @@ export function ConnectionSwitcher() {
             return;
         }
 
-        
+        if (navigatingConnectionId && connectionId !== navigatingConnectionId) {
+            return;
+        }
+
         if (connectionId) {
             const match = connections.find(item => item.connection.id === connectionId);
             if (match && match.connection.id !== currentConnection?.connection?.id) {
@@ -197,11 +191,18 @@ export function ConnectionSwitcher() {
             return;
         }
 
-        
         if (!currentConnection || connections.every(c => c.connection.id !== currentConnection.connection?.id)) {
             setCurrentConnection(connections[0]);
         }
-    }, [connectionId, currentConnection, connections, setCurrentConnection]);
+    }, [connectionId, currentConnection, connections, navigatingConnectionId, setCurrentConnection]);
+
+    useEffect(() => {
+        if (navigatingConnectionId && connectionId === navigatingConnectionId) {
+            setNavigatingConnectionId(null);
+            setPendingConnection(null);
+            setPendingIdentity(null);
+        }
+    }, [connectionId, navigatingConnectionId]);
 
     useEffect(() => {
         setConnectionListLoading(isSwitcherLoading);
@@ -231,22 +232,11 @@ export function ConnectionSwitcher() {
 
     const pendingLoadingKey = pendingConnection ? makeLoadingKey(pendingConnection.connection.id, pendingIdentity?.id) : null;
     const activeLoadingKey = displayedConnection ? makeLoadingKey(displayedConnection.connection.id, displayedIdentity?.id) : null;
-    const isConnecting = pendingLoadingKey ? Boolean(connectLoadings?.[pendingLoadingKey]) : activeLoadingKey ? Boolean(connectLoadings?.[activeLoadingKey]) : false;
+    const isConnecting = pendingLoadingKey ? true : activeLoadingKey ? Boolean(connectLoadings?.[activeLoadingKey]) : false;
 
     const buildConnectionPath = (connectionItem: ConnectionListItem) => {
         if (!organizationId) return null;
         const nextConnectionId = connectionItem.connection.id;
-
-        if (pathname?.includes(`/${organizationId}/${connectionId}/explorer`)) {
-            const defaultDatabase = connectionItem.connection.database;
-            return defaultDatabase
-                ? buildExplorerDatabasePath({ organization: organizationId, connectionId: nextConnectionId }, defaultDatabase)
-                : buildExplorerBasePath({ organization: organizationId, connectionId: nextConnectionId });
-        }
-
-        if (connectionId && pathname && pathname.includes(`/${organizationId}/${connectionId}`)) {
-            return pathname.replace(`/${organizationId}/${connectionId}`, `/${organizationId}/${nextConnectionId}`);
-        }
         return `/${organizationId}/${nextConnectionId}/sql-console`;
     };
 
@@ -281,9 +271,17 @@ export function ConnectionSwitcher() {
                         router.push(targetPath);
                     }
                 },
-                onSettled: () => {
+                onError: () => {
+                    setNavigatingConnectionId(current => (current === connectionItem.connection.id ? null : current));
+                    setConnectionSwitching(current => (current?.connectionId === connectionItem.connection.id ? null : current));
                     setPendingConnection(null);
                     setPendingIdentity(null);
+                },
+                onSettled: () => {
+                    if (!targetPath) {
+                        setPendingConnection(null);
+                        setPendingIdentity(null);
+                    }
                     setConnectLoadings((prev: Record<string, boolean> = {}) => {
                         const next = { ...prev };
                         delete next[loadingKey];
@@ -297,11 +295,20 @@ export function ConnectionSwitcher() {
     const handleSelect = (connectionItem: ConnectionListItem, identity?: ConnectionIdentity) => {
         if (!connectionItem?.connection) return;
         const targetPath = buildConnectionPath(connectionItem);
+        if (targetPath) {
+            setNavigatingConnectionId(connectionItem.connection.id);
+            setAutoConnectedRouteId(connectionItem.connection.id);
+            setConnectionSwitching({
+                connectionId: connectionItem.connection.id,
+                startedAt: Date.now(),
+            });
+        }
         startConnect(connectionItem, identity, targetPath);
     };
 
     useEffect(() => {
         if (!connectionId || !connections.length || isLoading) return;
+        if (navigatingConnectionId) return;
 
         const match = connections.find(item => item.connection.id === connectionId);
         if (!match) return;
@@ -313,7 +320,7 @@ export function ConnectionSwitcher() {
 
         setAutoConnectedRouteId(connectionId);
         startConnect(match, identity, null);
-    }, [autoConnectedRouteId, connectLoadings, connectionId, connections, isLoading]);
+    }, [autoConnectedRouteId, connectLoadings, connectionId, connections, isLoading, navigatingConnectionId]);
 
     const goToConnections = () => {
         router.push(`/${organizationId}/connections`);
@@ -334,19 +341,16 @@ export function ConnectionSwitcher() {
                             size="lg"
                             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground disabled:pointer-events-none disabled:cursor-wait disabled:opacity-100 disabled:text-current disabled:bg-transparent"
                         >
-                            
                             <div className="flex aspect-square size-8 items-center justify-center">
                                 <ConnectionSourceIcon connection={displayedConnection?.connection} className="max-h-7 max-w-7" />
                             </div>
 
-                            
                             <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
                                 <div className="flex items-center gap-2 min-w-0">
                                     {isConnecting ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : renderHealth(displayedConnection?.connection)}
                                     <span className="truncate font-semibold text-sm">{displayedConnection?.connection.name ?? t('Connections')}</span>
                                 </div>
 
-                                
                                 <ChevronsUpDown className="size-3 text-muted-foreground shrink-0" />
                             </div>
                         </SidebarMenuButton>
@@ -421,7 +425,6 @@ export function ConnectionSwitcher() {
                                         </DropdownMenuSubContent>
                                     </DropdownMenuSub>
                                 ) : (
-                                    
                                     <DropdownMenuItem
                                         key={connection.connection.id}
                                         onClick={() => handleSelect(connection)}

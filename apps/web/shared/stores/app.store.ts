@@ -23,6 +23,7 @@ export type TablesState = {
     connectionId: string | null;
     database: string | null;
     items: { label: string; value?: string }[];
+    loading: boolean;
 };
 
 export const databasesAtom = atom<DatabasesState>({
@@ -34,6 +35,7 @@ export const tablesAtom = atom<TablesState>({
     connectionId: null,
     database: null,
     items: [],
+    loading: false,
 });
 export const columnsAtom = atom<TableColumn[]>([]);
 export type ColumnsCacheEntry = { columns: TableColumn[]; updatedAt: number };

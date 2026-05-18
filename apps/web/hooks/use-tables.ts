@@ -19,11 +19,12 @@ export function useTables(databases: string) {
                 connectionId,
                 database: databases || null,
                 items: [],
+                loading: false,
             });
             return;
         }
 
-        if (tablesState.connectionId === connectionId && tablesState.database === databases && tablesState.items.length > 0) {
+        if (tablesState.connectionId === connectionId && tablesState.database === databases && tablesState.items.length > 0 && !tablesState.loading) {
             return;
         }
 
@@ -32,11 +33,12 @@ export function useTables(databases: string) {
                 connectionId,
                 database: databases,
                 items: [],
+                loading: true,
             });
         }
 
         void refresh(connectionId, databases);
-    }, [connectionId, databases, tablesState.connectionId, tablesState.database, tablesState.items.length, setTablesState]);
+    }, [connectionId, databases, tablesState.connectionId, tablesState.database, tablesState.items.length, tablesState.loading, setTablesState]);
 
     const refresh = async (requestedConnectionId = connectionId ?? undefined, requestedDatabase = databases) => {
         if (!requestedConnectionId || !requestedDatabase) {
@@ -52,43 +54,69 @@ export function useTables(databases: string) {
 
         const encodedDb = encodeURIComponent(requestedDatabase);
         const request = (async () => {
-            const requestInit = {
-                method: 'GET',
-                headers: {
-                    'X-Connection-ID': requestedConnectionId,
-                },
-            };
-            const [tablesResponse, viewsResponse] = await Promise.all([
-                authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/tables`, requestInit),
-                authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/views`, requestInit),
-            ]);
-            const tablesResult = (await tablesResponse.json()) as ResponseObject<any[]>;
-            const viewsResult = (await viewsResponse.json().catch(() => null)) as ResponseObject<any[]> | null;
-
-            if (isSuccess(tablesResult)) {
-                const merged = new Map<string, any>();
-                for (const item of tablesResult.data ?? []) {
-                    const key = String(item?.value ?? item?.name ?? item?.label ?? '');
-                    if (key) merged.set(key, item);
+            setTablesState(prev => {
+                if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
+                    return prev;
                 }
-                if (viewsResult && isSuccess(viewsResult)) {
-                    for (const item of viewsResult.data ?? []) {
+
+                return {
+                    ...prev,
+                    loading: true,
+                };
+            });
+
+            try {
+                const requestInit = {
+                    method: 'GET',
+                    headers: {
+                        'X-Connection-ID': requestedConnectionId,
+                    },
+                };
+                const [tablesResponse, viewsResponse] = await Promise.all([
+                    authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/tables`, requestInit),
+                    authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/views`, requestInit),
+                ]);
+                const tablesResult = (await tablesResponse.json()) as ResponseObject<any[]>;
+                const viewsResult = (await viewsResponse.json().catch(() => null)) as ResponseObject<any[]> | null;
+
+                if (isSuccess(tablesResult)) {
+                    const merged = new Map<string, any>();
+                    for (const item of tablesResult.data ?? []) {
                         const key = String(item?.value ?? item?.name ?? item?.label ?? '');
-                        if (key && !merged.has(key)) {
-                            merged.set(key, item);
+                        if (key) merged.set(key, item);
+                    }
+                    if (viewsResult && isSuccess(viewsResult)) {
+                        for (const item of viewsResult.data ?? []) {
+                            const key = String(item?.value ?? item?.name ?? item?.label ?? '');
+                            if (key && !merged.has(key)) {
+                                merged.set(key, item);
+                            }
                         }
                     }
-                }
 
+                    setTablesState(prev => {
+                        if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
+                            return prev;
+                        }
+
+                        return {
+                            connectionId: requestedConnectionId,
+                            database: requestedDatabase,
+                            items: [...merged.values()],
+                            loading: false,
+                        };
+                    });
+                    return;
+                }
+            } finally {
                 setTablesState(prev => {
                     if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
                         return prev;
                     }
 
                     return {
-                        connectionId: requestedConnectionId,
-                        database: requestedDatabase,
-                        items: [...merged.values()],
+                        ...prev,
+                        loading: false,
                     };
                 });
             }
@@ -104,6 +132,7 @@ export function useTables(databases: string) {
 
     return {
         tables: requestKey && tablesState.connectionId === connectionId && tablesState.database === databases ? tablesState.items : [],
+        loading: requestKey && tablesState.connectionId === connectionId && tablesState.database === databases ? tablesState.loading : false,
         refresh,
     };
 }
