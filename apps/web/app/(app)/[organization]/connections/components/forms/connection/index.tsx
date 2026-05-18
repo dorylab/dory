@@ -96,7 +96,7 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
                                     {CONNECTION_TYPE_OPTIONS.map(option => (
                                         <SelectItem key={option.value} value={option.value}>
                                             <span className="flex min-w-0 items-center gap-2">
-                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-muted">
+                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                                                     <DatabaseTypeIcon type={option.value} className="max-h-4 max-w-4" fallbackClassName="text-[10px]" />
                                                 </span>
                                                 <span className="truncate">{option.label}</span>

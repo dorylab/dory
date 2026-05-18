@@ -2,7 +2,7 @@ import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import { ColumnInfo } from './type';
 
 export function supportsTableStats(driver?: string | null): boolean {
-    return isPostgresFamilyConnectionType(driver) || driver === 'clickhouse' || driver === 'mysql' || driver === 'mariadb' || driver === 'sqlserver';
+    return isPostgresFamilyConnectionType(driver) || driver === 'clickhouse' || driver === 'mysql' || driver === 'mariadb';
 }
 
 export function buildColumnCacheKey(connectionId?: string, databaseName?: string, tableName?: string) {

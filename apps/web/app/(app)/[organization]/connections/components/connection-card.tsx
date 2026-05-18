@@ -124,11 +124,11 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                 <div className="mb-2 flex items-center justify-between">
                     <div className="flex min-w-0 items-center gap-3">
                         {isLocalFiles ? (
-                            <div className="bg-muted text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
+                            <div className="text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center">
                                 <FileTypeIcon sourceType={localFilesMeta?.sourceType} />
                             </div>
                         ) : (
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center">
                                 <DatabaseTypeIcon type={connection.type} />
                             </div>
                         )}

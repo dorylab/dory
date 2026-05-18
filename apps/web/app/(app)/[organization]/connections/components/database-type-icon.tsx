@@ -44,9 +44,18 @@ export function DatabaseTypeIcon({
     fallbackClassName?: string;
 }) {
     const meta = getDatabaseTypeMeta(type);
+    const normalizedType = type?.trim().toLowerCase();
 
     if (meta.src) {
-        return <Image src={meta.src} alt={meta.label} width={24} height={24} className={cn('max-h-6 max-w-6 object-contain', className)} />;
+        return (
+            <Image
+                src={meta.src}
+                alt={meta.label}
+                width={24}
+                height={24}
+                className={cn(normalizedType === 'sqlite' ? 'max-h-5 max-w-5' : 'max-h-6 max-w-6', 'object-contain', className)}
+            />
+        );
     }
 
     return <span className={cn('text-xs font-semibold uppercase text-muted-foreground', fallbackClassName)}>{meta.fallback}</span>;

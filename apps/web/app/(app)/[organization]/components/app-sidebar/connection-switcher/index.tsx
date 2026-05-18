@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronsUpDown, Database, Grip, Loader2, Plus, User } from 'lucide-react';
+import { ChevronsUpDown, Grip, Loader2, Plus, User } from 'lucide-react';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
@@ -36,11 +36,43 @@ import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { useConnectConnection } from '../../../connections/hooks/use-connect-connection';
 import { useConnections } from '../../../connections/hooks/use-connections';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
+import { DatabaseTypeIcon } from '../../../connections/components/database-type-icon';
+import { FileTypeIcon } from '../../../connections/components/file-type-icon';
 
-function getInitial(text?: string | null) {
-    if (!text) return 'C';
-    const letter = text.trim()[0];
-    return letter ? letter.toUpperCase() : 'C';
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+}
+
+function getLocalFilesSourceType(connection?: ConnectionListItem['connection'] | null) {
+    if (connection?.type !== 'duckdb') return null;
+    const options = parseConnectionOptions(connection.options);
+    if (options.managedBy !== 'local-files' || options.mode !== 'localFilesDataset') return null;
+    return typeof options.sourceType === 'string' ? options.sourceType : null;
+}
+
+function ConnectionSourceIcon({
+    connection,
+    className,
+}: {
+    connection?: ConnectionListItem['connection'] | null;
+    className?: string;
+}) {
+    const sourceType = getLocalFilesSourceType(connection);
+    if (sourceType) {
+        return <FileTypeIcon sourceType={sourceType} className={className} />;
+    }
+
+    return <DatabaseTypeIcon type={connection?.type} className={className} />;
 }
 
 function getHostLabel(
@@ -303,8 +335,8 @@ export function ConnectionSwitcher() {
                             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground disabled:pointer-events-none disabled:cursor-wait disabled:opacity-100 disabled:text-current disabled:bg-transparent"
                         >
                             
-                            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg text-sm font-semibold">
-                                {displayedConnection ? getInitial(displayedConnection.connection.name) : <Database className="size-4" />}
+                            <div className="flex aspect-square size-8 items-center justify-center">
+                                <ConnectionSourceIcon connection={displayedConnection?.connection} className="max-h-7 max-w-7" />
                             </div>
 
                             
@@ -340,8 +372,8 @@ export function ConnectionSwitcher() {
                                                     'bg-sidebar-accent text-sidebar-accent-foreground',
                                             )}
                                         >
-                                            <div className="flex size-6 items-center justify-center rounded-sm border">
-                                                <Database className="size-4 shrink-0" />
+                                            <div className="flex size-6 shrink-0 items-center justify-center">
+                                                <ConnectionSourceIcon connection={connection.connection} className="max-h-5 max-w-5" />
                                             </div>
                                             <div className="flex flex-col min-w-0 max-w-[220px]">
                                                 <div className="flex items-center gap-2">
@@ -399,8 +431,8 @@ export function ConnectionSwitcher() {
                                                 'bg-sidebar-accent text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground',
                                         )}
                                     >
-                                        <div className="flex size-6 items-center justify-center rounded-sm border">
-                                            <Database className="size-4 shrink-0" />
+                                        <div className="flex size-6 shrink-0 items-center justify-center">
+                                            <ConnectionSourceIcon connection={connection.connection} className="max-h-5 max-w-5" />
                                         </div>
                                         <div className="flex flex-col min-w-0 max-w-[220px]">
                                             <div className="flex items-center gap-2">
