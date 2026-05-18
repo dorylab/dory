@@ -9,19 +9,18 @@ import type { ConnectionType } from '@dory/shared/types/connections';
 type DatabaseTypeMeta = {
     src: string;
     label: string;
-    badge: string;
 };
 
 export const DATABASE_TYPE_META: Partial<Record<ConnectionType, DatabaseTypeMeta>> = {
-    clickhouse: { src: '/images/logos/clickhouse.svg', label: 'ClickHouse', badge: 'CLICKHOUSE' },
-    doris: { src: '/images/logos/apache-doris.svg', label: 'Apache Doris', badge: 'DORIS' },
-    duckdb: { src: '/images/logos/duckdb.svg', label: 'DuckDB', badge: 'DUCKDB' },
-    mariadb: { src: '/images/logos/mariadb.svg', label: 'MariaDB', badge: 'MARIADB' },
-    mysql: { src: '/images/logos/mysql.svg', label: 'MySQL', badge: 'MYSQL' },
-    neon: { src: '/images/logos/neon.svg', label: 'Neon', badge: 'NEON' },
-    postgres: { src: '/images/logos/postgresql.svg', label: 'PostgreSQL', badge: 'POSTGRES' },
-    sqlite: { src: '/images/logos/sqlite.svg', label: 'SQLite', badge: 'SQLITE' },
-    sqlserver: { src: '/images/logos/sqlserver.svg', label: 'SQL Server', badge: 'SQLSERVER' },
+    clickhouse: { src: '/images/logos/clickhouse.svg', label: 'ClickHouse' },
+    doris: { src: '/images/logos/apache-doris.svg', label: 'Apache Doris' },
+    duckdb: { src: '/images/logos/duckdb.svg', label: 'DuckDB' },
+    mariadb: { src: '/images/logos/mariadb.svg', label: 'MariaDB' },
+    mysql: { src: '/images/logos/mysql.svg', label: 'MySQL' },
+    neon: { src: '/images/logos/neon.svg', label: 'Neon' },
+    postgres: { src: '/images/logos/postgresql.svg', label: 'PostgreSQL' },
+    sqlite: { src: '/images/logos/sqlite.svg', label: 'SQLite' },
+    sqlserver: { src: '/images/logos/sqlserver.svg', label: 'SQL Server' },
 };
 
 export function getDatabaseTypeMeta(type?: string | null) {
@@ -31,7 +30,6 @@ export function getDatabaseTypeMeta(type?: string | null) {
     return {
         src: meta?.src,
         label: meta?.label ?? normalizedType,
-        badge: meta?.badge ?? normalizedType.toUpperCase(),
         fallback: normalizedType.slice(0, 2),
     };
 }

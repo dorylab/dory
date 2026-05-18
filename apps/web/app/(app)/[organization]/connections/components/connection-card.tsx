@@ -4,11 +4,12 @@ import { MotionHighlight } from '@/components/animate-ui/effects/motion-highligh
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
-import { Edit2, Trash2, Loader2, FileSpreadsheet, FileText, FileArchive } from 'lucide-react';
+import { Edit2, Trash2, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
-import { DatabaseTypeIcon, getDatabaseTypeMeta } from './database-type-icon';
+import { DatabaseTypeIcon } from './database-type-icon';
+import { FileTypeIcon } from './file-type-icon';
 
 type Props = {
     connectionItem: ConnectionListItem;
@@ -47,12 +48,6 @@ function getLocalFilesMeta(connection: ConnectionListItem['connection']) {
     };
 }
 
-function getFileIcon(sourceType?: string | null) {
-    if (sourceType === 'excel' || sourceType === 'csv') return FileSpreadsheet;
-    if (sourceType === 'parquet') return FileArchive;
-    return FileText;
-}
-
 export default function ConnectionCard({ connectionItem, id, connectLoading, errorMessage, onEdit, onConnect, onDeleteRequest }: Props) {
     const t = useTranslations('Connections');
     const hasMounted = useHasMounted();
@@ -61,8 +56,6 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
     const locationLabel = getConnectionLocationLabel(connection);
     const localFilesMeta = getLocalFilesMeta(connection);
     const isLocalFiles = Boolean(localFilesMeta);
-    const FileIcon = getFileIcon(localFilesMeta?.sourceType);
-    const databaseTypeMeta = getDatabaseTypeMeta(connection.type);
     const identityUsername = connectionItem.identities[0]?.username;
     const lastCheckStatus = (connection?.lastCheckStatus ?? 'unknown') as ConnectionCheckStatus;
     const lastCheckError = connection?.lastCheckError;
@@ -132,7 +125,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                     <div className="flex min-w-0 items-center gap-3">
                         {isLocalFiles ? (
                             <div className="bg-muted text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
-                                <FileIcon className="h-4 w-4" />
+                                <FileTypeIcon sourceType={localFilesMeta?.sourceType} />
                             </div>
                         ) : (
                             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
@@ -152,16 +145,10 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
 
                 {isLocalFiles ? (
                     <div className="mb-1 flex min-h-6 items-center gap-2">
-                        <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium uppercase">
-                            {localFilesMeta?.sourceType ?? 'file'}
-                        </span>
                         <span className="text-muted-foreground text-sm">Open Files</span>
                     </div>
                 ) : (
                     <div className="mb-1 flex min-h-6 min-w-0 items-center gap-2">
-                        <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium uppercase">
-                            {databaseTypeMeta.badge}
-                        </span>
                         {identityUsername ? <span className="truncate text-sm text-muted-foreground">{identityUsername}</span> : null}
                     </div>
                 )}
