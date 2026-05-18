@@ -19,6 +19,10 @@ export async function hydrateActionContext(ctx: ActionContext): Promise<ActionCo
         return await hydrateSchemaContext(nextCtx);
     }
 
+    if (isGenerateSqlContext(ctx)) {
+        return await hydrateSchemaContext(ctx);
+    }
+
     const inferred = await inferSqlDraftContext({
         dialect: ctx.dialect,
         editorText: ctx.sql,
@@ -76,9 +80,19 @@ async function hydrateSchemaContext(ctx: ActionContext): Promise<ActionContext> 
     };
 }
 
+function isGenerateSqlContext(ctx: ActionContext) {
+    return Boolean(ctx.instruction?.trim());
+}
+
 function shouldUseBroadSchemaContext(ctx: ActionContext) {
     const message = ctx.error?.message ?? '';
     const code = String(ctx.error?.code ?? '');
 
-    return code === '42P01' || /relation\s+["'`][^"'`]+["'`]\s+does\s+not\s+exist/i.test(message);
+    return (
+        code === '42P01' ||
+        /relation\s+["'`][^"'`]+["'`]\s+does\s+not\s+exist/i.test(message) ||
+        /no\s+such\s+table\s*:/i.test(message) ||
+        /table\s+["'`]?[^"'`]+["'`]?\s+does\s+not\s+exist/i.test(message) ||
+        /table\s+[^'"`\s]+\s+doesn't\s+exist/i.test(message)
+    );
 }

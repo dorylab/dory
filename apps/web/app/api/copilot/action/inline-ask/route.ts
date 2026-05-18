@@ -7,7 +7,7 @@ import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organizatio
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
-import { runInlineAskSqlGeneration, type InlineAskInput } from '@/lib/copilot/action/server/inline-ask';
+import { hydrateInlineAskInputForForwarding, runInlineAskSqlGeneration, type InlineAskInput } from '@/lib/copilot/action/server/inline-ask';
 import { translate } from '@dory/i18n/translate';
 import { getServerLocale } from '@dory/i18n/server';
 import { normalizeSqlDialect } from '@/lib/sql/sql-dialect';
@@ -23,6 +23,7 @@ type InlineAskRequestBody = {
     database?: string | null;
     activeSchema?: string | null;
     candidateTables?: InlineAskInput['candidateTables'];
+    schemaContext?: string | null;
     model?: string | null;
 };
 
@@ -31,6 +32,24 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
 
     try {
         const body = (await req.json()) as InlineAskRequestBody;
+        const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+        const connectionId = typeof body.connectionId === 'string' ? body.connectionId.trim() : '';
+
+        if (!prompt || !connectionId) {
+            return new NextResponse(translate(locale, 'SqlConsole.Copilot.Errors.InvalidRequest'), { status: 400 });
+        }
+
+        const input: InlineAskInput = {
+            prompt,
+            editorSql: typeof body.editorSql === 'string' ? body.editorSql : '',
+            connectionId,
+            dialect: normalizeSqlDialect(body.connectionType ?? undefined),
+            database: body.database ?? null,
+            activeSchema: body.activeSchema ?? null,
+            candidateTables: body.candidateTables ?? null,
+            schemaContext: body.schemaContext ?? null,
+            model: body.model ?? null,
+        };
 
         if (USE_CLOUD_AI) {
             const cloudBaseUrl = getCloudApiBaseUrl();
@@ -45,11 +64,13 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             }
 
             const url = new URL('/api/copilot/action/inline-ask', cloudBaseUrl).toString();
+            const hydratedInput = await hydrateInlineAskInputForForwarding(input, { locale, organizationId, userId });
             const upstream = await fetch(url, {
                 method: 'POST',
                 headers: buildCloudForwardHeaders(req, cloudBaseUrl),
                 body: JSON.stringify({
                     ...body,
+                    ...hydratedInput,
                     model: null,
                 }),
             });
@@ -60,26 +81,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             });
         }
 
-        const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
-        const connectionId = typeof body.connectionId === 'string' ? body.connectionId.trim() : '';
-
-        if (!prompt || !connectionId) {
-            return new NextResponse(translate(locale, 'SqlConsole.Copilot.Errors.InvalidRequest'), { status: 400 });
-        }
-
-        const result = await runInlineAskSqlGeneration(
-            {
-                prompt,
-                editorSql: typeof body.editorSql === 'string' ? body.editorSql : '',
-                connectionId,
-                dialect: normalizeSqlDialect(body.connectionType ?? undefined),
-                database: body.database ?? null,
-                activeSchema: body.activeSchema ?? null,
-                candidateTables: body.candidateTables ?? null,
-                model: body.model ?? null,
-            },
-            { locale, organizationId, userId },
-        );
+        const result = await runInlineAskSqlGeneration(input, { locale, organizationId, userId });
 
         return NextResponse.json({
             sql: result.fixedSql,
