@@ -6,6 +6,9 @@ export type CopilotResultSetContext = {
     title?: string | null;
     sqlText?: string | null;
     status?: 'success' | 'error' | 'running' | null;
+    errorMessage?: string | null;
+    errorCode?: string | number | null;
+    errorSqlState?: string | null;
     rowCount?: number | null;
     limited?: boolean | null;
     limit?: number | null;
