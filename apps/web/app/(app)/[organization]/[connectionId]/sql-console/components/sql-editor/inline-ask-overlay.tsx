@@ -20,19 +20,22 @@ type InlineAskOverlayProps = {
 export function InlineAskOverlay({ open, promptDraft, isGenerating, errorMessage, onPromptChange, onSubmit, onCancel }: InlineAskOverlayProps) {
     const t = useTranslations('SqlConsole');
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const promptDraftLengthRef = useRef(promptDraft.length);
+
+    promptDraftLengthRef.current = promptDraft.length;
 
     useEffect(() => {
         if (!open) return;
 
         const timer = window.setTimeout(() => {
             textareaRef.current?.focus();
-            textareaRef.current?.setSelectionRange(promptDraft.length, promptDraft.length);
+            textareaRef.current?.setSelectionRange(promptDraftLengthRef.current, promptDraftLengthRef.current);
         }, 0);
 
         return () => {
             window.clearTimeout(timer);
         };
-    }, [open, promptDraft.length]);
+    }, [open]);
 
     if (!open) return null;
 

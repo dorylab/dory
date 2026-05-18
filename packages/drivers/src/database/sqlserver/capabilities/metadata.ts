@@ -1,6 +1,8 @@
 import type {
     ConnectionMetadataAPI,
     ConnectionSchemaMap,
+    DatabaseFunctionDetail,
+    DatabaseFunctionKind,
     DatabaseObjectRow,
     DatabaseSummary,
     DatabaseSummaryOptions,
@@ -17,6 +19,7 @@ export type SqlServerMetadataAPI = ConnectionMetadataAPI & {
     getTablesOnly: (database: string) => Promise<DatabaseObjectRow[]>;
     getViews: (database: string) => Promise<DatabaseObjectRow[]>;
     getFunctions: (database?: string) => Promise<Array<{ label: string; value: string }>>;
+    getFunctionDetail: (database: string, functionName: string, schema?: string | null) => Promise<DatabaseFunctionDetail | null>;
     getSequences: (database?: string) => Promise<DatabaseObjectRow[]>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
@@ -40,6 +43,46 @@ type ColumnCountRow = {
 type RelationshipRow = {
     sourceTableName?: string;
     targetTableName?: string;
+};
+
+type FunctionDetailRow = {
+    objectId?: number | string;
+    schemaName?: string | null;
+    name?: string | null;
+    type?: string | null;
+    typeDescription?: string | null;
+    owner?: string | null;
+    createdAt?: string | Date | null;
+    modifiedAt?: string | Date | null;
+    definition?: string | null;
+};
+
+type FunctionParameterRow = {
+    name?: string | null;
+    parameterId?: number | string | null;
+    userTypeName?: string | null;
+    systemTypeName?: string | null;
+    maxLength?: number | string | null;
+    precision?: number | string | null;
+    scale?: number | string | null;
+    isOutput?: boolean | number | null;
+    hasDefaultValue?: boolean | number | null;
+    isNullable?: boolean | number | null;
+};
+
+type FunctionReturnColumnRow = {
+    name?: string | null;
+    typeName?: string | null;
+    maxLength?: number | string | null;
+    precision?: number | string | null;
+    scale?: number | string | null;
+    isNullable?: boolean | number | null;
+};
+
+type FunctionDependencyRow = {
+    schemaName?: string | null;
+    name?: string | null;
+    type?: string | null;
 };
 
 const USER_OBJECTS_SQL = `
@@ -82,6 +125,86 @@ function qualify(schemaName?: string | null, name?: string | null) {
     const object = name?.trim();
     if (!object) return null;
     return schema && schema !== 'dbo' ? `${schema}.${object}` : object;
+}
+
+function splitSqlServerName(value: string, schema?: string | null): { schema: string; name: string } {
+    const trimmed = value.trim().replace(/^\[|\]$/g, '');
+    const parts = trimmed
+        .split('.')
+        .map(part => part.trim().replace(/^\[|\]$/g, ''))
+        .filter(Boolean);
+    if (parts.length >= 2) {
+        return { schema: parts[parts.length - 2], name: parts[parts.length - 1] };
+    }
+    return { schema: schema?.trim() || 'dbo', name: parts[0] || trimmed };
+}
+
+function formatSqlServerType(row: Pick<FunctionParameterRow, 'systemTypeName' | 'userTypeName' | 'maxLength' | 'precision' | 'scale'>): string | null {
+    const rawType = row.userTypeName || row.systemTypeName;
+    if (!rawType) return null;
+    const typeName = rawType.toUpperCase();
+    const maxLength = toNumberOrNull(row.maxLength);
+    const precision = toNumberOrNull(row.precision);
+    const scale = toNumberOrNull(row.scale);
+    if (['NVARCHAR', 'NCHAR'].includes(typeName) && maxLength) {
+        return `${typeName}(${maxLength === -1 ? 'MAX' : maxLength / 2})`;
+    }
+    if (['VARCHAR', 'CHAR', 'VARBINARY', 'BINARY'].includes(typeName) && maxLength) {
+        return `${typeName}(${maxLength === -1 ? 'MAX' : maxLength})`;
+    }
+    if (['DECIMAL', 'NUMERIC'].includes(typeName) && precision) {
+        return `${typeName}(${precision},${scale ?? 0})`;
+    }
+    return typeName;
+}
+
+function mapSqlServerFunctionKind(type?: string | null): DatabaseFunctionKind {
+    switch (type) {
+        case 'FN':
+        case 'FS':
+        case 'FT':
+            return 'scalar';
+        case 'IF':
+        case 'TF':
+            return 'table';
+        case 'AF':
+            return 'aggregate';
+        case 'P':
+        case 'PC':
+            return 'procedure';
+        default:
+            return 'unknown';
+    }
+}
+
+function quoteSqlServerName(name: string) {
+    return `[${name.replace(/]/g, ']]')}]`;
+}
+
+function buildSqlServerSignature(qualifiedName: string, parameters: DatabaseFunctionDetail['parameters'], returnType: string | null, kind: DatabaseFunctionKind) {
+    const args = parameters
+        .filter(param => param.mode !== 'return')
+        .map(param => `${param.name} ${param.dataType ?? ''}`.trim())
+        .join(', ');
+    if (kind === 'procedure') return `${qualifiedName} ${args}`.trim();
+    return `${qualifiedName}(${args})${returnType ? ` -> ${returnType}` : ''}`;
+}
+
+function buildSqlServerSampleCall(qualifiedName: string, parameters: DatabaseFunctionDetail['parameters'], kind: DatabaseFunctionKind) {
+    const values = parameters
+        .filter(param => param.mode !== 'return' && param.mode !== 'out')
+        .map(param => sampleValueForType(param.dataType))
+        .join(', ');
+    if (kind === 'procedure') return `EXEC ${qualifiedName}${values ? ` ${values}` : ''};`;
+    return `SELECT ${qualifiedName}(${values});`;
+}
+
+function sampleValueForType(type?: string | null) {
+    const upper = (type ?? '').toUpperCase();
+    if (upper.includes('CHAR') || upper.includes('TEXT') || upper.includes('UNIQUEIDENTIFIER')) return "'sample'";
+    if (upper.includes('DATE') || upper.includes('TIME')) return "'2026-01-01'";
+    if (upper.includes('BIT') || upper.includes('BOOL')) return '1';
+    return '1';
 }
 
 function normalizeObjectRow(row: ObjectRow): DatabaseObjectRow | null {
@@ -324,9 +447,9 @@ async function getViews(datasource: SqlServerDatasource, database: string): Prom
 
 async function getFunctions(datasource: SqlServerDatasource, database?: string) {
     if (!database) return [];
-    const result = await datasource.queryWithContext<{ schemaName?: string; name?: string }>(
+    const result = await datasource.queryWithContext<{ schemaName?: string; name?: string; type?: string | null }>(
         `
-            SELECT s.name AS schemaName, o.name AS name
+            SELECT s.name AS schemaName, o.name AS name, o.type AS type
             FROM sys.objects o
             JOIN sys.schemas s ON s.schema_id = o.schema_id
             WHERE o.type IN ('FN', 'IF', 'TF', 'P')
@@ -337,9 +460,156 @@ async function getFunctions(datasource: SqlServerDatasource, database?: string) 
     );
 
     return result.rows
-        .map(row => qualify(row.schemaName, row.name))
-        .filter((name): name is string => Boolean(name))
-        .map(name => ({ value: name, label: name }));
+        .map(row => {
+            const name = qualify(row.schemaName, row.name);
+            return name
+                ? {
+                      value: name,
+                      label: name,
+                      schema: row.schemaName ?? null,
+                      kind: mapSqlServerFunctionKind(row.type),
+                  }
+                : null;
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row));
+}
+
+async function getFunctionDetail(datasource: SqlServerDatasource, database: string, functionName: string, schema?: string | null): Promise<DatabaseFunctionDetail | null> {
+    const target = splitSqlServerName(functionName, schema);
+    const detailResult = await datasource.queryWithContext<FunctionDetailRow>(
+        `
+            SELECT
+                o.object_id AS objectId,
+                s.name AS schemaName,
+                o.name AS name,
+                o.type AS type,
+                o.type_desc AS typeDescription,
+                USER_NAME(o.principal_id) AS owner,
+                o.create_date AS createdAt,
+                o.modify_date AS modifiedAt,
+                m.definition AS definition
+            FROM sys.objects o
+            JOIN sys.schemas s ON s.schema_id = o.schema_id
+            LEFT JOIN sys.sql_modules m ON m.object_id = o.object_id
+            WHERE s.name = @schemaName
+              AND o.name = @functionName
+              AND o.type IN ('FN', 'IF', 'TF', 'AF', 'FS', 'FT', 'P', 'PC')
+        `,
+        { database, params: { schemaName: target.schema, functionName: target.name } },
+    );
+    const detail = detailResult.rows[0];
+    if (!detail?.objectId || !detail.name) return null;
+
+    const objectId = Number(detail.objectId);
+    const [parameterResult, returnColumnResult, dependencyResult, usedByResult] = await Promise.all([
+        datasource.queryWithContext<FunctionParameterRow>(
+            `
+                SELECT
+                    p.name,
+                    p.parameter_id AS parameterId,
+                    TYPE_NAME(p.user_type_id) AS userTypeName,
+                    TYPE_NAME(p.system_type_id) AS systemTypeName,
+                    p.max_length AS maxLength,
+                    p.precision,
+                    p.scale,
+                    p.is_output AS isOutput,
+                    p.has_default_value AS hasDefaultValue,
+                    p.is_nullable AS isNullable
+                FROM sys.parameters p
+                WHERE p.object_id = @objectId
+                ORDER BY p.parameter_id
+            `,
+            { database, params: { objectId } },
+        ),
+        datasource.queryWithContext<FunctionReturnColumnRow>(
+            `
+                SELECT
+                    c.name,
+                    TYPE_NAME(c.user_type_id) AS typeName,
+                    c.max_length AS maxLength,
+                    c.precision,
+                    c.scale,
+                    c.is_nullable AS isNullable
+                FROM sys.columns c
+                WHERE c.object_id = @objectId
+                ORDER BY c.column_id
+            `,
+            { database, params: { objectId } },
+        ),
+        datasource.queryWithContext<FunctionDependencyRow>(
+            `
+                SELECT DISTINCT
+                    referenced_schema_name AS schemaName,
+                    referenced_entity_name AS name,
+                    referenced_class_desc AS type
+                FROM sys.sql_expression_dependencies
+                WHERE referencing_id = @objectId
+                  AND referenced_entity_name IS NOT NULL
+                ORDER BY referenced_schema_name, referenced_entity_name
+            `,
+            { database, params: { objectId } },
+        ),
+        datasource.queryWithContext<FunctionDependencyRow>(
+            `
+                SELECT DISTINCT
+                    OBJECT_SCHEMA_NAME(referencing_id) AS schemaName,
+                    OBJECT_NAME(referencing_id) AS name,
+                    o.type_desc AS type
+                FROM sys.sql_expression_dependencies d
+                JOIN sys.objects o ON o.object_id = d.referencing_id
+                WHERE d.referenced_id = @objectId
+                ORDER BY OBJECT_SCHEMA_NAME(referencing_id), OBJECT_NAME(referencing_id)
+            `,
+            { database, params: { objectId } },
+        ),
+    ]);
+
+    const parameters = parameterResult.rows
+        .filter(row => Number(row.parameterId ?? 0) > 0)
+        .map(row => ({
+            name: row.name || `@param${row.parameterId}`,
+            dataType: formatSqlServerType(row),
+            nullable: row.isNullable == null ? null : Boolean(row.isNullable),
+            hasDefault: row.hasDefaultValue == null ? null : Boolean(row.hasDefaultValue),
+            mode: row.isOutput ? ('out' as const) : ('in' as const),
+        }));
+    const returnParameter = parameterResult.rows.find(row => Number(row.parameterId ?? -1) === 0);
+    const kind = mapSqlServerFunctionKind(detail.type);
+    const qualifiedName = `${quoteSqlServerName(detail.schemaName ?? target.schema)}.${quoteSqlServerName(detail.name)}`;
+    const returnColumns = returnColumnResult.rows.map(row => ({
+        name: row.name ?? '',
+        dataType: formatSqlServerType({
+            userTypeName: row.typeName,
+            systemTypeName: row.typeName,
+            maxLength: row.maxLength,
+            precision: row.precision,
+            scale: row.scale,
+        }),
+        nullable: row.isNullable == null ? null : Boolean(row.isNullable),
+    }));
+    const returnType = kind === 'table' ? 'TABLE' : returnParameter ? formatSqlServerType(returnParameter) : null;
+
+    return {
+        name: detail.name,
+        schema: detail.schemaName ?? target.schema,
+        qualifiedName,
+        kind,
+        signature: buildSqlServerSignature(qualifiedName, parameters, returnType, kind),
+        owner: detail.owner ?? null,
+        createdAt: toIsoString(detail.createdAt),
+        modifiedAt: toIsoString(detail.modifiedAt),
+        parameters,
+        returnType,
+        returnColumns,
+        definition: detail.definition ?? null,
+        sampleCallSql: buildSqlServerSampleCall(qualifiedName, parameters, kind),
+        dependencies: dependencyResult.rows
+            .filter(row => row.name)
+            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+        usedBy: usedByResult.rows
+            .filter(row => row.name)
+            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+    };
 }
 
 async function getSequences(datasource: SqlServerDatasource, database?: string): Promise<DatabaseObjectRow[]> {
@@ -473,6 +743,7 @@ export function createSqlServerMetadataCapability(datasource: SqlServerDatasourc
         getTablesOnly: database => getTablesOnly(datasource, database),
         getViews: database => getViews(datasource, database),
         getFunctions: database => getFunctions(datasource, database),
+        getFunctionDetail: (database, functionName, schema) => getFunctionDetail(datasource, database, functionName, schema),
         getSequences: database => getSequences(datasource, database),
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),

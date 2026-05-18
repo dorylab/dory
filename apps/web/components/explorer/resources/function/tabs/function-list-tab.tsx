@@ -1,10 +1,13 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { ColumnDef, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Search } from 'lucide-react';
 import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { buildExplorerObjectPath } from '@/lib/explorer/build-path';
+import type { ExplorerBaseParams } from '@/lib/explorer/types';
 import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
@@ -14,6 +17,7 @@ import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
 
 type FunctionListResourceTabProps = {
+    baseParams: ExplorerBaseParams;
     database: string;
     schema?: string;
     searchPlaceholder: string;
@@ -22,7 +26,7 @@ type FunctionListResourceTabProps = {
 };
 
 export function FunctionListResourceTab(props: FunctionListResourceTabProps) {
-    const { database, schema, searchPlaceholder, emptyText, filteredEmptyText } = props;
+    const { baseParams, database, schema, searchPlaceholder, emptyText, filteredEmptyText } = props;
     const { connectionId } = useExplorerConnectionContext();
     const [searchValue, setSearchValue] = React.useState('');
     const [rows, setRows] = React.useState<DatabaseFunctionMeta[]>([]);
@@ -75,10 +79,24 @@ export function FunctionListResourceTab(props: FunctionListResourceTabProps) {
                 accessorKey: 'label',
                 header: 'Function',
                 meta: { className: 'text-left', cellClassName: 'text-left' },
-                cell: ({ row }) => <OverflowTooltip text={row.original.label} className="block max-w-[520px] truncate font-medium text-foreground" />,
+                cell: ({ row }) => {
+                    const qualified = splitQualifiedName(row.original.value);
+                    const href = buildExplorerObjectPath(baseParams, {
+                        database,
+                        schema: qualified.schema ?? schema,
+                        objectKind: 'function',
+                        name: qualified.name,
+                    });
+
+                    return (
+                        <Link href={href} className="block max-w-[520px] truncate font-medium text-foreground hover:underline">
+                            <OverflowTooltip text={row.original.label} className="block max-w-[520px] truncate font-medium" />
+                        </Link>
+                    );
+                },
             },
         ],
-        [],
+        [baseParams, database, schema],
     );
 
     const table = useReactTable({
