@@ -37,6 +37,7 @@ import { createCopilotSQLContextEnvelope } from '../../../chatbot/copilot/copilo
 import { useSqlInlineAskAI } from '../../hooks/useSqlInlineAskAI';
 import { normalizeSqlDialect } from '@/lib/sql/sql-dialect';
 import { useTables } from '@/hooks/use-tables';
+import { hasSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
 
 const isEditableShortcutTarget = (target: EventTarget | null) => {
     if (!(target instanceof HTMLElement)) return false;
@@ -149,10 +150,11 @@ export function SqlMode({
     const defaultSaveTitle = useMemo(() => activeTab?.tabName ?? t('Tabs.NewQuery'), [activeTab?.tabName, t]);
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection.id ?? null;
+    const limitDialect: SelectLimitDialect = currentConnection?.connection.type === 'sqlserver' ? 'sqlserver' : 'default';
     const generateSqlFromPrompt = useSqlInlineAskAI();
     const handleRunQuery = () => {
         if (!activeTab || isRunning) return;
-        const options = hasSqlLimit ? undefined : { limit: queryLimit };
+        const options = limitDialect === 'sqlserver' || !hasSqlLimit ? { limit: queryLimit } : undefined;
         runQuery(activeTab, options);
     };
     const handleLimitChange = (value: string) => {
@@ -166,7 +168,7 @@ export function SqlMode({
         [activeTab?.tabType === 'sql' && activeTab?.content, activeTab?.tabType, editorRef],
     );
     const currentSqlText = getSqlText().trim();
-    const hasSqlLimit = /\blimit\b/i.test(currentSqlText);
+    const hasSqlLimit = hasSelectLimit(currentSqlText, limitDialect);
     const runLabel = hasSelection ? t('Toolbar.RunSelected') : t('Toolbar.Run');
     const runLabelWithLimit = hasSqlLimit ? `${runLabel} ( Limit: SQL )` : `${runLabel} ( Limit: ${queryLimit} )`;
     const isSaved = !!currentSqlText && savedQueries.some(q => q.sqlText.trim() === currentSqlText);

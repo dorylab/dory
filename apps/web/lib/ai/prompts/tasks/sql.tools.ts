@@ -17,6 +17,7 @@ About the sqlRunner tool
   2) Use the provided schema context first. If table structure is still unclear, inspect schema with dialect-appropriate read-only queries before writing the final query.
      - PostgreSQL: prefer information_schema.columns, pg_catalog, or other PostgreSQL-compatible metadata queries. Do not use MySQL-only DESCRIBE / SHOW COLUMNS syntax.
      - MySQL / MariaDB: DESCRIBE, SHOW COLUMNS, and information_schema are acceptable.
+     - SQL Server: use T-SQL, sys catalog views, and INFORMATION_SCHEMA. Do not use LIMIT.
      - SQLite: use PRAGMA table_info(...) when needed.
   3) Never use SELECT *. Only project the columns needed for the answer.
   4) Call sqlRunner to execute the SQL.
@@ -41,7 +42,8 @@ export function buildDialectSqlPrompt(connectionType?: ConnectionType | null): s
     const dialectRules: string[] = [];
 
     if (normalizedType === 'postgres') {
-        dialectRules.push(`
+        dialectRules.push(
+            `
 PostgreSQL-specific rules
 
 - Use PostgreSQL syntax only.
@@ -49,31 +51,50 @@ PostgreSQL-specific rules
 - If you need metadata, prefer the provided schema context first.
 - For table/column metadata, use PostgreSQL-compatible sources only, such as information_schema.columns, pg_catalog, or pg_indexes.
 - Do not write ad-hoc index-inspection SQL before the main query unless the user explicitly asks for index analysis.
-`.trim());
+`.trim(),
+        );
     } else if (normalizedType === 'mysql' || normalizedType === 'mariadb') {
-        dialectRules.push(`
+        dialectRules.push(
+            `
 MySQL-specific rules
 
 - Use MySQL-compatible syntax only.
 - DESCRIBE, SHOW COLUMNS, information_schema.statistics, and other MySQL metadata queries are acceptable when needed.
 - Prefer the provided schema context before issuing metadata queries.
-`.trim());
+`.trim(),
+        );
     } else if (normalizedType === 'sqlite') {
-        dialectRules.push(`
+        dialectRules.push(
+            `
 SQLite-specific rules
 
 - Use SQLite syntax only.
 - Prefer PRAGMA table_info(...), PRAGMA index_list(...), and PRAGMA index_info(...) for metadata when needed.
 - Do not use PostgreSQL pg_catalog queries or MySQL information_schema queries.
-`.trim());
+`.trim(),
+        );
+    } else if (normalizedType === 'sqlserver') {
+        dialectRules.push(
+            `
+SQL Server-specific rules
+
+- Use T-SQL syntax only.
+- Use TOP (n) or OFFSET/FETCH for limiting rows. Do not use LIMIT.
+- Quote identifiers with [name] only when quoting is necessary.
+- Prefer sys catalog views and INFORMATION_SCHEMA for metadata when needed.
+- Do not use PostgreSQL pg_catalog queries or MySQL SHOW/DESCRIBE syntax.
+`.trim(),
+        );
     } else if (normalizedType === 'clickhouse' || normalizedType === 'doris') {
-        dialectRules.push(`
+        dialectRules.push(
+            `
 ${normalizedType === 'clickhouse' ? 'ClickHouse' : 'Doris'}-specific rules
 
 - Use ${normalizedType === 'clickhouse' ? 'ClickHouse' : 'Doris'} syntax only.
 - Do not invent PostgreSQL or MySQL system catalogs unless they are supported by this engine.
 - Prefer the provided schema context before issuing metadata queries.
-`.trim());
+`.trim(),
+        );
     }
 
     return [...commonRules, ...dialectRules].filter(Boolean).join('\n\n');

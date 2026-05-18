@@ -1,6 +1,6 @@
 export type Id = string;
 export type Timestamp = number;
 
-export const UNKNOWN_ID = "unknown";
+export const UNKNOWN_ID = 'unknown';
 
-export type ConnectionDialect = 'clickhouse' | 'duckdb' | 'mysql' | 'postgres' | 'sqlite' | 'unknown';
+export type ConnectionDialect = 'clickhouse' | 'duckdb' | 'mysql' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';

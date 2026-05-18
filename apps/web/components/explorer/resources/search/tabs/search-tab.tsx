@@ -71,11 +71,19 @@ function toSearchEntries(
                 }),
             };
         }),
-        ...functions.map(row => ({
-            kind: 'function' as const,
-            label: row.value,
-            href: '#',
-        })),
+        ...functions.map(row => {
+            const qualified = splitQualifiedName(row.value);
+            return {
+                kind: 'function' as const,
+                label: row.value,
+                href: buildExplorerObjectPath(baseParams, {
+                    database,
+                    schema: qualified.schema,
+                    objectKind: 'function',
+                    name: qualified.name,
+                }),
+            };
+        }),
         ...sequences.map(row => {
             const qualified = splitQualifiedName(row.name);
             return {

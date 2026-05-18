@@ -78,6 +78,7 @@ export function SchemaResourceView({ baseParams, catalog, resource }: SchemaView
             label: t('Tabs.functions'),
             content: (
                 <FunctionListResourceTab
+                    baseParams={baseParams}
                     database={resource.database}
                     schema={schemaName}
                     searchPlaceholder={t('Functions.SearchPlaceholder')}

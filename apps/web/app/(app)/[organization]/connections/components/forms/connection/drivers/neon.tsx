@@ -180,7 +180,7 @@ export function validateNeonConnection(value: any, ctx: RefinementCtx) {
     if (!rawConnectionString) {
         ctx.addIssue({
             code: 'custom',
-            path: ['host'],
+            path: ['connection', 'host'],
             message: 'Please provide a Neon connection string',
         });
         return;
@@ -191,7 +191,7 @@ export function validateNeonConnection(value: any, ctx: RefinementCtx) {
     if (!parsed.host || !parsed.username) {
         ctx.addIssue({
             code: 'custom',
-            path: ['host'],
+            path: ['connection', 'host'],
             message: 'Please paste a valid Neon PostgreSQL connection string',
         });
     }

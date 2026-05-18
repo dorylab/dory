@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { useDB } from '@/lib/client/use-pglite';
 import { useQuery } from '@/hooks/use-query';
 import { authFetch } from '@/lib/client/auth-fetch';
@@ -10,7 +10,8 @@ import { SQLTab } from '@dory/shared/types/tabs';
 import { runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
 import { SQLEditorHandle } from '../components/sql-editor';
 import { useTranslations } from 'next-intl';
-import { enforceSelectLimit } from '@dory/shared/utils/enforce-select-limit';
+import { currentConnectionAtom } from '@/shared/stores/app.store';
+import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
 import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
 
 type RequestAITabTitle = (tab: SQLTab, options?: { force?: boolean; sqlTextOverride?: string }) => Promise<void> | void;
@@ -22,24 +23,24 @@ function genSessionId() {
 
 const LEADING_COMMENTS_REGEX = /^\s*(?:(?:--[^\n]*\n)|(?:#[^\n]*\n)|(?:\/\*[\s\S]*?\*\/\s*))*/;
 
-function applyLimitToStatement(statement: string, limit: number) {
+function applyLimitToStatement(statement: string, limit: number, dialect: SelectLimitDialect) {
     const match = statement.match(LEADING_COMMENTS_REGEX);
     const prefix = match?.[0] ?? '';
     const body = statement.slice(prefix.length);
     const trimmedBody = body.trim();
     if (!trimmedBody) return statement;
-    const limited = enforceSelectLimit(trimmedBody, limit);
+    const limited = enforceSelectLimit(trimmedBody, limit, dialect);
     if (limited === trimmedBody) return statement;
     return `${prefix}${limited}`;
 }
 
-function applyLimitToSql(sqlText: string, limit?: number) {
+function applyLimitToSql(sqlText: string, limit: number | undefined, dialect: SelectLimitDialect) {
     if (!limit || !Number.isFinite(limit) || limit <= 0) return sqlText;
     const statements = splitMultiSQL(sqlText);
     if (statements.length <= 1) {
-        return applyLimitToStatement(sqlText, limit);
+        return applyLimitToStatement(sqlText, limit, dialect);
     }
-    return statements.map(statement => applyLimitToStatement(statement, limit)).join(';\n');
+    return statements.map(statement => applyLimitToStatement(statement, limit, dialect)).join(';\n');
 }
 
 export function useSqlQueryRunner({
@@ -59,6 +60,8 @@ export function useSqlQueryRunner({
     const { dbReady, setUserId, createQuerySession, finishQuerySession, applyServerResult } = useDB();
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
+    const currentConnection = useAtomValue(currentConnectionAtom);
+    const limitDialect: SelectLimitDialect = currentConnection?.connection.type === 'sqlserver' ? 'sqlserver' : 'default';
 
     const editorRef = useRef<SQLEditorHandle | null>(null);
     const abortControllersRef = useRef<Record<string, AbortController | undefined>>({});
@@ -78,7 +81,7 @@ export function useSqlQueryRunner({
             const tabId = tab.tabId;
             const sql = editorRef.current?.getValue() ?? (activeTab?.tabType === 'sql' ? (activeTab?.content ?? '') : '');
             const sqlText = (options?.sqlOverride ?? (tab.tabType === 'sql' ? (sql ?? '') : '')).trim();
-            const finalSqlText = tab.tabType === 'sql' ? applyLimitToSql(sqlText, options?.limit) : sqlText;
+            const finalSqlText = tab.tabType === 'sql' ? applyLimitToSql(sqlText, options?.limit, limitDialect) : sqlText;
             let database: string | null = null;
 
             if (options?.databaseOverride) {
@@ -204,6 +207,7 @@ export function useSqlQueryRunner({
             userReady,
             activeTab,
             activeDatabase,
+            limitDialect,
             query,
             createQuerySession,
             applyServerResult,

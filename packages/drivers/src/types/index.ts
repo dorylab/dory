@@ -9,7 +9,7 @@ export * from './table-info';
 export const DEFAULT_MAX_RESULT_ROWS = 10000;
 export const DEFAULT_TABLE_PREVIEW_LIMIT = 200;
 
-export type DriverType = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite';
+export type DriverType = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite' | 'sqlserver';
 export type ConnectionType = DriverType;
 
 export interface DriverConfig {
@@ -96,6 +96,48 @@ export type DatabaseObjectRow = {
 export type DatabaseFunctionMeta = {
     label: string;
     value: string;
+    schema?: string | null;
+    kind?: DatabaseFunctionKind | null;
+};
+
+export type DatabaseFunctionKind = 'scalar' | 'table' | 'aggregate' | 'procedure' | 'function' | 'unknown';
+
+export type DatabaseFunctionParameter = {
+    name: string;
+    dataType: string | null;
+    nullable: boolean | null;
+    hasDefault?: boolean | null;
+    mode?: 'in' | 'out' | 'inout' | 'return' | 'unknown' | null;
+};
+
+export type DatabaseFunctionReturnColumn = {
+    name: string;
+    dataType: string | null;
+    nullable: boolean | null;
+};
+
+export type DatabaseFunctionDependency = {
+    name: string;
+    schema?: string | null;
+    type?: string | null;
+};
+
+export type DatabaseFunctionDetail = {
+    name: string;
+    schema?: string | null;
+    qualifiedName: string;
+    kind: DatabaseFunctionKind;
+    signature: string | null;
+    owner: string | null;
+    createdAt: string | null;
+    modifiedAt: string | null;
+    parameters: DatabaseFunctionParameter[];
+    returnType: string | null;
+    returnColumns: DatabaseFunctionReturnColumn[];
+    definition: string | null;
+    sampleCallSql: string | null;
+    dependencies: DatabaseFunctionDependency[];
+    usedBy: DatabaseFunctionDependency[];
 };
 
 export type DatabaseExtensionMeta = {
@@ -146,7 +188,7 @@ export type DatabaseSummaryRecommendation = {
     rowsEstimate: number | null;
 };
 
-export type DatabaseSummaryEngine = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'postgres' | 'sqlite' | 'unknown';
+export type DatabaseSummaryEngine = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';
 
 export type DatabaseSummary = {
     databaseName: string;
@@ -223,6 +265,7 @@ export type ConnectionMetadataAPI = {
     getViews?: (database: string) => Promise<DatabaseObjectRow[]>;
     getMaterializedViews?: (database: string) => Promise<DatabaseObjectRow[]>;
     getFunctions?: (database?: string) => Promise<DatabaseFunctionMeta[]>;
+    getFunctionDetail?: (database: string, functionName: string, schema?: string | null) => Promise<DatabaseFunctionDetail | null>;
     getSequences?: (database?: string) => Promise<DatabaseObjectRow[]>;
     getExtensions?: (database?: string) => Promise<DatabaseExtensionMeta[]>;
     getDatabaseSummary?: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;

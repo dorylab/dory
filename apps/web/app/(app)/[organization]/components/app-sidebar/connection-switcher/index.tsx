@@ -1,9 +1,9 @@
 'use client';
 
-import { ChevronsUpDown, Database, Grip, Loader2, Plus, User } from 'lucide-react';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { ChevronsUpDown, Grip, Loader2, Plus, User } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
 
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/registry/new-york-v4/ui/sidebar';
@@ -21,7 +21,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 
 import { cn } from '@dory/web-utils';
-import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer/build-path';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import {
     connectionErrorAtom,
@@ -30,24 +29,47 @@ import {
     connectionLoadingMessageAtom,
     connectionOpenAtom,
     connectionStatusAtom,
+    connectionSwitchingAtom,
 } from '../../../connections/states';
 import { ConnectionCheckStatus, ConnectionIdentity, ConnectionListIdentity, ConnectionListItem } from '@dory/shared/types/connections';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { useConnectConnection } from '../../../connections/hooks/use-connect-connection';
 import { useConnections } from '../../../connections/hooks/use-connections';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
+import { DatabaseTypeIcon } from '../../../connections/components/database-type-icon';
+import { FileTypeIcon } from '../../../connections/components/file-type-icon';
 
-function getInitial(text?: string | null) {
-    if (!text) return 'C';
-    const letter = text.trim()[0];
-    return letter ? letter.toUpperCase() : 'C';
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
 }
 
-function getHostLabel(
-    connection: ConnectionListItem['connection'] | null,
-    isLoading: boolean,
-    t: ReturnType<typeof useTranslations>,
-) {
+function getLocalFilesSourceType(connection?: ConnectionListItem['connection'] | null) {
+    if (connection?.type !== 'duckdb') return null;
+    const options = parseConnectionOptions(connection.options);
+    if (options.managedBy !== 'local-files' || options.mode !== 'localFilesDataset') return null;
+    return typeof options.sourceType === 'string' ? options.sourceType : null;
+}
+
+function ConnectionSourceIcon({ connection, className }: { connection?: ConnectionListItem['connection'] | null; className?: string }) {
+    const sourceType = getLocalFilesSourceType(connection);
+    if (sourceType) {
+        return <FileTypeIcon sourceType={sourceType} className={className} />;
+    }
+
+    return <DatabaseTypeIcon type={connection?.type} className={className} />;
+}
+
+function getHostLabel(connection: ConnectionListItem['connection'] | null, isLoading: boolean, t: ReturnType<typeof useTranslations>) {
     const hostWithPort = getConnectionLocationLabel(connection);
     if (hostWithPort) return hostWithPort;
     return isLoading ? t('Loading connections') : t('No connections yet');
@@ -63,6 +85,8 @@ function makeLoadingKey(connectionId: string, identityId?: string | null) {
     return identityId ? `${connectionId}:${identityId}` : connectionId;
 }
 
+const SWITCH_CONNECT_TIMEOUT_MS = 12_000;
+
 export function ConnectionSwitcher() {
     const { isMobile } = useSidebar();
     const router = useRouter();
@@ -72,7 +96,6 @@ export function ConnectionSwitcher() {
     const connectionParam = params?.connectionId ?? params?.connection;
     const organizationId = Array.isArray(teamParam) ? teamParam[0] : teamParam;
     const connectionId = Array.isArray(connectionParam) ? connectionParam[0] : connectionParam;
-    const pathname = usePathname();
     const hasMounted = useHasMounted();
 
     const [currentConnection, setCurrentConnection] = useAtom(currentConnectionAtom);
@@ -80,12 +103,14 @@ export function ConnectionSwitcher() {
     const [pendingConnection, setPendingConnection] = useState<ConnectionListItem | null>(null);
     const [pendingIdentity, setPendingIdentity] = useState<ConnectionListIdentity | null>(null);
     const [autoConnectedRouteId, setAutoConnectedRouteId] = useState<string | null>(null);
+    const [navigatingConnectionId, setNavigatingConnectionId] = useState<string | null>(null);
 
     const setConnectionListLoading = useSetAtom(connectionListLoadingAtom);
     const setLoadingMessage = useSetAtom(connectionLoadingMessageAtom);
     const setConnectionError = useSetAtom(connectionErrorAtom);
     const setConnectionOpen = useSetAtom(connectionOpenAtom);
     const setConnectionStatus = useSetAtom(connectionStatusAtom);
+    const setConnectionSwitching = useSetAtom(connectionSwitchingAtom);
 
     const connectionsQuery = useConnections();
     const connections = useMemo<ConnectionListItem[]>(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
@@ -156,7 +181,10 @@ export function ConnectionSwitcher() {
             return;
         }
 
-        
+        if (navigatingConnectionId && connectionId !== navigatingConnectionId) {
+            return;
+        }
+
         if (connectionId) {
             const match = connections.find(item => item.connection.id === connectionId);
             if (match && match.connection.id !== currentConnection?.connection?.id) {
@@ -165,11 +193,18 @@ export function ConnectionSwitcher() {
             return;
         }
 
-        
         if (!currentConnection || connections.every(c => c.connection.id !== currentConnection.connection?.id)) {
             setCurrentConnection(connections[0]);
         }
-    }, [connectionId, currentConnection, connections, setCurrentConnection]);
+    }, [connectionId, currentConnection, connections, navigatingConnectionId, setCurrentConnection]);
+
+    useEffect(() => {
+        if (navigatingConnectionId && connectionId === navigatingConnectionId) {
+            setNavigatingConnectionId(null);
+            setPendingConnection(null);
+            setPendingIdentity(null);
+        }
+    }, [connectionId, navigatingConnectionId]);
 
     useEffect(() => {
         setConnectionListLoading(isSwitcherLoading);
@@ -199,24 +234,30 @@ export function ConnectionSwitcher() {
 
     const pendingLoadingKey = pendingConnection ? makeLoadingKey(pendingConnection.connection.id, pendingIdentity?.id) : null;
     const activeLoadingKey = displayedConnection ? makeLoadingKey(displayedConnection.connection.id, displayedIdentity?.id) : null;
-    const isConnecting = pendingLoadingKey ? Boolean(connectLoadings?.[pendingLoadingKey]) : activeLoadingKey ? Boolean(connectLoadings?.[activeLoadingKey]) : false;
+    const isConnecting = pendingLoadingKey ? true : activeLoadingKey ? Boolean(connectLoadings?.[activeLoadingKey]) : false;
 
     const buildConnectionPath = (connectionItem: ConnectionListItem) => {
         if (!organizationId) return null;
         const nextConnectionId = connectionItem.connection.id;
-
-        if (pathname?.includes(`/${organizationId}/${connectionId}/explorer`)) {
-            const defaultDatabase = connectionItem.connection.database;
-            return defaultDatabase
-                ? buildExplorerDatabasePath({ organization: organizationId, connectionId: nextConnectionId }, defaultDatabase)
-                : buildExplorerBasePath({ organization: organizationId, connectionId: nextConnectionId });
-        }
-
-        if (connectionId && pathname && pathname.includes(`/${organizationId}/${connectionId}`)) {
-            return pathname.replace(`/${organizationId}/${connectionId}`, `/${organizationId}/${nextConnectionId}`);
-        }
         return `/${organizationId}/${nextConnectionId}/sql-console`;
     };
+
+    const clearPendingConnect = useCallback(
+        (connectionItem: ConnectionListItem, loadingKey: string, options?: { clearSwitching?: boolean }) => {
+            setPendingConnection(current => (current?.connection.id === connectionItem.connection.id ? null : current));
+            setPendingIdentity(null);
+            setNavigatingConnectionId(current => (current === connectionItem.connection.id ? null : current));
+            if (options?.clearSwitching) {
+                setConnectionSwitching(current => (current?.connectionId === connectionItem.connection.id ? null : current));
+            }
+            setConnectLoadings((prev: Record<string, boolean> = {}) => {
+                const next = { ...prev };
+                delete next[loadingKey];
+                return next;
+            });
+        },
+        [setConnectLoadings, setConnectionSwitching],
+    );
 
     const startConnect = (connectionItem: ConnectionListItem, identity?: ConnectionIdentity | ConnectionListIdentity | null, targetPath?: string | null) => {
         if (!connectionItem?.connection) return;
@@ -236,6 +277,12 @@ export function ConnectionSwitcher() {
         setLoadingMessage(t('Connect to', { name: `${connectionItem.connection.name ?? connectionItem.connection.id}${identityLabel}` }));
         setConnectionError(null);
 
+        const timeoutId = window.setTimeout(() => {
+            clearPendingConnect(connectionItem, loadingKey, { clearSwitching: true });
+            setConnectionError(t('Connection failed'));
+            setLoadingMessage(null);
+        }, SWITCH_CONNECT_TIMEOUT_MS);
+
         connectMutation.mutate(
             {
                 payload: connectionItem,
@@ -249,9 +296,16 @@ export function ConnectionSwitcher() {
                         router.push(targetPath);
                     }
                 },
+                onError: () => {
+                    clearPendingConnect(connectionItem, loadingKey, { clearSwitching: true });
+                    setLoadingMessage(null);
+                },
                 onSettled: () => {
-                    setPendingConnection(null);
-                    setPendingIdentity(null);
+                    window.clearTimeout(timeoutId);
+                    if (!targetPath) {
+                        clearPendingConnect(connectionItem, loadingKey);
+                        return;
+                    }
                     setConnectLoadings((prev: Record<string, boolean> = {}) => {
                         const next = { ...prev };
                         delete next[loadingKey];
@@ -265,11 +319,20 @@ export function ConnectionSwitcher() {
     const handleSelect = (connectionItem: ConnectionListItem, identity?: ConnectionIdentity) => {
         if (!connectionItem?.connection) return;
         const targetPath = buildConnectionPath(connectionItem);
+        if (targetPath) {
+            setNavigatingConnectionId(connectionItem.connection.id);
+            setAutoConnectedRouteId(connectionItem.connection.id);
+            setConnectionSwitching({
+                connectionId: connectionItem.connection.id,
+                startedAt: Date.now(),
+            });
+        }
         startConnect(connectionItem, identity, targetPath);
     };
 
     useEffect(() => {
         if (!connectionId || !connections.length || isLoading) return;
+        if (navigatingConnectionId) return;
 
         const match = connections.find(item => item.connection.id === connectionId);
         if (!match) return;
@@ -281,7 +344,7 @@ export function ConnectionSwitcher() {
 
         setAutoConnectedRouteId(connectionId);
         startConnect(match, identity, null);
-    }, [autoConnectedRouteId, connectLoadings, connectionId, connections, isLoading]);
+    }, [autoConnectedRouteId, connectLoadings, connectionId, connections, isLoading, navigatingConnectionId]);
 
     const goToConnections = () => {
         router.push(`/${organizationId}/connections`);
@@ -302,19 +365,16 @@ export function ConnectionSwitcher() {
                             size="lg"
                             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground disabled:pointer-events-none disabled:cursor-wait disabled:opacity-100 disabled:text-current disabled:bg-transparent"
                         >
-                            
-                            <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg text-sm font-semibold">
-                                {displayedConnection ? getInitial(displayedConnection.connection.name) : <Database className="size-4" />}
+                            <div className="flex aspect-square size-8 items-center justify-center">
+                                <ConnectionSourceIcon connection={displayedConnection?.connection} className="max-h-7 max-w-7" />
                             </div>
 
-                            
                             <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
                                 <div className="flex items-center gap-2 min-w-0">
                                     {isConnecting ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : renderHealth(displayedConnection?.connection)}
                                     <span className="truncate font-semibold text-sm">{displayedConnection?.connection.name ?? t('Connections')}</span>
                                 </div>
 
-                                
                                 <ChevronsUpDown className="size-3 text-muted-foreground shrink-0" />
                             </div>
                         </SidebarMenuButton>
@@ -340,8 +400,8 @@ export function ConnectionSwitcher() {
                                                     'bg-sidebar-accent text-sidebar-accent-foreground',
                                             )}
                                         >
-                                            <div className="flex size-6 items-center justify-center rounded-sm border">
-                                                <Database className="size-4 shrink-0" />
+                                            <div className="flex size-6 shrink-0 items-center justify-center">
+                                                <ConnectionSourceIcon connection={connection.connection} className="max-h-5 max-w-5" />
                                             </div>
                                             <div className="flex flex-col min-w-0 max-w-[220px]">
                                                 <div className="flex items-center gap-2">
@@ -389,7 +449,6 @@ export function ConnectionSwitcher() {
                                         </DropdownMenuSubContent>
                                     </DropdownMenuSub>
                                 ) : (
-                                    
                                     <DropdownMenuItem
                                         key={connection.connection.id}
                                         onClick={() => handleSelect(connection)}
@@ -399,8 +458,8 @@ export function ConnectionSwitcher() {
                                                 'bg-sidebar-accent text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground',
                                         )}
                                     >
-                                        <div className="flex size-6 items-center justify-center rounded-sm border">
-                                            <Database className="size-4 shrink-0" />
+                                        <div className="flex size-6 shrink-0 items-center justify-center">
+                                            <ConnectionSourceIcon connection={connection.connection} className="max-h-5 max-w-5" />
                                         </div>
                                         <div className="flex flex-col min-w-0 max-w-[220px]">
                                             <div className="flex items-center gap-2">

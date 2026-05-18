@@ -4,6 +4,7 @@ import UrlTableBrowser from '@/app/(app)/[organization]/components/table-browser
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { formatObjectKindLabel } from '@/lib/explorer/routing';
 import type { ExplorerResource } from '@/lib/explorer/types';
+import { FunctionView } from '@/components/explorer/resources/function/views/function-view';
 
 type ObjectViewProps = {
     catalog: string;
@@ -15,6 +16,10 @@ export function ObjectView({ catalog, resource }: ObjectViewProps) {
         const tableName = resource.schema ? `${resource.schema}.${resource.name}` : resource.name;
 
         return <UrlTableBrowser catalog={catalog} databaseName={resource.database} tableName={tableName} />;
+    }
+
+    if (resource.objectKind === 'function' || resource.objectKind === 'procedure') {
+        return <FunctionView resource={resource} />;
     }
 
     return (

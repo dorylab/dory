@@ -75,7 +75,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
         onSelectDatabase?.(initialDatabase);
     }, [activeDatabase, currentConnection?.connection?.database, databaseOptions, onSelectDatabase, setActiveDatabase, sidebarConfig]);
 
-    const { tables, refresh: refreshTables } = useTables(activeDatabase);
+    const { tables, loading: tablesLoading, refresh: refreshTables } = useTables(activeDatabase);
     const { schemas, refresh: refreshSchemas } = useSchemas(activeDatabase, sidebarConfig.supportsSchemas);
     const { refresh: getTableColumns } = useColumns();
 
@@ -147,10 +147,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
         setLoadingTableKeys(new Set());
 
         try {
-            await Promise.all([
-                refreshTables(),
-                sidebarConfig.supportsSchemas ? refreshSchemas() : Promise.resolve(),
-            ]);
+            await Promise.all([refreshTables(), sidebarConfig.supportsSchemas ? refreshSchemas() : Promise.resolve()]);
         } finally {
             setIsRefreshing(false);
         }
@@ -225,6 +222,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
 
             <TableList
                 tables={filteredTables}
+                loading={tablesLoading}
                 activeDatabase={activeDatabase}
                 selectedTable={selectedTable}
                 selectedDatabase={selectedDatabase}

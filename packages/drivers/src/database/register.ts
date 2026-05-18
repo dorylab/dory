@@ -6,6 +6,7 @@ import { MariaDbDatasource } from './mariadb/MariaDbDatasource';
 import { MySqlDatasource } from './mysql/MySqlDatasource';
 import { PostgresDatasource } from './postgres/PostgresDatasource';
 import { SqliteDatasource } from './sqlite/SqliteDatasource';
+import { SqlServerDatasource } from './sqlserver/SqlServerDatasource';
 
 let duckDbDriverCtorPromise: Promise<DriverCtor> | null = null;
 let registered = false;
@@ -28,9 +29,19 @@ export function registerDatabaseDrivers() {
     registerDriver('neon', PostgresDatasource);
     registerDriver('postgres', PostgresDatasource);
     registerDriver('sqlite', SqliteDatasource);
+    registerDriver('sqlserver', SqlServerDatasource);
     registerDriver('duckdb', loadDuckDbDriver);
 }
 
 export function isDatabaseDriverType(value: unknown): value is DriverType {
-    return value === 'clickhouse' || value === 'duckdb' || value === 'mariadb' || value === 'mysql' || value === 'neon' || value === 'postgres' || value === 'sqlite';
+    return (
+        value === 'clickhouse' ||
+        value === 'duckdb' ||
+        value === 'mariadb' ||
+        value === 'mysql' ||
+        value === 'neon' ||
+        value === 'postgres' ||
+        value === 'sqlite' ||
+        value === 'sqlserver'
+    );
 }

@@ -21,6 +21,7 @@
         "@clickhouse/client": "^1.18.2",
         "@duckdb/node-api": "^1.5.2-r.1",
         "better-sqlite3": "^12.8.0",
+        "mssql": "^12.2.1",
         "mysql2": "^3.20.0",
         "pg": "^8.20.0",
         "ssh2": "^1.17.0",
@@ -28,6 +29,7 @@
     },
     "devDependencies": {
         "@types/better-sqlite3": "^7.6.13",
+        "@types/mssql": "^9.1.11",
         "@types/node": "^25.5.2",
         "@types/pg": "^8.20.0",
         "typescript": "^6.0.2"

@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useTranslations } from 'next-intl';
 import RequiredMark from '../../require-mark';
 import { CONNECTION_TYPE_OPTIONS, getConnectionDriver } from './drivers';
+import { DatabaseTypeIcon } from '../../database-type-icon';
 
 export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
     const { form } = props;
@@ -94,7 +95,12 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
                                 <SelectContent>
                                     {CONNECTION_TYPE_OPTIONS.map(option => (
                                         <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
+                                            <span className="flex min-w-0 items-center gap-2">
+                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                                                    <DatabaseTypeIcon type={option.value} className="max-h-4 max-w-4" fallbackClassName="text-[10px]" />
+                                                </span>
+                                                <span className="truncate">{option.label}</span>
+                                            </span>
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

@@ -51,6 +51,12 @@ const SIDEBAR_CONFIG_BY_DIALECT: Record<ConnectionType, SidebarConfig> = {
         supportsSchemas: false,
         hiddenDatabases: [],
     },
+    sqlserver: {
+        dialect: 'sqlserver',
+        supportsSchemas: true,
+        defaultSchemaName: 'dbo',
+        hiddenDatabases: ['master', 'model', 'msdb', 'tempdb', 'system', 'information_schema'],
+    },
 };
 
 export function getSidebarConfig(connectionType?: ConnectionType | null): SidebarConfig {

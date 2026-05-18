@@ -45,7 +45,9 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
         activeTabId,
         updateTab,
         addTab,
+        setActiveTabId,
         setActiveDatabase,
+        isLoading,
     });
 
     return {

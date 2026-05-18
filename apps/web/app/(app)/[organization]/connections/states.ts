@@ -12,5 +12,6 @@ export const connectionDeleteAtom = atom(false);
 export const connectionLoadingAtom = atom<any>({});
 export const connectionListLoadingAtom = atom<boolean>(true);
 export const connectionLoadingMessageAtom = atom<string | null>(null);
+export const connectionSwitchingAtom = atom<{ connectionId: string; startedAt: number } | null>(null);
 export const connectionErrorAtom = atom<string | null>(null);
 export const connectionsErrorAtom = atom<any>({});

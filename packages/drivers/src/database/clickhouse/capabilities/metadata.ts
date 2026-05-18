@@ -1,6 +1,7 @@
 import type {
     ConnectionMetadataAPI,
     ConnectionSchemaMap,
+    DatabaseFunctionDetail,
     DatabaseFunctionMeta,
     DatabaseObjectRow,
     DatabaseSummary,
@@ -17,6 +18,7 @@ export type ClickhouseMetadataAPI = ConnectionMetadataAPI & {
     getViews: (database: string) => Promise<DatabaseObjectRow[]>;
     getMaterializedViews: (database: string) => Promise<DatabaseObjectRow[]>;
     getFunctions: (database?: string) => Promise<DatabaseFunctionMeta[]>;
+    getFunctionDetail: (database: string, functionName: string, schema?: string | null) => Promise<DatabaseFunctionDetail | null>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
 };
@@ -332,6 +334,62 @@ async function getFunctions(datasource: ClickhouseDatasource, database?: string)
         .map(name => ({ label: name, value: name }));
 }
 
+async function getFunctionDetail(datasource: ClickhouseDatasource, database: string, functionName: string): Promise<DatabaseFunctionDetail | null> {
+    const targetName = functionName.trim();
+    if (!targetName) return null;
+
+    const userDefined = await datasource
+        .query<{ name?: string; createQuery?: string | null }>(
+            `
+                SELECT name, create_query AS createQuery
+                FROM system.user_defined_functions
+                WHERE database = {db:String}
+                  AND name = {name:String}
+                LIMIT 1
+            `,
+            { db: database, name: targetName },
+        )
+        .catch(() => ({ rows: [] as Array<{ name?: string; createQuery?: string | null }> }));
+    const userDefinedRow = userDefined.rows[0];
+
+    const builtIn = userDefinedRow
+        ? null
+        : await datasource
+              .query<{ name?: string; isAggregate?: number | string | null; aliasTo?: string | null }>(
+                  `
+                    SELECT name, is_aggregate AS isAggregate, alias_to AS aliasTo
+                    FROM system.functions
+                    WHERE name = {name:String}
+                    LIMIT 1
+                `,
+                  { name: targetName },
+              )
+              .catch(() => ({ rows: [] as Array<{ name?: string; isAggregate?: number | string | null; aliasTo?: string | null }> }));
+    const builtInRow = builtIn?.rows[0];
+    const name = userDefinedRow?.name ?? builtInRow?.name ?? targetName;
+    if (!name) return null;
+    const isAggregate = Boolean(Number(builtInRow?.isAggregate ?? 0));
+    const definition = userDefinedRow?.createQuery ?? null;
+
+    return {
+        name,
+        schema: database,
+        qualifiedName: `${database}.${name}`,
+        kind: isAggregate ? 'aggregate' : 'function',
+        signature: `${name}(...)`,
+        owner: null,
+        createdAt: null,
+        modifiedAt: null,
+        parameters: [],
+        returnType: null,
+        returnColumns: [],
+        definition,
+        sampleCallSql: `SELECT ${name}(1);`,
+        dependencies: builtInRow?.aliasTo ? [{ name: builtInRow.aliasTo, schema: null, type: 'alias' }] : [],
+        usedBy: [],
+    };
+}
+
 export function createClickhouseMetadataCapability(datasource: ClickhouseDatasource): ClickhouseMetadataAPI {
     return {
         getDatabases: () => getDatabases(datasource),
@@ -342,6 +400,7 @@ export function createClickhouseMetadataCapability(datasource: ClickhouseDatasou
         getViews: database => getViews(datasource, database),
         getMaterializedViews: database => getMaterializedViews(datasource, database),
         getFunctions: database => getFunctions(datasource, database),
+        getFunctionDetail: (database, functionName) => getFunctionDetail(datasource, database, functionName),
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
     };

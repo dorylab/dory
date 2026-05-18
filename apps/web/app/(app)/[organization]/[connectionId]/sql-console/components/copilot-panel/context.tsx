@@ -5,6 +5,7 @@ import { Copy } from 'lucide-react';
 
 import type { CopilotEnvelopeV1 } from '../../../chatbot/copilot/types/copilot-envelope';
 import type { CopilotResultSetContext } from '../../../chatbot/copilot/types/copilot-context-sql';
+import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/registry/new-york-v4/ui/accordion';
 import { useTranslations } from 'next-intl';
@@ -39,9 +40,9 @@ const SummaryRow = ({
     copyable?: boolean;
     copyLabel: string;
 }) => (
-    <div className="flex items-center gap-2 text-sm">
-        <span className="w-28 shrink-0 text-xs text-muted-foreground">{label}</span>
-        <span className="truncate text-sm font-medium text-foreground">{value || '-'}</span>
+    <div className="grid grid-cols-[7rem_minmax(0,1fr)_auto] items-start gap-2 text-sm">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <OverflowTooltip text={value || '-'} className="block min-w-0 truncate text-sm font-medium text-foreground" />
         {copyable && value ? (
             <Button
                 variant="ghost"
@@ -159,7 +160,13 @@ const ResultSetContext = ({ resultSet }: { resultSet?: CopilotResultSetContext |
     const profileColumns = Object.values(resultSet.stats?.columns ?? {}).slice(0, 6);
     const rowCount = resultSet.rowCount ?? summary?.rowCount ?? null;
     const columnCount = summary?.columnCount ?? resultSet.columns?.length ?? null;
-    const profileStatus = resultSet.stats ? t('Copilot.Context.ProfileReady') : t('Copilot.Context.ProfilePending');
+    const isErrorResult = resultSet.status === 'error';
+    const profileStatus = resultSet.stats
+        ? t('Copilot.Context.ProfileReady')
+        : isErrorResult
+          ? t('Copilot.Context.ProfileNotApplicable')
+          : t('Copilot.Context.ProfilePending');
+    const errorCode = resultSet.errorCode == null ? null : String(resultSet.errorCode);
 
     return (
         <div className="space-y-3 rounded-md border bg-card px-4 py-3">
@@ -170,21 +177,46 @@ const ResultSetContext = ({ resultSet }: { resultSet?: CopilotResultSetContext |
                     value={resultSet.status ?? t('Copilot.Context.EmptyValue')}
                     copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.StatusLabel') })}
                 />
-                <SummaryRow
-                    label={t('Copilot.Context.RowCountLabel')}
-                    value={formatNumber(rowCount) ?? t('Copilot.Context.EmptyValue')}
-                    copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.RowCountLabel') })}
-                />
-                <SummaryRow
-                    label={t('Copilot.Context.ColumnCountLabel')}
-                    value={formatNumber(columnCount) ?? t('Copilot.Context.EmptyValue')}
-                    copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.ColumnCountLabel') })}
-                />
-                <SummaryRow
-                    label={t('Copilot.Context.ProfileLabel')}
-                    value={profileStatus}
-                    copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.ProfileLabel') })}
-                />
+                {resultSet.errorMessage ? (
+                    <SummaryRow
+                        label={t('Copilot.Context.ErrorMessageLabel')}
+                        value={resultSet.errorMessage}
+                        copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.ErrorMessageLabel') })}
+                    />
+                ) : null}
+                {errorCode ? (
+                    <SummaryRow
+                        label={t('Copilot.Context.ErrorCodeLabel')}
+                        value={errorCode}
+                        copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.ErrorCodeLabel') })}
+                    />
+                ) : null}
+                {resultSet.errorSqlState ? (
+                    <SummaryRow
+                        label={t('Copilot.Context.SqlStateLabel')}
+                        value={resultSet.errorSqlState}
+                        copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.SqlStateLabel') })}
+                    />
+                ) : null}
+                {!isErrorResult ? (
+                    <>
+                        <SummaryRow
+                            label={t('Copilot.Context.RowCountLabel')}
+                            value={formatNumber(rowCount) ?? t('Copilot.Context.EmptyValue')}
+                            copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.RowCountLabel') })}
+                        />
+                        <SummaryRow
+                            label={t('Copilot.Context.ColumnCountLabel')}
+                            value={formatNumber(columnCount) ?? t('Copilot.Context.EmptyValue')}
+                            copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.ColumnCountLabel') })}
+                        />
+                        <SummaryRow
+                            label={t('Copilot.Context.ProfileLabel')}
+                            value={profileStatus}
+                            copyLabel={t('Copilot.Context.CopyLabel', { label: t('Copilot.Context.ProfileLabel') })}
+                        />
+                    </>
+                ) : null}
                 {summary?.kind ? (
                     <SummaryRow
                         label={t('Copilot.Context.ResultKindLabel')}

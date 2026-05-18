@@ -2,6 +2,8 @@ import type {
     DatabaseExtensionMeta,
     ConnectionMetadataAPI,
     ConnectionSchemaMap,
+    DatabaseFunctionDetail,
+    DatabaseFunctionKind,
     DatabaseFunctionMeta,
     DatabaseObjectRow,
     DatabaseSummary,
@@ -19,6 +21,7 @@ export type PostgresMetadataAPI = ConnectionMetadataAPI & {
     getViews: (database: string) => Promise<DatabaseObjectRow[]>;
     getMaterializedViews: (database: string) => Promise<DatabaseObjectRow[]>;
     getFunctions: (database?: string) => Promise<DatabaseFunctionMeta[]>;
+    getFunctionDetail: (database: string, functionName: string, schema?: string | null) => Promise<DatabaseFunctionDetail | null>;
     getSequences: (database?: string) => Promise<DatabaseObjectRow[]>;
     getExtensions: (database?: string) => Promise<DatabaseExtensionMeta[]>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
@@ -38,6 +41,40 @@ type ObjectRow = {
 type FunctionRow = {
     schemaName?: string;
     name?: string;
+};
+
+type FunctionDetailRow = {
+    oid?: number | string;
+    schemaName?: string | null;
+    name?: string | null;
+    owner?: string | null;
+    kind?: string | null;
+    arguments?: string | null;
+    identityArguments?: string | null;
+    resultType?: string | null;
+    definition?: string | null;
+    returnsSet?: boolean | null;
+    volatility?: string | null;
+};
+
+type FunctionParameterRow = {
+    name?: string | null;
+    mode?: string | null;
+    dataType?: string | null;
+    hasDefault?: boolean | null;
+    ordinal?: number | string | null;
+};
+
+type FunctionReturnColumnRow = {
+    name?: string | null;
+    dataType?: string | null;
+    nullable?: boolean | null;
+};
+
+type FunctionDependencyRow = {
+    schemaName?: string | null;
+    name?: string | null;
+    type?: string | null;
 };
 
 type ExtensionRow = {
@@ -88,6 +125,61 @@ function qualifyName(schemaName: string | undefined, objectName: string | undefi
         return objectName;
     }
     return `${schemaName}.${objectName}`;
+}
+
+function splitPostgresFunctionName(value: string, schema?: string | null): { schema: string | null; name: string } {
+    const trimmed = value.trim().replace(/^"|"$/g, '');
+    const parts = trimmed
+        .split('.')
+        .map(part => part.trim().replace(/^"|"$/g, ''))
+        .filter(Boolean);
+    if (parts.length >= 2) {
+        return { schema: parts[parts.length - 2], name: parts[parts.length - 1] };
+    }
+    return { schema: schema?.trim() || null, name: parts[0] || trimmed };
+}
+
+function quotePostgresName(name: string) {
+    return `"${name.replace(/"/g, '""')}"`;
+}
+
+function mapPostgresFunctionKind(kind?: string | null): DatabaseFunctionKind {
+    switch (kind) {
+        case 'a':
+            return 'aggregate';
+        case 'p':
+            return 'procedure';
+        case 'w':
+            return 'function';
+        case 'f':
+        default:
+            return 'function';
+    }
+}
+
+function mapPostgresParameterMode(mode?: string | null): 'in' | 'out' | 'inout' | 'unknown' {
+    switch (mode) {
+        case 'i':
+            return 'in';
+        case 'o':
+            return 'out';
+        case 'b':
+            return 'inout';
+        case 'v':
+            return 'in';
+        case 't':
+            return 'out';
+        default:
+            return 'in';
+    }
+}
+
+function samplePostgresValue(type?: string | null) {
+    const upper = (type ?? '').toUpperCase();
+    if (upper.includes('CHAR') || upper.includes('TEXT') || upper.includes('UUID')) return "'sample'";
+    if (upper.includes('DATE') || upper.includes('TIME')) return "'2026-01-01'";
+    if (upper.includes('BOOL')) return 'true';
+    return '1';
 }
 
 function normalizeObjectRow(row: ObjectRow): DatabaseObjectRow | null {
@@ -527,12 +619,157 @@ async function getFunctions(datasource: PostgresDatasource, database?: string, s
     );
 
     return result.rows
-        .map(row => {
+        .map<DatabaseFunctionMeta | null>(row => {
             const name = qualifyName(row.schemaName, row.name);
             if (!name) return null;
-            return { label: name, value: name };
+            return { label: name, value: name, schema: row.schemaName ?? null, kind: 'function' as const };
         })
         .filter((row): row is DatabaseFunctionMeta => Boolean(row));
+}
+
+async function getFunctionDetail(datasource: PostgresDatasource, database: string, functionName: string, schema?: string | null): Promise<DatabaseFunctionDetail | null> {
+    const target = splitPostgresFunctionName(functionName, schema);
+    const detailResult = await datasource.queryWithContext<FunctionDetailRow>(
+        `
+            SELECT
+                p.oid,
+                n.nspname AS "schemaName",
+                p.proname AS name,
+                pg_get_userbyid(p.proowner) AS owner,
+                p.prokind AS kind,
+                pg_get_function_arguments(p.oid) AS arguments,
+                pg_get_function_identity_arguments(p.oid) AS "identityArguments",
+                pg_get_function_result(p.oid) AS "resultType",
+                pg_get_functiondef(p.oid) AS definition,
+                p.proretset AS "returnsSet",
+                p.provolatile AS volatility
+            FROM pg_proc p
+            JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE p.proname = $1
+              AND ($2::text IS NULL OR n.nspname = $2)
+              AND ${SYSTEM_SCHEMA_FILTER}
+            ORDER BY n.nspname, p.proname
+            LIMIT 1
+        `,
+        { database, params: [target.name, target.schema] },
+    );
+    const detail = detailResult.rows[0];
+    if (!detail?.oid || !detail.name) return null;
+    const oid = Number(detail.oid);
+
+    const [parameterResult, returnColumnResult, dependencyResult, usedByResult] = await Promise.all([
+        datasource.queryWithContext<FunctionParameterRow>(
+            `
+                SELECT
+                    COALESCE(parameter_name, '') AS name,
+                    parameter_mode AS mode,
+                    data_type AS "dataType",
+                    parameter_default IS NOT NULL AS "hasDefault",
+                    ordinal_position AS ordinal
+                FROM information_schema.parameters
+                WHERE specific_schema = $1
+                  AND specific_name LIKE $2 || '\\_%'
+                ORDER BY ordinal_position
+            `,
+            { database, params: [detail.schemaName, detail.name] },
+        ),
+        datasource.queryWithContext<FunctionReturnColumnRow>(
+            `
+                SELECT
+                    a.attname AS name,
+                    pg_catalog.format_type(a.atttypid, a.atttypmod) AS "dataType",
+                    NOT a.attnotnull AS nullable
+                FROM pg_attribute a
+                WHERE a.attrelid = (
+                    SELECT p.prorettype
+                    FROM pg_proc p
+                    WHERE p.oid = $1::oid
+                )
+                  AND a.attnum > 0
+                  AND NOT a.attisdropped
+                ORDER BY a.attnum
+            `,
+            { database, params: [oid] },
+        ),
+        datasource.queryWithContext<FunctionDependencyRow>(
+            `
+                SELECT DISTINCT
+                    rn.nspname AS "schemaName",
+                    rc.relname AS name,
+                    CASE rc.relkind
+                        WHEN 'r' THEN 'table'
+                        WHEN 'v' THEN 'view'
+                        WHEN 'm' THEN 'materialized_view'
+                        WHEN 'S' THEN 'sequence'
+                        ELSE rc.relkind::text
+                    END AS type
+                FROM pg_depend d
+                JOIN pg_rewrite rw ON rw.oid = d.objid
+                JOIN pg_class rc ON rc.oid = d.refobjid
+                JOIN pg_namespace rn ON rn.oid = rc.relnamespace
+                WHERE rw.ev_class = $1::oid
+                ORDER BY rn.nspname, rc.relname
+            `,
+            { database, params: [oid] },
+        ).catch(() => ({ rows: [] as FunctionDependencyRow[] })),
+        datasource.queryWithContext<FunctionDependencyRow>(
+            `
+                SELECT DISTINCT
+                    n.nspname AS "schemaName",
+                    p.proname AS name,
+                    CASE p.prokind WHEN 'p' THEN 'procedure' WHEN 'a' THEN 'aggregate' ELSE 'function' END AS type
+                FROM pg_depend d
+                JOIN pg_proc p ON p.oid = d.objid
+                JOIN pg_namespace n ON n.oid = p.pronamespace
+                WHERE d.refobjid = $1::oid
+                ORDER BY n.nspname, p.proname
+            `,
+            { database, params: [oid] },
+        ).catch(() => ({ rows: [] as FunctionDependencyRow[] })),
+    ]);
+
+    const parameters = parameterResult.rows
+        .filter(row => row.mode !== 'OUT' && row.mode !== 'TABLE')
+        .map((row, index) => ({
+            name: row.name?.trim() || `arg${index + 1}`,
+            dataType: row.dataType ?? null,
+            nullable: null,
+            hasDefault: row.hasDefault ?? null,
+            mode: mapPostgresParameterMode(row.mode?.slice(0, 1).toLowerCase()),
+        }));
+    const kind = mapPostgresFunctionKind(detail.kind);
+    const schemaName = detail.schemaName ?? target.schema;
+    const qualifiedName = schemaName ? `${quotePostgresName(schemaName)}.${quotePostgresName(detail.name)}` : quotePostgresName(detail.name);
+    const returnColumns = returnColumnResult.rows.map(row => ({
+        name: row.name ?? '',
+        dataType: row.dataType ?? null,
+        nullable: row.nullable ?? null,
+    }));
+    const callArgs = parameters.filter(param => param.mode !== 'out').map(param => samplePostgresValue(param.dataType)).join(', ');
+    const sampleCallSql = kind === 'procedure' ? `CALL ${qualifiedName}(${callArgs});` : `SELECT ${qualifiedName}(${callArgs});`;
+    const returnType = detail.resultType ?? null;
+
+    return {
+        name: detail.name,
+        schema: schemaName ?? null,
+        qualifiedName,
+        kind: returnColumns.length > 0 ? 'table' : kind,
+        signature: `${qualifiedName}(${detail.identityArguments ?? detail.arguments ?? ''})${returnType ? ` -> ${returnType}` : ''}`,
+        owner: detail.owner ?? null,
+        createdAt: null,
+        modifiedAt: null,
+        parameters,
+        returnType,
+        returnColumns,
+        definition: detail.definition ?? null,
+        sampleCallSql,
+        dependencies: dependencyResult.rows
+            .filter(row => row.name)
+            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+        usedBy: usedByResult.rows
+            .filter(row => row.name)
+            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+    };
 }
 
 async function getSequences(datasource: PostgresDatasource, database?: string) {
@@ -736,6 +973,7 @@ export function createPostgresMetadataCapability(datasource: PostgresDatasource)
         getViews: database => getViews(datasource, database),
         getMaterializedViews: database => getMaterializedViews(datasource, database),
         getFunctions: database => getFunctions(datasource, database),
+        getFunctionDetail: (database, functionName, schema) => getFunctionDetail(datasource, database, functionName, schema),
         getSequences: database => getSequences(datasource, database),
         getExtensions: database => getExtensions(datasource, database),
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),

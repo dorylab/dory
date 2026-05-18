@@ -887,9 +887,6 @@ export function ResultTable() {
                                     <TabsTrigger value="overview" className="h-6 gap-1.5 px-3 text-xs cursor-pointer">
                                         <Sparkles className="h-3.5 w-3.5 text-violet-500" />
                                         {t('Insights.Title')}
-                                        <span className="rounded border border-border bg-background/70 px-1 py-0 text-[9px] font-medium leading-3 text-muted-foreground">
-                                            {t('Insights.Beta')}
-                                        </span>
                                     </TabsTrigger>
                                 </TabsList>
                             </div>

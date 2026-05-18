@@ -11,18 +11,24 @@ export function useSqlChatHandoff({
     activeTabId,
     updateTab,
     addTab,
+    setActiveTabId,
     setActiveDatabase,
+    isLoading,
 }: {
     tabs: SQLTab[];
     activeTabId: string | undefined;
     updateTab: UpdateTab;
     addTab: (payload?: { tabName?: string; content?: string; activate?: boolean }) => Promise<string>;
+    setActiveTabId: (tabId: string) => void;
     setActiveDatabase: any;
+    isLoading: boolean;
 }) {
     const t = useTranslations('SqlConsole');
     const applyPendingSqlFromChat = useCallback(async () => {
+        if (isLoading) return;
+
         let payload:
-            | { sql?: string; database?: string | null; mode?: SqlResultManualExecutionMode }
+            | { sql?: string; database?: string | null; mode?: SqlResultManualExecutionMode; tabName?: string | null }
             | null = null;
         try {
             const raw = localStorage.getItem('chatbot:pending-sql');
@@ -42,12 +48,13 @@ export function useSqlChatHandoff({
             }
         };
 
-        const tabName = t('Tabs.ChatQuery');
+        const tabName = payload.tabName?.trim() || t('Tabs.ChatQuery');
 
         if (payload.mode === 'editor') {
             let shouldFallbackToActiveTab = false;
+            let newTabId: string | null = null;
             try {
-                await addTab({
+                newTabId = await addTab({
                     tabName,
                     content: payload.sql,
                     activate: true,
@@ -64,6 +71,10 @@ export function useSqlChatHandoff({
                 });
             }
 
+            if (newTabId) {
+                setActiveTabId(newTabId);
+            }
+
             applyDatabaseSelection();
             return;
         }
@@ -76,7 +87,7 @@ export function useSqlChatHandoff({
         });
 
         applyDatabaseSelection();
-    }, [activeTabId, addTab, setActiveDatabase, t, tabs.length, updateTab]);
+    }, [activeTabId, addTab, isLoading, setActiveDatabase, setActiveTabId, t, tabs.length, updateTab]);
 
     useEffect(() => {
         void applyPendingSqlFromChat();
