@@ -10322,6 +10322,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"border-beam@npm:1.0.1":
+  version: 1.0.1
+  resolution: "border-beam@npm:1.0.1"
+  peerDependencies:
+    react: ">=18.0.0"
+    react-dom: ">=18.0.0"
+  checksum: 10c0/5cd4ace322c3c7cc21b33b7bcc694cb57d4965fbf51b9d22824458bcde43eca3f33b53ea9ee4236f254d5f4f9e526474ddb450e757f2f4b3a3ae14fca05da2d2
+  languageName: node
+  linkType: hard
+
 "boring-avatars@npm:^2.0.4":
   version: 2.0.4
   resolution: "boring-avatars@npm:2.0.4"
@@ -22789,6 +22799,7 @@ __metadata:
     ansi-to-react: "npm:^6.2.6"
     better-auth: "npm:^1.6.2"
     better-sqlite3: "npm:^12.8.0"
+    border-beam: "npm:1.0.1"
     boring-avatars: "npm:^2.0.4"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"

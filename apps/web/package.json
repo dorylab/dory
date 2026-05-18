@@ -128,6 +128,7 @@
         "ansi-to-react": "^6.2.6",
         "better-auth": "^1.6.2",
         "better-sqlite3": "^12.8.0",
+        "border-beam": "1.0.1",
         "boring-avatars": "^2.0.4",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
