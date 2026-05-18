@@ -15,10 +15,21 @@ const FILE_TYPE_META: Partial<Record<string, FileTypeMeta>> = {
     parquet: { src: '/images/file-types/parquet.svg', label: 'Apache Parquet' },
 };
 
+const FILE_TYPE_LABELS: Partial<Record<string, string>> = {
+    csv: 'CSV',
+};
+
 function getFallbackIcon(sourceType?: string | null) {
     if (sourceType === 'csv') return FileSpreadsheet;
     if (sourceType === 'parquet') return FileArchive;
     return FileText;
+}
+
+export function getFileTypeLabel(sourceType?: string | null) {
+    const normalizedType = sourceType?.trim().toLowerCase();
+    if (!normalizedType) return 'File';
+
+    return FILE_TYPE_META[normalizedType]?.label ?? FILE_TYPE_LABELS[normalizedType] ?? normalizedType.toUpperCase();
 }
 
 export function FileTypeIcon({

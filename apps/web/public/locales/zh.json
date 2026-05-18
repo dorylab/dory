@@ -252,7 +252,7 @@
         "Connection test success": "连接测试成功，版本：{version}",
         "Connection test failed": "连接测试失败",
         "Delete Dialog Title": "确定要删除吗？",
-        "Delete Dialog Description": "此操作无法撤销。这将永久删除你的数据源，并从服务器移除其数据。",
+        "Delete Dialog Description": "此操作无法撤销。这将永久删除该数据源。",
         "Loading connections": "加载连接中...",
         "No connections yet": "暂无连接",
         "Connect to": "连接到 {name}",

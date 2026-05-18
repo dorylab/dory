@@ -8,8 +8,8 @@ import { Edit2, Trash2, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
-import { DatabaseTypeIcon } from './database-type-icon';
-import { FileTypeIcon } from './file-type-icon';
+import { DatabaseTypeIcon, getDatabaseTypeMeta } from './database-type-icon';
+import { FileTypeIcon, getFileTypeLabel } from './file-type-icon';
 
 type Props = {
     connectionItem: ConnectionListItem;
@@ -56,6 +56,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
     const locationLabel = getConnectionLocationLabel(connection);
     const localFilesMeta = getLocalFilesMeta(connection);
     const isLocalFiles = Boolean(localFilesMeta);
+    const connectionTypeLabel = isLocalFiles ? getFileTypeLabel(localFilesMeta?.sourceType) : getDatabaseTypeMeta(connection.type).label;
     const identityUsername = connectionItem.identities[0]?.username;
     const lastCheckStatus = (connection?.lastCheckStatus ?? 'unknown') as ConnectionCheckStatus;
     const lastCheckError = connection?.lastCheckError;
@@ -123,15 +124,22 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
             >
                 <div className="mb-2 flex items-center justify-between">
                     <div className="flex min-w-0 items-center gap-3">
-                        {isLocalFiles ? (
-                            <div className="text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center">
-                                <FileTypeIcon sourceType={localFilesMeta?.sourceType} />
-                            </div>
-                        ) : (
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center">
-                                <DatabaseTypeIcon type={connection.type} />
-                            </div>
-                        )}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                {isLocalFiles ? (
+                                    <div className="text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center">
+                                        <FileTypeIcon sourceType={localFilesMeta?.sourceType} />
+                                    </div>
+                                ) : (
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center">
+                                        <DatabaseTypeIcon type={connection.type} />
+                                    </div>
+                                )}
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{connectionTypeLabel}</p>
+                            </TooltipContent>
+                        </Tooltip>
                         <p className="mb-1 min-h-6 truncate text-base font-medium">{connectionItem?.connection.name}</p>
                     </div>
                     {connectLoading ? (

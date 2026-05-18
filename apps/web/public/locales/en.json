@@ -248,7 +248,7 @@
         "Connection test success": "Connection test succeeded, version: {version}",
         "Connection test failed": "Connection test failed",
         "Delete Dialog Title": "Are you absolutely sure?",
-        "Delete Dialog Description": "This action cannot be undone. This will permanently delete your datasource and remove its data from our servers.",
+        "Delete Dialog Description": "This action cannot be undone. This will permanently delete this datasource.",
         "Loading connections": "Loading connections...",
         "No connections yet": "No connections yet",
         "Connect to": "Connect to {name}",
