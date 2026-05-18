@@ -2374,6 +2374,24 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/ui@npm:0.1.0, @dory/ui@workspace:packages/ui":
+  version: 0.0.0-use.local
+  resolution: "@dory/ui@workspace:packages/ui"
+  dependencies:
+    "@dory/web-utils": "npm:0.1.0"
+    "@types/react": "npm:^19.2.7"
+    border-beam: "npm:1.0.1"
+    class-variance-authority: "npm:^0.7.1"
+    radix-ui: "npm:^1.4.3"
+    react: "npm:^19.2.4"
+    react-dom: "npm:^19.2.4"
+    typescript: "npm:^6.0.2"
+  peerDependencies:
+    react: ">=18.0.0"
+    react-dom: ">=18.0.0"
+  languageName: unknown
+  linkType: soft
+
 "@dory/web-utils@npm:0.1.0, @dory/web-utils@workspace:packages/web-utils":
   version: 0.0.0-use.local
   resolution: "@dory/web-utils@workspace:packages/web-utils"
@@ -8907,7 +8925,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react@npm:*, @types/react@npm:19.2.14, @types/react@npm:^19":
+"@types/react@npm:*, @types/react@npm:19.2.14, @types/react@npm:^19, @types/react@npm:^19.2.7":
   version: 19.2.14
   resolution: "@types/react@npm:19.2.14"
   dependencies:
@@ -22721,6 +22739,7 @@ __metadata:
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
+    "@dory/ui": "npm:0.1.0"
     "@dory/web-utils": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
@@ -22799,7 +22818,6 @@ __metadata:
     ansi-to-react: "npm:^6.2.6"
     better-auth: "npm:^1.6.2"
     better-sqlite3: "npm:^12.8.0"
-    border-beam: "npm:1.0.1"
     boring-avatars: "npm:^2.0.4"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"
