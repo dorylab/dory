@@ -248,7 +248,7 @@
         "Connection test success": "La prueba de conexión fue exitosa, versión: {version}",
         "Connection test failed": "La prueba de conexión falló",
         "Delete Dialog Title": "¿Estás absolutamente seguro?",
-        "Delete Dialog Description": "Esta acción no se puede deshacer. Eliminará permanentemente esta fuente de datos.",
+        "Delete Dialog Description": "Esta acción no se puede deshacer. Se eliminarán permanentemente esta fuente de datos y sus datos.",
         "Loading connections": "Cargando conexiones...",
         "No connections yet": "Todavía no hay conexiones",
         "Connect to": "Conectar a {name}",

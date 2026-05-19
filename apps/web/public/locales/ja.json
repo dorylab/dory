@@ -248,7 +248,7 @@
         "Connection test success": "接続テストに成功しました。バージョン: {version}",
         "Connection test failed": "接続テストに失敗しました",
         "Delete Dialog Title": "本当に削除しますか？",
-        "Delete Dialog Description": "この操作は元に戻せません。このデータソースは完全に削除されます。",
+        "Delete Dialog Description": "この操作は元に戻せません。このデータソースとそのデータは完全に削除されます。",
         "Loading connections": "接続を読み込み中...",
         "No connections yet": "まだ接続がありません",
         "Connect to": "{name} に接続",

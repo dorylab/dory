@@ -1,10 +1,10 @@
 'use client';
 
-import { ChevronsUpDown, Grip, Loader2, Plus, User } from 'lucide-react';
+import { ChevronsUpDown, Database, Grip, Loader2, Plus, User } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/registry/new-york-v4/ui/sidebar';
 import {
@@ -30,6 +30,7 @@ import {
     connectionOpenAtom,
     connectionStatusAtom,
     connectionSwitchingAtom,
+    connectionsAtom,
 } from '../../../connections/states';
 import { ConnectionCheckStatus, ConnectionIdentity, ConnectionListIdentity, ConnectionListItem } from '@dory/shared/types/connections';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
@@ -85,6 +86,18 @@ function makeLoadingKey(connectionId: string, identityId?: string | null) {
     return identityId ? `${connectionId}:${identityId}` : connectionId;
 }
 
+function hasConnectionHealthChanged(current: ConnectionListItem | null, next: ConnectionListItem) {
+    if (!current) return true;
+    if (current.connection.id !== next.connection.id) return true;
+
+    return (
+        current.connection.lastCheckStatus !== next.connection.lastCheckStatus ||
+        current.connection.lastCheckAt !== next.connection.lastCheckAt ||
+        current.connection.lastCheckLatencyMs !== next.connection.lastCheckLatencyMs ||
+        current.connection.lastCheckError !== next.connection.lastCheckError
+    );
+}
+
 const SWITCH_CONNECT_TIMEOUT_MS = 12_000;
 
 export function ConnectionSwitcher() {
@@ -100,6 +113,7 @@ export function ConnectionSwitcher() {
 
     const [currentConnection, setCurrentConnection] = useAtom(currentConnectionAtom);
     const [connectLoadings, setConnectLoadings] = useAtom(connectionLoadingAtom);
+    const syncedConnections = useAtomValue(connectionsAtom);
     const [pendingConnection, setPendingConnection] = useState<ConnectionListItem | null>(null);
     const [pendingIdentity, setPendingIdentity] = useState<ConnectionListIdentity | null>(null);
     const [autoConnectedRouteId, setAutoConnectedRouteId] = useState<string | null>(null);
@@ -113,13 +127,14 @@ export function ConnectionSwitcher() {
     const setConnectionSwitching = useSetAtom(connectionSwitchingAtom);
 
     const connectionsQuery = useConnections();
-    const connections = useMemo<ConnectionListItem[]>(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
+    const connections = syncedConnections;
     const isLoading = connectionsQuery.isLoading;
+    const hasConnections = connections.length > 0;
 
     const connectMutation = useConnectConnection();
 
     const isInitialLoading = isLoading && connections.length === 0;
-    const hasActiveConnection = useMemo(() => Object.values(connectLoadings ?? {}).some(Boolean), [connectLoadings]);
+    const hasActiveConnection = useMemo(() => hasConnections && Object.values(connectLoadings ?? {}).some(Boolean), [connectLoadings, hasConnections]);
     const isSwitcherLoading = isInitialLoading || hasActiveConnection || Boolean(pendingConnection);
 
     const activeConnection = useMemo(() => {
@@ -178,6 +193,14 @@ export function ConnectionSwitcher() {
     useEffect(() => {
         if (!connections.length) {
             if (currentConnection) setCurrentConnection(null);
+            setPendingConnection(null);
+            setPendingIdentity(null);
+            setNavigatingConnectionId(null);
+            setAutoConnectedRouteId(null);
+            setConnectionSwitching(null);
+            setConnectionError(null);
+            setLoadingMessage(null);
+            setConnectLoadings({});
             return;
         }
 
@@ -187,7 +210,7 @@ export function ConnectionSwitcher() {
 
         if (connectionId) {
             const match = connections.find(item => item.connection.id === connectionId);
-            if (match && match.connection.id !== currentConnection?.connection?.id) {
+            if (match && hasConnectionHealthChanged(currentConnection, match)) {
                 setCurrentConnection(match);
             }
             return;
@@ -196,7 +219,17 @@ export function ConnectionSwitcher() {
         if (!currentConnection || connections.every(c => c.connection.id !== currentConnection.connection?.id)) {
             setCurrentConnection(connections[0]);
         }
-    }, [connectionId, currentConnection, connections, navigatingConnectionId, setCurrentConnection]);
+    }, [
+        connectionId,
+        currentConnection,
+        connections,
+        navigatingConnectionId,
+        setConnectLoadings,
+        setConnectionError,
+        setConnectionSwitching,
+        setCurrentConnection,
+        setLoadingMessage,
+    ]);
 
     useEffect(() => {
         if (navigatingConnectionId && connectionId === navigatingConnectionId) {
@@ -231,6 +264,7 @@ export function ConnectionSwitcher() {
 
     const displayedConnection = activeConnection;
     const displayedIdentity = activeIdentity;
+    const displayedLabel = displayedConnection?.connection.name ?? (isInitialLoading ? t('Loading connections') : t('No connections yet'));
 
     const pendingLoadingKey = pendingConnection ? makeLoadingKey(pendingConnection.connection.id, pendingIdentity?.id) : null;
     const activeLoadingKey = displayedConnection ? makeLoadingKey(displayedConnection.connection.id, displayedIdentity?.id) : null;
@@ -366,13 +400,25 @@ export function ConnectionSwitcher() {
                             className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground disabled:pointer-events-none disabled:cursor-wait disabled:opacity-100 disabled:text-current disabled:bg-transparent"
                         >
                             <div className="flex aspect-square size-8 items-center justify-center">
-                                <ConnectionSourceIcon connection={displayedConnection?.connection} className="max-h-7 max-w-7" />
+                                {displayedConnection ? (
+                                    <ConnectionSourceIcon connection={displayedConnection.connection} className="max-h-7 max-w-7" />
+                                ) : (
+                                    <div className="flex size-7 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent/60 text-muted-foreground">
+                                        {isInitialLoading ? <Loader2 className="size-4 animate-spin" /> : <Database className="size-4" />}
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex flex-1 items-center justify-between gap-2 min-w-0">
                                 <div className="flex items-center gap-2 min-w-0">
-                                    {isConnecting ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : renderHealth(displayedConnection?.connection)}
-                                    <span className="truncate font-semibold text-sm">{displayedConnection?.connection.name ?? t('Connections')}</span>
+                                    {displayedConnection ? (
+                                        isConnecting ? (
+                                            <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                                        ) : (
+                                            renderHealth(displayedConnection.connection)
+                                        )
+                                    ) : null}
+                                    <span className="truncate font-semibold text-sm">{displayedLabel}</span>
                                 </div>
 
                                 <ChevronsUpDown className="size-3 text-muted-foreground shrink-0" />
