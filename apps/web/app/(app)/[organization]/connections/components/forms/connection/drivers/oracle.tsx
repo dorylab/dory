@@ -4,7 +4,7 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/regi
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { FieldHelp, PortField } from './shared';
 
-function parseSqlServerHostDraft(rawHost: unknown): { host?: string; port?: number; database?: string; encrypt?: boolean } {
+function parseOracleHostDraft(rawHost: unknown): { host?: string; port?: number; database?: string } {
     if (typeof rawHost !== 'string') return {};
     const trimmed = rawHost.trim();
     if (!trimmed) return {};
@@ -12,15 +12,13 @@ function parseSqlServerHostDraft(rawHost: unknown): { host?: string; port?: numb
     const hasProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed);
 
     try {
-        const url = new URL(hasProtocol ? trimmed : `sqlserver://${trimmed}`);
+        const url = new URL(hasProtocol ? trimmed : `oracle://${trimmed}`);
         const hostname = url.hostname.includes(':') && !url.hostname.startsWith('[') ? `[${url.hostname}]` : url.hostname;
-        const encryptParam = url.searchParams.get('encrypt');
 
         return {
             host: hostname || trimmed,
             port: url.port ? Number(url.port) : undefined,
             database: url.pathname ? decodeURIComponent(url.pathname.replace(/^\//, '')) || undefined : undefined,
-            encrypt: encryptParam === null ? undefined : encryptParam === 'true' || encryptParam === '1',
         };
     } catch {
         return { host: trimmed };
@@ -43,59 +41,73 @@ function parseConnectionOptions(raw: unknown): Record<string, unknown> {
     return {};
 }
 
-export function createSqlServerConnectionDefaults() {
+export function createOracleConnectionDefaults() {
     return {
-        type: 'sqlserver',
+        type: 'oracle',
         name: '',
         description: '',
         host: '',
-        port: 1433,
+        port: 1521,
         httpPort: null,
-        encrypt: true,
-        trustServerCertificate: false,
         database: '',
+        connectString: '',
         environment: '',
         tags: '',
     };
 }
 
-export function normalizeSqlServerConnectionForForm(connection: any) {
+export function normalizeOracleConnectionForForm(connection: any) {
     const options = parseConnectionOptions(connection?.options);
-    const parsedHost = parseSqlServerHostDraft(connection?.host);
+    const parsedHost = parseOracleHostDraft(connection?.host);
 
     return {
-        ...createSqlServerConnectionDefaults(),
+        ...createOracleConnectionDefaults(),
         ...connection,
         host: parsedHost.host ?? connection?.host ?? '',
-        port: typeof connection?.port === 'number' ? connection.port : (parsedHost.port ?? 1433),
+        port: typeof connection?.port === 'number' ? connection.port : (parsedHost.port ?? 1521),
         httpPort: null,
-        encrypt: parsedHost.encrypt ?? (typeof options.encrypt === 'boolean' ? options.encrypt : true),
-        trustServerCertificate: typeof options.trustServerCertificate === 'boolean' ? options.trustServerCertificate : false,
         database: connection?.database ?? parsedHost.database ?? '',
+        connectString: typeof options.connectString === 'string' ? options.connectString : '',
     };
 }
 
-export function normalizeSqlServerConnectionForSubmit(connection: any) {
+export function normalizeOracleConnectionForSubmit(connection: any) {
     const options = parseConnectionOptions(connection?.options);
-    const { encrypt: _encrypt, trustServerCertificate: _trustServerCertificate, ...restConnection } = connection ?? {};
-    const parsedHost = parseSqlServerHostDraft(connection?.host);
+    const { connectString, ...restConnection } = connection ?? {};
+    const parsedHost = parseOracleHostDraft(connection?.host);
+    const normalizedConnectString = typeof connectString === 'string' ? connectString.trim() : '';
 
-    options.encrypt = parsedHost.encrypt ?? Boolean(connection?.encrypt);
-    options.trustServerCertificate = Boolean(connection?.trustServerCertificate);
+    if (normalizedConnectString) {
+        options.connectString = normalizedConnectString;
+    } else {
+        delete options.connectString;
+    }
 
     return {
         ...restConnection,
         host: parsedHost.host ?? connection?.host?.trim?.() ?? '',
-        port: typeof connection?.port === 'number' && Number.isFinite(connection.port) ? connection.port : (parsedHost.port ?? 1433),
+        port: typeof connection?.port === 'number' && Number.isFinite(connection.port) ? connection.port : (parsedHost.port ?? 1521),
         httpPort: null,
         database: connection?.database?.trim?.() || parsedHost.database || null,
         options: JSON.stringify(options),
     };
 }
 
-export function validateSqlServerConnection(_value: any, _ctx: RefinementCtx) {}
+export function validateOracleConnection(value: any, ctx: RefinementCtx) {
+    const parsedHost = parseOracleHostDraft(value?.host);
+    const serviceName = value?.database?.trim?.() || parsedHost.database;
+    const connectString = value?.connectString?.trim?.();
 
-export function SqlServerConnectionFields({ form }: { form: UseFormReturn<any> }) {
+    if (!serviceName && !connectString) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['connection', 'database'],
+            message: 'Please provide an Oracle service name',
+        });
+    }
+}
+
+export function OracleConnectionFields({ form }: { form: UseFormReturn<any> }) {
     return (
         <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem] items-start">
@@ -108,10 +120,10 @@ export function SqlServerConnectionFields({ form }: { form: UseFormReturn<any> }
                                 <span>
                                     Host<span className="text-destructive"> *</span>
                                 </span>
-                                <FieldHelp text="Use your SQL Server hostname or IP address." />
+                                <FieldHelp text="Use your Oracle hostname, IP address, or Easy Connect host form." />
                             </FormLabel>
                             <FormControl>
-                                <Input placeholder="db.example.com or sqlserver://db.example.com/app_db" {...field} />
+                                <Input placeholder="db.example.com or oracle://db.example.com:1521/ORCLPDB1" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -122,8 +134,8 @@ export function SqlServerConnectionFields({ form }: { form: UseFormReturn<any> }
                     form={form}
                     name="connection.port"
                     label="Port"
-                    placeholder="1433"
-                    helpText="SQL Server usually uses 1433 unless your server is configured differently."
+                    placeholder="1521"
+                    helpText="Oracle usually uses 1521 unless your listener is configured differently."
                     required
                 />
             </div>
@@ -134,11 +146,30 @@ export function SqlServerConnectionFields({ form }: { form: UseFormReturn<any> }
                 render={({ field }) => (
                     <FormItem className="space-y-2">
                         <FormLabel className="flex items-center gap-1.5">
-                            <span>Default Database</span>
-                            <FieldHelp text="Optional default SQL Server database to connect to." />
+                            <span>
+                                Service Name<span className="text-destructive"> *</span>
+                            </span>
+                            <FieldHelp text="Oracle service name, for example ORCLPDB1 or a pluggable database service." />
                         </FormLabel>
                         <FormControl>
-                            <Input placeholder="app_db" {...field} value={field.value ?? ''} />
+                            <Input placeholder="ORCLPDB1" {...field} value={field.value ?? ''} />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                )}
+            />
+
+            <FormField
+                control={form.control}
+                name="connection.connectString"
+                render={({ field }) => (
+                    <FormItem className="space-y-2">
+                        <FormLabel className="flex items-center gap-1.5">
+                            <span>Connect String</span>
+                            <FieldHelp text="Optional Easy Connect string override for advanced Oracle listener setups." />
+                        </FormLabel>
+                        <FormControl>
+                            <Input placeholder="db.example.com:1521/ORCLPDB1" {...field} value={field.value ?? ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>

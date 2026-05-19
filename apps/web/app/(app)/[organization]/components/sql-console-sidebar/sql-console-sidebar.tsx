@@ -85,6 +85,10 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
     const [loadingTableKeys, setLoadingTableKeys] = useState<Set<string>>(new Set());
 
     const schemaOptions = useMemo(() => schemas.toSorted((left, right) => left.label.localeCompare(right.label)), [schemas]);
+    const preferredSchema = useMemo(() => {
+        const defaultIdentity = currentConnection?.identities?.find(identity => identity.isDefault) ?? currentConnection?.identities?.[0];
+        return defaultIdentity?.username?.trim() || sidebarConfig.defaultSchemaName || '';
+    }, [currentConnection?.identities, sidebarConfig.defaultSchemaName]);
 
     useEffect(() => {
         if (!sidebarConfig.supportsSchemas) {
@@ -105,9 +109,13 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
             return;
         }
 
-        const defaultSchema = schemaOptions.find(schema => schema.value === sidebarConfig.defaultSchemaName)?.value ?? schemaOptions[0]?.value ?? '';
+        const defaultSchema =
+            schemaOptions.find(schema => schema.value.toLowerCase() === preferredSchema.toLowerCase())?.value ??
+            schemaOptions.find(schema => schema.value === sidebarConfig.defaultSchemaName)?.value ??
+            schemaOptions[0]?.value ??
+            '';
         setActiveSchema(defaultSchema);
-    }, [activeSchema, schemaOptions, sidebarConfig.defaultSchemaName, sidebarConfig.supportsSchemas]);
+    }, [activeSchema, preferredSchema, schemaOptions, sidebarConfig.defaultSchemaName, sidebarConfig.supportsSchemas]);
 
     const filteredTables = useMemo(() => {
         const normalizedFilter = deferredFilter.trim().toLowerCase();

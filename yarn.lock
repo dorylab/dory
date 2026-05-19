@@ -2332,10 +2332,12 @@ __metadata:
     "@types/better-sqlite3": "npm:^7.6.13"
     "@types/mssql": "npm:^9.1.11"
     "@types/node": "npm:^25.5.2"
+    "@types/oracledb": "npm:^6"
     "@types/pg": "npm:^8.20.0"
     better-sqlite3: "npm:^12.8.0"
     mssql: "npm:^12.2.1"
     mysql2: "npm:^3.20.0"
+    oracledb: "npm:^6.10.0"
     pg: "npm:^8.20.0"
     ssh2: "npm:^1.17.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
@@ -8845,6 +8847,15 @@ __metadata:
   dependencies:
     undici-types: "npm:~6.21.0"
   checksum: 10c0/b66c484c0a9f6d88b1ef360b0f487717234ee1a482cb2551ff73d9f3c43a42a777daf4c8a5eee970960728f8fe1f3877d3d8c6ffabcbca74cb401a59db700fa4
+  languageName: node
+  linkType: hard
+
+"@types/oracledb@npm:^6":
+  version: 6.10.3
+  resolution: "@types/oracledb@npm:6.10.3"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10c0/5d23feeb7d737dd05233fd02f35e8a8e32a7cee27495109616443a8fb5970a15388101c36d3f41ba9cb2024c1c7942f66c46ca93ad1b7a054308a2ad5edc4231
   languageName: node
   linkType: hard
 
@@ -18523,6 +18534,13 @@ __metadata:
     string-width: "npm:^7.2.0"
     strip-ansi: "npm:^7.1.0"
   checksum: 10c0/7d9291255db22e293ea164f520b6042a3e906576ab06c9cf408bf9ef5664ba0a9f3bd258baa4ada058cfcc2163ef9b6696d51237a866682ce33295349ba02c3a
+  languageName: node
+  linkType: hard
+
+"oracledb@npm:^6.10.0":
+  version: 6.10.0
+  resolution: "oracledb@npm:6.10.0"
+  checksum: 10c0/bd3c551a1fc2f3aeceeee5002a64c1104320195516b37c05252bb7e722b2de7c3ea041279c2d6c00501b4b595704aad3e200970583e8eb359b651314235ef6fc
   languageName: node
   linkType: hard
 

@@ -75,6 +75,14 @@ export const EXPLORER_CAPABILITIES: Record<ExplorerDriver, DriverCapabilities> =
         listKinds: ['schemas', 'tables', 'views', 'functions', 'sequences'],
         objectKinds: ['database', 'schema', 'table', 'view', 'function', 'sequence'],
     },
+    oracle: {
+        driver: 'oracle',
+        supportsSchema: true,
+        supportsDatabase: true,
+        supportsCatalog: false,
+        listKinds: ['schemas', 'tables', 'views', 'functions', 'sequences'],
+        objectKinds: ['database', 'schema', 'table', 'view', 'function', 'sequence'],
+    },
     trino: {
         driver: 'trino',
         supportsSchema: true,
@@ -113,7 +121,14 @@ export function getDriverCapabilities(driver?: string | null): DriverCapabilitie
 export function supportsDatabaseSummary(driver?: string | null): boolean {
     const resolvedDriver = resolveExplorerDriver(driver);
 
-    return resolvedDriver === 'postgres' || resolvedDriver === 'mysql' || resolvedDriver === 'mariadb' || resolvedDriver === 'clickhouse' || resolvedDriver === 'sqlserver';
+    return (
+        resolvedDriver === 'postgres' ||
+        resolvedDriver === 'mysql' ||
+        resolvedDriver === 'mariadb' ||
+        resolvedDriver === 'clickhouse' ||
+        resolvedDriver === 'oracle' ||
+        resolvedDriver === 'sqlserver'
+    );
 }
 
 export function driverSupportsSchema(driver?: string | null): boolean {

@@ -24,6 +24,7 @@ export function isConnectionDriverType(value: unknown): value is ConnectionDrive
         value === 'mariadb' ||
         value === 'mysql' ||
         value === 'neon' ||
+        value === 'oracle' ||
         value === 'postgres' ||
         value === 'sqlite' ||
         value === 'sqlserver'

@@ -30,6 +30,7 @@ export const ConnectionDialogFormSchema = z
             httpPort: requiredPort.optional().nullable(),
             ssl: z.boolean().default(false),
             database: z.string().optional().nullable(),
+            connectString: z.string().optional().nullable(),
             path: z.string().optional().nullable(),
             duckdbMode: z.enum(['local', 'motherduck']).optional(),
             environment: z.string().optional(),

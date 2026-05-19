@@ -1,9 +1,10 @@
 export const DEFAULT_MAX_RESULT_ROWS = 10000;
 
-export type SelectLimitDialect = 'default' | 'sqlserver';
+export type SelectLimitDialect = 'default' | 'oracle' | 'sqlserver';
 
 function normalizeDialect(dialect?: SelectLimitDialect): SelectLimitDialect {
-    return dialect === 'sqlserver' ? 'sqlserver' : 'default';
+    if (dialect === 'oracle' || dialect === 'sqlserver') return dialect;
+    return 'default';
 }
 
 export function hasSelectLimit(sql: string, dialect: SelectLimitDialect = 'default'): boolean {
@@ -12,6 +13,10 @@ export function hasSelectLimit(sql: string, dialect: SelectLimitDialect = 'defau
 
     if (normalizedDialect === 'sqlserver') {
         return /\btop\s*(?:\(\s*\d+\s*\)|\d+)\b/i.test(trimmed) || /\bfetch\s+next\s+\d+\s+rows\s+only\b/i.test(trimmed);
+    }
+
+    if (normalizedDialect === 'oracle') {
+        return /\bfetch\s+(first|next)\s+(:\w+|\d+)\s+rows\s+only\b/i.test(trimmed) || /\brownum\b/i.test(trimmed);
     }
 
     return /\blimit\b/i.test(trimmed);
@@ -62,8 +67,20 @@ function enforceSqlServerSelectLimit(sql: string, maxRows: number): string {
 }
 
 export function enforceSelectLimit(sql: string, maxRows = DEFAULT_MAX_RESULT_ROWS, dialect: SelectLimitDialect = 'default'): string {
-    if (normalizeDialect(dialect) === 'sqlserver') {
+    const normalizedDialect = normalizeDialect(dialect);
+
+    if (normalizedDialect === 'sqlserver') {
         return enforceSqlServerSelectLimit(sql, maxRows);
+    }
+
+    if (normalizedDialect === 'oracle') {
+        const original = sql;
+        let trimmed = sql.trim();
+        if (trimmed.endsWith(';')) trimmed = trimmed.slice(0, -1);
+        if (trimmed.includes(';')) return original;
+        if (!/^\s*(select|with)\b/i.test(trimmed)) return original;
+        if (hasSelectLimit(trimmed, 'oracle')) return trimmed;
+        return `${trimmed} FETCH FIRST ${maxRows} ROWS ONLY`;
     }
 
     const original = sql;

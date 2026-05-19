@@ -34,6 +34,11 @@ const SIDEBAR_CONFIG_BY_DIALECT: Record<ConnectionType, SidebarConfig> = {
         supportsSchemas: false,
         hiddenDatabases: ['information_schema', 'mysql', 'performance_schema', 'sys'],
     },
+    oracle: {
+        dialect: 'oracle',
+        supportsSchemas: true,
+        hiddenDatabases: ['SYS', 'SYSTEM', 'XDB', 'MDSYS', 'CTXSYS', 'ORDSYS'],
+    },
     neon: {
         dialect: 'postgres',
         supportsSchemas: true,

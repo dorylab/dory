@@ -38,8 +38,8 @@ export function TableList({
     t,
 }: TableListProps) {
     return (
-        <ScrollArea className="mt-1 min-h-0 flex-1 w-[calc(100%+0.75rem)] -mr-3 space-y-2">
-            <div className="pr-3">
+        <ScrollArea className="mt-1 min-h-0 w-[calc(100%+0.75rem)] min-w-0 flex-1 -mr-3 space-y-2">
+            <div className="min-w-0 pr-3">
                 {loading ? (
                     <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground" aria-live="polite">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -57,10 +57,10 @@ export function TableList({
                         const isSelected = Boolean(selectedTable) && table.value === selectedTable && (!selectedDatabase || activeDatabase === selectedDatabase);
 
                         return (
-                            <div key={table.key} className="my-px space-y-1">
-                                <div className={cn('mx-1 rounded-md', !isSelected && 'hover:bg-muted/50', isSelected && 'bg-primary/10 text-foreground ring-1 ring-primary/30')}>
-                                    <div className="flex items-center justify-between gap-2 px-1 py-1">
-                                        <div className="flex flex-1 items-center gap-2">
+                            <div key={table.key} className="my-px min-w-0 space-y-1">
+                                <div className={cn('mx-1 min-w-0 overflow-hidden rounded-md', !isSelected && 'hover:bg-muted/50', isSelected && 'bg-primary/10 text-foreground ring-1 ring-primary/30')}>
+                                    <div className="flex min-w-0 items-center justify-between gap-2 px-1 py-1">
+                                        <div className="flex min-w-0 flex-1 items-center gap-2">
                                             <button
                                                 onClick={() => onToggleTable(table)}
                                                 className="cursor-pointer rounded p-0.5 hover:bg-muted"
@@ -78,7 +78,7 @@ export function TableList({
                                             <Table className="h-3.5 w-3.5 shrink-0" />
 
                                             <button
-                                                className="w-full cursor-pointer overflow-hidden truncate whitespace-nowrap text-left text-sm"
+                                                className="min-w-0 flex-1 cursor-pointer overflow-hidden truncate whitespace-nowrap text-left text-sm"
                                                 onClick={() => {
                                                     const payload = {
                                                         database: activeDatabase,

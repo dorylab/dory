@@ -21,7 +21,7 @@ export type CopilotResultSetContext = {
 export type CopilotContextSQL = {
     baseline: {
         database?: string | null;
-        dialect?: 'clickhouse' | 'duckdb' | 'mysql' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';
+        dialect?: 'clickhouse' | 'duckdb' | 'mysql' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';
     };
 
     draft: {

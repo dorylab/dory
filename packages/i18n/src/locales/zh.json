@@ -339,6 +339,7 @@
         "No results": "未找到匹配项",
         "Filter tables": "筛选表",
         "Refresh tables": "刷新表",
+        "Loading tables": "正在加载表",
         "No matching tables found": "未找到匹配的表",
         "Collapse": "收起",
         "Expand": "展开",

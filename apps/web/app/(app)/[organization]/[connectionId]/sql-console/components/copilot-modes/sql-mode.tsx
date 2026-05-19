@@ -150,11 +150,11 @@ export function SqlMode({
     const defaultSaveTitle = useMemo(() => activeTab?.tabName ?? t('Tabs.NewQuery'), [activeTab?.tabName, t]);
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection.id ?? null;
-    const limitDialect: SelectLimitDialect = currentConnection?.connection.type === 'sqlserver' ? 'sqlserver' : 'default';
+    const limitDialect: SelectLimitDialect = currentConnection?.connection.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection.type === 'oracle' ? 'oracle' : 'default';
     const generateSqlFromPrompt = useSqlInlineAskAI();
     const handleRunQuery = () => {
         if (!activeTab || isRunning) return;
-        const options = limitDialect === 'sqlserver' || !hasSqlLimit ? { limit: queryLimit } : undefined;
+        const options = limitDialect === 'sqlserver' || limitDialect === 'oracle' || !hasSqlLimit ? { limit: queryLimit } : undefined;
         runQuery(activeTab, options);
     };
     const handleLimitChange = (value: string) => {

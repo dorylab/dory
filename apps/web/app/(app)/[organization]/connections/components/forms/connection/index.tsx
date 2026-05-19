@@ -59,7 +59,7 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
 
     return (
         <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] items-start">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem] items-start">
                 <FormField
                     control={control}
                     name="connection.name"
@@ -87,8 +87,8 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
                                 <RequiredMark />
                             </FormLabel>
                             <Select value={field.value} onValueChange={value => handleTypeChange(value, field.onChange)}>
-                                <FormControl className="w-full">
-                                    <SelectTrigger>
+                                <FormControl>
+                                    <SelectTrigger className="w-full min-w-0">
                                         <SelectValue placeholder={t('Select Database Type')} />
                                     </SelectTrigger>
                                 </FormControl>
