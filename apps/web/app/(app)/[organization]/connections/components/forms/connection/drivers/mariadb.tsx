@@ -98,7 +98,7 @@ export function validateMariaDbConnection(_value: any, _ctx: RefinementCtx) {}
 export function MariaDbConnectionFields({ form }: { form: UseFormReturn<any> }) {
     return (
         <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] items-start">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_12rem] items-start">
                 <FormField
                     control={form.control}
                     name="connection.host"
