@@ -3,4 +3,4 @@ export type Timestamp = number;
 
 export const UNKNOWN_ID = 'unknown';
 
-export type ConnectionDialect = 'clickhouse' | 'duckdb' | 'mysql' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';
+export type ConnectionDialect = 'clickhouse' | 'duckdb' | 'mysql' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';

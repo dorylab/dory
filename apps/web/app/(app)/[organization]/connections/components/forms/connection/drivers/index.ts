@@ -17,6 +17,7 @@ import {
     validateMariaDbConnection,
 } from './mariadb';
 import { createNeonConnectionDefaults, NeonConnectionFields, normalizeNeonConnectionForForm, normalizeNeonConnectionForSubmit, validateNeonConnection } from './neon';
+import { createOracleConnectionDefaults, normalizeOracleConnectionForForm, normalizeOracleConnectionForSubmit, OracleConnectionFields, validateOracleConnection } from './oracle';
 import {
     PostgresConnectionFields,
     createPostgresConnectionDefaults,
@@ -34,7 +35,7 @@ import {
     validateSqlServerConnection,
 } from './sqlserver';
 
-export type SupportedConnectionDriver = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite' | 'sqlserver';
+export type SupportedConnectionDriver = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
 
 type DriverDefinition = {
     label: string;
@@ -77,6 +78,14 @@ const DRIVERS: Record<SupportedConnectionDriver, DriverDefinition> = {
         normalizeForForm: normalizeNeonConnectionForForm,
         normalizeForSubmit: normalizeNeonConnectionForSubmit,
         validate: validateNeonConnection,
+    },
+    oracle: {
+        label: 'Oracle',
+        FormComponent: OracleConnectionFields,
+        createDefaults: createOracleConnectionDefaults,
+        normalizeForForm: normalizeOracleConnectionForForm,
+        normalizeForSubmit: normalizeOracleConnectionForSubmit,
+        validate: validateOracleConnection,
     },
     mariadb: {
         label: 'MariaDB',
@@ -132,6 +141,9 @@ export function getConnectionDriver(type?: string): DriverDefinition {
     }
     if (type === 'neon') {
         return DRIVERS.neon;
+    }
+    if (type === 'oracle') {
+        return DRIVERS.oracle;
     }
     if (type === 'sqlite') {
         return DRIVERS.sqlite;

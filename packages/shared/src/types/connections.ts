@@ -1,4 +1,4 @@
-export type ConnectionType = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'postgres' | 'sqlite' | 'sqlserver';
+export type ConnectionType = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
 export type ConnectionStatus = 'Connected' | 'Error' | 'Disconnected';
 export type ConnectionCheckStatus = 'unknown' | 'ok' | 'error';
 export type ConnectionIdentityStatus = 'active' | 'disabled';

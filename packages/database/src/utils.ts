@@ -26,6 +26,10 @@ export const DatasourceTypesWithDBEngine = [
         engine: 'mariadb',
     },
     {
+        type: 'oracle',
+        engine: 'oracle',
+    },
+    {
         type: 'doris',
         engine: 'doris',
     },

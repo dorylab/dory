@@ -48,6 +48,12 @@ const SQL_DIALECT_CONFIGS: Record<ConnectionDialect, SqlDialectConfig> = {
         monacoLanguageId: 'mysql',
         formatterLanguage: 'sqlite',
     },
+    oracle: {
+        dialect: 'oracle',
+        parserKey: 'mysql',
+        monacoLanguageId: 'sql',
+        formatterLanguage: 'sql',
+    },
     sqlserver: {
         dialect: 'sqlserver',
         parserKey: 'mysql',
@@ -67,6 +73,7 @@ const SQL_DIALECT_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, ConnectionD
     duckdb: 'duckdb',
     mariadb: 'mysql',
     mysql: 'mysql',
+    oracle: 'oracle',
     neon: 'postgres',
     postgres: 'postgres',
     sqlite: 'sqlite',
@@ -98,6 +105,8 @@ export const normalizeSqlDialect = (value?: string | null): ConnectionDialect =>
         case 'neon':
         case 'postgresql':
             return 'postgres';
+        case 'oracle':
+            return 'oracle';
         case 'sqlite':
             return 'sqlite';
         case 'sqlserver':

@@ -73,6 +73,19 @@ SQLite-specific rules
 - Do not use PostgreSQL pg_catalog queries or MySQL information_schema queries.
 `.trim(),
         );
+    } else if (normalizedType === 'oracle') {
+        dialectRules.push(
+            `
+Oracle-specific rules
+
+- Use Oracle SQL syntax only.
+- Use FETCH FIRST n ROWS ONLY or ROWNUM for limiting rows. Do not use LIMIT.
+- Use ALL_* and USER_* catalog views for metadata when needed, such as ALL_TABLES, ALL_TAB_COLUMNS, ALL_VIEWS, ALL_INDEXES, and ALL_CONSTRAINTS.
+- Query DUAL only when Oracle requires a one-row source.
+- Quote identifiers with "name" only when quoting is necessary.
+- Do not use PostgreSQL pg_catalog queries, SQL Server sys catalog views, or MySQL SHOW/DESCRIBE syntax.
+`.trim(),
+        );
     } else if (normalizedType === 'sqlserver') {
         dialectRules.push(
             `

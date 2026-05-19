@@ -24,7 +24,7 @@ const databaseSummarySchema = z.object({
     databaseName: z.string(),
     catalogName: z.string().nullable(),
     schemaName: z.string().nullable(),
-    engine: z.enum(['clickhouse', 'doris', 'duckdb', 'mariadb', 'mysql', 'postgres', 'sqlite', 'sqlserver', 'unknown']),
+    engine: z.enum(['clickhouse', 'doris', 'duckdb', 'mariadb', 'mysql', 'oracle', 'postgres', 'sqlite', 'sqlserver', 'unknown']),
     cluster: z.string().nullable(),
     owner: z.string().nullable(),
     tablesCount: z.number().nullable(),
@@ -164,7 +164,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ databas
             const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, connectionId, null);
             const engine = isPostgresFamilyConnectionType(config.type)
                 ? 'postgres'
-                : ((config.type ?? 'unknown') as 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown');
+                : ((config.type ?? 'unknown') as 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown');
             const cluster = config.port ? `${config.host}:${config.port}` : (config.host ?? null);
             const metadata = entry.instance.capabilities.metadata;
             if (!hasMetadataCapability(metadata, 'getDatabaseSummary')) {

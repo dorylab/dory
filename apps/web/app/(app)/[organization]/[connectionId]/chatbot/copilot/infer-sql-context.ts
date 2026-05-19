@@ -35,7 +35,7 @@ const parseTableIdentifier = (raw: string, dialect: ConnectionDialect) => {
     let database: string | null = null;
     let schema: string | null = null;
 
-    if (dialect === 'postgres') {
+    if (dialect === 'postgres' || dialect === 'oracle') {
         schema = parts.length > 1 ? parts[parts.length - 2]?.trim() || null : null;
         database = parts.length > 2 ? parts[parts.length - 3]?.trim() || null : null;
     } else {

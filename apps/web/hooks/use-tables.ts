@@ -24,7 +24,7 @@ export function useTables(databases: string) {
             return;
         }
 
-        if (tablesState.connectionId === connectionId && tablesState.database === databases && tablesState.items.length > 0 && !tablesState.loading) {
+        if (tablesState.connectionId === connectionId && tablesState.database === databases && !tablesState.loading) {
             return;
         }
 

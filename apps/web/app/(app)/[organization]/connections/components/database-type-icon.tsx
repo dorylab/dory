@@ -7,7 +7,7 @@ import { cn } from '@dory/web-utils';
 import type { ConnectionType } from '@dory/shared/types/connections';
 
 type DatabaseTypeMeta = {
-    src: string;
+    src?: string;
     label: string;
 };
 
@@ -18,6 +18,7 @@ export const DATABASE_TYPE_META: Partial<Record<ConnectionType, DatabaseTypeMeta
     mariadb: { src: '/images/logos/mariadb.svg', label: 'MariaDB' },
     mysql: { src: '/images/logos/mysql.svg', label: 'MySQL' },
     neon: { src: '/images/logos/neon.svg', label: 'Neon' },
+    oracle: { label: 'Oracle' },
     postgres: { src: '/images/logos/postgresql.svg', label: 'PostgreSQL' },
     sqlite: { src: '/images/logos/sqlite.svg', label: 'SQLite' },
     sqlserver: { src: '/images/logos/sqlserver.svg', label: 'SQL Server' },

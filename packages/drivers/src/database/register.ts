@@ -4,6 +4,7 @@ import type { DriverType } from '../types';
 import { ClickhouseDatasource } from './clickhouse/ClickhouseDatasource';
 import { MariaDbDatasource } from './mariadb/MariaDbDatasource';
 import { MySqlDatasource } from './mysql/MySqlDatasource';
+import { OracleDatasource } from './oracle/OracleDatasource';
 import { PostgresDatasource } from './postgres/PostgresDatasource';
 import { SqliteDatasource } from './sqlite/SqliteDatasource';
 import { SqlServerDatasource } from './sqlserver/SqlServerDatasource';
@@ -27,6 +28,7 @@ export function registerDatabaseDrivers() {
     registerDriver('mariadb', MariaDbDatasource);
     registerDriver('mysql', MySqlDatasource);
     registerDriver('neon', PostgresDatasource);
+    registerDriver('oracle', OracleDatasource);
     registerDriver('postgres', PostgresDatasource);
     registerDriver('sqlite', SqliteDatasource);
     registerDriver('sqlserver', SqlServerDatasource);
@@ -40,6 +42,7 @@ export function isDatabaseDriverType(value: unknown): value is DriverType {
         value === 'mariadb' ||
         value === 'mysql' ||
         value === 'neon' ||
+        value === 'oracle' ||
         value === 'postgres' ||
         value === 'sqlite' ||
         value === 'sqlserver'
