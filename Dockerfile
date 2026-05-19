@@ -23,6 +23,7 @@ COPY packages/drivers/package.json ./packages/drivers/
 COPY packages/files/package.json ./packages/files/
 COPY packages/i18n/package.json ./packages/i18n/
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/ui/package.json ./packages/ui/
 COPY packages/web-utils/package.json ./packages/web-utils/
 
 # Install dependencies (this layer is cached unless dependency files change)
