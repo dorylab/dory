@@ -177,7 +177,7 @@ Native ClickHouse user and role management UI.
 | SQLite     | ✅ Supported         |
 | DuckDB     | ✅ Supported         |
 | SQL Server | ✅ Supported         |
-| Oracle     | 🚧 Planned           |
+| Oracle     | ✅ Supported         |
 | Snowflake  | 🚧 Planned           |
 
 ---
