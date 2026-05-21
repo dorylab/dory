@@ -4,41 +4,42 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
-import { getDatabaseProvider } from '@dory/database/provider';
 import { ensureFileUrl } from '@dory/database/pglite/url';
-import { isDesktopRuntime } from '@dory/shared/runtime';
-import { resolveDemoSqlitePath } from '../lib/demo/paths';
+import { getDatabaseProvider } from '@dory/database/provider';
+import { migrateDB } from '@dory/database/postgres/migrate';
 import { resetPgliteClient } from '@dory/database/postgres/client/pglite';
+import { isDesktopRuntime } from '@dory/shared/runtime';
+
+import { resolveDemoSqlitePath } from '../lib/demo/paths';
 
 const DEFAULT_PGLITE_DB_PATH = '/app/data/dory';
 const DESKTOP_PGLITE_DB_PATH = './data/dory';
-
 
 async function ensureDirForFile(filePath: string) {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
 }
 
 function toFsPath(v: string) {
-  if (v.startsWith("file:")) return fileURLToPath(v);
-  return decodeURIComponent(v);
+    if (v.startsWith('file:')) return fileURLToPath(v);
+    return decodeURIComponent(v);
 }
 
 async function bootstrapPglite() {
-  const defaultFile = isDesktopRuntime() ? DESKTOP_PGLITE_DB_PATH : DEFAULT_PGLITE_DB_PATH;
-  const raw = process.env.PGLITE_DB_PATH ?? defaultFile;
-  console.log("[bootstrap] raw PGLITE_DB_PATH =", raw);
+    const defaultFile = isDesktopRuntime() ? DESKTOP_PGLITE_DB_PATH : DEFAULT_PGLITE_DB_PATH;
+    const raw = process.env.PGLITE_DB_PATH ?? defaultFile;
+    console.log('[bootstrap] raw PGLITE_DB_PATH =', raw);
 
-  const dbFilePath = toFsPath(raw);
+    const dbFilePath = toFsPath(raw);
 
-  // Keep a canonical file:// URL in env so downstream code resolves paths consistently.
-  process.env.PGLITE_DB_PATH = ensureFileUrl(dbFilePath);
-  console.log("[bootstrap] normalized PGLITE_DB_PATH =", process.env.PGLITE_DB_PATH);
-  console.log("[bootstrap] resolved pglite fs path =", dbFilePath);
+    // Keep a canonical file:// URL in env so downstream code resolves paths consistently.
+    process.env.PGLITE_DB_PATH = ensureFileUrl(dbFilePath);
+    console.log('[bootstrap] normalized PGLITE_DB_PATH =', process.env.PGLITE_DB_PATH);
+    console.log('[bootstrap] resolved pglite fs path =', dbFilePath);
 
-  await ensureDirForFile(dbFilePath);
+    await ensureDirForFile(dbFilePath);
 
-  console.log("[bootstrap] running pglite migrate...");
-  await migratePgliteDB();
+    console.log('[bootstrap] running pglite migrate...');
+    await migratePgliteDB();
 }
 
 async function verifyDemoSqlite() {
@@ -61,6 +62,9 @@ export async function bootstrap() {
         // Without this, the WASM runtime calls exit(99) when the Node process drains,
         // which propagates as exit code 99 and prevents the next process (server.js) from starting.
         await resetPgliteClient();
+    } else if (dbType === 'postgres') {
+        console.log('[bootstrap] running postgres migrate...');
+        await migrateDB();
     } else {
         console.log('[bootstrap] skip bootstrap');
     }

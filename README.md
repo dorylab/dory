@@ -37,34 +37,21 @@ It combines intelligent SQL editing, context-aware AI assistance, conversational
 brew install dorylab/dory/dory
 ```
 
-### Run with Docker
+### Run with Docker Compose
 
-Make sure Docker is installed, then run:
+Docker Compose is the recommended self-hosted deployment path. It runs Dory with a dedicated PostgreSQL database and persistent volumes.
 
 ```bash
-docker run -d --name dory \
-  -p 3000:3000 \
-  -e DS_SECRET_KEY="$(openssl rand -base64 32 | tr -d '\n')" \
-  -e BETTER_AUTH_SECRET="$(openssl rand -hex 32)" \
-  -e BETTER_AUTH_URL="http://localhost:3000" \
-  -e DORY_AI_PROVIDER=openai \
-  -e DORY_AI_MODEL=gpt-4o-mini \
-  -e DORY_AI_API_KEY=your_api_key_here \
-  -e DORY_AI_URL=https://api.openai.com/v1 \
-  -e NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION=false \
-  -e DORY_INIT_USER_EMAIL=admin@getdory.dev \
-  -e DORY_INIT_USER_PASSWORD=admin \
-  dorylab/dory:latest
-
+cp docker-compose.env.example .env
+# Edit .env and replace all placeholder secrets/passwords.
+docker compose up -d
 ```
 
-Then:
-
-`Username: admin@getdory.dev`
-
-`Password: admin`
+The initial administrator account is controlled by `DORY_INIT_USER_EMAIL` and `DORY_INIT_USER_PASSWORD` in `.env`.
 
 To enable email verification, set `RESEND_API_KEY` to a valid [resend](https://resend.com) key and `EMAIL_FROM` to a validated email.
+
+For a short-lived single-container trial, `yarn workspace web run docker:quickstart` still starts Dory with embedded PGLite storage.
 
 For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://www.getdory.dev/docs/deploy/self-hosting).
 

@@ -49,7 +49,8 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
     DORY_RUNTIME=docker \
-    NEXT_PUBLIC_DORY_RUNTIME=docker
+    NEXT_PUBLIC_DORY_RUNTIME=docker \
+    POSTGRES_MIGRATIONS_DIR=/app/postgres-migrations
 
 # tzdata
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata ca-certificates \
@@ -64,6 +65,7 @@ COPY --from=installer --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=installer --chown=node:node /app/apps/web/public ./apps/web/public
 COPY --from=installer --chown=node:node /app/apps/web/dist-scripts ./dist-scripts
 COPY --from=installer --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=installer --chown=node:node /app/packages/database/src/postgres/migrations ./postgres-migrations
 
 EXPOSE 3000
 CMD ["sh", "-c", "node dist-scripts/bootstrap.mjs && exec node apps/web/server.js"]
