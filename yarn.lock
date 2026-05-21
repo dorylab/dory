@@ -20490,8 +20490,8 @@ __metadata:
   linkType: hard
 
 "samlify@npm:^2.10.2":
-  version: 2.12.0
-  resolution: "samlify@npm:2.12.0"
+  version: 2.13.1
+  resolution: "samlify@npm:2.13.1"
   dependencies:
     "@authenio/xml-encryption": "npm:^2.0.2"
     "@xmldom/xmldom": "npm:^0.8.11"
@@ -20500,7 +20500,7 @@ __metadata:
     xml-crypto: "npm:^6.1.2"
     xml-escape: "npm:^1.1.0"
     xpath: "npm:^0.0.34"
-  checksum: 10c0/174ddbbcc14568457b449a5c2519718c241b353a90163a34e98786a0780dcae74a9bf4be9d6b79b2046cbc9b4fdf5c1ee067540a0c520f5edcf5c86547c945cc
+  checksum: 10c0/bfdb14530afcb847f714979920d1c93050e8b68b275b5bd3aeb7c3b92fef9f66474f355538e0ab6293e02fcc169d2b7d87d987e4a2dc0620a051f9f54cec0027
   languageName: node
   linkType: hard
 
