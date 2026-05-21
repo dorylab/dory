@@ -127,7 +127,7 @@ AI that understands your database — not just text completion.
 - Quickly locate field meanings and query ideas  
 
 ---
-<img alt="image" src="https://github.com/user-attachments/assets/4397055f7c74-4505-90dc-8d822845b670" />
+<!-- <img alt="image" src="https://github.com/user-attachments/assets/4397055f7c74-4505-90dc-8d822845b670" /> -->
 
 ### 📈 ClickHouse Monitoring (Deep Integration)
 
