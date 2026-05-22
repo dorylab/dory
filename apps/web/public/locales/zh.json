@@ -2512,6 +2512,18 @@
             "InvalidTokenPayload": "无效的 MCP token 请求内容。",
             "MissingTokenId": "缺少 MCP token id。",
             "TokenNotFound": "未找到 MCP token。"
+        },
+        "OrganizationAiProviders": {
+            "ApiKeyRequired": "这个 Provider 需要填写 API Key。",
+            "BaseUrlRequired": "这个 Provider 需要填写 Base URL。",
+            "ProviderIncomplete": "请先补全这个 Provider，再设为默认。",
+            "UnsupportedModel": "请选择这个 Provider 支持的模型。",
+            "UnsupportedProvider": "请选择支持的 AI Provider。",
+            "OrganizationProviderUnavailableInOss": "桌面版需要 Dory Pro 才能使用 Organization Provider；自托管需要 Enterprise Edition。",
+            "SystemProviderReadOnly": "System Provider 是只读的。",
+            "ProviderNotFound": "未找到 Organization Provider。",
+            "DisabledProviderCannotBeDefault": "请先启用这个 Provider，再设为默认。",
+            "SystemProviderUnavailable": "System Provider 尚未配置。"
         }
     },
     "Ai": {
@@ -3063,6 +3075,7 @@
         "Description": "管理组织信息和访问权限。",
         "Nav": {
             "Organization": "组织",
+            "Ai": "AI",
             "Billing": "套餐与订阅"
         },
         "Organization": {
@@ -3084,6 +3097,81 @@
             "Errors": {
                 "SlugRequired": "Slug 不能为空",
                 "SlugInvalid": "Slug 只能包含小写字母、数字和连字符"
+            }
+        },
+        "Ai": {
+            "Title": "AI Configuration",
+            "Description": "管理当前组织可用的 AI Providers。",
+            "Loading": "正在加载 AI 配置...",
+            "LoadFailed": "加载 AI 配置失败。",
+            "Saving": "保存中...",
+            "Deleting": "删除中...",
+            "ReadOnlyHint": "你当前的角色不能修改组织 AI Providers。",
+            "Providers": {
+                "Title": "AI Providers",
+                "Description": "当前组织可用于 AI 功能的 Provider 列表。"
+            },
+            "SystemProvider": {
+                "Label": "System Provider",
+                "Meta": "System Provider · 只读",
+                "Description": "由服务器管理员全局配置。"
+            },
+            "OrganizationProvider": {
+                "Label": "Organization Provider",
+                "Meta": "Organization Provider",
+                "Description": "当前组织的自定义 Provider。"
+            },
+            "Badges": {
+                "Default": "Default",
+                "Enabled": "Enabled",
+                "Disabled": "Disabled",
+                "Unconfigured": "未配置"
+            },
+            "Upgrade": {
+                "EnterpriseTitle": "Organization providers 可在 Enterprise Edition 中使用。",
+                "ProTitle": "Organization providers 可在 Dory Pro 中使用。",
+                "Description": "为每个组织配置独立的 AI Providers。"
+            },
+            "Form": {
+                "AddTitle": "Add Provider",
+                "AddDescription": "为当前组织添加自定义 AI Provider。",
+                "EditTitle": "Edit Provider",
+                "EditDescription": "更新 Provider、模型、Endpoint 或 API Key。"
+            },
+            "DeleteDialog": {
+                "Title": "删除 Provider？",
+                "Description": "这会从当前组织永久删除 {provider}。AI 功能会回退到下一个可用默认 Provider。"
+            },
+            "Fields": {
+                "Provider": "Provider",
+                "DefaultModel": "Default Model",
+                "DefaultModelHint": "当某个 AI 功能没有单独提供模型选择时，Dory 会使用这个默认模型。",
+                "BaseUrl": "Base URL",
+                "ApiKey": "API Key",
+                "ApiKeyConfigured": "已配置（{hint}）",
+                "ApiKeyPlaceholder": "粘贴 API Key",
+                "ApiKeyOptionalPlaceholder": "本地 OpenAI-compatible 端点可不填"
+            },
+            "Actions": {
+                "AddProvider": "Add Provider",
+                "UpgradeToEnterprise": "Upgrade to Enterprise",
+                "UpgradeToPro": "Upgrade to Pro",
+                "SetAsDefault": "Set as default",
+                "Edit": "Edit",
+                "Disable": "Disable",
+                "Enable": "Enable",
+                "Delete": "Delete",
+                "View": "View",
+                "ViewDocs": "View Docs",
+                "Cancel": "Cancel",
+                "SaveChanges": "Save Changes"
+            },
+            "Toasts": {
+                "ProviderAdded": "Organization provider 已添加",
+                "ProviderDeleted": "Organization provider 已删除",
+                "Saved": "Organization provider 已保存",
+                "SaveFailed": "保存 AI 配置失败",
+                "DeleteFailed": "删除 Organization provider 失败"
             }
         },
         "Billing": {

@@ -16,7 +16,6 @@ const PROVIDER_PRESETS: Record<string, Record<ModelRole, Preset>> = {
     xai: xAI_MODEL_PRESETS,
     meta: META_MODEL_PRESETS,
     'openai-compatible': COMPATIBLE_MODEL_PRESETS,
-    compatible: COMPATIBLE_MODEL_PRESETS,
 };
 
 const PROVIDER_FAST_MODELS: Record<string, string | undefined> = {
@@ -27,7 +26,6 @@ const PROVIDER_FAST_MODELS: Record<string, string | undefined> = {
     xai: 'grok-2-mini',
     meta: 'llama-3.1-8b-instruct',
     'openai-compatible': process.env.DORY_AI_MODEL ?? 'gpt-4o-mini',
-    compatible: process.env.DORY_AI_MODEL ?? 'gpt-4o-mini',
 };
 
 function getProviderKey(providerKey?: string) {

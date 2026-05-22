@@ -5,7 +5,7 @@ import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { generateText } from '@/lib/ai/gateway';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
 import { buildSchemaContext, getDefaultSchemaSampleLimits } from '@/lib/ai/prompts/contexts/schema';
 import { SYSTEM_PROMPT } from '@/lib/ai/prompts/system/core';
 import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
@@ -140,7 +140,9 @@ export const POST = withAutomationHandler(async ({ req, userId, organizationId }
         .join('\n\n');
 
     try {
-        const { model, modelName } = getEffectiveModelBundle('chat');
+        const { model, modelName, providerKey } = await getEffectiveModelBundleForOrganization('chat', {
+            organizationId,
+        });
 
         const result = await generateText({
             model,
@@ -154,6 +156,7 @@ export const POST = withAutomationHandler(async ({ req, userId, organizationId }
                 userId,
                 feature: 'automation_ai_ask',
                 model: modelName,
+                provider: providerKey ?? undefined,
             },
         });
 

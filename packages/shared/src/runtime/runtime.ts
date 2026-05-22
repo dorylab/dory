@@ -1,4 +1,5 @@
 export type DoryRuntime = 'desktop' | 'web' | 'docker';
+export type DoryLicense = 'oss' | 'enterprise';
 
 export function normalizeRuntime(value: string | null | undefined): DoryRuntime | null {
     const runtime = value?.trim().toLowerCase();
@@ -18,6 +19,22 @@ function readRawRuntime(): string {
 }
 
 export const runtime: DoryRuntime = normalizeRuntime(readRawRuntime()) ?? 'web';
+
+export function normalizeLicense(value: string | null | undefined): DoryLicense | null {
+    const license = value?.trim().toLowerCase();
+    if (!license) return null;
+    if (license === 'oss') return 'oss';
+    if (license === 'enterprise') return 'enterprise';
+    return null;
+}
+
+export function getLicenseForServer(): DoryLicense {
+    return normalizeLicense(process.env.DORY_LICENSE) ?? 'oss';
+}
+
+export function isEnterpriseLicenseForServer(): boolean {
+    return getLicenseForServer() === 'enterprise';
+}
 
 export function isDesktopRuntime(): boolean {
     return runtime === 'desktop';

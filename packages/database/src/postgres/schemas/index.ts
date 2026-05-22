@@ -13,6 +13,7 @@ import * as aiUsageSchema from './ai-usage';
 import * as syncOperationsSchema from './sync-operations';
 import * as mcpSchema from './mcp';
 import * as localFilesSchema from './local-files';
+import * as organizationAiProvidersSchema from './organization-ai-providers';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -29,6 +30,7 @@ export * from './ai-usage';
 export * from './sync-operations';
 export * from './mcp';
 export * from './local-files';
+export * from './organization-ai-providers';
 
 export const schema = {
     ...tabsSchema,
@@ -46,6 +48,7 @@ export const schema = {
     ...syncOperationsSchema,
     ...mcpSchema,
     ...localFilesSchema,
+    ...organizationAiProvidersSchema,
 };
 
 export type DBSchema = typeof schema;

@@ -2265,6 +2265,18 @@
             "ClosePage": "ページを閉じる",
             "Hint": "アプリが自動で開かない場合は、「Dory に戻る」をクリックしてください。"
         },
+        "OrganizationAiProviders": {
+            "ApiKeyRequired": "API key is required for this provider.",
+            "BaseUrlRequired": "Base URL is required for this provider.",
+            "ProviderIncomplete": "Complete this provider before setting it as default.",
+            "UnsupportedModel": "Please choose a supported model for this provider.",
+            "UnsupportedProvider": "Please choose a supported AI provider.",
+            "OrganizationProviderUnavailableInOss": "Organization providers require Dory Pro on Desktop or Enterprise Edition for self-hosting.",
+            "SystemProviderReadOnly": "System Provider is read-only.",
+            "ProviderNotFound": "Organization provider not found.",
+            "DisabledProviderCannotBeDefault": "Enable this provider before setting it as default.",
+            "SystemProviderUnavailable": "System Provider is not configured."
+        },
         "Connection": {
             "Errors": {
                 "Unauthorized": "認証されていないか、権限が不足しています",
@@ -3058,6 +3070,7 @@
         "Description": "組織の詳細とアクセス権を管理します。",
         "Nav": {
             "Organization": "組織",
+            "Ai": "AI",
             "Billing": "プランとサブスクリプション"
         },
         "Organization": {
@@ -3079,6 +3092,81 @@
             "Errors": {
                 "SlugRequired": "スラッグは必須です",
                 "SlugInvalid": "スラッグには小文字、数字、ハイフンのみ使用できます"
+            }
+        },
+        "Ai": {
+            "Title": "AI Configuration",
+            "Description": "Manage AI providers available to this organization.",
+            "Loading": "Loading AI configuration...",
+            "LoadFailed": "Failed to load AI configuration.",
+            "Saving": "Saving...",
+            "Deleting": "Deleting...",
+            "ReadOnlyHint": "Your current role does not allow updating organization AI providers.",
+            "Providers": {
+                "Title": "AI Providers",
+                "Description": "Providers this organization can use for AI features."
+            },
+            "SystemProvider": {
+                "Label": "System Provider",
+                "Meta": "System Provider · Read-only",
+                "Description": "Configured globally by server administrator."
+            },
+            "OrganizationProvider": {
+                "Label": "Organization Provider",
+                "Meta": "Organization Provider",
+                "Description": "Custom provider for this organization."
+            },
+            "Badges": {
+                "Default": "Default",
+                "Enabled": "Enabled",
+                "Disabled": "Disabled",
+                "Unconfigured": "Unconfigured"
+            },
+            "Upgrade": {
+                "EnterpriseTitle": "Organization providers are available in Enterprise Edition.",
+                "ProTitle": "Organization providers are available with Dory Pro.",
+                "Description": "Configure dedicated AI providers for each organization."
+            },
+            "Form": {
+                "AddTitle": "Add Provider",
+                "AddDescription": "Add a custom AI provider for this organization.",
+                "EditTitle": "Edit Provider",
+                "EditDescription": "Update the provider, model, endpoint, or API key."
+            },
+            "DeleteDialog": {
+                "Title": "Delete provider?",
+                "Description": "This will permanently delete {provider} from this organization. AI features will fall back to the next available default."
+            },
+            "Fields": {
+                "Provider": "Provider",
+                "DefaultModel": "Default Model",
+                "DefaultModelHint": "Dory uses this model when an AI feature does not offer its own model picker.",
+                "BaseUrl": "Base URL",
+                "ApiKey": "API Key",
+                "ApiKeyConfigured": "Configured ({hint})",
+                "ApiKeyPlaceholder": "Paste an API key",
+                "ApiKeyOptionalPlaceholder": "Optional for local OpenAI-compatible endpoints"
+            },
+            "Actions": {
+                "AddProvider": "Add Provider",
+                "UpgradeToEnterprise": "Upgrade to Enterprise",
+                "UpgradeToPro": "Upgrade to Pro",
+                "SetAsDefault": "Set as default",
+                "Edit": "Edit",
+                "Disable": "Disable",
+                "Enable": "Enable",
+                "Delete": "Delete",
+                "View": "View",
+                "ViewDocs": "View Docs",
+                "Cancel": "Cancel",
+                "SaveChanges": "Save Changes"
+            },
+            "Toasts": {
+                "ProviderAdded": "Organization provider added",
+                "ProviderDeleted": "Organization provider deleted",
+                "Saved": "Organization provider saved",
+                "SaveFailed": "Failed to save AI configuration",
+                "DeleteFailed": "Failed to delete organization provider"
             }
         },
         "Billing": {

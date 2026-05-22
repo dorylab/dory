@@ -2,7 +2,7 @@ import 'server-only';
 import { createIdGenerator, stepCountIs } from 'ai';
 
 import { streamText } from '@/lib/ai/gateway';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
 import { buildCloudToolSet } from '@/lib/ai/cloud-tools';
 import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { USE_CLOUD_AI } from '@/app/config/app';
@@ -10,17 +10,12 @@ import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
 export const runtime = 'nodejs';
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
-        const cloudApiBaseUrl = getCloudApiBaseUrl();
-        const shouldUseCloudProxy = USE_CLOUD_AI && Boolean(cloudApiBaseUrl);
-
-        const proxied = shouldUseCloudProxy ? await proxyAiRouteIfNeeded(req, '/api/ai/stream') : null;
-        if (proxied) return proxied;
-
         const body = (await req.json()) as {
             system: string;
             messages: unknown[];
@@ -31,11 +26,22 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             model?: string | null;
         };
 
+        const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
+        const cloudApiBaseUrl = getCloudApiBaseUrl();
+        const shouldUseCloudProxy = USE_CLOUD_AI && Boolean(cloudApiBaseUrl) && !organizationUsesProviderOverride;
+
+        const proxied = shouldUseCloudProxy
+            ? await proxyAiRouteIfNeeded(req, '/api/ai/stream', {
+                  body,
+              })
+            : null;
+        if (proxied) return proxied;
+
         const envProvider = (process.env.DORY_AI_PROVIDER ?? '').trim().toLowerCase();
         const envBaseUrl = (process.env.DORY_AI_URL ?? '').trim().toLowerCase();
         const isCloudflareGatewayUrl = envBaseUrl.includes('gateway.ai.cloudflare.com');
         const isCloudflareGatewayProvider = envProvider === 'cloudflare' || envProvider === 'cloudflare-gateway';
-        const shouldForcePresetModel = shouldUseCloudProxy || isCloudflareGatewayProvider || isCloudflareGatewayUrl;
+        const shouldForcePresetModel = !organizationUsesProviderOverride && (shouldUseCloudProxy || isCloudflareGatewayProvider || isCloudflareGatewayUrl);
         const requestedModel = shouldForcePresetModel ? null : body.model;
 
         console.info('[ai/stream] request model input', {
@@ -48,7 +54,15 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             forcePresetModel: shouldForcePresetModel,
         });
 
-        const { model, preset, modelName: providerModelName } = getEffectiveModelBundle('chat', requestedModel);
+        const {
+            model,
+            preset,
+            modelName: providerModelName,
+            providerKey,
+        } = await getEffectiveModelBundleForOrganization('chat', {
+            organizationId,
+            modelName: requestedModel,
+        });
         console.info('[ai/stream] model resolution', {
             requestedModel: body.model ?? null,
             effectiveRequestedModel: requestedModel ?? null,
@@ -77,8 +91,8 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
                 userId,
                 feature: 'chat_stream',
                 model: providerModelName,
-                gateway: isCloudflareGatewayProvider || isCloudflareGatewayUrl ? 'cloudflare' : 'direct',
-                provider: envProvider || null,
+                gateway: providerKey === 'cloudflare' || providerKey === 'cloudflare-gateway' || isCloudflareGatewayProvider || isCloudflareGatewayUrl ? 'cloudflare' : 'direct',
+                provider: providerKey ?? (envProvider || null),
             },
         });
 

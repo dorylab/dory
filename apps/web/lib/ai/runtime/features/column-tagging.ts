@@ -4,7 +4,7 @@ import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import { cleanJson } from '../../core/clean-json';
 import { buildColumnTaggingPrompt, heuristicTagging, normalizeAIResult } from '../../core/column-tagging';
 import { ColumnInput, SchemaTag, SchemaTagResponse } from '@dory/shared';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnTagsWithCacheOptions = {
@@ -26,21 +26,7 @@ type GetColumnTagsWithCacheOptions = {
 };
 
 export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOptions) {
-    const {
-        organizationId,
-        userId,
-        connectionId,
-        columns,
-        dbType,
-        catalog,
-        database,
-        table,
-        locale,
-        model,
-        feature = 'column_tagging',
-        promptVersion = 1,
-        algoVersion,
-    } = options;
+    const { organizationId, userId, connectionId, columns, dbType, catalog, database, table, locale, model, feature = 'column_tagging', promptVersion = 1, algoVersion } = options;
 
     if (!columns.length) {
         return {
@@ -50,10 +36,15 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
         };
     }
 
-    const { model: chatModel, preset, modelName: providerModelName } = getEffectiveModelBundle(
-        'column_tagging',
-        model,
-    );
+    const {
+        model: chatModel,
+        preset,
+        modelName: providerModelName,
+        providerKey,
+    } = await getEffectiveModelBundleForOrganization('column_tagging', {
+        organizationId,
+        modelName: model,
+    });
     const effectiveCatalog = catalog ?? 'default';
     const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
 
@@ -83,10 +74,11 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
             userId: userId ?? null,
             feature,
             model: providerModelName,
+            provider: providerKey ?? undefined,
             promptVersion,
             algoVersion,
         },
-        normalize: (savedPayload) => {
+        normalize: savedPayload => {
             if (savedPayload?.columns) return savedPayload.columns;
             return heuristicTagging(columns, locale);
         },
@@ -104,6 +96,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
                     userId: userId ?? null,
                     feature,
                     model: providerModelName,
+                    provider: providerKey ?? undefined,
                     promptVersion,
                     algoVersion,
                 },

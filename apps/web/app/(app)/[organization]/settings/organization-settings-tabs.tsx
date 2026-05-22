@@ -2,23 +2,24 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, BadgeCheck } from 'lucide-react';
+import { BadgeCheck, Bot, Building2 } from 'lucide-react';
 
 import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 
 type OrganizationSettingsTab = {
-    slug: 'organization' | 'billing';
+    slug: 'organization' | 'ai' | 'billing';
     label: string;
 };
 
 const tabIcons = {
     organization: Building2,
+    ai: Bot,
     billing: BadgeCheck,
 } satisfies Record<OrganizationSettingsTab['slug'], typeof Building2>;
 
 export function OrganizationSettingsTabs({ organization, items }: { organization: string; items: OrganizationSettingsTab[] }) {
     const pathname = usePathname();
-    const activeTab = pathname.endsWith('/settings/billing') ? 'billing' : 'organization';
+    const activeTab = pathname.endsWith('/settings/billing') ? 'billing' : pathname.endsWith('/settings/ai') ? 'ai' : 'organization';
 
     return (
         <Tabs value={activeTab} className="w-fit">

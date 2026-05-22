@@ -1,8 +1,8 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
 export type OpenAICompatibleProviderOptions = {
-    apiKey?: string;
-    baseURL?: string;
+    apiKey?: string | null;
+    baseURL?: string | null;
     name?: string;
 };
 
@@ -12,19 +12,16 @@ function normalizeBaseURL(baseURL: string) {
 }
 
 export function createOpenAICompatibleProvider(options: OpenAICompatibleProviderOptions = {}) {
-    const apiKey = options.apiKey ?? process.env.DORY_AI_API_KEY;
-    if (!apiKey) {
-        throw new Error('DORY_AI_API_KEY is required');
-    }
+    const apiKey = options.apiKey === undefined ? process.env.DORY_AI_API_KEY : options.apiKey;
 
-    const rawBaseURL = options.baseURL ?? process.env.DORY_AI_URL;
+    const rawBaseURL = options.baseURL === undefined ? process.env.DORY_AI_URL : options.baseURL;
     if (!rawBaseURL) {
         throw new Error('DORY_AI_URL is required');
     }
     const baseURL = normalizeBaseURL(rawBaseURL);
 
     const provider = createOpenAICompatible({
-        apiKey,
+        apiKey: apiKey || 'not-needed',
         baseURL,
         name: options.name ?? 'openai-compatible',
         includeUsage: true,

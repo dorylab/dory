@@ -24,6 +24,7 @@ import { USE_CLOUD_AI } from '@/app/config/app';
 import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import type { ConnectionType } from '@dory/shared/types/connections';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
 export const runtime = 'nodejs';
 
@@ -157,6 +158,9 @@ async function handleChatRequest(req: NextRequest) {
     const preset = getModelPresetOnly('chat');
     const providerModelName = requestedModel || preset.model;
     const compiledSystem = compileSystemPrompt(preset.system);
+    const db = userId ? await getDBService() : null;
+    const organizationUsesProviderOverride = db && organizationId ? await shouldUseOrganizationProviderOverride(db, organizationId) : false;
+
     console.info('[chat] model resolution', {
         requestedModel: requestedModel ?? null,
         presetModel: preset.model,
@@ -164,9 +168,8 @@ async function handleChatRequest(req: NextRequest) {
         envProvider: process.env.DORY_AI_PROVIDER ?? null,
         envModel: process.env.DORY_AI_MODEL ?? null,
         useCloud: USE_CLOUD_AI,
+        organizationUsesProviderOverride,
     });
-
-    const db = userId ? await getDBService() : null;
 
     let chatId: string | null = chatIdFromBody ?? null;
     let sessionTitle: string | null = null;
@@ -368,8 +371,8 @@ async function handleChatRequest(req: NextRequest) {
         }
     }
 
-    const useCloud = USE_CLOUD_AI && Boolean(getCloudApiBaseUrl());
-    const cloudBaseUrl = resolveCloudBaseUrl(req);
+    const useCloud = USE_CLOUD_AI && Boolean(getCloudApiBaseUrl()) && !organizationUsesProviderOverride;
+    const cloudBaseUrl = resolveCloudBaseUrl(req, useCloud);
     const cloudUrl = new URL('/api/ai/stream', cloudBaseUrl).toString();
     const cloudHeaders = buildCloudForwardHeaders(req, cloudBaseUrl);
     const cloudTools = buildCloudToolDeclarations({
@@ -949,8 +952,8 @@ function looksLikeStandaloneSql(text: string): boolean {
     return !/[。！？]/.test(trimmed) && !/^[-*]\s/m.test(trimmed);
 }
 
-function resolveCloudBaseUrl(req: NextRequest): string {
-    if (!USE_CLOUD_AI) {
+function resolveCloudBaseUrl(req: NextRequest, useCloud: boolean): string {
+    if (!useCloud) {
         try {
             return new URL(req.url).origin;
         } catch {

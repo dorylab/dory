@@ -2345,6 +2345,16 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/ee@npm:0.1.0, @dory/ee@workspace:packages/ee":
+  version: 0.0.0-use.local
+  resolution: "@dory/ee@workspace:packages/ee"
+  dependencies:
+    "@dory/database": "npm:0.1.0"
+    "@dory/shared": "npm:0.1.0"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
 "@dory/files@npm:0.1.0, @dory/files@workspace:packages/files":
   version: 0.0.0-use.local
   resolution: "@dory/files@workspace:packages/files"
@@ -22756,6 +22766,7 @@ __metadata:
     "@dory/analysis": "npm:0.1.0"
     "@dory/database": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"
+    "@dory/ee": "npm:0.1.0"
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"

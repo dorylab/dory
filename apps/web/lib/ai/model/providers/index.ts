@@ -11,17 +11,32 @@ type ChatProvider = {
     chatModel: (modelName: string) => any;
 };
 
-const providerFactories: Record<string, () => ChatProvider> = {
-    qwen: () => createQwenProvider(),
-    openai: () => createOpenAIProvider(),
-    anthropic: () => createAnthropicProvider(),
-    google: () => createGoogleProvider(),
-    xai: () => createXaiProvider(),
-    meta: () => createMetaProvider(),
-    'openai-compatible': () => createOpenAICompatibleProvider(),
-    compatible: () => createOpenAICompatibleProvider(),
-    cloudflare: () => createCloudflareGatewayProvider(),
-    'cloudflare-gateway': () => createCloudflareGatewayProvider(),
+type ProviderFactoryOptions = {
+    apiKey?: string | null;
+    baseURL?: string | null;
+    name?: string;
+};
+
+function withRequiredKeyOptions(options?: ProviderFactoryOptions) {
+    return {
+        ...options,
+        apiKey: options?.apiKey ?? undefined,
+        baseURL: options?.baseURL ?? undefined,
+    };
+}
+
+const providerFactories: Record<string, (options?: ProviderFactoryOptions) => ChatProvider> = {
+    qwen: options => createQwenProvider(withRequiredKeyOptions(options)),
+    openai: options => createOpenAIProvider(withRequiredKeyOptions(options)),
+    anthropic: options => createAnthropicProvider(withRequiredKeyOptions(options)),
+    google: options => createGoogleProvider(withRequiredKeyOptions(options)),
+    xai: options => createXaiProvider(withRequiredKeyOptions(options)),
+    meta: options => createMetaProvider(withRequiredKeyOptions(options)),
+    'azure-openai': options => createOpenAICompatibleProvider(withRequiredKeyOptions(options)),
+    openrouter: options => createOpenAICompatibleProvider(withRequiredKeyOptions(options)),
+    'openai-compatible': options => createOpenAICompatibleProvider(options),
+    cloudflare: options => createCloudflareGatewayProvider(withRequiredKeyOptions(options)),
+    'cloudflare-gateway': options => createCloudflareGatewayProvider(withRequiredKeyOptions(options)),
 };
 
 const providerCache = new Map<string, ChatProvider>();
@@ -45,8 +60,7 @@ function resolveProviderAndModel(modelName: string) {
     const trimmed = modelName.trim();
     const [prefix, rest] = trimmed.split('/', 2);
     const envProvider = (process.env.DORY_AI_PROVIDER ?? 'openai').toLowerCase();
-    const isCloudflareProvider =
-        envProvider === 'cloudflare' || envProvider === 'cloudflare-gateway';
+    const isCloudflareProvider = envProvider === 'cloudflare' || envProvider === 'cloudflare-gateway';
 
     if (rest && providerFactories[prefix.toLowerCase()]) {
         // For Cloudflare Gateway, model prefixes like "openai/gpt-4o-mini"
@@ -69,5 +83,24 @@ function resolveProviderAndModel(modelName: string) {
 export function getChatModel(modelName: string) {
     const { providerKey, model } = resolveProviderAndModel(modelName);
     const provider = getProvider(providerKey);
+    return provider.chatModel(model);
+}
+
+export function getChatModelForProviderConfig(options: { providerKey: string; modelName: string; apiKey?: string | null; baseURL?: string | null }) {
+    const providerKey = options.providerKey.trim().toLowerCase();
+    const factory = providerFactories[providerKey];
+    if (!factory) {
+        throw new Error(`Unknown AI provider: ${options.providerKey}`);
+    }
+
+    const trimmedModel = options.modelName.trim();
+    const [prefix, rest] = trimmedModel.split('/', 2);
+    const model = rest && prefix.toLowerCase() === providerKey ? rest : trimmedModel;
+    const provider = factory({
+        apiKey: options.apiKey,
+        baseURL: options.baseURL,
+        name: providerKey,
+    });
+
     return provider.chatModel(model);
 }

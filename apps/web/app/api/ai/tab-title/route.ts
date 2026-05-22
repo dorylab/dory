@@ -1,5 +1,5 @@
 import { generateText } from '@/lib/ai/gateway';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { buildTabTitlePrompt } from '@/lib/ai/prompts';
 import { getApiLocale } from '@/app/api/utils/i18n';
@@ -7,8 +7,9 @@ import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organizatio
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
         const locale = await getApiLocale();
         const body = (await req.json()) as {
@@ -17,16 +18,27 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             model?: string | null;
         };
         const { sql, database, model: requestedModel } = body;
-        const shouldForcePresetModel = USE_CLOUD_AI;
+        const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
+        const shouldForcePresetModel = USE_CLOUD_AI && !organizationUsesProviderOverride;
 
-        const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/tab-title', {
-            body: USE_CLOUD_AI ? { ...body, model: null } : body,
-        });
+        const proxied = organizationUsesProviderOverride
+            ? null
+            : await proxyAiRouteIfNeeded(req, '/api/ai/tab-title', {
+                  body: USE_CLOUD_AI ? { ...body, model: null } : body,
+              });
         if (proxied) return proxied;
 
         const effectiveRequestedModel = shouldForcePresetModel ? null : requestedModel;
 
-        const { model, preset, modelName: providerModelName } = getEffectiveModelBundle('title', effectiveRequestedModel);
+        const {
+            model,
+            preset,
+            modelName: providerModelName,
+            providerKey,
+        } = await getEffectiveModelBundleForOrganization('title', {
+            organizationId,
+            modelName: effectiveRequestedModel,
+        });
 
         if (!sql || !sql.trim()) {
             return new Response(JSON.stringify({ title: null }), {
@@ -47,7 +59,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
                 userId,
                 feature: 'tab_title',
                 model: providerModelName,
-                provider: (process.env.DORY_AI_PROVIDER ?? '').trim().toLowerCase() || null,
+                provider: providerKey ?? ((process.env.DORY_AI_PROVIDER ?? '').trim().toLowerCase() || null),
             },
         });
 

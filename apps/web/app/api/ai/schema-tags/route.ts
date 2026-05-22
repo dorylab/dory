@@ -7,6 +7,7 @@ import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organizatio
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
 export const runtime = 'nodejs';
 
@@ -31,8 +32,9 @@ const schemaTagRequestSchema = z.object({
 
 type SchemaTagRequest = z.infer<typeof schemaTagRequestSchema>;
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
-    const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/schema-tags');
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+    const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
+    const proxied = organizationUsesProviderOverride ? null : await proxyAiRouteIfNeeded(req, '/api/ai/schema-tags');
     if (proxied) return proxied;
 
     const locale = await getApiLocale();

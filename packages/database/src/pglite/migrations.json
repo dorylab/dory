@@ -206,5 +206,16 @@
     "bps": true,
     "folderMillis": 1778648400000,
     "hash": "b58d96b8037473a03788135e50fab5420654d12b30617d9660243793fbe01138"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"organization_ai_providers\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"provider\" text NOT NULL,\n    \"model\" text NOT NULL,\n    \"base_url\" text,\n    \"api_key_encrypted\" text,\n    \"key_hint\" text,\n    \"enabled\" boolean DEFAULT true NOT NULL,\n    \"is_default\" boolean DEFAULT false NOT NULL,\n    \"created_by_user_id\" text,\n    \"updated_by_user_id\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_organization_ai_providers_org\" ON \"organization_ai_providers\" USING btree (\"organization_id\");\n",
+      "\nCREATE INDEX \"idx_organization_ai_providers_org_enabled\" ON \"organization_ai_providers\" USING btree (\"organization_id\",\"enabled\");\n",
+      "\nCREATE UNIQUE INDEX \"uniq_organization_ai_provider_default\" ON \"organization_ai_providers\" USING btree (\"organization_id\") WHERE \"organization_ai_providers\".\"is_default\" = true;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1779285907000,
+    "hash": "b1e85a39007ddc49dfa12ff3d06e59cfeb5744893e03e47da32e38324b12ac14"
   }
 ]

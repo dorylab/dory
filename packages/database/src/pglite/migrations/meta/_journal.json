@@ -78,6 +78,13 @@
       "when": 1778648400000,
       "tag": "0010_local_files",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1779285907000,
+      "tag": "0011_organization_ai_providers",
+      "breakpoints": true
     }
   ]
 }

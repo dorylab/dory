@@ -6,6 +6,7 @@ import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { fallbackSummaries } from '@/lib/ai/core/schema-explanations';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
 export const runtime = 'nodejs';
 
@@ -32,8 +33,9 @@ const schemaExplanationRequestSchema = z.object({
 
 type SchemaExplanationRequest = z.infer<typeof schemaExplanationRequestSchema>;
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
-    const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/schema-explanations');
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+    const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
+    const proxied = organizationUsesProviderOverride ? null : await proxyAiRouteIfNeeded(req, '/api/ai/schema-explanations');
     if (proxied) return proxied;
 
     const locale = await getApiLocale();

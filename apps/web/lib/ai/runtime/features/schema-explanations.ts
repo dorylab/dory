@@ -9,7 +9,7 @@ import {
     ColumnInput,
     SchemaExplanationResponse,
 } from '../../core/schema-explanations';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnExplanationsOptions = {
@@ -26,8 +26,8 @@ type GetColumnExplanationsOptions = {
     columns: ColumnInput[];
     model?: string | null;
 
-    feature?: string;        // Default column_explanations
-    promptVersion?: number;  // Default 1
+    feature?: string; // Default column_explanations
+    promptVersion?: number; // Default 1
     algoVersion?: number;
 };
 
@@ -54,13 +54,17 @@ export async function getColumnExplanationsWithCache(
         return { columns: [], raw: undefined, fromCache: false };
     }
 
-    const { model: chatModel, preset, modelName: providerModelName } = getEffectiveModelBundle(
-        'schema_explanation',
-        model,
-    );
+    const {
+        model: chatModel,
+        preset,
+        modelName: providerModelName,
+        providerKey,
+    } = await getEffectiveModelBundleForOrganization('schema_explanation', {
+        organizationId,
+        modelName: model,
+    });
     const effectiveCatalog = catalog ?? 'default';
-    const systemPrompt =
-        compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
+    const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
 
     // Standardize schemaHash: align with tags/table-summary
     const schemaHash = await computeSchemaHash({
@@ -78,10 +82,7 @@ export async function getColumnExplanationsWithCache(
     });
     const localeKey = locale ?? 'en';
 
-    const { normalized, payload, fromCache } = await runAiWithCache<
-        SchemaExplanationResponse['columns'],
-        SchemaExplanationResponse | null
-    >({
+    const { normalized, payload, fromCache } = await runAiWithCache<SchemaExplanationResponse['columns'], SchemaExplanationResponse | null>({
         organizationId,
         connectionId,
         feature,
@@ -98,10 +99,11 @@ export async function getColumnExplanationsWithCache(
             userId: userId ?? null,
             feature,
             model: providerModelName,
+            provider: providerKey ?? undefined,
             promptVersion,
             algoVersion,
         },
-        normalize: (savedPayload) => normalizeSchemaExplanationPayload(columns, savedPayload, locale).columns,
+        normalize: savedPayload => normalizeSchemaExplanationPayload(columns, savedPayload, locale).columns,
         run: async () => {
             const prompt = buildSchemaExplanationPrompt({ columns, dbType, database, table, locale });
 
@@ -116,6 +118,7 @@ export async function getColumnExplanationsWithCache(
                     userId: userId ?? null,
                     feature,
                     model: providerModelName,
+                    provider: providerKey ?? undefined,
                     promptVersion,
                     algoVersion,
                 },

@@ -3,7 +3,7 @@ import 'server-only';
 import { z } from 'zod';
 import { generateText } from '@/lib/ai/gateway';
 import { isAiQuotaExceededError } from '@/lib/ai/usage-quota';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { cleanJson } from '@/lib/ai/core/clean-json';
 export { isMissingAiEnvError } from '@/lib/ai/errors';
@@ -27,7 +27,15 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
 
     for (let i = 0; i <= maxRetries; i++) {
         try {
-            const { model, preset, modelName: providerModelName } = getEffectiveModelBundle('action', requestedModel);
+            const {
+                model,
+                preset,
+                modelName: providerModelName,
+                providerKey,
+            } = await getEffectiveModelBundleForOrganization('action', {
+                organizationId: context?.organizationId ?? null,
+                modelName: requestedModel,
+            });
             const system = compileSystemPrompt(preset.system);
             const { text } = await generateText({
                 model,
@@ -40,6 +48,7 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
                     userId: context?.userId ?? null,
                     feature: context?.feature ?? 'copilot_action',
                     model: providerModelName,
+                    provider: providerKey ?? undefined,
                 },
             });
 

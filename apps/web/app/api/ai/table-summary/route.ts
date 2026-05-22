@@ -7,6 +7,7 @@ import { buildFallbackSummary, buildFallbackDetail, buildFallbackHighlights, bui
 import { ColumnInput } from '@dory/shared';
 import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
 export const runtime = 'nodejs';
 
@@ -45,8 +46,9 @@ function createTimer(label: string) {
     return { stamp, end };
 }
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
-    const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/table-summary');
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+    const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
+    const proxied = organizationUsesProviderOverride ? null : await proxyAiRouteIfNeeded(req, '/api/ai/table-summary');
     if (proxied) return proxied;
 
     const locale = await getApiLocale();

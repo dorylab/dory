@@ -1,5 +1,8 @@
-import { MODEL_PRESETS, resolveModelName } from './presets';
-import { getChatModel } from './providers';
+import { getDBService } from '@dory/database';
+import { getOrganizationAiProviderEntitlementModeForServer, resolveOrganizationAiProviderCapabilityForOrganization } from '@dory/ee/ai/organization-ai-providers';
+import { MODEL_PRESETS, getProviderModelPresets, resolveModelName } from './presets';
+import { getChatModel, getChatModelForProviderConfig } from './providers';
+import { isAiProviderApiKeyRequired, isAiProviderBaseUrlRequired } from '@dory/ee/ai/provider-options';
 import type { ModelRole } from './types';
 
 export type ModelBundle<R extends ModelRole = ModelRole> = {
@@ -11,6 +14,8 @@ export type EffectiveModelBundle<R extends ModelRole = ModelRole> = {
     model: ReturnType<typeof getChatModel>;
     preset: (typeof MODEL_PRESETS)[R];
     modelName: string;
+    providerKey?: string | null;
+    source?: 'global' | 'organization';
 };
 
 /**
@@ -72,12 +77,60 @@ export function getProviderModel(modelName: string) {
  * - Keeps the "default preset" path as the default
  * - Only hits provider lookup when a non-default modelName is requested
  */
-export function getEffectiveModelBundle<R extends ModelRole>(
-    role: R,
-    modelName?: string | null,
-): EffectiveModelBundle<R> {
+export function getEffectiveModelBundle<R extends ModelRole>(role: R, modelName?: string | null): EffectiveModelBundle<R> {
     const { model: defaultModel, preset } = getModelBundle(role);
     const resolvedModelName = modelName ?? preset.model;
     const model = resolvedModelName === preset.model ? defaultModel : getProviderModel(resolvedModelName);
-    return { model, preset, modelName: resolvedModelName };
+    return { model, preset, modelName: resolvedModelName, source: 'global' };
+}
+
+export async function getEffectiveModelBundleForOrganization<R extends ModelRole>(
+    role: R,
+    options: {
+        organizationId?: string | null;
+        modelName?: string | null;
+    } = {},
+): Promise<EffectiveModelBundle<R>> {
+    const organizationId = options.organizationId ?? null;
+    if (!organizationId) {
+        return getEffectiveModelBundle(role, options.modelName);
+    }
+
+    const db = await getDBService();
+    const provider = await db.organizationAiProviders.getDefaultResolved(organizationId);
+    if (!provider) {
+        return getEffectiveModelBundle(role, options.modelName);
+    }
+
+    const capability = await resolveOrganizationAiProviderCapabilityForOrganization(db, organizationId, getOrganizationAiProviderEntitlementModeForServer());
+    if (!capability.enabled) {
+        return getEffectiveModelBundle(role, options.modelName);
+    }
+
+    if (
+        !provider.provider ||
+        !provider.model ||
+        (isAiProviderApiKeyRequired(provider.provider) && !provider.apiKey) ||
+        (isAiProviderBaseUrlRequired(provider.provider) && !provider.baseUrl)
+    ) {
+        throw new Error('Organization AI provider is incomplete.');
+    }
+
+    const basePreset = getProviderModelPresets(provider.provider)[role] ?? MODEL_PRESETS[role];
+    const resolvedModelName = provider.model;
+    const preset = { ...basePreset, model: resolvedModelName };
+    const model = getChatModelForProviderConfig({
+        providerKey: provider.provider,
+        modelName: resolvedModelName,
+        apiKey: provider.apiKey,
+        baseURL: provider.baseUrl,
+    });
+
+    return {
+        model,
+        preset,
+        modelName: resolvedModelName,
+        providerKey: provider.provider,
+        source: 'organization',
+    };
 }

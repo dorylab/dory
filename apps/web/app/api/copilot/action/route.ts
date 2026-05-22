@@ -14,8 +14,9 @@ import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { USE_CLOUD_AI } from '@/app/config/app';
 import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const locale = await getServerLocale();
     try {
         const body = (await req.json()) as { intent?: ActionIntent; input?: CopilotFixInput; model?: string | null };
@@ -24,7 +25,9 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             return new NextResponse(translate(locale, 'SqlConsole.Copilot.Errors.InvalidRequest'), { status: 400 });
         }
 
-        if (USE_CLOUD_AI) {
+        const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
+
+        if (USE_CLOUD_AI && !organizationUsesProviderOverride) {
             const cloudBaseUrl = getCloudApiBaseUrl();
             if (!cloudBaseUrl) {
                 return NextResponse.json(
@@ -55,7 +58,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             });
         }
 
-        const shouldForcePresetModel = USE_CLOUD_AI;
+        const shouldForcePresetModel = USE_CLOUD_AI && !organizationUsesProviderOverride;
         const requestedModel = shouldForcePresetModel ? null : (body.model ?? body.input?.model ?? null);
 
         const result = await runQuickActionServer(body.intent, { ...body.input, model: requestedModel }, { locale, organizationId, userId });

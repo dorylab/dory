@@ -12,6 +12,7 @@ import { translate } from '@dory/i18n/translate';
 import { getServerLocale } from '@dory/i18n/server';
 import { normalizeSqlDialect } from '@/lib/sql/sql-dialect';
 import type { ConnectionType } from '@dory/shared/types/connections';
+import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
 
 export const runtime = 'nodejs';
 
@@ -27,7 +28,7 @@ type InlineAskRequestBody = {
     model?: string | null;
 };
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const locale = await getServerLocale();
 
     try {
@@ -51,7 +52,9 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             model: body.model ?? null,
         };
 
-        if (USE_CLOUD_AI) {
+        const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
+
+        if (USE_CLOUD_AI && !organizationUsesProviderOverride) {
             const cloudBaseUrl = getCloudApiBaseUrl();
             if (!cloudBaseUrl) {
                 return NextResponse.json(
