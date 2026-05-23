@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { BookOpen, CircleHelp, ExternalLink, KeyRound, Loader2, Pencil, Plus, Sparkles, Star, Trash2 } from 'lucide-react';
+import { BookOpen, CircleCheck, CircleHelp, ExternalLink, KeyRound, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -232,12 +232,13 @@ export default function AISettingsPageClient() {
     const organizationSlug = params.organization;
     const t = useTranslations('OrganizationSettings.Ai');
     const queryClient = useQueryClient();
+    const providersQueryKey = useMemo(() => ['organization-ai-providers', organizationSlug] as const, [organizationSlug]);
     const [formMode, setFormMode] = useState<ProviderFormMode | null>(null);
     const [form, setForm] = useState<ProviderFormInput>(() => createDefaultForm());
     const [providerToDelete, setProviderToDelete] = useState<AiProviderRow | null>(null);
 
     const providersQuery = useQuery({
-        queryKey: ['organization-ai-providers', organizationSlug],
+        queryKey: providersQueryKey,
         queryFn: getAiProviders,
         retry: false,
     });
@@ -248,6 +249,7 @@ export default function AISettingsPageClient() {
     const upgradeTarget = providersQuery.data?.upgradeTarget ?? 'enterprise';
     const isOssLicenseMode = !organizationProvidersAvailable && upgradeTarget === 'enterprise';
     const visibleProviders = isOssLicenseMode ? providers.filter(provider => provider.source === 'system') : providers;
+    const defaultProvider = visibleProviders.find(provider => provider.isDefault) ?? null;
     const editingProvider = useMemo(() => {
         if (formMode?.type !== 'edit') return null;
         return providers.find(provider => provider.id === formMode.providerId) ?? null;
@@ -276,7 +278,7 @@ export default function AISettingsPageClient() {
     const createMutation = useMutation({
         mutationFn: createOrganizationProvider,
         onSuccess: payload => {
-            queryClient.setQueryData(['organization-ai-providers', organizationSlug], payload);
+            queryClient.setQueryData(providersQueryKey, payload);
             setFormMode(null);
             setForm(createDefaultForm());
             toast.success(t('Toasts.ProviderAdded'));
@@ -288,13 +290,58 @@ export default function AISettingsPageClient() {
 
     const patchMutation = useMutation({
         mutationFn: ({ providerId, body }: { providerId: string; body: Record<string, unknown> }) => patchProvider(providerId, body),
-        onSuccess: payload => {
-            queryClient.setQueryData(['organization-ai-providers', organizationSlug], payload);
+        onMutate: async variables => {
+            if (variables.body.action !== 'set_default') return;
+
+            await queryClient.cancelQueries({ queryKey: providersQueryKey });
+            const previousPayload = queryClient.getQueryData<AiProvidersPayload>(providersQueryKey);
+
+            queryClient.setQueryData<AiProvidersPayload>(providersQueryKey, current => {
+                if (!current) return current;
+
+                const providers = current.providers
+                    .map(provider => {
+                        const isDefault = provider.id === variables.providerId;
+                        if (isDefault) {
+                            return {
+                                ...provider,
+                                isDefault: true,
+                                status: provider.configured ? 'active' : provider.status,
+                            } satisfies AiProviderRow;
+                        }
+
+                        return {
+                            ...provider,
+                            isDefault: false,
+                            status: provider.status === 'active' ? 'enabled' : provider.status,
+                        } satisfies AiProviderRow;
+                    })
+                    .sort((left, right) => {
+                        if (left.id === variables.providerId) return -1;
+                        if (right.id === variables.providerId) return 1;
+                        return 0;
+                    });
+
+                return {
+                    ...current,
+                    providers,
+                    defaultProviderId: variables.providerId,
+                };
+            });
+
+            return { previousPayload };
+        },
+        onSuccess: (payload, variables) => {
+            queryClient.setQueryData(providersQueryKey, payload);
+            void queryClient.invalidateQueries({ queryKey: providersQueryKey });
             setFormMode(null);
             setForm(createDefaultForm());
-            toast.success(t('Toasts.Saved'));
+            toast.success(variables.body.action === 'set_default' ? t('Toasts.DefaultUpdated') : t('Toasts.Saved'));
         },
-        onError: error => {
+        onError: (error, _variables, context) => {
+            if (context?.previousPayload) {
+                queryClient.setQueryData(providersQueryKey, context.previousPayload);
+            }
             toast.error(error instanceof Error ? error.message : t('Toasts.SaveFailed'));
         },
     });
@@ -302,7 +349,7 @@ export default function AISettingsPageClient() {
     const deleteMutation = useMutation({
         mutationFn: deleteProvider,
         onSuccess: payload => {
-            queryClient.setQueryData(['organization-ai-providers', organizationSlug], payload);
+            queryClient.setQueryData(providersQueryKey, payload);
             setProviderToDelete(null);
             toast.success(t('Toasts.ProviderDeleted'));
         },
@@ -426,6 +473,11 @@ export default function AISettingsPageClient() {
                             <div>
                                 <h2 className="font-semibold">{t('Providers.Title')}</h2>
                                 <p className="mt-1 text-sm text-muted-foreground">{t('Providers.Description')}</p>
+                                {organizationProvidersAvailable && defaultProvider ? (
+                                    <div className="mt-2 text-xs text-muted-foreground">
+                                        {t('Providers.CurrentDefault')}: <span className="font-medium text-foreground">{defaultProvider.displayName}</span>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                         {canManageProviders ? (
@@ -457,8 +509,8 @@ export default function AISettingsPageClient() {
                             <div
                                 key={row.id}
                                 className={cn(
-                                    'rounded-lg border px-4 py-4',
-                                    row.isDefault ? 'border-primary/35 bg-primary/5' : row.source === 'system' ? 'border-muted-foreground/20 bg-muted/30' : 'bg-background',
+                                    'relative overflow-hidden rounded-lg border px-4 py-4 transition-colors',
+                                    row.isDefault ? 'border-primary/25 bg-primary/[0.03]' : row.source === 'system' ? 'border-muted-foreground/15 bg-muted/20' : 'bg-background',
                                 )}
                             >
                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -468,9 +520,9 @@ export default function AISettingsPageClient() {
                                                 className={cn(
                                                     'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border',
                                                     row.isDefault
-                                                        ? 'border-primary/35 bg-primary/10 text-primary'
+                                                        ? 'border-primary/30 bg-background text-primary'
                                                         : row.source === 'system'
-                                                          ? 'border-muted-foreground/20 bg-muted text-muted-foreground'
+                                                          ? 'border-muted-foreground/15 bg-muted/50 text-muted-foreground'
                                                           : 'bg-background',
                                                 )}
                                             >
@@ -510,7 +562,7 @@ export default function AISettingsPageClient() {
                                             <>
                                                 {!row.isDefault && row.configured && canManageProviders ? (
                                                     <Button variant="outline" size="sm" onClick={() => setDefault(row)} disabled={isSaving}>
-                                                        <Star className="size-4" />
+                                                        <CircleCheck className="size-4" />
                                                         {t('Actions.SetAsDefault')}
                                                     </Button>
                                                 ) : null}
@@ -523,17 +575,27 @@ export default function AISettingsPageClient() {
                                             <>
                                                 {!row.isDefault && row.configured ? (
                                                     <Button variant="outline" size="sm" onClick={() => setDefault(row)} disabled={!canManageProviders || isSaving}>
-                                                        <Star className="size-4" />
+                                                        <CircleCheck className="size-4" />
                                                         {t('Actions.SetAsDefault')}
                                                     </Button>
                                                 ) : null}
-                                                <Button variant="outline" size="sm" onClick={() => openEditForm(row)} disabled={!canManageProviders || isSaving}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => openEditForm(row)}
+                                                    disabled={!canManageProviders || isSaving}
+                                                    aria-label={t('Actions.Edit')}
+                                                >
                                                     <Pencil className="size-4" />
-                                                    {t('Actions.Edit')}
                                                 </Button>
-                                                <Button variant="outline" size="sm" onClick={() => setProviderToDelete(row)} disabled={!canManageProviders || isSaving}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => setProviderToDelete(row)}
+                                                    disabled={!canManageProviders || isSaving}
+                                                    aria-label={t('Actions.Delete')}
+                                                >
                                                     <Trash2 className="size-4" />
-                                                    {t('Actions.Delete')}
                                                 </Button>
                                             </>
                                         )}

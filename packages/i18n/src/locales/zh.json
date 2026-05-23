@@ -3108,7 +3108,8 @@
             "ReadOnlyHint": "你当前的角色不能修改组织 AI Providers。",
             "Providers": {
                 "Title": "AI Providers",
-                "Description": "当前组织可用于 AI 功能的 Provider 列表。"
+                "Description": "当前组织可用于 AI 功能的 Provider 列表。",
+                "CurrentDefault": "当前默认"
             },
             "SystemProvider": {
                 "Label": "System Provider",
@@ -3157,7 +3158,7 @@
                 "AddProvider": "Add Provider",
                 "UpgradeToEnterprise": "Upgrade to Enterprise",
                 "UpgradeToPro": "Upgrade to Pro",
-                "SetAsDefault": "Set as default",
+                "SetAsDefault": "设为默认",
                 "Edit": "Edit",
                 "Disable": "Disable",
                 "Enable": "Enable",
@@ -3168,11 +3169,12 @@
                 "SaveChanges": "Save Changes"
             },
             "Toasts": {
-                "ProviderAdded": "Organization provider 已添加",
-                "ProviderDeleted": "Organization provider 已删除",
-                "Saved": "Organization provider 已保存",
+                "ProviderAdded": "组织 Provider 已添加",
+                "ProviderDeleted": "组织 Provider 已删除",
+                "Saved": "Provider 配置已保存",
+                "DefaultUpdated": "默认 Provider 已更新",
                 "SaveFailed": "保存 AI 配置失败",
-                "DeleteFailed": "删除 Organization provider 失败"
+                "DeleteFailed": "删除组织 Provider 失败"
             }
         },
         "Billing": {

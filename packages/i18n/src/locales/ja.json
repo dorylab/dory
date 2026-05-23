@@ -3104,7 +3104,8 @@
             "ReadOnlyHint": "Your current role does not allow updating organization AI providers.",
             "Providers": {
                 "Title": "AI Providers",
-                "Description": "Providers this organization can use for AI features."
+                "Description": "Providers this organization can use for AI features.",
+                "CurrentDefault": "Current default"
             },
             "SystemProvider": {
                 "Label": "System Provider",
@@ -3153,7 +3154,7 @@
                 "AddProvider": "Add Provider",
                 "UpgradeToEnterprise": "Upgrade to Enterprise",
                 "UpgradeToPro": "Upgrade to Pro",
-                "SetAsDefault": "Set as default",
+                "SetAsDefault": "Make default",
                 "Edit": "Edit",
                 "Disable": "Disable",
                 "Enable": "Enable",
@@ -3164,11 +3165,12 @@
                 "SaveChanges": "Save Changes"
             },
             "Toasts": {
-                "ProviderAdded": "Organization provider added",
-                "ProviderDeleted": "Organization provider deleted",
-                "Saved": "Organization provider saved",
-                "SaveFailed": "Failed to save AI configuration",
-                "DeleteFailed": "Failed to delete organization provider"
+                "ProviderAdded": "組織プロバイダーを追加しました",
+                "ProviderDeleted": "組織プロバイダーを削除しました",
+                "Saved": "プロバイダー設定を保存しました",
+                "DefaultUpdated": "デフォルトプロバイダーを更新しました",
+                "SaveFailed": "AI 設定を保存できませんでした",
+                "DeleteFailed": "組織プロバイダーを削除できませんでした"
             }
         },
         "Billing": {
