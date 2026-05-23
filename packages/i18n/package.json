@@ -19,7 +19,7 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "next": "16.2.6",
+        "next": "16.1.6",
         "next-intl": "^4.9.2"
     },
     "devDependencies": {

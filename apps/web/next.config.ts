@@ -55,7 +55,6 @@ const nextConfig = {
         fetches: {
             fullUrl: true,
         },
-        browserToTerminal: true,
         // 'error' — errors only (default)
         // 'warn'  — warnings and errors
         // true    — all console output
