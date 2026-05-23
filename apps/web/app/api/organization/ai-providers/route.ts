@@ -4,9 +4,9 @@ import { z } from 'zod';
 import { withManagedOrganizationHandler, withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { buildOrganizationAiProvidersPayload } from '@dory/ee/ai/organization-ai-provider-payload';
-import { resolveOrganizationAiProviderCapabilityForOrganization, getOrganizationAiProviderEntitlementModeForServer } from '@dory/ee/ai/organization-ai-providers';
 import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed } from '@dory/ee/ai/provider-options';
 import { canManageOrganization, resolveOrganizationAccess } from '@/lib/server/authz';
+import { resolveOrganizationAiProviderEntitlementForRequest } from '@/lib/server/organization-ai-providers/entitlement';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
 import { ORGANIZATION_AI_PROVIDERS } from '@dory/database/postgres/impl/organization-ai-providers';
@@ -22,12 +22,15 @@ const createSchema = z.object({
 
 export const GET = withUserAndOrganizationHandler(async ({ db, organizationId, userId }) => {
     const access = await resolveOrganizationAccess(organizationId, userId);
+    const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
     return NextResponse.json(
         ResponseUtil.success(
             await buildOrganizationAiProvidersPayload({
                 db,
                 organizationId,
                 canManage: canManageOrganization(access),
+                entitlementMode: entitlement.entitlementMode,
+                billingPlan: entitlement.billingPlan,
             }),
         ),
     );
@@ -47,8 +50,8 @@ export const POST = withManagedOrganizationHandler(async ({ req, db, organizatio
         );
     }
 
-    const capability = await resolveOrganizationAiProviderCapabilityForOrganization(db, organizationId, getOrganizationAiProviderEntitlementModeForServer());
-    if (!capability.enabled) {
+    const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
+    if (!entitlement.capability.enabled) {
         return NextResponse.json(
             ResponseUtil.error({
                 code: ErrorCodes.FORBIDDEN,
@@ -116,6 +119,8 @@ export const POST = withManagedOrganizationHandler(async ({ req, db, organizatio
                 db,
                 organizationId,
                 canManage: true,
+                entitlementMode: entitlement.entitlementMode,
+                billingPlan: entitlement.billingPlan,
             }),
         ),
     );

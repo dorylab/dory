@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { BookOpen, CircleCheck, CircleHelp, ExternalLink, FlaskConical, KeyRound, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { CircleCheck, CircleHelp, ExternalLink, FlaskConical, KeyRound, Loader2, LockKeyhole, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -18,7 +18,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/registry/new-york-v4/ui/alert';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -72,6 +71,7 @@ type OrganizationProviderCapability = {
 type AiProvidersPayload = {
     providers: AiProviderRow[];
     defaultProviderId: 'system' | string;
+    runtime: string | null;
     organizationProviderCapability: OrganizationProviderCapability;
     upgradeTarget: 'enterprise' | 'pro';
     providerResolution: AiProviderResolution;
@@ -87,7 +87,6 @@ type ProviderFormInput = {
 };
 
 const ENTERPRISE_INFO_URL = 'https://getdory.dev';
-const AI_DOCS_URL = 'https://getdory.dev/en/docs/deploy/environment-variables#ai-variables';
 
 async function parseAppResponse<T>(response: Response): Promise<T> {
     const payload = await response.json().catch(() => null);
@@ -226,20 +225,195 @@ function createDefaultForm(): ProviderFormInput {
     };
 }
 
-function ProviderStatusBadge({ row, t }: { row: AiProviderRow; t: ReturnType<typeof useTranslations> }) {
-    if (row.isDefault && row.status !== 'unconfigured') {
-        return <Badge>{t('Badges.Default')}</Badge>;
-    }
+function ProviderStatusBadges({ row, t }: { row: AiProviderRow; t: ReturnType<typeof useTranslations> }) {
+    return (
+        <>
+            {row.isDefault && row.status !== 'unconfigured' ? <Badge>{t('Badges.Default')}</Badge> : null}
+            {row.status === 'unconfigured' ? (
+                <Badge variant="outline" className="text-muted-foreground">
+                    {t('Badges.MissingConfig')}
+                </Badge>
+            ) : null}
+            {row.status === 'disabled' ? <Badge variant="outline">{t('Badges.Disabled')}</Badge> : null}
+        </>
+    );
+}
 
-    if (row.status === 'unconfigured') {
-        return <Badge variant="outline">{t('Badges.Unconfigured')}</Badge>;
-    }
-
-    if (row.status === 'disabled') {
-        return <Badge variant="outline">{t('Badges.Disabled')}</Badge>;
+function ProviderStateMessage({ row, t }: { row: AiProviderRow; t: ReturnType<typeof useTranslations> }) {
+    if (row.source === 'organization' && row.status === 'unconfigured') {
+        return <p className="mt-2 text-sm text-muted-foreground">{t('Status.MissingProviderConfig')}</p>;
     }
 
     return null;
+}
+
+function DefaultAiProviderBadges({ row, ownerLabel, t }: { row: AiProviderRow; ownerLabel: string; t: ReturnType<typeof useTranslations> }) {
+    return (
+        <>
+            <Badge variant="outline">{ownerLabel}</Badge>
+            {row.isDefault && row.status !== 'unconfigured' ? <Badge>{t('Badges.Default')}</Badge> : null}
+            {row.configured ? (
+                <Badge variant="secondary">{t('Badges.Enabled')}</Badge>
+            ) : (
+                <Badge variant="outline" className="text-muted-foreground">
+                    {t('Badges.NotAvailable')}
+                </Badge>
+            )}
+        </>
+    );
+}
+
+function DefaultAiProviderCard({
+    row,
+    ownerLabel,
+    description,
+    unavailableDescription,
+    canManageProviders,
+    isSaving,
+    onSetDefault,
+    t,
+}: {
+    row: AiProviderRow;
+    ownerLabel: string;
+    description: string;
+    unavailableDescription: string;
+    canManageProviders: boolean;
+    isSaving: boolean;
+    onSetDefault: (row: AiProviderRow) => void;
+    t: ReturnType<typeof useTranslations>;
+}) {
+    return (
+        <div
+            className={cn(
+                'relative overflow-hidden rounded-lg border px-4 py-4 transition-colors',
+                row.isDefault ? 'border-primary/25 bg-primary/[0.03]' : 'border-muted-foreground/15 bg-muted/20',
+            )}
+        >
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                    <div className="flex items-start gap-3">
+                        <span
+                            className={cn(
+                                'mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border',
+                                row.isDefault ? 'border-primary/30 bg-background text-primary' : 'border-muted-foreground/15 bg-muted/50 text-muted-foreground',
+                            )}
+                        >
+                            <ProviderIcon provider={row.provider} label={row.providerLabel} className="size-5" />
+                        </span>
+                        <div className="min-w-0">
+                            <div className="text-sm font-medium">{row.providerLabel}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <h3 className="min-w-0 font-semibold">{row.displayName}</h3>
+                                <DefaultAiProviderBadges row={row} ownerLabel={ownerLabel} t={t} />
+                            </div>
+                            <p className="mt-2 text-sm text-muted-foreground">{row.configured ? description : unavailableDescription}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {!row.isDefault && row.configured && canManageProviders ? (
+                        <Button variant="outline" size="sm" onClick={() => onSetDefault(row)} disabled={isSaving}>
+                            <CircleCheck className="size-4" />
+                            {t('Actions.SetAsDefault')}
+                        </Button>
+                    ) : null}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function DoryAiProviderSection({
+    providers,
+    canManageProviders,
+    isSaving,
+    onSetDefault,
+    t,
+}: {
+    providers: AiProviderRow[];
+    canManageProviders: boolean;
+    isSaving: boolean;
+    onSetDefault: (row: AiProviderRow) => void;
+    t: ReturnType<typeof useTranslations>;
+}) {
+    return (
+        <section className="space-y-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                        <Sparkles className="size-4" />
+                    </span>
+                    <div>
+                        <h3 className="font-semibold">{t('DoryAi.Title')}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">{t('DoryAi.Description')}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                {providers.map(row => (
+                    <DefaultAiProviderCard
+                        key={row.id}
+                        row={row}
+                        ownerLabel={t('Badges.DoryProvided')}
+                        description={row.isDefault ? t('DoryAi.ActiveModelDescription') : t('DoryAi.ModelDescription')}
+                        unavailableDescription={t('DoryAi.UnavailableDescription')}
+                        canManageProviders={canManageProviders}
+                        isSaving={isSaving}
+                        onSetDefault={onSetDefault}
+                        t={t}
+                    />
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function AdminProvidedAiProviderSection({
+    providers,
+    canManageProviders,
+    isSaving,
+    onSetDefault,
+    t,
+}: {
+    providers: AiProviderRow[];
+    canManageProviders: boolean;
+    isSaving: boolean;
+    onSetDefault: (row: AiProviderRow) => void;
+    t: ReturnType<typeof useTranslations>;
+}) {
+    return (
+        <section className="space-y-3">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                        <KeyRound className="size-4" />
+                    </span>
+                    <div>
+                        <h3 className="font-semibold">{t('AdminAi.Title')}</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">{t('AdminAi.Description')}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                {providers.map(row => (
+                    <DefaultAiProviderCard
+                        key={row.id}
+                        row={row}
+                        ownerLabel={t('Badges.AdminProvided')}
+                        description={row.isDefault ? t('AdminAi.ActiveModelDescription') : t('AdminAi.ModelDescription')}
+                        unavailableDescription={t('AdminAi.UnavailableDescription')}
+                        canManageProviders={canManageProviders}
+                        isSaving={isSaving}
+                        onSetDefault={onSetDefault}
+                        t={t}
+                    />
+                ))}
+            </div>
+        </section>
+    );
 }
 
 export default function AISettingsPageClient() {
@@ -262,9 +436,9 @@ export default function AISettingsPageClient() {
     const canManageProviders = providersQuery.data?.organizationProviderCapability.enabled === true;
     const organizationProvidersAvailable = providersQuery.data?.providerResolution.managementMode === 'organization_editable';
     const upgradeTarget = providersQuery.data?.upgradeTarget ?? 'enterprise';
-    const isOssLicenseMode = !organizationProvidersAvailable && upgradeTarget === 'enterprise';
-    const visibleProviders = isOssLicenseMode ? providers.filter(provider => provider.source === 'system') : providers;
-    const defaultProvider = visibleProviders.find(provider => provider.isDefault) ?? null;
+    const isDesktopRuntime = providersQuery.data?.runtime === 'desktop';
+    const systemProviders = providers.filter(provider => provider.source === 'system');
+    const organizationProviders = providers.filter(provider => provider.source === 'organization');
     const editingProvider = useMemo(() => {
         if (formMode?.type !== 'edit') return null;
         return providers.find(provider => provider.id === formMode.providerId) ?? null;
@@ -460,15 +634,6 @@ export default function AISettingsPageClient() {
         window.open(ENTERPRISE_INFO_URL, '_blank', 'noopener,noreferrer');
     }
 
-    async function openDocs() {
-        if (window.authBridge?.openExternal) {
-            await window.authBridge.openExternal(AI_DOCS_URL);
-            return;
-        }
-
-        window.open(AI_DOCS_URL, '_blank', 'noopener,noreferrer');
-    }
-
     function openUpgrade() {
         if (upgradeTarget === 'pro') {
             window.location.assign(`/${organizationSlug}/settings/billing`);
@@ -486,6 +651,57 @@ export default function AISettingsPageClient() {
             : isAiProviderApiKeyRequired(formProvider)
               ? t('Fields.ApiKeyPlaceholder')
               : t('Fields.ApiKeyOptionalPlaceholder');
+    const upgradeActionLabel = upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise');
+
+    function renderProviderRow(row: AiProviderRow) {
+        const providerDescription = row.source === 'organization' && row.isDefault ? t('OrganizationProvider.ActiveDescription') : t('OrganizationProvider.Description');
+
+        return (
+            <div
+                key={row.id}
+                className={cn('relative overflow-hidden rounded-lg border px-4 py-4 transition-colors', row.isDefault ? 'border-primary/25 bg-primary/[0.03]' : 'bg-background')}
+            >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                        <div className="flex items-start gap-3">
+                            <span
+                                className={cn(
+                                    'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border',
+                                    row.isDefault ? 'border-primary/30 bg-background text-primary' : 'bg-background',
+                                )}
+                            >
+                                <ProviderIcon provider={row.provider} label={row.providerLabel} className="size-5" />
+                            </span>
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="min-w-0 font-semibold">{row.displayName}</h3>
+                                    <ProviderStatusBadges row={row} t={t} />
+                                </div>
+                                <p className="mt-2 text-sm text-muted-foreground">{providerDescription}</p>
+                                <ProviderStateMessage row={row} t={t} />
+                                {row.keyHint ? <div className="mt-2 text-xs text-muted-foreground">{t('Fields.ApiKeyConfigured', { hint: row.keyHint })}</div> : null}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                        {!row.isDefault && row.configured ? (
+                            <Button variant="outline" size="sm" onClick={() => setDefault(row)} disabled={!canManageProviders || isSaving}>
+                                <CircleCheck className="size-4" />
+                                {t('Actions.SetAsDefault')}
+                            </Button>
+                        ) : null}
+                        <Button variant="ghost" size="icon" onClick={() => openEditForm(row)} disabled={!canManageProviders || isSaving} aria-label={t('Actions.Edit')}>
+                            <Pencil className="size-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setProviderToDelete(row)} disabled={!canManageProviders || isSaving} aria-label={t('Actions.Delete')}>
+                            <Trash2 className="size-4" />
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <>
@@ -500,146 +716,70 @@ export default function AISettingsPageClient() {
                     <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">{t('Loading')}</div>
                 ) : null}
 
-                <section className="rounded-lg border bg-background p-5">
+                <header className="border-b pb-5">
+                    <div className="max-w-3xl">
+                        <h2 className="text-xl font-semibold tracking-tight">{t('Providers.Title')}</h2>
+                        <p className="mt-2 text-sm text-muted-foreground">{t('Providers.Description')}</p>
+                    </div>
+                </header>
+
+                {isDesktopRuntime ? (
+                    <DoryAiProviderSection providers={systemProviders} canManageProviders={canManageProviders} isSaving={isSaving} onSetDefault={setDefault} t={t} />
+                ) : (
+                    <AdminProvidedAiProviderSection providers={systemProviders} canManageProviders={canManageProviders} isSaving={isSaving} onSetDefault={setDefault} t={t} />
+                )}
+
+                <section className="space-y-3">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex items-start gap-3">
-                            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                                <Sparkles className="size-4" />
+                            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                <KeyRound className="size-4" />
                             </span>
                             <div>
-                                <h2 className="font-semibold">{t('Providers.Title')}</h2>
-                                <p className="mt-1 text-sm text-muted-foreground">{t('Providers.Description')}</p>
-                                {organizationProvidersAvailable && defaultProvider ? (
-                                    <div className="mt-2 text-xs text-muted-foreground">
-                                        {t('Providers.CurrentDefault')}: <span className="font-medium text-foreground">{defaultProvider.displayName}</span>
-                                    </div>
-                                ) : null}
+                                <h3 className="font-semibold">{t('Groups.OrganizationTitle')}</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationDescription')}</p>
                             </div>
                         </div>
                         {canManageProviders ? (
-                            <Button onClick={openAddForm} disabled={isSaving || Boolean(formMode)}>
+                            <Button size="sm" onClick={openAddForm} disabled={isSaving || Boolean(formMode)}>
                                 <Plus className="size-4" />
                                 {t('Actions.AddProvider')}
-                            </Button>
-                        ) : !organizationProvidersAvailable && !isOssLicenseMode ? (
-                            <Button variant="outline" onClick={openUpgrade}>
-                                <ExternalLink className="size-4" />
-                                {upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise')}
                             </Button>
                         ) : null}
                     </div>
 
-                    {!organizationProvidersAvailable && !providersQuery.isLoading && !isOssLicenseMode ? (
-                        <Alert className="mt-5 bg-muted/20">
-                            <AlertTitle>{upgradeTarget === 'pro' ? t('Upgrade.ProTitle') : t('Upgrade.EnterpriseTitle')}</AlertTitle>
-                            <AlertDescription>{t('Upgrade.Description')}</AlertDescription>
-                        </Alert>
-                    ) : null}
-
                     {organizationProvidersAvailable && !canManageProviders ? (
-                        <div className="mt-5 rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">{t('ReadOnlyHint')}</div>
+                        <div className="rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">{t('ReadOnlyHint')}</div>
                     ) : null}
 
-                    <div className="mt-5 space-y-3">
-                        {visibleProviders.map(row => (
-                            <div
-                                key={row.id}
-                                className={cn(
-                                    'relative overflow-hidden rounded-lg border px-4 py-4 transition-colors',
-                                    row.isDefault ? 'border-primary/25 bg-primary/[0.03]' : row.source === 'system' ? 'border-muted-foreground/15 bg-muted/20' : 'bg-background',
-                                )}
-                            >
-                                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                    <div className="min-w-0">
-                                        <div className="flex items-start gap-3">
-                                            <span
-                                                className={cn(
-                                                    'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border',
-                                                    row.isDefault
-                                                        ? 'border-primary/30 bg-background text-primary'
-                                                        : row.source === 'system'
-                                                          ? 'border-muted-foreground/15 bg-muted/50 text-muted-foreground'
-                                                          : 'bg-background',
-                                                )}
-                                            >
-                                                <ProviderIcon provider={row.provider} label={row.providerLabel} className="size-5" />
-                                            </span>
-                                            <div className="min-w-0">
-                                                <div className="flex flex-wrap items-center gap-2">
-                                                    <h3 className="min-w-0 font-semibold">{row.displayName}</h3>
-                                                    <ProviderStatusBadge row={row} t={t} />
-                                                </div>
-                                                <div className="mt-1 text-sm text-muted-foreground">
-                                                    {row.source === 'system'
-                                                        ? isOssLicenseMode
-                                                            ? t('SystemProvider.Label')
-                                                            : t('SystemProvider.Meta')
-                                                        : t('OrganizationProvider.Meta')}
-                                                </div>
-                                                {row.source === 'system' && isOssLicenseMode ? (
-                                                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
-                                                        <p>{t('SystemProvider.EnvironmentDescription')}</p>
-                                                        <p>{t('SystemProvider.OssReadOnly')}</p>
-                                                    </div>
-                                                ) : (
-                                                    <p className="mt-2 text-sm text-muted-foreground">
-                                                        {row.source === 'system' ? t('SystemProvider.Description') : t('OrganizationProvider.Description')}
-                                                    </p>
-                                                )}
-                                                {row.keyHint ? (
-                                                    <div className="mt-2 text-xs text-muted-foreground">{t('Fields.ApiKeyConfigured', { hint: row.keyHint })}</div>
-                                                ) : null}
-                                            </div>
+                    {!organizationProvidersAvailable && !providersQuery.isLoading ? (
+                        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground">
+                                        <LockKeyhole className="size-4" />
+                                    </span>
+                                    <div>
+                                        <div className="text-sm font-medium">
+                                            {upgradeTarget === 'pro' ? t('Groups.OrganizationLockedProTitle') : t('Groups.OrganizationLockedEnterpriseTitle')}
                                         </div>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2 lg:justify-end">
-                                        {row.source === 'system' ? (
-                                            <>
-                                                {!row.isDefault && row.configured && canManageProviders ? (
-                                                    <Button variant="outline" size="sm" onClick={() => setDefault(row)} disabled={isSaving}>
-                                                        <CircleCheck className="size-4" />
-                                                        {t('Actions.SetAsDefault')}
-                                                    </Button>
-                                                ) : null}
-                                                <Button variant="outline" size="sm" onClick={() => void openDocs()}>
-                                                    <BookOpen className="size-4" />
-                                                    {t('Actions.View')}
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                {!row.isDefault && row.configured ? (
-                                                    <Button variant="outline" size="sm" onClick={() => setDefault(row)} disabled={!canManageProviders || isSaving}>
-                                                        <CircleCheck className="size-4" />
-                                                        {t('Actions.SetAsDefault')}
-                                                    </Button>
-                                                ) : null}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => openEditForm(row)}
-                                                    disabled={!canManageProviders || isSaving}
-                                                    aria-label={t('Actions.Edit')}
-                                                >
-                                                    <Pencil className="size-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => setProviderToDelete(row)}
-                                                    disabled={!canManageProviders || isSaving}
-                                                    aria-label={t('Actions.Delete')}
-                                                >
-                                                    <Trash2 className="size-4" />
-                                                </Button>
-                                            </>
-                                        )}
+                                        <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationLockedDescription')}</p>
                                     </div>
                                 </div>
+                                <Button variant="outline" size="sm" onClick={openUpgrade} className="w-full sm:w-auto">
+                                    <ExternalLink className="size-4" />
+                                    {upgradeActionLabel}
+                                </Button>
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ) : organizationProviders.length > 0 ? (
+                        <div className="space-y-3">{organizationProviders.map(renderProviderRow)}</div>
+                    ) : !providersQuery.isLoading ? (
+                        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
+                            <div className="text-sm font-medium">{t('Groups.OrganizationEmptyTitle')}</div>
+                            <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationEmptyDescription')}</p>
+                        </div>
+                    ) : null}
                 </section>
             </div>
 

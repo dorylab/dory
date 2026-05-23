@@ -2512,17 +2512,17 @@
             "TokenNotFound": "MCP token not found."
         },
         "OrganizationAiProviders": {
-            "ApiKeyRequired": "API key is required for this provider.",
-            "BaseUrlRequired": "Base URL is required for this provider.",
-            "ProviderIncomplete": "Complete this provider before setting it as default.",
-            "UnsupportedModel": "Please choose a supported model for this provider.",
-            "UnsupportedProvider": "Please choose a supported AI provider.",
-            "OrganizationProviderUnavailableInOss": "Organization providers require Dory Pro on Desktop or Enterprise Edition for self-hosting.",
-            "SystemProviderReadOnly": "System Provider is read-only.",
-            "ProviderNotFound": "Organization provider not found.",
-            "DisabledProviderCannotBeDefault": "Enable this provider before setting it as default.",
-            "SystemProviderUnavailable": "System Provider is not configured.",
-            "TestFailed": "Provider test failed: {reason}"
+            "ApiKeyRequired": "This AI service requires an API key.",
+            "BaseUrlRequired": "This AI service requires an endpoint.",
+            "ProviderIncomplete": "Complete this AI service before setting it as default.",
+            "UnsupportedModel": "Choose a supported model for this AI service.",
+            "UnsupportedProvider": "Choose a supported AI service.",
+            "OrganizationProviderUnavailableInOss": "Custom AI requires Dory Pro on Desktop or Enterprise Edition for self-hosting.",
+            "SystemProviderReadOnly": "Dory AI is managed by Dory and cannot be edited here.",
+            "ProviderNotFound": "Custom AI not found.",
+            "DisabledProviderCannotBeDefault": "Enable this AI service before setting it as default.",
+            "SystemProviderUnavailable": "Dory AI is not available.",
+            "TestFailed": "AI service test failed: {reason}"
         }
     },
     "Ai": {
@@ -3100,7 +3100,7 @@
         },
         "Ai": {
             "Title": "AI Configuration",
-            "Description": "Manage AI providers available to this organization.",
+            "Description": "Configure the models available to this organization.",
             "Loading": "Loading AI configuration...",
             "LoadFailed": "Failed to load AI configuration.",
             "Saving": "Saving...",
@@ -3108,55 +3108,82 @@
             "Testing": "Testing...",
             "ReadOnlyHint": "Your current role does not allow updating organization AI providers.",
             "Providers": {
-                "Title": "AI Providers",
-                "Description": "Providers this organization can use for AI features.",
+                "Title": "AI Models",
+                "Description": "Manage the AI services and models available to this organization.",
                 "CurrentDefault": "Current default"
             },
+            "Groups": {
+                "SystemTitle": "Dory AI",
+                "SystemDescription": "Default AI service configured for this Dory deployment. No organization setup required.",
+                "OrganizationTitle": "Custom AI",
+                "OrganizationDescription": "Connect your own AI service, such as OpenAI, Claude, Qwen, or an OpenAI-compatible model.",
+                "OrganizationLockedProTitle": "Upgrade to Pro to add custom AI",
+                "OrganizationLockedEnterpriseTitle": "Use Enterprise Edition to add custom AI",
+                "OrganizationLockedDescription": "Use your own API key to configure dedicated models for this organization.",
+                "OrganizationEmptyTitle": "No custom AI yet",
+                "OrganizationEmptyDescription": "Add your own API key and model to override Dory AI for this organization."
+            },
             "SystemProvider": {
-                "Label": "System Provider",
-                "Meta": "System Provider · Read-only",
-                "Description": "Configured globally by server administrator.",
-                "EnvironmentDescription": "Configured by server environment variables.",
-                "OssReadOnly": "Read-only in OSS Edition."
+                "Label": "Dory AI",
+                "Meta": "Dory AI",
+                "Description": "Default AI model configured for this Dory deployment.",
+                "ActiveDescription": "Default model currently used by this organization.",
+                "EnvironmentDescription": "Managed by the current Dory deployment. No organization setup required.",
+                "OssReadOnly": "Managed by Dory."
             },
             "OrganizationProvider": {
-                "Label": "Organization Provider",
-                "Meta": "Organization Provider",
-                "Description": "Custom provider for this organization."
+                "Label": "Custom AI",
+                "Meta": "Custom AI",
+                "Description": "Uses your own API key and model.",
+                "ActiveDescription": "Custom model currently used by this organization."
             },
             "Badges": {
                 "Default": "Default",
                 "Enabled": "Enabled",
                 "Disabled": "Disabled",
-                "Unconfigured": "Unconfigured"
+                "Unconfigured": "Missing config",
+                "System": "Dory provided",
+                "Organization": "Custom",
+                "ReadOnly": "Managed",
+                "Configured": "Configured",
+                "NotAvailable": "Not available",
+                "MissingConfig": "Missing config",
+                "DoryProvided": "Dory provided",
+                "AdminProvided": "Admin provided"
+            },
+            "Status": {
+                "MissingServerConfig": "Dory AI is temporarily unavailable.",
+                "MissingProviderConfig": "Missing API key or model configuration."
             },
             "Upgrade": {
-                "EnterpriseTitle": "Organization providers are available in Enterprise Edition.",
-                "ProTitle": "Organization providers are available with Dory Pro.",
-                "Description": "Configure dedicated AI providers for each organization."
+                "EnterpriseTitle": "Custom AI is available in Enterprise Edition.",
+                "ProTitle": "Custom AI is available with Dory Pro.",
+                "Description": "Use your own API key and model for each organization.",
+                "EnterpriseDescription": "Use Enterprise Edition to configure custom AI for this organization. Dory AI remains available by default.",
+                "ProDescription": "Upgrade to configure custom AI for this organization. Dory AI remains available by default."
             },
             "Form": {
-                "AddTitle": "Add Provider",
-                "AddDescription": "Add a custom AI provider for this organization.",
-                "EditTitle": "Edit Provider",
-                "EditDescription": "Update the provider, model, endpoint, or API key."
+                "AddTitle": "Add custom AI",
+                "AddDescription": "Connect your own AI service for this organization.",
+                "EditTitle": "Edit custom AI",
+                "EditDescription": "Update the AI service, model, endpoint, or API key."
             },
             "DeleteDialog": {
-                "Title": "Delete provider?",
+                "Title": "Delete custom AI?",
                 "Description": "This will permanently delete {provider} from this organization. AI features will fall back to the next available default."
             },
             "Fields": {
-                "Provider": "Provider",
-                "DefaultModel": "Default Model",
+                "Provider": "AI service",
+                "DefaultModel": "Model",
                 "DefaultModelHint": "Dory uses this model when an AI feature does not offer its own model picker.",
-                "BaseUrl": "Base URL",
-                "ApiKey": "API Key",
+                "BaseUrl": "Endpoint",
+                "ApiKey": "API key",
                 "ApiKeyConfigured": "Configured ({hint})",
                 "ApiKeyPlaceholder": "Paste an API key",
                 "ApiKeyOptionalPlaceholder": "Optional for local OpenAI-compatible endpoints"
             },
             "Actions": {
-                "AddProvider": "Add Provider",
+                "AddProvider": "Add custom AI",
                 "UpgradeToEnterprise": "Upgrade to Enterprise",
                 "UpgradeToPro": "Upgrade to Pro",
                 "SetAsDefault": "Make default",
@@ -3164,21 +3191,35 @@
                 "Disable": "Disable",
                 "Enable": "Enable",
                 "Delete": "Delete",
-                "View": "View",
-                "ViewDocs": "View Docs",
+                "View": "View details",
+                "ViewDocs": "View docs",
                 "TestProvider": "Test",
                 "Cancel": "Cancel",
-                "SaveChanges": "Save Changes"
+                "SaveChanges": "Save changes"
             },
             "Toasts": {
-                "ProviderAdded": "Organization provider added",
-                "ProviderDeleted": "Organization provider deleted",
-                "Saved": "Provider configuration saved",
-                "DefaultUpdated": "Default provider updated",
-                "TestSucceeded": "Provider test succeeded",
-                "TestFailed": "Provider test failed",
+                "ProviderAdded": "Custom AI added",
+                "ProviderDeleted": "Custom AI deleted",
+                "Saved": "AI configuration saved",
+                "DefaultUpdated": "Default model updated",
+                "TestSucceeded": "AI service test succeeded",
+                "TestFailed": "AI service test failed",
                 "SaveFailed": "Failed to save AI configuration",
-                "DeleteFailed": "Failed to delete organization provider"
+                "DeleteFailed": "Failed to delete custom AI"
+            },
+            "DoryAi": {
+                "Title": "Dory AI",
+                "Description": "Default AI service configured by the current Dory deployment.",
+                "ModelDescription": "Default model provided by Dory.",
+                "ActiveModelDescription": "Default model currently used by this organization.",
+                "UnavailableDescription": "Dory AI is temporarily unavailable."
+            },
+            "AdminAi": {
+                "Title": "System admin AI",
+                "Description": "Default AI service configured by the system administrator for this deployment.",
+                "ModelDescription": "Default AI model provided by the system administrator.",
+                "ActiveModelDescription": "Default model currently used by this organization.",
+                "UnavailableDescription": "Ask the system administrator to finish AI configuration."
             }
         },
         "Billing": {

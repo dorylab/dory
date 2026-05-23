@@ -2270,17 +2270,17 @@
             "Hint": "如果没有自动返回，请点击“返回 Dory”。"
         },
         "OrganizationAiProviders": {
-            "ApiKeyRequired": "这个 Provider 需要填写 API Key。",
-            "BaseUrlRequired": "这个 Provider 需要填写 Base URL。",
-            "ProviderIncomplete": "请先补全这个 Provider，再设为默认。",
-            "UnsupportedModel": "请选择这个 Provider 支持的模型。",
-            "UnsupportedProvider": "请选择支持的 AI Provider。",
-            "OrganizationProviderUnavailableInOss": "桌面版需要 Dory Pro 才能使用 Organization Provider；自托管需要 Enterprise Edition。",
-            "SystemProviderReadOnly": "System Provider 是只读的。",
-            "ProviderNotFound": "未找到 Organization Provider。",
-            "DisabledProviderCannotBeDefault": "请先启用这个 Provider，再设为默认。",
-            "SystemProviderUnavailable": "System Provider 尚未配置。",
-            "TestFailed": "Provider 测试失败：{reason}"
+            "ApiKeyRequired": "这个 AI 服务需要填写 API Key。",
+            "BaseUrlRequired": "这个 AI 服务需要填写 Endpoint。",
+            "ProviderIncomplete": "请先补全这个 AI 服务，再设为默认。",
+            "UnsupportedModel": "请选择这个 AI 服务支持的模型。",
+            "UnsupportedProvider": "请选择支持的 AI 服务。",
+            "OrganizationProviderUnavailableInOss": "桌面版需要 Dory Pro 才能使用自定义 AI；自托管需要 Enterprise Edition。",
+            "SystemProviderReadOnly": "Dory AI 由 Dory 托管，不能在这里编辑。",
+            "ProviderNotFound": "未找到自定义 AI。",
+            "DisabledProviderCannotBeDefault": "请先启用这个 AI 服务，再设为默认。",
+            "SystemProviderUnavailable": "Dory AI 暂不可用。",
+            "TestFailed": "AI 服务测试失败：{reason}"
         },
         "Connection": {
             "Errors": {
@@ -3100,86 +3100,127 @@
             }
         },
         "Ai": {
-            "Title": "AI Configuration",
-            "Description": "管理当前组织可用的 AI Providers。",
+            "Title": "AI 配置",
+            "Description": "配置当前组织可使用的 AI 模型与 Provider。",
             "Loading": "正在加载 AI 配置...",
             "LoadFailed": "加载 AI 配置失败。",
             "Saving": "保存中...",
             "Deleting": "删除中...",
             "Testing": "测试中...",
-            "ReadOnlyHint": "你当前的角色不能修改组织 AI Providers。",
+            "ReadOnlyHint": "你当前的角色不能修改组织 AI Provider。",
             "Providers": {
-                "Title": "AI Providers",
-                "Description": "当前组织可用于 AI 功能的 Provider 列表。",
+                "Title": "AI 模型",
+                "Description": "管理当前组织可使用的 AI 服务与模型。",
                 "CurrentDefault": "当前默认"
             },
+            "Groups": {
+                "SystemTitle": "Dory AI",
+                "SystemDescription": "由当前 Dory 部署配置的默认 AI 服务，无需组织手动配置。",
+                "OrganizationTitle": "自定义 AI",
+                "OrganizationDescription": "连接你自己的 AI 服务，例如 OpenAI、Claude、Qwen 或兼容 OpenAI API 的模型。",
+                "OrganizationLockedProTitle": "升级到 Pro 后可添加自定义 AI",
+                "OrganizationLockedEnterpriseTitle": "使用 Enterprise Edition 后可添加自定义 AI",
+                "OrganizationLockedDescription": "使用自己的 API Key，为当前组织配置专属模型。",
+                "OrganizationEmptyTitle": "暂无自定义 AI",
+                "OrganizationEmptyDescription": "添加自己的 API Key 与模型后，可为当前组织覆盖 Dory AI。"
+            },
             "SystemProvider": {
-                "Label": "System Provider",
-                "Meta": "System Provider · 只读",
-                "Description": "由服务器管理员全局配置。",
-                "EnvironmentDescription": "Configured by server environment variables.",
-                "OssReadOnly": "Read-only in OSS Edition."
+                "Label": "Dory AI",
+                "Meta": "Dory AI",
+                "Description": "由当前 Dory 部署配置的默认 AI 模型。",
+                "ActiveDescription": "当前组织正在使用的默认模型。",
+                "EnvironmentDescription": "由当前 Dory 部署管理，无需组织手动配置。",
+                "OssReadOnly": "由 Dory 托管。"
             },
             "OrganizationProvider": {
-                "Label": "Organization Provider",
-                "Meta": "Organization Provider",
-                "Description": "当前组织的自定义 Provider。"
+                "Label": "自定义 AI",
+                "Meta": "自定义 AI",
+                "Description": "使用自己的 API Key 与模型。",
+                "ActiveDescription": "当前组织正在使用的自定义模型。"
             },
             "Badges": {
-                "Default": "Default",
-                "Enabled": "Enabled",
-                "Disabled": "Disabled",
-                "Unconfigured": "未配置"
+                "Default": "默认",
+                "Enabled": "已启用",
+                "Disabled": "已停用",
+                "Unconfigured": "缺少配置",
+                "System": "Dory 提供",
+                "Organization": "自定义",
+                "ReadOnly": "不可编辑",
+                "Configured": "已配置",
+                "NotAvailable": "不可用",
+                "MissingConfig": "缺少配置",
+                "DoryProvided": "Dory 提供",
+                "AdminProvided": "系统管理员提供"
+            },
+            "Status": {
+                "MissingServerConfig": "Dory AI 暂不可用。",
+                "MissingProviderConfig": "缺少 API Key 或模型配置。"
             },
             "Upgrade": {
-                "EnterpriseTitle": "Organization providers 可在 Enterprise Edition 中使用。",
-                "ProTitle": "Organization providers 可在 Dory Pro 中使用。",
-                "Description": "为每个组织配置独立的 AI Providers。"
+                "EnterpriseTitle": "自定义 AI 是 Enterprise Edition 功能",
+                "ProTitle": "自定义 AI 是 Pro 功能",
+                "Description": "为每个组织配置自己的 API Key 与模型。",
+                "EnterpriseDescription": "使用 Enterprise Edition 后可以为当前组织配置自定义 AI。Dory AI 仍可默认使用。",
+                "ProDescription": "升级后可以为当前组织配置自定义 AI。Dory AI 仍可默认使用。"
             },
             "Form": {
-                "AddTitle": "Add Provider",
-                "AddDescription": "为当前组织添加自定义 AI Provider。",
-                "EditTitle": "Edit Provider",
-                "EditDescription": "更新 Provider、模型、Endpoint 或 API Key。"
+                "AddTitle": "添加自定义 AI",
+                "AddDescription": "为当前组织连接你自己的 AI 服务。",
+                "EditTitle": "编辑自定义 AI",
+                "EditDescription": "更新 AI 服务、模型、Endpoint 或 API Key。"
             },
             "DeleteDialog": {
-                "Title": "删除 Provider？",
-                "Description": "这会从当前组织永久删除 {provider}。AI 功能会回退到下一个可用默认 Provider。"
+                "Title": "删除自定义 AI？",
+                "Description": "这会从当前组织永久删除 {provider}。AI 功能会回退到下一个可用默认模型。"
             },
             "Fields": {
-                "Provider": "Provider",
-                "DefaultModel": "Default Model",
-                "DefaultModelHint": "当某个 AI 功能没有单独提供模型选择时，Dory 会使用这个默认模型。",
-                "BaseUrl": "Base URL",
+                "Provider": "AI 服务",
+                "DefaultModel": "模型",
+                "DefaultModelHint": "当某个 AI 功能没有单独提供模型选择时，Dory 会使用这个模型。",
+                "BaseUrl": "Endpoint",
                 "ApiKey": "API Key",
                 "ApiKeyConfigured": "已配置（{hint}）",
                 "ApiKeyPlaceholder": "粘贴 API Key",
-                "ApiKeyOptionalPlaceholder": "本地 OpenAI-compatible 端点可不填"
+                "ApiKeyOptionalPlaceholder": "本地 OpenAI 兼容服务可不填"
             },
             "Actions": {
-                "AddProvider": "Add Provider",
-                "UpgradeToEnterprise": "Upgrade to Enterprise",
-                "UpgradeToPro": "Upgrade to Pro",
+                "AddProvider": "添加自定义 AI",
+                "UpgradeToEnterprise": "升级到 Enterprise",
+                "UpgradeToPro": "升级到 Pro",
                 "SetAsDefault": "设为默认",
-                "Edit": "Edit",
-                "Disable": "Disable",
-                "Enable": "Enable",
-                "Delete": "Delete",
-                "View": "View",
-                "ViewDocs": "View Docs",
+                "Edit": "编辑",
+                "Disable": "停用",
+                "Enable": "启用",
+                "Delete": "删除",
+                "View": "查看详情",
+                "ViewDocs": "查看文档",
                 "TestProvider": "测试",
-                "Cancel": "Cancel",
-                "SaveChanges": "Save Changes"
+                "Cancel": "取消",
+                "SaveChanges": "保存更改"
             },
             "Toasts": {
-                "ProviderAdded": "组织 Provider 已添加",
-                "ProviderDeleted": "组织 Provider 已删除",
-                "Saved": "Provider 配置已保存",
-                "DefaultUpdated": "默认 Provider 已更新",
-                "TestSucceeded": "Provider 测试成功",
-                "TestFailed": "Provider 测试失败",
+                "ProviderAdded": "自定义 AI 已添加",
+                "ProviderDeleted": "自定义 AI 已删除",
+                "Saved": "AI 配置已保存",
+                "DefaultUpdated": "默认模型已更新",
+                "TestSucceeded": "AI 服务测试成功",
+                "TestFailed": "AI 服务测试失败",
                 "SaveFailed": "保存 AI 配置失败",
-                "DeleteFailed": "删除组织 Provider 失败"
+                "DeleteFailed": "删除自定义 AI 失败"
+            },
+            "DoryAi": {
+                "Title": "Dory AI",
+                "Description": "由当前 Dory 部署配置的默认 AI 服务。",
+                "ModelDescription": "Dory 提供的默认 AI 模型。",
+                "ActiveModelDescription": "当前组织正在使用的默认模型。",
+                "UnavailableDescription": "Dory AI 暂不可用。"
+            },
+            "AdminAi": {
+                "Title": "系统管理员提供",
+                "Description": "由系统管理员为当前部署配置的默认 AI 服务。",
+                "ModelDescription": "由系统管理员提供的默认 AI 模型。",
+                "ActiveModelDescription": "当前组织正在使用的默认模型。",
+                "UnavailableDescription": "请联系系统管理员完成 AI 配置。"
             }
         },
         "Billing": {

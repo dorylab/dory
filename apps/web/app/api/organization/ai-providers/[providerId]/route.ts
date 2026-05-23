@@ -4,13 +4,9 @@ import { z } from 'zod';
 import { withManagedOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { buildOrganizationAiProvidersPayload } from '@dory/ee/ai/organization-ai-provider-payload';
-import {
-    resolveOrganizationAiProviderCapabilityForOrganization,
-    getOrganizationAiProviderEntitlementModeForServer,
-    isGlobalAiProviderConfiguredFromEnv,
-    isOrganizationAiProviderConfigured,
-} from '@dory/ee/ai/organization-ai-providers';
+import { isGlobalAiProviderConfiguredFromEnv, isOrganizationAiProviderConfigured } from '@dory/ee/ai/organization-ai-providers';
 import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed } from '@dory/ee/ai/provider-options';
+import { resolveOrganizationAiProviderEntitlementForRequest } from '@/lib/server/organization-ai-providers/entitlement';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
 import { ORGANIZATION_AI_PROVIDERS } from '@dory/database/postgres/impl/organization-ai-providers';
@@ -54,8 +50,8 @@ export function PATCH(req: NextRequest, context: RouteContext) {
             );
         }
 
-        const capability = await resolveOrganizationAiProviderCapabilityForOrganization(db, organizationId, getOrganizationAiProviderEntitlementModeForServer());
-        if (!capability.enabled) {
+        const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
+        if (!entitlement.capability.enabled) {
             return NextResponse.json(
                 ResponseUtil.error({
                     code: ErrorCodes.FORBIDDEN,
@@ -189,6 +185,8 @@ export function PATCH(req: NextRequest, context: RouteContext) {
                     db,
                     organizationId,
                     canManage: true,
+                    entitlementMode: entitlement.entitlementMode,
+                    billingPlan: entitlement.billingPlan,
                 }),
             ),
         );
@@ -199,8 +197,8 @@ export function DELETE(req: NextRequest, context: RouteContext) {
     return withManagedOrganizationHandler(async ({ db, organizationId }) => {
         const locale = await getApiLocale();
         const { providerId } = await context.params;
-        const capability = await resolveOrganizationAiProviderCapabilityForOrganization(db, organizationId, getOrganizationAiProviderEntitlementModeForServer());
-        if (!capability.enabled) {
+        const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
+        if (!entitlement.capability.enabled) {
             return NextResponse.json(
                 ResponseUtil.error({
                     code: ErrorCodes.FORBIDDEN,
@@ -237,6 +235,8 @@ export function DELETE(req: NextRequest, context: RouteContext) {
                     db,
                     organizationId,
                     canManage: true,
+                    entitlementMode: entitlement.entitlementMode,
+                    billingPlan: entitlement.billingPlan,
                 }),
             ),
         );

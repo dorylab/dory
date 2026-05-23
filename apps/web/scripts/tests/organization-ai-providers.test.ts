@@ -91,9 +91,9 @@ test('organization provider override is controlled by Enterprise or Pro', () => 
         reason: 'requires_upgrade',
     });
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'cloud-plan', license: 'enterprise', billingPlan: 'hobby' }), {
-        enabled: true,
-        source: 'ee-license',
-        reason: 'enabled_by_enterprise',
+        enabled: false,
+        source: 'none',
+        reason: 'requires_upgrade',
     });
 });
 
@@ -174,6 +174,11 @@ test('global AI provider summary exposes display-safe provider and model labels'
     assert.deepEqual(getGlobalAiProviderSummaryFromEnv({ DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen3-max' }), {
         provider: 'Qwen',
         model: 'qwen3-max',
+        managedBy: 'Server Admin',
+    });
+    assert.deepEqual(getGlobalAiProviderSummaryFromEnv({ DORY_AI_PROVIDER: 'cloudflare', DORY_AI_MODEL: 'openai/gpt-4o-mini' }), {
+        provider: 'Cloudflare Gateway',
+        model: 'openai/gpt-4o-mini',
         managedBy: 'Server Admin',
     });
 });

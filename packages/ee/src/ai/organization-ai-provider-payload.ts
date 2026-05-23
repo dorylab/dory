@@ -1,12 +1,29 @@
 import { getLicenseForServer, getRuntimeForServer } from '@dory/shared/runtime';
 import type { DBService } from '@dory/database';
-import { buildAiProvidersViewModel, getOrganizationAiProviderEntitlementModeForServer, resolveOrganizationAiProviderBillingPlan } from './organization-ai-providers';
+import {
+    buildAiProvidersViewModel,
+    getOrganizationAiProviderEntitlementModeForServer,
+    resolveOrganizationAiProviderBillingPlan,
+    type OrganizationAiProviderEntitlementMode,
+    type OrganizationPlan,
+} from './organization-ai-providers';
 
-export async function buildOrganizationAiProvidersPayload(options: { db: DBService; organizationId: string; canManage: boolean }) {
-    const license = getLicenseForServer();
+export async function buildOrganizationAiProvidersPayload(options: {
+    db: DBService;
+    organizationId: string;
+    canManage: boolean;
+    entitlementMode?: OrganizationAiProviderEntitlementMode;
+    billingPlan?: OrganizationPlan | string | null;
+}) {
     const runtime = getRuntimeForServer() ?? 'web';
-    const entitlementMode = getOrganizationAiProviderEntitlementModeForServer();
-    const billingPlan = await resolveOrganizationAiProviderBillingPlan(options.db, options.organizationId);
+    const entitlementMode = options.entitlementMode ?? getOrganizationAiProviderEntitlementModeForServer();
+    const license = entitlementMode === 'self-hosted-license' ? getLicenseForServer() : null;
+    const billingPlan =
+        options.billingPlan !== undefined
+            ? options.billingPlan
+            : entitlementMode === 'cloud-plan'
+              ? await resolveOrganizationAiProviderBillingPlan(options.db, options.organizationId)
+              : null;
     const organizationProviders = await options.db.organizationAiProviders.list(options.organizationId);
     const viewModel = buildAiProvidersViewModel({
         organizationProviders,

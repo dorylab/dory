@@ -2511,17 +2511,17 @@
             "TokenNotFound": "MCP トークンが見つかりません。"
         },
         "OrganizationAiProviders": {
-            "ApiKeyRequired": "API key is required for this provider.",
-            "BaseUrlRequired": "Base URL is required for this provider.",
-            "ProviderIncomplete": "Complete this provider before setting it as default.",
-            "UnsupportedModel": "Please choose a supported model for this provider.",
-            "UnsupportedProvider": "Please choose a supported AI provider.",
-            "OrganizationProviderUnavailableInOss": "Organization providers require Dory Pro on Desktop or Enterprise Edition for self-hosting.",
-            "SystemProviderReadOnly": "System Provider is read-only.",
-            "ProviderNotFound": "Organization provider not found.",
-            "DisabledProviderCannotBeDefault": "Enable this provider before setting it as default.",
-            "SystemProviderUnavailable": "System Provider is not configured.",
-            "TestFailed": "Provider test failed: {reason}"
+            "ApiKeyRequired": "この AI サービスには API キーが必要です。",
+            "BaseUrlRequired": "この AI サービスにはエンドポイントが必要です。",
+            "ProviderIncomplete": "デフォルトに設定する前に、この AI サービスの設定を完了してください。",
+            "UnsupportedModel": "この AI サービスでサポートされているモデルを選択してください。",
+            "UnsupportedProvider": "サポートされている AI サービスを選択してください。",
+            "OrganizationProviderUnavailableInOss": "カスタム AI を利用するには、Desktop では Dory Pro、self-hosting では Enterprise Edition が必要です。",
+            "SystemProviderReadOnly": "Dory AI は Dory によって管理されており、ここでは編集できません。",
+            "ProviderNotFound": "カスタム AI が見つかりません。",
+            "DisabledProviderCannotBeDefault": "デフォルトに設定する前に、この AI サービスを有効化してください。",
+            "SystemProviderUnavailable": "Dory AI は利用できません。",
+            "TestFailed": "AI サービスのテストに失敗しました: {reason}"
         }
     },
     "Ai": {
@@ -3098,86 +3098,127 @@
             }
         },
         "Ai": {
-            "Title": "AI Configuration",
-            "Description": "Manage AI providers available to this organization.",
-            "Loading": "Loading AI configuration...",
-            "LoadFailed": "Failed to load AI configuration.",
-            "Saving": "Saving...",
-            "Deleting": "Deleting...",
-            "Testing": "Testing...",
-            "ReadOnlyHint": "Your current role does not allow updating organization AI providers.",
+            "Title": "AI 設定",
+            "Description": "この組織で利用できる AI モデルとプロバイダーを設定します。",
+            "Loading": "AI 設定を読み込んでいます...",
+            "LoadFailed": "AI 設定を読み込めませんでした。",
+            "Saving": "保存中...",
+            "Deleting": "削除中...",
+            "Testing": "テスト中...",
+            "ReadOnlyHint": "現在のロールでは組織の AI プロバイダーを更新できません。",
             "Providers": {
-                "Title": "AI Providers",
-                "Description": "Providers this organization can use for AI features.",
-                "CurrentDefault": "Current default"
+                "Title": "AI モデル",
+                "Description": "この組織で利用できる AI サービスとモデルを管理します。",
+                "CurrentDefault": "現在のデフォルト"
+            },
+            "Groups": {
+                "SystemTitle": "Dory AI",
+                "SystemDescription": "現在の Dory デプロイで設定されたデフォルトの AI サービスです。組織側の設定は不要です。",
+                "OrganizationTitle": "カスタム AI",
+                "OrganizationDescription": "OpenAI、Claude、Qwen、OpenAI API 互換モデルなど、自分の AI サービスを接続します。",
+                "OrganizationLockedProTitle": "Pro にアップグレードするとカスタム AI を追加できます",
+                "OrganizationLockedEnterpriseTitle": "Enterprise Edition でカスタム AI を追加できます",
+                "OrganizationLockedDescription": "自分の API キーを使って、この組織専用のモデルを設定できます。",
+                "OrganizationEmptyTitle": "カスタム AI はまだありません",
+                "OrganizationEmptyDescription": "自分の API キーとモデルを追加すると、この組織で Dory AI を上書きできます。"
             },
             "SystemProvider": {
-                "Label": "System Provider",
-                "Meta": "System Provider · Read-only",
-                "Description": "Configured globally by server administrator.",
-                "EnvironmentDescription": "Configured by server environment variables.",
-                "OssReadOnly": "Read-only in OSS Edition."
+                "Label": "Dory AI",
+                "Meta": "Dory AI",
+                "Description": "現在の Dory デプロイで設定されたデフォルトの AI モデルです。",
+                "ActiveDescription": "この組織が現在使用しているデフォルトモデルです。",
+                "EnvironmentDescription": "現在の Dory デプロイによって管理されます。組織側の設定は不要です。",
+                "OssReadOnly": "Dory によって管理されています。"
             },
             "OrganizationProvider": {
-                "Label": "Organization Provider",
-                "Meta": "Organization Provider",
-                "Description": "Custom provider for this organization."
+                "Label": "カスタム AI",
+                "Meta": "カスタム AI",
+                "Description": "自分の API キーとモデルを使用します。",
+                "ActiveDescription": "この組織が現在使用しているカスタムモデルです。"
             },
             "Badges": {
-                "Default": "Default",
-                "Enabled": "Enabled",
-                "Disabled": "Disabled",
-                "Unconfigured": "Unconfigured"
+                "Default": "デフォルト",
+                "Enabled": "有効",
+                "Disabled": "無効",
+                "Unconfigured": "設定不足",
+                "System": "Dory 提供",
+                "Organization": "カスタム",
+                "ReadOnly": "編集不可",
+                "Configured": "設定済み",
+                "NotAvailable": "利用不可",
+                "MissingConfig": "設定不足",
+                "DoryProvided": "Dory 提供",
+                "AdminProvided": "管理者提供"
+            },
+            "Status": {
+                "MissingServerConfig": "Dory AI は一時的に利用できません。",
+                "MissingProviderConfig": "API キーまたはモデル設定が不足しています。"
             },
             "Upgrade": {
-                "EnterpriseTitle": "Organization providers are available in Enterprise Edition.",
-                "ProTitle": "Organization providers are available with Dory Pro.",
-                "Description": "Configure dedicated AI providers for each organization."
+                "EnterpriseTitle": "カスタム AI は Enterprise Edition で利用できます。",
+                "ProTitle": "カスタム AI は Dory Pro で利用できます。",
+                "Description": "組織ごとに自分の API キーとモデルを使用できます。",
+                "EnterpriseDescription": "Enterprise Edition では、この組織向けにカスタム AI を設定できます。Dory AI は引き続きデフォルトで利用できます。",
+                "ProDescription": "アップグレードすると、この組織向けにカスタム AI を設定できます。Dory AI は引き続きデフォルトで利用できます。"
             },
             "Form": {
-                "AddTitle": "Add Provider",
-                "AddDescription": "Add a custom AI provider for this organization.",
-                "EditTitle": "Edit Provider",
-                "EditDescription": "Update the provider, model, endpoint, or API key."
+                "AddTitle": "カスタム AI を追加",
+                "AddDescription": "この組織に自分の AI サービスを接続します。",
+                "EditTitle": "カスタム AI を編集",
+                "EditDescription": "AI サービス、モデル、エンドポイント、API キーを更新します。"
             },
             "DeleteDialog": {
-                "Title": "Delete provider?",
-                "Description": "This will permanently delete {provider} from this organization. AI features will fall back to the next available default."
+                "Title": "カスタム AI を削除しますか？",
+                "Description": "{provider} はこの組織から完全に削除されます。AI 機能は次に利用可能なデフォルトへフォールバックします。"
             },
             "Fields": {
-                "Provider": "Provider",
-                "DefaultModel": "Default Model",
-                "DefaultModelHint": "Dory uses this model when an AI feature does not offer its own model picker.",
-                "BaseUrl": "Base URL",
-                "ApiKey": "API Key",
-                "ApiKeyConfigured": "Configured ({hint})",
-                "ApiKeyPlaceholder": "Paste an API key",
-                "ApiKeyOptionalPlaceholder": "Optional for local OpenAI-compatible endpoints"
+                "Provider": "AI サービス",
+                "DefaultModel": "モデル",
+                "DefaultModelHint": "AI 機能に個別のモデル選択がない場合、Dory はこのモデルを使用します。",
+                "BaseUrl": "エンドポイント",
+                "ApiKey": "API キー",
+                "ApiKeyConfigured": "設定済み（{hint}）",
+                "ApiKeyPlaceholder": "API キーを貼り付け",
+                "ApiKeyOptionalPlaceholder": "ローカルの OpenAI 互換サービスでは任意です"
             },
             "Actions": {
-                "AddProvider": "Add Provider",
-                "UpgradeToEnterprise": "Upgrade to Enterprise",
-                "UpgradeToPro": "Upgrade to Pro",
-                "SetAsDefault": "Make default",
-                "Edit": "Edit",
-                "Disable": "Disable",
-                "Enable": "Enable",
-                "Delete": "Delete",
-                "View": "View",
-                "ViewDocs": "View Docs",
-                "TestProvider": "Test",
-                "Cancel": "Cancel",
-                "SaveChanges": "Save Changes"
+                "AddProvider": "カスタム AI を追加",
+                "UpgradeToEnterprise": "Enterprise にアップグレード",
+                "UpgradeToPro": "Pro にアップグレード",
+                "SetAsDefault": "デフォルトに設定",
+                "Edit": "編集",
+                "Disable": "無効化",
+                "Enable": "有効化",
+                "Delete": "削除",
+                "View": "詳細を見る",
+                "ViewDocs": "ドキュメントを見る",
+                "TestProvider": "テスト",
+                "Cancel": "キャンセル",
+                "SaveChanges": "変更を保存"
             },
             "Toasts": {
-                "ProviderAdded": "組織プロバイダーを追加しました",
-                "ProviderDeleted": "組織プロバイダーを削除しました",
-                "Saved": "プロバイダー設定を保存しました",
-                "DefaultUpdated": "デフォルトプロバイダーを更新しました",
-                "TestSucceeded": "プロバイダーのテストに成功しました",
-                "TestFailed": "プロバイダーのテストに失敗しました",
+                "ProviderAdded": "カスタム AI を追加しました",
+                "ProviderDeleted": "カスタム AI を削除しました",
+                "Saved": "AI 設定を保存しました",
+                "DefaultUpdated": "デフォルトモデルを更新しました",
+                "TestSucceeded": "AI サービスのテストに成功しました",
+                "TestFailed": "AI サービスのテストに失敗しました",
                 "SaveFailed": "AI 設定を保存できませんでした",
-                "DeleteFailed": "組織プロバイダーを削除できませんでした"
+                "DeleteFailed": "カスタム AI を削除できませんでした"
+            },
+            "DoryAi": {
+                "Title": "Dory AI",
+                "Description": "現在の Dory デプロイで設定されたデフォルトの AI サービスです。",
+                "ModelDescription": "Dory が提供するデフォルトの AI モデルです。",
+                "ActiveModelDescription": "この組織が現在使用しているデフォルトモデルです。",
+                "UnavailableDescription": "Dory AI は一時的に利用できません。"
+            },
+            "AdminAi": {
+                "Title": "システム管理者提供",
+                "Description": "このデプロイ向けにシステム管理者が設定したデフォルトの AI サービスです。",
+                "ModelDescription": "システム管理者が提供するデフォルトの AI モデルです。",
+                "ActiveModelDescription": "この組織が現在使用しているデフォルトモデルです。",
+                "UnavailableDescription": "システム管理者に AI 設定の完了を依頼してください。"
             }
         },
         "Billing": {

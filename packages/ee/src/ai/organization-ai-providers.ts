@@ -28,7 +28,9 @@ export function resolveOrganizationAiProviderCapability(options: {
     license?: DoryLicense | null;
     billingPlan?: OrganizationPlan | string | null;
 }): OrganizationAiProviderCapability {
-    if ((options.license ?? getLicenseForServer()) === 'enterprise') {
+    const license = options.license === undefined ? getLicenseForServer() : options.license;
+
+    if (options.entitlementMode === 'self-hosted-license' && license === 'enterprise') {
         return {
             enabled: true,
             source: 'ee-license',
@@ -203,6 +205,7 @@ export type AiProviderUpgradeTarget = 'enterprise' | 'pro';
 export type AiProvidersViewModel = {
     providers: AiProviderListRow[];
     defaultProviderId: 'system' | string;
+    runtime: string | null;
     organizationProviderCapability: OrganizationAiProviderCapability;
     upgradeTarget: AiProviderUpgradeTarget;
     providerResolution: AiProviderResolution;
@@ -312,7 +315,7 @@ export function getAiProviderResolution(options: {
     billingPlan?: OrganizationPlan | string | null;
     env?: GlobalAiProviderEnv;
 }): AiProviderResolution {
-    const resolvedLicense = options.license ?? getLicenseForServer();
+    const resolvedLicense = options.license === undefined ? getLicenseForServer() : options.license;
     const entitlementMode = options.entitlementMode ?? 'self-hosted-license';
     const env = options.env ?? process.env;
     const globalProvider = buildGlobalProviderSummary(env);
@@ -385,6 +388,7 @@ export function buildAiProvidersViewModel(options: {
     return {
         providers,
         defaultProviderId,
+        runtime: options.runtime ?? null,
         organizationProviderCapability: resolution.organizationCapability,
         upgradeTarget:
             resolution.organizationCapability.source === 'cloud-plan' || options.entitlementMode === 'cloud-plan' || options.runtime === 'desktop' ? 'pro' : 'enterprise',
