@@ -2275,7 +2275,8 @@
             "SystemProviderReadOnly": "System Provider is read-only.",
             "ProviderNotFound": "Organization provider not found.",
             "DisabledProviderCannotBeDefault": "Enable this provider before setting it as default.",
-            "SystemProviderUnavailable": "System Provider is not configured."
+            "SystemProviderUnavailable": "System Provider is not configured.",
+            "TestFailed": "Provider test failed: {reason}"
         },
         "Connection": {
             "Errors": {
@@ -3101,6 +3102,7 @@
             "LoadFailed": "Failed to load AI configuration.",
             "Saving": "Saving...",
             "Deleting": "Deleting...",
+            "Testing": "Testing...",
             "ReadOnlyHint": "Your current role does not allow updating organization AI providers.",
             "Providers": {
                 "Title": "AI Providers",
@@ -3161,6 +3163,7 @@
                 "Delete": "Delete",
                 "View": "View",
                 "ViewDocs": "View Docs",
+                "TestProvider": "Test",
                 "Cancel": "Cancel",
                 "SaveChanges": "Save Changes"
             },
@@ -3169,6 +3172,8 @@
                 "ProviderDeleted": "Proveedor de la organización eliminado",
                 "Saved": "Configuración del proveedor guardada",
                 "DefaultUpdated": "Proveedor predeterminado actualizado",
+                "TestSucceeded": "Prueba del proveedor completada",
+                "TestFailed": "No se pudo probar el proveedor",
                 "SaveFailed": "No se pudo guardar la configuración de AI",
                 "DeleteFailed": "No se pudo eliminar el proveedor de la organización"
             }
@@ -3216,7 +3221,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "Conexiones ilimitadas a bases de datos",
                     "HigherAiQuotaAndFasterResponses": "Mayor cuota de IA y respuestas más rápidas",
-                    "AiSqlGenerationExplainOptimize": "Generación de SQL con IA + explain + optimize",
+                    "ByokAiFeatures": "Usa tu propia clave de IA para conectar modelos personalizados",
                     "EarlyAccessToUpcomingFeatures": "Acceso anticipado a próximas funciones",
                     "AdvancedChartsAndExports": "Gráficos avanzados y exportación",
                     "PrioritySupport": "Soporte prioritario"

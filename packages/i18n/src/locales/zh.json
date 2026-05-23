@@ -2279,7 +2279,8 @@
             "SystemProviderReadOnly": "System Provider 是只读的。",
             "ProviderNotFound": "未找到 Organization Provider。",
             "DisabledProviderCannotBeDefault": "请先启用这个 Provider，再设为默认。",
-            "SystemProviderUnavailable": "System Provider 尚未配置。"
+            "SystemProviderUnavailable": "System Provider 尚未配置。",
+            "TestFailed": "Provider 测试失败：{reason}"
         },
         "Connection": {
             "Errors": {
@@ -3105,6 +3106,7 @@
             "LoadFailed": "加载 AI 配置失败。",
             "Saving": "保存中...",
             "Deleting": "删除中...",
+            "Testing": "测试中...",
             "ReadOnlyHint": "你当前的角色不能修改组织 AI Providers。",
             "Providers": {
                 "Title": "AI Providers",
@@ -3165,6 +3167,7 @@
                 "Delete": "Delete",
                 "View": "View",
                 "ViewDocs": "View Docs",
+                "TestProvider": "测试",
                 "Cancel": "Cancel",
                 "SaveChanges": "Save Changes"
             },
@@ -3173,6 +3176,8 @@
                 "ProviderDeleted": "组织 Provider 已删除",
                 "Saved": "Provider 配置已保存",
                 "DefaultUpdated": "默认 Provider 已更新",
+                "TestSucceeded": "Provider 测试成功",
+                "TestFailed": "Provider 测试失败",
                 "SaveFailed": "保存 AI 配置失败",
                 "DeleteFailed": "删除组织 Provider 失败"
             }
@@ -3220,7 +3225,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "无限数据库连接",
                     "HigherAiQuotaAndFasterResponses": "更高的 AI 额度和更快的响应",
-                    "AiSqlGenerationExplainOptimize": "AI 生成 SQL + explain + optimize",
+                    "ByokAiFeatures": "使用自己的 AI Key，连接自定义模型",
                     "EarlyAccessToUpcomingFeatures": "优先体验即将推出的功能",
                     "AdvancedChartsAndExports": "高级图表与导出",
                     "PrioritySupport": "优先支持"

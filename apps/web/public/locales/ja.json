@@ -2520,7 +2520,8 @@
             "SystemProviderReadOnly": "System Provider is read-only.",
             "ProviderNotFound": "Organization provider not found.",
             "DisabledProviderCannotBeDefault": "Enable this provider before setting it as default.",
-            "SystemProviderUnavailable": "System Provider is not configured."
+            "SystemProviderUnavailable": "System Provider is not configured.",
+            "TestFailed": "Provider test failed: {reason}"
         }
     },
     "Ai": {
@@ -3103,6 +3104,7 @@
             "LoadFailed": "Failed to load AI configuration.",
             "Saving": "Saving...",
             "Deleting": "Deleting...",
+            "Testing": "Testing...",
             "ReadOnlyHint": "Your current role does not allow updating organization AI providers.",
             "Providers": {
                 "Title": "AI Providers",
@@ -3163,6 +3165,7 @@
                 "Delete": "Delete",
                 "View": "View",
                 "ViewDocs": "View Docs",
+                "TestProvider": "Test",
                 "Cancel": "Cancel",
                 "SaveChanges": "Save Changes"
             },
@@ -3171,6 +3174,8 @@
                 "ProviderDeleted": "組織プロバイダーを削除しました",
                 "Saved": "プロバイダー設定を保存しました",
                 "DefaultUpdated": "デフォルトプロバイダーを更新しました",
+                "TestSucceeded": "プロバイダーのテストに成功しました",
+                "TestFailed": "プロバイダーのテストに失敗しました",
                 "SaveFailed": "AI 設定を保存できませんでした",
                 "DeleteFailed": "組織プロバイダーを削除できませんでした"
             }
@@ -3218,7 +3223,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "無制限のデータベース接続",
                     "HigherAiQuotaAndFasterResponses": "より高い AI クォータと高速な応答",
-                    "AiSqlGenerationExplainOptimize": "AI による SQL 生成 + explain + optimize",
+                    "ByokAiFeatures": "Use your own AI key to connect custom models",
                     "EarlyAccessToUpcomingFeatures": "近日公開機能への先行アクセス",
                     "AdvancedChartsAndExports": "高度なチャートとエクスポート",
                     "PrioritySupport": "優先サポート"

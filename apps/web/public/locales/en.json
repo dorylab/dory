@@ -2521,7 +2521,8 @@
             "SystemProviderReadOnly": "System Provider is read-only.",
             "ProviderNotFound": "Organization provider not found.",
             "DisabledProviderCannotBeDefault": "Enable this provider before setting it as default.",
-            "SystemProviderUnavailable": "System Provider is not configured."
+            "SystemProviderUnavailable": "System Provider is not configured.",
+            "TestFailed": "Provider test failed: {reason}"
         }
     },
     "Ai": {
@@ -3104,6 +3105,7 @@
             "LoadFailed": "Failed to load AI configuration.",
             "Saving": "Saving...",
             "Deleting": "Deleting...",
+            "Testing": "Testing...",
             "ReadOnlyHint": "Your current role does not allow updating organization AI providers.",
             "Providers": {
                 "Title": "AI Providers",
@@ -3164,6 +3166,7 @@
                 "Delete": "Delete",
                 "View": "View",
                 "ViewDocs": "View Docs",
+                "TestProvider": "Test",
                 "Cancel": "Cancel",
                 "SaveChanges": "Save Changes"
             },
@@ -3172,6 +3175,8 @@
                 "ProviderDeleted": "Organization provider deleted",
                 "Saved": "Provider configuration saved",
                 "DefaultUpdated": "Default provider updated",
+                "TestSucceeded": "Provider test succeeded",
+                "TestFailed": "Provider test failed",
                 "SaveFailed": "Failed to save AI configuration",
                 "DeleteFailed": "Failed to delete organization provider"
             }
@@ -3219,7 +3224,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "Unlimited database connections",
                     "HigherAiQuotaAndFasterResponses": "Higher AI quota & faster responses",
-                    "AiSqlGenerationExplainOptimize": "AI SQL generation + explain + optimize",
+                    "ByokAiFeatures": "Use your own AI key to connect custom models",
                     "EarlyAccessToUpcomingFeatures": "Early access to upcoming features",
                     "AdvancedChartsAndExports": "Advanced charts & exports",
                     "PrioritySupport": "Priority support"

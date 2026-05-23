@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { BookOpen, CircleCheck, CircleHelp, ExternalLink, KeyRound, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, CircleCheck, CircleHelp, ExternalLink, FlaskConical, KeyRound, Loader2, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -118,6 +118,21 @@ async function createOrganizationProvider(input: ProviderFormInput): Promise<AiP
         }),
     });
     return parseAppResponse<AiProvidersPayload>(response);
+}
+
+async function testOrganizationProvider(input: ProviderFormInput): Promise<{ ok: true }> {
+    const response = await fetch('/api/organization/ai-providers/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+            provider: input.provider,
+            model: input.model,
+            baseUrl: input.baseUrl || null,
+            apiKey: input.apiKey || null,
+        }),
+    });
+    return parseAppResponse<{ ok: true }>(response);
 }
 
 async function patchProvider(providerId: string, body: Record<string, unknown>): Promise<AiProvidersPayload> {
@@ -288,6 +303,16 @@ export default function AISettingsPageClient() {
         },
     });
 
+    const testMutation = useMutation({
+        mutationFn: testOrganizationProvider,
+        onSuccess: () => {
+            toast.success(t('Toasts.TestSucceeded'));
+        },
+        onError: error => {
+            toast.error(error instanceof Error ? error.message : t('Toasts.TestFailed'));
+        },
+    });
+
     const patchMutation = useMutation({
         mutationFn: ({ providerId, body }: { providerId: string; body: Record<string, unknown> }) => patchProvider(providerId, body),
         onMutate: async variables => {
@@ -359,6 +384,8 @@ export default function AISettingsPageClient() {
     });
 
     const isSaving = createMutation.isPending || patchMutation.isPending || deleteMutation.isPending || formIsSaving;
+    const isTestingProvider = testMutation.isPending;
+    const isFormBusy = isSaving || isTestingProvider;
 
     function updateProvider(value: AiProvider) {
         setForm({
@@ -401,6 +428,15 @@ export default function AISettingsPageClient() {
         }
 
         createMutation.mutate({
+            provider: form.provider,
+            model: form.model.trim(),
+            baseUrl: form.baseUrl.trim(),
+            apiKey: form.apiKey.trim(),
+        });
+    }
+
+    function testForm() {
+        testMutation.mutate({
             provider: form.provider,
             model: form.model.trim(),
             baseUrl: form.baseUrl.trim(),
@@ -607,8 +643,8 @@ export default function AISettingsPageClient() {
                 </section>
             </div>
 
-            <Dialog open={Boolean(formMode)} onOpenChange={open => !open && !isSaving && setFormMode(null)}>
-                <DialogContent className="sm:max-w-2xl" onPointerDownOutside={event => isSaving && event.preventDefault()}>
+            <Dialog open={Boolean(formMode)} onOpenChange={open => !open && !isFormBusy && setFormMode(null)}>
+                <DialogContent className="sm:max-w-2xl" onPointerDownOutside={event => isFormBusy && event.preventDefault()}>
                     <DialogHeader>
                         <DialogTitle>{formTitle}</DialogTitle>
                         <DialogDescription>{formDescription}</DialogDescription>
@@ -616,7 +652,7 @@ export default function AISettingsPageClient() {
 
                     <div className="grid gap-4 md:grid-cols-2">
                         <Field label={t('Fields.Provider')}>
-                            <Select value={form.provider} onValueChange={value => updateProvider(value as AiProvider)} disabled={!canManageProviders || isSaving}>
+                            <Select value={form.provider} onValueChange={value => updateProvider(value as AiProvider)} disabled={!canManageProviders || isFormBusy}>
                                 <SelectTrigger className="w-full">
                                     <ProviderOptionLabel provider={form.provider} label={formProviderLabel} />
                                 </SelectTrigger>
@@ -637,12 +673,12 @@ export default function AISettingsPageClient() {
                                         value={form.model}
                                         onChange={event => setForm(current => ({ ...current, model: event.target.value }))}
                                         placeholder="gpt-5.4-mini / anthropic/claude-sonnet-4 / your-model-id"
-                                        disabled={!canManageProviders || isSaving}
+                                        disabled={!canManageProviders || isFormBusy}
                                         className="pl-9"
                                     />
                                 </div>
                             ) : (
-                                <Select value={form.model} onValueChange={value => setForm(current => ({ ...current, model: value }))} disabled={!canManageProviders || isSaving}>
+                                <Select value={form.model} onValueChange={value => setForm(current => ({ ...current, model: value }))} disabled={!canManageProviders || isFormBusy}>
                                     <SelectTrigger className="w-full">
                                         <ProviderOptionLabel provider={form.provider} label={modelOptions.find(option => option.value === form.model)?.label ?? form.model} />
                                     </SelectTrigger>
@@ -661,7 +697,7 @@ export default function AISettingsPageClient() {
                                 value={form.baseUrl}
                                 onChange={event => setForm(current => ({ ...current, baseUrl: event.target.value }))}
                                 placeholder={baseUrlPlaceholder}
-                                disabled={!canManageProviders || isSaving}
+                                disabled={!canManageProviders || isFormBusy}
                             />
                         </Field>
                         <Field label={t('Fields.ApiKey')}>
@@ -670,19 +706,25 @@ export default function AISettingsPageClient() {
                                 value={form.apiKey}
                                 onChange={event => setForm(current => ({ ...current, apiKey: event.target.value }))}
                                 placeholder={apiKeyPlaceholder}
-                                disabled={!canManageProviders || isSaving}
+                                disabled={!canManageProviders || isFormBusy}
                             />
                         </Field>
                     </div>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setFormMode(null)} disabled={isSaving}>
-                            {t('Actions.Cancel')}
+                    <DialogFooter className="sm:justify-between">
+                        <Button variant="outline" onClick={testForm} disabled={!canManageProviders || isFormBusy}>
+                            {isTestingProvider ? <Loader2 className="size-4 animate-spin" /> : <FlaskConical className="size-4" />}
+                            {isTestingProvider ? t('Testing') : t('Actions.TestProvider')}
                         </Button>
-                        <Button onClick={saveForm} disabled={!canManageProviders || isSaving}>
-                            {isSaving ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
-                            {isSaving ? t('Saving') : formMode?.type === 'edit' ? t('Actions.SaveChanges') : t('Actions.AddProvider')}
-                        </Button>
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <Button variant="outline" onClick={() => setFormMode(null)} disabled={isFormBusy}>
+                                {t('Actions.Cancel')}
+                            </Button>
+                            <Button onClick={saveForm} disabled={!canManageProviders || isFormBusy}>
+                                {isSaving ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+                                {isSaving ? t('Saving') : formMode?.type === 'edit' ? t('Actions.SaveChanges') : t('Actions.AddProvider')}
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
