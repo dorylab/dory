@@ -106,6 +106,7 @@ test('organization provider entitlement mode follows billing capabilities', () =
         STRIPE_PRO_MONTHLY_PRICE_ID: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
         DORY_CLOUD_API_URL: process.env.DORY_CLOUD_API_URL,
         NEXT_PUBLIC_DORY_CLOUD_API_URL: process.env.NEXT_PUBLIC_DORY_CLOUD_API_URL,
+        DORY_LICENSE: process.env.DORY_LICENSE,
     };
 
     const restoreEnv = () => {
@@ -127,6 +128,10 @@ test('organization provider entitlement mode follows billing capabilities', () =
         process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
         process.env.STRIPE_PRO_MONTHLY_PRICE_ID = 'price_test';
         assert.equal(getOrganizationAiProviderEntitlementModeForServer(), 'cloud-plan');
+
+        process.env.DORY_LICENSE = 'oss';
+        assert.equal(getOrganizationAiProviderEntitlementModeForServer(), 'self-hosted-license');
+        delete process.env.DORY_LICENSE;
 
         delete process.env.STRIPE_SECRET_KEY;
         delete process.env.STRIPE_WEBHOOK_SECRET;
@@ -223,6 +228,37 @@ test('provider resolution keeps system active in OSS', () => {
             ['Global', 'active'],
             ['Organization', 'enterprise'],
             ['User', 'coming_soon'],
+        ],
+    );
+});
+
+test('AI providers view model marks only the effective default in OSS', () => {
+    const viewModel = buildAiProvidersViewModel({
+        organizationProviders: [
+            {
+                id: 'provider_openai',
+                organizationId: 'org_123',
+                provider: 'openai',
+                model: 'gpt-5.4-mini',
+                baseUrl: 'https://api.openai.com/v1',
+                enabled: true,
+                isDefault: true,
+                hasKey: true,
+                keyHint: 'sk-o...test',
+                createdAt: '2026-05-20T00:00:00.000Z',
+                updatedAt: '2026-05-20T00:00:00.000Z',
+            },
+        ],
+        license: 'oss',
+        env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen-plus', DORY_AI_API_KEY: 'sk-test' },
+    });
+
+    assert.equal(viewModel.defaultProviderId, 'system');
+    assert.deepEqual(
+        viewModel.providers.map(provider => [provider.id, provider.status, provider.isDefault]),
+        [
+            ['system', 'active', true],
+            ['provider_openai', 'enabled', false],
         ],
     );
 });

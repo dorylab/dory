@@ -3113,7 +3113,9 @@
             "SystemProvider": {
                 "Label": "System Provider",
                 "Meta": "System Provider · 只读",
-                "Description": "由服务器管理员全局配置。"
+                "Description": "由服务器管理员全局配置。",
+                "EnvironmentDescription": "Configured by server environment variables.",
+                "OssReadOnly": "Read-only in OSS Edition."
             },
             "OrganizationProvider": {
                 "Label": "Organization Provider",

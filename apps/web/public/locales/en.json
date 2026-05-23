@@ -3112,7 +3112,9 @@
             "SystemProvider": {
                 "Label": "System Provider",
                 "Meta": "System Provider · Read-only",
-                "Description": "Configured globally by server administrator."
+                "Description": "Configured globally by server administrator.",
+                "EnvironmentDescription": "Configured by server environment variables.",
+                "OssReadOnly": "Read-only in OSS Edition."
             },
             "OrganizationProvider": {
                 "Label": "Organization Provider",

@@ -18,6 +18,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from '@/registry/new-york-v4/ui/alert';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
@@ -245,6 +246,8 @@ export default function AISettingsPageClient() {
     const canManageProviders = providersQuery.data?.organizationProviderCapability.enabled === true;
     const organizationProvidersAvailable = providersQuery.data?.providerResolution.managementMode === 'organization_editable';
     const upgradeTarget = providersQuery.data?.upgradeTarget ?? 'enterprise';
+    const isOssLicenseMode = !organizationProvidersAvailable && upgradeTarget === 'enterprise';
+    const visibleProviders = isOssLicenseMode ? providers.filter(provider => provider.source === 'system') : providers;
     const editingProvider = useMemo(() => {
         if (formMode?.type !== 'edit') return null;
         return providers.find(provider => provider.id === formMode.providerId) ?? null;
@@ -430,7 +433,7 @@ export default function AISettingsPageClient() {
                                 <Plus className="size-4" />
                                 {t('Actions.AddProvider')}
                             </Button>
-                        ) : !organizationProvidersAvailable ? (
+                        ) : !organizationProvidersAvailable && !isOssLicenseMode ? (
                             <Button variant="outline" onClick={openUpgrade}>
                                 <ExternalLink className="size-4" />
                                 {upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise')}
@@ -438,11 +441,11 @@ export default function AISettingsPageClient() {
                         ) : null}
                     </div>
 
-                    {!organizationProvidersAvailable && !providersQuery.isLoading ? (
-                        <div className="mt-5 rounded-md border bg-muted/20 px-4 py-3 text-sm">
-                            <div className="font-medium">{upgradeTarget === 'pro' ? t('Upgrade.ProTitle') : t('Upgrade.EnterpriseTitle')}</div>
-                            <div className="mt-1 text-muted-foreground">{t('Upgrade.Description')}</div>
-                        </div>
+                    {!organizationProvidersAvailable && !providersQuery.isLoading && !isOssLicenseMode ? (
+                        <Alert className="mt-5 bg-muted/20">
+                            <AlertTitle>{upgradeTarget === 'pro' ? t('Upgrade.ProTitle') : t('Upgrade.EnterpriseTitle')}</AlertTitle>
+                            <AlertDescription>{t('Upgrade.Description')}</AlertDescription>
+                        </Alert>
                     ) : null}
 
                     {organizationProvidersAvailable && !canManageProviders ? (
@@ -450,7 +453,7 @@ export default function AISettingsPageClient() {
                     ) : null}
 
                     <div className="mt-5 space-y-3">
-                        {providers.map(row => (
+                        {visibleProviders.map(row => (
                             <div
                                 key={row.id}
                                 className={cn(
@@ -479,11 +482,22 @@ export default function AISettingsPageClient() {
                                                     <ProviderStatusBadge row={row} t={t} />
                                                 </div>
                                                 <div className="mt-1 text-sm text-muted-foreground">
-                                                    {row.source === 'system' ? t('SystemProvider.Meta') : t('OrganizationProvider.Meta')}
+                                                    {row.source === 'system'
+                                                        ? isOssLicenseMode
+                                                            ? t('SystemProvider.Label')
+                                                            : t('SystemProvider.Meta')
+                                                        : t('OrganizationProvider.Meta')}
                                                 </div>
-                                                <p className="mt-2 text-sm text-muted-foreground">
-                                                    {row.source === 'system' ? t('SystemProvider.Description') : t('OrganizationProvider.Description')}
-                                                </p>
+                                                {row.source === 'system' && isOssLicenseMode ? (
+                                                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                                        <p>{t('SystemProvider.EnvironmentDescription')}</p>
+                                                        <p>{t('SystemProvider.OssReadOnly')}</p>
+                                                    </div>
+                                                ) : (
+                                                    <p className="mt-2 text-sm text-muted-foreground">
+                                                        {row.source === 'system' ? t('SystemProvider.Description') : t('OrganizationProvider.Description')}
+                                                    </p>
+                                                )}
                                                 {row.keyHint ? (
                                                     <div className="mt-2 text-xs text-muted-foreground">{t('Fields.ApiKeyConfigured', { hint: row.keyHint })}</div>
                                                 ) : null}

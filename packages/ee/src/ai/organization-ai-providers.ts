@@ -365,7 +365,15 @@ export function buildAiProvidersViewModel(options: {
 }): AiProvidersViewModel {
     const resolution = getAiProviderResolution(options);
     const hasOrganizationDefault = resolution.activeProvider.source === 'organization';
-    const organizationRows = options.organizationProviders.map(buildOrganizationProviderRow);
+    const organizationRows = options.organizationProviders.map(provider => {
+        const row = buildOrganizationProviderRow(provider);
+        const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
+        return {
+            ...row,
+            isDefault: isEffectiveDefault,
+            status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
+        };
+    });
     const defaultProviderId = organizationRows.find(row => row.isDefault && row.status !== 'disabled')?.id ?? 'system';
     const rows = [buildSystemProviderRow(resolution.globalProvider, !hasOrganizationDefault), ...organizationRows];
     const providers = [...rows].sort((left, right) => {
@@ -408,5 +416,9 @@ export async function shouldUseOrganizationProviderOverride(db: DBService, organ
 }
 
 export function getOrganizationAiProviderEntitlementModeForServer(): OrganizationAiProviderEntitlementMode {
+    if (process.env.DORY_LICENSE?.trim()) {
+        return 'self-hosted-license';
+    }
+
     return isBillingEnabledForServer() || isDesktopBillingHandoffAvailableForServer() ? 'cloud-plan' : 'self-hosted-license';
 }
