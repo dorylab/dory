@@ -3167,6 +3167,8 @@
             "Form": {
                 "AddTitle": "添加自定义 AI",
                 "AddDescription": "为当前组织连接你自己的 AI 服务。",
+                "ApiKeyStorageInstance": "API Key 会由当前 Dory 实例安全保存。",
+                "ApiKeyStorageDesktop": "API Key 会保存在这台设备本地。",
                 "EditTitle": "编辑自定义 AI",
                 "EditDescription": "更新 AI 服务、模型、Endpoint 或 API Key。"
             },

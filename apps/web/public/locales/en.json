@@ -3165,6 +3165,8 @@
             "Form": {
                 "AddTitle": "Add custom AI",
                 "AddDescription": "Connect your own AI service for this organization.",
+                "ApiKeyStorageInstance": "API keys are stored securely by this Dory instance.",
+                "ApiKeyStorageDesktop": "API keys are stored locally on this device.",
                 "EditTitle": "Edit custom AI",
                 "EditDescription": "Update the AI service, model, endpoint, or API key."
             },
