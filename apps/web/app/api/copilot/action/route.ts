@@ -10,12 +10,9 @@ import type { CopilotFixInput } from '@/app/(app)/[organization]/[connectionId]/
 import { getServerLocale } from '@dory/i18n/server';
 import { translate } from '@dory/i18n/translate';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
-import { isMissingAiEnvError } from '@/lib/ai/errors';
-import { USE_CLOUD_AI } from '@/app/config/app';
-import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
-import { getCloudApiBaseUrl } from '@/lib/cloud/url';
+import { isLocalMissingAiEnvError, resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const locale = await getServerLocale();
     try {
         const body = (await req.json()) as { intent?: ActionIntent; input?: CopilotFixInput; model?: string | null };
@@ -24,46 +21,34 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             return new NextResponse(translate(locale, 'SqlConsole.Copilot.Errors.InvalidRequest'), { status: 400 });
         }
 
-        if (USE_CLOUD_AI) {
-            const cloudBaseUrl = getCloudApiBaseUrl();
-            if (!cloudBaseUrl) {
-                return NextResponse.json(
-                    {
-                        code: 'CLOUD_API_NOT_CONFIGURED',
-                        message: translate(locale, 'SqlConsole.Copilot.Errors.InternalError'),
-                    },
-                    { status: 500 },
-                );
-            }
+        const input = body.input;
+        const requestedModelFromBody = input.model ?? body.model ?? null;
+        const execution = await resolveAiRouteExecution({
+            req,
+            db,
+            organizationId,
+            role: 'action',
+            requestedModel: requestedModelFromBody,
+            includeModel: false,
+            proxy: {
+                pathname: '/api/copilot/action',
+                bodyMode: 'copilot-action',
+                buildBody: async execution => {
+                    const hydratedInput = await hydrateInputForForwarding({ ...input, model: execution.requestedModel }, locale, { organizationId, userId });
+                    return {
+                        ...body,
+                        input: hydratedInput,
+                    };
+                },
+            },
+        });
+        if (execution.proxiedResponse) return execution.proxiedResponse;
 
-            const url = new URL('/api/copilot/action', cloudBaseUrl).toString();
-            const requestedModel = body.input?.model ?? body.model ?? null;
-            const hydratedInput = await hydrateInputForForwarding({ ...body.input, model: requestedModel }, locale, { organizationId, userId });
-            const upstream = await fetch(url, {
-                method: 'POST',
-                headers: buildCloudForwardHeaders(req, cloudBaseUrl),
-                body: JSON.stringify({
-                    ...body,
-                    model: null,
-                    input: { ...hydratedInput, model: null },
-                }),
-            });
-
-            return new NextResponse(upstream.body, {
-                status: upstream.status,
-                headers: { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },
-            });
-        }
-
-        const shouldForcePresetModel = USE_CLOUD_AI;
-        const requestedModel = shouldForcePresetModel ? null : (body.model ?? body.input?.model ?? null);
-
-        const result = await runQuickActionServer(body.intent, { ...body.input, model: requestedModel }, { locale, organizationId, userId });
+        const result = await runQuickActionServer(body.intent, { ...input, model: execution.requestedModel }, { locale, organizationId, userId });
         return NextResponse.json(result);
     } catch (e: any) {
         const rawMessage = typeof e?.message === 'string' ? e.message : '';
-        const isMissingEnv = isMissingAiEnvError(e);
-        if (isMissingEnv && !USE_CLOUD_AI) {
+        if (isLocalMissingAiEnvError(e)) {
             return NextResponse.json(
                 {
                     code: 'MISSING_AI_ENV',

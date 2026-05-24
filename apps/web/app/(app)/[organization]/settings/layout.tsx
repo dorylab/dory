@@ -6,8 +6,9 @@ import { OrganizationSettingsTabs } from './organization-settings-tabs';
 export default async function OrganizationSettingsLayout({ children, params }: { children: React.ReactNode; params: Promise<{ organization: string }> }) {
     const { organization } = await params;
     const t = await getTranslations('OrganizationSettings');
-    const navItems: Array<{ slug: 'organization' | 'billing'; label: string }> = [
+    const navItems: Array<{ slug: 'organization' | 'ai' | 'billing'; label: string }> = [
         { slug: 'organization', label: t('Nav.Organization') },
+        { slug: 'ai', label: t('Nav.Ai') },
         ...(isBillingSettingsVisibleForServer() ? ([{ slug: 'billing', label: t('Nav.Billing') }] as const) : []),
     ];
 

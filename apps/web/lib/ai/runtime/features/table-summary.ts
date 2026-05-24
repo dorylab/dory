@@ -13,7 +13,7 @@ import {
     ColumnInput,
     TableSummaryResponse,
 } from '../../core/table-summary';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { resolveModelName } from '@/lib/ai/model/presets';
 
@@ -31,8 +31,8 @@ type GetTableSummaryOptions = {
     locale?: string | null;
 
     model?: string | null;
-    feature?: string;        // Default 'table_summary'
-    promptVersion?: number;  // Default 2
+    feature?: string; // Default 'table_summary'
+    promptVersion?: number; // Default 2
     algoVersion?: number;
     ignoreCache?: boolean;
 };
@@ -56,7 +56,6 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         ignoreCache = false,
     } = options;
 
-
     const colList = columns ?? [];
     if (!colList.length) {
         return {
@@ -69,16 +68,19 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         };
     }
 
-    const providerModelName =
-        model ??
-        resolveModelName('table_summary', { variant: colList.length > 50 ? 'fast' : 'default' });
-    const { model: chatModel, preset, modelName: effectiveModelName } = getEffectiveModelBundle(
-        'table_summary',
-        providerModelName,
-    );
+    const providerModelName = model ?? resolveModelName('table_summary', { variant: colList.length > 50 ? 'fast' : 'default' });
+    const {
+        model: chatModel,
+        preset,
+        modelName: effectiveModelName,
+        providerKey,
+        gateway,
+    } = await getEffectiveModelBundleForOrganization('table_summary', {
+        organizationId,
+        modelName: providerModelName,
+    });
     const effectiveCatalog = catalog ?? 'default';
-    const systemPrompt =
-        compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
+    const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
 
     const schemaHash = await computeSchemaHash({
         dbType,
@@ -99,7 +101,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         organizationId,
         connectionId,
         feature,
-        model: providerModelName,
+        model: effectiveModelName,
         inputHash: `${schemaHash}:${localeKey}`,
         catalog: effectiveCatalog,
         dbType: dbType ?? null,
@@ -112,11 +114,13 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
             organizationId,
             userId: userId ?? null,
             feature,
-            model: providerModelName,
+            model: effectiveModelName,
+            provider: providerKey ?? undefined,
+            gateway: gateway ?? undefined,
             promptVersion,
             algoVersion,
         },
-        normalize: (savedPayload) =>
+        normalize: savedPayload =>
             normalizeTableSummary({
                 payload: savedPayload,
                 columns: colList,
@@ -146,7 +150,9 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
                     organizationId,
                     userId: userId ?? null,
                     feature,
-                    model: providerModelName,
+                    model: effectiveModelName,
+                    provider: providerKey ?? undefined,
+                    gateway: gateway ?? undefined,
                     promptVersion,
                     algoVersion,
                 },

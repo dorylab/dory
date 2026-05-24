@@ -2,25 +2,15 @@ import 'server-only';
 import { createIdGenerator, stepCountIs } from 'ai';
 
 import { streamText } from '@/lib/ai/gateway';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { isLocalMissingAiEnvError, requireLocalAiRouteModel, resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { buildCloudToolSet } from '@/lib/ai/cloud-tools';
-import { isMissingAiEnvError } from '@/lib/ai/errors';
-import { USE_CLOUD_AI } from '@/app/config/app';
-import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
-import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
 
 export const runtime = 'nodejs';
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
-        const cloudApiBaseUrl = getCloudApiBaseUrl();
-        const shouldUseCloudProxy = USE_CLOUD_AI && Boolean(cloudApiBaseUrl);
-
-        const proxied = shouldUseCloudProxy ? await proxyAiRouteIfNeeded(req, '/api/ai/stream') : null;
-        if (proxied) return proxied;
-
         const body = (await req.json()) as {
             system: string;
             messages: unknown[];
@@ -31,35 +21,28 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             model?: string | null;
         };
 
-        const envProvider = (process.env.DORY_AI_PROVIDER ?? '').trim().toLowerCase();
-        const envBaseUrl = (process.env.DORY_AI_URL ?? '').trim().toLowerCase();
-        const isCloudflareGatewayUrl = envBaseUrl.includes('gateway.ai.cloudflare.com');
-        const isCloudflareGatewayProvider = envProvider === 'cloudflare' || envProvider === 'cloudflare-gateway';
-        const shouldForcePresetModel = shouldUseCloudProxy || isCloudflareGatewayProvider || isCloudflareGatewayUrl;
-        const requestedModel = shouldForcePresetModel ? null : body.model;
+        const execution = await resolveAiRouteExecution({
+            req,
+            db,
+            organizationId,
+            role: 'chat',
+            requestedModel: body.model,
+            includeModel: true,
+            proxy: {
+                pathname: '/api/ai/stream',
+                body,
+            },
+        });
+        if (execution.proxiedResponse) return execution.proxiedResponse;
+        const model = requireLocalAiRouteModel(execution);
 
         console.info('[ai/stream] request model input', {
             requestedModel: body.model ?? null,
-            envProvider: process.env.DORY_AI_PROVIDER ?? null,
-            envBaseUrl: process.env.DORY_AI_URL ?? null,
-            envModel: process.env.DORY_AI_MODEL ?? null,
-            useCloud: USE_CLOUD_AI,
-            cloudProxyConfigured: shouldUseCloudProxy,
-            forcePresetModel: shouldForcePresetModel,
-        });
-
-        const { model, preset, modelName: providerModelName } = getEffectiveModelBundle('chat', requestedModel);
-        console.info('[ai/stream] model resolution', {
-            requestedModel: body.model ?? null,
-            effectiveRequestedModel: requestedModel ?? null,
-            providerModelName,
-            presetModel: preset.model,
-            envProvider: process.env.DORY_AI_PROVIDER ?? null,
-            envBaseUrl: process.env.DORY_AI_URL ?? null,
-            envModel: process.env.DORY_AI_MODEL ?? null,
-            useCloud: USE_CLOUD_AI,
-            cloudProxyConfigured: shouldUseCloudProxy,
-            forcePresetModel: shouldForcePresetModel,
+            effectiveRequestedModel: execution.requestedModel,
+            source: execution.source,
+            providerKey: execution.providerKey,
+            providerModelName: execution.modelName,
+            transport: execution.transport,
         });
 
         const toolSet = buildCloudToolSet(body.tools as Record<string, any> | null);
@@ -71,14 +54,14 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             tools: toolSet,
             toolChoice: body.toolChoice ?? 'auto',
             stopWhen: stepCountIs(Math.max(1, body.maxSteps ?? 1)),
-            temperature: body.temperature ?? preset.temperature,
+            temperature: body.temperature ?? execution.preset.temperature,
             context: {
                 organizationId,
                 userId,
                 feature: 'chat_stream',
-                model: providerModelName,
-                gateway: isCloudflareGatewayProvider || isCloudflareGatewayUrl ? 'cloudflare' : 'direct',
-                provider: envProvider || null,
+                model: execution.modelName,
+                gateway: execution.gateway,
+                provider: execution.providerKey,
             },
         });
 
@@ -90,7 +73,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             return toAiQuotaExceededResponse(error);
         }
 
-        if (isMissingAiEnvError(error) && !USE_CLOUD_AI) {
+        if (isLocalMissingAiEnvError(error)) {
             return new Response('MISSING_AI_ENV', {
                 status: 500,
                 headers: { 'Content-Type': 'text/plain; charset=utf-8' },

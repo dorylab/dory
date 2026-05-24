@@ -1,14 +1,12 @@
 import { generateText } from '@/lib/ai/gateway';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
+import { requireLocalAiRouteModel, resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { buildTabTitlePrompt } from '@/lib/ai/prompts';
 import { getApiLocale } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
-import { USE_CLOUD_AI } from '@/app/config/app';
-import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
         const locale = await getApiLocale();
         const body = (await req.json()) as {
@@ -17,16 +15,20 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             model?: string | null;
         };
         const { sql, database, model: requestedModel } = body;
-        const shouldForcePresetModel = USE_CLOUD_AI;
-
-        const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/tab-title', {
-            body: USE_CLOUD_AI ? { ...body, model: null } : body,
+        const execution = await resolveAiRouteExecution({
+            req,
+            db,
+            organizationId,
+            role: 'title',
+            requestedModel,
+            includeModel: true,
+            proxy: {
+                pathname: '/api/ai/tab-title',
+                body,
+            },
         });
-        if (proxied) return proxied;
-
-        const effectiveRequestedModel = shouldForcePresetModel ? null : requestedModel;
-
-        const { model, preset, modelName: providerModelName } = getEffectiveModelBundle('title', effectiveRequestedModel);
+        if (execution.proxiedResponse) return execution.proxiedResponse;
+        const model = requireLocalAiRouteModel(execution);
 
         if (!sql || !sql.trim()) {
             return new Response(JSON.stringify({ title: null }), {
@@ -39,15 +41,16 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
 
         const { text } = await generateText({
             model,
-            system: compileSystemPrompt(preset.system) ?? 'Return a concise title only, with no explanation.',
+            system: compileSystemPrompt(execution.preset.system) ?? 'Return a concise title only, with no explanation.',
             prompt,
-            temperature: preset.temperature,
+            temperature: execution.preset.temperature,
             context: {
                 organizationId,
                 userId,
                 feature: 'tab_title',
-                model: providerModelName,
-                provider: (process.env.DORY_AI_PROVIDER ?? '').trim().toLowerCase() || null,
+                model: execution.modelName,
+                provider: execution.providerKey,
+                gateway: execution.gateway,
             },
         });
 

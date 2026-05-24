@@ -22,5 +22,6 @@ export const fileAssets = activeSchemas?.fileAssets;
 export const datasets = activeSchemas?.datasets;
 export const datasetRelations = activeSchemas?.datasetRelations;
 export const datasetRelationColumns = activeSchemas?.datasetRelationColumns;
+export const organizationAiProviders = activeSchemas?.organizationAiProviders;
 
 export type ActiveDBSchema = typeof activeSchemas.schema;

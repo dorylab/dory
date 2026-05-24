@@ -1,9 +1,8 @@
 import 'server-only';
 import { NextRequest } from 'next/server';
 import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, readUIMessageStream, type ModelMessage, type UIMessage, type UIMessageChunk } from 'ai';
-import { getModelPresetOnly } from '@/lib/ai/model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
-import { isMissingAiEnvError } from '@/lib/ai/errors';
+import { buildAiRouteForwardRequest, isLocalMissingAiEnvError, resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { getDBService } from '@dory/database';
@@ -20,9 +19,6 @@ import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatb
 import { getApiLocale } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '../utils/with-organization-handler';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
-import { USE_CLOUD_AI } from '@/app/config/app';
-import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
-import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import type { ConnectionType } from '@dory/shared/types/connections';
 
 export const runtime = 'nodejs';
@@ -85,7 +81,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req }) => {
     try {
         return await handleChatRequest(req);
     } catch (error) {
-        if (isMissingAiEnvError(error) && !USE_CLOUD_AI) {
+        if (isLocalMissingAiEnvError(error)) {
             return new Response('MISSING_AI_ENV', {
                 status: 500,
                 headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -154,19 +150,27 @@ async function handleChatRequest(req: NextRequest) {
     const organizationId = resolveCurrentOrganizationId(session);
     const connectionId = connectionIdFromBody ?? req.headers.get('x-connection-id') ?? null;
 
-    const preset = getModelPresetOnly('chat');
-    const providerModelName = requestedModel || preset.model;
+    const db = userId ? await getDBService() : null;
+    const execution = await resolveAiRouteExecution({
+        req,
+        db,
+        organizationId,
+        role: 'chat',
+        requestedModel,
+        includeModel: false,
+    });
+    const preset = execution.preset;
     const compiledSystem = compileSystemPrompt(preset.system);
+
     console.info('[chat] model resolution', {
         requestedModel: requestedModel ?? null,
+        effectiveRequestedModel: execution.requestedModel,
+        source: execution.source,
+        providerKey: execution.providerKey,
         presetModel: preset.model,
-        providerModelName,
-        envProvider: process.env.DORY_AI_PROVIDER ?? null,
-        envModel: process.env.DORY_AI_MODEL ?? null,
-        useCloud: USE_CLOUD_AI,
+        providerModelName: execution.modelName,
+        transport: execution.transport,
     });
-
-    const db = userId ? await getDBService() : null;
 
     let chatId: string | null = chatIdFromBody ?? null;
     let sessionTitle: string | null = null;
@@ -175,7 +179,7 @@ async function handleChatRequest(req: NextRequest) {
         userId && (chatId || tabId)
             ? {
                   requestedModel: requestedModel ?? null,
-                  providerModel: providerModelName,
+                  providerModel: execution.modelName,
                   webSearch: Boolean(webSearch),
                   database: database ?? null,
                   activeSchema: activeSchema ?? null,
@@ -368,10 +372,8 @@ async function handleChatRequest(req: NextRequest) {
         }
     }
 
-    const useCloud = USE_CLOUD_AI && Boolean(getCloudApiBaseUrl());
-    const cloudBaseUrl = resolveCloudBaseUrl(req);
-    const cloudUrl = new URL('/api/ai/stream', cloudBaseUrl).toString();
-    const cloudHeaders = buildCloudForwardHeaders(req, cloudBaseUrl);
+    const streamForwarding = buildAiRouteForwardRequest(execution, req, '/api/ai/stream');
+    const streamLogLabel = streamForwarding.transport === 'cloud' ? 'cloud' : 'local';
     const cloudTools = buildCloudToolDeclarations({
         includeSqlRunner: sqlToolEnabled,
         sqlRunnerDescription: tools.sqlRunner?.description,
@@ -385,36 +387,34 @@ async function handleChatRequest(req: NextRequest) {
         toolChoice: 'auto',
         temperature: preset.temperature,
         maxSteps: maxSteps,
-        // Desktop runtime proxies to cloud. In that path, do not forward
-        // client-selected local model names (e.g. gpt-4o); let cloud env resolve.
-        model: useCloud ? null : providerModelName,
+        model: streamForwarding.forwardedModel,
     };
     const forwardedModel = baseCloudPayload.model ?? null;
 
     let initialCloudResponse: Awaited<ReturnType<typeof fetchCloudUiMessageStream>> | null = null;
 
     try {
-        console.info(useCloud ? '[chat] cloud request start' : '[chat] local request start', {
-            url: cloudUrl,
+        console.info(`[chat] ${streamLogLabel} request start`, {
+            url: streamForwarding.url,
             model: forwardedModel,
             messageCount: modelMessages.length,
         });
         initialCloudResponse = await fetchCloudUiMessageStream({
-            url: cloudUrl,
+            url: streamForwarding.url,
             payload: {
                 ...baseCloudPayload,
                 messages: modelMessages,
             },
-            headers: cloudHeaders,
+            headers: streamForwarding.headers,
         });
-        console.info(useCloud ? '[chat] cloud response received' : '[chat] local response received', {
-            url: cloudUrl,
+        console.info(`[chat] ${streamLogLabel} response received`, {
+            url: streamForwarding.url,
             status: initialCloudResponse.response.status,
             ok: initialCloudResponse.response.ok,
         });
     } catch (error) {
-        console.error(useCloud ? '[chat] cloud stream unavailable' : '[chat] local stream unavailable', {
-            url: cloudUrl,
+        console.error(`[chat] ${streamLogLabel} stream unavailable`, {
+            url: streamForwarding.url,
             error,
         });
         return new Response('AI_SERVICE_UNAVAILABLE', {
@@ -600,15 +600,15 @@ async function handleChatRequest(req: NextRequest) {
 
                         try {
                             nextResponse = await fetchCloudUiMessageStream({
-                                url: cloudUrl,
+                                url: streamForwarding.url,
                                 payload: {
                                     ...baseCloudPayload,
                                     messages: nextMessages,
                                 },
-                                headers: cloudHeaders,
+                                headers: streamForwarding.headers,
                             });
                         } catch (error) {
-                            console.error('[chat] cloud stream unavailable', error);
+                            console.error(`[chat] ${streamLogLabel} stream unavailable`, error);
                             writer.write({
                                 type: 'error',
                                 errorText: 'AI_SERVICE_UNAVAILABLE',
@@ -752,15 +752,15 @@ async function handleChatRequest(req: NextRequest) {
 
                 try {
                     nextResponse = await fetchCloudUiMessageStream({
-                        url: cloudUrl,
+                        url: streamForwarding.url,
                         payload: {
                             ...baseCloudPayload,
                             messages: nextMessages,
                         },
-                        headers: cloudHeaders,
+                        headers: streamForwarding.headers,
                     });
                 } catch (error) {
-                    console.error('[chat] cloud stream unavailable', error);
+                    console.error(`[chat] ${streamLogLabel} stream unavailable`, error);
                     writer.write({
                         type: 'error',
                         errorText: 'AI_SERVICE_UNAVAILABLE',
@@ -947,21 +947,4 @@ function looksLikeStandaloneSql(text: string): boolean {
     if (lines.length > 12) return false;
 
     return !/[。！？]/.test(trimmed) && !/^[-*]\s/m.test(trimmed);
-}
-
-function resolveCloudBaseUrl(req: NextRequest): string {
-    if (!USE_CLOUD_AI) {
-        try {
-            return new URL(req.url).origin;
-        } catch {
-            return 'http://localhost:3000';
-        }
-    }
-    const cloudUrl = getCloudApiBaseUrl();
-    if (cloudUrl) return cloudUrl;
-    try {
-        return new URL(req.url).origin;
-    } catch {
-        return 'http://localhost:3000';
-    }
 }

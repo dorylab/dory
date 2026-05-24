@@ -4,8 +4,8 @@ import { tool, stepCountIs } from 'ai';
 import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { generateText } from '@/lib/ai/gateway';
+import { requireLocalAiRouteModel, resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
-import { getEffectiveModelBundle } from '@/lib/ai/model';
 import { buildSchemaContext, getDefaultSchemaSampleLimits } from '@/lib/ai/prompts/contexts/schema';
 import { SYSTEM_PROMPT } from '@/lib/ai/prompts/system/core';
 import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
@@ -27,7 +27,7 @@ import { getReadOnlyQueryKeywordList } from '@/app/api/utils/sql-readonly';
  *   "database": "mydb"    // optional
  * }
  */
-export const POST = withAutomationHandler(async ({ req, userId, organizationId }) => {
+export const POST = withAutomationHandler(async ({ req, db, userId, organizationId }) => {
     const body = await req.json();
     const { connectionId, question, database } = body;
 
@@ -140,7 +140,15 @@ export const POST = withAutomationHandler(async ({ req, userId, organizationId }
         .join('\n\n');
 
     try {
-        const { model, modelName } = getEffectiveModelBundle('chat');
+        const execution = await resolveAiRouteExecution({
+            req,
+            db,
+            organizationId,
+            role: 'chat',
+            includeModel: true,
+            allowCloudProxy: false,
+        });
+        const model = requireLocalAiRouteModel(execution);
 
         const result = await generateText({
             model,
@@ -153,7 +161,9 @@ export const POST = withAutomationHandler(async ({ req, userId, organizationId }
                 organizationId,
                 userId,
                 feature: 'automation_ai_ask',
-                model: modelName,
+                model: execution.modelName,
+                provider: execution.providerKey ?? undefined,
+                gateway: execution.gateway ?? undefined,
             },
         });
 

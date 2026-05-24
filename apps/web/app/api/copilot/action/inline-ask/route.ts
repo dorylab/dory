@@ -2,11 +2,8 @@ import 'server-only';
 
 import { NextResponse } from 'next/server';
 
-import { buildCloudForwardHeaders } from '@/app/api/utils/cloud-ai-proxy';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
-import { USE_CLOUD_AI } from '@/app/config/app';
-import { isMissingAiEnvError } from '@/lib/ai/errors';
-import { getCloudApiBaseUrl } from '@/lib/cloud/url';
+import { isLocalMissingAiEnvError, resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { hydrateInlineAskInputForForwarding, runInlineAskSqlGeneration, type InlineAskInput } from '@/lib/copilot/action/server/inline-ask';
 import { translate } from '@dory/i18n/translate';
 import { getServerLocale } from '@dory/i18n/server';
@@ -27,7 +24,7 @@ type InlineAskRequestBody = {
     model?: string | null;
 };
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     const locale = await getServerLocale();
 
     try {
@@ -51,37 +48,27 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
             model: body.model ?? null,
         };
 
-        if (USE_CLOUD_AI) {
-            const cloudBaseUrl = getCloudApiBaseUrl();
-            if (!cloudBaseUrl) {
-                return NextResponse.json(
-                    {
-                        code: 'CLOUD_API_NOT_CONFIGURED',
-                        message: translate(locale, 'SqlConsole.Copilot.Errors.InternalError'),
-                    },
-                    { status: 500 },
-                );
-            }
+        const execution = await resolveAiRouteExecution({
+            req,
+            db,
+            organizationId,
+            role: 'action',
+            requestedModel: input.model,
+            includeModel: false,
+            proxy: {
+                pathname: '/api/copilot/action/inline-ask',
+                buildBody: async execution => {
+                    const hydratedInput = await hydrateInlineAskInputForForwarding({ ...input, model: execution.requestedModel }, { locale, organizationId, userId });
+                    return {
+                        ...body,
+                        ...hydratedInput,
+                    };
+                },
+            },
+        });
+        if (execution.proxiedResponse) return execution.proxiedResponse;
 
-            const url = new URL('/api/copilot/action/inline-ask', cloudBaseUrl).toString();
-            const hydratedInput = await hydrateInlineAskInputForForwarding(input, { locale, organizationId, userId });
-            const upstream = await fetch(url, {
-                method: 'POST',
-                headers: buildCloudForwardHeaders(req, cloudBaseUrl),
-                body: JSON.stringify({
-                    ...body,
-                    ...hydratedInput,
-                    model: null,
-                }),
-            });
-
-            return new NextResponse(upstream.body, {
-                status: upstream.status,
-                headers: { 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },
-            });
-        }
-
-        const result = await runInlineAskSqlGeneration(input, { locale, organizationId, userId });
+        const result = await runInlineAskSqlGeneration({ ...input, model: execution.requestedModel }, { locale, organizationId, userId });
 
         return NextResponse.json({
             sql: result.fixedSql,
@@ -91,8 +78,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId,
         });
     } catch (e: any) {
         const rawMessage = typeof e?.message === 'string' ? e.message : '';
-        const isMissingEnv = isMissingAiEnvError(e);
-        if (isMissingEnv && !USE_CLOUD_AI) {
+        if (isLocalMissingAiEnvError(e)) {
             return NextResponse.json(
                 {
                     code: 'MISSING_AI_ENV',

@@ -4,8 +4,8 @@ import provider from '@/lib/ai/provider';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { fallbackSummaries } from '@/lib/ai/core/schema-explanations';
-import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
+import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 
 export const runtime = 'nodejs';
 
@@ -32,9 +32,18 @@ const schemaExplanationRequestSchema = z.object({
 
 type SchemaExplanationRequest = z.infer<typeof schemaExplanationRequestSchema>;
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
-    const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/schema-explanations');
-    if (proxied) return proxied;
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+    const execution = await resolveAiRouteExecution({
+        req,
+        db,
+        organizationId,
+        role: 'schema_explanation',
+        includeModel: false,
+        proxy: {
+            pathname: '/api/ai/schema-explanations',
+        },
+    });
+    if (execution.proxiedResponse) return execution.proxiedResponse;
 
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);

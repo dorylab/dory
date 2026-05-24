@@ -2265,6 +2265,19 @@
             "ClosePage": "Cerrar página",
             "Hint": "Si la aplicación no se abre automáticamente, haz clic en \"Volver a Dory\"."
         },
+        "OrganizationAiProviders": {
+            "ApiKeyRequired": "Este servicio de IA requiere una clave API.",
+            "BaseUrlRequired": "Este servicio de IA requiere un endpoint.",
+            "ProviderIncomplete": "Completa este servicio de IA antes de establecerlo como predeterminado.",
+            "UnsupportedModel": "Elige un modelo compatible con este servicio de IA.",
+            "UnsupportedProvider": "Elige un servicio de IA compatible.",
+            "OrganizationProviderUnavailableInOss": "La IA personalizada requiere Dory Pro en Desktop o Enterprise Edition en self-hosting.",
+            "SystemProviderReadOnly": "Dory AI está gestionado por Dory y no se puede editar aquí.",
+            "ProviderNotFound": "No se encontró la IA personalizada.",
+            "DisabledProviderCannotBeDefault": "Habilita este servicio de IA antes de establecerlo como predeterminado.",
+            "SystemProviderUnavailable": "Dory AI no está disponible.",
+            "TestFailed": "Error al probar el servicio de IA: {reason}"
+        },
         "Connection": {
             "Errors": {
                 "Unauthorized": "No autorizado o con permisos insuficientes",
@@ -3058,6 +3071,7 @@
         "Description": "Gestiona los detalles y el acceso de la organización.",
         "Nav": {
             "Organization": "Organización",
+            "Ai": "AI",
             "Billing": "Planes y suscripciones"
         },
         "Organization": {
@@ -3079,6 +3093,130 @@
             "Errors": {
                 "SlugRequired": "El slug es obligatorio",
                 "SlugInvalid": "El slug solo puede contener letras minúsculas, números y guiones"
+            }
+        },
+        "Ai": {
+            "Title": "Configuración de IA",
+            "Description": "Configura los modelos y proveedores de IA disponibles para esta organización.",
+            "Loading": "Cargando configuración de IA...",
+            "LoadFailed": "No se pudo cargar la configuración de IA.",
+            "Saving": "Guardando...",
+            "Deleting": "Eliminando...",
+            "Testing": "Probando...",
+            "ReadOnlyHint": "Tu rol actual no permite actualizar los proveedores de IA de la organización.",
+            "Providers": {
+                "Title": "Modelos de IA",
+                "Description": "Gestiona los servicios y modelos de IA disponibles para esta organización.",
+                "CurrentDefault": "Predeterminado actual"
+            },
+            "Groups": {
+                "SystemTitle": "Dory AI",
+                "SystemDescription": "Servicio de IA predeterminado configurado para este despliegue de Dory. No requiere configuración de la organización.",
+                "OrganizationTitle": "IA personalizada",
+                "OrganizationDescription": "Conecta tu propio servicio de IA, como OpenAI, Claude, Qwen o un modelo compatible con la API de OpenAI.",
+                "OrganizationLockedProTitle": "Actualiza a Pro para añadir IA personalizada",
+                "OrganizationLockedEnterpriseTitle": "Usa Enterprise Edition para añadir IA personalizada",
+                "OrganizationLockedDescription": "Usa tu propia clave API para configurar modelos dedicados para esta organización.",
+                "OrganizationEmptyTitle": "Aún no hay IA personalizada",
+                "OrganizationEmptyDescription": "Añade tu propia clave API y modelo para reemplazar Dory AI en esta organización."
+            },
+            "SystemProvider": {
+                "Label": "Dory AI",
+                "Meta": "Dory AI",
+                "Description": "Modelo de IA predeterminado configurado para este despliegue de Dory.",
+                "ActiveDescription": "Modelo predeterminado que usa actualmente esta organización.",
+                "EnvironmentDescription": "Gestionado por el despliegue actual de Dory. No requiere configuración de la organización.",
+                "OssReadOnly": "Gestionado por Dory."
+            },
+            "OrganizationProvider": {
+                "Label": "IA personalizada",
+                "Meta": "IA personalizada",
+                "Description": "Usa tu propia clave API y modelo.",
+                "ActiveDescription": "Modelo personalizado que usa actualmente esta organización."
+            },
+            "Badges": {
+                "Default": "Predeterminado",
+                "Enabled": "Habilitado",
+                "Disabled": "Deshabilitado",
+                "Unconfigured": "Falta configuración",
+                "System": "Proporcionado por Dory",
+                "Organization": "Personalizado",
+                "ReadOnly": "No editable",
+                "Configured": "Configurado",
+                "NotAvailable": "No disponible",
+                "MissingConfig": "Falta configuración",
+                "DoryProvided": "Proporcionado por Dory",
+                "AdminProvided": "Administrador"
+            },
+            "Status": {
+                "MissingServerConfig": "Dory AI no está disponible temporalmente.",
+                "MissingProviderConfig": "Falta la clave API o la configuración del modelo."
+            },
+            "Upgrade": {
+                "EnterpriseTitle": "La IA personalizada está disponible en Enterprise Edition.",
+                "ProTitle": "La IA personalizada está disponible con Dory Pro.",
+                "Description": "Usa tu propia clave API y modelo para cada organización.",
+                "EnterpriseDescription": "Usa Enterprise Edition para configurar IA personalizada para esta organización. Dory AI sigue disponible de forma predeterminada.",
+                "ProDescription": "Actualiza para configurar IA personalizada para esta organización. Dory AI sigue disponible de forma predeterminada."
+            },
+            "Form": {
+                "AddTitle": "Añadir IA personalizada",
+                "AddDescription": "Conecta tu propio servicio de IA para esta organización.",
+                "EditTitle": "Editar IA personalizada",
+                "EditDescription": "Actualiza el servicio de IA, el modelo, el endpoint o la clave API."
+            },
+            "DeleteDialog": {
+                "Title": "¿Eliminar IA personalizada?",
+                "Description": "Esto eliminará permanentemente {provider} de esta organización. Las funciones de IA usarán el siguiente valor predeterminado disponible."
+            },
+            "Fields": {
+                "Provider": "Servicio de IA",
+                "DefaultModel": "Modelo",
+                "DefaultModelHint": "Dory usa este modelo cuando una función de IA no ofrece su propio selector de modelo.",
+                "BaseUrl": "Endpoint",
+                "ApiKey": "Clave API",
+                "ApiKeyConfigured": "Configurada ({hint})",
+                "ApiKeyPlaceholder": "Pega una clave API",
+                "ApiKeyOptionalPlaceholder": "Opcional para servicios locales compatibles con OpenAI"
+            },
+            "Actions": {
+                "AddProvider": "Añadir IA personalizada",
+                "UpgradeToEnterprise": "Actualizar a Enterprise",
+                "UpgradeToPro": "Actualizar a Pro",
+                "SetAsDefault": "Establecer como predeterminado",
+                "Edit": "Editar",
+                "Disable": "Deshabilitar",
+                "Enable": "Habilitar",
+                "Delete": "Eliminar",
+                "View": "Ver detalles",
+                "ViewDocs": "Ver documentación",
+                "TestProvider": "Probar",
+                "Cancel": "Cancelar",
+                "SaveChanges": "Guardar cambios"
+            },
+            "Toasts": {
+                "ProviderAdded": "IA personalizada añadida",
+                "ProviderDeleted": "IA personalizada eliminada",
+                "Saved": "Configuración de IA guardada",
+                "DefaultUpdated": "Modelo predeterminado actualizado",
+                "TestSucceeded": "Prueba del servicio de IA completada",
+                "TestFailed": "No se pudo probar el servicio de IA",
+                "SaveFailed": "No se pudo guardar la configuración de IA",
+                "DeleteFailed": "No se pudo eliminar la IA personalizada"
+            },
+            "DoryAi": {
+                "Title": "Dory AI",
+                "Description": "Servicio de IA predeterminado configurado por el despliegue actual de Dory.",
+                "ModelDescription": "Modelo de IA predeterminado proporcionado por Dory.",
+                "ActiveModelDescription": "Modelo predeterminado que usa actualmente esta organización.",
+                "UnavailableDescription": "Dory AI no está disponible temporalmente."
+            },
+            "AdminAi": {
+                "Title": "Proporcionado por el administrador del sistema",
+                "Description": "Servicio de IA predeterminado configurado por el administrador del sistema para este despliegue.",
+                "ModelDescription": "Modelo de IA predeterminado proporcionado por el administrador del sistema.",
+                "ActiveModelDescription": "Modelo predeterminado que usa actualmente esta organización.",
+                "UnavailableDescription": "Pide al administrador del sistema que complete la configuración de IA."
             }
         },
         "Billing": {
@@ -3124,7 +3262,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "Conexiones ilimitadas a bases de datos",
                     "HigherAiQuotaAndFasterResponses": "Mayor cuota de IA y respuestas más rápidas",
-                    "AiSqlGenerationExplainOptimize": "Generación de SQL con IA + explain + optimize",
+                    "ByokAiFeatures": "Usa tu propia clave de IA para conectar modelos personalizados",
                     "EarlyAccessToUpcomingFeatures": "Acceso anticipado a próximas funciones",
                     "AdvancedChartsAndExports": "Gráficos avanzados y exportación",
                     "PrioritySupport": "Soporte prioritario"

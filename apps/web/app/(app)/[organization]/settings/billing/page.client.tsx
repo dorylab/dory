@@ -130,15 +130,15 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
     const hobbyFeatures = [
         t('Hobby.Features.ConnectPopularDatabases'),
         t('Hobby.Features.SqlEditorAndQueryResults'),
-        t('Hobby.Features.BasicCharts'),
         t('Hobby.Features.AiQuotaIncluded'),
+        t('Hobby.Features.BasicCharts'),
         t('Hobby.Features.SavePersonalQueries'),
         t('Hobby.Features.CommunitySupport'),
     ];
     const proFeatures = [
         t('Pro.Features.UnlimitedDatabaseConnections'),
         t('Pro.Features.HigherAiQuotaAndFasterResponses'),
-        t('Pro.Features.AiSqlGenerationExplainOptimize'),
+        t('Pro.Features.ByokAiFeatures'),
         t('Pro.Features.AdvancedChartsAndExports'),
         t('Pro.Features.EarlyAccessToUpcomingFeatures'),
         t('Pro.Features.PrioritySupport'),

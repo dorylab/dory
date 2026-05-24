@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
+import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 import { buildResultInsightsPrompt } from '@/lib/ai/prompts';
 import { runLLMJson } from '@/lib/copilot/action/server/llm-json';
 import type { Locale } from '@dory/i18n/routing';
@@ -402,9 +402,18 @@ function normalizeResultInsightResponse(input: z.infer<typeof responseSchema>, p
     };
 }
 
-export const POST = withUserAndOrganizationHandler(async ({ req, organizationId, userId }) => {
-    const proxied = await proxyAiRouteIfNeeded(req, '/api/ai/result-insights');
-    if (proxied) return proxied;
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+    const execution = await resolveAiRouteExecution({
+        req,
+        db,
+        organizationId,
+        role: 'action',
+        includeModel: false,
+        proxy: {
+            pathname: '/api/ai/result-insights',
+        },
+    });
+    if (execution.proxiedResponse) return execution.proxiedResponse;
 
     const locale = await getApiLocale();
 
