@@ -3113,7 +3113,7 @@
                 "SystemTitle": "Dory AI",
                 "SystemDescription": "Servicio de IA predeterminado configurado para este despliegue de Dory. No requiere configuración de la organización.",
                 "OrganizationTitle": "IA personalizada",
-                "OrganizationDescription": "Conecta tu propio servicio de IA, como OpenAI, Claude, Qwen o un modelo compatible con la API de OpenAI.",
+                "OrganizationDescription": "Conecta tu propio servicio de IA, como OpenAI, Claude o un modelo compatible con la API de OpenAI.",
                 "OrganizationLockedProTitle": "Actualiza a Pro para añadir IA personalizada",
                 "OrganizationLockedEnterpriseTitle": "Usa Enterprise Edition para añadir IA personalizada",
                 "OrganizationLockedDescription": "Usa tu propia clave API para configurar modelos dedicados para esta organización.",

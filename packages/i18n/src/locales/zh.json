@@ -3117,7 +3117,7 @@
                 "SystemTitle": "Dory AI",
                 "SystemDescription": "由当前 Dory 部署配置的默认 AI 服务，无需组织手动配置。",
                 "OrganizationTitle": "自定义 AI",
-                "OrganizationDescription": "连接你自己的 AI 服务，例如 OpenAI、Claude、Qwen 或兼容 OpenAI API 的模型。",
+                "OrganizationDescription": "连接你自己的 AI 服务，例如 OpenAI、Claude 或兼容 OpenAI API 的模型。",
                 "OrganizationLockedProTitle": "升级到 Pro 后可添加自定义 AI",
                 "OrganizationLockedEnterpriseTitle": "使用 Enterprise Edition 后可添加自定义 AI",
                 "OrganizationLockedDescription": "使用自己的 API Key，为当前组织配置专属模型。",
