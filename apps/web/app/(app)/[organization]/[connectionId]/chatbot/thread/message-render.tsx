@@ -453,6 +453,11 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
         if (!id) return true;
         return toolResultFirstIndex.get(id) === messageIndex;
     };
+    const isRenderedWithPairedToolCall = (part: any) => {
+        const toolId = getToolResultId(part);
+        const pairedToolCall = toolId ? toolCallPartById.get(toolId) : null;
+        return Boolean(pairedToolCall && pairedToolCall.messageIndex <= messageIndex && shouldRenderToolCall(pairedToolCall.part));
+    };
     const inferToolArgsFromResult = (part: any) => {
         const result = part?.result ?? part?.output ?? part?.data;
         if (result?.type === 'sql-result' && typeof result.sql === 'string') {
@@ -821,9 +826,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
         const chartResult = getChartResultFromPart(part);
         if (chartResult) {
-            const toolId = getToolResultId(part);
-            const pairedToolCall = toolId ? toolCallPartById.get(toolId) : null;
-            if (pairedToolCall && (pairedToolCall.messageIndex < messageIndex || (pairedToolCall.messageIndex === messageIndex && pairedToolCall.partIndex < i))) {
+            if (isRenderedWithPairedToolCall(part)) {
                 return;
             }
             if (shouldHideIntermediateSuccess(part, i)) {
@@ -845,9 +848,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
         const sqlResult = getSqlResultFromPart(part, t('Errors.SqlExecutionFailed'));
         if (sqlResult) {
-            const toolId = getToolResultId(part);
-            const pairedToolCall = toolId ? toolCallPartById.get(toolId) : null;
-            if (pairedToolCall && (pairedToolCall.messageIndex < messageIndex || (pairedToolCall.messageIndex === messageIndex && pairedToolCall.partIndex < i))) {
+            if (isRenderedWithPairedToolCall(part)) {
                 return;
             }
             if (shouldHideToolFailure(part, i)) {

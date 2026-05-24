@@ -535,26 +535,6 @@ async function handleChatRequest(req: NextRequest) {
                             } as UIMessageChunk);
                         }
 
-                        const toolResultMessage = toolErrorText
-                            ? ({
-                                  role: 'tool',
-                                  content: [
-                                      {
-                                          type: 'tool-result',
-                                          toolCallId: syntheticToolCall.toolCallId,
-                                          toolName: syntheticToolCall.toolName,
-                                          output: {
-                                              type: 'error-text',
-                                              value: toolErrorText,
-                                          },
-                                      },
-                                  ],
-                              } as ModelMessage)
-                            : buildToolResultModelMessage(syntheticToolCall, toolOutput);
-
-                        nextMessages = [...nextMessages, buildToolCallModelMessage(syntheticToolCall), toolResultMessage];
-                        step += 1;
-
                         if (db && userId && organizationId && chatId) {
                             const toolMessageId = newEntityId();
                             try {
@@ -594,29 +574,7 @@ async function handleChatRequest(req: NextRequest) {
                             }
                         }
 
-                        if (toolOutput && isManualExecutionRequiredSqlResult(toolOutput)) {
-                            return;
-                        }
-
-                        try {
-                            nextResponse = await fetchCloudUiMessageStream({
-                                url: streamForwarding.url,
-                                payload: {
-                                    ...baseCloudPayload,
-                                    messages: nextMessages,
-                                },
-                                headers: streamForwarding.headers,
-                            });
-                        } catch (error) {
-                            console.error(`[chat] ${streamLogLabel} stream unavailable`, error);
-                            writer.write({
-                                type: 'error',
-                                errorText: 'AI_SERVICE_UNAVAILABLE',
-                            } as UIMessageChunk);
-                            return;
-                        }
-
-                        continue;
+                        return;
                     }
                 }
 
