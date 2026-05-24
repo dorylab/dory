@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/registry/new-york-v4/ui/card';
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, XAxis, YAxis } from 'recharts';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
@@ -154,25 +154,14 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                     }}
                     className={containerClass}
                 >
-                    <ResponsiveContainer width="100%" height="100%">
-                        <PieChart accessibilityLayer margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-                            <ChartTooltip content={<ChartTooltipContent nameKey={String(pieCategoryKey)} />} />
-                            <Pie
-                                data={data}
-                                dataKey={String(pieValueKey)}
-                                nameKey={String(pieCategoryKey)}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={44}
-                                outerRadius="75%"
-                                stroke="transparent"
-                            >
-                                {data.map((_, index) => (
-                                    <Cell key={index} fill={DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length]} />
-                                ))}
-                            </Pie>
-                        </PieChart>
-                    </ResponsiveContainer>
+                    <PieChart accessibilityLayer margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+                        <ChartTooltip content={<ChartTooltipContent nameKey={String(pieCategoryKey)} />} />
+                        <Pie data={data} dataKey={String(pieValueKey)} nameKey={String(pieCategoryKey)} cx="50%" cy="50%" innerRadius={44} outerRadius="75%" stroke="transparent">
+                            {data.map((_, index) => (
+                                <Cell key={index} fill={DEFAULT_CHART_COLORS[index % DEFAULT_CHART_COLORS.length]} />
+                            ))}
+                        </Pie>
+                    </PieChart>
                 </ChartContainer>
             );
         }
@@ -180,72 +169,7 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
         if (chartType === 'bar') {
             return (
                 <ChartContainer config={chartConfig} className={containerClass}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
-                            <CartesianGrid vertical={false} />
-                            <XAxis
-                                dataKey={String(effectiveXKey)}
-                                tickLine={false}
-                                axisLine={false}
-                                tickMargin={10}
-                                minTickGap={24}
-                                tickFormatter={value => String(value).slice(0, 18)}
-                            />
-                            <YAxis tickLine={false} axisLine={false} width={48} />
-                            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                            {effectiveSeries.map(series => (
-                                <Bar
-                                    key={series.key}
-                                    dataKey={series.key}
-                                    fill={`var(--color-${series.key})`}
-                                    radius={4}
-                                    stackId={options?.stacked ? 'stack' : undefined}
-                                    activeBar={false}
-                                />
-                            ))}
-                        </BarChart>
-                    </ResponsiveContainer>
-                </ChartContainer>
-            );
-        }
-
-        if (chartType === 'line') {
-            return (
-                <ChartContainer config={chartConfig} className={containerClass}>
-                    <ResponsiveContainer width="100%" height="100%">
-                        <LineChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
-                            <CartesianGrid vertical={false} />
-                            <XAxis
-                                dataKey={String(effectiveXKey)}
-                                tickLine={false}
-                                axisLine={false}
-                                tickMargin={10}
-                                minTickGap={24}
-                                tickFormatter={value => String(value).slice(0, 18)}
-                            />
-                            <YAxis tickLine={false} axisLine={false} width={48} />
-                            <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
-                            {effectiveSeries.map(series => (
-                                <Line
-                                    key={series.key}
-                                    type="monotone"
-                                    dataKey={series.key}
-                                    stroke={`var(--color-${series.key})`}
-                                    strokeWidth={2}
-                                    dot={false}
-                                    activeDot={{ r: 4 }}
-                                />
-                            ))}
-                        </LineChart>
-                    </ResponsiveContainer>
-                </ChartContainer>
-            );
-        }
-
-        return (
-            <ChartContainer config={chartConfig} className={containerClass}>
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
+                    <BarChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
                         <CartesianGrid vertical={false} />
                         <XAxis
                             dataKey={String(effectiveXKey)}
@@ -256,20 +180,64 @@ export function ChartResultCard({ result, source = 'tool', onFollowUp }: ChartRe
                             tickFormatter={value => String(value).slice(0, 18)}
                         />
                         <YAxis tickLine={false} axisLine={false} width={48} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
                         {effectiveSeries.map(series => (
-                            <Area
+                            <Bar
                                 key={series.key}
-                                type="monotone"
                                 dataKey={series.key}
-                                stroke={`var(--color-${series.key})`}
                                 fill={`var(--color-${series.key})`}
-                                fillOpacity={0.18}
+                                radius={4}
                                 stackId={options?.stacked ? 'stack' : undefined}
+                                activeBar={false}
                             />
                         ))}
-                    </AreaChart>
-                </ResponsiveContainer>
+                    </BarChart>
+                </ChartContainer>
+            );
+        }
+
+        if (chartType === 'line') {
+            return (
+                <ChartContainer config={chartConfig} className={containerClass}>
+                    <LineChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
+                        <CartesianGrid vertical={false} />
+                        <XAxis
+                            dataKey={String(effectiveXKey)}
+                            tickLine={false}
+                            axisLine={false}
+                            tickMargin={10}
+                            minTickGap={24}
+                            tickFormatter={value => String(value).slice(0, 18)}
+                        />
+                        <YAxis tickLine={false} axisLine={false} width={48} />
+                        <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+                        {effectiveSeries.map(series => (
+                            <Line key={series.key} type="monotone" dataKey={series.key} stroke={`var(--color-${series.key})`} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                        ))}
+                    </LineChart>
+                </ChartContainer>
+            );
+        }
+
+        return (
+            <ChartContainer config={chartConfig} className={containerClass}>
+                <AreaChart accessibilityLayer data={data} margin={{ left: 8, right: 8, top: 8 }}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis dataKey={String(effectiveXKey)} tickLine={false} axisLine={false} tickMargin={10} minTickGap={24} tickFormatter={value => String(value).slice(0, 18)} />
+                    <YAxis tickLine={false} axisLine={false} width={48} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    {effectiveSeries.map(series => (
+                        <Area
+                            key={series.key}
+                            type="monotone"
+                            dataKey={series.key}
+                            stroke={`var(--color-${series.key})`}
+                            fill={`var(--color-${series.key})`}
+                            fillOpacity={0.18}
+                            stackId={options?.stacked ? 'stack' : undefined}
+                        />
+                    ))}
+                </AreaChart>
             </ChartContainer>
         );
     };
