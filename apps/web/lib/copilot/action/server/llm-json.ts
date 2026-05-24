@@ -32,6 +32,7 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
                 preset,
                 modelName: providerModelName,
                 providerKey,
+                gateway,
             } = await getEffectiveModelBundleForOrganization('action', {
                 organizationId: context?.organizationId ?? null,
                 modelName: requestedModel,
@@ -49,6 +50,7 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
                     feature: context?.feature ?? 'copilot_action',
                     model: providerModelName,
                     provider: providerKey ?? undefined,
+                    gateway: gateway ?? undefined,
                 },
             });
 

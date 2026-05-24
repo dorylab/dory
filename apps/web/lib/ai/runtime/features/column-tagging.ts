@@ -41,6 +41,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
         preset,
         modelName: providerModelName,
         providerKey,
+        gateway,
     } = await getEffectiveModelBundleForOrganization('column_tagging', {
         organizationId,
         modelName: model,
@@ -75,6 +76,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
             feature,
             model: providerModelName,
             provider: providerKey ?? undefined,
+            gateway: gateway ?? undefined,
             promptVersion,
             algoVersion,
         },
@@ -97,6 +99,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
                     feature,
                     model: providerModelName,
                     provider: providerKey ?? undefined,
+                    gateway: gateway ?? undefined,
                     promptVersion,
                     algoVersion,
                 },

@@ -5,9 +5,8 @@ import { heuristicTagging } from '@/lib/ai/core/column-tagging';
 import { getConnectionIdFromRequest } from '@dory/web-utils/request';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
-import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
+import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 
 export const runtime = 'nodejs';
 
@@ -33,9 +32,17 @@ const schemaTagRequestSchema = z.object({
 type SchemaTagRequest = z.infer<typeof schemaTagRequestSchema>;
 
 export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
-    const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
-    const proxied = organizationUsesProviderOverride ? null : await proxyAiRouteIfNeeded(req, '/api/ai/schema-tags');
-    if (proxied) return proxied;
+    const execution = await resolveAiRouteExecution({
+        req,
+        db,
+        organizationId,
+        role: 'column_tagging',
+        includeModel: false,
+        proxy: {
+            pathname: '/api/ai/schema-tags',
+        },
+    });
+    if (execution.proxiedResponse) return execution.proxiedResponse;
 
     const locale = await getApiLocale();
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);

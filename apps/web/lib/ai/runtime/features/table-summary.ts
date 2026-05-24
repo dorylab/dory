@@ -74,6 +74,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         preset,
         modelName: effectiveModelName,
         providerKey,
+        gateway,
     } = await getEffectiveModelBundleForOrganization('table_summary', {
         organizationId,
         modelName: providerModelName,
@@ -115,6 +116,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
             feature,
             model: effectiveModelName,
             provider: providerKey ?? undefined,
+            gateway: gateway ?? undefined,
             promptVersion,
             algoVersion,
         },
@@ -150,6 +152,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
                     feature,
                     model: effectiveModelName,
                     provider: providerKey ?? undefined,
+                    gateway: gateway ?? undefined,
                     promptVersion,
                     algoVersion,
                 },

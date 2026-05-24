@@ -1,8 +1,6 @@
-import { getDBService } from '@dory/database';
-import { getOrganizationAiProviderEntitlementModeForServer, resolveOrganizationAiProviderCapabilityForOrganization } from '@dory/ee/ai/organization-ai-providers';
-import { MODEL_PRESETS, getProviderModelPresets, resolveModelName } from './presets';
-import { getChatModel, getChatModelForProviderConfig } from './providers';
-import { isAiProviderApiKeyRequired, isAiProviderBaseUrlRequired } from '@dory/ee/ai/provider-options';
+import { MODEL_PRESETS, resolveModelName } from './presets';
+import { getChatModel } from './providers';
+import { assertAiExecutionTargetHasModel, resolveAiExecutionTargetForOrganization } from './execution';
 import type { ModelRole } from './types';
 
 export type ModelBundle<R extends ModelRole = ModelRole> = {
@@ -15,6 +13,7 @@ export type EffectiveModelBundle<R extends ModelRole = ModelRole> = {
     preset: (typeof MODEL_PRESETS)[R];
     modelName: string;
     providerKey?: string | null;
+    gateway?: 'cloudflare' | 'direct' | null;
     source?: 'global' | 'organization';
 };
 
@@ -91,46 +90,23 @@ export async function getEffectiveModelBundleForOrganization<R extends ModelRole
         modelName?: string | null;
     } = {},
 ): Promise<EffectiveModelBundle<R>> {
-    const organizationId = options.organizationId ?? null;
-    if (!organizationId) {
-        return getEffectiveModelBundle(role, options.modelName);
-    }
-
-    const db = await getDBService();
-    const provider = await db.organizationAiProviders.getDefaultResolved(organizationId);
-    if (!provider) {
-        return getEffectiveModelBundle(role, options.modelName);
-    }
-
-    const capability = await resolveOrganizationAiProviderCapabilityForOrganization(db, organizationId, getOrganizationAiProviderEntitlementModeForServer());
-    if (!capability.enabled) {
-        return getEffectiveModelBundle(role, options.modelName);
-    }
-
-    if (
-        !provider.provider ||
-        !provider.model ||
-        (isAiProviderApiKeyRequired(provider.provider) && !provider.apiKey) ||
-        (isAiProviderBaseUrlRequired(provider.provider) && !provider.baseUrl)
-    ) {
-        throw new Error('Organization AI provider is incomplete.');
-    }
-
-    const basePreset = getProviderModelPresets(provider.provider)[role] ?? MODEL_PRESETS[role];
-    const resolvedModelName = provider.model;
-    const preset = { ...basePreset, model: resolvedModelName };
-    const model = getChatModelForProviderConfig({
-        providerKey: provider.provider,
-        modelName: resolvedModelName,
-        apiKey: provider.apiKey,
-        baseURL: provider.baseUrl,
+    const target = await resolveAiExecutionTargetForOrganization(role, {
+        organizationId: options.organizationId ?? null,
+        modelName: options.modelName ?? null,
+        allowCloudProxy: false,
+        includeModel: true,
     });
+    assertAiExecutionTargetHasModel(target);
 
     return {
-        model,
-        preset,
-        modelName: resolvedModelName,
-        providerKey: provider.provider,
-        source: 'organization',
+        model: target.model,
+        preset: target.preset,
+        modelName: target.modelName,
+        providerKey: target.providerKey,
+        gateway: target.gateway,
+        source: target.source,
     };
 }
+
+export { resolveAiExecutionTargetForOrganization } from './execution';
+export { resolveAiExecutionPolicy, isOrganizationProviderReadyForExecution } from './execution-policy';

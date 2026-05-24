@@ -5,9 +5,8 @@ import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organizatio
 import { getApiLocale } from '@/app/api/utils/i18n';
 import { buildFallbackSummary, buildFallbackDetail, buildFallbackHighlights, buildFallbackSnippets } from '@/lib/ai/core/table-summary';
 import { ColumnInput } from '@dory/shared';
-import { proxyAiRouteIfNeeded } from '@/app/api/utils/cloud-ai-proxy';
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
-import { shouldUseOrganizationProviderOverride } from '@dory/ee/ai/organization-ai-providers';
+import { resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 
 export const runtime = 'nodejs';
 
@@ -47,9 +46,17 @@ function createTimer(label: string) {
 }
 
 export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
-    const organizationUsesProviderOverride = await shouldUseOrganizationProviderOverride(db, organizationId);
-    const proxied = organizationUsesProviderOverride ? null : await proxyAiRouteIfNeeded(req, '/api/ai/table-summary');
-    if (proxied) return proxied;
+    const execution = await resolveAiRouteExecution({
+        req,
+        db,
+        organizationId,
+        role: 'table_summary',
+        includeModel: false,
+        proxy: {
+            pathname: '/api/ai/table-summary',
+        },
+    });
+    if (execution.proxiedResponse) return execution.proxiedResponse;
 
     const locale = await getApiLocale();
     const timer = createTimer('POST');

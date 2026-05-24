@@ -59,6 +59,7 @@ export async function getColumnExplanationsWithCache(
         preset,
         modelName: providerModelName,
         providerKey,
+        gateway,
     } = await getEffectiveModelBundleForOrganization('schema_explanation', {
         organizationId,
         modelName: model,
@@ -100,6 +101,7 @@ export async function getColumnExplanationsWithCache(
             feature,
             model: providerModelName,
             provider: providerKey ?? undefined,
+            gateway: gateway ?? undefined,
             promptVersion,
             algoVersion,
         },
@@ -119,6 +121,7 @@ export async function getColumnExplanationsWithCache(
                     feature,
                     model: providerModelName,
                     provider: providerKey ?? undefined,
+                    gateway: gateway ?? undefined,
                     promptVersion,
                     algoVersion,
                 },
