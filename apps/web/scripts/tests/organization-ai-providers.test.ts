@@ -19,6 +19,7 @@ const {
 const {
     buildAiProvidersViewModel,
     getAiProviderResolution,
+    getGlobalAiProviderStatusFromEnv,
     getGlobalAiProviderSummaryFromEnv,
     getOrganizationAiProviderEntitlementModeForServer,
     isGlobalAiProviderConfiguredFromEnv,
@@ -181,6 +182,29 @@ test('global AI provider summary exposes display-safe provider and model labels'
         model: 'openai/gpt-4o-mini',
         managedBy: 'Server Admin',
     });
+});
+
+test('AI providers view model can use cloud system status instead of local env', () => {
+    const cloudGlobalProvider = getGlobalAiProviderStatusFromEnv({
+        DORY_AI_PROVIDER: 'openai',
+        DORY_AI_MODEL: 'gpt-4.1-mini',
+        DORY_AI_API_KEY: 'sk-cloud',
+    });
+
+    const viewModel = buildAiProvidersViewModel({
+        organizationProviders: [],
+        license: 'oss',
+        runtime: 'desktop',
+        env: {},
+        globalProvider: cloudGlobalProvider,
+    });
+
+    assert.equal(viewModel.defaultProviderId, 'system');
+    assert.deepEqual(
+        viewModel.providers.map(provider => [provider.id, provider.status, provider.isDefault, provider.configured]),
+        [['system', 'active', true, true]],
+    );
+    assert.equal(viewModel.providerResolution.activeProvider.displayName, 'OpenAI · GPT-4.1-mini');
 });
 
 test('AI provider model options are provider scoped', () => {

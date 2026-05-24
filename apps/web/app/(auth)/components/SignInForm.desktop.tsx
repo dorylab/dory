@@ -43,7 +43,7 @@ export function SignInForm({
     const [err, setErr] = useState<string | null>(null);
     const [msg, setMsg] = useState<string | null>(null);
     const { isOffline: isDesktopOffline } = useCloudFeatureAvailability();
-    const { data: session, refetch: refetchSession } = authClient.useSession();
+    const { data: session } = authClient.useSession();
     const callbackURL = callbackURLOverride || searchParams?.get('callbackURL') || '/';
 
     useEffect(() => {
@@ -148,14 +148,6 @@ export function SignInForm({
 
             posthog.identify(email, { email });
             posthog.capture('user_signed_in', { method: 'email' });
-            await refetchSession();
-            const sessionRes = await fetch('/api/electron/auth/session', { cache: 'no-store' });
-            const sessionPayload = await sessionRes.json().catch(() => null);
-            if (!sessionRes.ok || !sessionPayload?.session) {
-                setErr(t('SignIn.LoginFailedRetry'));
-                posthog.capture('user_sign_in_failed', { method: 'email', error: 'desktop_session_missing_after_sign_in' });
-                return;
-            }
             router.refresh();
             router.push(callbackURL);
         } catch (e: any) {

@@ -4,6 +4,7 @@ import {
     buildAiProvidersViewModel,
     getOrganizationAiProviderEntitlementModeForServer,
     resolveOrganizationAiProviderBillingPlan,
+    type AiProviderSummary,
     type OrganizationAiProviderEntitlementMode,
     type OrganizationPlan,
 } from './organization-ai-providers';
@@ -14,6 +15,7 @@ export async function buildOrganizationAiProvidersPayload(options: {
     canManage: boolean;
     entitlementMode?: OrganizationAiProviderEntitlementMode;
     billingPlan?: OrganizationPlan | string | null;
+    globalProvider?: AiProviderSummary | null;
 }) {
     const runtime = getRuntimeForServer() ?? 'web';
     const entitlementMode = options.entitlementMode ?? getOrganizationAiProviderEntitlementModeForServer();
@@ -31,6 +33,7 @@ export async function buildOrganizationAiProvidersPayload(options: {
         license,
         billingPlan,
         runtime,
+        globalProvider: options.globalProvider,
     });
 
     return {

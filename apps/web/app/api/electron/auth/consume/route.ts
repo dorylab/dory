@@ -28,11 +28,7 @@ type TicketUser = {
     activeOrganizationId?: string | null;
 };
 
-async function consumeTicketLocally(params: {
-    ticket: string;
-    anonymousUserId?: string | null;
-    anonymousActiveOrganizationId?: string | null;
-}) {
+async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: string | null; anonymousActiveOrganizationId?: string | null }) {
     const auth = await getAuth();
     const ctx = await auth.$context;
 
@@ -89,12 +85,7 @@ async function consumeTicketLocally(params: {
         ...baseAttrs,
         ...(maxAge ? { maxAge } : {}),
     };
-    const cookie = await serializeSignedCookie(
-        ctx.authCookies.sessionToken.name,
-        session.token,
-        ctx.secret,
-        cookieAttrs,
-    );
+    const cookie = await serializeSignedCookie(ctx.authCookies.sessionToken.name, session.token, ctx.secret, cookieAttrs);
 
     const res = NextResponse.json({ ok: true });
     res.headers.append('set-cookie', cookie);
@@ -171,7 +162,14 @@ export async function POST(req: Request) {
         });
 
         const response = await proxyAuthRequest(proxyReq);
-        const mirror = response.ok ? await mirrorCloudSessionToDesktop(req, response.headers) : null;
+        let mirror = null;
+        if (response.ok) {
+            try {
+                mirror = await mirrorCloudSessionToDesktop(req, response.headers);
+            } catch (error) {
+                console.warn('[electron-auth][consume] cloud consume succeeded but local desktop session mirror failed', error);
+            }
+        }
 
         console.log('[electron-auth][consume] proxy response', {
             status: response.status,

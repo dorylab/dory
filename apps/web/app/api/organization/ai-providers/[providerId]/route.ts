@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 import { withManagedOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { buildOrganizationAiProvidersPayload } from '@dory/ee/ai/organization-ai-provider-payload';
 import { isGlobalAiProviderConfiguredFromEnv, isOrganizationAiProviderConfigured } from '@dory/ee/ai/organization-ai-providers';
 import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed } from '@dory/ee/ai/provider-options';
+import { buildOrganizationAiProvidersPayloadForRequest, resolveGlobalAiProviderForRequest } from '@/lib/server/organization-ai-providers/cloud-system-provider';
 import { resolveOrganizationAiProviderEntitlementForRequest } from '@/lib/server/organization-ai-providers/entitlement';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
@@ -61,6 +61,7 @@ export function PATCH(req: NextRequest, context: RouteContext) {
             );
         }
 
+        let globalProvider: Awaited<ReturnType<typeof resolveGlobalAiProviderForRequest>> | undefined;
         if (providerId === 'system') {
             if (parsed.data.action !== 'set_default') {
                 return NextResponse.json(
@@ -72,7 +73,9 @@ export function PATCH(req: NextRequest, context: RouteContext) {
                 );
             }
 
-            if (!isGlobalAiProviderConfiguredFromEnv()) {
+            globalProvider = await resolveGlobalAiProviderForRequest();
+            const systemProviderConfigured = globalProvider?.configured ?? isGlobalAiProviderConfiguredFromEnv();
+            if (!systemProviderConfigured) {
                 return NextResponse.json(
                     ResponseUtil.error({
                         code: ErrorCodes.VALIDATION_ERROR,
@@ -181,12 +184,13 @@ export function PATCH(req: NextRequest, context: RouteContext) {
 
         return NextResponse.json(
             ResponseUtil.success(
-                await buildOrganizationAiProvidersPayload({
+                await buildOrganizationAiProvidersPayloadForRequest({
                     db,
                     organizationId,
                     canManage: true,
                     entitlementMode: entitlement.entitlementMode,
                     billingPlan: entitlement.billingPlan,
+                    globalProvider,
                 }),
             ),
         );
@@ -231,7 +235,7 @@ export function DELETE(req: NextRequest, context: RouteContext) {
 
         return NextResponse.json(
             ResponseUtil.success(
-                await buildOrganizationAiProvidersPayload({
+                await buildOrganizationAiProvidersPayloadForRequest({
                     db,
                     organizationId,
                     canManage: true,
