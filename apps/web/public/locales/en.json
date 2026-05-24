@@ -3116,7 +3116,7 @@
                 "SystemTitle": "Dory AI",
                 "SystemDescription": "Default AI service configured for this Dory deployment. No organization setup required.",
                 "OrganizationTitle": "Custom AI",
-                "OrganizationDescription": "Connect your own AI service, such as OpenAI, Claude, Qwen, or an OpenAI-compatible model.",
+                "OrganizationDescription": "Connect your own AI service, such as OpenAI, Claude, or an OpenAI-compatible model.",
                 "OrganizationLockedProTitle": "Upgrade to Pro to add custom AI",
                 "OrganizationLockedEnterpriseTitle": "Use Enterprise Edition to add custom AI",
                 "OrganizationLockedDescription": "Use your own API key to configure dedicated models for this organization.",
@@ -3165,6 +3165,8 @@
             "Form": {
                 "AddTitle": "Add custom AI",
                 "AddDescription": "Connect your own AI service for this organization.",
+                "ApiKeyStorageInstance": "API keys are stored securely by this Dory instance.",
+                "ApiKeyStorageDesktop": "API keys are stored locally on this device.",
                 "EditTitle": "Edit custom AI",
                 "EditDescription": "Update the AI service, model, endpoint, or API key."
             },

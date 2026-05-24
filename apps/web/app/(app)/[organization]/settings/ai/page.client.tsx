@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { CircleCheck, CircleHelp, ExternalLink, FlaskConical, KeyRound, Loader2, LockKeyhole, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -645,6 +646,7 @@ export default function AISettingsPageClient() {
 
     const formTitle = formMode?.type === 'edit' ? t('Form.EditTitle') : t('Form.AddTitle');
     const formDescription = formMode?.type === 'edit' ? t('Form.EditDescription') : t('Form.AddDescription');
+    const apiKeyStorageDescription = isDesktopRuntime ? t('Form.ApiKeyStorageDesktop') : t('Form.ApiKeyStorageInstance');
     const apiKeyPlaceholder =
         formMode?.type === 'edit' && editingProvider?.keyHint
             ? t('Fields.ApiKeyConfigured', { hint: editingProvider.keyHint })
@@ -789,6 +791,11 @@ export default function AISettingsPageClient() {
                         <DialogTitle>{formTitle}</DialogTitle>
                         <DialogDescription>{formDescription}</DialogDescription>
                     </DialogHeader>
+
+                    <Alert className="border-primary/20 bg-primary/10 text-primary">
+                        <KeyRound className="size-4" />
+                        <AlertDescription className="text-primary/80">{apiKeyStorageDescription}</AlertDescription>
+                    </Alert>
 
                     <div className="grid gap-4 md:grid-cols-2">
                         <Field label={t('Fields.Provider')}>

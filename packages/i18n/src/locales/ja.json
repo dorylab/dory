@@ -3113,7 +3113,7 @@
                 "SystemTitle": "Dory AI",
                 "SystemDescription": "現在の Dory デプロイで設定されたデフォルトの AI サービスです。組織側の設定は不要です。",
                 "OrganizationTitle": "カスタム AI",
-                "OrganizationDescription": "OpenAI、Claude、Qwen、OpenAI API 互換モデルなど、自分の AI サービスを接続します。",
+                "OrganizationDescription": "OpenAI、Claude、OpenAI API 互換モデルなど、自分の AI サービスを接続します。",
                 "OrganizationLockedProTitle": "Pro にアップグレードするとカスタム AI を追加できます",
                 "OrganizationLockedEnterpriseTitle": "Enterprise Edition でカスタム AI を追加できます",
                 "OrganizationLockedDescription": "自分の API キーを使って、この組織専用のモデルを設定できます。",
@@ -3162,6 +3162,8 @@
             "Form": {
                 "AddTitle": "カスタム AI を追加",
                 "AddDescription": "この組織に自分の AI サービスを接続します。",
+                "ApiKeyStorageInstance": "API キーはこの Dory インスタンスに安全に保存されます。",
+                "ApiKeyStorageDesktop": "API キーはこのデバイスにローカル保存されます。",
                 "EditTitle": "カスタム AI を編集",
                 "EditDescription": "AI サービス、モデル、エンドポイント、API キーを更新します。"
             },

@@ -953,6 +953,11 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
 
         // reasoning
         if (part.type === 'reasoning') {
+            const reasoningText = typeof part.text === 'string' ? part.text.trim() : '';
+            if (!reasoningText) {
+                return;
+            }
+
             pushNarrativeContent(
                 <Reasoning
                     key={`${message.id}-reasoning-${i}`}
@@ -960,7 +965,7 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                     isStreaming={status === 'streaming' && i === message.parts.length - 1 && message.id === messages.at(-1)?.id}
                 >
                     <ReasoningTrigger />
-                    <ReasoningContent>{part.text}</ReasoningContent>
+                    <ReasoningContent>{reasoningText}</ReasoningContent>
                 </Reasoning>,
             );
             return;

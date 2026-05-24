@@ -3117,7 +3117,7 @@
                 "SystemTitle": "Dory AI",
                 "SystemDescription": "由当前 Dory 部署配置的默认 AI 服务，无需组织手动配置。",
                 "OrganizationTitle": "自定义 AI",
-                "OrganizationDescription": "连接你自己的 AI 服务，例如 OpenAI、Claude、Qwen 或兼容 OpenAI API 的模型。",
+                "OrganizationDescription": "连接你自己的 AI 服务，例如 OpenAI、Claude 或兼容 OpenAI API 的模型。",
                 "OrganizationLockedProTitle": "升级到 Pro 后可添加自定义 AI",
                 "OrganizationLockedEnterpriseTitle": "使用 Enterprise Edition 后可添加自定义 AI",
                 "OrganizationLockedDescription": "使用自己的 API Key，为当前组织配置专属模型。",
@@ -3166,6 +3166,8 @@
             "Form": {
                 "AddTitle": "添加自定义 AI",
                 "AddDescription": "为当前组织连接你自己的 AI 服务。",
+                "ApiKeyStorageInstance": "API Key 会由当前 Dory 实例安全保存。",
+                "ApiKeyStorageDesktop": "API Key 会保存在这台设备本地。",
                 "EditTitle": "编辑自定义 AI",
                 "EditDescription": "更新 AI 服务、模型、Endpoint 或 API Key。"
             },

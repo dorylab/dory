@@ -626,6 +626,7 @@ async function handleChatRequest(req: NextRequest) {
 
                 const toolResultMessages: ModelMessage[] = [];
                 let shouldStopAfterToolResults = false;
+                let completedChartBuild = false;
 
                 for (const toolCall of toolCalls) {
                     if (executedToolCallIds.has(toolCall.toolCallId)) {
@@ -698,6 +699,9 @@ async function handleChatRequest(req: NextRequest) {
                             output: toolOutput,
                         } as UIMessageChunk);
                         toolResultMessages.push(buildToolResultModelMessage(executableToolCall, toolOutput));
+                        if (isChartResult(toolOutput)) {
+                            completedChartBuild = true;
+                        }
                         if (isManualExecutionRequiredSqlResult(toolOutput)) {
                             shouldStopAfterToolResults = true;
                         }
@@ -746,7 +750,7 @@ async function handleChatRequest(req: NextRequest) {
                 nextMessages = [...nextMessages, ...toolResultMessages];
                 step += 1;
 
-                if (shouldStopAfterToolResults) {
+                if (shouldStopAfterToolResults || completedChartBuild) {
                     return;
                 }
 
@@ -844,6 +848,10 @@ function buildToolResultModelMessage(toolCall: CollectedToolCall, output: unknow
             },
         ],
     } as ModelMessage;
+}
+
+function isChartResult(value: unknown): boolean {
+    return Boolean(value && typeof value === 'object' && (value as Record<string, unknown>).type === 'chart');
 }
 
 function withChartBuilderFallbackData(toolCall: CollectedToolCall, messages: ModelMessage[]): CollectedToolCall {
