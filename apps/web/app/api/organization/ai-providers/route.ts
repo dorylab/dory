@@ -3,9 +3,9 @@ import { z } from 'zod';
 
 import { withManagedOrganizationHandler, withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { buildOrganizationAiProvidersPayload } from '@dory/ee/ai/organization-ai-provider-payload';
 import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed } from '@dory/ee/ai/provider-options';
 import { canManageOrganization, resolveOrganizationAccess } from '@/lib/server/authz';
+import { buildOrganizationAiProvidersPayloadForRequest } from '@/lib/server/organization-ai-providers/cloud-system-provider';
 import { resolveOrganizationAiProviderEntitlementForRequest } from '@/lib/server/organization-ai-providers/entitlement';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
@@ -25,7 +25,7 @@ export const GET = withUserAndOrganizationHandler(async ({ db, organizationId, u
     const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
     return NextResponse.json(
         ResponseUtil.success(
-            await buildOrganizationAiProvidersPayload({
+            await buildOrganizationAiProvidersPayloadForRequest({
                 db,
                 organizationId,
                 canManage: canManageOrganization(access),
@@ -115,7 +115,7 @@ export const POST = withManagedOrganizationHandler(async ({ req, db, organizatio
 
     return NextResponse.json(
         ResponseUtil.success(
-            await buildOrganizationAiProvidersPayload({
+            await buildOrganizationAiProvidersPayloadForRequest({
                 db,
                 organizationId,
                 canManage: true,

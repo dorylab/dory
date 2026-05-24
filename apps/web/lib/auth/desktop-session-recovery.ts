@@ -7,6 +7,7 @@ import { schema } from '@dory/database/schema';
 import { getClient } from '@dory/database/postgres/client';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { isOrganizationRole, type OrganizationRoleKey } from '@/lib/auth/organization-ac';
+import { buildCloudSessionLookupCookieHeader, normalizeSessionCookieName } from '@/lib/auth/session-cookie-header';
 
 const DESKTOP_SESSION_COOKIE_NAME = 'dory.desktop_session_token';
 const DESKTOP_SESSION_COOKIE_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -60,7 +61,10 @@ function getSetCookies(headers: Headers): string[] {
 
     const raw = headers.get('set-cookie');
     if (!raw) return [];
-    return [raw];
+    return raw
+        .split(/,(?=\s*[^;,\s]+=)/)
+        .map(value => value.trim())
+        .filter(Boolean);
 }
 
 function buildCookieValue(options: { name: string; value: string; maxAge?: number; secure?: boolean }) {
@@ -133,11 +137,6 @@ function readCookie(headers: Headers, cookieName: string) {
     return null;
 }
 
-function normalizeCookieName(name: string): string[] {
-    const baseName = name.replace(/^__Secure-/, '').replace(/^__Host-/, '');
-    return Array.from(new Set([baseName, `__Secure-${baseName}`, `__Host-${baseName}`]));
-}
-
 function readCookieValueFromSetCookie(setCookie: string, name: string): string | null {
     const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const match = setCookie.match(new RegExp(`^${escapedName}=([^;]+)`));
@@ -145,7 +144,7 @@ function readCookieValueFromSetCookie(setCookie: string, name: string): string |
 }
 
 function extractSessionCookieFromSetCookieHeaders(headers: Headers, cookieName: string): { name: string; value: string } | null {
-    const cookieNames = normalizeCookieName(cookieName);
+    const cookieNames = normalizeSessionCookieName(cookieName);
     for (const cookie of getSetCookies(headers)) {
         for (const name of cookieNames) {
             const value = readCookieValueFromSetCookie(cookie, name);
@@ -198,7 +197,10 @@ async function verifyRecoveryToken(token: string): Promise<DesktopSessionRecover
     }
 }
 
-async function fetchCloudSessionDetails(req: Request, responseHeaders: Headers): Promise<{
+async function fetchCloudSessionDetails(
+    req: Request,
+    responseHeaders: Headers,
+): Promise<{
     cloudSession: CloudSessionLike;
     access: OrganizationAccessPayload;
 } | null> {
@@ -215,9 +217,14 @@ async function fetchCloudSessionDetails(req: Request, responseHeaders: Headers):
     }
 
     const headers = createAuthProxyHeaders(req.headers, baseUrl);
-    const existingCookie = headers.get('cookie');
-    const nextCookie = `${sessionCookie.name}=${sessionCookie.value}`;
-    headers.set('cookie', existingCookie ? `${existingCookie}; ${nextCookie}` : nextCookie);
+    headers.set(
+        'cookie',
+        buildCloudSessionLookupCookieHeader({
+            existingCookieHeader: headers.get('cookie'),
+            sessionCookie,
+            sessionCookieName: ctx.authCookies.sessionToken.name,
+        }),
+    );
 
     const sessionResponse = await fetch(new URL('/api/auth/get-session', baseUrl).toString(), {
         headers,
@@ -259,9 +266,7 @@ async function fetchCloudSessionDetails(req: Request, responseHeaders: Headers):
         };
     }
 
-    const accessPayload = (await accessResponse.json().catch(() => null)) as
-        | { code?: number; data?: { access?: OrganizationAccessPayload } }
-        | null;
+    const accessPayload = (await accessResponse.json().catch(() => null)) as { code?: number; data?: { access?: OrganizationAccessPayload } } | null;
 
     return {
         cloudSession: resolvedCloudSession,
@@ -269,10 +274,7 @@ async function fetchCloudSessionDetails(req: Request, responseHeaders: Headers):
     };
 }
 
-async function ensureLocalDesktopUserState(input: {
-    cloudSession: CloudSessionLike;
-    access: OrganizationAccessPayload;
-}) {
+async function ensureLocalDesktopUserState(input: { cloudSession: CloudSessionLike; access: OrganizationAccessPayload }) {
     const db = await getClient();
     const user = input.cloudSession.user;
     const session = input.cloudSession.session;
@@ -418,10 +420,7 @@ export async function buildDesktopSessionRecoveryCookie(input: { userId: string;
     return buildDesktopRecoveryCookie(recoveryToken, input.requestUrl);
 }
 
-export async function persistDesktopCloudSessionSnapshot(input: {
-    cloudSession: CloudSessionLike;
-    access: OrganizationAccessPayload;
-}) {
+export async function persistDesktopCloudSessionSnapshot(input: { cloudSession: CloudSessionLike; access: OrganizationAccessPayload }) {
     if (!input.cloudSession.user?.id) {
         return;
     }
@@ -512,7 +511,9 @@ export async function resolveDesktopRecoveredSession(headers: Headers) {
     const secureCookie = `__Secure-${ctx.authCookies.sessionToken.name.replace(/^__Secure-/, '')}=${cookieValue}`;
     requestHeaders.set('cookie', cookieHeader ? `${cookieHeader}; ${baseCookie}; ${secureCookie}` : `${baseCookie}; ${secureCookie}`);
 
-    return auth.api.getSession({
-        headers: requestHeaders,
-    }).catch(() => null);
+    return auth.api
+        .getSession({
+            headers: requestHeaders,
+        })
+        .catch(() => null);
 }

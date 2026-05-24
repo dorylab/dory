@@ -227,7 +227,7 @@ function getGlobalAiModel(env: GlobalAiProviderEnv): string {
     return env.DORY_AI_MODEL?.trim() || GLOBAL_AI_PROVIDER_DEFAULT_MODELS[provider] || 'gpt-4.1-mini';
 }
 
-function buildGlobalProviderSummary(env: GlobalAiProviderEnv): AiProviderSummary {
+export function getGlobalAiProviderStatusFromEnv(env: GlobalAiProviderEnv = process.env): AiProviderSummary {
     const provider = getGlobalAiProvider(env);
     const model = getGlobalAiModel(env);
     const providerLabel = GLOBAL_AI_PROVIDER_LABELS[provider] ?? formatGlobalAiProviderLabel(provider);
@@ -313,12 +313,13 @@ export function getAiProviderResolution(options: {
     entitlementMode?: OrganizationAiProviderEntitlementMode;
     license?: DoryLicense | null;
     billingPlan?: OrganizationPlan | string | null;
+    globalProvider?: AiProviderSummary | null;
     env?: GlobalAiProviderEnv;
 }): AiProviderResolution {
     const resolvedLicense = options.license === undefined ? getLicenseForServer() : options.license;
     const entitlementMode = options.entitlementMode ?? 'self-hosted-license';
     const env = options.env ?? process.env;
-    const globalProvider = buildGlobalProviderSummary(env);
+    const globalProvider = options.globalProvider ?? getGlobalAiProviderStatusFromEnv(env);
     const organizationCapability = resolveOrganizationAiProviderCapability({
         entitlementMode,
         license: resolvedLicense,
@@ -364,6 +365,7 @@ export function buildAiProvidersViewModel(options: {
     license?: DoryLicense | null;
     billingPlan?: OrganizationPlan | string | null;
     runtime?: string | null;
+    globalProvider?: AiProviderSummary | null;
     env?: GlobalAiProviderEnv;
 }): AiProvidersViewModel {
     const resolution = getAiProviderResolution(options);
