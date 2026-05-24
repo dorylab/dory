@@ -1,5 +1,9 @@
-function readEnv(name: keyof NodeJS.ProcessEnv): string | null {
-    const value = process.env[name];
+import { getRuntimeForServer, type DoryRuntime } from '@dory/shared/runtime';
+
+const DEFAULT_DESKTOP_CLOUD_API_URL = 'https://app.getdory.dev/api';
+
+function readEnvValue(env: Partial<Record<keyof NodeJS.ProcessEnv, string | undefined>>, name: keyof NodeJS.ProcessEnv): string | null {
+    const value = env[name];
     if (typeof value !== 'string') return null;
 
     const trimmed = value.trim();
@@ -15,16 +19,27 @@ function toCloudApiBaseUrl(value: string): string {
     return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
 }
 
-export function getCloudApiBaseUrl(): string | null {
-    const explicitApiUrl = readEnv('DORY_CLOUD_API_URL') ?? readEnv('NEXT_PUBLIC_DORY_CLOUD_API_URL');
+export function resolveCloudApiBaseUrl(options: { env: Partial<Record<keyof NodeJS.ProcessEnv, string | undefined>>; runtime: DoryRuntime | null }): string | null {
+    const explicitApiUrl = readEnvValue(options.env, 'DORY_CLOUD_API_URL') ?? readEnvValue(options.env, 'NEXT_PUBLIC_DORY_CLOUD_API_URL');
     if (explicitApiUrl) {
         return stripTrailingSlash(explicitApiUrl);
     }
 
-    const legacyCloudUrl = readEnv('DORY_AI_CLOUD_URL');
+    const legacyCloudUrl = readEnvValue(options.env, 'DORY_AI_CLOUD_URL');
     if (legacyCloudUrl) {
         return toCloudApiBaseUrl(legacyCloudUrl);
     }
 
+    if (options.runtime === 'desktop') {
+        return DEFAULT_DESKTOP_CLOUD_API_URL;
+    }
+
     return null;
+}
+
+export function getCloudApiBaseUrl(): string | null {
+    return resolveCloudApiBaseUrl({
+        env: process.env,
+        runtime: getRuntimeForServer(),
+    });
 }

@@ -1,6 +1,7 @@
 import { getAuth } from '@/lib/auth';
-import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
+import { proxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { mirrorCloudSessionToDesktop } from '@/lib/auth/desktop-session-recovery';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -14,7 +15,10 @@ function getSetCookies(headers: Headers): string[] {
 
     const raw = headers.get('set-cookie');
     if (!raw) return [];
-    return [raw];
+    return raw
+        .split(/,(?=\s*[^;,\s]+=)/)
+        .map(value => value.trim())
+        .filter(Boolean);
 }
 
 function rewriteSetCookie(value: string, isSecureRequest: boolean): string {
@@ -43,14 +47,29 @@ function rewriteSetCookie(value: string, isSecureRequest: boolean): string {
     return [rewrittenNameValue, ...rewritten].join('; ');
 }
 
+async function tryMirrorDesktopSession(req: Request, response: Response) {
+    if (!response.ok) {
+        return null;
+    }
+
+    try {
+        return await mirrorCloudSessionToDesktop(req, response.headers);
+    } catch (error) {
+        console.warn('[electron-auth][email-sign-in] cloud sign-in succeeded but local desktop session mirror failed', error);
+        return null;
+    }
+}
+
 export async function POST(req: Request) {
-    if (shouldProxyAuthRequest()) {
+    if (isDesktopRuntime()) {
         const response = await proxyAuthRequest(req);
-        const mirror = response.ok ? await mirrorCloudSessionToDesktop(req, response.headers) : null;
+        const mirror = await tryMirrorDesktopSession(req, response);
         if (!mirror) {
-            if (response.ok) {
-                return NextResponse.json({ error: 'Failed to create a local desktop session. Please try again.' }, { status: 502 });
+            if (!response.ok) {
+                return response;
             }
+
+            console.warn('[electron-auth][email-sign-in] cloud sign-in succeeded without local desktop session mirror');
             return response;
         }
 
@@ -63,6 +82,9 @@ export async function POST(req: Request) {
         });
     }
 
+    // Non-desktop runtime is the cloud/server side of this endpoint. Desktop
+    // must never use this local auth branch; it proxies above and mirrors the
+    // cloud session back into the local desktop runtime.
     const auth = await getAuth();
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== 'object') {
