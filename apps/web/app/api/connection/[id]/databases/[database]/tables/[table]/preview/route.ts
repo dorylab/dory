@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import z from 'zod';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
+import { mapConnectionErrorToResponse } from '@/app/api/connection/error-response';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
@@ -42,10 +43,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
         const params = await context.params;
         const datasourceId = params?.id ?? req.headers.get('x-connection-id');
         if (!datasourceId) {
-            return NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }),
-                { status: 400 },
-            );
+            return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }), { status: 400 });
         }
 
         const body = await req.json().catch(() => ({}));

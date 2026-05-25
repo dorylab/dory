@@ -1,6 +1,6 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
-import { getSqliteTableDdl, getSqliteTableIndexes, getSqliteTableProperties, previewSqliteTable } from '../sqlite-driver';
-import type { SqliteDatasource } from '../SqliteDatasource';
+import { getSqliteTableDdl, getSqliteTableIndexes, getSqliteTableProperties, previewSqliteTable } from '../runtime';
+import type { SqliteDatasource } from '../datasource';
 
 export function createSqliteTableInfoCapability(datasource: SqliteDatasource): GetTableInfoAPI {
     return {

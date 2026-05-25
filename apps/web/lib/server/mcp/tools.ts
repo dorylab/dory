@@ -7,7 +7,7 @@ import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-pr
 import { hasMetadataCapability, hasTableInfoCapability, isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, QueryType, TableColumnInfo, TimeRange } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
-import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
 import { runAnalysis } from '@/lib/server/analysis/run-analysis';
 import { routing } from '@dory/i18n/routing';
@@ -414,7 +414,17 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, filters, includeTimeline, includeSlowQueries, includeErrorQueries, pageSize, identityId }) => {
             requireScope(context, 'monitoring:read');
-            return structured(await getMonitoringSummaryOperation(toOperationContext(context), { connectionId, filters, includeTimeline, includeSlowQueries, includeErrorQueries, pageSize, identityId }));
+            return structured(
+                await getMonitoringSummaryOperation(toOperationContext(context), {
+                    connectionId,
+                    filters,
+                    includeTimeline,
+                    includeSlowQueries,
+                    includeErrorQueries,
+                    pageSize,
+                    identityId,
+                }),
+            );
         },
     );
 

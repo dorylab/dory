@@ -5,7 +5,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { createOracleMetadataCapability, type OracleMetadataAPI } from './capabilities/metadata';
 import { createOracleTableInfoCapability } from './capabilities/table-info';
 import { OracleDialect } from './dialect';
-import { createOraclePool, executeOracleCommand, executeOracleQuery, pingOracle, resolveOraclePort, resolveOracleServiceName } from './oracle-driver';
+import { createOraclePool, executeOracleCommand, executeOracleQuery, pingOracle, resolveOraclePort, resolveOracleServiceName } from './runtime';
 
 export class OracleDatasource extends BaseConnection {
     readonly dialect = OracleDialect;

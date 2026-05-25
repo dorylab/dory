@@ -5,7 +5,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { createPostgresMetadataCapability, type PostgresMetadataAPI } from './capabilities/metadata';
 import { createPostgresTableInfoCapability } from './capabilities/table-info';
 import { PostgresDialect } from './dialect';
-import { createPostgresPool, executePostgresCommand, executePostgresQuery, pingPostgres, resolvePostgresPort } from './postgres-driver';
+import { createPostgresPool, executePostgresCommand, executePostgresQuery, pingPostgres, resolvePostgresPort } from './runtime';
 
 export class PostgresDatasource extends BaseConnection {
     readonly dialect = PostgresDialect;

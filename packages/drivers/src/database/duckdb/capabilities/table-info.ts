@@ -1,7 +1,7 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
 
-import type { DuckDbDatasource } from '../DuckDbDatasource';
-import { getDuckDbTableDdl, getDuckDbTableIndexes, getDuckDbTableProperties, previewDuckDbTable } from '../duckdb-driver';
+import type { DuckDbDatasource } from '../datasource';
+import { getDuckDbTableDdl, getDuckDbTableIndexes, getDuckDbTableProperties, previewDuckDbTable } from '../runtime';
 
 export function createDuckDbTableInfoCapability(datasource: DuckDbDatasource): GetTableInfoAPI {
     return {

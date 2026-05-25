@@ -10,8 +10,8 @@ import type {
     DatabaseSummaryTable,
     TableColumnInfo,
 } from '@dory/drivers/types';
-import type { OracleDatasource } from '../OracleDatasource';
-import { normalizeOracleCatalogName, parseOracleTableReference, resolveOracleServiceName } from '../oracle-driver';
+import type { OracleDatasource } from '../datasource';
+import { normalizeOracleCatalogName, parseOracleTableReference, resolveOracleServiceName } from '../runtime';
 
 export type OracleMetadataAPI = ConnectionMetadataAPI & {
     getSchemas: (database: string) => Promise<Array<{ label: string; value: string }>>;
@@ -473,9 +473,7 @@ export function createOracleMetadataCapability(datasource: OracleDatasource): Or
                 `,
                 { database },
             );
-            const maxColumn = columnCounts.rows
-                .slice()
-                .sort((a, b) => (toNumberOrNull(b.columnCount) ?? 0) - (toNumberOrNull(a.columnCount) ?? 0))[0];
+            const maxColumn = columnCounts.rows.slice().sort((a, b) => (toNumberOrNull(b.columnCount) ?? 0) - (toNumberOrNull(a.columnCount) ?? 0))[0];
             const totalColumns = columnCounts.rows.reduce((sum, row) => sum + (toNumberOrNull(row.columnCount) ?? 0), 0);
             const tablesWithColumnCounts = columnCounts.rows.length;
             const totalBytes = tables.reduce((sum, table) => sum + (table.totalBytes ?? 0), 0);

@@ -11,8 +11,8 @@ import type {
     DatabaseSummaryOptions,
     TableColumnInfo,
 } from '@dory/drivers/types';
-import { normalizePostgresTableKind } from '../postgres-driver';
-import type { PostgresDatasource } from '../PostgresDatasource';
+import { normalizePostgresTableKind } from '../runtime';
+import type { PostgresDatasource } from '../datasource';
 
 export type PostgresMetadataAPI = ConnectionMetadataAPI & {
     getSchemas: (database: string) => Promise<{ label: string; value: string }[]>;
@@ -691,8 +691,9 @@ async function getFunctionDetail(datasource: PostgresDatasource, database: strin
             `,
             { database, params: [oid] },
         ),
-        datasource.queryWithContext<FunctionDependencyRow>(
-            `
+        datasource
+            .queryWithContext<FunctionDependencyRow>(
+                `
                 SELECT DISTINCT
                     rn.nspname AS "schemaName",
                     rc.relname AS name,
@@ -710,10 +711,12 @@ async function getFunctionDetail(datasource: PostgresDatasource, database: strin
                 WHERE rw.ev_class = $1::oid
                 ORDER BY rn.nspname, rc.relname
             `,
-            { database, params: [oid] },
-        ).catch(() => ({ rows: [] as FunctionDependencyRow[] })),
-        datasource.queryWithContext<FunctionDependencyRow>(
-            `
+                { database, params: [oid] },
+            )
+            .catch(() => ({ rows: [] as FunctionDependencyRow[] })),
+        datasource
+            .queryWithContext<FunctionDependencyRow>(
+                `
                 SELECT DISTINCT
                     n.nspname AS "schemaName",
                     p.proname AS name,
@@ -724,8 +727,9 @@ async function getFunctionDetail(datasource: PostgresDatasource, database: strin
                 WHERE d.refobjid = $1::oid
                 ORDER BY n.nspname, p.proname
             `,
-            { database, params: [oid] },
-        ).catch(() => ({ rows: [] as FunctionDependencyRow[] })),
+                { database, params: [oid] },
+            )
+            .catch(() => ({ rows: [] as FunctionDependencyRow[] })),
     ]);
 
     const parameters = parameterResult.rows
@@ -745,7 +749,10 @@ async function getFunctionDetail(datasource: PostgresDatasource, database: strin
         dataType: row.dataType ?? null,
         nullable: row.nullable ?? null,
     }));
-    const callArgs = parameters.filter(param => param.mode !== 'out').map(param => samplePostgresValue(param.dataType)).join(', ');
+    const callArgs = parameters
+        .filter(param => param.mode !== 'out')
+        .map(param => samplePostgresValue(param.dataType))
+        .join(', ');
     const sampleCallSql = kind === 'procedure' ? `CALL ${qualifiedName}(${callArgs});` : `SELECT ${qualifiedName}(${callArgs});`;
     const returnType = detail.resultType ?? null;
 
@@ -763,12 +770,8 @@ async function getFunctionDetail(datasource: PostgresDatasource, database: strin
         returnColumns,
         definition: detail.definition ?? null,
         sampleCallSql,
-        dependencies: dependencyResult.rows
-            .filter(row => row.name)
-            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
-        usedBy: usedByResult.rows
-            .filter(row => row.name)
-            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+        dependencies: dependencyResult.rows.filter(row => row.name).map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+        usedBy: usedByResult.rows.filter(row => row.name).map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
     };
 }
 

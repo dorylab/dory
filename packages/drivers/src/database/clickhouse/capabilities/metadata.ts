@@ -10,7 +10,7 @@ import type {
     DatabaseRecentTable,
     TableColumnInfo,
 } from '@dory/drivers/types';
-import type { ClickhouseDatasource } from '../ClickhouseDatasource';
+import type { ClickhouseDatasource } from '../datasource';
 
 export type ClickhouseMetadataAPI = ConnectionMetadataAPI & {
     getTableColumns: (database: string, table: string) => Promise<TableColumnInfo[]>;

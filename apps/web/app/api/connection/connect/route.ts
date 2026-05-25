@@ -11,7 +11,7 @@ import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/driver
 import { pickConnectionIdentity } from '@dory/drivers/config';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError, getConnectionErrorCode } from '@/app/api/connection/utils';
+import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError, getConnectionErrorCode } from '@/lib/connection/utils';
 import { buildStoredConnectionConfig } from '@/lib/connection/config';
 
 export const runtime = 'nodejs';

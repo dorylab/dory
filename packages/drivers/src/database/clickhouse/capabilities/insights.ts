@@ -1,6 +1,6 @@
 import type { QueryInsightsFilters, QueryInsightsRow, QueryInsightsSummary, QueryTimelinePoint, QueryType, TimeRange } from '@dory/drivers/types';
 import type { Pagination, QueryInsightsAPI } from '@dory/drivers/types';
-import type { ClickhouseDatasource } from '../ClickhouseDatasource';
+import type { ClickhouseDatasource } from '../datasource';
 
 type TimeRangePreset = {
     windowSql: string;

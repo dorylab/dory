@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
-import { ensureConnectionPoolForUser } from '../../utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { hasMetadataCapability } from '@dory/drivers/types';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';

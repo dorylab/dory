@@ -1,7 +1,7 @@
 import { type GetTableInfoAPI } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import { TableMutationInfo, TablePartitionStat, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import type { ClickhouseDatasource } from '../ClickhouseDatasource';
+import type { ClickhouseDatasource } from '../datasource';
 
 type SizeRow = {
     rowCount?: number;

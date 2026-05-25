@@ -4,7 +4,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { SqliteDialect } from './dialect';
 import { createSqliteMetadataCapability, type SqliteMetadataAPI } from './capabilities/metadata';
 import { createSqliteTableInfoCapability } from './capabilities/table-info';
-import { executeSqliteQuery, openSqliteDatabase, pingSqlite } from './sqlite-driver';
+import { executeSqliteQuery, openSqliteDatabase, pingSqlite } from './runtime';
 
 export class SqliteDatasource extends BaseConnection {
     readonly dialect = SqliteDialect;

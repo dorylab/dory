@@ -10,7 +10,7 @@ import type {
     UpdateUserPayload,
 } from '@dory/drivers/types';
 import { remapPrivilegesForScope, type ScopedPrivilegeScope } from '@dory/drivers/types';
-import { ClickhouseDatasource } from '../ClickhouseDatasource';
+import { ClickhouseDatasource } from '../datasource';
 
 const COLUMN_CACHE = new Map<string, Set<string>>();
 

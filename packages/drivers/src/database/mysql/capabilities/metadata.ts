@@ -8,7 +8,7 @@ import type {
     DatabaseSummaryTable,
     TableColumnInfo,
 } from '@dory/drivers/types';
-import type { MySqlDatasource } from '../MySqlDatasource';
+import type { MySqlDatasource } from '../datasource';
 
 export type MysqlMetadataAPI = ConnectionMetadataAPI & {
     getTableColumns: (database: string, table: string) => Promise<TableColumnInfo[]>;

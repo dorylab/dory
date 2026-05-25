@@ -5,7 +5,7 @@ import { withConnectionTimeout } from '@dory/drivers/core';
 import { createDriver } from '@dory/drivers/core';
 import { getDBService } from '@dory/database';
 import { TestConnectionPayload } from '@dory/shared/types/connections';
-import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/app/api/connection/utils';
+import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/lib/connection/utils';
 import { buildTestConnectionConfig } from '@/lib/connection/config';
 
 type SSHConfigWithSecrets = NonNullable<TestConnectionPayload['ssh']> & {
