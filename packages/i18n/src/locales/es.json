@@ -2421,7 +2421,10 @@
             "Prompt": {
                 "SchemaContextTitle": "[Contexto de datos actual]",
                 "DatabaseContextTitle": "[Contexto de base de datos]",
-                "CopilotContextTitle": "[Contexto actual de Copilot]"
+                "CopilotContextTitle": "[Contexto actual de Copilot]",
+                "ExecutionIntent": {
+                    "Policy": "Política de ejecución del turno actual:\n- Clasifica el último mensaje del usuario antes de decidir si usar sqlRunner.\n- Si el usuario pide explícitamente solo generar, mostrar o escribir SQL, o pide no ejecutar la consulta, no llames a sqlRunner en este turno y devuelve solo SQL salvo que necesites una aclaración.\n- Si el usuario pide ver, listar, ordenar por ranking, comparar, agregar, crear un gráfico u obtener resultados reales de la base de datos de otra forma, y sqlRunner está disponible, llama a sqlRunner con una consulta SQL de solo lectura antes de la respuesta final.\n- Para solicitudes que requieren resultados de datos, no termines solo escribiendo SQL.\n- Mantén los límites de resultados exploratorios o de detalle en 100 filas o menos."
+                }
             },
             "ChartBuilder": {
                 "Description": "Devuelve una configuración de gráfico basada en los datos proporcionados.\n\nUso:\n1. Especifica chartType (bar/line/area/pie).\n2. data es un arreglo de filas del resultado de la consulta.\n3. Si no tienes claro xKey / yKeys / categoryKey / valueKey, déjalos vacíos y la herramienta los inferirá:\n   - Línea/área: prioriza un campo temporal para x y campos numéricos para y.\n   - Barras: prioriza un campo categórico para x y campos numéricos para y.\n   - Circular: elige un campo categórico como categoryKey y un campo numérico como valueKey.\n4. La herramienta infiere columnas temporales/numéricas/categóricas y establece options.xKeyType/sortBy cuando corresponde.",

@@ -2425,7 +2425,10 @@
             "Prompt": {
                 "SchemaContextTitle": "【当前数据上下文】",
                 "DatabaseContextTitle": "【数据库上下文】",
-                "CopilotContextTitle": "【当前 Copilot 上下文】"
+                "CopilotContextTitle": "【当前 Copilot 上下文】",
+                "ExecutionIntent": {
+                    "Policy": "当前轮执行策略：\n- 在决定是否使用 sqlRunner 之前，先判断用户最新消息的意图。\n- 如果用户明确要求只生成、只显示或只写 SQL，或明确要求不要执行查询，则本轮不要调用 sqlRunner；除非需要澄清，否则只返回 SQL。\n- 如果用户要求查看、列出、排名、对比、聚合、画图，或以其他方式获取实际数据库结果，并且 sqlRunner 可用，请先用只读 SQL 调用 sqlRunner，再给出最终回答。\n- 对于需要数据结果的请求，不要只写 SQL 就结束。\n- 探索性或明细查询的结果限制保持在 100 行以内。"
+                }
             },
             "ChartBuilder": {
                 "Description": "根据提供的数据返回图表配置。\n\n使用说明：\n1. 指定 chartType（bar/line/area/pie）。\n2. data 为查询结果行数组。\n3. 如果不确定 xKey / yKeys / categoryKey / valueKey，可留空，工具会自动推断：\n   - Line/area：优先选择时间字段作为 x，数值字段作为 y。\n   - Bar：优先选择分类字段作为 x，数值字段作为 y。\n   - Pie：选择一个分类字段作为 categoryKey，一个数值字段作为 valueKey。\n4. 工具会识别时间/数值/分类列，并在合适时设置 options.xKeyType/sortBy。",
