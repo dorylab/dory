@@ -1,13 +1,16 @@
-// scripts/dev-bootstrap.ts
-import 'dotenv/config'; // Equivalent to dotenv.config(), but more reliable
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+import nextEnv from '@next/env';
 import { migratePgliteDB } from '@dory/database/pglite/migrate-pglite';
 import { getDatabaseProvider } from '@dory/database/provider';
 import { ensureFileUrl, extractFilePath } from '@dory/database/pglite/url';
 import { resolveDemoSqlitePath } from '@/lib/demo/paths';
 import { resetPgliteClient } from '@dory/database/postgres/client/pglite';
+
+const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+nextEnv.loadEnvConfig(appDir, true);
 
 async function ensureDirForFile(filePath: string) {
     const dir = path.dirname(filePath);
