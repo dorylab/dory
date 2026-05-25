@@ -16,18 +16,10 @@ type CreateSqlRunnerOptions = {
     locale?: Locale;
 };
 
-const ROW_LIMIT = parsePositiveInt(process.env.CHATBOT_SQL_ROW_LIMIT, 200);
+const MAX_SQL_RESULT_ROWS = 100;
+const ROW_LIMIT = Math.min(parsePositiveInt(process.env.CHATBOT_SQL_ROW_LIMIT, MAX_SQL_RESULT_ROWS), MAX_SQL_RESULT_ROWS);
 
-
-export function createSqlRunnerTool({
-    userId,
-    organizationId,
-    datasourceId,
-    messageId,
-    chatId,
-    defaultDatabase,
-    locale,
-}: CreateSqlRunnerOptions) {
+export function createSqlRunnerTool({ userId, organizationId, datasourceId, messageId, chatId, defaultDatabase, locale }: CreateSqlRunnerOptions) {
     const t = (key: string, values?: Record<string, unknown>) => translateApi(key, values, locale);
     const description = t('Api.Chat.SqlRunner.Description');
     return tool({
@@ -47,19 +39,13 @@ export function createSqlRunnerTool({
             if (!trimmed) {
                 return buildErrorResult(sql, requestedDatabase, t('Api.Chat.SqlRunner.SqlRequired'));
             }
+            const limitedSql = enforceSqlResultRowLimit(trimmed, MAX_SQL_RESULT_ROWS);
 
-            
             if (!isReadOnlyQuery(trimmed)) {
-                return buildErrorResult(
-                    trimmed,
-                    requestedDatabase,
-                    t('Api.Chat.SqlRunner.ReadOnlyOnly'),
-                    undefined,
-                    {
-                        required: true,
-                        reason: 'non-readonly-query',
-                    },
-                );
+                return buildErrorResult(trimmed, requestedDatabase, t('Api.Chat.SqlRunner.ReadOnlyOnly'), undefined, {
+                    required: true,
+                    reason: 'non-readonly-query',
+                });
             }
 
             const baseAudit = {
@@ -67,7 +53,7 @@ export function createSqlRunnerTool({
                 user_id: userId,
                 source: 'chatbot' as const,
                 datasource_id: datasourceId,
-                sql_text: sql,
+                sql_text: limitedSql,
                 database_name: requestedDatabase,
                 extra_json: {
                     chat_id: chatId,
@@ -80,13 +66,12 @@ export function createSqlRunnerTool({
             }
 
             try {
-                
                 const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
                 const instance = entry.instance;
 
                 const targetDatabase = requestedDatabase ?? sanitizeDatabase(defaultDatabase) ?? sanitizeDatabase(config.database);
                 const performanceGuardResult = await validateSqlPerformance({
-                    sql: trimmed,
+                    sql: limitedSql,
                     database: targetDatabase,
                     t,
                 });
@@ -96,7 +81,7 @@ export function createSqlRunnerTool({
                 }
 
                 const started = Date.now();
-                const result = await instance.queryWithContext(trimmed, {
+                const result = await instance.queryWithContext(limitedSql, {
                     database: targetDatabase ?? undefined,
                 });
                 const durationMs = Date.now() - started;
@@ -126,13 +111,13 @@ export function createSqlRunnerTool({
                         bytesRead: Number.isFinite(bytesRead) ? bytesRead : null,
                         tabId: 'chatbot',
                         userId,
-                        sqlText: sql,
+                        sqlText: limitedSql,
                     });
                 }
 
                 const base: SqlResultBase = {
                     type: 'sql-result',
-                    sql: trimmed,
+                    sql: limitedSql,
                     database: targetDatabase ?? null,
                     timestamp: new Date().toISOString(),
                 };
@@ -156,18 +141,17 @@ export function createSqlRunnerTool({
                 const code = extractErrorCode(rawMessage);
                 const targetDatabase = requestedDatabase ?? sanitizeDatabase(defaultDatabase);
 
-                
                 if (db?.audit) {
                     await db.audit.logError({
                         ...baseAudit,
                         errorMessage: rawMessage,
                         tabId: 'chatbot',
                         userId,
-                        sqlText: sql
+                        sqlText: limitedSql,
                     });
                 }
 
-                return buildErrorResult(trimmed, targetDatabase, rawMessage, code);
+                return buildErrorResult(limitedSql, targetDatabase, rawMessage, code);
             }
         },
     });
@@ -182,9 +166,9 @@ type SqlResultBase = {
 
 export type SqlResultOk = SqlResultBase & {
     ok: true;
-    rowCount: number; 
-    sampleRowCount: number; 
-    hasMore: boolean; 
+    rowCount: number;
+    sampleRowCount: number;
+    hasMore: boolean;
     previewRows: Array<Record<string, unknown>>;
     columns: Array<{ name: string; type: string | null }>;
     durationMs: number;
@@ -205,13 +189,7 @@ export type SqlResultError = SqlResultBase & {
 
 export type SqlResult = SqlResultOk | SqlResultError;
 
-function buildErrorResult(
-    sql: string,
-    database: string | null,
-    message: string,
-    code?: number | null,
-    manualExecution?: SqlResultError['manualExecution'],
-): SqlResultError {
+function buildErrorResult(sql: string, database: string | null, message: string, code?: number | null, manualExecution?: SqlResultError['manualExecution']): SqlResultError {
     return {
         type: 'sql-result',
         sql,
@@ -246,6 +224,38 @@ function sanitizeDatabase(value?: string | null): string | null {
     if (!value) return null;
     const trimmed = value.trim();
     return trimmed.length ? trimmed : null;
+}
+
+export function enforceSqlResultRowLimit(sql: string, maxRows = MAX_SQL_RESULT_ROWS): string {
+    const limit = Math.max(1, Math.floor(maxRows));
+
+    let nextSql = sql
+        .replace(/\blimit\s+(\d+)\s*,\s*(\d+)/gi, (match, offset, count) => {
+            const countValue = Number(count);
+            if (!Number.isFinite(countValue) || countValue <= limit) return match;
+            return `LIMIT ${offset}, ${limit}`;
+        })
+        .replace(/\blimit\s+(\d+)/gi, (match, count) => {
+            const countValue = Number(count);
+            if (!Number.isFinite(countValue) || countValue <= limit) return match;
+            return `LIMIT ${limit}`;
+        })
+        .replace(/\b(fetch\s+(?:first|next)\s+)(\d+)(\s+rows?\s+only\b)/gi, (match, prefix, count, suffix) => {
+            const countValue = Number(count);
+            if (!Number.isFinite(countValue) || countValue <= limit) return match;
+            return `${prefix}${limit}${suffix}`;
+        })
+        .replace(/\b(top\s*\(?\s*)(\d+)(\s*\)?)/i, (match, prefix, count, suffix) => {
+            const countValue = Number(count);
+            if (!Number.isFinite(countValue) || countValue <= limit) return match;
+            return `${prefix}${limit}${suffix}`;
+        });
+
+    if (nextSql.endsWith(';')) {
+        nextSql = `${nextSql.slice(0, -1).trimEnd()};`;
+    }
+
+    return nextSql;
 }
 
 async function validateSqlPerformance(params: {

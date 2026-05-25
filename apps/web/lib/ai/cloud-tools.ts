@@ -33,28 +33,13 @@ export const SQL_RUNNER_INPUT_SCHEMA: JsonSchema = {
 export const CHART_BUILDER_INPUT_SCHEMA: JsonSchema = {
     type: 'object',
     additionalProperties: false,
-    required: ['chartType', 'data'],
+    required: ['chartType'],
     properties: {
         title: { type: 'string' },
         description: { type: 'string' },
         chartType: {
             type: 'string',
             enum: ['bar', 'line', 'area', 'pie'],
-        },
-        data: {
-            type: 'array',
-            minItems: 1,
-            items: {
-                type: 'object',
-                additionalProperties: {
-                    anyOf: [
-                        { type: 'string' },
-                        { type: 'number' },
-                        { type: 'boolean' },
-                        { type: 'null' },
-                    ],
-                },
-            },
         },
         xKey: { type: 'string' },
         yKeys: {
@@ -111,9 +96,7 @@ export function buildCloudToolDeclarations(options: {
     return declarations;
 }
 
-export function buildCloudToolSet(
-    declarations?: Record<string, CloudToolDeclaration> | null,
-): ToolSet {
+export function buildCloudToolSet(declarations?: Record<string, CloudToolDeclaration> | null): ToolSet {
     if (!declarations) return {};
 
     const tools: ToolSet = {};
@@ -123,9 +106,7 @@ export function buildCloudToolSet(
             title: declaration.title,
             strict: declaration.strict,
             inputSchema: jsonSchema(declaration.inputSchema),
-            outputSchema: jsonSchema(
-                declaration.outputSchema ?? DEFAULT_TOOL_OUTPUT_SCHEMA,
-            ),
+            outputSchema: jsonSchema(declaration.outputSchema ?? DEFAULT_TOOL_OUTPUT_SCHEMA),
         };
     }
 

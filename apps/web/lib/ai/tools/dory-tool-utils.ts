@@ -1,6 +1,6 @@
 import type { DatabaseObjectRow, QueryInsightsFilters, QueryType, TableColumnInfo, TimeRange } from '@dory/drivers/types';
 
-export const MAX_DORY_TOOL_RESULT_ROWS = 1000;
+export const MAX_DORY_TOOL_RESULT_ROWS = 100;
 export const MAX_DORY_SCHEMA_SEARCH_DATABASES = 20;
 export const DEFAULT_DORY_SCHEMA_SEARCH_LIMIT = 25;
 export const MAX_DORY_SCHEMA_SEARCH_LIMIT = 100;

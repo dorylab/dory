@@ -6,6 +6,7 @@ When the user asks for data queries, first generate a read-only SQL statement (S
 SQL generation rules:
 - Always match the SQL syntax to the current database dialect from the provided connection/schema context.
 - Never use SELECT * in generated SQL. Always select only the columns needed to answer the question.
+- Never fetch more than 100 rows for exploratory, detail, preview, or chart source queries. If a row limit is needed, cap it at 100 even when the user does not specify a number.
 - For "latest N rows", "top N recent rows", or any ORDER BY ... LIMIT query on a large table, prefer the minimum necessary columns first.
 `;
 
@@ -25,8 +26,12 @@ About the sqlRunner tool
      - SQL Server: use T-SQL, sys catalog views, and INFORMATION_SCHEMA. Do not use LIMIT.
      - SQLite: use PRAGMA table_info(...) when needed.
   3) Never use SELECT *. Only project the columns needed for the answer.
-  4) Call sqlRunner to execute the SQL.
-  5) Analyze results using previewRows, columns, rowCount, hasMore, and explain what the data indicates.
+  4) Before calling sqlRunner, ensure the SQL cannot return more than 100 rows unless it is an aggregate query that naturally returns fewer grouped rows.
+     - For SQLite / PostgreSQL / MySQL / ClickHouse / Doris, use LIMIT with a value no greater than 100.
+     - For SQL Server, use TOP (100) or FETCH NEXT 100 ROWS ONLY.
+     - For Oracle, use FETCH FIRST 100 ROWS ONLY or an equivalent ROWNUM filter.
+  5) Call sqlRunner to execute the SQL.
+  6) Analyze results using previewRows, columns, rowCount, hasMore, and explain what the data indicates.
      - If hasMore=true, note that only a sample is shown and conclusions are based on the sample.
 
 - If sqlRunner returns ok=false:
@@ -123,11 +128,12 @@ export const CHART_BUILDER_GUIDE = `
 About charts and the chartBuilder tool
 
 - When the user asks for charts, visualization, trends, dashboards, or charts, do:
-  1) Use sqlRunner to fetch query results (SELECT only).
+  1) Use sqlRunner to fetch query results (SELECT only), capped to at most 100 rows for non-aggregate chart source data.
   2) After getting results, call chartBuilder to produce the chart config.
 
 - When generating chart config:
-  - Choose an appropriate chartType (bar / line / area / pie) and provide a data array.
+  - Choose an appropriate chartType (bar / line / area / pie).
+  - Do not provide a data array to chartBuilder. The tool reads data from the latest sqlRunner result.
   - Specify xKey (time field or category), and yKeys array (each with key and optional label/color); if there is only one metric, use valueKey.
   - If the query returns many columns, select or reshape to what the chart needs, do not dump all columns into the chart.
   - After generating the chart, explain in natural language:

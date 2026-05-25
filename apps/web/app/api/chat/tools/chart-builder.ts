@@ -12,7 +12,6 @@ function createChartInputSchema(locale: Locale) {
         title: z.string().optional(),
         description: z.string().optional(),
         chartType: z.enum(['bar', 'line', 'area', 'pie']),
-        data: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))).default([]),
         xKey: z.string().optional(),
         yKeys: z
             .array(
@@ -43,7 +42,7 @@ export function createChartBuilderTool(locale: Locale) {
         description: t('Api.Chat.ChartBuilder.Description'),
         inputSchema: chartInputSchema,
         execute: async (input, options) => {
-            const data = input.data.length > 0 ? input.data : findLatestSqlPreviewRows(options.messages);
+            const data = findLatestSqlPreviewRows(options.messages);
             const profile = buildResultAutoChartProfile({
                 rows: data,
                 overrides: {

@@ -186,7 +186,7 @@ export function createDoryChatTools(options: CreateDoryChatToolsOptions) {
                 connectionId: optionalConnectionIdSchema(),
                 database: z.string().min(1),
                 table: z.string().min(1),
-                limit: z.number().int().positive().max(1000).optional(),
+                limit: z.number().int().positive().max(100).optional(),
                 offset: z.number().int().min(0).optional(),
                 identityId: z.string().min(1).optional(),
             }),

@@ -1,23 +1,19 @@
 'use client';
 
-import { ReactNode, useCallback, useRef, useState } from 'react';
+import { ReactNode } from 'react';
 import type { UIMessage } from 'ai';
-import { AlertTriangleIcon, CheckCircle2Icon, ChevronDownIcon, ChevronRightIcon, LoaderCircleIcon, MoreHorizontalIcon } from 'lucide-react';
 
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import { Source, Sources, SourcesContent, SourcesTrigger } from '@/components/ai-elements/sources';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
-import { Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@/components/ai-elements/tool';
+import { Tool, ToolContent, ToolHeader } from '@/components/ai-elements/tool';
 import { ChartResultPart, ChartResultCard } from '@/components/@dory/ui/ai/charts-result';
 import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
 import { AssistantFallbackCard } from '@/components/@dory/ui/ai/assistant-fallback';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { DropdownMenuItem } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { buildAutoChartFromSql } from '@/components/@dory/ui/ai/utils/auto-charts';
-import { cn } from '@dory/web-utils';
 import { useTranslations } from 'next-intl';
-import { useStickToBottomContext } from 'use-stick-to-bottom';
 
 import type { CopilotActionExecutor } from '../copilot/action-bridge';
 import { SqlResultPart, SqlResultManualExecutionMode } from '@/components/@dory/ui/ai/sql-result/type';
@@ -52,100 +48,6 @@ type SqlStepKey =
     | 'DeleteData'
     | 'CreateObject'
     | 'DropObject';
-
-function findScrollableAncestor(node: HTMLElement | null): HTMLElement | null {
-    let current = node?.parentElement ?? null;
-
-    while (current) {
-        const style = window.getComputedStyle(current);
-        const overflowY = style.overflowY;
-        const canScroll = overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
-
-        if (canScroll && current.scrollHeight > current.clientHeight) {
-            return current;
-        }
-
-        current = current.parentElement;
-    }
-
-    return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null;
-}
-
-function ProcessStepCollapsible({
-    item,
-    statusCopy,
-}: {
-    item: { key: string; summary: string; content: ReactNode; actions?: ReactNode; defaultOpen?: boolean };
-    statusCopy: ReturnType<typeof getProcessStatusCopy>;
-}) {
-    const [open, setOpen] = useState(item.defaultOpen ?? false);
-    const triggerRef = useRef<HTMLButtonElement | null>(null);
-    const stickToBottom = useStickToBottomContext();
-
-    const restoreScrollPosition = useCallback((scrollContainer: HTMLElement | null, scrollTop: number) => {
-        if (!scrollContainer) return;
-
-        scrollContainer.scrollTop = scrollTop;
-
-        requestAnimationFrame(() => {
-            scrollContainer.scrollTop = scrollTop;
-        });
-    }, []);
-
-    const handleOpenChange = useCallback(
-        (nextOpen: boolean) => {
-            const scrollContainer = stickToBottom.scrollRef.current ?? findScrollableAncestor(triggerRef.current);
-            const scrollTop = scrollContainer?.scrollTop ?? 0;
-
-            stickToBottom.stopScroll();
-            stickToBottom.targetScrollTop = () => scrollTop;
-            setOpen(nextOpen);
-
-            requestAnimationFrame(() => {
-                restoreScrollPosition(scrollContainer, scrollTop);
-
-                requestAnimationFrame(() => {
-                    restoreScrollPosition(scrollContainer, scrollTop);
-                    stickToBottom.targetScrollTop = null;
-                });
-            });
-        },
-        [restoreScrollPosition, stickToBottom],
-    );
-
-    return (
-        <Collapsible open={open} onOpenChange={handleOpenChange} className="group/step overflow-hidden">
-            <div className="px-1 py-1.5">
-                <div className="min-w-0">
-                    <div className="min-w-0 flex-1">
-                        <CollapsibleTrigger
-                            ref={triggerRef}
-                            className="flex w-full items-center justify-between gap-2 text-left text-[12.5px] text-muted-foreground transition-colors hover:text-foreground/80"
-                            onMouseDown={event => {
-                                event.preventDefault();
-                            }}
-                        >
-                            <span className="inline-flex min-w-0 items-center gap-2">
-                                <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', statusCopy.dotClassName)} />
-                                <span className="truncate">{item.summary}</span>
-                                <span className={cn('inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px]', statusCopy.badgeClassName)}>
-                                    {statusCopy.icon}
-                                    <span>{statusCopy.label}</span>
-                                </span>
-                                <ChevronRightIcon className="size-3.5 shrink-0 group-data-[state=open]/step:hidden" />
-                                <ChevronDownIcon className="hidden size-3.5 shrink-0 group-data-[state=open]/step:block" />
-                            </span>
-                            <span className="flex shrink-0 items-center gap-0.5">{item.actions}</span>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="pt-2">
-                            <div className="min-w-0 pl-0.5">{item.content}</div>
-                        </CollapsibleContent>
-                    </div>
-                </div>
-            </div>
-        </Collapsible>
-    );
-}
 
 export function getSqlResultFromPart(part: any, fallbackMessage?: string): SqlResultPart | null {
     if (!part || typeof part !== 'object') return null;
@@ -293,173 +195,84 @@ function getSqlStepLabel(stepKey: SqlStepKey, t: ChatbotTranslate): string {
     return t(`Tools.Steps.${stepKey}`);
 }
 
-function getProcessNotesLabel(t: ChatbotTranslate): string {
-    return t('Tools.ProcessNotes');
+function formatToolValue(value: unknown): string {
+    if (value === null || value === undefined) return '-';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+    return JSON.stringify(value);
 }
 
-type ProcessVisualStatus = 'running' | 'completed' | 'error';
-
-function getProcessVisualStatus(part: any): ProcessVisualStatus {
-    if (part?.type === 'tool-error' || part?.state === 'output-error') {
-        return 'error';
-    }
-
-    if (part?.type === 'tool-result' || part?.type === 'tool_result' || (typeof part?.type === 'string' && part.type.startsWith('tool-') && part.output)) {
-        return 'completed';
-    }
-
-    return 'running';
-}
-
-function getProcessStatusCopy(status: ProcessVisualStatus, t: ChatbotTranslate) {
-    if (status === 'error') {
-        return {
-            label: t('Tools.Status.Error'),
-            icon: <AlertTriangleIcon className="size-3.5" />,
-            badgeClassName: 'border-destructive/20 bg-destructive/[0.04] text-destructive',
-            dotClassName: 'bg-destructive',
-        };
-    }
-
-    if (status === 'running') {
-        return {
-            label: t('Tools.Status.Running'),
-            icon: <LoaderCircleIcon className="size-3.5 animate-spin" />,
-            badgeClassName: 'border-border bg-muted/40 text-muted-foreground',
-            dotClassName: 'bg-primary',
-        };
-    }
-
-    return {
-        label: t('Tools.Status.Completed'),
-        icon: <CheckCircle2Icon className="size-3.5" />,
-        badgeClassName: 'border-border bg-muted/30 text-muted-foreground',
-        dotClassName: 'bg-emerald-500',
-    };
+function getObjectKeys(rows: Array<Record<string, unknown>>, maxColumns = 6) {
+    const keys = new Set<string>();
+    rows.forEach(row => {
+        Object.keys(row).forEach(key => keys.add(key));
+    });
+    return Array.from(keys).slice(0, maxColumns);
 }
 
 const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, onManualExecute, mode = 'global', onExecuteAction }: MessageRendererProps) => {
     const t = useTranslations('Chatbot');
-    const processItems: Array<{ key: string; summary: string; content: ReactNode; status: ProcessVisualStatus; actions?: ReactNode; defaultOpen?: boolean }> = [];
-    const leadingContentItems: ReactNode[] = [];
-    const narrativeContentItems: ReactNode[] = [];
-    const deferredToolItems: ReactNode[] = [];
-    const foldedNarrativeParts: ReactNode[] = [];
-    const sqlResults: SqlResultPart[] = [];
-    const chartResults: ChartResultPart[] = [];
-
     const assistantMessage = message.role === 'assistant';
     const isLatestAssistant = assistantMessage && messageIndex === messages.length - 1;
     const isStreaming = status !== 'ready';
-    const textPartIndexes = (message.parts ?? [])
-        .map((part: any, index: number) => (part?.type === 'text' && typeof part.text === 'string' && part.text.trim() ? index : -1))
-        .filter((index: number) => index >= 0);
-    const finalTextPartIndex = textPartIndexes.at(-1) ?? -1;
-    const hasMultipleTextParts = textPartIndexes.length > 1;
-    const messageHasChartResult = !!message.parts?.some((part: any) => Boolean(getChartResultFromPart(part)));
-
-    const userRequestedChart = didUserRequestChart(messages, messageIndex);
-    const renderTextPart = (text: string, key: string) => {
-        const displayText = assistantMessage ? removeUnavailableImageMarkdown(text) : text;
-        if (!displayText.trim()) {
-            return null;
-        }
-
-        if (message.role === 'user') {
-            return (
-                <div key={key} className="max-w-full whitespace-pre-wrap break-words leading-7 text-foreground [overflow-wrap:anywhere]">
-                    {displayText}
-                </div>
-            );
-        }
-
-        return <MessageResponse key={key}>{displayText}</MessageResponse>;
-    };
-    const pushNarrativeContent = (node: ReactNode) => {
-        narrativeContentItems.push(node);
-    };
-    const pushDeferredToolContent = (node: ReactNode) => {
-        deferredToolItems.push(
-            <div className="py-1.5" key={`tool-block-${message.id}-${deferredToolItems.length}`}>
-                {node}
-            </div>,
-        );
-    };
-
     const showCopilotSqlActions = mode === 'copilot' && typeof onExecuteAction === 'function';
+    const sourceParts = assistantMessage ? (message.parts ?? []).filter((part: any) => part?.type === 'source-url') : [];
+    const sqlResults: SqlResultPart[] = [];
+    const chartResults: ChartResultPart[] = [];
+    const renderedLegacyResultIds = new Set<string>();
+    let didRenderSources = false;
+
     const getToolCallId = (part: any) => {
         if (!part || typeof part !== 'object') return null;
-        if (typeof part.callId === 'string') return part.callId;
         if (typeof part.toolCallId === 'string') return part.toolCallId;
+        if (typeof part.callId === 'string') return part.callId;
         return null;
     };
-    const isToolCallPart = (part: any) => {
-        if (!part || typeof part !== 'object') return false;
-        if (part.type === 'tool_call' || part.type === 'tool-call') return true;
-        if (typeof part.type === 'string' && part.type.startsWith('tool-') && part.state === 'input-available') {
-            return true;
+    const isLegacyToolCallPart = (part: any) => part?.type === 'tool-call' || part?.type === 'tool_call';
+    const isLegacyToolResultPart = (part: any) => part?.type === 'tool-result' || part?.type === 'tool_result' || part?.type === 'tool-error';
+    const isTypedToolPart = (part: any) => typeof part?.type === 'string' && part.type.startsWith('tool-') && !isLegacyToolCallPart(part) && !isLegacyToolResultPart(part);
+    const isFinalToolState = (part: any) => part?.state === 'output-available' || part?.state === 'output-error' || part?.state === 'output-denied' || Boolean(part?.output);
+    const getToolOutput = (part: any) => part?.output ?? part?.result ?? part?.data ?? null;
+    const getToolErrorText = (part: any) =>
+        part?.errorText ?? part?.error?.message ?? (part?.type === 'tool-error' && typeof part?.message === 'string' ? part.message : undefined);
+    const getToolName = (part: any) => {
+        if (typeof part?.toolName === 'string') return part.toolName;
+        if (typeof part?.type === 'string' && part.type.startsWith('tool-')) {
+            return part.type.replace(/^tool-/, '');
         }
-        return false;
-    };
-    const toolCallFirstIndex = new Map<string, number>();
-    messages.forEach((msg, index) => {
-        (msg.parts ?? []).forEach((part: any) => {
-            const id = getToolCallId(part);
-            if (id && isToolCallPart(part) && !toolCallFirstIndex.has(id)) {
-                toolCallFirstIndex.set(id, index);
-            }
-        });
-    });
-    const shouldRenderToolCall = (part: any) => {
-        const id = getToolCallId(part);
-        if (!id) return true;
-        return toolCallFirstIndex.get(id) === messageIndex;
-    };
-    const getToolResultId = (part: any) => {
-        if (!part || typeof part !== 'object') return null;
-        if (typeof part.callId === 'string') return part.callId;
-        if (typeof part.toolCallId === 'string') return part.toolCallId;
+
+        const result = getToolOutput(part);
+        if (result?.type === 'sql-result') return 'sqlRunner';
+        if (result?.type === 'chart') return 'chartBuilder';
         return null;
     };
-    const toolCallPartById = new Map<string, { part: any; messageIndex: number; partIndex: number }>();
-    const toolResultPartById = new Map<string, { part: any; messageIndex: number; partIndex: number }>();
-    messages.forEach((msg, msgIndex) => {
-        (msg.parts ?? []).forEach((part: any, partIndex: number) => {
-            const toolCallId = getToolCallId(part);
-            if (toolCallId && isToolCallPart(part) && !toolCallPartById.has(toolCallId)) {
-                toolCallPartById.set(toolCallId, { part, messageIndex: msgIndex, partIndex });
-            }
+    const getToolStepSummary = (part: any) => {
+        const toolName = getToolName(part);
+        const input = part?.input ?? getToolOutput(part);
 
-            const toolResultId = getToolResultId(part);
-            const isResultPart = part?.type === 'tool_result' || part?.type === 'tool-result' || (typeof part?.type === 'string' && part.type.startsWith('tool-') && part.output);
-            if (toolResultId && isResultPart && !toolResultPartById.has(toolResultId)) {
-                toolResultPartById.set(toolResultId, { part, messageIndex: msgIndex, partIndex });
-            }
-        });
-    });
-    const toolResultFirstIndex = new Map<string, number>();
-    messages.forEach((msg, index) => {
-        (msg.parts ?? []).forEach((part: any) => {
-            if (part?.type === 'tool_result' || part?.type === 'tool-result' || (typeof part?.type === 'string' && part.type.startsWith('tool-') && part.output)) {
-                const id = getToolResultId(part);
-                if (id && !toolResultFirstIndex.has(id)) {
-                    toolResultFirstIndex.set(id, index);
-                }
-            }
-        });
-    });
-    const shouldRenderToolResult = (part: any) => {
-        const id = getToolResultId(part);
-        if (!id) return true;
-        return toolResultFirstIndex.get(id) === messageIndex;
+        if (toolName === 'sqlRunner') {
+            const sql = typeof part?.input?.sql === 'string' ? part.input.sql : typeof input?.sql === 'string' ? input.sql : '';
+            return getSqlStepLabel(summarizeSqlStep(sql), t);
+        }
+
+        if (toolName === 'chartBuilder') {
+            const chartType = typeof part?.input?.chartType === 'string' ? part.input.chartType : typeof input?.chartType === 'string' ? input.chartType : null;
+            return chartType ? t('Tools.Steps.BuildChartWithType', { chartType }) : t('Tools.Steps.BuildChart');
+        }
+
+        return toolName ? formatToolName(toolName, t) : t('Tools.Steps.RunTool');
     };
-    const isRenderedWithPairedToolCall = (part: any) => {
-        const toolId = getToolResultId(part);
-        const pairedToolCall = toolId ? toolCallPartById.get(toolId) : null;
-        return Boolean(pairedToolCall && pairedToolCall.messageIndex <= messageIndex && shouldRenderToolCall(pairedToolCall.part));
+    const getToolDisplayTitle = (part: any) => {
+        const summary = getToolStepSummary(part);
+        const toolName = getToolName(part);
+        if (toolName === 'sqlRunner' || toolName === 'chartBuilder') return summary;
+
+        const toolLabel = formatToolName(toolName, t);
+        return summary === toolLabel ? summary : `${summary} · ${toolLabel}`;
     };
     const inferToolArgsFromResult = (part: any) => {
-        const result = part?.result ?? part?.output ?? part?.data;
+        const result = getToolOutput(part);
         if (result?.type === 'sql-result' && typeof result.sql === 'string') {
             return { sql: result.sql };
         }
@@ -477,559 +290,534 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 dataCount: rawData.length,
             };
         }
-        return { toolCallId: getToolResultId(part) };
+        return { toolCallId: getToolCallId(part) };
     };
-    const toolCallStateById = new Map<
-        string,
-        {
-            hasFinalState: boolean;
+    const getToolState = (part: any): any => {
+        if (part?.state) return part.state;
+        if (part?.type === 'tool-error') return 'output-error';
+        if (isLegacyToolResultPart(part) || part?.output) return 'output-available';
+        return 'input-available';
+    };
+    const mergeLegacyToolResult = (callPart: any, resultPart: any | null) => {
+        if (!resultPart) return callPart;
+
+        return {
+            ...callPart,
+            state: resultPart.type === 'tool-error' ? 'output-error' : 'output-available',
+            output: getToolOutput(resultPart),
+            errorText: getToolErrorText(resultPart),
+        };
+    };
+    const renderMetaItems = (items: Array<[string, unknown]>) => {
+        const visibleItems = items.filter(([, value]) => value !== undefined && value !== null && value !== '');
+        if (visibleItems.length === 0) return null;
+
+        return (
+            <div className="flex flex-wrap gap-1.5">
+                {visibleItems.map(([label, value]) => (
+                    <span key={label} className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/20 px-2 py-1 text-[12px] text-muted-foreground">
+                        <span>{label}</span>
+                        <span className="font-medium text-foreground/80">{formatToolValue(value)}</span>
+                    </span>
+                ))}
+            </div>
+        );
+    };
+    const renderCompactRows = (rows: Array<Record<string, unknown>>, columns?: string[]) => {
+        if (rows.length === 0) return <p className="text-sm text-muted-foreground">No rows returned.</p>;
+
+        const displayRows = rows.slice(0, 5);
+        const displayColumns = (columns?.length ? columns : getObjectKeys(displayRows)).slice(0, 6);
+
+        return (
+            <div className="overflow-hidden rounded-lg border border-border/45 bg-background/70">
+                <table className="w-full min-w-max text-sm">
+                    <thead>
+                        <tr>
+                            {displayColumns.map(column => (
+                                <th key={column} className="h-9 border-b border-border/45 bg-background px-3 text-left text-[12px] font-medium text-muted-foreground">
+                                    {column}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {displayRows.map((row, rowIndex) => (
+                            <tr key={rowIndex} className="even:bg-muted/[0.16]">
+                                {displayColumns.map(column => (
+                                    <td key={column} className="h-9 border-b border-border/35 px-3 align-middle text-[12px] text-foreground/80 last:border-b-0">
+                                        {formatToolValue(row[column])}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {rows.length > displayRows.length ? (
+                    <div className="border-t border-border/35 px-3 py-2 text-[11px] text-muted-foreground">
+                        Showing {displayRows.length} of {rows.length} rows.
+                    </div>
+                ) : null}
+            </div>
+        );
+    };
+    const renderColumnsSummary = (columns: any[]) => (
+        <div className="overflow-hidden rounded-lg border border-border/45 bg-background/70">
+            <table className="w-full min-w-max text-sm">
+                <thead>
+                    <tr>
+                        <th className="h-9 border-b border-border/45 bg-background px-3 text-left text-[12px] font-medium text-muted-foreground">Column</th>
+                        <th className="h-9 border-b border-border/45 bg-background px-3 text-left text-[12px] font-medium text-muted-foreground">Type</th>
+                        <th className="h-9 border-b border-border/45 bg-background px-3 text-left text-[12px] font-medium text-muted-foreground">Key</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {columns.slice(0, 12).map((column, index) => (
+                        <tr key={`${column?.columnName ?? column?.name ?? index}`} className="even:bg-muted/[0.16]">
+                            <td className="h-9 border-b border-border/35 px-3 align-middle text-[12px] font-medium text-foreground/85">
+                                {formatToolValue(column?.columnName ?? column?.name)}
+                            </td>
+                            <td className="h-9 border-b border-border/35 px-3 align-middle text-[12px] text-muted-foreground">
+                                {formatToolValue(column?.columnType ?? column?.type)}
+                            </td>
+                            <td className="h-9 border-b border-border/35 px-3 align-middle text-[12px] text-muted-foreground">{column?.isPrimaryKey ? 'Primary' : '-'}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            {columns.length > 12 ? <div className="border-t border-border/35 px-3 py-2 text-[11px] text-muted-foreground">Showing 12 of {columns.length} columns.</div> : null}
+        </div>
+    );
+    const renderDoryToolContent = (part: any, state: string, input: any, output: any, errorText?: string) => {
+        const toolName = getToolName(part);
+
+        if (state === 'input-streaming' || state === 'input-available') {
+            return (
+                <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Running this tool.</p>
+                    {renderMetaItems([
+                        ['Database', input?.database],
+                        ['Table', input?.table],
+                        ['Limit', input?.limit],
+                        ['Query', input?.query],
+                    ])}
+                </div>
+            );
         }
-    >();
-    messages.forEach(msg => {
-        (msg.parts ?? []).forEach((part: any) => {
-            const id = getToolCallId(part) ?? getToolResultId(part);
-            if (!id) return;
 
-            const current = toolCallStateById.get(id) ?? {
-                hasFinalState: false,
-            };
+        if (state === 'output-error') {
+            return <div className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm text-destructive">{errorText || 'Tool failed.'}</div>;
+        }
 
-            const hasOutput =
-                part?.type === 'tool-result' ||
-                part?.type === 'tool_result' ||
-                part?.type === 'tool-error' ||
-                (typeof part?.type === 'string' && part.type.startsWith('tool-') && (part.output || part.state?.startsWith?.('output')));
+        const result = output && typeof output === 'object' ? output : {};
+        const ok = (result as any).ok !== false;
+        const toolOutput = (result as any).ok === true ? result : output;
 
-            if (hasOutput) {
-                current.hasFinalState = true;
+        if (!ok) {
+            return (
+                <div className="rounded-lg border border-destructive/20 bg-destructive/[0.04] px-3 py-2 text-sm text-destructive">
+                    {formatToolValue((result as any).error?.message ?? errorText ?? 'Tool failed.')}
+                </div>
+            );
+        }
+
+        if (toolName === 'chartBuilder') {
+            const chart = (toolOutput as any)?.type === 'chart' ? (toolOutput as any) : (result as any);
+            const rows = Array.isArray(chart?.data) ? chart.data : [];
+            const yKeys = Array.isArray(chart?.yKeys) ? chart.yKeys.map((item: any) => item?.label ?? item?.key).filter(Boolean) : [];
+            const valueFields = chart?.valueKey ?? (yKeys.length > 0 ? yKeys.join(', ') : undefined);
+
+            return (
+                <div className="space-y-2.5">
+                    {chart?.title ? <p className="text-sm font-medium text-foreground/85">{formatToolValue(chart.title)}</p> : null}
+                    {renderMetaItems([
+                        ['Chart', chart?.chartType ?? input?.chartType],
+                        ['Rows', rows.length || input?.dataCount],
+                        ['Category', chart?.categoryKey],
+                        ['X', chart?.categoryKey ? undefined : chart?.xKey],
+                        ['Value', valueFields],
+                    ])}
+                </div>
+            );
+        }
+
+        if (toolName === 'describeTable') {
+            const columns = Array.isArray((toolOutput as any)?.columns) ? (toolOutput as any).columns : [];
+            return (
+                <div className="space-y-2.5">
+                    {renderMetaItems([
+                        ['Database', input?.database],
+                        ['Table', input?.table],
+                        ['Columns', columns.length],
+                    ])}
+                    {columns.length > 0 ? renderColumnsSummary(columns) : <p className="text-sm text-muted-foreground">No columns returned.</p>}
+                </div>
+            );
+        }
+
+        if (toolName === 'previewTable') {
+            const resultSets = Array.isArray((toolOutput as any)?.queryResultSets) ? (toolOutput as any).queryResultSets : [];
+            const firstSet = resultSets[0] ?? {};
+            const rows = Array.isArray((toolOutput as any)?.results?.[0]) ? (toolOutput as any).results[0] : [];
+            const columnNames = Array.isArray(firstSet?.columns) ? firstSet.columns.map((column: any) => column?.name ?? column?.columnName).filter(Boolean) : undefined;
+
+            return (
+                <div className="space-y-2.5">
+                    {renderMetaItems([
+                        ['Database', input?.database ?? (toolOutput as any)?.session?.database],
+                        ['Table', input?.table],
+                        ['Rows', rows.length],
+                        ['Limit', firstSet?.limit ?? input?.limit],
+                    ])}
+                    {renderCompactRows(rows, columnNames)}
+                </div>
+            );
+        }
+
+        if (toolName === 'listTables') {
+            const tables = Array.isArray((toolOutput as any)?.tables) ? (toolOutput as any).tables : [];
+            return (
+                <div className="space-y-2.5">
+                    {renderMetaItems([
+                        ['Database', input?.database],
+                        ['Tables', tables.length],
+                    ])}
+                    <div className="flex flex-wrap gap-1.5">
+                        {tables.slice(0, 24).map((table: any, index: number) => (
+                            <span
+                                key={`${table?.name ?? table?.value ?? index}`}
+                                className="rounded-md border border-border/50 bg-muted/20 px-2 py-1 text-[12px] text-foreground/80"
+                            >
+                                {formatToolValue(table?.name ?? table?.label ?? table?.value ?? table)}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        if (toolName === 'listConnections') {
+            const connections = Array.isArray((toolOutput as any)?.connections) ? (toolOutput as any).connections : [];
+            return (
+                <div className="space-y-2.5">
+                    {renderMetaItems([['Connections', connections.length]])}
+                    {renderCompactRows(
+                        connections.map((connection: any) => ({
+                            name: connection.name,
+                            type: connection.type ?? connection.engine,
+                            database: connection.database,
+                            status: connection.status ?? connection.lastCheckStatus,
+                        })),
+                        ['name', 'type', 'database', 'status'],
+                    )}
+                </div>
+            );
+        }
+
+        if (toolName === 'searchSchema') {
+            const results = Array.isArray((toolOutput as any)?.results) ? (toolOutput as any).results : [];
+            return (
+                <div className="space-y-2.5">
+                    {renderMetaItems([
+                        ['Query', input?.query],
+                        ['Matches', results.length],
+                    ])}
+                    {renderCompactRows(
+                        results.map((item: any) => ({
+                            kind: item.kind,
+                            database: item.database,
+                            table: item.table ?? item.name,
+                            column: item.kind === 'column' ? item.name : null,
+                            type: item.type ?? null,
+                        })),
+                        ['kind', 'database', 'table', 'column', 'type'],
+                    )}
+                </div>
+            );
+        }
+
+        if (toolName === 'listSavedQueries') {
+            const savedQueries = Array.isArray((toolOutput as any)?.savedQueries) ? (toolOutput as any).savedQueries : [];
+            return savedQueries.length > 0 ? (
+                renderCompactRows(
+                    savedQueries.map((query: any) => ({
+                        title: query.title,
+                        folder: query.folderId,
+                        updated: query.updatedAt,
+                    })),
+                    ['title', 'folder', 'updated'],
+                )
+            ) : (
+                <p className="text-sm text-muted-foreground">No saved queries returned.</p>
+            );
+        }
+
+        return (
+            <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Tool completed.</p>
+                {renderMetaItems([
+                    ['Database', input?.database],
+                    ['Table', input?.table],
+                    ['Limit', input?.limit],
+                ])}
+            </div>
+        );
+    };
+
+    const legacyResultById = new Map<string, any>();
+    const typedToolPreferredIndexById = new Map<string, number>();
+    (message.parts ?? []).forEach((part: any, index: number) => {
+        const id = getToolCallId(part);
+        if (!id) return;
+
+        if (isLegacyToolResultPart(part) && !legacyResultById.has(id)) {
+            legacyResultById.set(id, part);
+        }
+
+        if (isTypedToolPart(part)) {
+            const preferredIndex = typedToolPreferredIndexById.get(id);
+            if (preferredIndex === undefined || isFinalToolState(part)) {
+                typedToolPreferredIndexById.set(id, index);
             }
-
-            toolCallStateById.set(id, current);
-        });
+        }
     });
 
-    const getToolName = (part: any) => {
-        if (typeof part?.toolName === 'string') return part.toolName;
-        if (typeof part?.type === 'string' && part.type.startsWith('tool-')) {
-            return part.type.replace(/^tool-/, '');
+    const renderTextPart = (text: string, key: string) => {
+        const displayText = assistantMessage ? removeUnavailableImageMarkdown(text) : text;
+        if (!displayText.trim()) return null;
+
+        if (message.role === 'user') {
+            return (
+                <div key={key} className="max-w-full whitespace-pre-wrap break-words leading-7 text-foreground [overflow-wrap:anywhere]">
+                    {displayText}
+                </div>
+            );
         }
 
-        const result = part?.result ?? part?.output ?? part?.data;
-        if (result?.type === 'sql-result') return 'sqlRunner';
-        if (result?.type === 'chart') return 'chartBuilder';
-        return null;
+        return <MessageResponse key={key}>{displayText}</MessageResponse>;
     };
+    const renderSources = (key: string) => {
+        if (sourceParts.length === 0 || didRenderSources) return null;
+        didRenderSources = true;
 
-    const getToolStepSummary = (part: any) => {
-        const toolName = getToolName(part);
-        const input = part?.input ?? part?.result ?? part?.output ?? part?.data;
-
-        if (toolName === 'sqlRunner') {
-            const sql = typeof part?.input?.sql === 'string' ? part.input.sql : typeof input?.sql === 'string' ? input.sql : '';
-            return getSqlStepLabel(summarizeSqlStep(sql), t);
-        }
-
-        if (toolName === 'chartBuilder') {
-            const chartType = typeof part?.input?.chartType === 'string' ? part.input.chartType : typeof input?.chartType === 'string' ? input.chartType : null;
-            return chartType ? t('Tools.Steps.BuildChartWithType', { chartType }) : t('Tools.Steps.BuildChart');
-        }
-
-        return toolName ? formatToolName(toolName, t) : t('Tools.Steps.RunTool');
+        return (
+            <Sources key={key}>
+                <SourcesTrigger count={sourceParts.length} />
+                {sourceParts.map((part: any, i: number) => (
+                    <SourcesContent key={`${message.id}-source-${i}`}>
+                        <Source href={part.url} title={part.title ?? part.url} />
+                    </SourcesContent>
+                ))}
+            </Sources>
+        );
     };
-
-    const getToolDisplayTitle = (part: any) => {
-        const summary = getToolStepSummary(part);
-        const toolName = getToolName(part);
-
-        if (toolName === 'sqlRunner') {
-            return summary;
-        }
-
-        if (toolName === 'chartBuilder') {
-            return summary;
-        }
-
-        const toolLabel = formatToolName(toolName, t);
-
-        return summary === toolLabel ? summary : `${summary} · ${toolLabel}`;
-    };
-
+    const renderSqlResultBody = (sqlResult: SqlResultPart, key: string) => (
+        <SqlResultBody
+            key={key}
+            result={sqlResult}
+            onManualExecute={onManualExecute}
+            mode={mode}
+            manualPrimaryAction={
+                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
+                    <Button
+                        type="button"
+                        size="sm"
+                        className="h-9 rounded-full px-4 text-sm font-medium"
+                        onClick={() => onExecuteAction?.({ type: 'sql.replace', sql: sqlResult.sql })}
+                    >
+                        {t('Tools.ReplaceSql')}
+                    </Button>
+                ) : undefined
+            }
+            manualMenuActions={
+                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
+                    <DropdownMenuItem onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}>{t('Tools.NewTab')}</DropdownMenuItem>
+                ) : undefined
+            }
+            footerActions={
+                showCopilotSqlActions && !sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
+                    <>
+                        <Button size="sm" className="h-9 rounded-full px-4 text-sm font-medium" onClick={() => onExecuteAction?.({ type: 'sql.replace', sql: sqlResult.sql })}>
+                            {t('Tools.ReplaceSql')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-9 rounded-full border-0 px-4 text-sm font-medium"
+                            onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}
+                        >
+                            {t('Tools.NewTab')}
+                        </Button>
+                    </>
+                ) : null
+            }
+            embedded
+        />
+    );
     const renderToolStateCard = ({
         part,
         key,
         fallbackInput,
         inputContent,
         resultContent,
-        forceState,
     }: {
         part: any;
         key: string;
         fallbackInput?: unknown;
         inputContent?: ReactNode;
         resultContent?: ReactNode;
-        forceState?: 'input-available' | 'output-available' | 'output-error';
     }) => {
-        const title = getToolDisplayTitle(part);
-        const state =
-            forceState ??
-            (part?.type === 'tool-error' || part?.state === 'output-error'
-                ? 'output-error'
-                : part?.type === 'tool-result' || part?.type === 'tool_result' || (typeof part?.type === 'string' && part.type.startsWith('tool-') && part.output)
-                  ? 'output-available'
-                  : 'input-available');
+        const state = getToolState(part);
         const input = part?.input ?? fallbackInput;
-        const output = part?.result ?? part?.output ?? part?.data ?? null;
-        const errorText = part?.errorText ?? part?.error?.message ?? (part?.type === 'tool-error' && typeof part?.message === 'string' ? part.message : undefined);
-        const defaultOpen = state !== 'output-available';
+        const output = getToolOutput(part);
+        const errorText = getToolErrorText(part);
 
         return (
-            <Tool key={key} defaultOpen={defaultOpen} className="mb-0 border-border/60 shadow-none">
-                <ToolHeader type="dynamic-tool" state={state} toolName={title} title={title} />
+            <Tool key={`${key}-${state}`} defaultOpen={false} className="mb-0 border-border/60 shadow-none">
+                <ToolHeader type="dynamic-tool" state={state} toolName={getToolDisplayTitle(part)} title={getToolDisplayTitle(part)} />
                 <ToolContent>
-                    {inputContent ?? (input !== undefined ? <ToolInput input={input} /> : null)}
                     {resultContent ? (
-                        <div className="pt-3">{resultContent}</div>
-                    ) : state !== 'input-available' ? (
-                        <div className="pt-3">
-                            <ToolOutput output={output} errorText={errorText} />
+                        <div className="space-y-3 pt-3">
+                            {inputContent}
+                            {resultContent}
                         </div>
-                    ) : null}
+                    ) : (
+                        <div className="pt-3">{renderDoryToolContent(part, state, input, output, errorText)}</div>
+                    )}
                 </ToolContent>
             </Tool>
         );
     };
-
-    const hasLaterVisibleSqlSuccess = (currentIndex: number) =>
-        (message.parts ?? []).slice(currentIndex + 1).some((candidate: any) => {
-            if (!shouldRenderToolResult(candidate)) {
-                return false;
-            }
-
-            const nextSqlResult = getSqlResultFromPart(candidate, t('Errors.SqlExecutionFailed'));
-            return Boolean(nextSqlResult?.ok);
-        });
-
-    const hasLaterVisibleChartResult = (currentIndex: number) =>
-        (message.parts ?? []).slice(currentIndex + 1).some((candidate: any) => {
-            if (!shouldRenderToolResult(candidate)) {
-                return false;
-            }
-
-            return Boolean(getChartResultFromPart(candidate));
-        });
-
-    const shouldHideToolFailure = (part: any, index: number) => {
-        if (part?.type === 'tool-error' || part?.state === 'output-error') {
-            return true;
-        }
-
+    const renderToolPart = (part: any, index: number) => {
+        const key = `${message.id}-tool-${getToolCallId(part) ?? index}`;
+        const toolName = getToolName(part);
         const sqlResult = getSqlResultFromPart(part, t('Errors.SqlExecutionFailed'));
-        if (sqlResult && !sqlResult.ok && hasLaterVisibleSqlSuccess(index)) {
-            return true;
-        }
 
-        return Boolean(sqlResult && !sqlResult.ok);
-    };
-
-    const shouldHideIntermediateSuccess = (part: any, index: number) => {
-        const sqlResult = getSqlResultFromPart(part, t('Errors.SqlExecutionFailed'));
-        if (sqlResult?.ok && hasLaterVisibleSqlSuccess(index)) {
-            return true;
-        }
-
-        const chartResult = getChartResultFromPart(part);
-        if (chartResult && hasLaterVisibleChartResult(index)) {
-            return true;
-        }
-
-        return false;
-    };
-
-    if (assistantMessage && message.parts?.some((part: any) => part.type === 'source-url')) {
-        const sourceParts = message.parts.filter((part: any) => part.type === 'source-url');
-        leadingContentItems.push(
-            <Sources key={`${message.id}-sources`}>
-                <SourcesTrigger count={sourceParts.length} />
-                {sourceParts.map((part: any, i: number) => (
-                    <SourcesContent key={`${message.id}-source-${i}`}>
-                        <Source href={part.url} title={part.url} />
-                    </SourcesContent>
-                ))}
-            </Sources>,
-        );
-    }
-
-    message.parts?.forEach((part: any, i: number) => {
-        // tool-call
-        if (part.type === 'tool-call' || part.type === 'tool_call') {
-            if (!shouldRenderToolCall(part)) {
-                return;
-            }
-            const toolId = getToolCallId(part);
-            const toolName = getToolName(part);
-            const pairedResult = toolId ? toolResultPartById.get(toolId) : null;
-
-            if (toolName === 'sqlRunner') {
-                const sqlResult = pairedResult?.part ? getSqlResultFromPart(pairedResult.part, t('Errors.SqlExecutionFailed')) : null;
-                const sql = typeof part?.input?.sql === 'string' ? part.input.sql : '';
-                pushDeferredToolContent(
-                    renderToolStateCard({
+        if (sqlResult) {
+            sqlResults.push(sqlResult);
+            return (
+                <div key={key} className="py-1.5">
+                    {renderToolStateCard({
                         part,
-                        key: `${message.id}-tool-call-${i}`,
-                        inputContent: sql ? <SqlStatementBlock sql={sql} onCopy={onCopySql} /> : undefined,
-                        resultContent: sqlResult ? (
-                            <SqlResultBody
-                                key={`${message.id}-sql-${i}`}
-                                result={sqlResult}
-                                onManualExecute={onManualExecute}
-                                mode={mode}
-                                manualPrimaryAction={
-                                    showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            className="h-9 rounded-full px-4 text-sm font-medium"
-                                            onClick={() => onExecuteAction?.({ type: 'sql.replace', sql: sqlResult.sql })}
-                                        >
-                                            {t('Tools.ReplaceSql')}
-                                        </Button>
-                                    ) : undefined
-                                }
-                                manualMenuActions={
-                                    showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
-                                        <DropdownMenuItem onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}>{t('Tools.NewTab')}</DropdownMenuItem>
-                                    ) : undefined
-                                }
-                                footerActions={
-                                    showCopilotSqlActions && !sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
-                                        <>
-                                            <Button
-                                                size="sm"
-                                                className="h-9 rounded-full px-4 text-sm font-medium"
-                                                onClick={() => onExecuteAction?.({ type: 'sql.replace', sql: sqlResult.sql })}
-                                            >
-                                                {t('Tools.ReplaceSql')}
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                className="h-9 rounded-full border-0 px-4 text-sm font-medium"
-                                                onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}
-                                            >
-                                                {t('Tools.NewTab')}
-                                            </Button>
-                                        </>
-                                    ) : null
-                                }
-                                embedded
-                            />
-                        ) : undefined,
-                        forceState: sqlResult ? 'output-available' : 'input-available',
-                    }),
-                );
-                return;
-            }
-
-            if (toolName === 'chartBuilder') {
-                const chartResult = pairedResult?.part ? getChartResultFromPart(pairedResult.part) : null;
-                if (chartResult) {
-                    chartResults.push(chartResult);
-                }
-
-                pushDeferredToolContent(
-                    <>
-                        {renderToolStateCard({
-                            part: pairedResult?.part ?? part,
-                            key: `${message.id}-tool-call-${i}`,
-                            fallbackInput: chartResult && pairedResult?.part ? inferToolArgsFromResult(pairedResult.part) : undefined,
-                            forceState: chartResult ? 'output-available' : 'input-available',
-                        })}
-                        {chartResult ? <ChartResultCard key={`${message.id}-chart-${i}`} result={chartResult} source="tool" /> : null}
-                    </>,
-                );
-                return;
-            }
-
-            processItems.push({
-                key: `${message.id}-tool-call-${i}`,
-                summary: getToolStepSummary(part),
-                status: getProcessVisualStatus(part),
-                defaultOpen: getProcessVisualStatus(part) !== 'completed',
-                content: renderToolStateCard({ part, key: `${message.id}-tool-call-${i}` }),
-            });
-            return;
-        }
-
-        if (typeof part.type === 'string' && part.type.startsWith('tool-') && part.input && part.state === 'input-available') {
-            if (!shouldRenderToolCall(part)) {
-                return;
-            }
-            const toolId = getToolCallId(part);
-            const toolName = getToolName(part);
-            const pairedResult = toolId ? toolResultPartById.get(toolId) : null;
-
-            if (toolName === 'sqlRunner') {
-                const sqlResult = pairedResult?.part ? getSqlResultFromPart(pairedResult.part, t('Errors.SqlExecutionFailed')) : null;
-                const sql = typeof part?.input?.sql === 'string' ? part.input.sql : '';
-                pushDeferredToolContent(
-                    renderToolStateCard({
-                        part,
-                        key: `${message.id}-dynamic-tool-call-${i}`,
-                        inputContent: sql ? <SqlStatementBlock sql={sql} onCopy={onCopySql} /> : undefined,
-                        resultContent: sqlResult ? (
-                            <SqlResultBody key={`${message.id}-dynamic-sql-${i}`} result={sqlResult} onManualExecute={onManualExecute} mode={mode} embedded />
-                        ) : undefined,
-                        forceState: sqlResult ? 'output-available' : 'input-available',
-                    }),
-                );
-                return;
-            }
-
-            if (toolName === 'chartBuilder') {
-                const chartResult = pairedResult?.part ? getChartResultFromPart(pairedResult.part) : null;
-                if (chartResult) {
-                    chartResults.push(chartResult);
-                }
-
-                pushDeferredToolContent(
-                    <>
-                        {renderToolStateCard({
-                            part: pairedResult?.part ?? part,
-                            key: `${message.id}-dynamic-tool-call-${i}`,
-                            fallbackInput: chartResult && pairedResult?.part ? inferToolArgsFromResult(pairedResult.part) : undefined,
-                            forceState: chartResult ? 'output-available' : 'input-available',
-                        })}
-                        {chartResult ? <ChartResultCard key={`${message.id}-dynamic-chart-${i}`} result={chartResult} source="tool" /> : null}
-                    </>,
-                );
-                return;
-            }
-
-            processItems.push({
-                key: `${message.id}-dynamic-tool-call-${i}`,
-                summary: getToolStepSummary(part),
-                status: getProcessVisualStatus(part),
-                defaultOpen: getProcessVisualStatus(part) !== 'completed',
-                content: renderToolStateCard({ part, key: `${message.id}-dynamic-tool-call-${i}` }),
-            });
-            return;
-        }
-
-        // tool-error
-        if (part.type === 'tool-error') {
-            return;
-        }
-
-        if (!shouldRenderToolResult(part)) {
-            return;
+                        key: `${key}-card`,
+                        fallbackInput: inferToolArgsFromResult(part),
+                        inputContent: sqlResult.sql ? <SqlStatementBlock sql={sqlResult.sql} onCopy={onCopySql} /> : undefined,
+                        resultContent: renderSqlResultBody(sqlResult, `${key}-result`),
+                    })}
+                </div>
+            );
         }
 
         const chartResult = getChartResultFromPart(part);
         if (chartResult) {
-            if (isRenderedWithPairedToolCall(part)) {
-                return;
-            }
-            if (shouldHideIntermediateSuccess(part, i)) {
-                return;
-            }
-
             chartResults.push(chartResult);
-            pushDeferredToolContent(
-                renderToolStateCard({
-                    part,
-                    key: `${message.id}-tool-chart-${i}`,
-                    fallbackInput: inferToolArgsFromResult(part),
-                    forceState: 'output-available',
-                }),
+            return (
+                <div key={key} className="space-y-2 py-1.5">
+                    {renderToolStateCard({
+                        part,
+                        key: `${key}-card`,
+                        fallbackInput: inferToolArgsFromResult(part),
+                    })}
+                    <ChartResultCard key={`${key}-chart`} result={chartResult} source="tool" />
+                </div>
             );
-            pushDeferredToolContent(<ChartResultCard key={`${message.id}-chart-${i}`} result={chartResult} source="tool" />);
-            return;
         }
 
-        const sqlResult = getSqlResultFromPart(part, t('Errors.SqlExecutionFailed'));
-        if (sqlResult) {
-            if (isRenderedWithPairedToolCall(part)) {
-                return;
-            }
-            if (shouldHideToolFailure(part, i)) {
-                return;
-            }
-            if (shouldHideIntermediateSuccess(part, i)) {
-                return;
-            }
+        if (!toolName) return null;
 
-            sqlResults.push(sqlResult);
-
-            pushDeferredToolContent(
-                renderToolStateCard({
+        return (
+            <div key={key} className="py-1.5">
+                {renderToolStateCard({
                     part,
-                    key: `${message.id}-tool-sql-${i}`,
-                    inputContent: sqlResult.sql ? <SqlStatementBlock sql={sqlResult.sql} onCopy={onCopySql} /> : undefined,
-                    resultContent: (
-                        <SqlResultBody
-                            key={`${message.id}-sql-${i}`}
-                            result={sqlResult}
-                            onManualExecute={onManualExecute}
-                            mode={mode}
-                            manualPrimaryAction={
-                                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        className="h-9 rounded-full px-4 text-sm font-medium"
-                                        onClick={() => onExecuteAction?.({ type: 'sql.replace', sql: sqlResult.sql })}
-                                    >
-                                        {t('Tools.ReplaceSql')}
-                                    </Button>
-                                ) : undefined
-                            }
-                            manualMenuActions={
-                                showCopilotSqlActions && sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
-                                    <DropdownMenuItem onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}>{t('Tools.NewTab')}</DropdownMenuItem>
-                                ) : undefined
-                            }
-                            footerActions={
-                                showCopilotSqlActions && !sqlResult.manualExecution?.required && sqlResult.sql?.trim() ? (
-                                    <>
-                                        <Button
-                                            size="sm"
-                                            className="h-9 rounded-full px-4 text-sm font-medium"
-                                            onClick={() => onExecuteAction?.({ type: 'sql.replace', sql: sqlResult.sql })}
-                                        >
-                                            {t('Tools.ReplaceSql')}
-                                        </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            className="h-9 rounded-full border-0 px-4 text-sm font-medium"
-                                            onClick={() => onExecuteAction?.({ type: 'sql.newTab', sql: sqlResult.sql })}
-                                        >
-                                            {t('Tools.NewTab')}
-                                        </Button>
-                                    </>
-                                ) : null
-                            }
-                            embedded
-                        />
-                    ),
-                    forceState: 'output-available',
-                }),
-            );
-            return;
-        }
-
-        const toolName = getToolName(part);
-        if (toolName) {
-            if (shouldHideToolFailure(part, i)) {
-                return;
-            }
-
-            processItems.push({
-                key: `${message.id}-tool-result-${i}`,
-                summary: getToolStepSummary(part),
-                status: getProcessVisualStatus(part),
-                defaultOpen: getProcessVisualStatus(part) !== 'completed',
-                content: renderToolStateCard({
-                    part,
-                    key: `${message.id}-tool-result-${i}`,
+                    key: `${key}-card`,
                     fallbackInput: inferToolArgsFromResult(part),
-                }),
-            });
-        }
+                })}
+            </div>
+        );
+    };
 
-        if (part.type === 'text') {
-            if (assistantMessage && hasMultipleTextParts && i !== finalTextPartIndex) {
-                const textNode = renderTextPart(part.text, `${message.id}-folded-text-${i}`);
-                if (textNode) {
-                    foldedNarrativeParts.push(textNode);
+    const contentItems = (message.parts ?? [])
+        .map((part: any, index: number) => {
+            if (!part || typeof part !== 'object') return null;
+
+            if (part.type === 'text') {
+                return renderTextPart(part.text ?? '', `${message.id}-text-${index}`);
+            }
+
+            if (part.type === 'reasoning') {
+                const reasoningText = typeof part.text === 'string' ? part.text.trim() : '';
+                if (!reasoningText) return null;
+
+                return (
+                    <Reasoning
+                        key={`${message.id}-reasoning-${index}`}
+                        className="w-full"
+                        isStreaming={status === 'streaming' && index === message.parts.length - 1 && message.id === messages.at(-1)?.id}
+                    >
+                        <ReasoningTrigger />
+                        <ReasoningContent>{reasoningText}</ReasoningContent>
+                    </Reasoning>
+                );
+            }
+
+            if (part.type === 'source-url') {
+                return renderSources(`${message.id}-sources`);
+            }
+
+            if (part.type === 'source-document' || part.type === 'file' || part.type === 'step-start') {
+                return null;
+            }
+
+            if (isTypedToolPart(part)) {
+                const id = getToolCallId(part);
+                if (id && typedToolPreferredIndexById.get(id) !== index) {
+                    return null;
                 }
-                return;
-            }
-            const textNode = renderTextPart(part.text, `${message.id}-text-${i}`);
-            if (textNode) {
-                pushNarrativeContent(textNode);
-            }
-            return;
-        }
-
-        // reasoning
-        if (part.type === 'reasoning') {
-            const reasoningText = typeof part.text === 'string' ? part.text.trim() : '';
-            if (!reasoningText) {
-                return;
+                return renderToolPart(part, index);
             }
 
-            pushNarrativeContent(
-                <Reasoning
-                    key={`${message.id}-reasoning-${i}`}
-                    className="w-full"
-                    isStreaming={status === 'streaming' && i === message.parts.length - 1 && message.id === messages.at(-1)?.id}
-                >
-                    <ReasoningTrigger />
-                    <ReasoningContent>{reasoningText}</ReasoningContent>
-                </Reasoning>,
-            );
-            return;
-        }
-    });
+            if (isLegacyToolCallPart(part)) {
+                const id = getToolCallId(part);
+                const pairedResult = id ? legacyResultById.get(id) : null;
+                if (id && pairedResult) {
+                    renderedLegacyResultIds.add(id);
+                }
+                return renderToolPart(mergeLegacyToolResult(part, pairedResult), index);
+            }
 
-    if (userRequestedChart && chartResults.length === 0 && sqlResults.length > 0) {
+            if (isLegacyToolResultPart(part)) {
+                const id = getToolCallId(part);
+                if (id && renderedLegacyResultIds.has(id)) {
+                    return null;
+                }
+                return renderToolPart(part, index);
+            }
+
+            return null;
+        })
+        .filter(Boolean) as ReactNode[];
+
+    if (!didRenderSources) {
+        const sources = renderSources(`${message.id}-sources`);
+        if (sources) contentItems.unshift(sources);
+    }
+
+    if (didUserRequestChart(messages, messageIndex) && chartResults.length === 0 && sqlResults.length > 0) {
         const autoChart = buildAutoChartFromSql(sqlResults[0]);
         if (autoChart) {
-            pushDeferredToolContent(<ChartResultCard key={`${message.id}-auto-chart`} result={autoChart} source="auto" />);
+            contentItems.push(
+                <div key={`${message.id}-auto-chart`} className="py-1.5">
+                    <ChartResultCard result={autoChart} source="auto" />
+                </div>,
+            );
         }
     }
 
-    if (processItems.length > 0) {
-        if (foldedNarrativeParts.length > 0) {
-            processItems.unshift({
-                key: `${message.id}-process-notes`,
-                summary: getProcessNotesLabel(t),
-                status: 'completed',
-                defaultOpen: false,
-                content: (
-                    <div key={`${message.id}-process-notes`} className="space-y-3 pt-1">
-                        {foldedNarrativeParts}
-                    </div>
-                ),
-            });
-        }
-
-        const processNodes = processItems.map(item => {
-            const statusCopy = getProcessStatusCopy(item.status, t);
-
-            return <ProcessStepCollapsible key={item.key} item={item} statusCopy={statusCopy} />;
-        });
-
-        deferredToolItems.unshift(...processNodes);
+    if (assistantMessage && contentItems.length === 0 && (!isLatestAssistant || !isStreaming)) {
+        contentItems.push(<AssistantFallbackCard key={`${message.id}-fallback`} />);
     }
 
-    const hasToolParts = !!message.parts?.some((part: any) => {
-        if (!part || typeof part !== 'object') return false;
-        if (part.type === 'tool-call' || part.type === 'tool_call') return false;
-        if (part.type === 'tool-error') return true;
-        if (part.type === 'tool-result' || part.type === 'tool_result') return true;
-        return typeof part.type === 'string' && part.type.startsWith('tool-');
-    });
-
-    if (assistantMessage && narrativeContentItems.length === 0 && (!isLatestAssistant || !isStreaming) && !hasToolParts) {
-        pushNarrativeContent(<AssistantFallbackCard key={`${message.id}-fallback`} />);
-    }
-
-    const contentItems: ReactNode[] = [...leadingContentItems];
-
-    if (narrativeContentItems.length > 0) {
-        const [firstNarrativeItem, ...remainingNarrativeItems] = narrativeContentItems;
-        contentItems.push(firstNarrativeItem);
-        contentItems.push(...deferredToolItems);
-        contentItems.push(...remainingNarrativeItems);
-    } else {
-        contentItems.push(...deferredToolItems);
-    }
-
-    if (contentItems.length === 0) {
-        return null;
-    }
+    if (contentItems.length === 0) return null;
 
     const isAssistant = message.role === 'assistant';
 
@@ -1038,26 +826,6 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
             <Message from={message.role} className={isAssistant ? 'w-full' : undefined}>
                 <MessageContent className={isAssistant ? 'w-full max-w-none bg-transparent' : undefined}>{contentItems}</MessageContent>
             </Message>
-
-            {/* {showActions && (
-                <ResponseActions>
-                    <Action
-                        label={t('Actions.Copy')}
-                        onClick={() => {
-                            
-                            const lastTextPart: any = (message.parts ?? []).filter((p: any) => p?.type === 'text' && p.text)?.at(-1);
-                            const text = lastTextPart?.text?.toString?.() ?? '';
-                            if (text) navigator.clipboard.writeText(text);
-                        }}
-                    >
-                        <CopyIcon className="size-3" />
-                    </Action>
-
-                    <Action label={t('Actions.Retry')}>
-                        <RefreshCcwIcon className="size-3" />
-                    </Action>
-                </Actions>
-            )} */}
         </div>
     );
 };

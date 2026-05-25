@@ -4,14 +4,7 @@ import { getDBService } from '@dory/database';
 import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
 import { buildResultContext } from '@dory/analysis/result-context';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
-import type {
-    DatabaseObjectRow,
-    DatabaseSummaryEngine,
-    QueryInsightsFilters,
-    QueryType,
-    TableColumnInfo,
-    TimeRange,
-} from '@dory/drivers/types';
+import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, QueryType, TableColumnInfo, TimeRange } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
@@ -19,7 +12,7 @@ import { runAnalysis } from '@/lib/server/analysis/run-analysis';
 import { getReadonlyMcpStatements } from '@/lib/server/mcp/sql-safety';
 import { routing, type Locale } from '@dory/i18n/routing';
 
-export const MAX_DORY_TOOL_RESULT_ROWS = 1000;
+export const MAX_DORY_TOOL_RESULT_ROWS = 100;
 export const MAX_DORY_SCHEMA_SEARCH_DATABASES = 20;
 export const DEFAULT_DORY_SCHEMA_SEARCH_LIMIT = 25;
 export const MAX_DORY_SCHEMA_SEARCH_LIMIT = 100;
@@ -238,7 +231,10 @@ export async function listTablesOperation(context: DoryToolOperationContext, inp
     return { tables: await entry.instance.listTablesOnly(input.database) };
 }
 
-export async function describeTableOperation(context: DoryToolOperationContext, input: { connectionId?: string | null; database: string; table: string; identityId?: string | null }) {
+export async function describeTableOperation(
+    context: DoryToolOperationContext,
+    input: { connectionId?: string | null; database: string; table: string; identityId?: string | null },
+) {
     const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
     return { columns: await entry.instance.describeTable(input.database, input.table) };
 }
@@ -259,7 +255,10 @@ export async function getDatabaseSummaryOperation(
     };
 }
 
-export async function getTableProfileOperation(context: DoryToolOperationContext, input: { connectionId?: string | null; database: string; table: string; identityId?: string | null }) {
+export async function getTableProfileOperation(
+    context: DoryToolOperationContext,
+    input: { connectionId?: string | null; database: string; table: string; identityId?: string | null },
+) {
     const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
     return {
         connectionId: resolveConnectionId(context, input.connectionId),
@@ -348,7 +347,10 @@ export async function searchSchemaOperation(
     };
 }
 
-export async function listSavedQueriesOperation(context: DoryToolOperationContext, input: { connectionId?: string | null; limit?: number | null; includeArchived?: boolean | null }) {
+export async function listSavedQueriesOperation(
+    context: DoryToolOperationContext,
+    input: { connectionId?: string | null; limit?: number | null; includeArchived?: boolean | null },
+) {
     const db = await getDBService();
     const records = await db.savedQueries.list({
         organizationId: context.organizationId,
@@ -519,7 +521,12 @@ export function buildResultContextOperation(input: {
     };
 }
 
-export function buildChartProfileOperation(input: { rows: Array<Record<string, unknown>>; columns?: unknown; stats?: Record<string, unknown> | null; overrides?: Record<string, unknown> }) {
+export function buildChartProfileOperation(input: {
+    rows: Array<Record<string, unknown>>;
+    columns?: unknown;
+    stats?: Record<string, unknown> | null;
+    overrides?: Record<string, unknown>;
+}) {
     return {
         profile: buildResultAutoChartProfile({
             rows: input.rows.slice(0, MAX_DORY_TOOL_RESULT_ROWS),
