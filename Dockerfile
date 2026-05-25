@@ -41,7 +41,33 @@ RUN yarn run build \
  && cp -rn node_modules/@electric-sql/pglite/dist/. apps/web/dist-scripts/ \
  && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.data apps/web/dist-scripts/ \
  && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.wasm apps/web/dist-scripts/ \
- && rm -f apps/web/.next/standalone/.env apps/web/.next/standalone/.env.local
+ && rm -f apps/web/.next/standalone/.env apps/web/.next/standalone/.env.local \
+ && rm -rf \
+    apps/web/.next/standalone/apps/web/__registry__ \
+    apps/web/.next/standalone/apps/web/app \
+    apps/web/.next/standalone/apps/web/components \
+    apps/web/.next/standalone/apps/web/dist-scripts \
+    apps/web/.next/standalone/apps/web/hooks \
+    apps/web/.next/standalone/apps/web/i18n \
+    apps/web/.next/standalone/apps/web/lib \
+    apps/web/.next/standalone/apps/web/registry \
+    apps/web/.next/standalone/apps/web/scripts \
+    apps/web/.next/standalone/apps/web/shared \
+    apps/web/.next/standalone/apps/web/components.json \
+    apps/web/.next/standalone/apps/web/drizzle.config.ts \
+    apps/web/.next/standalone/apps/web/drizzle.pglite.config.ts \
+    apps/web/.next/standalone/apps/web/eslint.config.mjs \
+    apps/web/.next/standalone/apps/web/instrumentation-client.ts \
+    apps/web/.next/standalone/apps/web/instrumentation.ts \
+    apps/web/.next/standalone/apps/web/next.config.ts \
+    apps/web/.next/standalone/apps/web/postcss.config.mjs \
+    apps/web/.next/standalone/apps/web/posthog-setup-report.md \
+    apps/web/.next/standalone/apps/web/registry.json \
+    apps/web/.next/standalone/apps/web/tsconfig.json \
+    apps/web/.next/standalone/apps/web/tsconfig.scripts.json \
+    apps/web/.next/standalone/apps/web/vercel.json \
+    apps/web/.next/standalone/apps/web/wrangler.toml \
+ && find apps/web/.next/standalone/apps/web/.next/server -name '*.nft.json' -delete
 
 FROM node:24-bookworm-slim AS runner
 
