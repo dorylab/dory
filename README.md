@@ -55,7 +55,6 @@ docker run -d --name dory \
   -e DORY_INIT_USER_EMAIL=admin@getdory.dev \
   -e DORY_INIT_USER_PASSWORD=admin \
   dorylab/dory:latest
-
 ```
 
 Then:
@@ -64,11 +63,24 @@ Then:
 
 `Password: admin`
 
+The initial administrator account is controlled by `DORY_INIT_USER_EMAIL` and `DORY_INIT_USER_PASSWORD` in `.env`.
+
 To enable email verification, set `RESEND_API_KEY` to a valid [resend](https://resend.com) key and `EMAIL_FROM` to a validated email.
+
+
+### Self-host with Docker Compose
+
+For long-running self-hosted deployments, Docker Compose runs Dory with a dedicated PostgreSQL database and persistent volumes.
+
+```bash
+cp docker-compose.env.example .env
+# Edit .env and replace all placeholder secrets/passwords.
+docker compose up -d
+```
 
 For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://www.getdory.dev/docs/deploy/self-hosting).
 
-  
+
 ### 🧠 Supported AI Providers
 
 Dory is built with a pluggable AI provider architecture.

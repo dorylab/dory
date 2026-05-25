@@ -42,7 +42,33 @@ RUN yarn run build \
  && cp -rn node_modules/@electric-sql/pglite/dist/. apps/web/dist-scripts/ \
  && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.data apps/web/dist-scripts/ \
  && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.wasm apps/web/dist-scripts/ \
- && rm -f apps/web/.next/standalone/.env apps/web/.next/standalone/.env.local
+ && rm -f apps/web/.next/standalone/.env apps/web/.next/standalone/.env.local \
+ && rm -rf \
+    apps/web/.next/standalone/apps/web/__registry__ \
+    apps/web/.next/standalone/apps/web/app \
+    apps/web/.next/standalone/apps/web/components \
+    apps/web/.next/standalone/apps/web/dist-scripts \
+    apps/web/.next/standalone/apps/web/hooks \
+    apps/web/.next/standalone/apps/web/i18n \
+    apps/web/.next/standalone/apps/web/lib \
+    apps/web/.next/standalone/apps/web/registry \
+    apps/web/.next/standalone/apps/web/scripts \
+    apps/web/.next/standalone/apps/web/shared \
+    apps/web/.next/standalone/apps/web/components.json \
+    apps/web/.next/standalone/apps/web/drizzle.config.ts \
+    apps/web/.next/standalone/apps/web/drizzle.pglite.config.ts \
+    apps/web/.next/standalone/apps/web/eslint.config.mjs \
+    apps/web/.next/standalone/apps/web/instrumentation-client.ts \
+    apps/web/.next/standalone/apps/web/instrumentation.ts \
+    apps/web/.next/standalone/apps/web/next.config.ts \
+    apps/web/.next/standalone/apps/web/postcss.config.mjs \
+    apps/web/.next/standalone/apps/web/posthog-setup-report.md \
+    apps/web/.next/standalone/apps/web/registry.json \
+    apps/web/.next/standalone/apps/web/tsconfig.json \
+    apps/web/.next/standalone/apps/web/tsconfig.scripts.json \
+    apps/web/.next/standalone/apps/web/vercel.json \
+    apps/web/.next/standalone/apps/web/wrangler.toml \
+ && find apps/web/.next/standalone/apps/web/.next/server -name '*.nft.json' -delete
 
 FROM node:24-bookworm-slim AS runner
 
@@ -50,7 +76,8 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
     DORY_RUNTIME=docker \
-    NEXT_PUBLIC_DORY_RUNTIME=docker
+    NEXT_PUBLIC_DORY_RUNTIME=docker \
+    POSTGRES_MIGRATIONS_DIR=/app/postgres-migrations
 
 # tzdata
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata ca-certificates \
@@ -65,6 +92,7 @@ COPY --from=installer --chown=node:node /app/apps/web/.next/standalone ./
 COPY --from=installer --chown=node:node /app/apps/web/public ./apps/web/public
 COPY --from=installer --chown=node:node /app/apps/web/dist-scripts ./dist-scripts
 COPY --from=installer --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=installer --chown=node:node /app/packages/database/src/postgres/migrations ./postgres-migrations
 
 EXPOSE 3000
 CMD ["sh", "-c", "node dist-scripts/bootstrap.mjs && exec node apps/web/server.js"]
