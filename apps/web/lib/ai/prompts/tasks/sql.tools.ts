@@ -14,7 +14,12 @@ About the sqlRunner tool
 
 - For questions related to data querying, aggregation, reporting, metrics, monitoring, or comparisons, follow these steps:
   1) Based on the current database context (dialect / database / schema / table), write read-only SQL for the active database engine (prefer SELECT).
-  2) Use the provided schema context first. If table structure is still unclear, inspect schema with dialect-appropriate read-only queries before writing the final query.
+  2) Use the provided schema context first. If table structure is still unclear, use the metadata tools before writing the final query:
+     - listDatabases to discover available databases.
+     - listTables or searchSchema to find candidate tables and views.
+     - describeTable or getTableProfile to inspect real columns, types, indexes, DDL, and table stats.
+     - getDatabaseSummary for a compact overview of important tables and database shape.
+     Only fall back to dialect-specific metadata SQL when these metadata tools are unavailable or return insufficient information.
      - PostgreSQL: prefer information_schema.columns, pg_catalog, or other PostgreSQL-compatible metadata queries. Do not use MySQL-only DESCRIBE / SHOW COLUMNS syntax.
      - MySQL / MariaDB: DESCRIBE, SHOW COLUMNS, and information_schema are acceptable.
      - SQL Server: use T-SQL, sys catalog views, and INFORMATION_SCHEMA. Do not use LIMIT.
@@ -32,6 +37,7 @@ About the sqlRunner tool
   - If it still fails, be honest about the cause and suggest next steps (e.g., check table names, column names, time ranges).
 
 - Do not fabricate query results. If the query cannot be executed or data is insufficient, say you are not sure or that there is not enough data.
+- Do not invent table or column names. When in doubt, call searchSchema or describeTable first.
 `.trim();
 
 export function buildDialectSqlPrompt(connectionType?: ConnectionType | null): string {

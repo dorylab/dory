@@ -2374,6 +2374,48 @@
             "Tools": {
                 "Rag": {
                     "Description": "Recupera los fragmentos de documentos más relevantes para la pregunta del usuario y devuelve pasajes de contexto para responder."
+                },
+                "ListConnections": {
+                    "Description": "Lista las conexiones de base de datos disponibles en la organización actual sin devolver secretos."
+                },
+                "ListDatabases": {
+                    "Description": "Lista las bases de datos de la conexión Dory actual."
+                },
+                "ListTables": {
+                    "Description": "Lista las tablas de una base de datos usando metadatos del driver de Dory."
+                },
+                "DescribeTable": {
+                    "Description": "Devuelve metadatos reales de columnas de una tabla, incluidos tipos, claves, valores predeterminados y comentarios cuando estén disponibles."
+                },
+                "GetDatabaseSummary": {
+                    "Description": "Devuelve un resumen compacto de la base de datos con conteos de objetos, estimaciones de tamaño y tablas recomendadas para empezar."
+                },
+                "GetTableProfile": {
+                    "Description": "Devuelve metadatos de tabla, columnas, estadísticas, índices, propiedades y DDL cuando la conexión lo admite."
+                },
+                "SearchSchema": {
+                    "Description": "Busca tablas, vistas y columnas por nombre, tipo o comentario usando metadatos del driver de Dory."
+                },
+                "ListSavedQueries": {
+                    "Description": "Lista consultas SQL guardadas para la conexión actual."
+                },
+                "GetSavedQuery": {
+                    "Description": "Obtiene una consulta SQL guardada por id para la conexión actual."
+                },
+                "GetMonitoringSummary": {
+                    "Description": "Devuelve un resumen de monitoreo de consultas y muestras opcionales de línea de tiempo, consultas lentas y consultas con error."
+                },
+                "PreviewTable": {
+                    "Description": "Previsualiza filas de una tabla con un límite estricto de filas."
+                },
+                "BuildResultContext": {
+                    "Description": "Construye el contexto de resultado de análisis de Dory a partir de metadatos de resultados SQL."
+                },
+                "BuildChartProfile": {
+                    "Description": "Construye el perfil automático de gráfico de Dory a partir de filas y columnas de resultado."
+                },
+                "RunAnalysis": {
+                    "Description": "Ejecuta una acción de análisis de Dory sobre un contexto de resultado y la conexión actual."
                 }
             },
             "Prompt": {

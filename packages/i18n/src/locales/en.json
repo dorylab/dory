@@ -2376,6 +2376,48 @@
             "Tools": {
                 "Rag": {
                     "Description": "Retrieve the most relevant document snippets for the user's question and return context passages for answering."
+                },
+                "ListConnections": {
+                    "Description": "List database connections available in the current organization without returning secrets."
+                },
+                "ListDatabases": {
+                    "Description": "List databases for the current Dory connection."
+                },
+                "ListTables": {
+                    "Description": "List tables in a database using Dory driver metadata."
+                },
+                "DescribeTable": {
+                    "Description": "Return real column metadata for a table, including types, keys, defaults, and comments when available."
+                },
+                "GetDatabaseSummary": {
+                    "Description": "Return a compact database summary with object counts, size estimates, and recommended starting tables."
+                },
+                "GetTableProfile": {
+                    "Description": "Return table metadata, columns, stats, indexes, properties, and DDL when supported by the connection."
+                },
+                "SearchSchema": {
+                    "Description": "Search tables, views, and columns by name, type, or comment using Dory driver metadata."
+                },
+                "ListSavedQueries": {
+                    "Description": "List saved SQL queries for the current connection."
+                },
+                "GetSavedQuery": {
+                    "Description": "Get a saved SQL query by id for the current connection."
+                },
+                "GetMonitoringSummary": {
+                    "Description": "Return query monitoring summary and optional timeline, slow query, and error query samples."
+                },
+                "PreviewTable": {
+                    "Description": "Preview rows from a table with a hard row limit."
+                },
+                "BuildResultContext": {
+                    "Description": "Build Dory analysis result context from SQL result metadata."
+                },
+                "BuildChartProfile": {
+                    "Description": "Build Dory automatic chart profile from result rows and columns."
+                },
+                "RunAnalysis": {
+                    "Description": "Run a Dory analysis action against a result context and the current connection."
                 }
             },
             "Prompt": {

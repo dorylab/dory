@@ -31,3 +31,15 @@ export class UnsupportedCapabilityError extends DatasourceError {
         this.name = 'UnsupportedCapabilityError';
     }
 }
+
+export class UnsupportedDriverCapabilityError extends DatasourceError {
+    readonly code = 'DRIVER_CAPABILITY_UNSUPPORTED' as const;
+
+    constructor(
+        public readonly capability: string,
+        public readonly type?: string,
+    ) {
+        super(type ? `Datasource type "${type}" does not support capability "${capability}"` : `Driver capability is not supported: ${capability}`);
+        this.name = 'UnsupportedDriverCapabilityError';
+    }
+}

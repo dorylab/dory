@@ -2374,6 +2374,48 @@
             "Tools": {
                 "Rag": {
                     "Description": "ユーザーの質問に最も関連する文書断片を取得し、回答のためのコンテキストを返します。"
+                },
+                "ListConnections": {
+                    "Description": "現在の組織で利用できるデータベース接続を、シークレットを含めずに一覧します。"
+                },
+                "ListDatabases": {
+                    "Description": "現在の Dory 接続のデータベースを一覧します。"
+                },
+                "ListTables": {
+                    "Description": "Dory driver のメタデータを使ってデータベース内のテーブルを一覧します。"
+                },
+                "DescribeTable": {
+                    "Description": "テーブルの実際の列メタデータを返します。型、キー、デフォルト値、コメントを含められます。"
+                },
+                "GetDatabaseSummary": {
+                    "Description": "オブジェクト数、サイズ推定、確認開始に適したテーブルを含むデータベース概要を返します。"
+                },
+                "GetTableProfile": {
+                    "Description": "接続が対応している場合、テーブルのメタデータ、列、統計、インデックス、プロパティ、DDL を返します。"
+                },
+                "SearchSchema": {
+                    "Description": "Dory driver のメタデータを使い、名前、型、コメントでテーブル、ビュー、列を検索します。"
+                },
+                "ListSavedQueries": {
+                    "Description": "現在の接続の保存済み SQL クエリを一覧します。"
+                },
+                "GetSavedQuery": {
+                    "Description": "現在の接続の保存済み SQL クエリを id で取得します。"
+                },
+                "GetMonitoringSummary": {
+                    "Description": "クエリ監視の概要と、必要に応じてタイムライン、遅いクエリ、エラークエリのサンプルを返します。"
+                },
+                "PreviewTable": {
+                    "Description": "厳格な行数上限付きでテーブル行をプレビューします。"
+                },
+                "BuildResultContext": {
+                    "Description": "SQL 結果メタデータから Dory 分析用の結果コンテキストを構築します。"
+                },
+                "BuildChartProfile": {
+                    "Description": "結果行と列から Dory の自動チャートプロファイルを構築します。"
+                },
+                "RunAnalysis": {
+                    "Description": "結果コンテキストと現在の接続に対して Dory の分析アクションを実行します。"
                 }
             },
             "Prompt": {

@@ -1,5 +1,5 @@
 import { BaseConnection } from '@dory/drivers/core';
-import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 
 type ColumnInfo = {
     columnName?: string;

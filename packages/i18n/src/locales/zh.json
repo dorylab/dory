@@ -2378,6 +2378,48 @@
             "Tools": {
                 "Rag": {
                     "Description": "检索与用户问题最相关的文档片段，返回若干上下文段落用于回答。"
+                },
+                "ListConnections": {
+                    "Description": "列出当前组织可用的数据库连接，不返回密钥。"
+                },
+                "ListDatabases": {
+                    "Description": "列出当前 Dory 连接中的数据库。"
+                },
+                "ListTables": {
+                    "Description": "使用 Dory driver 元数据列出数据库中的表。"
+                },
+                "DescribeTable": {
+                    "Description": "返回表的真实列元数据，包括类型、主键、默认值和注释等信息。"
+                },
+                "GetDatabaseSummary": {
+                    "Description": "返回数据库概要，包括对象数量、大小估算和推荐优先查看的表。"
+                },
+                "GetTableProfile": {
+                    "Description": "返回表的元数据、列、统计信息、索引、属性和 DDL（取决于连接支持情况）。"
+                },
+                "SearchSchema": {
+                    "Description": "使用 Dory driver 元数据按名称、类型或注释搜索表、视图和列。"
+                },
+                "ListSavedQueries": {
+                    "Description": "列出当前连接的已保存 SQL 查询。"
+                },
+                "GetSavedQuery": {
+                    "Description": "按 id 获取当前连接的一条已保存 SQL 查询。"
+                },
+                "GetMonitoringSummary": {
+                    "Description": "返回查询监控概要，并可包含时间线、慢查询和错误查询样本。"
+                },
+                "PreviewTable": {
+                    "Description": "在硬性行数限制内预览表数据。"
+                },
+                "BuildResultContext": {
+                    "Description": "根据 SQL 结果元数据构建 Dory 分析上下文。"
+                },
+                "BuildChartProfile": {
+                    "Description": "根据结果行和列构建 Dory 自动图表画像。"
+                },
+                "RunAnalysis": {
+                    "Description": "基于结果上下文和当前连接运行 Dory 分析动作。"
                 }
             },
             "Prompt": {

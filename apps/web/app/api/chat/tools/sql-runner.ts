@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { ensureConnectionPoolForUser } from '../../connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { isReadOnlyQuery } from '../../utils/sql-readonly';
 import { getDBService } from '@dory/database';
 import { Locale } from '@dory/i18n/routing';

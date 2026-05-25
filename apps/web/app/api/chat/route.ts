@@ -11,6 +11,7 @@ import { buildCloudflareAiGatewayHeaders, assertAiQuotaAllowed, isAiQuotaExceede
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
 import { createSqlRunnerTool } from './tools/sql-runner';
 import { createChartBuilderTool } from './tools/chart-builder';
+import { createDoryChatTools } from './tools/dory-tools';
 import { buildUserLanguageInstruction, extractMessageText, normalizeMessage } from './utils';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
@@ -216,6 +217,17 @@ async function handleChatRequest(req: Request) {
     const tools: Record<string, any> = {
         chartBuilder: createChartBuilderTool(locale),
     };
+    if (userId && organizationId) {
+        Object.assign(
+            tools,
+            createDoryChatTools({
+                userId,
+                organizationId,
+                currentConnectionId: connectionId,
+                locale,
+            }),
+        );
+    }
     const sqlToolEnabled = Boolean(db && userId && organizationId && connectionId);
 
     if (sqlToolEnabled) {
@@ -309,7 +321,7 @@ async function handleChatRequest(req: Request) {
         tools,
         instructions: agentContext.instructions,
         temperature: preset.temperature,
-        maxSteps: 6,
+        maxSteps: 8,
         headers,
         context: {
             organizationId,
