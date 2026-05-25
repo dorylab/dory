@@ -153,6 +153,28 @@ function removeUnavailableImageMarkdown(text: string) {
         .trim();
 }
 
+const SQL_TEXT_START_RE = /^(select|with|insert|update|delete|create|alter|drop|truncate|merge|explain|describe|show|pragma)\b/i;
+
+function extractStandaloneSqlText(text: string): string | null {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+
+    const fencedMatch = trimmed.match(/^```(?:sql)?\s*([\s\S]*?)\s*```$/i);
+    const candidate = (fencedMatch?.[1] ?? trimmed).trim();
+    if (!SQL_TEXT_START_RE.test(candidate)) return null;
+
+    const statements = candidate
+        .split(';')
+        .map(statement => statement.trim())
+        .filter(Boolean);
+
+    if (statements.length > 1 && statements.some(statement => !SQL_TEXT_START_RE.test(statement) && !statement.startsWith('--') && !statement.startsWith('/*'))) {
+        return null;
+    }
+
+    return candidate;
+}
+
 function formatToolName(toolName: string | null | undefined, t: ChatbotTranslate): string {
     const fallback = t('Tools.Names.Tool');
     if (!toolName) return fallback;
@@ -590,6 +612,15 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
             return (
                 <div key={key} className="max-w-full whitespace-pre-wrap break-words leading-7 text-foreground [overflow-wrap:anywhere]">
                     {displayText}
+                </div>
+            );
+        }
+
+        const standaloneSql = extractStandaloneSqlText(displayText);
+        if (standaloneSql) {
+            return (
+                <div key={key} className="py-1.5">
+                    <SqlStatementBlock sql={standaloneSql} onCopy={onCopySql} />
                 </div>
             );
         }

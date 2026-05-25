@@ -2369,7 +2369,10 @@
             "Prompt": {
                 "SchemaContextTitle": "[Current data context]",
                 "DatabaseContextTitle": "[Database context]",
-                "CopilotContextTitle": "[Current Copilot context]"
+                "CopilotContextTitle": "[Current Copilot context]",
+                "ExecutionIntent": {
+                    "Policy": "Current turn execution policy:\n- Classify the latest user message before deciding whether to use sqlRunner.\n- If the user explicitly asks to only generate, show, or write SQL, or asks not to execute the query, do not call sqlRunner and return SQL only unless clarification is needed.\n- If the user asks to view, list, rank, compare, aggregate, chart, or otherwise obtain actual database results, and sqlRunner is available, call sqlRunner with a read-only SQL query before the final answer.\n- Do not stop after only writing SQL for data-result requests.\n- Keep exploratory/detail result limits at 100 rows or fewer."
+                }
             },
             "ChartBuilder": {
                 "Description": "Return a chart configuration based on the provided data.\n\nUsage:\n1. Specify chartType (bar/line/area/pie).\n2. data is an array of query result rows.\n3. If you are unsure about xKey / yKeys / categoryKey / valueKey, leave them empty and the tool will infer:\n   - Line/area: prefer a time field for x, numeric fields for y.\n   - Bar: prefer a category field for x, numeric fields for y.\n   - Pie: choose one category field as categoryKey and one numeric field as valueKey.\n4. The tool infers time/numeric/category columns and sets options.xKeyType/sortBy when appropriate.",

@@ -18,11 +18,12 @@ import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getDBService } from '@dory/database';
 import { newEntityId } from '@dory/shared/id';
 import { MAX_HISTORY_MESSAGES } from '@/lib/ai/prompts';
-import { getApiLocale } from '@/app/api/utils/i18n';
+import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '../utils/with-organization-handler';
 import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import type { ConnectionType } from '@dory/shared/types/connections';
+import type { Locale } from '@dory/i18n/routing';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,11 @@ function mergeHeaders(headers: Record<string, string | undefined> | undefined, e
         ...(headers ?? {}),
         ...extraHeaders,
     };
+}
+
+function buildCurrentTurnExecutionInstruction(sqlToolEnabled: boolean, locale: Locale): string | null {
+    if (!sqlToolEnabled) return null;
+    return translateApi('Api.Chat.Prompt.ExecutionIntent.Policy', undefined, locale);
 }
 
 export const POST = withUserAndOrganizationHandler(async ({ req }) => {
@@ -258,6 +264,8 @@ async function handleChatRequest(req: Request) {
         copilotEnvelope,
         locale,
     });
+    const currentTurnExecutionInstruction = buildCurrentTurnExecutionInstruction(sqlToolEnabled, locale);
+    const agentInstructions = [agentContext.instructions, currentTurnExecutionInstruction].filter(Boolean).join('\n\n');
 
     const currentUserMessageId = typeof (currentUserMessage as any)?.id === 'string' && (currentUserMessage as any).id ? (currentUserMessage as any).id : requestMessageId || null;
     const existedMessageIds = new Set<string>();
@@ -319,7 +327,7 @@ async function handleChatRequest(req: Request) {
     const agent = buildDoryChatAgent({
         model,
         tools,
-        instructions: agentContext.instructions,
+        instructions: agentInstructions,
         temperature: preset.temperature,
         maxSteps: 8,
         headers,
@@ -338,7 +346,7 @@ async function handleChatRequest(req: Request) {
         requestId,
         startedAt,
         debugInput: {
-            system: agentContext.instructions,
+            system: agentInstructions,
             messages: historyMessagesForAgent as any,
             prompt: null,
         },

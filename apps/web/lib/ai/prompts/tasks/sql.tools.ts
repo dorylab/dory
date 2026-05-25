@@ -1,7 +1,8 @@
 import type { ConnectionType } from '@dory/shared/types/connections';
 
 export const SQL_TOOL_INSTRUCTION = `
-When the user asks for data queries, first generate a read-only SQL statement (SELECT only) and call the sqlRunner tool. In your response, include the SQL and explain the query results.
+When the user asks for data queries that require actual database results, first generate a read-only SQL statement (SELECT only) and call the sqlRunner tool. In your response, include the SQL and explain the query results.
+If the user explicitly asks to only generate, show, or write SQL without executing it, return the SQL only and do not call sqlRunner.
 
 SQL generation rules:
 - Always match the SQL syntax to the current database dialect from the provided connection/schema context.
