@@ -13,9 +13,11 @@ type ParentMessage =
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 3318;
 const targetBaseUrl = readRequiredEnv('DORY_MCP_PROXY_TARGET_URL').replace(/\/$/, '');
+const desktopGrant = readRequiredEnv('DORY_MCP_DESKTOP_GRANT');
 const host = process.env.DORY_MCP_PROXY_HOST?.trim() || DEFAULT_HOST;
 const port = parsePort(process.env.DORY_MCP_PROXY_PORT) ?? DEFAULT_PORT;
 const endpoint = `http://${host}:${port}/api/mcp`;
+const DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
 
 function readRequiredEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -62,7 +64,7 @@ function readRequestBody(req: http.IncomingMessage): Promise<Buffer> {
 
 function buildForwardHeaders(req: http.IncomingMessage) {
   const headers = new Headers();
-  const blocked = new Set(['connection', 'content-length', 'host', 'transfer-encoding']);
+  const blocked = new Set(['connection', 'content-length', 'host', 'transfer-encoding', DESKTOP_GRANT_HEADER]);
 
   for (const [name, value] of Object.entries(req.headers)) {
     if (blocked.has(name.toLowerCase()) || typeof value === 'undefined') {
@@ -75,6 +77,7 @@ function buildForwardHeaders(req: http.IncomingMessage) {
     headers.set(name, value);
   }
 
+  headers.set(DESKTOP_GRANT_HEADER, desktopGrant);
   return headers;
 }
 

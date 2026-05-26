@@ -245,7 +245,7 @@ async function launch() {
       log('[electron] launch targetUrl:', targetUrl);
       loadMainWindowUrl(targetUrl, log);
       if (mcpProxyManager.isEnabled()) {
-        await mcpProxyManager.start(targetUrl, { persist: false }).catch(error => {
+        await mcpProxyManager.start(targetUrl, undefined, { persist: false }).catch(error => {
           logError('[electron] failed to restore MCP proxy:', error);
         });
       }
@@ -402,9 +402,12 @@ ipcMain.handle('mcp:get-state', async () => {
   return mcpProxyManager.getState();
 });
 
-ipcMain.handle('mcp:start', async () => {
+ipcMain.handle('mcp:start', async (_event, desktopGrant: string) => {
+  if (typeof desktopGrant !== 'string' || !desktopGrant.trim()) {
+    throw new Error('MCP desktop grant is required.');
+  }
   const targetUrl = await serverManager.getAppUrl();
-  return mcpProxyManager.start(targetUrl);
+  return mcpProxyManager.start(targetUrl, desktopGrant);
 });
 
 ipcMain.handle('mcp:stop', async () => {

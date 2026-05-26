@@ -2514,7 +2514,8 @@
             "SettingsPatchUnsupported": "MCP 设置按用户 token 管理，不支持 PATCH。",
             "InvalidTokenPayload": "无效的 MCP token 请求内容。",
             "MissingTokenId": "缺少 MCP token id。",
-            "TokenNotFound": "未找到 MCP token。"
+            "TokenNotFound": "未找到 MCP token。",
+            "DesktopGrantUnavailable": "MCP 桌面端授权只在桌面运行时可用。"
         },
         "OrganizationAiProviders": {
             "ApiKeyRequired": "这个 AI 服务需要填写 API Key。",
@@ -2952,37 +2953,21 @@
             "AgentAccess": {
                 "Loading": "正在加载 MCP 设置...",
                 "LoadFailed": "加载 MCP 设置失败。",
-                "SaveFailed": "更新 MCP 设置失败。",
-                "CreateFailed": "创建 MCP token 失败。",
-                "RevokeFailed": "撤销 MCP token 失败。",
-                "EnableLabel": "个人 MCP",
-                "EnableDescription": "为你信任的 MCP client 创建个人 token。",
                 "ProxyLabel": "本地 MCP Endpoint",
                 "ProxyDescription": "为桌面端 MCP client 启动固定的 localhost MCP endpoint。",
                 "ProxyStopped": "本地 MCP endpoint 已开启但未运行。",
                 "ProxyStartFailed": "更新本地 MCP endpoint 失败。",
                 "EndpointLabel": "Endpoint",
-                "EndpointDescription": "在 Codex 或其他 MCP client 中配合你的个人 MCP token 使用这个 URL。",
+                "EndpointDescription": "将这个 URL 作为 MCP server endpoint 使用。",
                 "Copy": "复制",
                 "Copied": "已复制",
-                "DeleteToken": "删除 token",
-                "TokensTitle": "个人访问 token",
-                "DefaultTokenName": "MCP Client",
-                "TokenNamePlaceholder": "Client 名称",
-                "CreateToken": "创建",
-                "TokenCreated": "Token 已创建。",
-                "TokenOnce": "现在复制这个个人 token。它之后不会再次显示。",
-                "NoTokens": "你还没有 MCP token。",
-                "LastUsedAt": "最后使用：{date}",
-                "RevokedAt": "已撤销：{date}",
                 "SetupTitle": "MCP 配置方法",
-                "SetupDescription": "这些 token 属于你的用户账号，请不要分享；当你被移出组织后，访问会自动失效。",
+                "SetupDescription": "桌面端 client 通过本地 endpoint 连接，不需要手动填写凭据。",
                 "SetupTabs": {
                     "General": "通用"
                 },
                 "General": {
                     "Endpoint": "Endpoint",
-                    "Authorization": "HTTP header",
                     "JsonTitle": "通用 JSON 配置"
                 },
                 "Codex": {
@@ -2993,7 +2978,7 @@
                     "CliTitle": "Claude Code CLI",
                     "JsonTitle": ".mcp.json"
                 },
-                "Refresh": "刷新"
+                "WebAuthorizationStatus": "Web MCP 授权稍后提供。现在可以使用桌面端本地 MCP。"
             }
         },
         "QueryClient": {

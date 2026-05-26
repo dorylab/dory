@@ -48,7 +48,7 @@ interface Window {
   };
   mcpBridge?: {
     getState: () => Promise<McpBridgeState>;
-    start: () => Promise<McpBridgeState>;
+    start: (desktopGrant: string) => Promise<McpBridgeState>;
     stop: () => Promise<McpBridgeState>;
   };
   logBridge?: {

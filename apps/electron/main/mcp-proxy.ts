@@ -12,6 +12,7 @@ export type McpProxyState = {
 
 type McpProxyStore = {
   enabled: boolean;
+  desktopGrant?: string;
 };
 
 type CreateMcpProxyManagerOptions = {
@@ -73,6 +74,7 @@ export function createMcpProxyManager({ log, logWarn, logError }: CreateMcpProxy
   function stop(options: { persist?: boolean } = {}): McpProxyState {
     if (options.persist !== false) {
       mcpProxyStore.set('enabled', false);
+      mcpProxyStore.delete('desktopGrant');
     }
 
     if (childProc && !childProc.killed) {
@@ -84,13 +86,21 @@ export function createMcpProxyManager({ log, logWarn, logError }: CreateMcpProxy
     return getState();
   }
 
-  async function start(targetUrl: string, options: { persist?: boolean } = {}): Promise<McpProxyState> {
+  async function start(targetUrl: string, desktopGrant?: string, options: { persist?: boolean } = {}): Promise<McpProxyState> {
     if (options.persist !== false) {
       mcpProxyStore.set('enabled', true);
+      if (desktopGrant) {
+        mcpProxyStore.set('desktopGrant', desktopGrant);
+      }
     }
 
     if (childProc && !childProc.killed && childProc.exitCode === null) {
       return getState();
+    }
+
+    const resolvedDesktopGrant = desktopGrant || mcpProxyStore.get('desktopGrant');
+    if (!resolvedDesktopGrant) {
+      throw new Error('MCP desktop grant is required.');
     }
 
     lastError = null;
@@ -108,6 +118,7 @@ export function createMcpProxyManager({ log, logWarn, logError }: CreateMcpProxy
         DORY_MCP_PROXY_HOST: DEFAULT_MCP_PROXY_HOST,
         DORY_MCP_PROXY_PORT: String(port),
         DORY_MCP_PROXY_TARGET_URL: targetUrl,
+        DORY_MCP_DESKTOP_GRANT: resolvedDesktopGrant,
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
