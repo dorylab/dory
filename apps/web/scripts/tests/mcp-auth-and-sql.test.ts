@@ -156,6 +156,7 @@ test('desktop MCP grants are signed, expire, and reject tampering', () => {
     });
     assert.equal(verifyMcpDesktopGrant(`${grant.slice(0, -1)}x`, { now: 2_000, secret }), null);
     assert.equal(verifyMcpDesktopGrant(grant, { now: 6_000, secret }), null);
+    assert.equal(verifyMcpDesktopGrant(grant, { now: 6_000, secret, ignoreExpiration: true })?.userId, 'owner-user');
 });
 
 test('desktop MCP grant auth context uses the signed user and organization', async () => {

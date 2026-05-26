@@ -224,7 +224,7 @@ export function issueMcpDesktopGrant({
     };
 }
 
-export function verifyMcpDesktopGrant(grant: string | null, { now = Date.now(), secret }: { now?: number; secret?: string } = {}) {
+export function verifyMcpDesktopGrant(grant: string | null, { now = Date.now(), secret, ignoreExpiration = false }: { now?: number; secret?: string; ignoreExpiration?: boolean } = {}) {
     if (!grant) return null;
     const [encodedPayload, signature, extra] = grant.split('.');
     if (!encodedPayload || !signature || extra) return null;
@@ -240,14 +240,14 @@ export function verifyMcpDesktopGrant(grant: string | null, { now = Date.now(), 
     }
 
     const payload = parseGrantPayload(parsed);
-    if (!payload || payload.exp <= now) return null;
+    if (!payload || (!ignoreExpiration && payload.exp <= now)) return null;
     return payload;
 }
 
-export async function buildMcpAuthContextForDesktopGrant(grant: string | null, deps: McpDesktopGrantAccessDeps = {}): Promise<McpTokenAccessResult> {
+export async function buildMcpAuthContextForDesktopGrant(grant: string | null, deps: McpDesktopGrantAccessDeps & { ignoreExpiration?: boolean } = {}): Promise<McpTokenAccessResult> {
     let payload: McpDesktopGrantPayload | null;
     try {
-        payload = verifyMcpDesktopGrant(grant, { now: deps.now, secret: deps.secret });
+        payload = verifyMcpDesktopGrant(grant, { now: deps.now, secret: deps.secret, ignoreExpiration: deps.ignoreExpiration });
     } catch {
         payload = null;
     }

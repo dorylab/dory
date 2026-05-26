@@ -13,11 +13,25 @@ type ParentMessage =
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 3318;
 const targetBaseUrl = readRequiredEnv('DORY_MCP_PROXY_TARGET_URL').replace(/\/$/, '');
-const desktopGrant = readRequiredEnv('DORY_MCP_DESKTOP_GRANT');
+let desktopGrant = readRequiredEnv('DORY_MCP_DESKTOP_GRANT');
 const host = process.env.DORY_MCP_PROXY_HOST?.trim() || DEFAULT_HOST;
 const port = parsePort(process.env.DORY_MCP_PROXY_PORT) ?? DEFAULT_PORT;
 const endpoint = `http://${host}:${port}/api/mcp`;
 const DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
+const GRANT_REFRESH_SKEW_MS = 5 * 60 * 1000;
+const GRANT_REFRESH_RETRY_MS = 60 * 1000;
+
+type RefreshPayload = {
+  code?: number;
+  data?: {
+    grant?: string;
+    expiresAt?: string;
+  };
+  message?: string;
+};
+
+let grantRefreshTimer: NodeJS.Timeout | null = null;
+let grantRefreshPromise: Promise<void> | null = null;
 
 function readRequiredEnv(name: string) {
   const value = process.env[name]?.trim();
@@ -39,6 +53,79 @@ function parsePort(value: string | undefined): number | null {
 function sendToParent(message: ParentMessage) {
   if (process.send) {
     process.send(message);
+  }
+}
+
+function readGrantExpiryMs(grant: string): number | null {
+  const [encodedPayload] = grant.split('.');
+  if (!encodedPayload) return null;
+
+  try {
+    const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')) as { exp?: unknown };
+    return typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function scheduleGrantRefresh(delayOverride?: number) {
+  if (grantRefreshTimer) {
+    clearTimeout(grantRefreshTimer);
+    grantRefreshTimer = null;
+  }
+
+  const expiresAt = readGrantExpiryMs(desktopGrant);
+  if (!expiresAt && typeof delayOverride !== 'number') return;
+
+  const delay = typeof delayOverride === 'number' ? delayOverride : Math.max(0, expiresAt! - Date.now() - GRANT_REFRESH_SKEW_MS);
+  grantRefreshTimer = setTimeout(() => {
+    void refreshDesktopGrant().catch(() => {
+      scheduleGrantRefresh(GRANT_REFRESH_RETRY_MS);
+    });
+  }, delay);
+}
+
+async function refreshDesktopGrant() {
+  if (grantRefreshPromise) {
+    return grantRefreshPromise;
+  }
+
+  grantRefreshPromise = (async () => {
+    const response = await fetch(`${targetBaseUrl}/api/mcp/desktop-grant/refresh`, {
+      method: 'POST',
+      headers: {
+        [DESKTOP_GRANT_HEADER]: desktopGrant,
+      },
+    });
+    const payload = (await response.json().catch(() => null)) as RefreshPayload | null;
+    const nextGrant = payload?.data?.grant;
+
+    if (!response.ok || payload?.code !== 0 || !nextGrant) {
+      throw new Error(payload?.message ?? 'Failed to refresh MCP desktop grant');
+    }
+
+    desktopGrant = nextGrant;
+    scheduleGrantRefresh();
+  })();
+
+  try {
+    await grantRefreshPromise;
+  } finally {
+    grantRefreshPromise = null;
+  }
+}
+
+async function ensureDesktopGrantFresh() {
+  const expiresAt = readGrantExpiryMs(desktopGrant);
+  if (!expiresAt) return;
+  if (expiresAt - Date.now() > GRANT_REFRESH_SKEW_MS) return;
+
+  try {
+    await refreshDesktopGrant();
+  } catch {
+    if (expiresAt <= Date.now()) {
+      throw new Error('MCP desktop grant expired and could not be refreshed.');
+    }
   }
 }
 
@@ -94,6 +181,7 @@ function writeProxyResponse(res: http.ServerResponse, upstream: Response) {
 }
 
 async function proxyMcpRequest(req: http.IncomingMessage, res: http.ServerResponse) {
+  await ensureDesktopGrantFresh();
   const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readRequestBody(req);
   const upstream = await fetch(`${targetBaseUrl}/api/mcp`, {
     method: req.method,
@@ -143,6 +231,7 @@ server.on('error', error => {
 });
 
 server.listen(port, host, () => {
+  scheduleGrantRefresh();
   sendToParent({
     type: 'ready',
     endpoint,
@@ -150,5 +239,8 @@ server.listen(port, host, () => {
 });
 
 process.on('SIGTERM', () => {
+  if (grantRefreshTimer) {
+    clearTimeout(grantRefreshTimer);
+  }
   server.close(() => process.exit(0));
 });

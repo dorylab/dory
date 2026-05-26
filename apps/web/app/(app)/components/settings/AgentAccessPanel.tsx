@@ -9,6 +9,7 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { authClient } from '@/lib/auth-client';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { SettingsRow } from './SettingsRow';
 
@@ -43,9 +44,10 @@ export function AgentAccessPanel() {
     const [loading, setLoading] = useState(true);
     const [proxyBusy, setProxyBusy] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const { data: session } = authClient.useSession();
+    const userId = session?.user?.id ?? null;
     const isDesktop = isDesktopRuntime();
-    const desktopMcpReady = isDesktop && Boolean(mcpProxy?.enabled && mcpProxy.running && mcpProxy.endpoint);
-    const effectiveEndpoint = desktopMcpReady ? mcpProxy?.endpoint : undefined;
+    const effectiveEndpoint = isDesktop ? (mcpProxy?.endpoint ?? settings?.endpoint) : undefined;
 
     const setupSnippets = useMemo(() => {
         if (!effectiveEndpoint) return '';
@@ -92,10 +94,10 @@ export function AgentAccessPanel() {
             return null;
         }
 
-        const state = await window.mcpBridge.getState();
+        const state = await window.mcpBridge.getState(userId ?? undefined);
         setMcpProxy(state);
         return state;
-    }, [isDesktop]);
+    }, [isDesktop, userId]);
 
     const loadSettings = useCallback(async () => {
         setLoading(true);
@@ -129,6 +131,10 @@ export function AgentAccessPanel() {
 
     const toggleMcpProxy = async (enabled: boolean) => {
         if (typeof window === 'undefined' || !window.mcpBridge) return;
+        if (!userId) {
+            setMessage({ type: 'error', text: t('ProxyStartFailed') });
+            return;
+        }
         setProxyBusy(true);
         setMessage(null);
         try {
@@ -141,8 +147,9 @@ export function AgentAccessPanel() {
                               }),
                           )
                       ).grant,
+                      userId,
                   )
-                : await window.mcpBridge.stop();
+                : await window.mcpBridge.stop(userId);
             setMcpProxy(state);
             if (state.error) {
                 setMessage({ type: 'error', text: state.error });
@@ -176,7 +183,7 @@ export function AgentAccessPanel() {
                         {mcpProxy ? (
                             <Switch
                                 checked={mcpProxy.enabled}
-                                disabled={proxyBusy || loading || typeof window === 'undefined' || !window.mcpBridge}
+                                disabled={proxyBusy || loading || !userId || typeof window === 'undefined' || !window.mcpBridge}
                                 onCheckedChange={checked => {
                                     void toggleMcpProxy(checked);
                                 }}

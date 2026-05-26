@@ -47,9 +47,10 @@ interface Window {
     onStateChanged: (callback: (state: UpdateBridgeState) => void) => () => void;
   };
   mcpBridge?: {
-    getState: () => Promise<McpBridgeState>;
-    start: (desktopGrant: string) => Promise<McpBridgeState>;
-    stop: () => Promise<McpBridgeState>;
+    getState: (userId?: string) => Promise<McpBridgeState>;
+    start: (desktopGrant: string, userId: string) => Promise<McpBridgeState>;
+    stop: (userId?: string) => Promise<McpBridgeState>;
+    stopActive: () => Promise<McpBridgeState>;
   };
   logBridge?: {
     log: (level: 'info' | 'warn' | 'error', ...args: unknown[]) => void;
