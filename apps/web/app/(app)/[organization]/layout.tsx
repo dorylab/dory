@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import type React from 'react';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
+import { isBillingManagementAvailableForServer, isBillingSettingsVisibleForServer, isDesktopBillingHandoffRuntimeForServer } from '@dory/shared/runtime';
 import { OrganizationAppShell } from './components/organization-app-shell';
 
 export default async function TeamLayout({ children, params }: { children: React.ReactNode; params: Promise<{ organization: string }> }) {
@@ -56,6 +57,9 @@ export default async function TeamLayout({ children, params }: { children: React
             organizationId={organization.id}
             isOffline={bootstrap.isOffline}
             canUseCloudFeatures={bootstrap.canUseCloudFeatures}
+            billingSettingsVisible={isBillingSettingsVisibleForServer()}
+            billingManagementAvailable={isBillingManagementAvailableForServer()}
+            desktopBillingHandoff={isDesktopBillingHandoffRuntimeForServer()}
         >
             {children}
         </OrganizationAppShell>

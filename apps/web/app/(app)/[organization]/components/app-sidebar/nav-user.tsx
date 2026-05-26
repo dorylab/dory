@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { IconDotsVertical, IconLogin2, IconLogout, IconSettings } from '@tabler/icons-react';
+import { IconDotsVertical, IconLogin2, IconLogout } from '@tabler/icons-react';
 import { Avatar, AvatarImage } from '@/registry/new-york-v4/ui/avatar';
 import BoringAvatar from 'boring-avatars';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
@@ -14,7 +14,6 @@ import { AuthLinkSheet } from '@/components/auth/auth-link-sheet';
 import { User } from 'better-auth';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { getOrganizationBillingStatus } from '@/lib/billing/api';
-import { getOrganizationAccess } from '@/lib/organization/api';
 import { cn } from '@dory/web-utils';
 
 function PlanBadge({ label, plan }: { label: string; plan: 'hobby' | 'pro' }) {
@@ -33,9 +32,7 @@ function PlanBadge({ label, plan }: { label: string; plan: 'hobby' | 'pro' }) {
 export function NavUser({ user, organizationId }: { user: User | null; organizationId: string }) {
     const { isMobile, state } = useSidebar();
     const pathname = usePathname();
-    const router = useRouter();
     const searchParams = useSearchParams();
-    const params = useParams<{ organization: string }>();
     const t = useTranslations('AppSidebar');
     const planT = useTranslations('OrganizationSettings.Billing.Plan');
     const collapsed = state === 'collapsed';
@@ -52,13 +49,6 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
 
     const displayName = isAnonymous ? t('GuestSession.Name') : user?.name;
     const displaySubtitle = isAnonymous ? t('GuestSession.Subtitle') : user?.email;
-    const organizationSlug = params.organization;
-    const organizationAccessQuery = useQuery({
-        queryKey: ['organization-access', organizationSlug, user?.id ?? 'anonymous'],
-        queryFn: () => getOrganizationAccess(),
-        enabled: !isAnonymous,
-        retry: false,
-    });
     const billingStatusQuery = useQuery({
         queryKey: ['organization-billing', organizationId],
         queryFn: () => getOrganizationBillingStatus(organizationId),
@@ -66,7 +56,6 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
         retry: false,
         staleTime: 60_000,
     });
-    const canManageOrganization = Boolean(organizationAccessQuery.data?.permissions.organization.update);
     const plan = billingStatusQuery.data?.plan ?? null;
     const planLabel = plan === 'pro' ? planT('Pro') : plan === 'hobby' ? planT('Hobby') : null;
 
@@ -119,17 +108,6 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
                 >
                     <IconLogin2 />
                     {t('GuestSession.SignIn')}
-                </DropdownMenuItem>
-            ) : null}
-            {canManageOrganization ? (
-                <DropdownMenuItem
-                    onSelect={() => {
-                        setMenuOpen(false);
-                        router.push(`/${organizationSlug}/settings/organization`);
-                    }}
-                >
-                    <IconSettings />
-                    {t('OrganizationSetting')}
                 </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem

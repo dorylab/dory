@@ -2834,7 +2834,27 @@
             "Title": "设置",
             "Description": "应用设置",
             "SearchPlaceholder": "搜索设置",
+            "Groups": {
+                "Person": "个人",
+                "Workspace": "工作区",
+                "About": "关于"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "组织",
+                    "Title": "组织",
+                    "Description": "不离开当前工作流即可管理这个工作区。"
+                },
+                "Ai": {
+                    "Label": "AI",
+                    "Title": "AI 配置",
+                    "Description": "配置当前组织可使用的 AI 模型与 Provider。"
+                },
+                "Billing": {
+                    "Label": "套餐与订阅",
+                    "Title": "套餐与订阅",
+                    "Description": "查看当前套餐和账单选项。"
+                },
                 "Appearance": {
                     "Label": "外观",
                     "Title": "主题与外观",

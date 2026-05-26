@@ -2830,7 +2830,27 @@
             "Title": "Configuración",
             "Description": "Configuración de la aplicación",
             "SearchPlaceholder": "Buscar ajustes",
+            "Groups": {
+                "Person": "Persona",
+                "Workspace": "Espacio de trabajo",
+                "About": "Acerca de"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "Organización",
+                    "Title": "Organización",
+                    "Description": "Administra este espacio de trabajo sin salir de tu flujo actual."
+                },
+                "Ai": {
+                    "Label": "IA",
+                    "Title": "Configuración de IA",
+                    "Description": "Configura los modelos disponibles para esta organización."
+                },
+                "Billing": {
+                    "Label": "Planes y suscripciones",
+                    "Title": "Planes y suscripciones",
+                    "Description": "Revisa el plan actual y las opciones de facturación."
+                },
                 "Appearance": {
                     "Label": "Apariencia",
                     "Title": "Tema y apariencia",

@@ -2830,7 +2830,27 @@
             "Title": "設定",
             "Description": "アプリ設定",
             "SearchPlaceholder": "設定を検索",
+            "Groups": {
+                "Person": "個人",
+                "Workspace": "ワークスペース",
+                "About": "情報"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "組織",
+                    "Title": "組織",
+                    "Description": "現在の作業を離れずにこのワークスペースを管理します。"
+                },
+                "Ai": {
+                    "Label": "AI",
+                    "Title": "AI 設定",
+                    "Description": "この組織で利用できるモデルを設定します。"
+                },
+                "Billing": {
+                    "Label": "プランとサブスクリプション",
+                    "Title": "プランとサブスクリプション",
+                    "Description": "現在のプランと請求オプションを確認します。"
+                },
                 "Appearance": {
                     "Label": "外観",
                     "Title": "テーマと外観",

@@ -13,6 +13,9 @@ export function OrganizationAppShell({
     organizationId,
     isOffline,
     canUseCloudFeatures,
+    billingSettingsVisible,
+    billingManagementAvailable,
+    desktopBillingHandoff,
 }: {
     children: React.ReactNode;
     defaultOpen: boolean;
@@ -20,10 +23,18 @@ export function OrganizationAppShell({
     organizationId: string;
     isOffline: boolean;
     canUseCloudFeatures: boolean;
+    billingSettingsVisible: boolean;
+    billingManagementAvailable: boolean;
+    desktopBillingHandoff: boolean;
 }) {
     return (
         <AppCapabilitiesProvider value={{ isOffline, canUseCloudFeatures }}>
-            <SettingsProvider>
+            <SettingsProvider
+                includeOrganizationSettings
+                includeBillingSettings={billingSettingsVisible}
+                billingManagementAvailable={billingManagementAvailable}
+                desktopBillingHandoff={desktopBillingHandoff}
+            >
                 <div className="flex h-screen min-h-0 flex-col overflow-hidden">
                     <SidebarProvider
                         className="flex-1 !min-h-0"

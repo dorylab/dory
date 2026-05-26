@@ -2791,7 +2791,27 @@
             "Title": "Settings",
             "Description": "Application settings",
             "SearchPlaceholder": "Search settings",
+            "Groups": {
+                "Person": "Person",
+                "Workspace": "Workspace",
+                "About": "About"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "Organization",
+                    "Title": "Organization",
+                    "Description": "Manage this workspace without leaving your current flow."
+                },
+                "Ai": {
+                    "Label": "AI",
+                    "Title": "AI Configuration",
+                    "Description": "Configure the models available to this organization."
+                },
+                "Billing": {
+                    "Label": "Plans & subscriptions",
+                    "Title": "Plans & subscriptions",
+                    "Description": "Review the current plan and billing options."
+                },
                 "Appearance": {
                     "Label": "Appearance",
                     "Title": "Theme & Appearance",

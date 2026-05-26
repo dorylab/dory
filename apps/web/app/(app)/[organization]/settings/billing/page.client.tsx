@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Check, ExternalLink, RefreshCw } from 'lucide-react';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
+import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { getOrganizationBillingStatus, openOrganizationBillingPortal, upgradeOrganizationToPro } from '@/lib/billing/api';
 import { getOrganizationAccess, getFullOrganization } from '@/lib/organization/api';
 
@@ -30,10 +31,19 @@ function formatDate(value: string | null, fallback: string) {
     });
 }
 
-type BillingSettingsPageClientProps = {
+export type BillingSettingsPageClientProps = {
     billingManagementAvailable: boolean;
     desktopBillingHandoff: boolean;
 };
+
+function PlanFeatureSkeleton() {
+    return (
+        <li className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className="h-4 w-52" />
+        </li>
+    );
+}
 
 export default function BillingSettingsPageClient({ billingManagementAvailable, desktopBillingHandoff }: BillingSettingsPageClientProps) {
     const params = useParams<{ organization: string }>();
@@ -198,10 +208,25 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
                         <div className="absolute right-4 top-4 inline-flex h-5 items-center rounded-full border border-sidebar-border bg-background px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                             {t('CurrentPlan')}
                         </div>
-                        <div className="mt-2 text-2xl font-semibold">{isLoading ? t('Loading') : currentPlanTitle}</div>
-                        <div className="mt-1 text-sm text-muted-foreground">{isLoading ? null : currentPlanPrice}</div>
+                        {isLoading ? (
+                            <div className="mt-2 space-y-2">
+                                <Skeleton className="h-8 w-28" />
+                                <Skeleton className="h-4 w-20" />
+                            </div>
+                        ) : (
+                            <>
+                                <div className="mt-2 text-2xl font-semibold">{currentPlanTitle}</div>
+                                <div className="mt-1 text-sm text-muted-foreground">{currentPlanPrice}</div>
+                            </>
+                        )}
 
-                        {!isLoading && !billingStatusQuery.isError ? (
+                        {isLoading ? (
+                            <ul className="mt-4 space-y-3">
+                                <PlanFeatureSkeleton />
+                                <PlanFeatureSkeleton />
+                                <PlanFeatureSkeleton />
+                            </ul>
+                        ) : !billingStatusQuery.isError ? (
                             <ul className="mt-4 space-y-3 text-sm">
                                 {(isProPlan ? proFeatures : hobbyFeatures).map(feature => (
                                     <li key={feature} className="flex items-center gap-2">

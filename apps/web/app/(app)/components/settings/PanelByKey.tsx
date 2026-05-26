@@ -1,3 +1,6 @@
+'use client';
+
+import dynamic from 'next/dynamic';
 import type { CategoryKey } from './types';
 import { AppearancePanel } from './AppearancePanel/AppearancePanel';
 import { EditorPanel } from './EditorPanel/EditorPanel';
@@ -7,9 +10,32 @@ import { ShortcutsPanel } from './ShortcutsPanel';
 import { SecurityPanel } from './SecurityPanel';
 import { AboutPanel } from './AboutPanel';
 import { AgentAccessPanel } from './AgentAccessPanel';
+import type { AISettingsPageClientProps } from '../../[organization]/settings/ai/page.client';
+import type { BillingSettingsPageClientProps } from '../../[organization]/settings/billing/page.client';
+import { OrganizationPanel } from './OrganizationPanel';
+import { useSettings } from './settings-provider';
 
-export function PanelByKey({ keyName }: { keyName: CategoryKey }) {
+const AISettingsPageClient = dynamic<AISettingsPageClientProps>(() => import('../../[organization]/settings/ai/page.client'));
+const BillingSettingsPageClient = dynamic<BillingSettingsPageClientProps>(() => import('../../[organization]/settings/billing/page.client'));
+
+export function PanelByKey({
+    keyName,
+    billingManagementAvailable,
+    desktopBillingHandoff,
+}: {
+    keyName: CategoryKey;
+    billingManagementAvailable: boolean;
+    desktopBillingHandoff: boolean;
+}) {
+    const { openSettings } = useSettings();
+
     switch (keyName) {
+        case 'organization':
+            return <OrganizationPanel />;
+        case 'ai':
+            return <AISettingsPageClient onOpenBillingSettings={() => openSettings('billing')} />;
+        case 'billing':
+            return <BillingSettingsPageClient billingManagementAvailable={billingManagementAvailable} desktopBillingHandoff={desktopBillingHandoff} />;
         case 'appearance':
             return <AppearancePanel />;
         case 'editor':

@@ -1,17 +1,26 @@
 'use client';
 
+import type { ElementType } from 'react';
 import { useTranslations } from 'next-intl';
 import { MonitorCog } from 'lucide-react';
 import { DialogTitle, DialogDescription } from '@/registry/new-york-v4/ui/dialog';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
 import type { CategoryKey } from './types';
-import { getCategories } from './types';
 import { PanelByKey } from './PanelByKey';
 
-export function SettingsContent({ active }: { active: CategoryKey }) {
+export function SettingsContent({
+    active,
+    categories,
+    billingManagementAvailable,
+    desktopBillingHandoff,
+}: {
+    active: CategoryKey;
+    categories: Array<{ key: CategoryKey; icon: ElementType; title: string; description?: string }>;
+    billingManagementAvailable: boolean;
+    desktopBillingHandoff: boolean;
+}) {
     const t = useTranslations('DoryUI.Settings');
-    const categories = getCategories(t);
     const meta = categories.find(category => category.key === active);
     const TitleIcon = meta?.icon ?? MonitorCog;
 
@@ -27,7 +36,7 @@ export function SettingsContent({ active }: { active: CategoryKey }) {
             <Separator className="my-4 shrink-0" />
             <ScrollArea className="h-0 min-h-0 flex-1">
                 <div className="px-6 pb-6">
-                    <PanelByKey keyName={active} />
+                    <PanelByKey keyName={active} billingManagementAvailable={billingManagementAvailable} desktopBillingHandoff={desktopBillingHandoff} />
                 </div>
             </ScrollArea>
         </section>
