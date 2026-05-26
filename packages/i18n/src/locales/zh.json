@@ -3325,7 +3325,8 @@
                     "AiQuotaIncluded": "包含 AI 额度",
                     "SavePersonalQueries": "保存个人查询",
                     "CommunitySupport": "社区支持"
-                }
+                },
+                "LimitedTimeUnlimitedAlert": "限时期间，Hobby 可无限制使用这些能力。"
             },
             "Pro": {
                 "Title": "Pro（建议）",
@@ -3333,7 +3334,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "无限数据库连接",
                     "HigherAiQuotaAndFasterResponses": "更高的 AI 额度和更快的响应",
-                    "ByokAiFeatures": "使用自己的 AI Key，连接自定义模型",
+                    "ByokAiFeatures": "BYOK（使用自己的 AI Key）",
                     "EarlyAccessToUpcomingFeatures": "优先体验即将推出的功能",
                     "AdvancedChartsAndExports": "高级图表与导出",
                     "PrioritySupport": "优先支持"

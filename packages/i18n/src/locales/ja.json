@@ -3321,7 +3321,8 @@
                     "AiQuotaIncluded": "AI クォータ込み",
                     "SavePersonalQueries": "個人用クエリを保存",
                     "CommunitySupport": "コミュニティサポート"
-                }
+                },
+                "LimitedTimeUnlimitedAlert": "期間限定で、Hobby ではこれらの機能を無制限に利用できます。"
             },
             "Pro": {
                 "Title": "Pro（おすすめ）",
@@ -3329,7 +3330,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "無制限のデータベース接続",
                     "HigherAiQuotaAndFasterResponses": "より高い AI クォータと高速な応答",
-                    "ByokAiFeatures": "Use your own AI key to connect custom models",
+                    "ByokAiFeatures": "BYOK (Use your own AI key)",
                     "EarlyAccessToUpcomingFeatures": "近日公開機能への先行アクセス",
                     "AdvancedChartsAndExports": "高度なチャートとエクスポート",
                     "PrioritySupport": "優先サポート"
