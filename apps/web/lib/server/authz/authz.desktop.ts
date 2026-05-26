@@ -1,8 +1,6 @@
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getSessionFromRequest } from '@/lib/auth/session';
-import { persistDesktopCloudSessionSnapshot } from '@/lib/auth/desktop-session-recovery';
 import { fetchDesktopCloud } from '@/lib/server/desktop-cloud';
-import { resolveLocalOrganizationAccess } from './authz.local';
 import {
     finalizeDesktopOrganizationAccessResult,
     type CloudOrganizationAccessAttempt,
@@ -112,27 +110,7 @@ export async function resolveDesktopOrganizationAccessResult(organizationId: str
     });
 
     const resultPromise = (async () => {
-        const localAccess = await resolveLocalOrganizationAccess(organizationId, userId).catch(() => null);
-        if (localAccess?.isMember) {
-            return finalizeDesktopOrganizationAccessResult({
-                organizationId,
-                userId,
-                sessionUserId,
-                activeOrganizationId,
-                cloudAttempt: { status: 'not_configured' },
-                localAccess,
-            });
-        }
-
         const cloudAttempt = await fetchCloudOrganizationAccess(organizationId);
-        if (cloudAttempt.status === 'granted' && session?.user?.id) {
-            await persistDesktopCloudSessionSnapshot({
-                cloudSession: session,
-                access: cloudAttempt.access,
-            }).catch(error => {
-                console.warn('[desktop-session] failed to persist cloud access snapshot:', error);
-            });
-        }
 
         return finalizeDesktopOrganizationAccessResult({
             organizationId,
@@ -140,7 +118,6 @@ export async function resolveDesktopOrganizationAccessResult(organizationId: str
             sessionUserId,
             activeOrganizationId,
             cloudAttempt,
-            localAccess,
         });
     })();
 

@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter } from 'next/navigation';
 
 import { authClient } from '@/lib/auth-client';
 import { isDesktopRuntime } from '@dory/shared/runtime';
@@ -23,53 +22,9 @@ async function issueMcpDesktopGrant(): Promise<string> {
 }
 
 export function SessionRecoverySync() {
-    const router = useRouter();
     const { data: session } = authClient.useSession();
-    const syncInFlightRef = React.useRef(false);
     const mcpSyncRunIdRef = React.useRef(0);
     const previousUserIdRef = React.useRef<string | null | undefined>(undefined);
-
-    React.useEffect(() => {
-        if (!isDesktopRuntime()) {
-            return;
-        }
-
-        let disposed = false;
-
-        const syncSession = async () => {
-            if (disposed || syncInFlightRef.current || !navigator.onLine) {
-                return;
-            }
-
-            syncInFlightRef.current = true;
-            try {
-                const response = await fetch('/api/auth/get-session', {
-                    credentials: 'include',
-                    cache: 'no-store',
-                });
-
-                if (!disposed && response.ok) {
-                    router.refresh();
-                }
-            } catch {
-                // Ignore transient reconnect failures.
-            } finally {
-                syncInFlightRef.current = false;
-            }
-        };
-
-        void syncSession();
-
-        const handleOnline = () => {
-            void syncSession();
-        };
-
-        window.addEventListener('online', handleOnline);
-        return () => {
-            disposed = true;
-            window.removeEventListener('online', handleOnline);
-        };
-    }, [router]);
 
     React.useEffect(() => {
         if (!isDesktopRuntime() || typeof window === 'undefined' || !window.mcpBridge) {

@@ -1,6 +1,5 @@
 import { getAuth } from '@/lib/auth';
 import { proxyAuthRequest } from '@/lib/auth/auth-proxy';
-import { mirrorCloudSessionToDesktop } from '@/lib/auth/desktop-session-recovery';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { NextResponse } from 'next/server';
 
@@ -47,39 +46,9 @@ function rewriteSetCookie(value: string, isSecureRequest: boolean): string {
     return [rewrittenNameValue, ...rewritten].join('; ');
 }
 
-async function tryMirrorDesktopSession(req: Request, response: Response) {
-    if (!response.ok) {
-        return null;
-    }
-
-    try {
-        return await mirrorCloudSessionToDesktop(req, response.headers);
-    } catch (error) {
-        console.warn('[electron-auth][email-sign-in] cloud sign-in succeeded but local desktop session mirror failed', error);
-        return null;
-    }
-}
-
 export async function POST(req: Request) {
     if (isDesktopRuntime()) {
-        const response = await proxyAuthRequest(req);
-        const mirror = await tryMirrorDesktopSession(req, response);
-        if (!mirror) {
-            if (!response.ok) {
-                return response;
-            }
-
-            console.warn('[electron-auth][email-sign-in] cloud sign-in succeeded without local desktop session mirror');
-            return response;
-        }
-
-        const headers = new Headers(response.headers);
-        headers.append('set-cookie', mirror.cookie);
-        return new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers,
-        });
+        return proxyAuthRequest(req);
     }
 
     // Non-desktop runtime is the cloud/server side of this endpoint. Desktop

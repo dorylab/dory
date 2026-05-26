@@ -1,5 +1,4 @@
 import { getAuth } from '@/lib/auth';
-import { mirrorCloudSessionToDesktop } from '@/lib/auth/desktop-session-recovery';
 import { buildSessionOrganizationPatch } from '@/lib/auth/migration-state';
 import { linkAnonymousOrganizationToUser } from '@/lib/auth/anonymous-lifecycle/link';
 import { serializeSignedCookie } from 'better-call';
@@ -162,41 +161,12 @@ export async function POST(req: Request) {
         });
 
         const response = await proxyAuthRequest(proxyReq);
-        let mirror = null;
-        if (response.ok) {
-            try {
-                mirror = await mirrorCloudSessionToDesktop(req, response.headers);
-            } catch (error) {
-                console.warn('[electron-auth][consume] cloud consume succeeded but local desktop session mirror failed', error);
-            }
-        }
 
         console.log('[electron-auth][consume] proxy response', {
             status: response.status,
-            hasMirror: Boolean(mirror),
         });
 
-        // Migrate local anonymous user's org/connections to the new user
-        if (mirror && anonymousUserId && mirror.userId !== anonymousUserId) {
-            await linkAnonymousUserLocally({
-                anonymousUserId,
-                anonymousActiveOrganizationId: anonymousActiveOrganizationId ?? null,
-                newUserId: mirror.userId,
-                newActiveOrganizationId: mirror.activeOrganizationId,
-            });
-        }
-
-        if (!mirror) {
-            return response;
-        }
-
-        const headers = new Headers(response.headers);
-        headers.append('set-cookie', mirror.cookie);
-        return new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers,
-        });
+        return response;
     }
 
     const body = bodySchemaWithAnonymous.parse(await req.json().catch(() => ({})));

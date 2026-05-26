@@ -1,7 +1,6 @@
 import { headers } from 'next/headers';
 import { createAuthProxyHeaders } from '@/lib/auth/auth-proxy';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
-import { getDesktopCloudStateFromFlags } from '@/lib/runtime/cloud-capabilities';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 
 export type DesktopCloudState = 'available' | 'not_configured' | 'unreachable';
@@ -17,8 +16,6 @@ export type DesktopCloudResponse =
           response: null;
           baseUrl: string | null;
       };
-
-export { getDesktopCloudStateFromFlags } from '@/lib/runtime/cloud-capabilities';
 
 export async function fetchDesktopCloud(pathname: string, init: RequestInit = {}): Promise<DesktopCloudResponse> {
     if (getRuntimeForServer() !== 'desktop') {

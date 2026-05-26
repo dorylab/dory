@@ -14,7 +14,6 @@ type OrganizationSummary = {
 
 export type OrganizationResolutionState = {
     organization: OrganizationSummary | null;
-    isOffline: boolean;
 };
 
 function toOrganizationSummary(organization: { id: string; slug?: string | null; name?: string | null } | null, fallbackId?: string | null): OrganizationSummary | null {
@@ -90,7 +89,6 @@ export async function getOrganizationBySlugOrIdState(slugOrId: string, userId: s
         if (!currentOrganizationId) {
             return {
                 organization: null,
-                isOffline: false,
             };
         }
 
@@ -98,7 +96,6 @@ export async function getOrganizationBySlugOrIdState(slugOrId: string, userId: s
         if (!accessResult.access?.isMember) {
             return {
                 organization: null,
-                isOffline: accessResult.isOffline,
             };
         }
 
@@ -107,54 +104,22 @@ export async function getOrganizationBySlugOrIdState(slugOrId: string, userId: s
             if (slugOrId !== resolvedOrganization?.id && slugOrId !== resolvedOrganization?.slug) {
                 return {
                     organization: null,
-                    isOffline: false,
                 };
             }
 
             return {
                 organization: resolvedOrganization,
-                isOffline: false,
             };
         }
-
-        const localOrganization = await getLocalOrganizationSummaryBySlugOrId(slugOrId, userId).catch(() => null);
-        if (localOrganization && currentOrganizationId === localOrganization.id) {
-            return {
-                organization: localOrganization,
-                isOffline: accessResult.isOffline,
-            };
-        }
-
-        const sessionOrganization = toOrganizationSummary(accessResult.access.organization, currentOrganizationId);
-        if (slugOrId !== sessionOrganization?.id && slugOrId !== sessionOrganization?.slug) {
-            return {
-                organization: null,
-                isOffline: accessResult.isOffline,
-            };
-        }
-
-        return {
-            organization: sessionOrganization,
-            isOffline: accessResult.isOffline,
-        };
     }
 
     return {
         organization: await getLocalOrganizationSummaryBySlugOrId(slugOrId, userId),
-        isOffline: false,
     };
 }
 
 export async function getFirstOrganizationForUserState(userId: string): Promise<OrganizationResolutionState> {
     if (shouldProxyAuthRequest()) {
-        const localOrganization = await getLocalOrganizationSummaryByUser(userId).catch(() => null);
-        if (localOrganization) {
-            return {
-                organization: localOrganization,
-                isOffline: false,
-            };
-        }
-
         const cloudResponse = await fetchDesktopCloud('/api/auth/organization/list');
         if (cloudResponse.state === 'available') {
             const organizations = (await cloudResponse.response.json().catch(() => null)) as Array<{ id: string; slug: string; name: string }> | null;
@@ -166,25 +131,21 @@ export async function getFirstOrganizationForUserState(userId: string): Promise<
                         slug: firstOrganization.slug ?? firstOrganization.id,
                         name: firstOrganization.name,
                     },
-                    isOffline: false,
                 };
             }
 
             return {
                 organization: null,
-                isOffline: false,
             };
         }
 
         return {
             organization: null,
-            isOffline: cloudResponse.state === 'unreachable',
         };
     }
 
     return {
         organization: await getLocalOrganizationSummaryByUser(userId),
-        isOffline: false,
     };
 }
 

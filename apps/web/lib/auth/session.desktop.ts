@@ -5,8 +5,6 @@ import { createSessionResolver } from '@dory/auth-core';
 
 import { getAuth } from '../auth';
 import { createAuthProxyHeaders, shouldProxyAuthRequest } from './auth-proxy.desktop';
-import { readDesktopSessionRecoveryPayload, resolveDesktopRecoveredSession } from './desktop-session-recovery';
-import { resolveDesktopSessionFromHeaders } from './session-resolution';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 
@@ -19,34 +17,9 @@ const resolveSession = createSessionResolver({
 });
 
 async function resolveSessionFromHeaders(reqHeaders: Headers, url: string | null) {
-    return resolveDesktopSessionFromHeaders({
+    return resolveSession({
         headers: reqHeaders,
         url,
-        fallbacks: {
-            getLocalSession: async headers =>
-                getAuth()
-                    .then(auth =>
-                        auth.api
-                            .getSession({
-                                headers,
-                            })
-                            .catch(() => null),
-                    )
-                    .catch(() => null),
-            getRecoveredSession: async headers => {
-                const recoveryPayload = await readDesktopSessionRecoveryPayload(headers);
-                if (!recoveryPayload?.userId) {
-                    return null;
-                }
-
-                return resolveDesktopRecoveredSession(headers);
-            },
-            getCloudSession: async headers =>
-                resolveSession({
-                    headers,
-                    url,
-                }),
-        },
     });
 }
 
