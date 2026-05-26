@@ -44,7 +44,8 @@ export function AgentAccessPanel() {
     const [proxyBusy, setProxyBusy] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const isDesktop = isDesktopRuntime();
-    const effectiveEndpoint = isDesktop && mcpProxy?.endpoint ? mcpProxy.endpoint : settings?.endpoint;
+    const desktopMcpReady = isDesktop && Boolean(mcpProxy?.enabled && mcpProxy.running && mcpProxy.endpoint);
+    const effectiveEndpoint = desktopMcpReady ? mcpProxy?.endpoint : undefined;
 
     const setupSnippets = useMemo(() => {
         if (!effectiveEndpoint) return '';
@@ -190,27 +191,6 @@ export function AgentAccessPanel() {
                     ) : null}
                 </div>
             ) : null}
-
-            <div className="space-y-1.5">
-                <SettingsRow label={t('EndpointLabel')} description={t('EndpointDescription')}>
-                    <CopyButton
-                        text={effectiveEndpoint ?? ''}
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        disabled={!effectiveEndpoint}
-                        aria-label={t('Copy')}
-                        title={t('Copy')}
-                        label={copyLabel}
-                        copiedLabel={copiedLabel}
-                    />
-                </SettingsRow>
-                {isInitialLoading ? (
-                    <Skeleton className="h-9 w-full" />
-                ) : effectiveEndpoint ? (
-                    <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{effectiveEndpoint}</pre>
-                ) : null}
-            </div>
 
             {isInitialLoading ? (
                 <div className="space-y-3">

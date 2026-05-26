@@ -2837,7 +2837,7 @@
                 "AgentAccess": {
                     "Label": "MCP",
                     "Title": "MCP",
-                    "Description": "個人用 MCP トークンで信頼済みエージェントを Dory に接続します。"
+                    "Description": "Codex、Claude Code、その他の Agent 向けにローカル MCP エンドポイントを公開します。"
                 }
             },
             "Appearance": {
@@ -2950,12 +2950,10 @@
             "AgentAccess": {
                 "Loading": "MCP 設定を読み込んでいます...",
                 "LoadFailed": "MCP 設定の読み込みに失敗しました。",
-                "ProxyLabel": "ローカル MCP エンドポイント",
-                "ProxyDescription": "デスクトップクライアント向けに固定の localhost MCP エンドポイントを起動します。",
+                "ProxyLabel": "有効化",
+                "ProxyDescription": "Agent クライアントが Dory に接続できるようにします。",
                 "ProxyStopped": "ローカル MCP エンドポイントは有効ですが実行されていません。",
                 "ProxyStartFailed": "ローカル MCP エンドポイントの更新に失敗しました。",
-                "EndpointLabel": "エンドポイント",
-                "EndpointDescription": "この URL を MCP server endpoint として使用します。",
                 "Copy": "コピー",
                 "Copied": "コピー済み",
                 "SetupTitle": "MCP セットアップ",

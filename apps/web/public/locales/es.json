@@ -2837,7 +2837,7 @@
                 "AgentAccess": {
                     "Label": "MCP",
                     "Title": "MCP",
-                    "Description": "Conecta agentes de confianza a Dory con tus tokens MCP personales."
+                    "Description": "Expón un endpoint MCP local para Codex, Claude Code y otros agentes."
                 }
             },
             "Appearance": {
@@ -2950,12 +2950,10 @@
             "AgentAccess": {
                 "Loading": "Cargando ajustes de MCP...",
                 "LoadFailed": "No se pudieron cargar los ajustes de MCP.",
-                "ProxyLabel": "Endpoint MCP local",
-                "ProxyDescription": "Ejecuta un endpoint MCP localhost fijo para clientes de escritorio.",
+                "ProxyLabel": "Activar",
+                "ProxyDescription": "Permite que los clientes de agente se conecten a Dory.",
                 "ProxyStopped": "El endpoint MCP local está habilitado, pero no se está ejecutando.",
                 "ProxyStartFailed": "No se pudo actualizar el endpoint MCP local.",
-                "EndpointLabel": "Endpoint",
-                "EndpointDescription": "Usa esta URL como endpoint del servidor MCP.",
                 "Copy": "Copiar",
                 "Copied": "Copiado",
                 "SetupTitle": "Configuración de MCP",

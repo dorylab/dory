@@ -1,5 +1,5 @@
 import type { ElementType } from 'react';
-import { Palette, Info, Code, Database, Bot, BadgeCheck, Building2 } from 'lucide-react';
+import { Palette, Info, Code, Database, Bot, BadgeCheck, Building2, Cable } from 'lucide-react';
 
 export type CategoryKey = 'organization' | 'ai' | 'billing' | 'appearance' | 'editor' | 'notifications' | 'data' | 'agentAccess' | 'shortcuts' | 'security' | 'about';
 export type CategoryGroupKey = 'person' | 'workspace' | 'about';
@@ -38,6 +38,14 @@ export function getCategories(
                   icon: Bot,
                   title: t('Categories.Ai.Title'),
                   description: t('Categories.Ai.Description'),
+              },
+              {
+                  key: 'agentAccess',
+                  group: 'person',
+                  label: t('Categories.AgentAccess.Label'),
+                  icon: Cable,
+                  title: t('Categories.AgentAccess.Title'),
+                  description: t('Categories.AgentAccess.Description'),
               },
               ...(options.includeBillingSettings
                   ? [

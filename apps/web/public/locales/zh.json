@@ -2840,7 +2840,7 @@
                 "AgentAccess": {
                     "Label": "MCP",
                     "Title": "MCP",
-                    "Description": "使用你的个人 MCP token 连接可信 Agent。"
+                    "Description": "为 Codex、Claude Code 和其他 Agent 开启本地 MCP endpoint。"
                 }
             },
             "Appearance": {
@@ -2953,12 +2953,10 @@
             "AgentAccess": {
                 "Loading": "正在加载 MCP 设置...",
                 "LoadFailed": "加载 MCP 设置失败。",
-                "ProxyLabel": "本地 MCP Endpoint",
-                "ProxyDescription": "为桌面端 MCP client 启动固定的 localhost MCP endpoint。",
+                "ProxyLabel": "启用",
+                "ProxyDescription": "允许 Agent client 连接到 Dory。",
                 "ProxyStopped": "本地 MCP endpoint 已开启但未运行。",
                 "ProxyStartFailed": "更新本地 MCP endpoint 失败。",
-                "EndpointLabel": "Endpoint",
-                "EndpointDescription": "将这个 URL 作为 MCP server endpoint 使用。",
                 "Copy": "复制",
                 "Copied": "已复制",
                 "SetupTitle": "MCP 配置方法",
