@@ -7,13 +7,30 @@ import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-pr
 import { hasMetadataCapability, hasTableInfoCapability, isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, QueryType, TableColumnInfo, TimeRange } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
-import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
 import { runAnalysis } from '@/lib/server/analysis/run-analysis';
 import { routing } from '@dory/i18n/routing';
 import type { McpAuthContext } from './auth';
 import { hasMcpScope } from './auth';
 import { getReadonlyMcpStatements } from './sql-safety';
+import {
+    buildChartProfileOperation,
+    buildResultContextOperation,
+    getDatabaseSummaryOperation,
+    getMonitoringSummaryOperation,
+    getSavedQueryOperation,
+    getTableProfileOperation,
+    listConnectionsOperation,
+    listDatabasesOperation,
+    listSavedQueriesOperation,
+    listTablesOperation,
+    previewTableOperation,
+    runAnalysisOperation,
+    runReadonlySqlOperation,
+    searchSchemaOperation,
+    describeTableOperation,
+} from '@/lib/ai/tools/dory-tool-operations';
 
 const MAX_MCP_RESULT_ROWS = 1000;
 const MAX_MCP_SCHEMA_SEARCH_DATABASES = 20;
@@ -218,6 +235,13 @@ async function getConnectionEntry(context: McpAuthContext, connectionId: string,
     return ensureConnectionPoolForUser(context.userId, context.organizationId, connectionId, identityId ?? null);
 }
 
+function toOperationContext(context: McpAuthContext) {
+    return {
+        organizationId: context.organizationId,
+        userId: context.userId,
+    };
+}
+
 export function registerDoryMcpTools(server: McpServer, context: McpAuthContext) {
     server.registerTool(
         'dory_list_connections',
@@ -227,27 +251,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async () => {
             requireScope(context, 'connections:read');
-            const db = await getDBService();
-            const records = await db.connections.list(context.organizationId);
-            return structured({
-                connections: records.map(item => ({
-                    id: item.connection.id,
-                    name: item.connection.name,
-                    type: item.connection.type,
-                    engine: item.connection.engine,
-                    database: item.connection.database,
-                    status: item.connection.status,
-                    environment: item.connection.environment,
-                    lastCheckStatus: item.connection.lastCheckStatus,
-                    identities: item.identities.map(identity => ({
-                        id: identity.id,
-                        name: identity.name,
-                        username: identity.username,
-                        isDefault: identity.isDefault,
-                        database: identity.database,
-                    })),
-                })),
-            });
+            return structured(await listConnectionsOperation(toOperationContext(context)));
         },
     );
 
@@ -263,12 +267,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, identityId }) => {
             requireScope(context, 'connections:read');
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const metadata = entry.instance.capabilities.metadata;
-            if (!hasMetadataCapability(metadata, 'getDatabases')) {
-                throw new Error('This connection does not support database listing.');
-            }
-            return structured({ databases: await metadata.getDatabases() });
+            return structured(await listDatabasesOperation(toOperationContext(context), { connectionId, identityId }));
         },
     );
 
@@ -285,12 +284,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, identityId }) => {
             requireScope(context, 'connections:read');
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const metadata = entry.instance.capabilities.metadata;
-            if (!hasMetadataCapability(metadata, 'getTablesOnly')) {
-                throw new Error('This connection does not support table listing.');
-            }
-            return structured({ tables: await metadata.getTablesOnly(database) });
+            return structured(await listTablesOperation(toOperationContext(context), { connectionId, database, identityId }));
         },
     );
 
@@ -308,12 +302,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, table, identityId }) => {
             requireScope(context, 'connections:read');
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const metadata = entry.instance.capabilities.metadata;
-            if (!hasMetadataCapability(metadata, 'getTableColumns')) {
-                throw new Error('This connection does not support table column metadata.');
-            }
-            return structured({ columns: await metadata.getTableColumns(database, table) });
+            return structured(await describeTableOperation(toOperationContext(context), { connectionId, database, table, identityId }));
         },
     );
 
@@ -332,21 +321,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, catalog, schema, identityId }) => {
             requireAnyScope(context, ['schema:read', 'connections:read']);
-            const { entry, config } = await getConnectionEntry(context, connectionId, identityId);
-            const metadata = entry.instance.capabilities.metadata;
-            if (!hasMetadataCapability(metadata, 'getDatabaseSummary')) {
-                throw new Error('This connection does not support database summaries.');
-            }
-
-            const summary = await metadata.getDatabaseSummary({
-                database,
-                catalogName: catalog ?? null,
-                schemaName: schema ?? null,
-                engine: getConnectionEngine(config.type),
-                cluster: config.port ? `${config.host}:${config.port}` : (config.host ?? null),
-            });
-
-            return structured({ summary });
+            return structured(await getDatabaseSummaryOperation(toOperationContext(context), { connectionId, database, catalog, schema, identityId }));
         },
     );
 
@@ -364,60 +339,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, table, identityId }) => {
             requireAnyScope(context, ['schema:read', 'connections:read']);
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const metadata = entry.instance.capabilities.metadata;
-            const tableInfo = entry.instance.capabilities.tableInfo;
-            let hasColumnsCapability = false;
-            let hasPropertiesCapability = false;
-            let hasStatsCapability = false;
-            let hasIndexesCapability = false;
-            let hasDdlCapability = false;
-            let columns: TableColumnInfo[] = [];
-            let properties: unknown = null;
-            let stats: unknown = null;
-            let indexes: unknown[] = [];
-            let ddl: string | null = null;
-
-            if (hasMetadataCapability(metadata, 'getTableColumns')) {
-                hasColumnsCapability = true;
-                columns = await metadata.getTableColumns(database, table);
-            }
-            if (hasTableInfoCapability(tableInfo, 'properties')) {
-                hasPropertiesCapability = true;
-                properties = await tableInfo.properties(database, table);
-            }
-            if (hasTableInfoCapability(tableInfo, 'stats')) {
-                hasStatsCapability = true;
-                stats = await tableInfo.stats(database, table);
-            }
-            if (hasTableInfoCapability(tableInfo, 'indexes')) {
-                hasIndexesCapability = true;
-                indexes = await tableInfo.indexes(database, table);
-            }
-            if (hasTableInfoCapability(tableInfo, 'ddl')) {
-                hasDdlCapability = true;
-                ddl = await tableInfo.ddl(database, table);
-            }
-
-            const capabilities = {
-                columns: hasColumnsCapability,
-                properties: hasPropertiesCapability,
-                stats: hasStatsCapability,
-                indexes: hasIndexesCapability,
-                ddl: hasDdlCapability,
-            };
-
-            return structured({
-                connectionId,
-                database,
-                table,
-                capabilities,
-                columns,
-                properties,
-                stats,
-                indexes,
-                ddl,
-            });
+            return structured(await getTableProfileOperation(toOperationContext(context), { connectionId, database, table, identityId }));
         },
     );
 
@@ -437,86 +359,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, query, database, limit, includeColumns, identityId }) => {
             requireAnyScope(context, ['schema:read', 'connections:read']);
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const metadata = entry.instance.capabilities.metadata;
-            if (!metadata) {
-                throw new Error('This connection does not support schema metadata.');
-            }
-
-            const maxResults = clampMcpLimit(limit, DEFAULT_MCP_SCHEMA_SEARCH_LIMIT, MAX_MCP_SCHEMA_SEARCH_LIMIT);
-            const shouldIncludeColumns = includeColumns !== false;
-            let databases: string[];
-
-            if (database) {
-                databases = [database];
-            } else {
-                if (!hasMetadataCapability(metadata, 'getDatabases')) {
-                    throw new Error('This connection does not support database discovery. Provide a database input.');
-                }
-                databases = (await metadata.getDatabases())
-                    .map(item => item.value)
-                    .filter(Boolean)
-                    .slice(0, MAX_MCP_SCHEMA_SEARCH_DATABASES);
-            }
-
-            const results: SchemaSearchItem[] = [];
-            const scanned = {
-                databases: 0,
-                tables: 0,
-                views: 0,
-                columns: 0,
-            };
-
-            for (const databaseName of databases) {
-                if (results.length >= maxResults) break;
-                scanned.databases += 1;
-
-                const tables = hasMetadataCapability(metadata, 'getTablesOnly') ? await metadata.getTablesOnly(databaseName) : [];
-                const views = hasMetadataCapability(metadata, 'getViews') ? await metadata.getViews(databaseName) : [];
-                const tableObjects = tables.map(item => toSchemaObject('table', databaseName, item));
-                const viewObjects = views.map(item => toSchemaObject('view', databaseName, item));
-
-                scanned.tables += tableObjects.length;
-                scanned.views += viewObjects.length;
-
-                for (const object of [...tableObjects, ...viewObjects]) {
-                    if (results.length >= maxResults) break;
-                    if (matchSchemaSearch(object, query)) {
-                        results.push(object);
-                    }
-                }
-
-                if (!shouldIncludeColumns || !hasMetadataCapability(metadata, 'getTableColumns')) {
-                    continue;
-                }
-
-                for (const object of [...tableObjects, ...viewObjects]) {
-                    if (results.length >= maxResults) break;
-                    const columns = await metadata.getTableColumns(databaseName, object.name).catch(() => [] as TableColumnInfo[]);
-                    scanned.columns += columns.length;
-
-                    for (const column of columns) {
-                        if (results.length >= maxResults) break;
-                        const item = toSchemaColumn(databaseName, object.name, column);
-                        if (matchSchemaSearch(item, query)) {
-                            results.push(item);
-                        }
-                    }
-                }
-            }
-
-            return structured({
-                query,
-                connectionId,
-                databases,
-                results,
-                meta: {
-                    limit: maxResults,
-                    truncated: results.length >= maxResults,
-                    includeColumns: shouldIncludeColumns,
-                    scanned,
-                },
-            });
+            return structured(await searchSchemaOperation(toOperationContext(context), { connectionId, query, database, limit, includeColumns, identityId }));
         },
     );
 
@@ -533,18 +376,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, limit, includeArchived }) => {
             requireScope(context, 'saved_queries:read');
-            const db = await getDBService();
-            const records = await db.savedQueries.list({
-                organizationId: context.organizationId,
-                userId: context.userId,
-                connectionId,
-                includeArchived: includeArchived === true,
-                limit: clampMcpLimit(limit, DEFAULT_MCP_SCHEMA_SEARCH_LIMIT, MAX_MCP_SCHEMA_SEARCH_LIMIT),
-            });
-
-            return structured({
-                savedQueries: records.map(toSavedQueryPayload),
-            });
+            return structured(await listSavedQueriesOperation(toOperationContext(context), { connectionId, limit, includeArchived }));
         },
     );
 
@@ -561,22 +393,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, id, includeArchived }) => {
             requireScope(context, 'saved_queries:read');
-            const db = await getDBService();
-            const record = await db.savedQueries.getById({
-                organizationId: context.organizationId,
-                userId: context.userId,
-                connectionId,
-                id,
-                includeArchived: includeArchived === true,
-            });
-
-            if (!record) {
-                throw new Error('Saved query not found.');
-            }
-
-            return structured({
-                savedQuery: toSavedQueryPayload(record),
-            });
+            return structured(await getSavedQueryOperation(toOperationContext(context), { connectionId, id, includeArchived }));
         },
     );
 
@@ -597,32 +414,17 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, filters, includeTimeline, includeSlowQueries, includeErrorQueries, pageSize, identityId }) => {
             requireScope(context, 'monitoring:read');
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const insights = entry.instance.capabilities.queryInsights;
-            if (!insights) {
-                throw new Error('This connection does not support query monitoring insights.');
-            }
-
-            const normalizedFilters = normalizeMonitoringFilters(filters);
-            const pagination = {
-                pageIndex: 0,
-                pageSize: clampMcpLimit(pageSize, DEFAULT_MCP_MONITORING_PAGE_SIZE, MAX_MCP_MONITORING_PAGE_SIZE),
-            };
-            const [summary, timeline, slowQueries, errorQueries] = await Promise.all([
-                insights.summary(normalizedFilters),
-                includeTimeline === true ? insights.timeline(normalizedFilters) : Promise.resolve(null),
-                includeSlowQueries === true ? insights.slowQueries(normalizedFilters, pagination) : Promise.resolve(null),
-                includeErrorQueries === true ? insights.errorQueries(normalizedFilters, pagination) : Promise.resolve(null),
-            ]);
-
-            return structured({
-                connectionId,
-                filters: normalizedFilters,
-                summary,
-                timeline,
-                slowQueries,
-                errorQueries,
-            });
+            return structured(
+                await getMonitoringSummaryOperation(toOperationContext(context), {
+                    connectionId,
+                    filters,
+                    includeTimeline,
+                    includeSlowQueries,
+                    includeErrorQueries,
+                    pageSize,
+                    identityId,
+                }),
+            );
         },
     );
 
@@ -642,18 +444,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, table, limit, offset, identityId }) => {
             requireScope(context, 'query:read');
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const payload = await buildTablePreviewPayload({
-                connection: entry.instance,
-                connectionId,
-                database,
-                table,
-                limit: clampLimit(limit),
-                offset: offset ?? 0,
-                userId: context.userId,
-                source: 'mcp-table-preview',
-            });
-            return structured(payload);
+            return structured(await previewTableOperation(toOperationContext(context), { connectionId, database, table, limit, offset, identityId, source: 'mcp-table-preview' }));
         },
     );
 
@@ -672,65 +463,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, sql, limit, identityId }) => {
             requireScope(context, 'query:read');
-            const { entry } = await getConnectionEntry(context, connectionId, identityId);
-            const statements = getReadonlyMcpStatements(sql);
-            const maxRows = clampLimit(limit);
-            const sessionId = randomUUID();
-            const queryResultSets: unknown[] = [];
-            const results: Array<Array<Record<string, unknown>>> = [];
-
-            for (let index = 0; index < statements.length; index += 1) {
-                const statement = statements[index]!;
-                const startedAt = new Date();
-                const perfStart = performance.now();
-                const result = await entry.instance.queryWithContext<Record<string, unknown>>(statement, {
-                    database,
-                    queryId: sessionId,
-                });
-                const rows = Array.isArray(result.rows) ? result.rows.slice(0, maxRows) : [];
-                const durationMs = Math.round(performance.now() - perfStart);
-                const finishedAt = new Date();
-
-                queryResultSets.push({
-                    sessionId,
-                    setIndex: index,
-                    sqlText: statement,
-                    sqlOp: statement.trim().split(/\s+/)[0]?.toUpperCase() ?? 'SQL',
-                    title: statement.trim().slice(0, 80),
-                    columns: result.columns ?? null,
-                    rowCount: result.rowCount ?? rows.length,
-                    limited: rows.length < (result.rows?.length ?? rows.length) || (result.limited ?? false),
-                    limit: maxRows,
-                    affectedRows: null,
-                    status: 'success',
-                    errorMessage: null,
-                    startedAt,
-                    finishedAt,
-                    durationMs,
-                });
-                results.push(rows);
-            }
-
-            return structured({
-                session: {
-                    sessionId,
-                    userId: context.userId,
-                    connectionId,
-                    database: database ?? null,
-                    sqlText: sql,
-                    status: 'success',
-                    errorMessage: null,
-                    resultSetCount: queryResultSets.length,
-                    source: 'mcp',
-                },
-                queryResultSets,
-                results,
-                meta: {
-                    refId: randomUUID(),
-                    totalSets: queryResultSets.length,
-                    maxRows,
-                },
-            });
+            return structured(await runReadonlySqlOperation(toOperationContext(context), { connectionId, database, sql, limit, identityId, source: 'mcp' }));
         },
     );
 
@@ -751,17 +484,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async input => {
             requireScope(context, 'analysis:run');
-            return structured({
-                resultContext: buildResultContext({
-                    sessionId: input.sessionId,
-                    setIndex: input.setIndex,
-                    sqlText: input.sqlText,
-                    databaseName: input.databaseName,
-                    rowCount: input.rowCount,
-                    columns: input.columns?.map(toResultContextColumn),
-                    stats: input.stats as any,
-                }),
-            });
+            return structured(buildResultContextOperation(input));
         },
     );
 
@@ -779,14 +502,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async input => {
             requireScope(context, 'analysis:run');
-            return structured({
-                profile: buildResultAutoChartProfile({
-                    rows: input.rows.slice(0, MAX_MCP_RESULT_ROWS),
-                    columns: input.columns,
-                    stats: input.stats as any,
-                    overrides: input.overrides as any,
-                }),
-            });
+            return structured(buildChartProfileOperation(input));
         },
     );
 
@@ -811,27 +527,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async input => {
             requireScope(context, 'analysis:run');
-            const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
-            const result = await runAnalysis({
-                request: {
-                    context: {
-                        connectionId: input.connectionId,
-                        databaseName: input.databaseName,
-                        resultRef: input.resultRef,
-                        resultContext: input.resultContext as any,
-                        insight: input.insight,
-                    },
-                    trigger: input.trigger as any,
-                },
-                connection: entry.instance,
-                connectionId: input.connectionId,
-                tabId: input.tabId ?? null,
-                locale: routing.defaultLocale,
-                organizationId: context.organizationId,
-                userId: context.userId,
-            });
-
-            return structured(result);
+            return structured(await runAnalysisOperation(toOperationContext(context), input));
         },
     );
 }

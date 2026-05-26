@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
-import { ensureConnectionPoolForUser, mapConnectionErrorToResponse } from '@/app/api/connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
+import { mapConnectionErrorToResponse } from '@/app/api/connection/error-response';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 
 type CatalogContext = {
@@ -26,10 +27,7 @@ export async function resolveCatalogContext(
     const { userId, organizationId } = auth;
     if (!userId || !organizationId) {
         return {
-            response: NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.UNAUTHORIZED, message: errorMessages.unauthorized }),
-                { status: 401 },
-            ),
+            response: NextResponse.json(ResponseUtil.error({ code: ErrorCodes.UNAUTHORIZED, message: errorMessages.unauthorized }), { status: 401 }),
         };
     }
 
@@ -38,19 +36,13 @@ export async function resolveCatalogContext(
 
     if (!datasourceId) {
         return {
-            response: NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }),
-                { status: 400 },
-            ),
+            response: NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: t('Api.Connection.Errors.MissingConnectionId') }), { status: 400 }),
         };
     }
 
     if (!databaseParam) {
         return {
-            response: NextResponse.json(
-                ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: errorMessages.missingDatabase }),
-                { status: 400 },
-            ),
+            response: NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: errorMessages.missingDatabase }), { status: 400 }),
         };
     }
 

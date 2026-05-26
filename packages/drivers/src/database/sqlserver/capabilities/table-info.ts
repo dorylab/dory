@@ -1,8 +1,8 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import type { SqlServerDatasource } from '../SqlServerDatasource';
-import { parseSqlServerTableReference, quoteSqlServerQualifiedName } from '../sqlserver-driver';
+import type { SqlServerDatasource } from '../datasource';
+import { parseSqlServerTableReference, quoteSqlServerQualifiedName } from '../runtime';
 
 type TableIdentityRow = {
     objectId?: number;

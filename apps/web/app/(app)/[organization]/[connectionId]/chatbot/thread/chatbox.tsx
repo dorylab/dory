@@ -50,6 +50,12 @@ function isToolCallPart(part: any) {
     return typeof part.type === 'string' && part.type.startsWith('tool-') && part.input && part.state === 'input-available';
 }
 
+function isToolPartWithKey(part: any) {
+    if (!part || typeof part !== 'object') return false;
+    if (part.type === 'tool-call' || part.type === 'tool_call' || part.type === 'tool-result' || part.type === 'tool_result' || part.type === 'tool-error') return true;
+    return typeof part.type === 'string' && part.type.startsWith('tool-');
+}
+
 function getToolPartKey(part: any, fallback: string) {
     if (!part || typeof part !== 'object') return fallback;
     if (typeof part.callId === 'string') return part.callId;
@@ -129,7 +135,7 @@ const ChatBotComp = ({
             }
 
             const currentToolCallKeys = new Set(
-                (message.parts ?? []).map((part: any, index: number) => (isToolCallPart(part) ? getToolPartKey(part, `${message.id}:live:${index}`) : null)).filter(Boolean),
+                (message.parts ?? []).map((part: any, index: number) => (isToolPartWithKey(part) ? getToolPartKey(part, `${message.id}:live:${index}`) : null)).filter(Boolean),
             );
 
             const persistedParts = persistedToolCalls
@@ -335,10 +341,7 @@ const ChatBotComp = ({
     }, [activeSchema, sidebarConfig, tables]);
 
     const resolvedActiveDatabase = activeDatabase || currentConnection?.connection?.database || null;
-    const resolvedActiveSchema =
-        sidebarConfig.supportsSchemas
-            ? activeSchema || (resolvedActiveDatabase ? (sidebarConfig.defaultSchemaName ?? null) : null)
-            : null;
+    const resolvedActiveSchema = sidebarConfig.supportsSchemas ? activeSchema || (resolvedActiveDatabase ? (sidebarConfig.defaultSchemaName ?? null) : null) : null;
 
     const submitPrompt = async (message: PromptInputMessage) => {
         const hasText = Boolean(message.text);
@@ -359,10 +362,7 @@ const ChatBotComp = ({
                         ? (copilotEnvelope.context.baseline.database ?? resolvedActiveDatabase)
                         : (copilotEnvelope?.context.database ?? resolvedActiveDatabase)
                     : resolvedActiveDatabase;
-            const schemaForContext =
-                mode === 'copilot'
-                    ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.schema ?? null) : null)
-                    : resolvedActiveSchema;
+            const schemaForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.schema ?? null) : null) : resolvedActiveSchema;
 
             const tableForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.name ?? null) : null) : selectedTable || null;
 

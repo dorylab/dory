@@ -5,7 +5,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { createMysqlMetadataCapability, type MysqlMetadataAPI } from './capabilities/metadata';
 import { createMysqlTableInfoCapability } from './capabilities/table-info';
 import { MySqlDialect } from './dialect';
-import { cancelMySqlQuery, createMySqlPool, executeMySqlCommand, executeMySqlQuery, pingMySql, resolveMysqlPort } from './mysql-driver';
+import { cancelMySqlQuery, createMySqlPool, executeMySqlCommand, executeMySqlQuery, pingMySql, resolveMysqlPort } from './runtime';
 
 export class MySqlDatasource extends BaseConnection {
     readonly dialect = MySqlDialect;

@@ -2378,12 +2378,57 @@
             "Tools": {
                 "Rag": {
                     "Description": "检索与用户问题最相关的文档片段，返回若干上下文段落用于回答。"
+                },
+                "ListConnections": {
+                    "Description": "列出当前组织可用的数据库连接，不返回密钥。"
+                },
+                "ListDatabases": {
+                    "Description": "列出当前 Dory 连接中的数据库。"
+                },
+                "ListTables": {
+                    "Description": "使用 Dory driver 元数据列出数据库中的表。"
+                },
+                "DescribeTable": {
+                    "Description": "返回表的真实列元数据，包括类型、主键、默认值和注释等信息。"
+                },
+                "GetDatabaseSummary": {
+                    "Description": "返回数据库概要，包括对象数量、大小估算和推荐优先查看的表。"
+                },
+                "GetTableProfile": {
+                    "Description": "返回表的元数据、列、统计信息、索引、属性和 DDL（取决于连接支持情况）。"
+                },
+                "SearchSchema": {
+                    "Description": "使用 Dory driver 元数据按名称、类型或注释搜索表、视图和列。"
+                },
+                "ListSavedQueries": {
+                    "Description": "列出当前连接的已保存 SQL 查询。"
+                },
+                "GetSavedQuery": {
+                    "Description": "按 id 获取当前连接的一条已保存 SQL 查询。"
+                },
+                "GetMonitoringSummary": {
+                    "Description": "返回查询监控概要，并可包含时间线、慢查询和错误查询样本。"
+                },
+                "PreviewTable": {
+                    "Description": "在硬性行数限制内预览表数据。"
+                },
+                "BuildResultContext": {
+                    "Description": "根据 SQL 结果元数据构建 Dory 分析上下文。"
+                },
+                "BuildChartProfile": {
+                    "Description": "根据结果行和列构建 Dory 自动图表画像。"
+                },
+                "RunAnalysis": {
+                    "Description": "基于结果上下文和当前连接运行 Dory 分析动作。"
                 }
             },
             "Prompt": {
                 "SchemaContextTitle": "【当前数据上下文】",
                 "DatabaseContextTitle": "【数据库上下文】",
-                "CopilotContextTitle": "【当前 Copilot 上下文】"
+                "CopilotContextTitle": "【当前 Copilot 上下文】",
+                "ExecutionIntent": {
+                    "Policy": "当前轮执行策略：\n- 在决定是否使用 sqlRunner 之前，先判断用户最新消息的意图。\n- 如果用户明确要求只生成、只显示或只写 SQL，或明确要求不要执行查询，则本轮不要调用 sqlRunner；除非需要澄清，否则只返回 SQL。\n- 如果用户要求查看、列出、排名、对比、聚合、画图，或以其他方式获取实际数据库结果，并且 sqlRunner 可用，请先用只读 SQL 调用 sqlRunner，再给出最终回答。\n- 对于需要数据结果的请求，不要只写 SQL 就结束。\n- 探索性或明细查询的结果限制保持在 100 行以内。"
+                }
             },
             "ChartBuilder": {
                 "Description": "根据提供的数据返回图表配置。\n\n使用说明：\n1. 指定 chartType（bar/line/area/pie）。\n2. data 为查询结果行数组。\n3. 如果不确定 xKey / yKeys / categoryKey / valueKey，可留空，工具会自动推断：\n   - Line/area：优先选择时间字段作为 x，数值字段作为 y。\n   - Bar：优先选择分类字段作为 x，数值字段作为 y。\n   - Pie：选择一个分类字段作为 categoryKey，一个数值字段作为 valueKey。\n4. 工具会识别时间/数值/分类列，并在合适时设置 options.xKeyType/sortBy。",
@@ -2789,7 +2834,27 @@
             "Title": "设置",
             "Description": "应用设置",
             "SearchPlaceholder": "搜索设置",
+            "Groups": {
+                "Person": "个人",
+                "Workspace": "工作区",
+                "About": "关于"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "组织",
+                    "Title": "组织",
+                    "Description": "不离开当前工作流即可管理这个工作区。"
+                },
+                "Ai": {
+                    "Label": "AI",
+                    "Title": "AI 配置",
+                    "Description": "配置当前组织可使用的 AI 模型与 Provider。"
+                },
+                "Billing": {
+                    "Label": "套餐与订阅",
+                    "Title": "套餐与订阅",
+                    "Description": "查看当前套餐和账单选项。"
+                },
                 "Appearance": {
                     "Label": "外观",
                     "Title": "主题与外观",
@@ -3227,7 +3292,7 @@
         },
         "Billing": {
             "Title": "套餐与订阅",
-            "Description": "查看当前组织套餐，升级到 Pro，或在 Stripe 中管理账单。",
+            "Description": "查看当前组织套餐和账单选项。",
             "UnavailableDescription": "无法加载组织账单信息。",
             "CurrentPlan": "当前套餐",
             "Loading": "加载中...",
@@ -3236,8 +3301,8 @@
             "ManageBilling": "管理账单",
             "Redirecting": "正在跳转...",
             "Opening": "正在打开...",
-            "DesktopUpgradeToPro": "在浏览器中订阅",
-            "OpeningBrowser": "正在打开浏览器...",
+            "DesktopUpgradeToPro": "获取早期体验",
+            "OpeningBrowser": "正在打开...",
             "RefreshBillingStatus": "刷新状态",
             "Refreshing": "正在刷新...",
             "RefreshComplete": "账单状态已刷新",

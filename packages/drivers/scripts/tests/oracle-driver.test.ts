@@ -8,7 +8,7 @@ import {
     parseOracleTableReference,
     resolveOraclePort,
     resolveOracleServiceName,
-} from '../../src/database/oracle/oracle-driver';
+} from '../../src/database/oracle/runtime';
 import { normalizeOracleObjectRow } from '../../src/database/oracle/capabilities/metadata';
 
 const baseConfig = {

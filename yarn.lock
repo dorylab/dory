@@ -22790,6 +22790,7 @@ __metadata:
     "@ianvs/prettier-plugin-sort-imports": "npm:^4.7.1"
     "@modelcontextprotocol/sdk": "npm:^1.29.0"
     "@monaco-editor/react": "npm:^4.7.0"
+    "@next/env": "npm:16.1.6"
     "@opennextjs/cloudflare": "npm:^1.18.0"
     "@paper-design/shaders-react": "npm:^0.0.72"
     "@radix-ui/react-accessible-icon": "npm:^1.1.8"

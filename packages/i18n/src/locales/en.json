@@ -2376,12 +2376,57 @@
             "Tools": {
                 "Rag": {
                     "Description": "Retrieve the most relevant document snippets for the user's question and return context passages for answering."
+                },
+                "ListConnections": {
+                    "Description": "List database connections available in the current organization without returning secrets."
+                },
+                "ListDatabases": {
+                    "Description": "List databases for the current Dory connection."
+                },
+                "ListTables": {
+                    "Description": "List tables in a database using Dory driver metadata."
+                },
+                "DescribeTable": {
+                    "Description": "Return real column metadata for a table, including types, keys, defaults, and comments when available."
+                },
+                "GetDatabaseSummary": {
+                    "Description": "Return a compact database summary with object counts, size estimates, and recommended starting tables."
+                },
+                "GetTableProfile": {
+                    "Description": "Return table metadata, columns, stats, indexes, properties, and DDL when supported by the connection."
+                },
+                "SearchSchema": {
+                    "Description": "Search tables, views, and columns by name, type, or comment using Dory driver metadata."
+                },
+                "ListSavedQueries": {
+                    "Description": "List saved SQL queries for the current connection."
+                },
+                "GetSavedQuery": {
+                    "Description": "Get a saved SQL query by id for the current connection."
+                },
+                "GetMonitoringSummary": {
+                    "Description": "Return query monitoring summary and optional timeline, slow query, and error query samples."
+                },
+                "PreviewTable": {
+                    "Description": "Preview rows from a table with a hard row limit."
+                },
+                "BuildResultContext": {
+                    "Description": "Build Dory analysis result context from SQL result metadata."
+                },
+                "BuildChartProfile": {
+                    "Description": "Build Dory automatic chart profile from result rows and columns."
+                },
+                "RunAnalysis": {
+                    "Description": "Run a Dory analysis action against a result context and the current connection."
                 }
             },
             "Prompt": {
                 "SchemaContextTitle": "[Current data context]",
                 "DatabaseContextTitle": "[Database context]",
-                "CopilotContextTitle": "[Current Copilot context]"
+                "CopilotContextTitle": "[Current Copilot context]",
+                "ExecutionIntent": {
+                    "Policy": "Current turn execution policy:\n- Classify the latest user message before deciding whether to use sqlRunner.\n- If the user explicitly asks to only generate, show, or write SQL, or asks not to execute the query, do not call sqlRunner and return SQL only unless clarification is needed.\n- If the user asks to view, list, rank, compare, aggregate, chart, or otherwise obtain actual database results, and sqlRunner is available, call sqlRunner with a read-only SQL query before the final answer.\n- Do not stop after only writing SQL for data-result requests.\n- Keep exploratory/detail result limits at 100 rows or fewer."
+                }
             },
             "ChartBuilder": {
                 "Description": "Return a chart configuration based on the provided data.\n\nUsage:\n1. Specify chartType (bar/line/area/pie).\n2. data is an array of query result rows.\n3. If you are unsure about xKey / yKeys / categoryKey / valueKey, leave them empty and the tool will infer:\n   - Line/area: prefer a time field for x, numeric fields for y.\n   - Bar: prefer a category field for x, numeric fields for y.\n   - Pie: choose one category field as categoryKey and one numeric field as valueKey.\n4. The tool infers time/numeric/category columns and sets options.xKeyType/sortBy when appropriate.",
@@ -2787,7 +2832,27 @@
             "Title": "Settings",
             "Description": "Application settings",
             "SearchPlaceholder": "Search settings",
+            "Groups": {
+                "Person": "Person",
+                "Workspace": "Workspace",
+                "About": "About"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "Organization",
+                    "Title": "Organization",
+                    "Description": "Manage this workspace without leaving your current flow."
+                },
+                "Ai": {
+                    "Label": "AI",
+                    "Title": "AI Configuration",
+                    "Description": "Configure the models available to this organization."
+                },
+                "Billing": {
+                    "Label": "Plans & subscriptions",
+                    "Title": "Plans & subscriptions",
+                    "Description": "Review the current plan and billing options."
+                },
                 "Appearance": {
                     "Label": "Appearance",
                     "Title": "Theme & Appearance",
@@ -3225,7 +3290,7 @@
         },
         "Billing": {
             "Title": "Plans & subscriptions",
-            "Description": "Review the current organization plan, upgrade to Pro, or manage billing in Stripe.",
+            "Description": "Review the current organization plan and billing options.",
             "UnavailableDescription": "Unable to load organization billing.",
             "CurrentPlan": "Current plan",
             "Loading": "Loading...",
@@ -3234,8 +3299,8 @@
             "ManageBilling": "Manage billing",
             "Redirecting": "Redirecting...",
             "Opening": "Opening...",
-            "DesktopUpgradeToPro": "Subscribe in browser",
-            "OpeningBrowser": "Opening browser...",
+            "DesktopUpgradeToPro": "Get Early Access",
+            "OpeningBrowser": "Opening...",
             "RefreshBillingStatus": "Refresh status",
             "Refreshing": "Refreshing...",
             "RefreshComplete": "Billing status refreshed",

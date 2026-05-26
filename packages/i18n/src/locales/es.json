@@ -2374,12 +2374,57 @@
             "Tools": {
                 "Rag": {
                     "Description": "Recupera los fragmentos de documentos más relevantes para la pregunta del usuario y devuelve pasajes de contexto para responder."
+                },
+                "ListConnections": {
+                    "Description": "Lista las conexiones de base de datos disponibles en la organización actual sin devolver secretos."
+                },
+                "ListDatabases": {
+                    "Description": "Lista las bases de datos de la conexión Dory actual."
+                },
+                "ListTables": {
+                    "Description": "Lista las tablas de una base de datos usando metadatos del driver de Dory."
+                },
+                "DescribeTable": {
+                    "Description": "Devuelve metadatos reales de columnas de una tabla, incluidos tipos, claves, valores predeterminados y comentarios cuando estén disponibles."
+                },
+                "GetDatabaseSummary": {
+                    "Description": "Devuelve un resumen compacto de la base de datos con conteos de objetos, estimaciones de tamaño y tablas recomendadas para empezar."
+                },
+                "GetTableProfile": {
+                    "Description": "Devuelve metadatos de tabla, columnas, estadísticas, índices, propiedades y DDL cuando la conexión lo admite."
+                },
+                "SearchSchema": {
+                    "Description": "Busca tablas, vistas y columnas por nombre, tipo o comentario usando metadatos del driver de Dory."
+                },
+                "ListSavedQueries": {
+                    "Description": "Lista consultas SQL guardadas para la conexión actual."
+                },
+                "GetSavedQuery": {
+                    "Description": "Obtiene una consulta SQL guardada por id para la conexión actual."
+                },
+                "GetMonitoringSummary": {
+                    "Description": "Devuelve un resumen de monitoreo de consultas y muestras opcionales de línea de tiempo, consultas lentas y consultas con error."
+                },
+                "PreviewTable": {
+                    "Description": "Previsualiza filas de una tabla con un límite estricto de filas."
+                },
+                "BuildResultContext": {
+                    "Description": "Construye el contexto de resultado de análisis de Dory a partir de metadatos de resultados SQL."
+                },
+                "BuildChartProfile": {
+                    "Description": "Construye el perfil automático de gráfico de Dory a partir de filas y columnas de resultado."
+                },
+                "RunAnalysis": {
+                    "Description": "Ejecuta una acción de análisis de Dory sobre un contexto de resultado y la conexión actual."
                 }
             },
             "Prompt": {
                 "SchemaContextTitle": "[Contexto de datos actual]",
                 "DatabaseContextTitle": "[Contexto de base de datos]",
-                "CopilotContextTitle": "[Contexto actual de Copilot]"
+                "CopilotContextTitle": "[Contexto actual de Copilot]",
+                "ExecutionIntent": {
+                    "Policy": "Política de ejecución del turno actual:\n- Clasifica el último mensaje del usuario antes de decidir si usar sqlRunner.\n- Si el usuario pide explícitamente solo generar, mostrar o escribir SQL, o pide no ejecutar la consulta, no llames a sqlRunner en este turno y devuelve solo SQL salvo que necesites una aclaración.\n- Si el usuario pide ver, listar, ordenar por ranking, comparar, agregar, crear un gráfico u obtener resultados reales de la base de datos de otra forma, y sqlRunner está disponible, llama a sqlRunner con una consulta SQL de solo lectura antes de la respuesta final.\n- Para solicitudes que requieren resultados de datos, no termines solo escribiendo SQL.\n- Mantén los límites de resultados exploratorios o de detalle en 100 filas o menos."
+                }
             },
             "ChartBuilder": {
                 "Description": "Devuelve una configuración de gráfico basada en los datos proporcionados.\n\nUso:\n1. Especifica chartType (bar/line/area/pie).\n2. data es un arreglo de filas del resultado de la consulta.\n3. Si no tienes claro xKey / yKeys / categoryKey / valueKey, déjalos vacíos y la herramienta los inferirá:\n   - Línea/área: prioriza un campo temporal para x y campos numéricos para y.\n   - Barras: prioriza un campo categórico para x y campos numéricos para y.\n   - Circular: elige un campo categórico como categoryKey y un campo numérico como valueKey.\n4. La herramienta infiere columnas temporales/numéricas/categóricas y establece options.xKeyType/sortBy cuando corresponde.",
@@ -2785,7 +2830,27 @@
             "Title": "Configuración",
             "Description": "Configuración de la aplicación",
             "SearchPlaceholder": "Buscar ajustes",
+            "Groups": {
+                "Person": "Persona",
+                "Workspace": "Espacio de trabajo",
+                "About": "Acerca de"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "Organización",
+                    "Title": "Organización",
+                    "Description": "Administra este espacio de trabajo sin salir de tu flujo actual."
+                },
+                "Ai": {
+                    "Label": "IA",
+                    "Title": "Configuración de IA",
+                    "Description": "Configura los modelos disponibles para esta organización."
+                },
+                "Billing": {
+                    "Label": "Planes y suscripciones",
+                    "Title": "Planes y suscripciones",
+                    "Description": "Revisa el plan actual y las opciones de facturación."
+                },
                 "Appearance": {
                     "Label": "Apariencia",
                     "Title": "Tema y apariencia",
@@ -3223,7 +3288,7 @@
         },
         "Billing": {
             "Title": "Planes y suscripciones",
-            "Description": "Revisa el plan actual de la organización, mejora a Pro o gestiona la facturación en Stripe.",
+            "Description": "Revisa el plan actual de la organización y las opciones de facturación.",
             "UnavailableDescription": "No se puede cargar la facturación de la organización.",
             "CurrentPlan": "Plan actual",
             "Loading": "Cargando...",
@@ -3232,8 +3297,8 @@
             "ManageBilling": "Gestionar facturación",
             "Redirecting": "Redirigiendo...",
             "Opening": "Abriendo...",
-            "DesktopUpgradeToPro": "Suscribirse en el navegador",
-            "OpeningBrowser": "Abriendo el navegador...",
+            "DesktopUpgradeToPro": "Obtener acceso anticipado",
+            "OpeningBrowser": "Abriendo...",
             "RefreshBillingStatus": "Actualizar estado",
             "Refreshing": "Actualizando...",
             "RefreshComplete": "Estado de facturación actualizado",

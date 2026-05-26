@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import type { BaseConnection } from '@dory/drivers/core';
-import { hasTableInfoCapability } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 
 type BuildTablePreviewPayloadParams = {
@@ -35,17 +34,12 @@ function buildPreviewSqlText(database: string, table: string): string {
 }
 
 export async function buildTablePreviewPayload({ connection, connectionId, database, table, limit, offset, sessionId, tabId, userId, source }: BuildTablePreviewPayloadParams) {
-    const tableInfo = connection.capabilities.tableInfo;
-    if (!hasTableInfoCapability(tableInfo, 'preview')) {
-        throw new Error('Table preview is not supported for this connection');
-    }
-
     const normalizedLimit = normalizePreviewLimit(limit);
     const normalizedOffset = normalizePreviewOffset(offset);
     const sqlText = buildPreviewSqlText(database, table);
     const startedAt = new Date();
     const perfStart = performance.now();
-    const result = await tableInfo.preview(database, table, { limit: normalizedLimit, offset: normalizedOffset });
+    const result = await connection.previewTable(database, table, { limit: normalizedLimit, offset: normalizedOffset });
     const durationMs = Math.round(performance.now() - perfStart);
     const finishedAt = new Date();
     const rows = Array.isArray(result.rows) ? result.rows : [];

@@ -247,6 +247,23 @@ export type QueryInsightsImpl = {
 };
 
 export type QueryInsightsAPI = QueryInsightsImpl;
+
+export type DriverMonitoringSummaryOptions = {
+    filters: QueryInsightsFilters;
+    includeTimeline?: boolean;
+    includeSlowQueries?: boolean;
+    includeErrorQueries?: boolean;
+    pagination?: Pagination;
+};
+
+export type DriverMonitoringSummary = {
+    filters: QueryInsightsFilters;
+    summary: QueryInsightsSummary;
+    timeline: QueryTimelinePoint[] | null;
+    slowQueries: { rows: QueryInsightsRow[]; total: number } | null;
+    errorQueries: { rows: QueryInsightsRow[]; total: number } | null;
+};
+
 export type GetTableInfoAPI = {
     properties: (database: string, table: string) => Promise<TablePropertiesRow | null>;
     ddl: (database: string, table: string) => Promise<string | null>;
@@ -270,6 +287,21 @@ export type ConnectionMetadataAPI = {
     getExtensions?: (database?: string) => Promise<DatabaseExtensionMeta[]>;
     getDatabaseSummary?: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail?: (database: string) => Promise<DatabaseObjectRow[]>;
+};
+
+export type DriverTableProfile = {
+    capabilities: {
+        columns: boolean;
+        properties: boolean;
+        stats: boolean;
+        indexes: boolean;
+        ddl: boolean;
+    };
+    columns: TableColumnInfo[];
+    properties: TablePropertiesRow | null;
+    stats: TableStats | null;
+    indexes: TableIndexInfo[];
+    ddl: string | null;
 };
 
 export type ConnectionCapabilities = {

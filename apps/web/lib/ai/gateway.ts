@@ -139,6 +139,10 @@ function createRequestId(): string {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+export function createAiRequestId(): string {
+    return createRequestId();
+}
+
 function truncateString(value: string, maxLength: number): string {
     if (value.length <= maxLength) return value;
     return `${value.slice(0, maxLength)}...(truncated)`;
@@ -207,6 +211,60 @@ async function writeAiUsage(record: AiUsageRecord, meter?: AiMeteringOptions, tr
     if (typeof process !== 'undefined' && process.env.AI_USAGE_LOG === '1') {
         console.info('[ai][usage]', JSON.stringify(record));
     }
+}
+
+export async function recordAiUsage(options: {
+    requestId: string;
+    context?: AiGatewayContext;
+    input: AiDebugInput;
+    usage?: LanguageModelUsage;
+    latencyMs?: number;
+    fromCache?: boolean;
+    status?: AiUsageStatus;
+    error?: unknown;
+    outputText?: string | null;
+    outputJson?: Record<string, unknown> | null;
+    meter?: AiMeteringOptions;
+}) {
+    const err = options.error ? toErrorParts(options.error) : { code: null, message: null };
+    const gateway = inferGateway(options.context);
+    const provider = inferProvider(options.context);
+    const promptVersion = options.context?.promptVersion ?? 1;
+    const algoVersion = options.context?.algoVersion;
+
+    const debugInput = buildDebugInput(options.input);
+
+    await writeAiUsage(
+        {
+            requestId: options.requestId,
+            organizationId: options.context?.organizationId ?? null,
+            userId: options.context?.userId ?? null,
+            feature: options.context?.feature,
+            model: options.context?.model,
+            promptVersion,
+            algoVersion,
+            usage: options.usage,
+            usageJson: toUsageJson(options.usage),
+            latencyMs: options.latencyMs,
+            fromCache: options.fromCache ?? false,
+            status: options.status ?? 'ok',
+            errorCode: (options.error as { code?: string } | null)?.code === AI_QUOTA_EXCEEDED_CODE ? AI_QUOTA_EXCEEDED_CODE : err.code,
+            errorMessage: err.message,
+            gateway,
+            provider,
+            costMicros: options.context?.costMicros ?? null,
+            traceId: options.context?.traceId ?? null,
+            spanId: options.context?.spanId ?? null,
+        },
+        options.meter,
+        buildTraceRecord({
+            requestId: options.requestId,
+            context: options.context,
+            debugInput,
+            outputText: options.outputText ?? null,
+            outputJson: options.outputJson ?? (err.message ? { error: err.message, code: err.code } : null),
+        }),
+    );
 }
 
 function extractUsageFields(usage?: LanguageModelUsage) {

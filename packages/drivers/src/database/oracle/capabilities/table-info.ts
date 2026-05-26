@@ -1,8 +1,8 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import type { OracleDatasource } from '../OracleDatasource';
-import { parseOracleTableReference, quoteOracleQualifiedName } from '../oracle-driver';
+import type { OracleDatasource } from '../datasource';
+import { parseOracleTableReference, quoteOracleQualifiedName } from '../runtime';
 
 type TableIdentityRow = {
     schemaName?: string | null;
@@ -179,10 +179,7 @@ async function getTablePreview(datasource: OracleDatasource, database: string, t
     const limit = normalizePreviewLimit(options?.limit);
     const offset = Math.max(0, Math.floor(options?.offset ?? 0));
     const qualifiedName = quoteOracleQualifiedName(target.schema, target.table);
-    const sql =
-        offset > 0
-            ? `SELECT * FROM ${qualifiedName} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`
-            : `SELECT * FROM ${qualifiedName} FETCH FIRST ${limit} ROWS ONLY`;
+    const sql = offset > 0 ? `SELECT * FROM ${qualifiedName} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY` : `SELECT * FROM ${qualifiedName} FETCH FIRST ${limit} ROWS ONLY`;
 
     return datasource.queryWithContext<Record<string, unknown>>(sql, { database });
 }

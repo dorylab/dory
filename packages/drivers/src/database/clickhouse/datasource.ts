@@ -11,7 +11,7 @@ import {
     isClickhouseTlsEnabled,
     pingClickhouse,
     resolveClickhouseHttpPort,
-} from './clickhouse-driver';
+} from './runtime';
 import { createClickhouseMetadataCapability, type ClickhouseMetadataAPI } from './capabilities/metadata';
 import { createClickhouseQueryInsightsCapability } from './capabilities/insights';
 import { createClickhouseTableInfoCapability } from './capabilities/table-info';

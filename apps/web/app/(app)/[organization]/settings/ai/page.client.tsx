@@ -25,6 +25,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/registry/new-york-v4/ui/select';
+import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import {
     AI_PROVIDER_OPTIONS,
@@ -325,16 +326,40 @@ function DefaultAiProviderCard({
     );
 }
 
+function DefaultAiProviderSkeleton() {
+    return (
+        <div className="rounded-lg border border-muted-foreground/15 bg-muted/20 px-4 py-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                    <Skeleton className="mt-0.5 size-9 shrink-0 rounded-md" />
+                    <div className="min-w-0 flex-1 space-y-3">
+                        <Skeleton className="h-4 w-20" />
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Skeleton className="h-5 w-48" />
+                            <Skeleton className="h-5 w-24 rounded-full" />
+                            <Skeleton className="h-5 w-16 rounded-full" />
+                        </div>
+                        <Skeleton className="h-4 w-full max-w-xl" />
+                    </div>
+                </div>
+                <Skeleton className="h-8 w-28" />
+            </div>
+        </div>
+    );
+}
+
 function DoryAiProviderSection({
     providers,
     canManageProviders,
     isSaving,
+    isLoading,
     onSetDefault,
     t,
 }: {
     providers: AiProviderRow[];
     canManageProviders: boolean;
     isSaving: boolean;
+    isLoading: boolean;
     onSetDefault: (row: AiProviderRow) => void;
     t: ReturnType<typeof useTranslations>;
 }) {
@@ -353,19 +378,23 @@ function DoryAiProviderSection({
             </div>
 
             <div className="space-y-3">
-                {providers.map(row => (
-                    <DefaultAiProviderCard
-                        key={row.id}
-                        row={row}
-                        ownerLabel={t('Badges.DoryProvided')}
-                        description={row.isDefault ? t('DoryAi.ActiveModelDescription') : t('DoryAi.ModelDescription')}
-                        unavailableDescription={t('DoryAi.UnavailableDescription')}
-                        canManageProviders={canManageProviders}
-                        isSaving={isSaving}
-                        onSetDefault={onSetDefault}
-                        t={t}
-                    />
-                ))}
+                {isLoading ? (
+                    <DefaultAiProviderSkeleton />
+                ) : (
+                    providers.map(row => (
+                        <DefaultAiProviderCard
+                            key={row.id}
+                            row={row}
+                            ownerLabel={t('Badges.DoryProvided')}
+                            description={row.isDefault ? t('DoryAi.ActiveModelDescription') : t('DoryAi.ModelDescription')}
+                            unavailableDescription={t('DoryAi.UnavailableDescription')}
+                            canManageProviders={canManageProviders}
+                            isSaving={isSaving}
+                            onSetDefault={onSetDefault}
+                            t={t}
+                        />
+                    ))
+                )}
             </div>
         </section>
     );
@@ -375,12 +404,14 @@ function AdminProvidedAiProviderSection({
     providers,
     canManageProviders,
     isSaving,
+    isLoading,
     onSetDefault,
     t,
 }: {
     providers: AiProviderRow[];
     canManageProviders: boolean;
     isSaving: boolean;
+    isLoading: boolean;
     onSetDefault: (row: AiProviderRow) => void;
     t: ReturnType<typeof useTranslations>;
 }) {
@@ -399,25 +430,33 @@ function AdminProvidedAiProviderSection({
             </div>
 
             <div className="space-y-3">
-                {providers.map(row => (
-                    <DefaultAiProviderCard
-                        key={row.id}
-                        row={row}
-                        ownerLabel={t('Badges.AdminProvided')}
-                        description={row.isDefault ? t('AdminAi.ActiveModelDescription') : t('AdminAi.ModelDescription')}
-                        unavailableDescription={t('AdminAi.UnavailableDescription')}
-                        canManageProviders={canManageProviders}
-                        isSaving={isSaving}
-                        onSetDefault={onSetDefault}
-                        t={t}
-                    />
-                ))}
+                {isLoading ? (
+                    <DefaultAiProviderSkeleton />
+                ) : (
+                    providers.map(row => (
+                        <DefaultAiProviderCard
+                            key={row.id}
+                            row={row}
+                            ownerLabel={t('Badges.AdminProvided')}
+                            description={row.isDefault ? t('AdminAi.ActiveModelDescription') : t('AdminAi.ModelDescription')}
+                            unavailableDescription={t('AdminAi.UnavailableDescription')}
+                            canManageProviders={canManageProviders}
+                            isSaving={isSaving}
+                            onSetDefault={onSetDefault}
+                            t={t}
+                        />
+                    ))
+                )}
             </div>
         </section>
     );
 }
 
-export default function AISettingsPageClient() {
+export type AISettingsPageClientProps = {
+    onOpenBillingSettings?: () => void;
+};
+
+export default function AISettingsPageClient({ onOpenBillingSettings }: AISettingsPageClientProps) {
     const params = useParams<{ organization: string }>();
     const organizationSlug = params.organization;
     const t = useTranslations('OrganizationSettings.Ai');
@@ -637,6 +676,10 @@ export default function AISettingsPageClient() {
 
     function openUpgrade() {
         if (upgradeTarget === 'pro') {
+            if (onOpenBillingSettings) {
+                onOpenBillingSettings();
+                return;
+            }
             window.location.assign(`/${organizationSlug}/settings/billing`);
             return;
         }
@@ -714,21 +757,24 @@ export default function AISettingsPageClient() {
                     </div>
                 ) : null}
 
-                {providersQuery.isLoading && !providersQuery.isError ? (
-                    <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">{t('Loading')}</div>
-                ) : null}
-
-                <header className="border-b pb-5">
-                    <div className="max-w-3xl">
-                        <h2 className="text-xl font-semibold tracking-tight">{t('Providers.Title')}</h2>
-                        <p className="mt-2 text-sm text-muted-foreground">{t('Providers.Description')}</p>
-                    </div>
-                </header>
-
                 {isDesktopRuntime ? (
-                    <DoryAiProviderSection providers={systemProviders} canManageProviders={canManageProviders} isSaving={isSaving} onSetDefault={setDefault} t={t} />
+                    <DoryAiProviderSection
+                        providers={systemProviders}
+                        canManageProviders={canManageProviders}
+                        isSaving={isSaving}
+                        isLoading={providersQuery.isLoading}
+                        onSetDefault={setDefault}
+                        t={t}
+                    />
                 ) : (
-                    <AdminProvidedAiProviderSection providers={systemProviders} canManageProviders={canManageProviders} isSaving={isSaving} onSetDefault={setDefault} t={t} />
+                    <AdminProvidedAiProviderSection
+                        providers={systemProviders}
+                        canManageProviders={canManageProviders}
+                        isSaving={isSaving}
+                        isLoading={providersQuery.isLoading}
+                        onSetDefault={setDefault}
+                        t={t}
+                    />
                 )}
 
                 <section className="space-y-3">
@@ -754,7 +800,9 @@ export default function AISettingsPageClient() {
                         <div className="rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">{t('ReadOnlyHint')}</div>
                     ) : null}
 
-                    {!organizationProvidersAvailable && !providersQuery.isLoading ? (
+                    {providersQuery.isLoading ? (
+                        <DefaultAiProviderSkeleton />
+                    ) : !organizationProvidersAvailable ? (
                         <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex items-start gap-3">
@@ -776,12 +824,12 @@ export default function AISettingsPageClient() {
                         </div>
                     ) : organizationProviders.length > 0 ? (
                         <div className="space-y-3">{organizationProviders.map(renderProviderRow)}</div>
-                    ) : !providersQuery.isLoading ? (
+                    ) : (
                         <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
                             <div className="text-sm font-medium">{t('Groups.OrganizationEmptyTitle')}</div>
                             <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationEmptyDescription')}</p>
                         </div>
-                    ) : null}
+                    )}
                 </section>
             </div>
 

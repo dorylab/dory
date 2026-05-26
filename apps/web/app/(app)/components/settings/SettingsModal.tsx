@@ -14,21 +14,33 @@ export function SettingsModal({
     onOpenChange,
     activeCategory = 'appearance',
     onActiveCategoryChange,
+    includeOrganizationSettings = false,
+    includeBillingSettings = false,
+    billingManagementAvailable = false,
+    desktopBillingHandoff = false,
 }: {
     open: boolean;
     onOpenChange: (v: boolean) => void;
     activeCategory?: CategoryKey;
     onActiveCategoryChange?: (category: CategoryKey) => void;
+    includeOrganizationSettings?: boolean;
+    includeBillingSettings?: boolean;
+    billingManagementAvailable?: boolean;
+    desktopBillingHandoff?: boolean;
 }) {
     const [query, setQuery] = React.useState('');
     const t = useTranslations('DoryUI.Settings');
-    const categories = React.useMemo(() => getCategories(t), [t]);
+    const categories = React.useMemo(() => getCategories(t, { includeOrganizationSettings, includeBillingSettings }), [t, includeOrganizationSettings, includeBillingSettings]);
 
     React.useEffect(() => {
         if (open) {
             setQuery('');
         }
     }, [open, activeCategory]);
+
+    const resolvedActiveCategory = React.useMemo(() => {
+        return categories.some(category => category.key === activeCategory) ? activeCategory : (categories[0]?.key ?? 'appearance');
+    }, [activeCategory, categories]);
 
     const filtered = React.useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -40,8 +52,19 @@ export function SettingsModal({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className={cn('p-0 gap-0 overflow-hidden', 'sm:max-w-[960px] w-[960px] h-[600px] min-h-0', 'rounded-2xl')}>
                 <div className="grid h-full min-h-0 overflow-hidden grid-cols-[280px_minmax(0,1fr)]">
-                    <SettingsSidebar active={activeCategory} query={query} onQueryChange={setQuery} onSelect={onActiveCategoryChange ?? (() => undefined)} filtered={filtered} />
-                    <SettingsContent active={activeCategory} />
+                    <SettingsSidebar
+                        active={resolvedActiveCategory}
+                        query={query}
+                        onQueryChange={setQuery}
+                        onSelect={onActiveCategoryChange ?? (() => undefined)}
+                        filtered={filtered}
+                    />
+                    <SettingsContent
+                        active={resolvedActiveCategory}
+                        categories={categories}
+                        billingManagementAvailable={billingManagementAvailable}
+                        desktopBillingHandoff={desktopBillingHandoff}
+                    />
                 </div>
             </DialogContent>
         </Dialog>

@@ -1,9 +1,6 @@
-import { NextResponse } from 'next/server';
 import { getDBService } from '@dory/database';
 import '@/lib/drivers/register-database-drivers';
 
-import { ResponseUtil } from '@/lib/result';
-import { ErrorCodes } from '@dory/shared/errors';
 import type { ConnectionListItem, ConnectionSsh } from '@dory/shared/types/connections';
 import { BaseConfig } from '@dory/drivers/types';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
@@ -74,10 +71,10 @@ export function normalizeOptions(raw: unknown): string | Record<string, unknown>
 function isLocalFilesDatasetOptions(options: unknown) {
     return Boolean(
         options &&
-        typeof options === 'object' &&
-        !Array.isArray(options) &&
-        (options as Record<string, unknown>).managedBy === 'local-files' &&
-        (options as Record<string, unknown>).mode === 'localFilesDataset',
+            typeof options === 'object' &&
+            !Array.isArray(options) &&
+            (options as Record<string, unknown>).managedBy === 'local-files' &&
+            (options as Record<string, unknown>).mode === 'localFilesDataset',
     );
 }
 
@@ -143,24 +140,6 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
     const entry = await ensurePoolWithLatest(config);
 
     return { entry, config, identity };
-}
-
-export function mapConnectionErrorToResponse(error: unknown, messages: { notFound: string; missingHost: string; missingPath?: string; fallback: string }) {
-    const code = getConnectionErrorCode(error);
-
-    if (code === CONNECTION_ERROR_CODES.notFound) {
-        return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: messages.notFound }), { status: 404 });
-    }
-
-    if (code === CONNECTION_ERROR_CODES.missingHost) {
-        return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: messages.missingHost }), { status: 400 });
-    }
-
-    if (code === CONNECTION_ERROR_CODES.missingPath) {
-        return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.INVALID_PARAMS, message: messages.missingPath ?? messages.fallback }), { status: 400 });
-    }
-
-    return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.ERROR, message: messages.fallback }), { status: 500 });
 }
 
 export function mapNamesToLabelValue(names: string[]) {

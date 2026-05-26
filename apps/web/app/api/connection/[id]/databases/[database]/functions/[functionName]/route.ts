@@ -6,7 +6,7 @@ import { resolveCatalogContext } from '../../../_utils';
 import { hasMetadataCapability } from '@dory/drivers/types';
 import { ErrorCodes } from '@dory/shared/errors';
 import { destroyDriverPool } from '@dory/drivers/core';
-import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
 type FunctionDetailParams = {
@@ -32,7 +32,9 @@ export async function GET(req: NextRequest, context: { params: Promise<FunctionD
         }
 
         if (!hasMetadataCapability(metadata, 'getFunctionDetail')) {
-            return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: 'Function detail metadata is not supported for this connection.' }), { status: 404 });
+            return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: 'Function detail metadata is not supported for this connection.' }), {
+                status: 404,
+            });
         }
 
         const params = await context.params;

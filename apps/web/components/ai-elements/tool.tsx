@@ -3,14 +3,15 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { cn } from '@dory/web-utils';
 import type { DynamicToolUIPart, ToolUIPart } from 'ai';
-import { CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, CircleIcon, ClockIcon, XCircleIcon } from 'lucide-react';
+import { CheckCircleIcon, ChevronDownIcon, ChevronRightIcon, ClockIcon, LoaderCircleIcon, XCircleIcon } from 'lucide-react';
 import type { ComponentProps, ReactNode } from 'react';
 import { isValidElement } from 'react';
 import { CodeBlock } from './code-block';
+import { Shimmer } from './shimmer';
 
 export type ToolProps = ComponentProps<typeof Collapsible>;
 
-export const Tool = ({ className, ...props }: ToolProps) => <Collapsible className={cn('group not-prose mb-2 w-full overflow-hidden', className)} {...props} />;
+export const Tool = ({ className, ...props }: ToolProps) => <Collapsible className={cn('not-prose mb-2 w-full overflow-hidden', className)} {...props} />;
 
 export type ToolPart = ToolUIPart | DynamicToolUIPart;
 
@@ -38,8 +39,8 @@ export const getStatusMeta = (status: ToolPart['state']) => {
     };
 
     const icons: Record<ToolPart['state'], ReactNode> = {
-        'input-streaming': <CircleIcon className="size-3.5" />,
-        'input-available': <ClockIcon className="size-3.5 animate-pulse" />,
+        'input-streaming': <LoaderCircleIcon className="size-3.5 animate-spin text-muted-foreground/60" />,
+        'input-available': <LoaderCircleIcon className="size-3.5 animate-spin text-muted-foreground/60" />,
         'approval-requested': <ClockIcon className="size-3.5 text-yellow-600" />,
         'approval-responded': <CheckCircleIcon className="size-3.5 text-blue-600" />,
         'output-available': <CheckCircleIcon className="size-3.5 text-green-600" />,
@@ -55,28 +56,43 @@ export const getStatusMeta = (status: ToolPart['state']) => {
 
 export const getStatusBadge = (status: ToolPart['state']) => {
     const statusMeta = getStatusMeta(status);
+    const isLoadingState = status === 'input-streaming' || status === 'input-available';
 
     return (
-        <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground/65 transition-colors group-hover:text-muted-foreground/85">
+        <span className="inline-flex shrink-0 items-center gap-1 text-[12px] text-muted-foreground/65 transition-colors group-hover/tool-header:text-muted-foreground/85">
             {statusMeta.icon}
-            <span>{statusMeta.label}</span>
+            {isLoadingState ? (
+                <Shimmer as="span" className="text-[12px] leading-5" duration={1.25}>
+                    {statusMeta.label}
+                </Shimmer>
+            ) : (
+                <span>{statusMeta.label}</span>
+            )}
         </span>
     );
 };
 
 export const ToolHeader = ({ className, title, type, state, toolName, ...props }: ToolHeaderProps) => {
     const derivedName = type === 'dynamic-tool' ? toolName : type.split('-').slice(1).join('-');
+    const isLoadingState = state === 'input-streaming' || state === 'input-available';
+    const displayTitle = title ?? derivedName;
 
     return (
         <CollapsibleTrigger
-            className={cn('flex w-full items-center gap-1.5 py-1 text-left transition-colors hover:text-muted-foreground/90', className)}
+            className={cn('group/tool-header flex w-full cursor-pointer items-center gap-1.5 py-1 text-left transition-colors hover:text-muted-foreground/90', className)}
             {...props}
         >
             <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                <span className="truncate text-[13px] leading-5 text-muted-foreground/85 transition-colors group-hover:text-foreground/85">{title ?? derivedName}</span>
+                {isLoadingState ? (
+                    <Shimmer as="span" className="truncate text-[13px] leading-5" duration={1.25}>
+                        {displayTitle}
+                    </Shimmer>
+                ) : (
+                    <span className="truncate text-[13px] leading-5 text-muted-foreground/85 transition-colors group-hover/tool-header:text-foreground/85">{displayTitle}</span>
+                )}
                 {getStatusBadge(state)}
-                <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover:text-muted-foreground/75 group-data-[state=open]:hidden" />
-                <ChevronDownIcon className="hidden size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover:text-muted-foreground/75 group-data-[state=open]:block" />
+                <ChevronRightIcon className="size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover/tool-header:text-muted-foreground/75 group-data-[state=open]/tool-header:hidden" />
+                <ChevronDownIcon className="hidden size-3.5 shrink-0 text-muted-foreground/55 transition-colors group-hover/tool-header:text-muted-foreground/75 group-data-[state=open]/tool-header:block" />
             </div>
         </CollapsibleTrigger>
     );

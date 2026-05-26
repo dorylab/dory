@@ -1,11 +1,13 @@
 import type { ConnectionType } from '@dory/shared/types/connections';
 
 export const SQL_TOOL_INSTRUCTION = `
-When the user asks for data queries, first generate a read-only SQL statement (SELECT only) and call the sqlRunner tool. In your response, include the SQL and explain the query results.
+When the user asks for data queries that require actual database results, first generate a read-only SQL statement (SELECT only) and call the sqlRunner tool. In your response, include the SQL and explain the query results.
+If the user explicitly asks to only generate, show, or write SQL without executing it, return the SQL only and do not call sqlRunner.
 
 SQL generation rules:
 - Always match the SQL syntax to the current database dialect from the provided connection/schema context.
 - Never use SELECT * in generated SQL. Always select only the columns needed to answer the question.
+- Never fetch more than 100 rows for exploratory, detail, preview, or chart source queries. If a row limit is needed, cap it at 100 even when the user does not specify a number.
 - For "latest N rows", "top N recent rows", or any ORDER BY ... LIMIT query on a large table, prefer the minimum necessary columns first.
 `;
 
@@ -14,14 +16,23 @@ About the sqlRunner tool
 
 - For questions related to data querying, aggregation, reporting, metrics, monitoring, or comparisons, follow these steps:
   1) Based on the current database context (dialect / database / schema / table), write read-only SQL for the active database engine (prefer SELECT).
-  2) Use the provided schema context first. If table structure is still unclear, inspect schema with dialect-appropriate read-only queries before writing the final query.
+  2) Use the provided schema context first. If table structure is still unclear, use the metadata tools before writing the final query:
+     - listDatabases to discover available databases.
+     - listTables or searchSchema to find candidate tables and views.
+     - describeTable or getTableProfile to inspect real columns, types, indexes, DDL, and table stats.
+     - getDatabaseSummary for a compact overview of important tables and database shape.
+     Only fall back to dialect-specific metadata SQL when these metadata tools are unavailable or return insufficient information.
      - PostgreSQL: prefer information_schema.columns, pg_catalog, or other PostgreSQL-compatible metadata queries. Do not use MySQL-only DESCRIBE / SHOW COLUMNS syntax.
      - MySQL / MariaDB: DESCRIBE, SHOW COLUMNS, and information_schema are acceptable.
      - SQL Server: use T-SQL, sys catalog views, and INFORMATION_SCHEMA. Do not use LIMIT.
      - SQLite: use PRAGMA table_info(...) when needed.
   3) Never use SELECT *. Only project the columns needed for the answer.
-  4) Call sqlRunner to execute the SQL.
-  5) Analyze results using previewRows, columns, rowCount, hasMore, and explain what the data indicates.
+  4) Before calling sqlRunner, ensure the SQL cannot return more than 100 rows unless it is an aggregate query that naturally returns fewer grouped rows.
+     - For SQLite / PostgreSQL / MySQL / ClickHouse / Doris, use LIMIT with a value no greater than 100.
+     - For SQL Server, use TOP (100) or FETCH NEXT 100 ROWS ONLY.
+     - For Oracle, use FETCH FIRST 100 ROWS ONLY or an equivalent ROWNUM filter.
+  5) Call sqlRunner to execute the SQL.
+  6) Analyze results using previewRows, columns, rowCount, hasMore, and explain what the data indicates.
      - If hasMore=true, note that only a sample is shown and conclusions are based on the sample.
 
 - If sqlRunner returns ok=false:
@@ -32,6 +43,7 @@ About the sqlRunner tool
   - If it still fails, be honest about the cause and suggest next steps (e.g., check table names, column names, time ranges).
 
 - Do not fabricate query results. If the query cannot be executed or data is insufficient, say you are not sure or that there is not enough data.
+- Do not invent table or column names. When in doubt, call searchSchema or describeTable first.
 `.trim();
 
 export function buildDialectSqlPrompt(connectionType?: ConnectionType | null): string {
@@ -117,11 +129,12 @@ export const CHART_BUILDER_GUIDE = `
 About charts and the chartBuilder tool
 
 - When the user asks for charts, visualization, trends, dashboards, or charts, do:
-  1) Use sqlRunner to fetch query results (SELECT only).
+  1) Use sqlRunner to fetch query results (SELECT only), capped to at most 100 rows for non-aggregate chart source data.
   2) After getting results, call chartBuilder to produce the chart config.
 
 - When generating chart config:
-  - Choose an appropriate chartType (bar / line / area / pie) and provide a data array.
+  - Choose an appropriate chartType (bar / line / area / pie).
+  - Do not provide a data array to chartBuilder. The tool reads data from the latest sqlRunner result.
   - Specify xKey (time field or category), and yKeys array (each with key and optional label/color); if there is only one metric, use valueKey.
   - If the query returns many columns, select or reshape to what the chart needs, do not dump all columns into the chart.
   - After generating the chart, explain in natural language:

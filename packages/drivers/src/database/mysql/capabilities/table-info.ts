@@ -1,8 +1,8 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import type { MySqlDatasource } from '../MySqlDatasource';
-import { parseMysqlTableReference, quoteMysqlQualifiedTable } from '../mysql-driver';
+import type { MySqlDatasource } from '../datasource';
+import { parseMysqlTableReference, quoteMysqlQualifiedTable } from '../runtime';
 
 type TableIdentityRow = {
     name?: string;

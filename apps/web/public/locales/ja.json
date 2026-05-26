@@ -2368,7 +2368,10 @@
             "Prompt": {
                 "SchemaContextTitle": "[現在のデータコンテキスト]",
                 "DatabaseContextTitle": "[データベースコンテキスト]",
-                "CopilotContextTitle": "[現在の Copilot コンテキスト]"
+                "CopilotContextTitle": "[現在の Copilot コンテキスト]",
+                "ExecutionIntent": {
+                    "Policy": "現在のターンの実行ポリシー:\n- sqlRunner を使うかどうかを決める前に、最新のユーザーメッセージの意図を分類してください。\n- ユーザーが SQL の生成、表示、作成のみを明示している場合、またはクエリを実行しないよう求めている場合は、このターンでは sqlRunner を呼び出さず、確認が必要な場合を除いて SQL だけを返してください。\n- ユーザーが表示、一覧、ランキング、比較、集計、グラフ作成、または実際のデータベース結果の取得を求めており、sqlRunner が利用可能な場合は、最終回答の前に読み取り専用 SQL で sqlRunner を呼び出してください。\n- データ結果が必要なリクエストでは、SQL を書くだけで終了しないでください。\n- 探索的または明細の結果件数は 100 行以下にしてください。"
+                }
             },
             "ChartBuilder": {
                 "Description": "提供されたデータに基づいてグラフ設定を返します。\n\n使い方:\n1. chartType（bar/line/area/pie）を指定します。\n2. data はクエリ結果行の配列です。\n3. xKey / yKeys / categoryKey / valueKey が不明な場合は空にしてください。ツールが推定します。\n   - Line/area: x には時間フィールド、y には数値フィールドを優先します。\n   - Bar: x にはカテゴリフィールド、y には数値フィールドを優先します。\n   - Pie: categoryKey にカテゴリフィールド、valueKey に数値フィールドを選択します。\n4. ツールは時間/数値/カテゴリ列を推定し、必要に応じて options.xKeyType/sortBy を設定します。",
@@ -2787,7 +2790,27 @@
             "Title": "設定",
             "Description": "アプリ設定",
             "SearchPlaceholder": "設定を検索",
+            "Groups": {
+                "Person": "個人",
+                "Workspace": "ワークスペース",
+                "About": "情報"
+            },
             "Categories": {
+                "Organization": {
+                    "Label": "組織",
+                    "Title": "組織",
+                    "Description": "現在の作業を離れずにこのワークスペースを管理します。"
+                },
+                "Ai": {
+                    "Label": "AI",
+                    "Title": "AI 設定",
+                    "Description": "この組織で利用できるモデルを設定します。"
+                },
+                "Billing": {
+                    "Label": "プランとサブスクリプション",
+                    "Title": "プランとサブスクリプション",
+                    "Description": "現在のプランと請求オプションを確認します。"
+                },
                 "Appearance": {
                     "Label": "外観",
                     "Title": "テーマと外観",
@@ -3225,7 +3248,7 @@
         },
         "Billing": {
             "Title": "プランとサブスクリプション",
-            "Description": "現在の組織プランを確認し、Pro へアップグレードしたり、Stripe で請求を管理したりできます。",
+            "Description": "現在の組織プランと請求オプションを確認します。",
             "UnavailableDescription": "組織の請求情報を読み込めません。",
             "CurrentPlan": "現在のプラン",
             "Loading": "読み込み中...",
@@ -3234,8 +3257,8 @@
             "ManageBilling": "請求を管理",
             "Redirecting": "リダイレクト中...",
             "Opening": "開いています...",
-            "DesktopUpgradeToPro": "ブラウザでサブスクライブ",
-            "OpeningBrowser": "ブラウザを開いています...",
+            "DesktopUpgradeToPro": "早期アクセスを取得",
+            "OpeningBrowser": "開いています...",
             "RefreshBillingStatus": "状態を更新",
             "Refreshing": "更新中...",
             "RefreshComplete": "請求状況を更新しました",

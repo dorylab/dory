@@ -5,7 +5,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { createDuckDbMetadataCapability, type DuckDbMetadataAPI } from './capabilities/metadata';
 import { createDuckDbTableInfoCapability } from './capabilities/table-info';
 import { DuckDbDialect } from './dialect';
-import { closeDuckDbConnection, executeDuckDbQuery, openDuckDbConnection, pingDuckDb } from './duckdb-driver';
+import { closeDuckDbConnection, executeDuckDbQuery, openDuckDbConnection, pingDuckDb } from './runtime';
 
 type DuckDbHandle = Awaited<ReturnType<typeof openDuckDbConnection>>;
 

@@ -10,8 +10,8 @@ import type {
     DatabaseSummaryTable,
     TableColumnInfo,
 } from '@dory/drivers/types';
-import type { SqlServerDatasource } from '../SqlServerDatasource';
-import { parseSqlServerTableReference } from '../sqlserver-driver';
+import type { SqlServerDatasource } from '../datasource';
+import { parseSqlServerTableReference } from '../runtime';
 
 export type SqlServerMetadataAPI = ConnectionMetadataAPI & {
     getSchemas: (database: string) => Promise<Array<{ label: string; value: string }>>;
@@ -603,12 +603,8 @@ async function getFunctionDetail(datasource: SqlServerDatasource, database: stri
         returnColumns,
         definition: detail.definition ?? null,
         sampleCallSql: buildSqlServerSampleCall(qualifiedName, parameters, kind),
-        dependencies: dependencyResult.rows
-            .filter(row => row.name)
-            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
-        usedBy: usedByResult.rows
-            .filter(row => row.name)
-            .map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+        dependencies: dependencyResult.rows.filter(row => row.name).map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
+        usedBy: usedByResult.rows.filter(row => row.name).map(row => ({ name: row.name!, schema: row.schemaName ?? null, type: row.type ?? null })),
     };
 }
 

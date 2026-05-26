@@ -1,7 +1,7 @@
 import type { ConnectionMetadataAPI, DatabaseObjectRow, TableColumnInfo } from '@dory/drivers/types';
 
-import type { DuckDbDatasource } from '../DuckDbDatasource';
-import { getDuckDbDatabases, getDuckDbTableColumns, getDuckDbTables } from '../duckdb-driver';
+import type { DuckDbDatasource } from '../datasource';
+import { getDuckDbDatabases, getDuckDbTableColumns, getDuckDbTables } from '../runtime';
 
 export type DuckDbMetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
 

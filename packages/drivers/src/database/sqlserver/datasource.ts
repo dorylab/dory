@@ -5,7 +5,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { createSqlServerMetadataCapability, type SqlServerMetadataAPI } from './capabilities/metadata';
 import { createSqlServerTableInfoCapability } from './capabilities/table-info';
 import { SqlServerDialect } from './dialect';
-import { createSqlServerPool, executeSqlServerCommand, executeSqlServerQuery, pingSqlServer, resolveSqlServerPort } from './sqlserver-driver';
+import { createSqlServerPool, executeSqlServerCommand, executeSqlServerQuery, pingSqlServer, resolveSqlServerPort } from './runtime';
 
 export class SqlServerDatasource extends BaseConnection {
     readonly dialect = SqlServerDialect;

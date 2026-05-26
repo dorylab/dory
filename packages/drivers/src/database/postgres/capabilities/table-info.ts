@@ -1,7 +1,7 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import type { PostgresDatasource } from '../PostgresDatasource';
+import type { PostgresDatasource } from '../datasource';
 
 type TableIdentityRow = {
     oid?: number;

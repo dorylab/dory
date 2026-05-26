@@ -3,7 +3,7 @@ import { ResponseUtil } from '@/lib/result';
 import { NextRequest, NextResponse } from 'next/server';
 import { testConnectService } from './service';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { CONNECTION_ERROR_CODES, getConnectionErrorCode } from '@/app/api/connection/utils';
+import { CONNECTION_ERROR_CODES, getConnectionErrorCode } from '@/lib/connection/utils';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 export const runtime = 'nodejs';
 export const POST = withUserAndOrganizationHandler(async ({ req, organizationId }) => {
@@ -24,17 +24,17 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
                 ? t('Api.Connection.Errors.MissingHost')
                 : code === CONNECTION_ERROR_CODES.missingPath
                   ? t('Api.Connection.Errors.MissingPath')
-                : code === CONNECTION_ERROR_CODES.missingUsername
-                  ? t('Api.Connection.Errors.MissingUsername')
-                  : code === CONNECTION_ERROR_CODES.missingIdentityInfo
-                    ? t('Api.Connection.Errors.MissingIdentityInfo')
-                    : code === CONNECTION_ERROR_CODES.missingPassword
-                      ? t('Api.Connection.Errors.MissingPassword')
-                      : code === CONNECTION_ERROR_CODES.missingSshPassword
-                        ? t('Api.Connection.Errors.MissingSshPassword')
-                        : code === CONNECTION_ERROR_CODES.missingSshPrivateKey
-                          ? t('Api.Connection.Errors.MissingSshPrivateKey')
-                          : messageFromError ?? fallbackMessage;
+                  : code === CONNECTION_ERROR_CODES.missingUsername
+                    ? t('Api.Connection.Errors.MissingUsername')
+                    : code === CONNECTION_ERROR_CODES.missingIdentityInfo
+                      ? t('Api.Connection.Errors.MissingIdentityInfo')
+                      : code === CONNECTION_ERROR_CODES.missingPassword
+                        ? t('Api.Connection.Errors.MissingPassword')
+                        : code === CONNECTION_ERROR_CODES.missingSshPassword
+                          ? t('Api.Connection.Errors.MissingSshPassword')
+                          : code === CONNECTION_ERROR_CODES.missingSshPrivateKey
+                            ? t('Api.Connection.Errors.MissingSshPrivateKey')
+                            : (messageFromError ?? fallbackMessage);
         message = (error as any).level ? `[${(error as any).level}] ${message}` : message;
         return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.ERROR, message }), { status: 200 });
     }

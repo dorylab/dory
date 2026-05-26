@@ -22,6 +22,7 @@ import {
     useSidebar,
 } from '@/registry/new-york-v4/ui/sidebar';
 import { createOrganization, listOrganizations, setActiveOrganization, slugifyOrganizationName } from '@/lib/organization/api';
+import { useSettings } from '@/app/(app)/components/settings/settings';
 
 function replaceOrganizationInPath(pathname: string, currentSlug: string | undefined, nextSlug: string) {
     if (!currentSlug) {
@@ -42,6 +43,7 @@ export function OrganizationSwitcher() {
     const router = useRouter();
     const pathname = usePathname();
     const params = useParams<{ organization?: string }>();
+    const { openSettings } = useSettings();
     const currentOrganizationSlug = params.organization;
     const [submitting, setSubmitting] = React.useState<string | null>(null);
     const organizationsQuery = useQuery({
@@ -137,7 +139,7 @@ export function OrganizationSwitcher() {
                             </div>
                             <div className="text-muted-foreground font-medium">Add organization</div>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 p-2" onClick={() => router.push(`/${activeOrganization.slug}/settings/organization`)}>
+                        <DropdownMenuItem className="gap-2 p-2" onClick={() => openSettings('organization')}>
                             <div className="bg-background flex size-6 items-center justify-center rounded-md border">
                                 <Settings className="size-4" />
                             </div>

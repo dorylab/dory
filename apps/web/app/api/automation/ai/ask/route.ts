@@ -8,7 +8,7 @@ import { requireLocalAiRouteModel, resolveAiRouteExecution } from '@/lib/ai/exec
 import { isAiQuotaExceededError, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
 import { buildSchemaContext, getDefaultSchemaSampleLimits } from '@/lib/ai/prompts/contexts/schema';
 import { SYSTEM_PROMPT } from '@/lib/ai/prompts/system/core';
-import { ensureConnectionPoolForUser } from '@/app/api/connection/utils';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { withAutomationHandler } from '../../with-automation-handler';
 import { isReadOnlyQuery, AI_ROW_LIMIT } from '../../utils';

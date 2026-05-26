@@ -1,6 +1,6 @@
 import type { ConnectionMetadataAPI } from '@dory/drivers/types';
-import { getSqliteDatabases, getSqliteTableColumns, getSqliteTables, getSqliteViews } from '../sqlite-driver';
-import type { SqliteDatasource } from '../SqliteDatasource';
+import { getSqliteDatabases, getSqliteTableColumns, getSqliteTables, getSqliteViews } from '../runtime';
+import type { SqliteDatasource } from '../datasource';
 
 export type SqliteMetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
 
