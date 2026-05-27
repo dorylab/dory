@@ -81,23 +81,6 @@ docker compose up -d
 For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://www.getdory.dev/docs/deploy/self-hosting).
 
 
-### 🧠 Supported AI Providers
-
-Dory is built with a pluggable AI provider architecture.
-You can freely switch between different model vendors by changing environment variables — no code changes required.
-
-Currently supported providers:
-
-| Provider          | Env `DORY_AI_PROVIDER` | Description                                           |
-| ----------------- | ---------------------- | ----------------------------------------------------- |
-| OpenAI            | `openai`               | Default provider. Uses official OpenAI API.           |
-| OpenAI-Compatible | `openai-compatible`    | Any service exposing an OpenAI-compatible API.        |
-| Anthropic         | `anthropic`            | Claude models via Anthropic official API.             |
-| Google            | `google`               | Gemini models via Google Generative AI API.           |
-| Qwen (Alibaba)    | `qwen`                 | Qwen models via DashScope OpenAI-compatible endpoint. |
-| xAI               | `xai`                  | Grok models via xAI API.                              |
-
-
 ## ✨ Key Features
 
 ### 🧠 SQL Copilot
@@ -140,6 +123,14 @@ AI that understands your database — not just text completion.
 
 ---
 <!-- <img alt="image" src="https://github.com/user-attachments/assets/4397055f7c74-4505-90dc-8d822845b670" /> -->
+
+### 🔗 Agent Access via MCP
+
+- Desktop MCP endpoint for local agent clients
+- No manual token copy/paste in the desktop app
+- Supports schema discovery, saved queries, read-only SQL, table previews, monitoring summaries, and analysis tools
+
+---
 
 ### 📈 ClickHouse Monitoring (Deep Integration)
 
@@ -191,6 +182,59 @@ Native ClickHouse user and role management UI.
 | SQL Server | ✅ Supported         |
 | Oracle     | ✅ Supported         |
 | Snowflake  | 🚧 Planned           |
+
+---
+
+## 🧠 Supported AI Providers
+
+Dory is built with a pluggable AI provider architecture.
+You can freely switch between different model vendors by changing environment variables — no code changes required.
+
+Currently supported providers:
+
+| Provider          | Env `DORY_AI_PROVIDER` | Description                                           |
+| ----------------- | ---------------------- | ----------------------------------------------------- |
+| OpenAI            | `openai`               | Default provider. Uses official OpenAI API.           |
+| OpenAI-Compatible | `openai-compatible`    | Any service exposing an OpenAI-compatible API.        |
+| Anthropic         | `anthropic`            | Claude models via Anthropic official API.             |
+| Google            | `google`               | Gemini models via Google Generative AI API.           |
+| Qwen (Alibaba)    | `qwen`                 | Qwen models via DashScope OpenAI-compatible endpoint. |
+| xAI               | `xai`                  | Grok models via xAI API.                              |
+
+---
+
+## 🔗 Desktop MCP
+
+The Dory desktop app includes local MCP (Model Context Protocol) support, so agent clients can use your Dory connections without manually copying API tokens.
+
+To enable it:
+
+1. Open the Dory desktop app.
+2. Go to **Settings → Agent Access**.
+3. Turn on **Enable**.
+4. Add the displayed local endpoint to your MCP client.
+
+By default, desktop MCP runs at:
+
+```text
+http://127.0.0.1:3318/api/mcp
+```
+
+For Codex CLI:
+
+```bash
+codex mcp add dory --url http://127.0.0.1:3318/api/mcp
+codex mcp list
+```
+
+For Claude Code:
+
+```bash
+claude mcp add --transport http dory http://127.0.0.1:3318/api/mcp
+claude mcp list
+```
+
+Dory manages the desktop MCP grant automatically. The local MCP endpoint can list connections, inspect schemas, read saved queries, preview tables, run read-only SQL, and build analysis context for connected databases.
 
 ---
 
