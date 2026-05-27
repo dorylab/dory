@@ -55,8 +55,6 @@ export default async function TeamLayout({ children, params }: { children: React
             defaultOpen={defaultOpen}
             initialUser={session.user as any}
             organizationId={organization.id}
-            isOffline={bootstrap.isOffline}
-            canUseCloudFeatures={bootstrap.canUseCloudFeatures}
             billingSettingsVisible={isBillingSettingsVisibleForServer()}
             billingManagementAvailable={isBillingManagementAvailableForServer()}
             desktopBillingHandoff={isDesktopBillingHandoffRuntimeForServer()}
