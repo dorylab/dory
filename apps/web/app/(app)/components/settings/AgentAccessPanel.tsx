@@ -3,32 +3,23 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, Copy, Loader2, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 import { CopyButton } from '@/components/@dory/ui/copy-button';
-import { Button } from '@/registry/new-york-v4/ui/button';
-import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { authClient } from '@/lib/auth-client';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { SettingsRow } from './SettingsRow';
 
-type McpTokenRecord = {
-    id: string;
-    name: string;
-    tokenPrefix: string;
-    scopes: string[];
-    enabled: boolean;
-    lastUsedAt: string | null;
-    revokedAt: string | null;
-    createdAt: string;
-};
-
 type McpSettingsPayload = {
     endpoint: string;
-    defaultScopes: string[];
-    tokens: McpTokenRecord[];
+};
+
+type McpDesktopGrantPayload = {
+    grant: string;
+    expiresAt: string;
 };
 
 type McpProxyState = {
@@ -37,16 +28,6 @@ type McpProxyState = {
     endpoint: string;
     error: string | null;
 };
-
-const TOKEN_PLACEHOLDER = 'dory_mcp_...';
-const TOKEN_ENV_VAR = 'DORY_MCP_TOKEN';
-
-function formatDate(value?: string | null) {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '-';
-    return date.toLocaleString();
-}
 
 async function readJson<T>(res: Response): Promise<T> {
     const json = await res.json().catch(() => null);
@@ -62,48 +43,35 @@ export function AgentAccessPanel() {
     const [mcpProxy, setMcpProxy] = useState<McpProxyState | null>(null);
     const [loading, setLoading] = useState(true);
     const [proxyBusy, setProxyBusy] = useState(false);
-    const [creating, setCreating] = useState(false);
-    const defaultTokenName = t('DefaultTokenName');
-    const [tokenName, setTokenName] = useState(defaultTokenName);
-    const [newToken, setNewToken] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const { data: session } = authClient.useSession();
+    const userId = session?.user?.id ?? null;
     const isDesktop = isDesktopRuntime();
-    const effectiveEndpoint = mcpProxy?.enabled && mcpProxy.running && mcpProxy.endpoint ? mcpProxy.endpoint : settings?.endpoint;
+    const effectiveEndpoint = isDesktop ? (mcpProxy?.endpoint ?? settings?.endpoint) : undefined;
 
     const setupSnippets = useMemo(() => {
         if (!effectiveEndpoint) return '';
-        const authorizationHeader = `Bearer ${TOKEN_PLACEHOLDER}`;
         const genericJson = JSON.stringify(
             {
                 mcpServers: {
                     dory: {
                         type: 'http',
                         url: effectiveEndpoint,
-                        headers: {
-                            Authorization: authorizationHeader,
-                        },
                     },
                 },
             },
             null,
             2,
         );
-        const codexCli = [
-            `export ${TOKEN_ENV_VAR}="${TOKEN_PLACEHOLDER}"`,
-            `codex mcp add dory --url ${effectiveEndpoint} --bearer-token-env-var ${TOKEN_ENV_VAR}`,
-            'codex mcp list',
-        ].join('\n');
-        const codexToml = [`[mcp_servers.dory]`, `url = "${effectiveEndpoint}"`, `bearer_token_env_var = "${TOKEN_ENV_VAR}"`].join('\n');
-        const claudeCli = [`claude mcp add --transport http dory ${effectiveEndpoint} \\`, `  --header "Authorization: Bearer ${TOKEN_PLACEHOLDER}"`, 'claude mcp list'].join('\n');
+        const codexCli = [`codex mcp add dory --url ${effectiveEndpoint}`, 'codex mcp list'].join('\n');
+        const codexToml = [`[mcp_servers.dory]`, `url = "${effectiveEndpoint}"`].join('\n');
+        const claudeCli = [`claude mcp add --transport http dory ${effectiveEndpoint}`, 'claude mcp list'].join('\n');
         const claudeJson = JSON.stringify(
             {
                 mcpServers: {
                     dory: {
                         type: 'http',
                         url: effectiveEndpoint,
-                        headers: {
-                            Authorization: `Bearer \${${TOKEN_ENV_VAR}}`,
-                        },
                     },
                 },
             },
@@ -117,7 +85,6 @@ export function AgentAccessPanel() {
             codexToml,
             claudeCli,
             claudeJson,
-            authorizationHeader,
         };
     }, [effectiveEndpoint]);
 
@@ -127,10 +94,10 @@ export function AgentAccessPanel() {
             return null;
         }
 
-        const state = await window.mcpBridge.getState();
+        const state = await window.mcpBridge.getState(userId ?? undefined);
         setMcpProxy(state);
         return state;
-    }, [isDesktop]);
+    }, [isDesktop, userId]);
 
     const loadSettings = useCallback(async () => {
         setLoading(true);
@@ -162,55 +129,27 @@ export function AgentAccessPanel() {
         void loadSettings();
     }, [loadSettings]);
 
-    const createToken = async () => {
-        setCreating(true);
-        setMessage(null);
-        setNewToken(null);
-        try {
-            const payload = await readJson<{ token: string; record: McpTokenRecord }>(
-                await authFetch('/api/mcp/tokens', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: tokenName.trim() || defaultTokenName }),
-                }),
-            );
-            setNewToken(payload.token);
-            setSettings(current => (current ? { ...current, tokens: [...current.tokens, payload.record] } : current));
-            setMessage({ type: 'success', text: t('TokenCreated') });
-        } catch (error) {
-            setMessage({ type: 'error', text: error instanceof Error ? error.message : t('CreateFailed') });
-        } finally {
-            setCreating(false);
-        }
-    };
-
-    const deleteToken = async (id: string) => {
-        setMessage(null);
-        try {
-            await readJson<{ deleted: boolean }>(
-                await authFetch(`/api/mcp/tokens/${encodeURIComponent(id)}`, {
-                    method: 'DELETE',
-                }),
-            );
-            setSettings(current =>
-                current
-                    ? {
-                          ...current,
-                          tokens: current.tokens.filter(token => token.id !== id),
-                      }
-                    : current,
-            );
-        } catch (error) {
-            setMessage({ type: 'error', text: error instanceof Error ? error.message : t('RevokeFailed') });
-        }
-    };
-
     const toggleMcpProxy = async (enabled: boolean) => {
         if (typeof window === 'undefined' || !window.mcpBridge) return;
+        if (!userId) {
+            setMessage({ type: 'error', text: t('ProxyStartFailed') });
+            return;
+        }
         setProxyBusy(true);
         setMessage(null);
         try {
-            const state = enabled ? await window.mcpBridge.start() : await window.mcpBridge.stop();
+            const state = enabled
+                ? await window.mcpBridge.start(
+                      (
+                          await readJson<McpDesktopGrantPayload>(
+                              await authFetch('/api/mcp/desktop-grant', {
+                                  method: 'POST',
+                              }),
+                          )
+                      ).grant,
+                      userId,
+                  )
+                : await window.mcpBridge.stop(userId);
             setMcpProxy(state);
             if (state.error) {
                 setMessage({ type: 'error', text: state.error });
@@ -244,7 +183,7 @@ export function AgentAccessPanel() {
                         {mcpProxy ? (
                             <Switch
                                 checked={mcpProxy.enabled}
-                                disabled={proxyBusy || loading || typeof window === 'undefined' || !window.mcpBridge}
+                                disabled={proxyBusy || loading || !userId || typeof window === 'undefined' || !window.mcpBridge}
                                 onCheckedChange={checked => {
                                     void toggleMcpProxy(checked);
                                 }}
@@ -260,94 +199,6 @@ export function AgentAccessPanel() {
                 </div>
             ) : null}
 
-            <div className="space-y-1.5">
-                <SettingsRow label={t('EndpointLabel')} description={t('EndpointDescription')}>
-                    <CopyButton
-                        text={effectiveEndpoint ?? ''}
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        disabled={!effectiveEndpoint}
-                        aria-label={t('Copy')}
-                        title={t('Copy')}
-                        label={copyLabel}
-                        copiedLabel={copiedLabel}
-                    />
-                </SettingsRow>
-                {isInitialLoading ? (
-                    <Skeleton className="h-9 w-full" />
-                ) : effectiveEndpoint ? (
-                    <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{effectiveEndpoint}</pre>
-                ) : null}
-            </div>
-
-            <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium">{t('TokensTitle')}</div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadSettings} disabled={loading} aria-label={t('Refresh')} title={t('Refresh')}>
-                        <RotateCcw className={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
-                    </Button>
-                </div>
-                <div className="flex gap-2">
-                    <Input value={tokenName} onChange={event => setTokenName(event.target.value)} placeholder={t('TokenNamePlaceholder')} disabled={!settings} />
-                    <Button size="sm" onClick={createToken} disabled={creating || !settings}>
-                        {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                        {t('CreateToken')}
-                    </Button>
-                </div>
-                {newToken ? (
-                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3">
-                        <div className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">{t('TokenOnce')}</div>
-                        <div className="flex items-center gap-2">
-                            <code className="min-w-0 flex-1 break-all rounded bg-background px-2 py-1 text-xs">{newToken}</code>
-                            <CopyButton
-                                text={newToken}
-                                variant="outline"
-                                size="icon"
-                                className="h-7 w-7"
-                                aria-label={t('Copy')}
-                                title={t('Copy')}
-                                label={copyLabel}
-                                copiedLabel={copiedLabel}
-                            />
-                        </div>
-                    </div>
-                ) : null}
-                <div className="divide-y rounded-md border">
-                    {isInitialLoading ? (
-                        <>
-                            <TokenSkeleton />
-                            <TokenSkeleton />
-                        </>
-                    ) : (settings?.tokens ?? []).length === 0 ? (
-                        <div className="px-3 py-4 text-sm text-muted-foreground">{t('NoTokens')}</div>
-                    ) : (
-                        settings!.tokens.map(token => (
-                            <div key={token.id} className="flex items-center justify-between gap-3 px-3 py-3">
-                                <div className="min-w-0">
-                                    <div className="truncate text-sm font-medium">
-                                        {token.name} <span className="font-mono text-xs text-muted-foreground">{token.tokenPrefix}...</span>
-                                    </div>
-                                    <div className="mt-1 text-xs text-muted-foreground">
-                                        {token.revokedAt ? t('RevokedAt', { date: formatDate(token.revokedAt) }) : t('LastUsedAt', { date: formatDate(token.lastUsedAt) })}
-                                    </div>
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => deleteToken(token.id)}
-                                    aria-label={t('DeleteToken')}
-                                    title={t('DeleteToken')}
-                                >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
-
             {isInitialLoading ? (
                 <div className="space-y-3">
                     <div>
@@ -359,42 +210,42 @@ export function AgentAccessPanel() {
                     <Skeleton className="h-10 w-full" />
                     <Skeleton className="h-32 w-full" />
                 </div>
-            ) : setupSnippets ? (
-                <div className="space-y-3">
-                    <div>
-                        <div className="text-sm font-medium">{t('SetupTitle')}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">{t('SetupDescription')}</div>
+            ) : isDesktop ? (
+                setupSnippets ? (
+                    <div className="space-y-3">
+                        <div>
+                            <div className="text-sm font-medium">{t('SetupTitle')}</div>
+                            <div className="mt-1 text-xs text-muted-foreground">{t('SetupDescription')}</div>
+                        </div>
+                        <Tabs defaultValue="general" className="w-full">
+                            <TabsList className="grid w-full grid-cols-3">
+                                <TabsTrigger value="general">{t('SetupTabs.General')}</TabsTrigger>
+                                <TabsTrigger value="codex">Codex</TabsTrigger>
+                                <TabsTrigger value="claudeCode">Claude Code</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="general" className="mt-3 space-y-3">
+                                <div className="grid gap-2 rounded-md border bg-muted/20 p-3 text-xs">
+                                    <div className="grid gap-1">
+                                        <span className="font-medium text-foreground">{t('General.Endpoint')}</span>
+                                        <code className="break-all text-muted-foreground">{setupSnippets.endpoint}</code>
+                                    </div>
+                                </div>
+                                <CopyableSnippet title={t('General.JsonTitle')} text={setupSnippets.genericJson} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+                            </TabsContent>
+                            <TabsContent value="codex" className="mt-3 space-y-3">
+                                <CopyableSnippet title={t('Codex.CliTitle')} text={setupSnippets.codexCli} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+                                <CopyableSnippet title={t('Codex.TomlTitle')} text={setupSnippets.codexToml} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+                            </TabsContent>
+                            <TabsContent value="claudeCode" className="mt-3 space-y-3">
+                                <CopyableSnippet title={t('ClaudeCode.CliTitle')} text={setupSnippets.claudeCli} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+                                <CopyableSnippet title={t('ClaudeCode.JsonTitle')} text={setupSnippets.claudeJson} copyLabel={copyLabel} copiedLabel={copiedLabel} />
+                            </TabsContent>
+                        </Tabs>
                     </div>
-                    <Tabs defaultValue="general" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="general">{t('SetupTabs.General')}</TabsTrigger>
-                            <TabsTrigger value="codex">Codex</TabsTrigger>
-                            <TabsTrigger value="claudeCode">Claude Code</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="general" className="mt-3 space-y-3">
-                            <div className="grid gap-2 rounded-md border bg-muted/20 p-3 text-xs">
-                                <div className="grid gap-1">
-                                    <span className="font-medium text-foreground">{t('General.Endpoint')}</span>
-                                    <code className="break-all text-muted-foreground">{setupSnippets.endpoint}</code>
-                                </div>
-                                <div className="grid gap-1">
-                                    <span className="font-medium text-foreground">{t('General.Authorization')}</span>
-                                    <code className="break-all text-muted-foreground">Authorization: {setupSnippets.authorizationHeader}</code>
-                                </div>
-                            </div>
-                            <CopyableSnippet title={t('General.JsonTitle')} text={setupSnippets.genericJson} copyLabel={copyLabel} copiedLabel={copiedLabel} />
-                        </TabsContent>
-                        <TabsContent value="codex" className="mt-3 space-y-3">
-                            <CopyableSnippet title={t('Codex.CliTitle')} text={setupSnippets.codexCli} copyLabel={copyLabel} copiedLabel={copiedLabel} />
-                            <CopyableSnippet title={t('Codex.TomlTitle')} text={setupSnippets.codexToml} copyLabel={copyLabel} copiedLabel={copiedLabel} />
-                        </TabsContent>
-                        <TabsContent value="claudeCode" className="mt-3 space-y-3">
-                            <CopyableSnippet title={t('ClaudeCode.CliTitle')} text={setupSnippets.claudeCli} copyLabel={copyLabel} copiedLabel={copiedLabel} />
-                            <CopyableSnippet title={t('ClaudeCode.JsonTitle')} text={setupSnippets.claudeJson} copyLabel={copyLabel} copiedLabel={copiedLabel} />
-                        </TabsContent>
-                    </Tabs>
-                </div>
-            ) : null}
+                ) : null
+            ) : (
+                <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">{t('WebAuthorizationStatus')}</div>
+            )}
 
             {message ? (
                 <div
@@ -407,18 +258,6 @@ export function AgentAccessPanel() {
                     {message.text}
                 </div>
             ) : null}
-        </div>
-    );
-}
-
-function TokenSkeleton() {
-    return (
-        <div className="flex items-center justify-between gap-3 px-3 py-3">
-            <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton className="h-4 w-48" />
-                <Skeleton className="h-3 w-36" />
-            </div>
-            <Skeleton className="h-7 w-7" />
         </div>
     );
 }

@@ -2,7 +2,19 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 import type { OrganizationAccess } from '../../lib/server/authz';
-import { buildMcpAuthContextForToken, generateMcpToken, hashMcpToken, hasMcpScope, isAllowedMcpOrigin, MCP_DEFAULT_SCOPES, MCP_TOKEN_PREFIX } from '../../lib/server/mcp/auth';
+import {
+    authenticateMcpRequest,
+    buildMcpAuthContextForDesktopGrant,
+    buildMcpAuthContextForToken,
+    generateMcpToken,
+    hashMcpToken,
+    hasMcpScope,
+    isAllowedMcpOrigin,
+    issueMcpDesktopGrant,
+    MCP_DEFAULT_SCOPES,
+    MCP_TOKEN_PREFIX,
+    verifyMcpDesktopGrant,
+} from '../../lib/server/mcp/auth';
 import { getReadonlyMcpStatements } from '../../lib/server/mcp/sql-safety';
 import { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '../../lib/server/mcp/tools';
 
@@ -119,6 +131,74 @@ test('MCP auth context rejects token owners without workspace or connection read
             }),
     });
     assert.equal(noConnection.ok, false);
+});
+
+test('desktop MCP grants are signed, expire, and reject tampering', () => {
+    const secret = 'test-secret';
+    const { grant, expiresAt } = issueMcpDesktopGrant({
+        userId: 'owner-user',
+        organizationId: 'org',
+        scopes: ['connections:read'],
+        now: 1_000,
+        expiresInMs: 5_000,
+        secret,
+    });
+
+    assert.equal(expiresAt.toISOString(), new Date(6_000).toISOString());
+    assert.deepEqual(verifyMcpDesktopGrant(grant, { now: 2_000, secret }), {
+        v: 1,
+        typ: 'dory_mcp_desktop_grant',
+        userId: 'owner-user',
+        organizationId: 'org',
+        scopes: ['connections:read'],
+        iat: 1_000,
+        exp: 6_000,
+    });
+    assert.equal(verifyMcpDesktopGrant(`${grant.slice(0, -1)}x`, { now: 2_000, secret }), null);
+    assert.equal(verifyMcpDesktopGrant(grant, { now: 6_000, secret }), null);
+    assert.equal(verifyMcpDesktopGrant(grant, { now: 6_000, secret, ignoreExpiration: true })?.userId, 'owner-user');
+});
+
+test('desktop MCP grant auth context uses the signed user and organization', async () => {
+    const access = createAccess({ organizationId: 'org', userId: 'owner-user' });
+    const { grant } = issueMcpDesktopGrant({
+        userId: 'owner-user',
+        organizationId: 'org',
+        scopes: ['connections:read'],
+        access,
+        secret: 'test-secret',
+    });
+
+    const result = await buildMcpAuthContextForDesktopGrant(grant, {
+        secret: 'test-secret',
+    });
+
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.context.tokenId, 'desktop-grant');
+    assert.equal(result.context.organizationId, 'org');
+    assert.equal(result.context.userId, 'owner-user');
+    assert.deepEqual(result.context.scopes, ['connections:read']);
+});
+
+test('desktop MCP grant auth context rejects invalid grants', async () => {
+    const result = await buildMcpAuthContextForDesktopGrant('invalid', {
+        secret: 'test-secret',
+        resolveAccess: async (organizationId, userId) => createAccess({ organizationId, userId }),
+    });
+
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 401);
+});
+
+test('MCP request auth keeps missing bearer behavior outside desktop runtime', async () => {
+    const result = await authenticateMcpRequest(new Request('https://dory.example.com/api/mcp'));
+
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.equal(result.status, 401);
+    assert.equal(result.message, 'Missing or invalid MCP bearer token.');
 });
 
 test('isAllowedMcpOrigin accepts same-origin and localhost calls', () => {

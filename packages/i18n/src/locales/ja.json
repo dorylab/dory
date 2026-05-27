@@ -86,7 +86,6 @@
             "GoogleNotSupportedDesktop": "デスクトップアプリでは Google ログインはまだサポートされていません。",
             "LoginFailedRetry": "ログインに失敗しました。後でもう一度お試しください。",
             "NetworkErrorRetry": "ネットワークエラーです。後でもう一度お試しください。",
-            "CloudFeaturesUnavailableOffline": "デスクトップアプリがオフラインの間は、クラウド依存のログインと復旧操作は利用できません。",
             "ForgotPasswordEmailRequired": "「パスワードを忘れた場合」をクリックする前にメールアドレスを入力してください。",
             "ResetEmailFailed": "リセットメールの送信に失敗しました",
             "ResetEmailSent": "パスワード再設定メールを送信しました。受信箱を確認してください。",
@@ -2564,7 +2563,8 @@
             "SettingsPatchUnsupported": "MCP 設定はユーザーごとのトークンで管理されます。PATCH はサポートされていません。",
             "InvalidTokenPayload": "MCP トークンのリクエスト内容が無効です。",
             "MissingTokenId": "MCP トークン ID がありません。",
-            "TokenNotFound": "MCP トークンが見つかりません。"
+            "TokenNotFound": "MCP トークンが見つかりません。",
+            "DesktopGrantUnavailable": "MCP デスクトップ grant はデスクトップ runtime でのみ利用できます。"
         }
     },
     "Ai": {
@@ -2876,7 +2876,7 @@
                 "AgentAccess": {
                     "Label": "MCP",
                     "Title": "MCP",
-                    "Description": "個人用 MCP トークンで信頼済みエージェントを Dory に接続します。"
+                    "Description": "Codex、Claude Code、その他の Agent 向けにローカル MCP エンドポイントを公開します。"
                 }
             },
             "Appearance": {
@@ -2989,37 +2989,19 @@
             "AgentAccess": {
                 "Loading": "MCP 設定を読み込んでいます...",
                 "LoadFailed": "MCP 設定の読み込みに失敗しました。",
-                "SaveFailed": "MCP 設定の更新に失敗しました。",
-                "CreateFailed": "MCP トークンの作成に失敗しました。",
-                "RevokeFailed": "MCP トークンの取り消しに失敗しました。",
-                "EnableLabel": "個人用 MCP",
-                "EnableDescription": "信頼する MCP クライアント向けの個人用トークンを作成します。",
-                "ProxyLabel": "ローカル MCP エンドポイント",
-                "ProxyDescription": "デスクトップクライアント向けに固定の localhost MCP エンドポイントを起動します。",
+                "ProxyLabel": "有効化",
+                "ProxyDescription": "Agent クライアントが Dory に接続できるようにします。",
                 "ProxyStopped": "ローカル MCP エンドポイントは有効ですが実行されていません。",
                 "ProxyStartFailed": "ローカル MCP エンドポイントの更新に失敗しました。",
-                "EndpointLabel": "エンドポイント",
-                "EndpointDescription": "Codex などの MCP クライアントで、個人用 MCP トークンと一緒にこの URL を使用します。",
                 "Copy": "コピー",
                 "Copied": "コピー済み",
-                "DeleteToken": "トークンを削除",
-                "TokensTitle": "個人用アクセストークン",
-                "DefaultTokenName": "MCP クライアント",
-                "TokenNamePlaceholder": "クライアント名",
-                "CreateToken": "作成",
-                "TokenCreated": "トークンを作成しました。",
-                "TokenOnce": "この個人用トークンを今すぐコピーしてください。再表示されません。",
-                "NoTokens": "MCP トークンはまだありません。",
-                "LastUsedAt": "最終使用: {date}",
-                "RevokedAt": "取り消し済み: {date}",
                 "SetupTitle": "MCP セットアップ",
-                "SetupDescription": "これらのトークンはあなたのユーザーアカウントに紐づきます。共有しないでください。組織メンバーから外れるとアクセスは失効します。",
+                "SetupDescription": "デスクトップクライアントはローカルエンドポイント経由で接続します。手動の認証情報は不要です。",
                 "SetupTabs": {
                     "General": "一般"
                 },
                 "General": {
                     "Endpoint": "エンドポイント",
-                    "Authorization": "HTTP ヘッダー",
                     "JsonTitle": "汎用 JSON 設定"
                 },
                 "Codex": {
@@ -3030,7 +3012,7 @@
                     "CliTitle": "Claude Code CLI",
                     "JsonTitle": ".mcp.json"
                 },
-                "Refresh": "更新"
+                "WebAuthorizationStatus": "Web MCP authorization は後日提供予定です。現在はデスクトップのローカル MCP を利用できます。"
             }
         },
         "QueryClient": {
@@ -3362,8 +3344,5 @@
     },
     "Routes": {
         "SQL Console": "SQL コンソール"
-    },
-    "Offline": {
-        "DesktopBanner": "現在オフラインです。Dory はローカルのデスクトップデータを使用しており、クラウド専用機能は一時的に利用できません。"
     }
 }

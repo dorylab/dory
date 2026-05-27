@@ -244,11 +244,6 @@ async function launch() {
       const targetUrl = await serverManager.getAppUrl();
       log('[electron] launch targetUrl:', targetUrl);
       loadMainWindowUrl(targetUrl, log);
-      if (mcpProxyManager.isEnabled()) {
-        await mcpProxyManager.start(targetUrl, { persist: false }).catch(error => {
-          logError('[electron] failed to restore MCP proxy:', error);
-        });
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logError('[electron] launch error:', error);
@@ -343,7 +338,7 @@ if (!gotLock) {
 app.on('before-quit', () => {
   log('[electron] before-quit');
   setMainWindowQuitting(true);
-  mcpProxyManager.stop({ persist: false });
+  void mcpProxyManager.stop({ persist: false });
   serverManager.stopStandaloneServer();
 });
 
@@ -398,17 +393,27 @@ ipcMain.handle('filesystem:select-local-file', async () => {
   return result.filePaths[0] ?? null;
 });
 
-ipcMain.handle('mcp:get-state', async () => {
-  return mcpProxyManager.getState();
+ipcMain.handle('mcp:get-state', async (_event, userId?: string) => {
+  return mcpProxyManager.getState(userId);
 });
 
-ipcMain.handle('mcp:start', async () => {
+ipcMain.handle('mcp:start', async (_event, desktopGrant: string, userId: string) => {
+  if (typeof desktopGrant !== 'string' || !desktopGrant.trim()) {
+    throw new Error('MCP desktop grant is required.');
+  }
+  if (typeof userId !== 'string' || !userId.trim()) {
+    throw new Error('MCP user id is required.');
+  }
   const targetUrl = await serverManager.getAppUrl();
-  return mcpProxyManager.start(targetUrl);
+  return mcpProxyManager.start(targetUrl, desktopGrant, userId);
 });
 
-ipcMain.handle('mcp:stop', async () => {
-  return mcpProxyManager.stop();
+ipcMain.handle('mcp:stop', async (_event, userId?: string) => {
+  return mcpProxyManager.stop({ userId });
+});
+
+ipcMain.handle('mcp:stop-active', async () => {
+  return mcpProxyManager.stopActive();
 });
 
 ipcMain.on('log:renderer', (_event, level: string, ...args: unknown[]) => {

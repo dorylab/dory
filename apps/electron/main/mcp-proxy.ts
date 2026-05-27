@@ -11,7 +11,8 @@ export type McpProxyState = {
 };
 
 type McpProxyStore = {
-  enabled: boolean;
+  enabled?: boolean;
+  enabledByUserId?: Record<string, boolean>;
 };
 
 type CreateMcpProxyManagerOptions = {
@@ -55,45 +56,116 @@ export function createMcpProxyManager({ log, logWarn, logError }: CreateMcpProxy
   const mcpProxyStore = new Store<McpProxyStore>({
     name: 'mcp-proxy',
     defaults: {
-      enabled: false,
+      enabledByUserId: {},
     },
   });
   let childProc: ChildProcess | null = null;
+  let activeUserId: string | null = null;
   let lastError: string | null = null;
 
-  function getState(): McpProxyState {
+  function readEnabledByUserId() {
+    return mcpProxyStore.get('enabledByUserId') ?? {};
+  }
+
+  function isEnabledForUser(userId?: string | null) {
+    if (!userId) return false;
+    return readEnabledByUserId()[userId] === true;
+  }
+
+  function setEnabledForUser(userId: string, enabled: boolean) {
+    const enabledByUserId = { ...readEnabledByUserId() };
+    if (enabled) {
+      enabledByUserId[userId] = true;
+    } else {
+      delete enabledByUserId[userId];
+    }
+    mcpProxyStore.set('enabledByUserId', enabledByUserId);
+    mcpProxyStore.delete('enabled');
+  }
+
+  function isRunning() {
+    return Boolean(childProc && !childProc.killed && childProc.exitCode === null);
+  }
+
+  function isRunningForUser(userId?: string | null) {
+    if (!isRunning()) return false;
+    return !userId || activeUserId === userId;
+  }
+
+  async function stopRunningProxy() {
+    const proc = childProc;
+    if (!proc || proc.killed || proc.exitCode !== null) {
+      childProc = null;
+      activeUserId = null;
+      return;
+    }
+
+    log('[electron] stopping MCP proxy...');
+    proc.kill();
+    await new Promise<void>(resolve => {
+      const timeout = setTimeout(resolve, 1000);
+      const cleanup = () => {
+        clearTimeout(timeout);
+        proc.off('exit', cleanup);
+        proc.off('error', cleanup);
+        resolve();
+      };
+      proc.once('exit', cleanup);
+      proc.once('error', cleanup);
+    });
+
+    if (childProc === proc) {
+      childProc = null;
+      activeUserId = null;
+    }
+  }
+
+  function getState(userId?: string | null): McpProxyState {
     return {
-      enabled: mcpProxyStore.get('enabled') === true,
-      running: Boolean(childProc && !childProc.killed && childProc.exitCode === null),
+      enabled: isEnabledForUser(userId),
+      running: isRunningForUser(userId),
       endpoint: getProxyEndpoint(),
       error: lastError,
     };
   }
 
-  function stop(options: { persist?: boolean } = {}): McpProxyState {
-    if (options.persist !== false) {
-      mcpProxyStore.set('enabled', false);
+  async function stop(options: { persist?: boolean; userId?: string | null } = {}): Promise<McpProxyState> {
+    const targetUserId = options.userId ?? null;
+    const shouldStopRunningProxy = !targetUserId || activeUserId === targetUserId;
+
+    if (options.persist !== false && targetUserId) {
+      setEnabledForUser(targetUserId, false);
     }
 
-    if (childProc && !childProc.killed) {
-      log('[electron] stopping MCP proxy...');
-      childProc.kill();
+    if (shouldStopRunningProxy) {
+      await stopRunningProxy();
+      lastError = null;
     }
-    childProc = null;
-    lastError = null;
-    return getState();
+    return getState(targetUserId);
   }
 
-  async function start(targetUrl: string, options: { persist?: boolean } = {}): Promise<McpProxyState> {
-    if (options.persist !== false) {
-      mcpProxyStore.set('enabled', true);
+  async function start(targetUrl: string, desktopGrant: string, userId: string, options: { persist?: boolean } = {}): Promise<McpProxyState> {
+    if (!userId.trim()) {
+      throw new Error('MCP user id is required.');
+    }
+    if (!desktopGrant.trim()) {
+      throw new Error('MCP desktop grant is required.');
     }
 
-    if (childProc && !childProc.killed && childProc.exitCode === null) {
-      return getState();
+    if (options.persist !== false) {
+      setEnabledForUser(userId, true);
+    }
+
+    if (isRunningForUser(userId)) {
+      return getState(userId);
+    }
+
+    if (isRunning()) {
+      await stop({ persist: false });
     }
 
     lastError = null;
+    activeUserId = userId;
     const port = parsePort(process.env.DORY_MCP_PORT);
     const childPath = getChildPath();
     log('[electron] starting MCP proxy:', {
@@ -108,6 +180,7 @@ export function createMcpProxyManager({ log, logWarn, logError }: CreateMcpProxy
         DORY_MCP_PROXY_HOST: DEFAULT_MCP_PROXY_HOST,
         DORY_MCP_PROXY_PORT: String(port),
         DORY_MCP_PROXY_TARGET_URL: targetUrl,
+        DORY_MCP_DESKTOP_GRANT: desktopGrant,
       },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
@@ -119,6 +192,7 @@ export function createMcpProxyManager({ log, logWarn, logError }: CreateMcpProxy
       logWarn('[electron] MCP proxy exited:', code, signal);
       if (childProc === proc) {
         childProc = null;
+        activeUserId = null;
       }
     });
     childProc.on('error', error => {
@@ -177,16 +251,18 @@ export function createMcpProxyManager({ log, logWarn, logError }: CreateMcpProxy
         childProc.kill();
       }
       childProc = null;
+      activeUserId = null;
       throw error;
     });
 
-    return getState();
+    return getState(userId);
   }
 
   return {
     getState,
     start,
     stop,
-    isEnabled: () => mcpProxyStore.get('enabled') === true,
+    stopActive: () => stop({ persist: false }),
+    isEnabled: isEnabledForUser,
   };
 }

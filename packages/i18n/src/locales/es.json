@@ -86,7 +86,6 @@
             "GoogleNotSupportedDesktop": "El inicio de sesión con Google todavía no está disponible en la app de escritorio.",
             "LoginFailedRetry": "El inicio de sesión falló. Inténtalo más tarde.",
             "NetworkErrorRetry": "Error de red. Inténtalo más tarde.",
-            "CloudFeaturesUnavailableOffline": "Las acciones de inicio de sesión y recuperación que dependen de la nube no están disponibles mientras la app de escritorio está sin conexión.",
             "ForgotPasswordEmailRequired": "Introduce tu correo antes de hacer clic en “¿Olvidaste tu contraseña?”.",
             "ResetEmailFailed": "No se pudo enviar el correo de restablecimiento",
             "ResetEmailSent": "Correo de restablecimiento enviado. Revisa tu bandeja de entrada.",
@@ -2564,7 +2563,8 @@
             "SettingsPatchUnsupported": "Los ajustes de MCP se gestionan por token de usuario. PATCH no está soportado.",
             "InvalidTokenPayload": "Carga del token MCP no válida.",
             "MissingTokenId": "Falta el id del token MCP.",
-            "TokenNotFound": "No se encontró el token MCP."
+            "TokenNotFound": "No se encontró el token MCP.",
+            "DesktopGrantUnavailable": "Las concesiones MCP de escritorio solo están disponibles en el runtime de escritorio."
         }
     },
     "Ai": {
@@ -2876,7 +2876,7 @@
                 "AgentAccess": {
                     "Label": "MCP",
                     "Title": "MCP",
-                    "Description": "Conecta agentes de confianza a Dory con tus tokens MCP personales."
+                    "Description": "Expón un endpoint MCP local para Codex, Claude Code y otros agentes."
                 }
             },
             "Appearance": {
@@ -2989,37 +2989,19 @@
             "AgentAccess": {
                 "Loading": "Cargando ajustes de MCP...",
                 "LoadFailed": "No se pudieron cargar los ajustes de MCP.",
-                "SaveFailed": "No se pudieron actualizar los ajustes de MCP.",
-                "CreateFailed": "No se pudo crear el token MCP.",
-                "RevokeFailed": "No se pudo revocar el token MCP.",
-                "EnableLabel": "MCP personal",
-                "EnableDescription": "Crea tokens personales para clientes MCP de confianza.",
-                "ProxyLabel": "Endpoint MCP local",
-                "ProxyDescription": "Ejecuta un endpoint MCP localhost fijo para clientes de escritorio.",
+                "ProxyLabel": "Activar",
+                "ProxyDescription": "Permite que los clientes de agente se conecten a Dory.",
                 "ProxyStopped": "El endpoint MCP local está habilitado, pero no se está ejecutando.",
                 "ProxyStartFailed": "No se pudo actualizar el endpoint MCP local.",
-                "EndpointLabel": "Endpoint",
-                "EndpointDescription": "Usa esta URL con tu token MCP personal en Codex u otro cliente MCP.",
                 "Copy": "Copiar",
                 "Copied": "Copiado",
-                "DeleteToken": "Eliminar token",
-                "TokensTitle": "Tokens de acceso personal",
-                "DefaultTokenName": "Cliente MCP",
-                "TokenNamePlaceholder": "Nombre del cliente",
-                "CreateToken": "Crear",
-                "TokenCreated": "Token creado.",
-                "TokenOnce": "Copia este token personal ahora. No se volverá a mostrar.",
-                "NoTokens": "Todavía no tienes tokens MCP.",
-                "LastUsedAt": "Último uso: {date}",
-                "RevokedAt": "Revocado: {date}",
                 "SetupTitle": "Configuración de MCP",
-                "SetupDescription": "Estos tokens pertenecen a tu cuenta de usuario. No los compartas; el acceso termina cuando se elimina tu membresía de la organización.",
+                "SetupDescription": "Los clientes de escritorio se conectan mediante el endpoint local. No hace falta introducir credenciales manualmente.",
                 "SetupTabs": {
                     "General": "General"
                 },
                 "General": {
                     "Endpoint": "Endpoint",
-                    "Authorization": "Cabecera HTTP",
                     "JsonTitle": "Configuración JSON genérica"
                 },
                 "Codex": {
@@ -3030,7 +3012,7 @@
                     "CliTitle": "Claude Code CLI",
                     "JsonTitle": ".mcp.json"
                 },
-                "Refresh": "Actualizar"
+                "WebAuthorizationStatus": "La autorización MCP web llegará más adelante. El MCP local de escritorio ya está disponible."
             }
         },
         "QueryClient": {
@@ -3362,8 +3344,5 @@
     },
     "Routes": {
         "SQL Console": "Consola SQL"
-    },
-    "Offline": {
-        "DesktopBanner": "Estás sin conexión. Dory está usando los datos locales del escritorio y las funciones exclusivas de la nube no están disponibles temporalmente."
     }
 }
