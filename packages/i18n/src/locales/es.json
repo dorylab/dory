@@ -3321,7 +3321,8 @@
                     "AiQuotaIncluded": "Cuota de IA incluida",
                     "SavePersonalQueries": "Guarda consultas personales",
                     "CommunitySupport": "Soporte comunitario"
-                }
+                },
+                "LimitedTimeUnlimitedAlert": "Por tiempo limitado, Hobby incluye acceso ilimitado a estas capacidades."
             },
             "Pro": {
                 "Title": "Pro (Recomendado)",
@@ -3329,7 +3330,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "Conexiones ilimitadas a bases de datos",
                     "HigherAiQuotaAndFasterResponses": "Mayor cuota de IA y respuestas más rápidas",
-                    "ByokAiFeatures": "Usa tu propia clave de IA para conectar modelos personalizados",
+                    "ByokAiFeatures": "BYOK (Usa tu propia clave de IA)",
                     "EarlyAccessToUpcomingFeatures": "Acceso anticipado a próximas funciones",
                     "AdvancedChartsAndExports": "Gráficos avanzados y exportación",
                     "PrioritySupport": "Soporte prioritario"

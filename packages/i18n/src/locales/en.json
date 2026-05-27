@@ -2849,8 +2849,8 @@
                     "Description": "Configure the models available to this organization."
                 },
                 "Billing": {
-                    "Label": "Plans & subscriptions",
-                    "Title": "Plans & subscriptions",
+                    "Label": "Plans & Subscriptions",
+                    "Title": "Plans & Subscriptions",
                     "Description": "Review the current plan and billing options."
                 },
                 "Appearance": {
@@ -3139,7 +3139,7 @@
         "Nav": {
             "Organization": "Organization",
             "Ai": "AI",
-            "Billing": "Plans & subscriptions"
+            "Billing": "Plans & Subscriptions"
         },
         "Organization": {
             "CardTitle": "Details",
@@ -3289,7 +3289,7 @@
             }
         },
         "Billing": {
-            "Title": "Plans & subscriptions",
+            "Title": "Plans & Subscriptions",
             "Description": "Review the current organization plan and billing options.",
             "UnavailableDescription": "Unable to load organization billing.",
             "CurrentPlan": "Current plan",
@@ -3323,7 +3323,8 @@
                     "AiQuotaIncluded": "AI quota included",
                     "SavePersonalQueries": "Save personal queries",
                     "CommunitySupport": "Community support"
-                }
+                },
+                "LimitedTimeUnlimitedAlert": "For a limited time, Hobby includes unlimited access to these capabilities."
             },
             "Pro": {
                 "Title": "Pro (Recommended)",
@@ -3331,7 +3332,7 @@
                 "Features": {
                     "UnlimitedDatabaseConnections": "Unlimited database connections",
                     "HigherAiQuotaAndFasterResponses": "Higher AI quota & faster responses",
-                    "ByokAiFeatures": "Use your own AI key to connect custom models",
+                    "ByokAiFeatures": "BYOK (Use your own AI key)",
                     "EarlyAccessToUpcomingFeatures": "Early access to upcoming features",
                     "AdvancedChartsAndExports": "Advanced charts & exports",
                     "PrioritySupport": "Priority support"
