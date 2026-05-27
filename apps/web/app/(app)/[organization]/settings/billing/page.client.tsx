@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Check, ExternalLink, RefreshCw } from 'lucide-react';
+import { Check, ExternalLink, Info, RefreshCw } from 'lucide-react';
+import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { getOrganizationBillingStatus, openOrganizationBillingPortal, upgradeOrganizationToPro } from '@/lib/billing/api';
@@ -196,7 +197,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
 
             <div className={showProPlan ? 'grid gap-4 md:grid-cols-2' : 'grid gap-4'}>
                 <div className="relative rounded-lg border bg-muted/30 px-4 py-4">
-                    <div className="absolute right-4 top-4 inline-flex h-5 items-center rounded-full border border-sidebar-border bg-background px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <div className="absolute right-4 top-4 inline-flex h-5 items-center rounded-full border border-primary/20 bg-primary/10 px-2 text-[10px] font-medium uppercase tracking-wide text-primary">
                         {t('CurrentPlan')}
                     </div>
                     {isLoading ? (
@@ -219,13 +220,27 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
                         </ul>
                     ) : !billingStatusQuery.isError ? (
                         <ul className="mt-4 space-y-3 text-sm">
-                            {(isProPlan ? proFeatures : hobbyFeatures).map(feature => (
-                                <li key={feature} className="flex items-center gap-2">
-                                    <Check className="size-4 text-primary" />
-                                    <span>{feature}</span>
-                                </li>
-                            ))}
+                            {isProPlan
+                                ? proFeatures.map(feature => (
+                                      <li key={feature} className="flex items-center gap-2">
+                                          <Check className="size-4 text-primary" />
+                                          <span>{feature}</span>
+                                      </li>
+                                  ))
+                                : hobbyFeatures.map(feature => (
+                                      <li key={feature} className="flex items-center gap-2">
+                                          <Check className="size-4 text-primary" />
+                                          <span className="text-muted-foreground line-through decoration-muted-foreground/80">{feature}</span>
+                                      </li>
+                                  ))}
                         </ul>
+                    ) : null}
+
+                    {!isLoading && !billingStatusQuery.isError && !isProPlan ? (
+                        <Alert className="mt-4 border-primary/20 bg-primary/5 py-2 text-primary">
+                            <Info className="size-4" />
+                            <AlertDescription className="text-xs text-primary/80">{t('Hobby.LimitedTimeUnlimitedAlert')}</AlertDescription>
+                        </Alert>
                     ) : null}
 
                     {currentPeriodEnd ? (
