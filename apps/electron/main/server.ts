@@ -30,8 +30,13 @@ type DesktopSecrets = {
     dsSecretKey: string;
 };
 
+type DesktopServerPortSelection = {
+    port: number;
+    shouldPersist: boolean;
+};
+
 const DESKTOP_SECRETS_FILE_NAME = 'desktop-secrets.json';
-const DEFAULT_DESKTOP_SERVER_PORT = 3317;
+const DESKTOP_SERVER_CONFIG_FILE_NAME = 'desktop-server.json';
 
 export function createStandaloneServerManager({ isDev, userDataPath, databasePath, log, logWarn, logError }: CreateStandaloneServerManagerOptions) {
     let cachedServerUrl: string | null = null;
@@ -83,8 +88,13 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
         stopStandaloneServer();
 
         const hostname = '127.0.0.1';
-        const preferredPort = parsePortValue(childEnv.DORY_DESKTOP_PORT, 'DORY_DESKTOP_PORT', logWarn) ?? DEFAULT_DESKTOP_SERVER_PORT;
-        const port = await findAvailablePort(hostname, preferredPort, logWarn);
+        const portSelection = await resolveDesktopServerPort({
+            childEnv,
+            userDataPath,
+            hostname,
+            logWarn,
+        });
+        const port = portSelection.port;
 
         log(`[electron] Starting bootstrap script on port ${port}...`);
 
@@ -170,6 +180,9 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
         log('[electron] Next running port:', port);
 
         await waitUntilReady(hostname, port);
+        if (portSelection.shouldPersist) {
+            persistDesktopServerPort(userDataPath, port, logWarn);
+        }
 
         const url = `http://${hostname}:${port}`;
         log('[electron] Next ready:', url);
@@ -310,26 +323,55 @@ function loadStandaloneEnv(standaloneDir: string): NodeJS.ProcessEnv {
     return loaded;
 }
 
-function parsePortValue(value: string | undefined, name: string, logWarn: LogFn): number | null {
-    const trimmed = value?.trim();
-    if (!trimmed) return null;
+function parsePortValue(value: unknown): number | null {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
 
-    const port = Number(trimmed);
-    if (Number.isInteger(port) && port > 0 && port <= 65535) {
-        return port;
+    const port = typeof value === 'number' ? value : Number(value.trim());
+    return Number.isInteger(port) && port > 0 && port <= 65535 ? port : null;
+}
+
+function getDesktopServerConfigPath(userDataPath: string) {
+    return path.join(userDataPath, DESKTOP_SERVER_CONFIG_FILE_NAME);
+}
+
+function readPersistedDesktopServerPort(userDataPath: string, logWarn: LogFn): number | null {
+    const filePath = getDesktopServerConfigPath(userDataPath);
+    if (!fs.existsSync(filePath)) return null;
+
+    try {
+        const raw = JSON.parse(fs.readFileSync(filePath, 'utf8')) as { port?: unknown };
+        return parsePortValue(raw?.port);
+    } catch (error) {
+        logWarn('[electron] failed to read desktop server config:', error);
+        return null;
     }
+}
 
-    logWarn(`[electron] ignoring invalid ${name}:`, value);
-    return null;
+function persistDesktopServerPort(userDataPath: string, port: number, logWarn: LogFn) {
+    try {
+        fs.mkdirSync(userDataPath, { recursive: true });
+        fs.writeFileSync(
+            getDesktopServerConfigPath(userDataPath),
+            JSON.stringify(
+                {
+                    port,
+                    updatedAt: new Date().toISOString(),
+                },
+                null,
+                2,
+            ),
+            { mode: 0o600 },
+        );
+    } catch (error) {
+        logWarn('[electron] failed to persist desktop server port:', error);
+    }
 }
 
 function canListenOnPort(host: string, port: number): Promise<boolean> {
     return new Promise(resolve => {
         const server = net.createServer();
 
-        server.once('error', () => {
-            resolve(false);
-        });
+        server.once('error', () => resolve(false));
 
         server.listen(port, host, () => {
             server.close(() => resolve(true));
@@ -337,13 +379,7 @@ function canListenOnPort(host: string, port: number): Promise<boolean> {
     });
 }
 
-async function findAvailablePort(host: string, preferredPort: number, logWarn: LogFn): Promise<number> {
-    if (await canListenOnPort(host, preferredPort)) {
-        return preferredPort;
-    }
-
-    logWarn(`[electron] preferred desktop server port ${preferredPort} is unavailable; falling back to an ephemeral port`);
-
+function findAvailablePort(host: string): Promise<number> {
     return new Promise((resolve, reject) => {
         const server = net.createServer();
 
@@ -354,6 +390,38 @@ async function findAvailablePort(host: string, preferredPort: number, logWarn: L
 
         server.on('error', reject);
     });
+}
+
+async function resolveDesktopServerPort(options: {
+    childEnv: NodeJS.ProcessEnv;
+    userDataPath: string;
+    hostname: string;
+    logWarn: LogFn;
+}): Promise<DesktopServerPortSelection> {
+    const envPort = parsePortValue(options.childEnv.DORY_DESKTOP_PORT);
+    if (envPort) {
+        if (await canListenOnPort(options.hostname, envPort)) {
+            return { port: envPort, shouldPersist: false };
+        }
+
+        options.logWarn(`[electron] configured DORY_DESKTOP_PORT ${envPort} is unavailable; falling back to stored or ephemeral port`);
+    } else if (options.childEnv.DORY_DESKTOP_PORT?.trim()) {
+        options.logWarn('[electron] ignoring invalid DORY_DESKTOP_PORT:', options.childEnv.DORY_DESKTOP_PORT);
+    }
+
+    const persistedPort = readPersistedDesktopServerPort(options.userDataPath, options.logWarn);
+    if (persistedPort) {
+        if (await canListenOnPort(options.hostname, persistedPort)) {
+            return { port: persistedPort, shouldPersist: false };
+        }
+
+        options.logWarn(`[electron] persisted desktop server port ${persistedPort} is unavailable; selecting a new ephemeral port`);
+    }
+
+    return {
+        port: await findAvailablePort(options.hostname),
+        shouldPersist: true,
+    };
 }
 
 function isPortOpen(host: string, port: number): Promise<boolean> {
