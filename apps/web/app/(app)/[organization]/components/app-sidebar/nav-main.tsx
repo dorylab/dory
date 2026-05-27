@@ -11,20 +11,11 @@ export type NavItem = {
     url: string;
     matchPrefix?: string;
     icon?: React.ComponentType<{ className?: string }>;
-    requiresConnection?: boolean; 
+    active?: boolean;
+    disabled?: boolean;
 };
 
-export function NavMain({
-    items,
-    disabled = false, 
-    hasActiveConnection = false, 
-    className,
-}: {
-    items: NavItem[];
-    disabled?: boolean;
-    hasActiveConnection?: boolean;
-    className?: string;
-}) {
+export function NavMain({ items, className, itemClassName }: { items: NavItem[]; className?: string; itemClassName?: string }) {
     const pathname = usePathname();
 
     return (
@@ -33,10 +24,12 @@ export function NavMain({
                 <SidebarMenu>
                     {items.map(item => {
                         const IconComp = item.icon;
-                        const itemDisabled = disabled || (item.requiresConnection && !hasActiveConnection);
+                        const itemDisabled = Boolean(item.disabled);
 
                         const matchBase = item.matchPrefix ?? item.url;
-                        const isActive = !itemDisabled && (pathname === item.url || pathname.startsWith(`${item.url}/`) || pathname === matchBase || pathname.startsWith(`${matchBase}/`));
+                        const isActive =
+                            item.active ??
+                            (!itemDisabled && (pathname === item.url || pathname.startsWith(`${item.url}/`) || pathname === matchBase || pathname.startsWith(`${matchBase}/`)));
 
                         const content = itemDisabled ? (
                             <span
@@ -44,6 +37,7 @@ export function NavMain({
                                 className={cn(
                                     'flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0',
                                     'cursor-not-allowed opacity-60 text-muted-foreground',
+                                    itemClassName,
                                 )}
                             >
                                 {IconComp && <IconComp className="h-4 w-4 shrink-0" />}
@@ -53,7 +47,7 @@ export function NavMain({
                             <Link
                                 href={item.url}
                                 prefetch={false}
-                                className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0"
+                                className={cn('flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0', itemClassName)}
                             >
                                 {IconComp && <IconComp className="h-4 w-4 shrink-0" />}
                                 <span>{item.title}</span>
@@ -65,10 +59,8 @@ export function NavMain({
                                 <SidebarMenuButton
                                     asChild
                                     tooltip={item.title}
-                                    
                                     isActive={isActive}
                                     className={cn(
-                                        
                                         'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground data-[active=true]:active:bg-primary/90 data-[active=true]:active:text-primary-foreground',
                                     )}
                                 >

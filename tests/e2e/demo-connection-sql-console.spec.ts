@@ -339,7 +339,7 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
     const organization = await getOrganizationSlug(page);
     console.log(`[demo-flow] organization:${organization}`);
 
-    const mainHeading = page.getByRole('heading', { name: /connections/i });
+    const mainHeading = page.getByRole('heading', { name: /data sources/i });
     await expect(mainHeading).toBeVisible();
     await focusLocator(page, mainHeading, { maxScale: 3, padding: 0.58 });
     await beat(page);

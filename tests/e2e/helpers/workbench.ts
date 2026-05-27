@@ -413,20 +413,20 @@ export async function createConnectionAndOpenConsole(page: Page) {
     await page.goto('/');
     await page.waitForURL(/\/[^/]+\/connections$/);
 
-    await page.getByRole('button', { name: /add connection/i }).click();
-    const dialog = page.getByRole('dialog', { name: /create connection/i });
+    await page.getByRole('button', { name: /add data source/i }).click();
+    const dialog = page.getByRole('dialog', { name: /create data source/i });
     await expect(dialog).toBeVisible();
 
-    await page.getByLabel(/Connection Name/i).fill('E2E ClickHouse');
+    await page.getByLabel(/Data Source Name/i).fill('E2E ClickHouse');
     await page.getByLabel(/Host/i).fill('localhost');
     await page.getByLabel(/HTTP Port/i).fill('8123');
     await page.getByLabel(/Database Username/i).fill('default');
     await dialog.locator('input[type="password"]').fill('password');
 
-    await page.getByRole('button', { name: /test connection/i }).click();
+    await page.getByRole('button', { name: /test data source/i }).click();
     await expect(page.getByText(/24\.8\.1/)).toBeVisible();
 
-    await page.getByRole('button', { name: /create connection/i }).click();
+    await page.getByRole('button', { name: /create data source/i }).click();
     await expect(dialog).toBeHidden();
 
     const connectionCard = page.getByTestId('connection-card').filter({ hasText: connection.connection.name }).first();

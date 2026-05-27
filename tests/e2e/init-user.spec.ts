@@ -19,7 +19,7 @@ test('init user can sign in and reach the default organization workspace', async
 
     await page.waitForURL(/\/[^/]+\/connections$/);
 
-    await expect(page.getByRole('heading', { name: /connections/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /data sources/i })).toBeVisible();
     await expect(page.getByText(initEmail)).toBeVisible();
     await expectAppHealthy(appErrors);
 });

@@ -14,7 +14,7 @@ test('demo login redirects to workspace and shows user info', async ({ page, app
     await demoButton.click();
 
     await page.waitForURL(/\/[^/]+\/connections$/);
-    await expect(page.getByRole('heading', { name: /connections/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /data sources/i })).toBeVisible();
     await expect(page.getByText('Demo User')).toBeVisible();
     await expectAppHealthy(appErrors);
 });

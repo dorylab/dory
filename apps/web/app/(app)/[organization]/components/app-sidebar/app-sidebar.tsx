@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { ArrowUpCircle, Compass, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
+import { ArrowUpCircle, Briefcase, Compass, Database, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -74,12 +74,13 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const defaultDatabase = currentRouteConnection ? getExplorerDefaultDatabase(currentRouteConnection) : null;
     const currentConnectionType = currentRouteConnection?.type ?? null;
     const supportsOperationalPages = currentConnectionType === 'clickhouse';
+    const dataSourcesUrl = `/${organization}/connections`;
     const explorerUrl =
         connectionId && defaultDatabase
             ? buildExplorerDatabasePath({ organization, connectionId }, defaultDatabase)
             : connectionId
               ? buildExplorerBasePath({ organization, connectionId })
-              : `/${organization}/connections`;
+              : dataSourcesUrl;
     const [updaterState, setUpdaterState] = React.useState<{ readyToInstall: boolean; version: string | null }>({
         readyToInstall: false,
         version: null,
@@ -89,43 +90,55 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const updateTooltip = updaterState.version ? t('UpdateTooltip', { version: updaterState.version }) : t('UpdateTooltipUnknown');
     const [showStarNotification, setShowStarNotification] = React.useState<boolean | null>(null);
 
-    const navMain = [
+    const primaryNav = [
         {
-            title: t('SQLConsole'),
-            url: connectionId ? `/${organization}/${connectionId}/sql-console` : `/${organization}/connections`,
-            icon: SquareCode,
-            requiresConnection: true,
+            title: t('DataSources'),
+            url: dataSourcesUrl,
+            icon: Database,
         },
         {
-            title: t('Explorer'),
-            url: explorerUrl,
-            matchPrefix: connectionId ? buildExplorerBasePath({ organization, connectionId }) : undefined,
-            icon: Compass,
-            requiresConnection: true,
+            title: t('Work'),
+            url: dataSourcesUrl,
+            icon: Briefcase,
+            active: false,
+            disabled: true,
         },
-        {
-            title: t('Chatbot'),
-            url: connectionId ? `/${organization}/${connectionId}/chatbot` : `/${organization}/chatbot`,
-            icon: IconFileAi,
-            requiresConnection: true,
-        },
-        ...(supportsOperationalPages
-            ? [
-                  {
-                      title: t('Monitoring'),
-                      url: connectionId ? `/${organization}/${connectionId}/monitoring` : `/${organization}/connections`,
-                      icon: FileChartColumnIncreasing,
-                      requiresConnection: true,
-                  },
-                  {
-                      title: t('Privileges'),
-                      url: connectionId ? `/${organization}/${connectionId}/privileges` : `/${organization}/privileges`,
-                      icon: IconUsers,
-                      requiresConnection: true,
-                  },
-              ]
-            : []),
     ];
+
+    const dataSourceNav = connectionId
+        ? [
+              {
+                  title: t('SQLConsole'),
+                  url: `/${organization}/${connectionId}/sql-console`,
+                  icon: SquareCode,
+              },
+              {
+                  title: t('Explorer'),
+                  url: explorerUrl,
+                  matchPrefix: buildExplorerBasePath({ organization, connectionId }),
+                  icon: Compass,
+              },
+              {
+                  title: t('Chatbot'),
+                  url: `/${organization}/${connectionId}/chatbot`,
+                  icon: IconFileAi,
+              },
+              ...(supportsOperationalPages
+                  ? [
+                        {
+                            title: t('Monitoring'),
+                            url: `/${organization}/${connectionId}/monitoring`,
+                            icon: FileChartColumnIncreasing,
+                        },
+                        {
+                            title: t('Privileges'),
+                            url: `/${organization}/${connectionId}/privileges`,
+                            icon: IconUsers,
+                        },
+                    ]
+                  : []),
+          ]
+        : [];
 
     const navSecondary = [
         {
@@ -199,7 +212,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navMain} disabled={!connectionId} hasActiveConnection={!!connectionId} />
+                <NavMain items={connectionId ? dataSourceNav : primaryNav} />
                 <div className="mt-auto space-y-2">
                     {showStarNotification ? (
                         <div className="px-2 group-data-[collapsible=icon]:hidden">

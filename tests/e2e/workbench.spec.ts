@@ -25,24 +25,24 @@ async function runQueryUntilRequest(page: Parameters<typeof test>[0]['page']) {
     throw new Error('Query request was not sent after retrying the Run action.');
 }
 
-test('can create a connection from the connections page', async ({ page, appErrors }) => {
+test('can create a data source from the data sources page', async ({ page, appErrors }) => {
     await mockWorkbenchApis(page);
 
     await page.goto('/');
     await page.waitForURL(/\/[^/]+\/connections$/);
 
-    await page.getByRole('button', { name: /add connection/i }).click();
-    const dialog = page.getByRole('dialog', { name: /create connection/i });
-    await page.getByLabel(/Connection Name/i).fill('E2E ClickHouse');
+    await page.getByRole('button', { name: /add data source/i }).click();
+    const dialog = page.getByRole('dialog', { name: /create data source/i });
+    await page.getByLabel(/Data Source Name/i).fill('E2E ClickHouse');
     await page.getByLabel(/Host/i).fill('localhost');
     await page.getByLabel(/HTTP Port/i).fill('8123');
     await page.getByLabel(/Database Username/i).fill('default');
     await dialog.locator('input[type="password"]').fill('password');
 
-    await page.getByRole('button', { name: /test connection/i }).click();
+    await page.getByRole('button', { name: /test data source/i }).click();
     await expect(page.getByText(/24\.8\.1/)).toBeVisible();
 
-    await page.getByRole('button', { name: /create connection/i }).click();
+    await page.getByRole('button', { name: /create data source/i }).click();
     await expect(page.getByRole('main').getByText('E2E ClickHouse')).toBeVisible();
     await expectAppHealthy(appErrors);
 });
