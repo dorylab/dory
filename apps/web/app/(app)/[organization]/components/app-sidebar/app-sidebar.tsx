@@ -75,6 +75,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const currentConnectionType = currentRouteConnection?.type ?? null;
     const supportsOperationalPages = currentConnectionType === 'clickhouse';
     const dataSourcesUrl = `/${organization}/connections`;
+    const workUrl = `/${organization}/work`;
     const explorerUrl =
         connectionId && defaultDatabase
             ? buildExplorerDatabasePath({ organization, connectionId }, defaultDatabase)
@@ -98,10 +99,8 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
         },
         {
             title: t('Work'),
-            url: dataSourcesUrl,
+            url: workUrl,
             icon: Briefcase,
-            active: false,
-            disabled: true,
         },
     ];
 
