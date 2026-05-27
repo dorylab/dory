@@ -31,6 +31,7 @@ type DesktopSecrets = {
 };
 
 const DESKTOP_SECRETS_FILE_NAME = 'desktop-secrets.json';
+const DEFAULT_DESKTOP_SERVER_PORT = 3317;
 
 export function createStandaloneServerManager({ isDev, userDataPath, databasePath, log, logWarn, logError }: CreateStandaloneServerManagerOptions) {
     let cachedServerUrl: string | null = null;
@@ -82,7 +83,8 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
         stopStandaloneServer();
 
         const hostname = '127.0.0.1';
-        const port = await findAvailablePort();
+        const preferredPort = parsePortValue(childEnv.DORY_DESKTOP_PORT, 'DORY_DESKTOP_PORT', logWarn) ?? DEFAULT_DESKTOP_SERVER_PORT;
+        const port = await findAvailablePort(hostname, preferredPort, logWarn);
 
         log(`[electron] Starting bootstrap script on port ${port}...`);
 
@@ -308,11 +310,44 @@ function loadStandaloneEnv(standaloneDir: string): NodeJS.ProcessEnv {
     return loaded;
 }
 
-function findAvailablePort(): Promise<number> {
+function parsePortValue(value: string | undefined, name: string, logWarn: LogFn): number | null {
+    const trimmed = value?.trim();
+    if (!trimmed) return null;
+
+    const port = Number(trimmed);
+    if (Number.isInteger(port) && port > 0 && port <= 65535) {
+        return port;
+    }
+
+    logWarn(`[electron] ignoring invalid ${name}:`, value);
+    return null;
+}
+
+function canListenOnPort(host: string, port: number): Promise<boolean> {
+    return new Promise(resolve => {
+        const server = net.createServer();
+
+        server.once('error', () => {
+            resolve(false);
+        });
+
+        server.listen(port, host, () => {
+            server.close(() => resolve(true));
+        });
+    });
+}
+
+async function findAvailablePort(host: string, preferredPort: number, logWarn: LogFn): Promise<number> {
+    if (await canListenOnPort(host, preferredPort)) {
+        return preferredPort;
+    }
+
+    logWarn(`[electron] preferred desktop server port ${preferredPort} is unavailable; falling back to an ephemeral port`);
+
     return new Promise((resolve, reject) => {
         const server = net.createServer();
 
-        server.listen(0, () => {
+        server.listen(0, host, () => {
             const { port } = server.address() as AddressInfo;
             server.close(() => resolve(port));
         });
