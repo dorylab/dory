@@ -141,6 +141,7 @@ export class PostgresConnectionsRepository {
                 role: connectionIdentities.role,
                 isDefault: connectionIdentities.isDefault,
                 database: connectionIdentities.database,
+                updatedAt: connectionIdentities.updatedAt,
             })
             .from(connectionIdentities)
             .where(and(inArray(connectionIdentities.connectionId, connectionIds), isNull(connectionIdentities.deletedAt)));
@@ -155,6 +156,7 @@ export class PostgresConnectionsRepository {
                 role: string | null;
                 isDefault: boolean;
                 database: string | null;
+                updatedAt: Date;
             }>
         >();
 
@@ -174,18 +176,21 @@ export class PostgresConnectionsRepository {
                 role: row.role,
                 isDefault: row.isDefault,
                 database: row.database,
+                updatedAt: row.updatedAt,
             });
             identitiesMap.set(row.connectionId, list);
         }
 
         // 4) Build ConnectionListItem
-        const result: ConnectionListItem[] = rows.map(row => {
-            return {
-                connection: connectionMap.get(row.id),
-                identities: identitiesMap.get(row.id) ?? [],
-                ssh: sshMap.get(row.id) ?? null,
-            };
-        }).filter(item => !this.isHiddenManagedConnection(item.connection));
+        const result: ConnectionListItem[] = rows
+            .map(row => {
+                return {
+                    connection: connectionMap.get(row.id),
+                    identities: identitiesMap.get(row.id) ?? [],
+                    ssh: sshMap.get(row.id) ?? null,
+                };
+            })
+            .filter(item => !this.isHiddenManagedConnection(item.connection));
 
         return result;
     }
@@ -429,6 +434,7 @@ export class PostgresConnectionsRepository {
                 role: connectionIdentities.role,
                 isDefault: connectionIdentities.isDefault,
                 database: connectionIdentities.database,
+                updatedAt: connectionIdentities.updatedAt,
             })
             .from(connectionIdentities)
             .where(and(eq(connectionIdentities.connectionId, row.id), isNull(connectionIdentities.deletedAt)));
@@ -440,6 +446,7 @@ export class PostgresConnectionsRepository {
             role: r.role,
             isDefault: r.isDefault,
             database: r.database,
+            updatedAt: r.updatedAt,
         }));
 
         // 3) Build response
@@ -608,8 +615,7 @@ export class PostgresConnectionsRepository {
             updateData.status = payload.status as ConnectionIdentityStatus;
         }
         if (payload.database !== undefined) updateData.database = payload.database ?? null;
-        // Update updatedAt if you have that field
-        // updateData.updatedAt = new Date();
+        updateData.updatedAt = new Date();
 
         // Allow only secret updates even if no other fields are provided
         const [identity] = await db

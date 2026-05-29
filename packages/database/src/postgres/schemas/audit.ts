@@ -1,5 +1,6 @@
 import { pgTable, text, integer, timestamp, jsonb, index } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
+import type { QuerySource, QueryStatus } from '@dory/shared/types/audit';
 
 export const queryAudit = pgTable(
     'query_audit',
@@ -10,14 +11,19 @@ export const queryAudit = pgTable(
         organizationId: text('organization_id').notNull(),
         tabId: text('tab_id'),
         userId: text('user_id').notNull(),
-        source: text('source').$type<'console' | 'chatbot' | 'api' | 'task'>().notNull(),
+        source: text('source').$type<QuerySource>().notNull(),
         connectionId: text('connection_id'),
         connectionName: text('connection_name'),
+        identityId: text('identity_id'),
+        identityName: text('identity_name'),
+        identityUsername: text('identity_username'),
+        identityRole: text('identity_role'),
+        identityDatabase: text('identity_database'),
         databaseName: text('database_name'),
         queryId: text('query_id'),
         sqlText: text('sql_text').notNull(),
 
-        status: text('status').$type<'success' | 'error' | 'denied' | 'canceled'>().notNull(),
+        status: text('status').$type<QueryStatus>().notNull(),
         errorMessage: text('error_message'),
 
         durationMs: integer('duration_ms'),

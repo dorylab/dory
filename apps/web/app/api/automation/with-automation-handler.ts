@@ -4,6 +4,7 @@ import { getDBService } from '@dory/database';
 import { ErrorCodes } from '@dory/shared/errors';
 import { ResponseUtil } from '@/lib/result';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
+import { inferAutomationSqlAuditContext, runWithSqlAudit } from '@/lib/server/sql-audit';
 
 type AutomationHandlerContext = {
     req: NextRequest;
@@ -66,7 +67,13 @@ export function withAutomationHandler(handler: AutomationHandlerFn) {
 
             const db = await getDBService();
 
-            return await handler({ req, db, userId, organizationId });
+            return await runWithSqlAudit(
+                inferAutomationSqlAuditContext(req, {
+                    organizationId,
+                    userId,
+                }),
+                () => handler({ req, db, userId, organizationId }),
+            );
         } catch (err: any) {
             console.error('[automation] handler error', err);
             return NextResponse.json(

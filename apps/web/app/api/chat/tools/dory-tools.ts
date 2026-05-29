@@ -68,6 +68,7 @@ function createOperationContext(options: CreateDoryChatToolsOptions): DoryToolOp
         currentConnectionId: options.currentConnectionId ?? null,
         locale: options.locale,
         restrictToCurrentConnection: true,
+        auditSource: 'ai_schema_metadata',
     };
 }
 

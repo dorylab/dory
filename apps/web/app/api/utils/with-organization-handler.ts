@@ -7,6 +7,7 @@ import { ResponseUtil } from '@/lib/result';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { canManageOrganization, canWriteWorkspace, resolveOrganizationAccess } from '@/lib/server/authz';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
+import { inferRequestSqlAuditContext, runWithSqlAudit } from '@/lib/server/sql-audit';
 
 type OrganizationHandlerContext = {
     req: NextRequest;
@@ -142,13 +143,20 @@ export function withOrganizationHandler(handler: OrganizationHandlerFn) {
                 );
             }
 
-            return handler({
-                req,
-                db,
-                session,
-                userId,
-                organizationId,
-            });
+            return runWithSqlAudit(
+                inferRequestSqlAuditContext(req, {
+                    organizationId,
+                    userId,
+                }),
+                () =>
+                    handler({
+                        req,
+                        db,
+                        session,
+                        userId,
+                        organizationId,
+                    }),
+            );
         });
     };
 }
@@ -206,13 +214,20 @@ export function withUserAndOrganizationHandler(handler: UserOrganizationHandlerF
                 );
             }
 
-            return handler({
-                req,
-                db,
-                session,
-                userId,
-                organizationId,
-            });
+            return runWithSqlAudit(
+                inferRequestSqlAuditContext(req, {
+                    organizationId,
+                    userId,
+                }),
+                () =>
+                    handler({
+                        req,
+                        db,
+                        session,
+                        userId,
+                        organizationId,
+                    }),
+            );
         });
     };
 }

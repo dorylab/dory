@@ -2,7 +2,7 @@
 import { queryAudit } from '../../schemas/audit';
 import type { PostgresDBClient } from '@dory/shared';
 import { getClient } from '../../client';
-import { AuditPayload } from '@dory/shared/types/audit';
+import type { AuditPayload, QueryStatus } from '@dory/shared/types/audit';
 import { translateDatabase } from '@dory/database/i18n';
 
 export class PgAuditLoggerRepository {
@@ -15,6 +15,10 @@ export class PgAuditLoggerRepository {
         this.inited = true;
     }
 
+    async log(payload: AuditPayload & { status: QueryStatus }): Promise<void> {
+        await this.insertAudit(payload, payload.status, payload.errorMessage ?? undefined);
+    }
+
     async logSuccess(payload: AuditPayload): Promise<void> {
         await this.insertAudit(payload, 'success');
     }
@@ -23,7 +27,15 @@ export class PgAuditLoggerRepository {
         await this.insertAudit(payload, 'error', payload.errorMessage);
     }
 
-    private async insertAudit(payload: AuditPayload, status: 'success' | 'error', errorMessage?: string): Promise<void> {
+    async logDenied(payload: AuditPayload & { errorMessage: string }): Promise<void> {
+        await this.insertAudit(payload, 'denied', payload.errorMessage);
+    }
+
+    async logCanceled(payload: AuditPayload & { errorMessage?: string | null }): Promise<void> {
+        await this.insertAudit(payload, 'canceled', payload.errorMessage ?? undefined);
+    }
+
+    private async insertAudit(payload: AuditPayload, status: QueryStatus, errorMessage?: string): Promise<void> {
         try {
             if (!this.inited) await this.init();
 
@@ -39,6 +51,11 @@ export class PgAuditLoggerRepository {
                 // —— Connection info —— //
                 connectionId: payload.connectionId ?? null,
                 connectionName: payload.connectionName ?? null,
+                identityId: payload.identityId ?? null,
+                identityName: payload.identityName ?? null,
+                identityUsername: payload.identityUsername ?? null,
+                identityRole: payload.identityRole ?? null,
+                identityDatabase: payload.identityDatabase ?? null,
                 databaseName: payload.databaseName ?? null,
 
                 // —— Query identifier —— //

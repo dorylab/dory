@@ -96,6 +96,12 @@ export class PgAuditQueryRepository {
             rows_written: r.rowsWritten ?? null,
 
             connection_id: r.connectionId ?? null,
+            connection_name: r.connectionName ?? null,
+            identity_id: r.identityId ?? null,
+            identity_name: r.identityName ?? null,
+            identity_username: r.identityUsername ?? null,
+            identity_role: r.identityRole ?? null,
+            identity_database: r.identityDatabase ?? null,
             database_name: r.databaseName ?? null,
 
             sql_text: r.sqlText,
@@ -278,6 +284,12 @@ export class PgAuditQueryRepository {
             rows_written: r.rowsWritten ?? null,
 
             connection_id: r.connectionId ?? null,
+            connection_name: r.connectionName ?? null,
+            identity_id: r.identityId ?? null,
+            identity_name: r.identityName ?? null,
+            identity_username: r.identityUsername ?? null,
+            identity_role: r.identityRole ?? null,
+            identity_database: r.identityDatabase ?? null,
             database_name: r.databaseName ?? null,
 
             sql_text: r.sqlText,

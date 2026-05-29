@@ -13,6 +13,7 @@ import { isMissingAiEnvError } from '@/lib/ai/errors';
 import { withAutomationHandler } from '../../with-automation-handler';
 import { isReadOnlyQuery, AI_ROW_LIMIT } from '../../utils';
 import { getReadOnlyQueryKeywordList } from '@/app/api/utils/sql-readonly';
+import { logDeniedSqlAudit } from '@/lib/server/sql-audit';
 
 /**
  * POST /api/automation/ai/ask
@@ -87,6 +88,20 @@ export const POST = withAutomationHandler(async ({ req, db, userId, organization
         execute: async ({ sql, database: db }) => {
             const trimmed = sql.trim();
             if (!isReadOnlyQuery(trimmed)) {
+                await logDeniedSqlAudit(
+                    {
+                        organizationId,
+                        userId,
+                        source: 'automation_ai_sql',
+                        connectionId,
+                        databaseName: db ?? database ?? null,
+                    },
+                    {
+                        sqlText: trimmed,
+                        databaseName: db ?? database ?? null,
+                        errorMessage: `Only read-only queries (${getReadOnlyQueryKeywordList()}) are allowed.`,
+                    },
+                );
                 const errorResult = {
                     ok: false,
                     error: `Only read-only queries (${getReadOnlyQueryKeywordList()}) are allowed.`,
