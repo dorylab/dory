@@ -74,6 +74,7 @@ export type AuditItem = {
     source: QuerySource;
     status: QueryStatus;
     duration_ms?: number | null;
+    error_message?: string | null;
     rows_read?: number | null;
     bytes_read?: number | null;
     rows_written?: number | null;

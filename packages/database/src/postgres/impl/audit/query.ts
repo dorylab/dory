@@ -91,6 +91,7 @@ export class PgAuditQueryRepository {
             status: r.status as any,
 
             duration_ms: r.durationMs ?? null,
+            error_message: r.errorMessage ?? null,
             rows_read: r.rowsRead ?? null,
             bytes_read: r.bytesRead ?? null,
             rows_written: r.rowsWritten ?? null,
@@ -279,6 +280,7 @@ export class PgAuditQueryRepository {
             status: r.status as any,
 
             duration_ms: r.durationMs ?? null,
+            error_message: r.errorMessage ?? null,
             rows_read: r.rowsRead ?? null,
             bytes_read: r.bytesRead ?? null,
             rows_written: r.rowsWritten ?? null,

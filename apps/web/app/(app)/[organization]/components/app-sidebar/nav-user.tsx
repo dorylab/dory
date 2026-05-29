@@ -1,19 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { IconDotsVertical, IconLogin2, IconLogout } from '@tabler/icons-react';
+import { ClipboardList } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/registry/new-york-v4/ui/avatar';
 import BoringAvatar from 'boring-avatars';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger, useSidebar } from '@/registry/new-york-v4/ui/sidebar';
 import { signOut } from '@/lib/auth-client';
 import { AuthLinkSheet } from '@/components/auth/auth-link-sheet';
 import { User } from 'better-auth';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { getOrganizationBillingStatus } from '@/lib/billing/api';
+import { getOrganizationAccess } from '@/lib/organization/api';
 import { cn } from '@dory/web-utils';
 
 function PlanBadge({ label, plan }: { label: string; plan: 'hobby' | 'pro' }) {
@@ -31,6 +34,7 @@ function PlanBadge({ label, plan }: { label: string; plan: 'hobby' | 'pro' }) {
 
 export function NavUser({ user, organizationId }: { user: User | null; organizationId: string }) {
     const { isMobile, state } = useSidebar();
+    const params = useParams<{ organization?: string }>();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const t = useTranslations('AppSidebar');
@@ -56,8 +60,17 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
         retry: false,
         staleTime: 60_000,
     });
+    const accessQuery = useQuery({
+        queryKey: ['organization-access', organizationId],
+        queryFn: () => getOrganizationAccess(organizationId),
+        enabled: Boolean(organizationId) && !isAnonymous,
+        retry: false,
+        staleTime: 60_000,
+    });
     const plan = billingStatusQuery.data?.plan ?? null;
     const planLabel = plan === 'pro' ? planT('Pro') : plan === 'hobby' ? planT('Hobby') : null;
+    const canViewAuditLog = accessQuery.data?.role === 'owner' || accessQuery.data?.role === 'admin';
+    const organizationSlug = params.organization ?? pathname?.split('/').filter(Boolean)[0] ?? '';
 
     function handleSignIn() {
         setMenuOpen(false);
@@ -109,6 +122,17 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
                     <IconLogin2 />
                     {t('GuestSession.SignIn')}
                 </DropdownMenuItem>
+            ) : null}
+            {canViewAuditLog && organizationSlug ? (
+                <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild onSelect={() => setMenuOpen(false)}>
+                        <Link href={`/${organizationSlug}/audit/logs`}>
+                            <ClipboardList />
+                            Audit Log
+                        </Link>
+                    </DropdownMenuItem>
+                </>
             ) : null}
             <DropdownMenuItem
                 onSelect={async () => {
