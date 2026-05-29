@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
@@ -11,7 +11,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { getOrganizationBillingStatus, openOrganizationBillingPortal, upgradeOrganizationToPro } from '@/lib/billing/api';
 import { getOrganizationAccess, getFullOrganization } from '@/lib/organization/api';
-import { useSettingsHeaderAction } from '../../../components/settings/settings-header-action';
+import { useOptionalSettingsHeaderAction } from '../../../components/settings/settings-header-action';
 
 function formatDate(value: string | null, fallback: string) {
     if (!value) {
@@ -50,7 +50,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
     const params = useParams<{ organization: string }>();
     const organizationSlug = params.organization;
     const t = useTranslations('OrganizationSettings.Billing');
-    const { setHeaderAction } = useSettingsHeaderAction();
+    const headerAction = useOptionalSettingsHeaderAction();
     const formatWithFallback = (value: string | null) => formatDate(value, t('NotAvailable'));
 
     const organizationQuery = useQuery({
@@ -153,29 +153,33 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
         t('Pro.Features.EarlyAccessToUpcomingFeatures'),
         t('Pro.Features.PrioritySupport'),
     ];
+    const refreshButton = useMemo(
+        () =>
+            billingManagementAvailable ? (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    onClick={() => void refreshBillingStatus()}
+                    disabled={billingStatusQuery.isFetching || !organization}
+                    aria-label={t('RefreshBillingStatus')}
+                    title={t('RefreshBillingStatus')}
+                >
+                    <RefreshCw className={billingStatusQuery.isFetching ? 'size-4 animate-spin' : 'size-4'} />
+                </Button>
+            ) : null,
+        [billingManagementAvailable, billingStatusQuery.isFetching, organization, refreshBillingStatus, t],
+    );
 
     useEffect(() => {
-        if (!billingManagementAvailable) {
-            setHeaderAction(null);
+        if (!headerAction) {
             return;
         }
 
-        setHeaderAction(
-            <Button
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={() => void refreshBillingStatus()}
-                disabled={billingStatusQuery.isFetching || !organization}
-                aria-label={t('RefreshBillingStatus')}
-                title={t('RefreshBillingStatus')}
-            >
-                <RefreshCw className={billingStatusQuery.isFetching ? 'size-4 animate-spin' : 'size-4'} />
-            </Button>,
-        );
+        headerAction.setHeaderAction(refreshButton);
 
-        return () => setHeaderAction(null);
-    }, [billingManagementAvailable, billingStatusQuery.isFetching, organization, refreshBillingStatus, setHeaderAction, t]);
+        return () => headerAction.setHeaderAction(null);
+    }, [headerAction, refreshButton]);
 
     if (organizationQuery.isError) {
         return (
@@ -191,6 +195,8 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
 
     return (
         <div className="space-y-6">
+            {!headerAction && refreshButton ? <div className="flex justify-end">{refreshButton}</div> : null}
+
             {!billingManagementAvailable ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">{t('DesktopCloudUnavailable')}</div>
             ) : null}

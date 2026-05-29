@@ -3053,6 +3053,7 @@
         "StarNotificationDescription": "GitHub でスターを付けて、このプロジェクトを広めてください。",
         "StarNotificationAction": "GitHub でスター",
         "DismissStarNotification": "GitHub スター案内を閉じる",
+        "Organization": "組織",
         "OrganizationSetting": "組織設定",
         "LogOut": "ログアウト",
         "Update": "更新",
@@ -3077,9 +3078,11 @@
         "Title": "組織設定",
         "Description": "組織の詳細とアクセス権を管理します。",
         "Nav": {
-            "Organization": "組織",
-            "Ai": "AI",
-            "Billing": "プランとサブスクリプション"
+            "Organization": "一般",
+            "Members": "メンバー",
+            "Ai": "AI Providers",
+            "QueryAudit": "Query Audit",
+            "Billing": "請求"
         },
         "Organization": {
             "CardTitle": "詳細",
@@ -3100,6 +3103,18 @@
             "Errors": {
                 "SlugRequired": "スラッグは必須です",
                 "SlugInvalid": "スラッグには小文字、数字、ハイフンのみ使用できます"
+            }
+        },
+        "Members": {
+            "Title": "メンバー",
+            "Description": "この組織にアクセスできるメンバーを表示します。",
+            "LoadFailed": "メンバーの読み込みに失敗しました。",
+            "Empty": "メンバーが見つかりません。",
+            "Table": {
+                "Member": "メンバー",
+                "Role": "ロール",
+                "Status": "ステータス",
+                "Joined": "参加日"
             }
         },
         "Ai": {

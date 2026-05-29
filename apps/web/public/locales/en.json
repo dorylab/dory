@@ -3054,6 +3054,7 @@
         "StarNotificationDescription": "Give the project a GitHub star to help more people discover it.",
         "StarNotificationAction": "Star on GitHub",
         "DismissStarNotification": "Dismiss GitHub star prompt",
+        "Organization": "Organization",
         "OrganizationSetting": "Organization settings",
         "LogOut": "Log out",
         "Update": "Update",
@@ -3078,9 +3079,11 @@
         "Title": "Organization settings",
         "Description": "Manage organization details and access.",
         "Nav": {
-            "Organization": "Organization",
-            "Ai": "AI",
-            "Billing": "Plans & Subscriptions"
+            "Organization": "General",
+            "Members": "Members",
+            "Ai": "AI Providers",
+            "QueryAudit": "Query Audit",
+            "Billing": "Billing"
         },
         "Organization": {
             "CardTitle": "Details",
@@ -3101,6 +3104,18 @@
             "Errors": {
                 "SlugRequired": "Slug is required",
                 "SlugInvalid": "Slug can only contain lowercase letters, numbers, and hyphens"
+            }
+        },
+        "Members": {
+            "Title": "Members",
+            "Description": "View people with access to this organization.",
+            "LoadFailed": "Failed to load members.",
+            "Empty": "No members found.",
+            "Table": {
+                "Member": "Member",
+                "Role": "Role",
+                "Status": "Status",
+                "Joined": "Joined"
             }
         },
         "Ai": {
