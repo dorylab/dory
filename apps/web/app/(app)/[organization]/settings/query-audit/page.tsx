@@ -19,5 +19,5 @@ export default async function OrganizationSettingsQueryAuditPage({ params }: { p
         redirect(`/${organization}/settings/organization`);
     }
 
-    return <QueryAuditPageClient organizationId={organizationId} />;
+    return <QueryAuditPageClient organizationId={organizationId} showHeader={false} embedded />;
 }

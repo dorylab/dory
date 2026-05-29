@@ -1281,6 +1281,10 @@
             "Loading": "保存済みクエリを読み込み中...",
             "Empty": "保存済みクエリはありません",
             "Title": "保存済みクエリ",
+            "MyQueries": "自分のクエリ",
+            "QueryHistory": "クエリ履歴",
+            "QueryHistoryEmptyTitle": "クエリ履歴はまだ利用できません",
+            "QueryHistoryEmptyDescription": "クエリログに接続すると、このビューに最近のクエリ履歴が表示されます。",
             "SearchPlaceholder": "保存済みクエリを検索",
             "SearchEmpty": "一致する保存済みクエリはありません",
             "MoreActions": "その他の操作",
@@ -1884,7 +1888,8 @@
         "Refresh": "更新",
         "Sidebar": {
             "Tables": "テーブル",
-            "SavedQueries": "保存済みクエリ"
+            "SavedQueries": "保存済みクエリ",
+            "Queries": "クエリ"
         },
         "VTable": {
             "Header": {
@@ -3116,6 +3121,10 @@
                 "Status": "ステータス",
                 "Joined": "参加日"
             }
+        },
+        "QueryAudit": {
+            "Title": "Query Audit",
+            "Description": "この組織の SQL クエリ監査レコード。"
         },
         "Ai": {
             "Title": "AI 設定",

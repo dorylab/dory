@@ -1283,6 +1283,10 @@
             "Loading": "正在加载保存的查询...",
             "Empty": "暂无保存的查询",
             "Title": "保存的查询",
+            "MyQueries": "我的查询",
+            "QueryHistory": "查询历史",
+            "QueryHistoryEmptyTitle": "查询历史暂不可用",
+            "QueryHistoryEmptyDescription": "接入查询日志后，这里会显示最近的查询历史。",
             "SearchPlaceholder": "搜索保存的查询",
             "SearchEmpty": "未找到匹配的查询",
             "MoreActions": "更多操作",
@@ -1886,7 +1890,8 @@
         "Refresh": "刷新",
         "Sidebar": {
             "Tables": "表",
-            "SavedQueries": "保存的查询"
+            "SavedQueries": "保存的查询",
+            "Queries": "查询"
         },
         "VTable": {
             "Header": {
@@ -3119,6 +3124,10 @@
                 "Status": "状态",
                 "Joined": "加入时间"
             }
+        },
+        "QueryAudit": {
+            "Title": "Query Audit",
+            "Description": "当前组织的 SQL 查询审计记录。"
         },
         "Ai": {
             "Title": "AI 配置",

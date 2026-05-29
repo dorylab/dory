@@ -11,7 +11,7 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 import { getFullOrganization } from '@/lib/organization/api';
 
-export default function MembersSettingsPageClient() {
+export default function MembersSettingsPageClient({ showHeader = true }: { showHeader?: boolean }) {
     const params = useParams<{ organization: string }>();
     const organizationSlug = params.organization;
     const t = useTranslations('OrganizationSettings.Members');
@@ -25,11 +25,13 @@ export default function MembersSettingsPageClient() {
     const members = organizationQuery.data?.members ?? [];
 
     return (
-        <div className="flex max-w-4xl flex-col gap-4">
-            <div className="space-y-1">
-                <h2 className="text-xl font-semibold tracking-tight">{t('Title')}</h2>
-                <p className="text-sm text-muted-foreground">{t('Description')}</p>
-            </div>
+        <div className="flex w-full flex-col gap-4">
+            {showHeader ? (
+                <div className="space-y-1">
+                    <h2 className="text-xl font-semibold tracking-tight">{t('Title')}</h2>
+                    <p className="text-sm text-muted-foreground">{t('Description')}</p>
+                </div>
+            ) : null}
 
             {organizationQuery.isError ? (
                 <Alert variant="destructive">

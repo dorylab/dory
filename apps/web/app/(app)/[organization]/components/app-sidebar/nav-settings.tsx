@@ -8,22 +8,28 @@ import { Building2, Moon, Settings, Sun } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { SidebarMenuButton, SidebarMenuItem } from '@/registry/new-york-v4/ui/sidebar';
 import { useSettings } from '../../../components/settings/settings';
+import { cn } from '@dory/web-utils';
 
 export function SidebarOrganizationEntry() {
     const params = useParams<{ organization?: string }>();
     const pathname = usePathname();
     const t = useTranslations('AppSidebar');
     const organizationSlug = params.organization ?? pathname?.split('/').filter(Boolean)[0] ?? '';
-
-    if (!organizationSlug) {
-        return null;
-    }
+    const href = organizationSlug ? `/${organizationSlug}/settings/organization` : '/';
+    const active = Boolean(organizationSlug && pathname?.startsWith(`/${organizationSlug}/settings`));
 
     return (
         <>
             <SidebarMenuItem>
-                <SidebarMenuButton asChild className="w-full justify-start group-data-[collapsible=icon]:justify-center">
-                    <Link href={`/${organizationSlug}/settings/organization`}>
+                <SidebarMenuButton
+                    asChild
+                    className={cn(
+                        'w-full justify-start group-data-[collapsible=icon]:justify-center',
+                        'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground data-[active=true]:active:bg-primary/90 data-[active=true]:active:text-primary-foreground',
+                    )}
+                    isActive={active}
+                >
+                    <Link href={href}>
                         <Building2 className="h-4 w-4 shrink-0" />
                         <span>{t('Organization')}</span>
                     </Link>

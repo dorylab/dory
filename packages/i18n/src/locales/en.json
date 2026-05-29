@@ -1280,6 +1280,10 @@
             "Loading": "Loading saved queries...",
             "Empty": "No saved queries",
             "Title": "Saved Queries",
+            "MyQueries": "My Queries",
+            "QueryHistory": "Query History",
+            "QueryHistoryEmptyTitle": "Query history is not available yet",
+            "QueryHistoryEmptyDescription": "This view will show recent query history once it is connected to query logs.",
             "SearchPlaceholder": "Search saved queries",
             "SearchEmpty": "No matching saved queries",
             "MoreActions": "More actions",
@@ -1883,7 +1887,8 @@
         "Refresh": "Refresh",
         "Sidebar": {
             "Tables": "Tables",
-            "SavedQueries": "Saved Queries"
+            "SavedQueries": "Saved Queries",
+            "Queries": "Queries"
         },
         "VTable": {
             "Header": {
@@ -3124,7 +3129,7 @@
             "Members": "Members",
             "Ai": "AI Providers",
             "QueryAudit": "Query Audit",
-            "Billing": "Billing"
+            "Billing": "Subscriptions"
         },
         "Organization": {
             "CardTitle": "Details",
@@ -3158,6 +3163,10 @@
                 "Status": "Status",
                 "Joined": "Joined"
             }
+        },
+        "QueryAudit": {
+            "Title": "Query Audit",
+            "Description": "SQL query audit records for this organization."
         },
         "Ai": {
             "Title": "AI Configuration",

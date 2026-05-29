@@ -194,7 +194,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
     }
 
     return (
-        <div className="space-y-6">
+        <div className="w-full space-y-6">
             {!headerAction && refreshButton ? <div className="flex justify-end">{refreshButton}</div> : null}
 
             {!billingManagementAvailable ? (

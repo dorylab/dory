@@ -33,6 +33,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/registry/new-york-v4/ui/hover-card';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { authFetch } from '@/lib/client/auth-fetch';
@@ -76,6 +77,8 @@ function formatTime(value: string | Date | null | undefined, locale: string) {
 type SavedQueriesSidebarProps = {
     onSelect?: (item: SavedQueryItem) => void;
 };
+
+type SavedQueriesView = 'my-queries' | 'query-history';
 
 function summarizeSql(sqlText: string) {
     return sqlText.replace(/\s+/g, ' ').trim();
@@ -207,6 +210,8 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const [hoverOpenId, setHoverOpenId] = useState<string | null>(null);
     const [searchValue, setSearchValue] = useState('');
     const [hoverBlockOnceId, setHoverBlockOnceId] = useState<string | null>(null);
+    const [queryView, setQueryView] = useState<SavedQueriesView>('my-queries');
+    const isMyQueriesView = queryView === 'my-queries';
 
     // Folder-specific state
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(loadExpandedFolders);
@@ -307,11 +312,13 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     );
 
     useEffect(() => {
+        if (!isMyQueriesView) return;
         fetchAll();
-    }, [fetchAll]);
+    }, [fetchAll, isMyQueriesView]);
 
     useEffect(() => {
         const handler = () => {
+            if (!isMyQueriesView) return;
             setLimit(50);
             setHasMore(true);
             fetchAll();
@@ -320,7 +327,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         return () => {
             window.removeEventListener('saved-queries-updated', handler);
         };
-    }, [fetchAll]);
+    }, [fetchAll, isMyQueriesView]);
 
     useEffect(() => {
         return () => {
@@ -963,141 +970,174 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     return (
         <div className="flex h-full flex-col min-h-0 gap-2 px-2 pb-3 pt-1">
-            <div className="flex items-center gap-1.5 px-1">
-                <Input
-                    value={searchValue}
-                    onChange={event => setSearchValue(event.target.value)}
-                    placeholder={t('SavedQueries.SearchPlaceholder')}
-                    className="h-8 min-w-0 flex-1"
-                />
-                <div className="flex shrink-0 items-center gap-0.5">
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCreateFolderOpen(true)} aria-label={t('SavedQueries.Folders.CreateFolder')}>
-                                <FolderPlus className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">{t('SavedQueries.Folders.CreateFolder')}</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => {
-                                    setLimit(50);
-                                    setHasMore(true);
-                                    fetchAll();
-                                }}
-                                disabled={loading}
-                                aria-label={t('Refresh')}
-                            >
-                                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">{t('Refresh')}</TooltipContent>
-                    </Tooltip>
-                </div>
+            <div className="px-1">
+                <Select value={queryView} onValueChange={value => setQueryView(value as SavedQueriesView)}>
+                    <SelectTrigger size="sm" className="w-full justify-between bg-background">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
+                        <SelectItem value="my-queries">{t('SavedQueries.MyQueries')}</SelectItem>
+                        <SelectItem value="query-history">{t('SavedQueries.QueryHistory')}</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
-            <div ref={scrollRootRef} className="flex-1 min-h-0">
-                <ScrollArea className="h-full pr-2">
-                    {!hasContent ? (
-                        <div className="text-xs text-muted-foreground py-6 text-center">{emptyHint}</div>
-                    ) : isSearching ? (
-                        <div className="space-y-1">{rootItems.map(item => renderQueryItem(item))}</div>
-                    ) : (
-                        <div ref={dndContainerRef}>
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={collisionDetection}
-                                modifiers={dndModifiers}
-                                onDragStart={handleDragStart}
-                                onDragOver={handleDragOver}
-                                onDragEnd={handleDragEnd}
-                                onDragCancel={handleDragCancel}
-                            >
-                                <div className="space-y-1">
-                                    {/* Folders with DnD reorder */}
-                                    <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
-                                        {folders.map(folder => {
-                                            const folderItems = folderQueryMap.get(folder.id) ?? [];
-                                            const isExpanded = expandedFolders.has(folder.id);
-                                            return (
-                                                <SortableFolderWrapper key={folder.id} id={folder.id}>
-                                                    {({ listeners, attributes, isDragging }) => (
-                                                        <FolderItem
-                                                            folder={folder}
-                                                            expanded={isExpanded}
-                                                            isDropTarget={activeDropFolderId === folder.id}
-                                                            isAbsorbing={absorbingFolderId === folder.id}
-                                                            onToggle={() => toggleFolder(folder.id)}
-                                                            onRename={openRenameFolder}
-                                                            onDelete={openDeleteFolder}
-                                                            t={t}
-                                                            dragHandleListeners={listeners}
-                                                            dragHandleAttributes={attributes}
-                                                            isDragging={isDragging}
-                                                        >
-                                                            {folderItems.length === 0 ? (
-                                                                <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground">
-                                                                    <span aria-hidden className="h-4 w-4 shrink-0" />
-                                                                    <span>{t('SavedQueries.Folders.EmptyFolder')}</span>
-                                                                </div>
-                                                            ) : (
-                                                                <SortableContext items={folderItems.map(item => getQueryDndId(item.id))} strategy={verticalListSortingStrategy}>
-                                                                    {folderItems.map(item => (
-                                                                        <SortableQueryWrapper key={item.id} id={item.id} folderId={folder.id}>
-                                                                            {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
-                                                                        </SortableQueryWrapper>
-                                                                    ))}
-                                                                </SortableContext>
-                                                            )}
-                                                        </FolderItem>
-                                                    )}
-                                                </SortableFolderWrapper>
-                                            );
-                                        })}
-                                    </SortableContext>
-                                    <DragOverlay dropAnimation={null}>
-                                        {activeFolderForOverlay && (
-                                            <div className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 shadow-md">
-                                                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                                                <span className="text-sm font-medium">{activeFolderForOverlay.name}</span>
-                                            </div>
-                                        )}
-                                    </DragOverlay>
-                                    {/* Separator between folders and root queries */}
-                                    {folders.length > 0 && rootItems.length > 0 && <div className="border-t border-border/40 my-1.5" />}
-                                    {/* Root-level queries with DnD reorder */}
-                                    <SortableContext items={rootItems.map(item => getQueryDndId(item.id))} strategy={verticalListSortingStrategy}>
-                                        {rootItems.map(item => (
-                                            <SortableQueryWrapper key={item.id} id={item.id} folderId={null}>
-                                                {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
-                                            </SortableQueryWrapper>
-                                        ))}
-                                    </SortableContext>
-                                    {loadingMore ? <div className="py-3 text-center text-xs text-muted-foreground">{t('SavedQueries.Loading')}</div> : null}
-                                </div>
-                                <DragOverlay dropAnimation={null}>
-                                    {activeQueryForOverlay && (
-                                        <div
-                                            className={cn(
-                                                'rounded-md border bg-background px-3 py-1.5 shadow-md',
-                                                'transition-[transform,opacity,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transform-none motion-reduce:transition-none',
-                                                activeDropFolderId && 'scale-[0.9] opacity-90 shadow-[0_8px_18px_-14px_hsl(var(--foreground)/0.45)]',
-                                            )}
-                                        >
-                                            <div className="text-sm font-medium truncate max-w-[200px]">{activeQueryForOverlay.title}</div>
-                                            <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{summarizeSql(activeQueryForOverlay.sqlText ?? '')}</div>
-                                        </div>
-                                    )}
-                                </DragOverlay>
-                            </DndContext>
+            {isMyQueriesView ? (
+                <>
+                    <div className="flex items-center gap-1.5 px-1">
+                        <Input
+                            value={searchValue}
+                            onChange={event => setSearchValue(event.target.value)}
+                            placeholder={t('SavedQueries.SearchPlaceholder')}
+                            className="h-8 min-w-0 flex-1"
+                        />
+                        <div className="flex shrink-0 items-center gap-0.5">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCreateFolderOpen(true)}
+                                        aria-label={t('SavedQueries.Folders.CreateFolder')}
+                                    >
+                                        <FolderPlus className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">{t('SavedQueries.Folders.CreateFolder')}</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => {
+                                            setLimit(50);
+                                            setHasMore(true);
+                                            fetchAll();
+                                        }}
+                                        disabled={loading}
+                                        aria-label={t('Refresh')}
+                                    >
+                                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">{t('Refresh')}</TooltipContent>
+                            </Tooltip>
                         </div>
-                    )}
-                </ScrollArea>
-            </div>
+                    </div>
+                    <div ref={scrollRootRef} className="flex-1 min-h-0">
+                        <ScrollArea className="h-full pr-2">
+                            {!hasContent ? (
+                                <div className="text-xs text-muted-foreground py-6 text-center">{emptyHint}</div>
+                            ) : isSearching ? (
+                                <div className="space-y-1">{rootItems.map(item => renderQueryItem(item))}</div>
+                            ) : (
+                                <div ref={dndContainerRef}>
+                                    <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={collisionDetection}
+                                        modifiers={dndModifiers}
+                                        onDragStart={handleDragStart}
+                                        onDragOver={handleDragOver}
+                                        onDragEnd={handleDragEnd}
+                                        onDragCancel={handleDragCancel}
+                                    >
+                                        <div className="space-y-1">
+                                            {/* Folders with DnD reorder */}
+                                            <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
+                                                {folders.map(folder => {
+                                                    const folderItems = folderQueryMap.get(folder.id) ?? [];
+                                                    const isExpanded = expandedFolders.has(folder.id);
+                                                    return (
+                                                        <SortableFolderWrapper key={folder.id} id={folder.id}>
+                                                            {({ listeners, attributes, isDragging }) => (
+                                                                <FolderItem
+                                                                    folder={folder}
+                                                                    expanded={isExpanded}
+                                                                    isDropTarget={activeDropFolderId === folder.id}
+                                                                    isAbsorbing={absorbingFolderId === folder.id}
+                                                                    onToggle={() => toggleFolder(folder.id)}
+                                                                    onRename={openRenameFolder}
+                                                                    onDelete={openDeleteFolder}
+                                                                    t={t}
+                                                                    dragHandleListeners={listeners}
+                                                                    dragHandleAttributes={attributes}
+                                                                    isDragging={isDragging}
+                                                                >
+                                                                    {folderItems.length === 0 ? (
+                                                                        <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground">
+                                                                            <span aria-hidden className="h-4 w-4 shrink-0" />
+                                                                            <span>{t('SavedQueries.Folders.EmptyFolder')}</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <SortableContext
+                                                                            items={folderItems.map(item => getQueryDndId(item.id))}
+                                                                            strategy={verticalListSortingStrategy}
+                                                                        >
+                                                                            {folderItems.map(item => (
+                                                                                <SortableQueryWrapper key={item.id} id={item.id} folderId={folder.id}>
+                                                                                    {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
+                                                                                </SortableQueryWrapper>
+                                                                            ))}
+                                                                        </SortableContext>
+                                                                    )}
+                                                                </FolderItem>
+                                                            )}
+                                                        </SortableFolderWrapper>
+                                                    );
+                                                })}
+                                            </SortableContext>
+                                            <DragOverlay dropAnimation={null}>
+                                                {activeFolderForOverlay && (
+                                                    <div className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 shadow-md">
+                                                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        <span className="text-sm font-medium">{activeFolderForOverlay.name}</span>
+                                                    </div>
+                                                )}
+                                            </DragOverlay>
+                                            {/* Separator between folders and root queries */}
+                                            {folders.length > 0 && rootItems.length > 0 && <div className="border-t border-border/40 my-1.5" />}
+                                            {/* Root-level queries with DnD reorder */}
+                                            <SortableContext items={rootItems.map(item => getQueryDndId(item.id))} strategy={verticalListSortingStrategy}>
+                                                {rootItems.map(item => (
+                                                    <SortableQueryWrapper key={item.id} id={item.id} folderId={null}>
+                                                        {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
+                                                    </SortableQueryWrapper>
+                                                ))}
+                                            </SortableContext>
+                                            {loadingMore ? <div className="py-3 text-center text-xs text-muted-foreground">{t('SavedQueries.Loading')}</div> : null}
+                                        </div>
+                                        <DragOverlay dropAnimation={null}>
+                                            {activeQueryForOverlay && (
+                                                <div
+                                                    className={cn(
+                                                        'rounded-md border bg-background px-3 py-1.5 shadow-md',
+                                                        'transition-[transform,opacity,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transform-none motion-reduce:transition-none',
+                                                        activeDropFolderId && 'scale-[0.9] opacity-90 shadow-[0_8px_18px_-14px_hsl(var(--foreground)/0.45)]',
+                                                    )}
+                                                >
+                                                    <div className="text-sm font-medium truncate max-w-[200px]">{activeQueryForOverlay.title}</div>
+                                                    <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                                                        {summarizeSql(activeQueryForOverlay.sqlText ?? '')}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </DragOverlay>
+                                    </DndContext>
+                                </div>
+                            )}
+                        </ScrollArea>
+                    </div>
+                </>
+            ) : (
+                <div className="flex flex-1 items-start px-1 pt-4">
+                    <div className="w-full rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm">
+                        <div className="font-medium text-foreground">{t('SavedQueries.QueryHistoryEmptyTitle')}</div>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('SavedQueries.QueryHistoryEmptyDescription')}</p>
+                    </div>
+                </div>
+            )}
 
             {/* Rename query dialog */}
             <Dialog open={renameOpen} onOpenChange={setRenameOpen}>

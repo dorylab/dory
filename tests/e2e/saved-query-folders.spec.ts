@@ -194,7 +194,7 @@ async function openSavedQueriesSidebar(page: Page) {
         await expect(page).toHaveURL(new RegExp(`/[^/]+/${seededConnection.connection.id}/sql-console$`), { timeout: 15000 });
     }
 
-    const tab = page.getByRole('tab', { name: /Saved Queries/i });
+    const tab = page.getByRole('tab', { name: /^Queries$/i });
     await expect(tab).toBeVisible();
     await tab.click({ force: true });
     if ((await tab.getAttribute('data-state')) !== 'active') {
@@ -208,6 +208,7 @@ async function openSavedQueriesSidebar(page: Page) {
         });
     }
     await expect(tab).toHaveAttribute('data-state', 'active');
+    await expect(page.getByRole('combobox').filter({ hasText: /My Queries/i })).toBeVisible();
     await expect(page.getByPlaceholder(/Search/i)).toBeVisible();
 }
 
@@ -237,6 +238,22 @@ test.describe('Saved Query Folders', () => {
         await expect(page.getByText('Debug')).toBeVisible();
         await expect(page.getByText('Actor count')).toBeVisible();
 
+        await page
+            .getByRole('combobox')
+            .filter({ hasText: /My Queries/i })
+            .click();
+        await page.getByRole('option', { name: /Query History/i }).click();
+        await expect(page.getByText('Query history is not available yet')).toBeVisible();
+        await expect(page.getByPlaceholder(/Search/i)).toBeHidden();
+
+        await page
+            .getByRole('combobox')
+            .filter({ hasText: /Query History/i })
+            .click();
+        await page.getByRole('option', { name: /My Queries/i }).click();
+        await expect(page.getByText('Analytics')).toBeVisible();
+        await expect(page.getByText('Actor count')).toBeVisible();
+
         await expectAppHealthy(appErrors);
     });
 
@@ -250,7 +267,7 @@ test.describe('Saved Query Folders', () => {
 
         await openSavedQueriesSidebar(page);
 
-    const createBtn = page.getByRole('button', { name: /new folder/i });
+        const createBtn = page.getByRole('button', { name: /new folder/i });
         await createBtn.click();
 
         const dialog = page.getByRole('dialog');

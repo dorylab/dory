@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, ChevronDown, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, RefreshCw, Search } from 'lucide-react';
 
 import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 import { cn } from '@dory/web-utils';
@@ -17,6 +18,8 @@ import { getAuditSourceGroup, type AuditItem, type AuditSearchResult, type Audit
 
 type QueryAuditPageClientProps = {
     organizationId: string;
+    showHeader?: boolean;
+    embedded?: boolean;
 };
 
 type ApiResponse<T> = {
@@ -84,7 +87,7 @@ const SOURCE_GROUP_OPTIONS: Array<{ value: SourceGroupFilter; label: string }> =
     { value: 'mcp', label: 'MCP' },
 ];
 
-export default function QueryAuditPageClient({ organizationId }: QueryAuditPageClientProps) {
+export default function QueryAuditPageClient({ organizationId, showHeader = true, embedded = false }: QueryAuditPageClientProps) {
     const [searchText, setSearchText] = useState('');
     const [submittedSearchText, setSubmittedSearchText] = useState('');
     const [status, setStatus] = useState<StatusFilter>('all');
@@ -126,57 +129,61 @@ export default function QueryAuditPageClient({ organizationId }: QueryAuditPageC
     }
 
     return (
-        <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-4 px-6 py-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
-                    <h1 className="text-2xl font-semibold tracking-tight">Query Audit</h1>
-                    <p className="text-sm text-muted-foreground">SQL query audit records for this organization.</p>
-                </div>
-                <Button variant="outline" size="sm" className="gap-2" onClick={() => query.refetch()} disabled={query.isFetching}>
-                    <RefreshCw className={cn('size-4', query.isFetching && 'animate-spin')} />
-                    Refresh
-                </Button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-                <form onSubmit={submitSearch} className="flex min-w-[280px] flex-1 items-center gap-2">
-                    <div className="relative min-w-[220px] flex-1">
-                        <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Search SQL text" className="pl-8" />
+        <div className={cn('flex h-full min-h-0 w-full flex-1 flex-col gap-4', !embedded && 'px-6 py-6')}>
+            {showHeader ? (
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                        <h1 className="text-2xl font-semibold tracking-tight">Query Audit</h1>
+                        <p className="text-sm text-muted-foreground">SQL query audit records for this organization.</p>
                     </div>
+                    <Button variant="outline" size="sm" className="gap-2" onClick={() => query.refetch()} disabled={query.isFetching}>
+                        <RefreshCw className={cn('size-4', query.isFetching && 'animate-spin')} />
+                        Refresh
+                    </Button>
+                </div>
+            ) : null}
+
+            <form onSubmit={submitSearch} className="flex w-full flex-wrap items-center justify-between gap-2">
+                <div className={cn('relative min-w-[240px]', embedded ? 'w-[420px] max-w-full' : 'w-[min(480px,100%)]')}>
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Search SQL text" className="pl-8" />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    <Select value={status} onValueChange={handleStatusChange}>
+                        <SelectTrigger className="w-[150px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                            {STATUS_OPTIONS.map(option => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select value={sourceGroup} onValueChange={handleSourceGroupChange}>
+                        <SelectTrigger className="w-[160px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                            {SOURCE_GROUP_OPTIONS.map(option => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {!showHeader ? (
+                        <Button variant="ghost" size="icon" className="size-9" onClick={() => query.refetch()} disabled={query.isFetching} aria-label="Refresh" title="Refresh">
+                            <RefreshCw className={cn('size-4', query.isFetching && 'animate-spin')} />
+                        </Button>
+                    ) : null}
                     <Button type="submit" variant="secondary">
                         Search
                     </Button>
-                </form>
-                <div className="relative">
-                    <select
-                        value={status}
-                        onChange={event => handleStatusChange(event.target.value)}
-                        className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-[150px] appearance-none rounded-md border px-3 py-2 pr-8 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-                    >
-                        {STATUS_OPTIONS.map(option => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
-                <div className="relative">
-                    <select
-                        value={sourceGroup}
-                        onChange={event => handleSourceGroupChange(event.target.value)}
-                        className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-[160px] appearance-none rounded-md border px-3 py-2 pr-8 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-                    >
-                        {SOURCE_GROUP_OPTIONS.map(option => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                </div>
-            </div>
+            </form>
 
             {query.isError ? (
                 <Alert variant="destructive">

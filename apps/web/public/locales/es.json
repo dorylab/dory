@@ -1281,6 +1281,10 @@
             "Loading": "Cargando consultas guardadas...",
             "Empty": "No hay consultas guardadas",
             "Title": "Consultas guardadas",
+            "MyQueries": "Mis consultas",
+            "QueryHistory": "Historial de consultas",
+            "QueryHistoryEmptyTitle": "El historial de consultas aún no está disponible",
+            "QueryHistoryEmptyDescription": "Esta vista mostrará el historial reciente cuando se conecten los registros de consultas.",
             "SearchPlaceholder": "Buscar consultas guardadas",
             "SearchEmpty": "No hay consultas guardadas coincidentes",
             "MoreActions": "Más acciones",
@@ -1884,7 +1888,8 @@
         "Refresh": "Actualizar",
         "Sidebar": {
             "Tables": "Tablas",
-            "SavedQueries": "Consultas guardadas"
+            "SavedQueries": "Consultas guardadas",
+            "Queries": "Consultas"
         },
         "VTable": {
             "Header": {
@@ -3116,6 +3121,10 @@
                 "Status": "Estado",
                 "Joined": "Se unió"
             }
+        },
+        "QueryAudit": {
+            "Title": "Query Audit",
+            "Description": "Registros de auditoría de consultas SQL de esta organización."
         },
         "Ai": {
             "Title": "Configuración de IA",
