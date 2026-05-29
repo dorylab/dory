@@ -33,6 +33,29 @@ type MockQuery = {
     context: Record<string, unknown>;
     workId: null;
 };
+type MockAuditItem = {
+    id: string;
+    created_at: string;
+    organizationId: string;
+    user_id: string;
+    source: 'user_sql_console';
+    status: 'success' | 'error' | 'canceled';
+    duration_ms: number | null;
+    error_message: string | null;
+    rows_read: number | null;
+    bytes_read: number | null;
+    rows_written: number | null;
+    connection_id: string;
+    connection_name: string;
+    identity_id: string | null;
+    identity_name: string | null;
+    identity_username: string | null;
+    identity_role: string | null;
+    identity_database: string | null;
+    database_name: string | null;
+    sql_text: string;
+    extra_json: Record<string, unknown>;
+};
 
 function createMockFolder(id: string, name: string, position: number): MockFolder {
     const now = new Date().toISOString();
@@ -64,6 +87,32 @@ function createMockQuery(
     };
 }
 
+function createMockAuditItem(id: string, sqlText: string, status: MockAuditItem['status'] = 'success'): MockAuditItem {
+    return {
+        id,
+        created_at: new Date().toISOString(),
+        organizationId: 'org-1',
+        user_id: 'user-1',
+        source: 'user_sql_console',
+        status,
+        duration_ms: 23,
+        error_message: status === 'error' ? 'Query failed' : null,
+        rows_read: 10,
+        bytes_read: 128,
+        rows_written: null,
+        connection_id: 'conn-1',
+        connection_name: 'E2E ClickHouse',
+        identity_id: 'identity-1',
+        identity_name: 'default',
+        identity_username: 'default',
+        identity_role: null,
+        identity_database: null,
+        database_name: 'default',
+        sql_text: sqlText,
+        extra_json: {},
+    };
+}
+
 /**
  * Layer folder-specific mock routes on top of mockWorkbenchApis.
  * Must be called AFTER mockWorkbenchApis so our routes take priority.
@@ -73,10 +122,12 @@ async function mockFolderApis(
     options: {
         initialFolders?: MockFolder[];
         initialQueries?: MockQuery[];
+        initialHistory?: MockAuditItem[];
     } = {},
 ) {
     const folders: MockFolder[] = [...(options.initialFolders ?? [])];
     const queries: MockQuery[] = [...(options.initialQueries ?? [])];
+    const history: MockAuditItem[] = [...(options.initialHistory ?? [])];
     let folderCounter = folders.length;
 
     // Remove the catch-all saved-queries handler from mockWorkbenchApis,
@@ -85,6 +136,7 @@ async function mockFolderApis(
     await page.unroute('**/api/sql-console/saved-query-folders');
     await page.unroute('**/api/sql-console/saved-query-folders/reorder');
     await page.unroute('**/api/sql-console/saved-queries/reorder');
+    await page.unroute('**/api/query-audit').catch(() => undefined);
 
     // Reorder routes
     await page.route('**/api/sql-console/saved-queries/reorder', async route => {
@@ -170,6 +222,18 @@ async function mockFolderApis(
         await route.fallback();
     });
 
+    await page.route(url => url.pathname.endsWith('/api/query-audit'), async route => {
+        await json(route, {
+            code: 0,
+            message: 'success',
+            data: {
+                items: history,
+                total: history.length,
+                nextCursor: null,
+            },
+        });
+    });
+
     return { folders, queries };
 }
 
@@ -230,6 +294,9 @@ test.describe('Saved Query Folders', () => {
                 createMockQuery('q3', 'join_test', 'SELECT * FROM joins', 'folder-2', 1000),
                 createMockQuery('q4', 'Actor count', 'SELECT count(*) FROM actors', null, 1000),
             ],
+            initialHistory: [
+                createMockAuditItem('audit-1', 'SELECT * FROM audit_history'),
+            ],
         });
 
         await openSavedQueriesSidebar(page);
@@ -243,7 +310,7 @@ test.describe('Saved Query Folders', () => {
             .filter({ hasText: /My Queries/i })
             .click();
         await page.getByRole('option', { name: /Query History/i }).click();
-        await expect(page.getByText('Query history is not available yet')).toBeVisible();
+        await expect(page.getByRole('button', { name: /SELECT \* FROM audit_history/i })).toBeVisible();
         await expect(page.getByPlaceholder(/Search/i)).toBeHidden();
 
         await page

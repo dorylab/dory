@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FolderPlus, GripVertical, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
 import {
     DndContext,
     DragOverlay,
@@ -40,11 +40,13 @@ import { authFetch } from '@/lib/client/auth-fetch';
 import { authClient } from '@/lib/auth-client';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { cn } from '@dory/web-utils';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { useLocale, useTranslations } from 'next-intl';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import posthog from 'posthog-js';
 import { AccountRequiredSheet } from '@/components/auth/account-required-sheet';
+import type { AuditItem } from '@dory/shared/types/audit';
+import { savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
 import { FolderItem, type FolderData } from './folder-item';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
@@ -78,10 +80,22 @@ type SavedQueriesSidebarProps = {
     onSelect?: (item: SavedQueryItem) => void;
 };
 
-type SavedQueriesView = 'my-queries' | 'query-history';
+type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'sql_text' | 'status' | 'duration_ms' | 'error_message'>;
+
+type ApiResponse<T> = {
+    code: number;
+    message?: string;
+    data?: T;
+};
 
 function summarizeSql(sqlText: string) {
     return sqlText.replace(/\s+/g, ' ').trim();
+}
+
+function buildHistoryQueryTitle(item: QueryHistoryItem, fallback: string) {
+    const summary = summarizeSql(item.sql_text);
+    if (!summary) return fallback;
+    return summary.length > 64 ? `${summary.slice(0, 61)}...` : summary;
 }
 
 const FOLDER_DND_PREFIX = 'folder:';
@@ -192,6 +206,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const { data: session } = authClient.useSession();
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection.id ?? null;
+    const sessionUserId = session?.user?.id ?? null;
     const isAnonymous = isAnonymousUser(session?.user);
     const scrollRootRef = useRef<HTMLDivElement | null>(null);
     const scrollRestoreRef = useRef<{ top: number } | null>(null);
@@ -210,8 +225,12 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const [hoverOpenId, setHoverOpenId] = useState<string | null>(null);
     const [searchValue, setSearchValue] = useState('');
     const [hoverBlockOnceId, setHoverBlockOnceId] = useState<string | null>(null);
-    const [queryView, setQueryView] = useState<SavedQueriesView>('my-queries');
+    const [queryViewByConnection, setQueryViewByConnection] = useAtom(savedQueriesViewByConnectionAtom);
+    const queryView = connectionId ? (queryViewByConnection[connectionId] ?? 'my-queries') : 'my-queries';
     const isMyQueriesView = queryView === 'my-queries';
+    const [historyItems, setHistoryItems] = useState<QueryHistoryItem[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState<string | null>(null);
 
     // Folder-specific state
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(loadExpandedFolders);
@@ -233,6 +252,20 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         if (typeof window === 'undefined') return;
         window.dispatchEvent(new CustomEvent('saved-queries-updated'));
     }, []);
+
+    const setQueryView = useCallback(
+        (nextView: SavedQueriesView) => {
+            if (!connectionId) return;
+            setQueryViewByConnection(prev => {
+                if (prev[connectionId] === nextView) return prev;
+                return {
+                    ...prev,
+                    [connectionId]: nextView,
+                };
+            });
+        },
+        [connectionId, setQueryViewByConnection],
+    );
 
     const toggleFolder = useCallback((folderId: string) => {
         setExpandedFolders(prev => {
@@ -311,10 +344,55 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         [fetchFolders, fetchList],
     );
 
+    const fetchQueryHistory = useCallback(async () => {
+        setHistoryError(null);
+
+        if (isAnonymous) {
+            setHistoryItems([]);
+            return;
+        }
+
+        if (!connectionId || !sessionUserId) {
+            setHistoryItems([]);
+            setHistoryError(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            return;
+        }
+
+        setHistoryLoading(true);
+        try {
+            const params = new URLSearchParams({
+                limit: '50',
+                sources: 'user_sql_console,console',
+                statuses: 'success,error,canceled',
+                user_id: sessionUserId,
+                connection_id: connectionId,
+            });
+            const res = await authFetch(`/api/query-audit?${params.toString()}`);
+            const payload = (await res.json().catch(() => null)) as ApiResponse<{ items?: QueryHistoryItem[] }> | null;
+
+            if (!res.ok || payload?.code !== 0) {
+                throw new Error(payload?.message ?? t('SavedQueries.QueryHistoryLoadFailed'));
+            }
+
+            setHistoryItems(payload.data?.items ?? []);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : t('SavedQueries.QueryHistoryLoadFailed');
+            setHistoryError(message);
+            setHistoryItems([]);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, [connectionId, isAnonymous, sessionUserId, t]);
+
     useEffect(() => {
         if (!isMyQueriesView) return;
         fetchAll();
     }, [fetchAll, isMyQueriesView]);
+
+    useEffect(() => {
+        if (queryView !== 'query-history') return;
+        fetchQueryHistory();
+    }, [fetchQueryHistory, queryView]);
 
     useEffect(() => {
         const handler = () => {
@@ -1005,25 +1083,6 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                                 </TooltipTrigger>
                                 <TooltipContent side="bottom">{t('SavedQueries.Folders.CreateFolder')}</TooltipContent>
                             </Tooltip>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() => {
-                                            setLimit(50);
-                                            setHasMore(true);
-                                            fetchAll();
-                                        }}
-                                        disabled={loading}
-                                        aria-label={t('Refresh')}
-                                    >
-                                        <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="bottom">{t('Refresh')}</TooltipContent>
-                            </Tooltip>
                         </div>
                     </div>
                     <div ref={scrollRootRef} className="flex-1 min-h-0">
@@ -1131,11 +1190,70 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                     </div>
                 </>
             ) : (
-                <div className="flex flex-1 items-start px-1 pt-4">
-                    <div className="w-full rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm">
-                        <div className="font-medium text-foreground">{t('SavedQueries.QueryHistoryEmptyTitle')}</div>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('SavedQueries.QueryHistoryEmptyDescription')}</p>
-                    </div>
+                <div className="flex-1 min-h-0 px-1">
+                    <ScrollArea className="h-full pr-2">
+                        {historyLoading ? (
+                            <div className="text-xs text-muted-foreground py-6 text-center">{t('SavedQueries.QueryHistoryLoading')}</div>
+                        ) : historyError ? (
+                            <div className="text-xs text-destructive py-6 text-center">{historyError}</div>
+                        ) : historyItems.length === 0 ? (
+                            <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm">
+                                <div className="font-medium text-foreground">{t('SavedQueries.QueryHistoryEmptyTitle')}</div>
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('SavedQueries.QueryHistoryEmptyDescription')}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-1">
+                                {historyItems.map(item => {
+                                    const displaySql = item.sql_text ?? '';
+                                    const summary = summarizeSql(displaySql);
+                                    return (
+                                        <HoverCard key={item.id} openDelay={200} closeDelay={120}>
+                                            <HoverCardTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className={cn(
+                                                        'group flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left transition-colors',
+                                                        'border border-transparent hover:border-muted-foreground/20 hover:bg-muted/40',
+                                                    )}
+                                                    onClick={() => {
+                                                        onSelect?.({
+                                                            id: `history:${item.id}`,
+                                                            title: buildHistoryQueryTitle(item, t('SavedQueries.QueryHistoryUntitled')),
+                                                            sqlText: item.sql_text,
+                                                            connectionId,
+                                                            createdAt: item.created_at,
+                                                            updatedAt: item.created_at,
+                                                        });
+                                                    }}
+                                                >
+                                                    <div className="flex w-full items-center justify-between gap-2">
+                                                        <span className="min-w-0 truncate text-sm font-medium">{summary || t('SavedQueries.QueryHistoryUntitled')}</span>
+                                                        <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{item.status}</span>
+                                                    </div>
+                                                    <div className="mt-0.5 flex w-full items-center gap-2 text-[11px] text-muted-foreground">
+                                                        <span className="truncate">{formatTime(item.created_at, locale)}</span>
+                                                        {item.duration_ms === null || item.duration_ms === undefined ? null : (
+                                                            <span className="shrink-0">{t('SavedQueries.QueryHistoryDuration', { value: String(item.duration_ms) })}</span>
+                                                        )}
+                                                    </div>
+                                                    {item.error_message ? <div className="mt-0.5 line-clamp-1 text-[11px] text-destructive">{item.error_message}</div> : null}
+                                                </button>
+                                            </HoverCardTrigger>
+                                            <HoverCardContent side="right" align="start" sideOffset={12} className="w-[420px] p-0 z-40">
+                                                <div className="space-y-4 p-4">
+                                                    <div className="space-y-1">
+                                                        <div className="text-lg font-semibold text-foreground">{t('SavedQueries.QueryHistory')}</div>
+                                                        <div className="text-xs text-muted-foreground">{formatTime(item.created_at, locale)}</div>
+                                                    </div>
+                                                    <SmartCodeBlock value={displaySql || ' '} type="sql" maxHeightClassName="max-h-64" />
+                                                </div>
+                                            </HoverCardContent>
+                                        </HoverCard>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </ScrollArea>
                 </div>
             )}
 

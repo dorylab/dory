@@ -24,6 +24,14 @@ export const copilotPanelTabAtom = atomWithStorage<'ask' | 'action' | 'context'>
     createJSONStorage(() => localStorage),
 );
 
+export type SavedQueriesView = 'my-queries' | 'query-history';
+
+export const savedQueriesViewByConnectionAtom = atomWithStorage<Record<string, SavedQueriesView>>(
+    'sqlConsole.savedQueriesViewByConnection',
+    {},
+    createJSONStorage(() => localStorage),
+);
+
 export const currentTabResultAtom = atom<TabResult[]>([]);
 
 export const sessionIdByTabAtom = atom<Record<string, string>>({});
