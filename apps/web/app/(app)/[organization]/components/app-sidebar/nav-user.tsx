@@ -69,7 +69,7 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
     });
     const plan = billingStatusQuery.data?.plan ?? null;
     const planLabel = plan === 'pro' ? planT('Pro') : plan === 'hobby' ? planT('Hobby') : null;
-    const canViewAuditLog = accessQuery.data?.role === 'owner' || accessQuery.data?.role === 'admin';
+    const canViewQueryAudit = accessQuery.data?.role === 'owner' || accessQuery.data?.role === 'admin';
     const organizationSlug = params.organization ?? pathname?.split('/').filter(Boolean)[0] ?? '';
 
     function handleSignIn() {
@@ -123,13 +123,13 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
                     {t('GuestSession.SignIn')}
                 </DropdownMenuItem>
             ) : null}
-            {canViewAuditLog && organizationSlug ? (
+            {canViewQueryAudit && organizationSlug ? (
                 <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild onSelect={() => setMenuOpen(false)}>
-                        <Link href={`/${organizationSlug}/audit/logs`}>
+                        <Link href={`/${organizationSlug}/query-audit`}>
                             <ClipboardList />
-                            Audit Log
+                            Query Audit
                         </Link>
                     </DropdownMenuItem>
                 </>

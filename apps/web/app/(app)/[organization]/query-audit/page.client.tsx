@@ -1,21 +1,21 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, ChevronDown, RefreshCw, Search } from 'lucide-react';
 
+import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/registry/new-york-v4/ui/select';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 import { cn } from '@dory/web-utils';
-import { getAuditSourceGroup, type AuditItem, type AuditSearchResult, type QueryStatus } from '@dory/shared/types/audit';
+import { getAuditSourceGroup, type AuditItem, type AuditSearchResult, type AuditSourceGroup, type QuerySource, type QueryStatus } from '@dory/shared/types/audit';
 
-type AuditLogsPageClientProps = {
+type QueryAuditPageClientProps = {
     organizationId: string;
 };
 
@@ -26,7 +26,46 @@ type ApiResponse<T> = {
 };
 
 type StatusFilter = 'all' | QueryStatus;
-type SourceGroupFilter = 'all' | 'user' | 'dory_system' | 'ai' | 'automation' | 'mcp';
+type SourceGroupFilter = 'all' | AuditSourceGroup;
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+
+const QUERY_SOURCES: QuerySource[] = [
+    'console',
+    'chatbot',
+    'api',
+    'task',
+    'user_sql_console',
+    'user_table_preview',
+    'dory_schema_metadata',
+    'dory_monitoring',
+    'ai_sql_runner',
+    'ai_table_preview',
+    'ai_schema_metadata',
+    'ai_analysis',
+    'automation_sql',
+    'automation_ai_sql',
+    'automation_schema_metadata',
+    'mcp_sql_runner',
+    'mcp_table_preview',
+    'mcp_schema_metadata',
+    'mcp_monitoring',
+    'mcp_analysis',
+];
+
+const SOURCES_BY_GROUP = QUERY_SOURCES.reduce<Record<AuditSourceGroup, QuerySource[]>>(
+    (acc, source) => {
+        acc[getAuditSourceGroup(source)].push(source);
+        return acc;
+    },
+    {
+        user: [],
+        dory_system: [],
+        ai: [],
+        automation: [],
+        mcp: [],
+    },
+);
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
     { value: 'all', label: 'All statuses' },
@@ -45,53 +84,53 @@ const SOURCE_GROUP_OPTIONS: Array<{ value: SourceGroupFilter; label: string }> =
     { value: 'mcp', label: 'MCP' },
 ];
 
-export default function AuditLogsPageClient({ organizationId }: AuditLogsPageClientProps) {
+export default function QueryAuditPageClient({ organizationId }: QueryAuditPageClientProps) {
     const [searchText, setSearchText] = useState('');
     const [submittedSearchText, setSubmittedSearchText] = useState('');
     const [status, setStatus] = useState<StatusFilter>('all');
     const [sourceGroup, setSourceGroup] = useState<SourceGroupFilter>('all');
-    const [cursorStack, setCursorStack] = useState<string[]>([]);
-    const cursor = cursorStack[cursorStack.length - 1] ?? null;
+    const [pageIndex, setPageIndex] = useState(0);
+    const [pageSize, setPageSize] = useState(50);
 
     const query = useQuery({
-        queryKey: ['audit-logs', organizationId, submittedSearchText, status, cursor],
+        queryKey: ['query-audit', organizationId, submittedSearchText, status, sourceGroup, pageIndex, pageSize],
         queryFn: () =>
-            fetchAuditLogs({
+            fetchQueryAuditRecords({
                 q: submittedSearchText,
                 status,
-                cursor,
+                sourceGroup,
+                pageIndex,
+                pageSize,
             }),
         retry: false,
         staleTime: 10_000,
     });
 
-    const rows = useMemo(() => {
-        const items = query.data?.items ?? [];
-        if (sourceGroup === 'all') return items;
-        return items.filter(item => getAuditSourceGroup(item.source) === sourceGroup);
-    }, [query.data?.items, sourceGroup]);
+    const rows = query.data?.items ?? [];
+    const total = query.data?.total ?? rows.length;
 
     function submitSearch(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        setCursorStack([]);
+        setPageIndex(0);
         setSubmittedSearchText(searchText.trim());
     }
 
     function handleStatusChange(value: string) {
-        setCursorStack([]);
+        setPageIndex(0);
         setStatus(value as StatusFilter);
     }
 
     function handleSourceGroupChange(value: string) {
+        setPageIndex(0);
         setSourceGroup(value as SourceGroupFilter);
     }
 
     return (
-        <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-6 py-6">
+        <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-4 px-6 py-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-1">
-                    <h1 className="text-2xl font-semibold tracking-tight">Audit Log</h1>
-                    <p className="text-sm text-muted-foreground">SQL audit records for this organization.</p>
+                    <h1 className="text-2xl font-semibold tracking-tight">Query Audit</h1>
+                    <p className="text-sm text-muted-foreground">SQL query audit records for this organization.</p>
                 </div>
                 <Button variant="outline" size="sm" className="gap-2" onClick={() => query.refetch()} disabled={query.isFetching}>
                     <RefreshCw className={cn('size-4', query.isFetching && 'animate-spin')} />
@@ -109,37 +148,45 @@ export default function AuditLogsPageClient({ organizationId }: AuditLogsPageCli
                         Search
                     </Button>
                 </form>
-                <Select value={status} onValueChange={handleStatusChange}>
-                    <SelectTrigger className="w-[150px]">{STATUS_OPTIONS.find(option => option.value === status)?.label}</SelectTrigger>
-                    <SelectContent>
+                <div className="relative">
+                    <select
+                        value={status}
+                        onChange={event => handleStatusChange(event.target.value)}
+                        className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-[150px] appearance-none rounded-md border px-3 py-2 pr-8 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                    >
                         {STATUS_OPTIONS.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
+                            <option key={option.value} value={option.value}>
                                 {option.label}
-                            </SelectItem>
+                            </option>
                         ))}
-                    </SelectContent>
-                </Select>
-                <Select value={sourceGroup} onValueChange={handleSourceGroupChange}>
-                    <SelectTrigger className="w-[160px]">{SOURCE_GROUP_OPTIONS.find(option => option.value === sourceGroup)?.label}</SelectTrigger>
-                    <SelectContent>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                <div className="relative">
+                    <select
+                        value={sourceGroup}
+                        onChange={event => handleSourceGroupChange(event.target.value)}
+                        className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-[160px] appearance-none rounded-md border px-3 py-2 pr-8 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                    >
                         {SOURCE_GROUP_OPTIONS.map(option => (
-                            <SelectItem key={option.value} value={option.value}>
+                            <option key={option.value} value={option.value}>
                                 {option.label}
-                            </SelectItem>
+                            </option>
                         ))}
-                    </SelectContent>
-                </Select>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
             </div>
 
             {query.isError ? (
                 <Alert variant="destructive">
                     <AlertCircle className="size-4" />
-                    <AlertDescription>{query.error instanceof Error ? query.error.message : 'Failed to load audit logs.'}</AlertDescription>
+                    <AlertDescription>{query.error instanceof Error ? query.error.message : 'Failed to load query audit records.'}</AlertDescription>
                 </Alert>
             ) : null}
 
-            <div className="min-h-0 overflow-hidden rounded-md border">
-                <Table>
+            <div className="min-h-[360px] flex-1 overflow-auto rounded-md border">
+                <Table className="min-w-[1280px]">
                     <TableHeader>
                         <TableRow>
                             <TableHead className="w-[170px]">Time</TableHead>
@@ -162,7 +209,7 @@ export default function AuditLogsPageClient({ organizationId }: AuditLogsPageCli
                                 </TableRow>
                             ))
                         ) : rows.length ? (
-                            rows.map(item => <AuditLogRow key={item.id} item={item} />)
+                            rows.map(item => <QueryAuditRow key={item.id} item={item} />)
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
@@ -174,32 +221,23 @@ export default function AuditLogsPageClient({ organizationId }: AuditLogsPageCli
                 </Table>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-                <p className="text-xs text-muted-foreground">
-                    Showing {rows.length} {sourceGroup !== 'all' ? 'filtered ' : ''}records
-                </p>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={!cursorStack.length || query.isFetching} onClick={() => setCursorStack(stack => stack.slice(0, -1))}>
-                        Previous
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={!query.data?.nextCursor || query.isFetching}
-                        onClick={() => {
-                            const nextCursor = query.data?.nextCursor;
-                            if (nextCursor) setCursorStack(stack => [...stack, nextCursor]);
-                        }}
-                    >
-                        Next
-                    </Button>
-                </div>
-            </div>
+            <DataTablePagination
+                total={total}
+                pageIndex={pageIndex}
+                pageSize={pageSize}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                onPageChange={setPageIndex}
+                onPageSizeChange={nextPageSize => {
+                    setPageSize(nextPageSize);
+                    setPageIndex(0);
+                }}
+                className="px-0 py-0"
+            />
         </div>
     );
 }
 
-function AuditLogRow({ item }: { item: AuditItem }) {
+function QueryAuditRow({ item }: { item: AuditItem }) {
     const rowCount = item.rows_written ?? item.rows_read ?? null;
     const connectionLabel = item.connection_name || item.connection_id || 'Unknown';
     const identityLabel = item.identity_username || item.identity_name || item.identity_id || 'Unknown';
@@ -259,12 +297,13 @@ function StatusBadge({ status }: { status: QueryStatus }) {
     );
 }
 
-async function fetchAuditLogs(input: { q: string; status: StatusFilter; cursor: string | null }): Promise<AuditSearchResult> {
-    const url = new URL('/api/audit/logs', window.location.origin);
-    url.searchParams.set('limit', '50');
+async function fetchQueryAuditRecords(input: { q: string; status: StatusFilter; sourceGroup: SourceGroupFilter; pageIndex: number; pageSize: number }): Promise<AuditSearchResult> {
+    const url = new URL('/api/query-audit', window.location.origin);
+    url.searchParams.set('limit', String(input.pageSize));
+    url.searchParams.set('offset', String(input.pageIndex * input.pageSize));
     if (input.q) url.searchParams.set('q', input.q);
     if (input.status !== 'all') url.searchParams.set('statuses', input.status);
-    if (input.cursor) url.searchParams.set('cursor', input.cursor);
+    if (input.sourceGroup !== 'all') url.searchParams.set('sources', SOURCES_BY_GROUP[input.sourceGroup].join(','));
 
     const response = await fetch(url.toString(), {
         credentials: 'include',
@@ -272,7 +311,7 @@ async function fetchAuditLogs(input: { q: string; status: StatusFilter; cursor: 
     const payload = (await response.json().catch(() => null)) as ApiResponse<AuditSearchResult> | null;
 
     if (!response.ok || payload?.code !== 0 || !payload.data) {
-        throw new Error(payload?.message ?? 'Failed to load audit logs');
+        throw new Error(payload?.message ?? 'Failed to load query audit records');
     }
 
     return payload.data;

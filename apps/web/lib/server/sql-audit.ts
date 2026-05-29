@@ -323,7 +323,7 @@ async function insertSqlAudit(input: {
         const db = await getDBService();
         await db.audit.log(payload);
     } catch (error) {
-        console.error('[sql-audit] failed to write audit log', error);
+        console.error('[sql-audit] failed to write query audit record', error);
     }
 }
 

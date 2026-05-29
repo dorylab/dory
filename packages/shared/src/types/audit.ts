@@ -63,6 +63,7 @@ export type AuditSearchQuery = {
     chat_id?: string;
     q?: string;
     limit?: number;
+    offset?: number;
     cursor?: string | null;
 };
 
@@ -92,6 +93,7 @@ export type AuditItem = {
 
 export type AuditSearchResponse = {
     items: AuditItem[];
+    total?: number;
     nextCursor?: string | null;
 };
 
@@ -124,7 +126,7 @@ export type OverviewResponse = {
     topErrors: Array<{ message: string; count: number }>;
 };
 
-export type AuditSearchResult = { items: AuditItem[]; nextCursor?: string | null };
+export type AuditSearchResult = { items: AuditItem[]; total?: number; nextCursor?: string | null };
 
 export interface AuditPayload {
     organizationId: string;
@@ -174,6 +176,7 @@ export type AuditSearchParams = {
 
     q?: string;
     limit?: number;
+    offset?: number;
     cursor?: string | null;
 };
 

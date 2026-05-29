@@ -34,6 +34,7 @@ const QUERY_STATUSES = new Set<QueryStatus>(['success', 'error', 'denied', 'canc
 export const GET = withManagedOrganizationHandler(async ({ req, db, organizationId }) => {
     const searchParams = req.nextUrl.searchParams;
     const limit = clampLimit(searchParams.get('limit'));
+    const offset = normalizeOffset(searchParams.get('offset'));
     const sources = parseCsvFilter(searchParams.get('sources'), QUERY_SOURCES);
     const statuses = parseCsvFilter(searchParams.get('statuses'), QUERY_STATUSES);
 
@@ -50,6 +51,7 @@ export const GET = withManagedOrganizationHandler(async ({ req, db, organization
         q: normalizeString(searchParams.get('q')),
         cursor: normalizeString(searchParams.get('cursor')),
         limit,
+        offset,
     });
 
     return NextResponse.json(ResponseUtil.success(result));
@@ -71,6 +73,12 @@ function clampLimit(value?: string | null): number {
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) return 50;
     return Math.max(1, Math.min(200, Math.floor(parsed)));
+}
+
+function normalizeOffset(value?: string | null): number | undefined {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return undefined;
+    return Math.max(0, Math.floor(parsed));
 }
 
 function parseCsvFilter<T extends string>(value: string | null, allowed: Set<T>): T[] | undefined {

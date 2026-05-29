@@ -2,9 +2,9 @@ import { redirect } from 'next/navigation';
 
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { canManageOrganization, resolveOrganizationAccess } from '@/lib/server/authz';
-import AuditLogsPageClient from './page.client';
+import QueryAuditPageClient from './page.client';
 
-export default async function OrganizationAuditLogsPage({ params }: { params: Promise<{ organization: string }> }) {
+export default async function OrganizationQueryAuditPage({ params }: { params: Promise<{ organization: string }> }) {
     const { organization } = await params;
     const bootstrap = await getAppBootstrapState({ organizationSlugOrId: organization });
     const userId = bootstrap.session?.user?.id ?? null;
@@ -19,5 +19,5 @@ export default async function OrganizationAuditLogsPage({ params }: { params: Pr
         redirect(`/${organization}/connections`);
     }
 
-    return <AuditLogsPageClient organizationId={organizationId} />;
+    return <QueryAuditPageClient organizationId={organizationId} />;
 }
