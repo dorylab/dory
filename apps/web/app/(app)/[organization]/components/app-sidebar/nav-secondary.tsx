@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 import { ExternalLink } from 'lucide-react';
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/registry/new-york-v4/ui/sidebar';
-import { SidebarOrganizationEntry, SidebarSettingsEntry, SidebarThemeEntry } from './nav-settings';
+import { SidebarSettingsEntry, SidebarThemeEntry } from './nav-settings';
 import { cn } from '@dory/web-utils';
 
 export function NavSecondary({
@@ -26,7 +26,6 @@ export function NavSecondary({
         <SidebarGroup {...props} className={cn(props.className)}>
             <SidebarGroupContent>
                 <SidebarMenu>
-                    <SidebarOrganizationEntry />
                     <SidebarThemeEntry />
                     <SidebarSettingsEntry />
                     {items.map(item => {
