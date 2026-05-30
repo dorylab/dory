@@ -20,6 +20,10 @@ export function useSettingsHeaderAction() {
     return context;
 }
 
+export function useOptionalSettingsHeaderAction() {
+    return useContext(SettingsHeaderActionContext);
+}
+
 export function SettingsPanelActionSlot({ children, className }: { children: ReactNode; className?: string }) {
     if (!children) {
         return null;

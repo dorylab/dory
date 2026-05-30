@@ -2,9 +2,9 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { isReadOnlyQuery } from '../../utils/sql-readonly';
-import { getDBService } from '@dory/database';
 import { Locale } from '@dory/i18n/routing';
 import { translateApi } from '@/app/api/utils/i18n';
+import { logDeniedSqlAudit, runWithSqlAudit } from '@/lib/server/sql-audit';
 
 type CreateSqlRunnerOptions = {
     userId: string;
@@ -42,27 +42,29 @@ export function createSqlRunnerTool({ userId, organizationId, datasourceId, mess
             const limitedSql = enforceSqlResultRowLimit(trimmed, MAX_SQL_RESULT_ROWS);
 
             if (!isReadOnlyQuery(trimmed)) {
+                await logDeniedSqlAudit(
+                    {
+                        organizationId,
+                        userId,
+                        source: 'ai_sql_runner',
+                        connectionId: datasourceId,
+                        databaseName: requestedDatabase,
+                        tabId: 'chatbot',
+                        extraJson: {
+                            chatId,
+                            messageId,
+                        },
+                    },
+                    {
+                        sqlText: trimmed,
+                        databaseName: requestedDatabase,
+                        errorMessage: t('Api.Chat.SqlRunner.ReadOnlyOnly'),
+                    },
+                );
                 return buildErrorResult(trimmed, requestedDatabase, t('Api.Chat.SqlRunner.ReadOnlyOnly'), undefined, {
                     required: true,
                     reason: 'non-readonly-query',
                 });
-            }
-
-            const baseAudit = {
-                organizationId,
-                user_id: userId,
-                source: 'chatbot' as const,
-                datasource_id: datasourceId,
-                sql_text: limitedSql,
-                database_name: requestedDatabase,
-                extra_json: {
-                    chat_id: chatId,
-                    message_id: messageId,
-                },
-            };
-            const db = await getDBService();
-            if (!db?.audit) {
-                console.warn('[chat] Audit repository not available, skipping audit logging.');
             }
 
             try {
@@ -81,9 +83,24 @@ export function createSqlRunnerTool({ userId, organizationId, datasourceId, mess
                 }
 
                 const started = Date.now();
-                const result = await instance.queryWithContext(limitedSql, {
-                    database: targetDatabase ?? undefined,
-                });
+                const result = await runWithSqlAudit(
+                    {
+                        organizationId,
+                        userId,
+                        source: 'ai_sql_runner',
+                        connectionId: datasourceId,
+                        databaseName: targetDatabase,
+                        tabId: 'chatbot',
+                        extraJson: {
+                            chatId,
+                            messageId,
+                        },
+                    },
+                    () =>
+                        instance.queryWithContext(limitedSql, {
+                            database: targetDatabase ?? undefined,
+                        }),
+                );
                 const durationMs = Date.now() - started;
                 console.info('[chat][sqlRunner] executed', {
                     datasourceId,
@@ -100,20 +117,6 @@ export function createSqlRunnerTool({ userId, organizationId, datasourceId, mess
                               type: col.type ?? null,
                           }))
                         : inferColumnsFromRows(previewRows);
-
-                if (db?.audit) {
-                    const rowsRead = Number(result.statistics?.rows_read);
-                    const bytesRead = Number(result.statistics?.bytes_read);
-                    await db.audit.logSuccess({
-                        ...baseAudit,
-                        durationMs: durationMs,
-                        rowsRead: Number.isFinite(rowsRead) ? rowsRead : null,
-                        bytesRead: Number.isFinite(bytesRead) ? bytesRead : null,
-                        tabId: 'chatbot',
-                        userId,
-                        sqlText: limitedSql,
-                    });
-                }
 
                 const base: SqlResultBase = {
                     type: 'sql-result',
@@ -140,16 +143,6 @@ export function createSqlRunnerTool({ userId, organizationId, datasourceId, mess
                 const rawMessage = String(error?.message ?? error ?? t('Api.Chat.SqlRunner.ExecuteFailed'));
                 const code = extractErrorCode(rawMessage);
                 const targetDatabase = requestedDatabase ?? sanitizeDatabase(defaultDatabase);
-
-                if (db?.audit) {
-                    await db.audit.logError({
-                        ...baseAudit,
-                        errorMessage: rawMessage,
-                        tabId: 'chatbot',
-                        userId,
-                        sqlText: limitedSql,
-                    });
-                }
 
                 return buildErrorResult(limitedSql, targetDatabase, rawMessage, code);
             }

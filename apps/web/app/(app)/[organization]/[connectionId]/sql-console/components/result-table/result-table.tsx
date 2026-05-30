@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Activity, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, MoreHorizontal, RefreshCw, Sparkles } from 'lucide-react';
+import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
 
 import VTable from './vtable';
 import { InspectorPanel } from './vtable/InspectorPanel';
@@ -26,7 +26,6 @@ import { DebugPanel, DebugPayload } from './components/DebugPanel';
 import { makeSetUserPickedAtom, makeActiveSetAtom, makeAutoSetActiveSetAtom, makeSetActiveSetAtom, makeUserPickedAtom } from './stores/active-set.atoms';
 import { useAutoJumpToLastResult } from './hooks/useAutoJumpToLastResult';
 import { SQLErrorAlert } from './components/SQLErrorAlert';
-import { ResultOverviewPanel } from './ResultOverviewPanel';
 import { VTableSearchBar } from './components/TableSearchBar';
 import { Charts } from './components/charts';
 import { useLocale, useTranslations } from 'next-intl';
@@ -40,6 +39,7 @@ import type { ResultSetViewState } from '@/lib/client/type';
 
 const MAX_ROWS_HINT = 5_000_000; // UI hint only
 const OVERVIEW_SET = -1;
+type ResultViewMode = 'table' | 'charts';
 
 function serializeViewFilters(filters: ColumnFilter[]): NonNullable<ResultSetViewState['filters']> {
     return filters.map(filter => ({
@@ -106,7 +106,7 @@ export function ResultTable() {
     const t = useTranslations('SqlConsole');
     const locale = useLocale();
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
-    const [currentViewMode, setCurrentViewMode] = useState<'overview' | 'table' | 'charts'>('table');
+    const [currentViewMode, setCurrentViewMode] = useState<ResultViewMode>('table');
     const [inspectorOpen, setInspectorOpen] = useState(false);
     const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
     const [inspectorPayload, setInspectorPayload] = useState<any>(null);
@@ -196,8 +196,16 @@ export function ResultTable() {
     const rowCount = results.length;
 
     useEffect(() => {
-        setCurrentViewMode(viewModesByKey[viewModeKey] ?? 'table');
-    }, [viewModeKey, viewModesByKey]);
+        const savedViewMode = viewModesByKey[viewModeKey];
+        const nextViewMode: ResultViewMode = savedViewMode === 'charts' ? 'charts' : 'table';
+        setCurrentViewMode(nextViewMode);
+        if (savedViewMode === 'overview') {
+            setViewModesByKey(prev => ({
+                ...prev,
+                [viewModeKey]: 'table',
+            }));
+        }
+    }, [setViewModesByKey, viewModeKey, viewModesByKey]);
 
     const chartSetIndices = useMemo(() => {
         const indicesFromSnapshot = Object.keys(chartSnapshotsBySet)
@@ -864,7 +872,7 @@ export function ResultTable() {
                         <Tabs
                             value={currentViewMode}
                             onValueChange={value => {
-                                if (value === 'overview' || value === 'table' || value === 'charts') {
+                                if (value === 'table' || value === 'charts') {
                                     setCurrentViewMode(value);
                                     setViewModesByKey(prev => {
                                         if (prev[viewModeKey] === value) return prev;
@@ -883,10 +891,6 @@ export function ResultTable() {
                                     </TabsTrigger>
                                     <TabsTrigger value="charts" className="h-6 px-3 text-xs cursor-pointer">
                                         {t('Results.Charts')}
-                                    </TabsTrigger>
-                                    <TabsTrigger value="overview" className="h-6 gap-1.5 px-3 text-xs cursor-pointer">
-                                        <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-                                        {t('Insights.Title')}
                                     </TabsTrigger>
                                 </TabsList>
                             </div>
@@ -938,17 +942,7 @@ export function ResultTable() {
                         </div>
                     </div>
                 </div>
-                {currentViewMode === 'overview' ? (
-                    <div className="flex min-h-0 flex-1 overflow-hidden">
-                        <ResultOverviewPanel
-                            stats={sessionMetas.stats}
-                            columns={sessionMetas.columns}
-                            rowCount={results.length}
-                            sqlText={sessionMetas.sqlText}
-                            rows={results.slice(0, 2000).map(result => result.rowData as Record<string, unknown>)}
-                        />
-                    </div>
-                ) : currentViewMode === 'table' ? (
+                {currentViewMode === 'table' ? (
                     <>
                         <div className="flex-1 min-h-0">
                             <VTable

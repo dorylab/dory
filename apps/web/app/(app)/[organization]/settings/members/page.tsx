@@ -1,7 +1,5 @@
-import { redirect } from 'next/navigation';
+import MembersSettingsPageClient from './page.client';
 
-export default async function OrganizationSettingsMembersPage({ params }: { params: Promise<{ organization: string }> }) {
-    const { organization } = await params;
-
-    redirect(`/${organization}/settings/organization`);
+export default function OrganizationSettingsMembersPage() {
+    return <MembersSettingsPageClient showHeader={false} />;
 }

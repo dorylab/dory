@@ -26,6 +26,8 @@ export class PgAuditQueryRepository {
     async search(params: AuditSearchParams): Promise<AuditSearchResult> {
         const db = (await getClient()) as PostgresDBClient;
         const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
+        const parsedOffset = Number(params.offset ?? 0);
+        const offset = Number.isFinite(parsedOffset) ? Math.max(Math.floor(parsedOffset), 0) : 0;
 
         const where: SQLWrapper[] = [eq(queryAudit.organizationId, params.organizationId)];
 
@@ -69,11 +71,20 @@ export class PgAuditQueryRepository {
             );
         }
 
+        const whereCondition = where.length ? and(...where) : undefined;
+        const [totalRow] = await db
+            .select({
+                total: sql<number>`count(*)`,
+            })
+            .from(queryAudit)
+            .where(whereCondition);
+
         const rows = await db
             .select()
             .from(queryAudit)
-            .where(where.length ? and(...where) : undefined)
+            .where(whereCondition)
             .orderBy(desc(queryAudit.createdAt), desc(queryAudit.id))
+            .offset(offset)
             .limit(limit + 1);
 
         const hasMore = rows.length > limit;
@@ -91,11 +102,18 @@ export class PgAuditQueryRepository {
             status: r.status as any,
 
             duration_ms: r.durationMs ?? null,
+            error_message: r.errorMessage ?? null,
             rows_read: r.rowsRead ?? null,
             bytes_read: r.bytesRead ?? null,
             rows_written: r.rowsWritten ?? null,
 
             connection_id: r.connectionId ?? null,
+            connection_name: r.connectionName ?? null,
+            identity_id: r.identityId ?? null,
+            identity_name: r.identityName ?? null,
+            identity_username: r.identityUsername ?? null,
+            identity_role: r.identityRole ?? null,
+            identity_database: r.identityDatabase ?? null,
             database_name: r.databaseName ?? null,
 
             sql_text: r.sqlText,
@@ -105,7 +123,7 @@ export class PgAuditQueryRepository {
         const last = slice[slice.length - 1];
         const nextCursor = hasMore && last ? enc({ created_at_ms: last.createdAt.getTime(), id: last.id }) : null;
 
-        return { items, nextCursor };
+        return { items, total: Number(totalRow?.total ?? 0), nextCursor };
     }
 
     async overview(filters: OverviewFilters): Promise<OverviewResponse> {
@@ -273,11 +291,18 @@ export class PgAuditQueryRepository {
             status: r.status as any,
 
             duration_ms: r.durationMs ?? null,
+            error_message: r.errorMessage ?? null,
             rows_read: r.rowsRead ?? null,
             bytes_read: r.bytesRead ?? null,
             rows_written: r.rowsWritten ?? null,
 
             connection_id: r.connectionId ?? null,
+            connection_name: r.connectionName ?? null,
+            identity_id: r.identityId ?? null,
+            identity_name: r.identityName ?? null,
+            identity_username: r.identityUsername ?? null,
+            identity_role: r.identityRole ?? null,
+            identity_database: r.identityDatabase ?? null,
             database_name: r.databaseName ?? null,
 
             sql_text: r.sqlText,

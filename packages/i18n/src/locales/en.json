@@ -1280,6 +1280,14 @@
             "Loading": "Loading saved queries...",
             "Empty": "No saved queries",
             "Title": "Saved Queries",
+            "MyQueries": "My Queries",
+            "QueryHistory": "Query History",
+            "QueryHistoryLoading": "Loading query history...",
+            "QueryHistoryLoadFailed": "Failed to load query history",
+            "QueryHistoryEmptyTitle": "No query history",
+            "QueryHistoryEmptyDescription": "Run SQL from the console and your recent queries will appear here.",
+            "QueryHistoryUntitled": "SQL query",
+            "QueryHistoryDuration": "{value} ms",
             "SearchPlaceholder": "Search saved queries",
             "SearchEmpty": "No matching saved queries",
             "MoreActions": "More actions",
@@ -1883,7 +1891,8 @@
         "Refresh": "Refresh",
         "Sidebar": {
             "Tables": "Tables",
-            "SavedQueries": "Saved Queries"
+            "SavedQueries": "Saved Queries",
+            "Queries": "Queries"
         },
         "VTable": {
             "Header": {
@@ -3095,6 +3104,7 @@
         "StarNotificationDescription": "Give the project a GitHub star to help more people discover it.",
         "StarNotificationAction": "Star on GitHub",
         "DismissStarNotification": "Dismiss GitHub star prompt",
+        "Organization": "Organization",
         "OrganizationSetting": "Organization settings",
         "LogOut": "Log out",
         "Update": "Update",
@@ -3119,9 +3129,11 @@
         "Title": "Organization settings",
         "Description": "Manage organization details and access.",
         "Nav": {
-            "Organization": "Organization",
-            "Ai": "AI",
-            "Billing": "Plans & Subscriptions"
+            "Organization": "General",
+            "Members": "Members",
+            "Ai": "AI Providers",
+            "QueryAudit": "Query Audit",
+            "Billing": "Subscriptions"
         },
         "Organization": {
             "CardTitle": "Details",
@@ -3143,6 +3155,22 @@
                 "SlugRequired": "Slug is required",
                 "SlugInvalid": "Slug can only contain lowercase letters, numbers, and hyphens"
             }
+        },
+        "Members": {
+            "Title": "Members",
+            "Description": "View people with access to this organization.",
+            "LoadFailed": "Failed to load members.",
+            "Empty": "No members found.",
+            "Table": {
+                "Member": "Member",
+                "Role": "Role",
+                "Status": "Status",
+                "Joined": "Joined"
+            }
+        },
+        "QueryAudit": {
+            "Title": "Query Audit",
+            "Description": "SQL query audit records for this organization."
         },
         "Ai": {
             "Title": "AI Configuration",

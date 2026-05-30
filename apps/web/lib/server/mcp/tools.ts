@@ -31,6 +31,7 @@ import {
     searchSchemaOperation,
     describeTableOperation,
 } from '@/lib/ai/tools/dory-tool-operations';
+import type { QuerySource } from '@dory/shared/types/audit';
 
 const MAX_MCP_RESULT_ROWS = 1000;
 const MAX_MCP_SCHEMA_SEARCH_DATABASES = 20;
@@ -235,10 +236,11 @@ async function getConnectionEntry(context: McpAuthContext, connectionId: string,
     return ensureConnectionPoolForUser(context.userId, context.organizationId, connectionId, identityId ?? null);
 }
 
-function toOperationContext(context: McpAuthContext) {
+function toOperationContext(context: McpAuthContext, auditSource: QuerySource = 'mcp_schema_metadata') {
     return {
         organizationId: context.organizationId,
         userId: context.userId,
+        auditSource,
     };
 }
 
@@ -415,7 +417,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         async ({ connectionId, filters, includeTimeline, includeSlowQueries, includeErrorQueries, pageSize, identityId }) => {
             requireScope(context, 'monitoring:read');
             return structured(
-                await getMonitoringSummaryOperation(toOperationContext(context), {
+                await getMonitoringSummaryOperation(toOperationContext(context, 'mcp_monitoring'), {
                     connectionId,
                     filters,
                     includeTimeline,
@@ -444,7 +446,17 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, table, limit, offset, identityId }) => {
             requireScope(context, 'query:read');
-            return structured(await previewTableOperation(toOperationContext(context), { connectionId, database, table, limit, offset, identityId, source: 'mcp-table-preview' }));
+            return structured(
+                await previewTableOperation(toOperationContext(context, 'mcp_table_preview'), {
+                    connectionId,
+                    database,
+                    table,
+                    limit,
+                    offset,
+                    identityId,
+                    source: 'mcp-table-preview',
+                }),
+            );
         },
     );
 
@@ -463,7 +475,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async ({ connectionId, database, sql, limit, identityId }) => {
             requireScope(context, 'query:read');
-            return structured(await runReadonlySqlOperation(toOperationContext(context), { connectionId, database, sql, limit, identityId, source: 'mcp' }));
+            return structured(await runReadonlySqlOperation(toOperationContext(context, 'mcp_sql_runner'), { connectionId, database, sql, limit, identityId, source: 'mcp' }));
         },
     );
 
@@ -527,7 +539,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
         },
         async input => {
             requireScope(context, 'analysis:run');
-            return structured(await runAnalysisOperation(toOperationContext(context), input));
+            return structured(await runAnalysisOperation(toOperationContext(context, 'mcp_schema_metadata'), input));
         },
     );
 }

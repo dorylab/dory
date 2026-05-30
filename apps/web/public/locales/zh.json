@@ -1283,6 +1283,14 @@
             "Loading": "正在加载保存的查询...",
             "Empty": "暂无保存的查询",
             "Title": "保存的查询",
+            "MyQueries": "我的查询",
+            "QueryHistory": "查询历史",
+            "QueryHistoryLoading": "正在加载查询历史...",
+            "QueryHistoryLoadFailed": "加载查询历史失败",
+            "QueryHistoryEmptyTitle": "暂无查询历史",
+            "QueryHistoryEmptyDescription": "在 SQL console 主动执行 SQL 后，最近的查询会显示在这里。",
+            "QueryHistoryUntitled": "SQL 查询",
+            "QueryHistoryDuration": "{value} ms",
             "SearchPlaceholder": "搜索保存的查询",
             "SearchEmpty": "未找到匹配的查询",
             "MoreActions": "更多操作",
@@ -1886,7 +1894,8 @@
         "Refresh": "刷新",
         "Sidebar": {
             "Tables": "表",
-            "SavedQueries": "保存的查询"
+            "SavedQueries": "保存的查询",
+            "Queries": "查询"
         },
         "VTable": {
             "Header": {
@@ -3056,6 +3065,7 @@
         "StarNotificationAction": "GitHub Star",
         "DismissStarNotification": "关闭 GitHub Star 提示",
         "GetHelp": "获取帮助",
+        "Organization": "组织",
         "OrganizationSetting": "组织设置",
         "LogOut": "退出登录",
         "Update": "更新",
@@ -3080,9 +3090,11 @@
         "Title": "组织设置",
         "Description": "管理组织信息和访问权限。",
         "Nav": {
-            "Organization": "组织",
-            "Ai": "AI",
-            "Billing": "套餐与订阅"
+            "Organization": "通用",
+            "Members": "成员",
+            "Ai": "AI Providers",
+            "QueryAudit": "Query Audit",
+            "Billing": "账单"
         },
         "Organization": {
             "CardTitle": "基本信息",
@@ -3104,6 +3116,22 @@
                 "SlugRequired": "Slug 不能为空",
                 "SlugInvalid": "Slug 只能包含小写字母、数字和连字符"
             }
+        },
+        "Members": {
+            "Title": "成员",
+            "Description": "查看当前组织的访问成员。",
+            "LoadFailed": "加载成员失败。",
+            "Empty": "暂无成员。",
+            "Table": {
+                "Member": "成员",
+                "Role": "角色",
+                "Status": "状态",
+                "Joined": "加入时间"
+            }
+        },
+        "QueryAudit": {
+            "Title": "Query Audit",
+            "Description": "当前组织的 SQL 查询审计记录。"
         },
         "Ai": {
             "Title": "AI 配置",

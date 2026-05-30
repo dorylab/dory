@@ -11,6 +11,8 @@ import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
 import { runAnalysis } from '@/lib/server/analysis/run-analysis';
 import { getReadonlyMcpStatements } from '@/lib/server/mcp/sql-safety';
 import { routing, type Locale } from '@dory/i18n/routing';
+import { getSqlAuditConnectionSnapshot, logDeniedSqlAudit, runWithSqlAudit } from '@/lib/server/sql-audit';
+import type { QuerySource } from '@dory/shared/types/audit';
 
 export const MAX_DORY_TOOL_RESULT_ROWS = 100;
 export const MAX_DORY_SCHEMA_SEARCH_DATABASES = 20;
@@ -25,6 +27,7 @@ export type DoryToolOperationContext = {
     currentConnectionId?: string | null;
     locale?: Locale;
     restrictToCurrentConnection?: boolean;
+    auditSource?: QuerySource;
 };
 
 export type SchemaSearchItem =
@@ -191,6 +194,47 @@ async function getConnectionEntry(context: DoryToolOperationContext, connectionI
     return ensureConnectionPoolForUser(context.userId, context.organizationId, resolvedConnectionId, identityId ?? null);
 }
 
+function withDoryToolSqlAudit<T>(
+    context: DoryToolOperationContext,
+    input: { connectionId?: string | null; database?: string | null; databaseName?: string | null; identityId?: string | null },
+    source: QuerySource,
+    operation: () => Promise<T> | T,
+) {
+    return runWithSqlAudit(
+        {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            source,
+            connectionId: resolveConnectionId(context, input.connectionId),
+            identityId: input.identityId ?? null,
+            databaseName: input.database ?? input.databaseName ?? null,
+            extraJson: {
+                identityId: input.identityId ?? null,
+            },
+        },
+        operation,
+    );
+}
+
+function metadataAuditSource(context: DoryToolOperationContext): QuerySource {
+    return context.auditSource ?? 'ai_schema_metadata';
+}
+
+function monitoringAuditSource(context: DoryToolOperationContext): QuerySource {
+    return context.auditSource === 'mcp_schema_metadata' ? 'mcp_monitoring' : (context.auditSource ?? 'ai_schema_metadata');
+}
+
+function previewAuditSource(inputSource?: string | null): QuerySource {
+    if (inputSource === 'mcp-table-preview') return 'mcp_table_preview';
+    if (inputSource === 'chat-table-preview') return 'ai_table_preview';
+    return 'user_table_preview';
+}
+
+function readonlySqlAuditSource(inputSource?: string | null): QuerySource {
+    if (inputSource === 'mcp') return 'mcp_sql_runner';
+    return 'ai_sql_runner';
+}
+
 function getConnectionEngine(value?: string | null): DatabaseSummaryEngine {
     if (isPostgresFamilyConnectionType(value)) return 'postgres';
     if (value === 'clickhouse' || value === 'duckdb' || value === 'mariadb' || value === 'mysql' || value === 'oracle' || value === 'sqlite' || value === 'sqlserver') return value;
@@ -223,12 +267,12 @@ export async function listConnectionsOperation(context: DoryToolOperationContext
 
 export async function listDatabasesOperation(context: DoryToolOperationContext, input: { connectionId?: string | null; identityId?: string | null }) {
     const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
-    return { databases: await entry.instance.listDatabases() };
+    return withDoryToolSqlAudit(context, input, metadataAuditSource(context), async () => ({ databases: await entry.instance.listDatabases() }));
 }
 
 export async function listTablesOperation(context: DoryToolOperationContext, input: { connectionId?: string | null; database: string; identityId?: string | null }) {
     const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
-    return { tables: await entry.instance.listTablesOnly(input.database) };
+    return withDoryToolSqlAudit(context, input, metadataAuditSource(context), async () => ({ tables: await entry.instance.listTablesOnly(input.database) }));
 }
 
 export async function describeTableOperation(
@@ -236,7 +280,7 @@ export async function describeTableOperation(
     input: { connectionId?: string | null; database: string; table: string; identityId?: string | null },
 ) {
     const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
-    return { columns: await entry.instance.describeTable(input.database, input.table) };
+    return withDoryToolSqlAudit(context, input, metadataAuditSource(context), async () => ({ columns: await entry.instance.describeTable(input.database, input.table) }));
 }
 
 export async function getDatabaseSummaryOperation(
@@ -244,7 +288,7 @@ export async function getDatabaseSummaryOperation(
     input: { connectionId?: string | null; database: string; catalog?: string | null; schema?: string | null; identityId?: string | null },
 ) {
     const { entry, config } = await getConnectionEntry(context, input.connectionId, input.identityId);
-    return {
+    return withDoryToolSqlAudit(context, input, metadataAuditSource(context), async () => ({
         summary: await entry.instance.getDatabaseSummary({
             database: input.database,
             catalogName: input.catalog ?? null,
@@ -252,7 +296,7 @@ export async function getDatabaseSummaryOperation(
             engine: getConnectionEngine(config.type),
             cluster: config.port ? `${config.host}:${config.port}` : (config.host ?? null),
         }),
-    };
+    }));
 }
 
 export async function getTableProfileOperation(
@@ -260,12 +304,12 @@ export async function getTableProfileOperation(
     input: { connectionId?: string | null; database: string; table: string; identityId?: string | null },
 ) {
     const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
-    return {
+    return withDoryToolSqlAudit(context, input, metadataAuditSource(context), async () => ({
         connectionId: resolveConnectionId(context, input.connectionId),
         database: input.database,
         table: input.table,
         ...(await entry.instance.getTableProfile(input.database, input.table)),
-    };
+    }));
 }
 
 export async function searchSchemaOperation(
@@ -281,10 +325,12 @@ export async function searchSchemaOperation(
     if (input.database) {
         databases = [input.database];
     } else {
-        databases = (await entry.instance.listDatabases())
-            .map(item => item.value)
-            .filter(Boolean)
-            .slice(0, MAX_DORY_SCHEMA_SEARCH_DATABASES);
+        databases = await withDoryToolSqlAudit(context, input, metadataAuditSource(context), async () =>
+            (await entry.instance.listDatabases())
+                .map(item => item.value)
+                .filter(Boolean)
+                .slice(0, MAX_DORY_SCHEMA_SEARCH_DATABASES),
+        );
     }
 
     const results: SchemaSearchItem[] = [];
@@ -299,8 +345,12 @@ export async function searchSchemaOperation(
         if (results.length >= maxResults) break;
         scanned.databases += 1;
 
-        const tables = await entry.instance.listTablesOnly(databaseName).catch(() => [] as DatabaseObjectRow[]);
-        const views = await entry.instance.listViews(databaseName).catch(() => [] as DatabaseObjectRow[]);
+        const tables = await withDoryToolSqlAudit(context, { ...input, database: databaseName }, metadataAuditSource(context), async () =>
+            entry.instance.listTablesOnly(databaseName).catch(() => [] as DatabaseObjectRow[]),
+        );
+        const views = await withDoryToolSqlAudit(context, { ...input, database: databaseName }, metadataAuditSource(context), async () =>
+            entry.instance.listViews(databaseName).catch(() => [] as DatabaseObjectRow[]),
+        );
         const tableObjects = tables.map(item => toSchemaObject('table', databaseName, item));
         const viewObjects = views.map(item => toSchemaObject('view', databaseName, item));
 
@@ -320,7 +370,9 @@ export async function searchSchemaOperation(
 
         for (const object of [...tableObjects, ...viewObjects]) {
             if (results.length >= maxResults) break;
-            const columns = await entry.instance.describeTable(databaseName, object.name).catch(() => [] as TableColumnInfo[]);
+            const columns = await withDoryToolSqlAudit(context, { ...input, database: databaseName }, metadataAuditSource(context), async () =>
+                entry.instance.describeTable(databaseName, object.name).catch(() => [] as TableColumnInfo[]),
+            );
             scanned.columns += columns.length;
 
             for (const column of columns) {
@@ -400,7 +452,7 @@ export async function getMonitoringSummaryOperation(
     const { entry } = await getConnectionEntry(context, connectionId, input.identityId);
     const normalizedFilters = normalizeMonitoringFilters(input.filters);
     const pageSize = clampDoryToolLimit(input.pageSize, DEFAULT_DORY_MONITORING_PAGE_SIZE, MAX_DORY_MONITORING_PAGE_SIZE);
-    return {
+    return withDoryToolSqlAudit(context, input, monitoringAuditSource(context), async () => ({
         connectionId,
         ...(await entry.instance.getMonitoringSummary({
             filters: normalizedFilters,
@@ -412,7 +464,7 @@ export async function getMonitoringSummaryOperation(
                 pageSize,
             },
         })),
-    };
+    }));
 }
 
 export async function previewTableOperation(
@@ -421,16 +473,18 @@ export async function previewTableOperation(
 ) {
     const connectionId = resolveConnectionId(context, input.connectionId);
     const { entry } = await getConnectionEntry(context, connectionId, input.identityId);
-    return buildTablePreviewPayload({
-        connection: entry.instance,
-        connectionId,
-        database: input.database,
-        table: input.table,
-        limit: clampResultLimit(input.limit),
-        offset: input.offset ?? 0,
-        userId: context.userId,
-        source: input.source ?? 'tool-table-preview',
-    });
+    return withDoryToolSqlAudit(context, input, previewAuditSource(input.source), async () =>
+        buildTablePreviewPayload({
+            connection: entry.instance,
+            connectionId,
+            database: input.database,
+            table: input.table,
+            limit: clampResultLimit(input.limit),
+            offset: input.offset ?? 0,
+            userId: context.userId,
+            source: input.source ?? 'tool-table-preview',
+        }),
+    );
 }
 
 export async function runReadonlySqlOperation(
@@ -439,7 +493,32 @@ export async function runReadonlySqlOperation(
 ) {
     const connectionId = resolveConnectionId(context, input.connectionId);
     const { entry } = await getConnectionEntry(context, connectionId, input.identityId);
-    const statements = getReadonlyMcpStatements(input.sql);
+    const auditSource = readonlySqlAuditSource(input.source);
+    let statements: string[];
+    try {
+        statements = getReadonlyMcpStatements(input.sql);
+    } catch (error) {
+        await logDeniedSqlAudit(
+            {
+                organizationId: context.organizationId,
+                userId: context.userId,
+                source: auditSource,
+                connectionId,
+                identityId: input.identityId ?? null,
+                databaseName: input.database ?? null,
+                connectionSnapshot: getSqlAuditConnectionSnapshot(entry),
+                extraJson: {
+                    identityId: input.identityId ?? null,
+                },
+            },
+            {
+                sqlText: input.sql,
+                databaseName: input.database ?? null,
+                errorMessage: error instanceof Error ? error.message : String(error ?? 'SQL denied'),
+            },
+        );
+        throw error;
+    }
     const maxRows = clampResultLimit(input.limit);
     const sessionId = randomUUID();
     const queryResultSets: unknown[] = [];
@@ -449,10 +528,25 @@ export async function runReadonlySqlOperation(
         const statement = statements[index]!;
         const startedAt = new Date();
         const perfStart = performance.now();
-        const result = await entry.instance.queryWithContext<Record<string, unknown>>(statement, {
-            database: input.database ?? undefined,
-            queryId: sessionId,
-        });
+        const result = await runWithSqlAudit(
+            {
+                organizationId: context.organizationId,
+                userId: context.userId,
+                source: auditSource,
+                connectionId,
+                identityId: input.identityId ?? null,
+                databaseName: input.database ?? null,
+                queryId: sessionId,
+                extraJson: {
+                    identityId: input.identityId ?? null,
+                },
+            },
+            () =>
+                entry.instance.queryWithContext<Record<string, unknown>>(statement, {
+                    database: input.database ?? undefined,
+                    queryId: sessionId,
+                }),
+        );
         const rows = Array.isArray(result.rows) ? result.rows.slice(0, maxRows) : [];
         const durationMs = Math.round(performance.now() - perfStart);
         const finishedAt = new Date();
@@ -552,22 +646,36 @@ export async function runAnalysisOperation(
 ) {
     const connectionId = resolveConnectionId(context, input.connectionId);
     const { entry } = await getConnectionEntry(context, connectionId, input.identityId);
-    return runAnalysis({
-        request: {
-            context: {
-                connectionId,
-                databaseName: input.databaseName,
-                resultRef: input.resultRef,
-                resultContext: input.resultContext as any,
-                insight: input.insight,
+    return runWithSqlAudit(
+        {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            source: context.auditSource === 'mcp_schema_metadata' ? 'mcp_analysis' : 'ai_analysis',
+            connectionId,
+            databaseName: input.databaseName ?? null,
+            tabId: input.tabId ?? null,
+            extraJson: {
+                identityId: input.identityId ?? null,
             },
-            trigger: input.trigger as any,
         },
-        connection: entry.instance,
-        connectionId,
-        tabId: input.tabId ?? null,
-        locale: context.locale ?? routing.defaultLocale,
-        organizationId: context.organizationId,
-        userId: context.userId,
-    });
+        () =>
+            runAnalysis({
+                request: {
+                    context: {
+                        connectionId,
+                        databaseName: input.databaseName,
+                        resultRef: input.resultRef,
+                        resultContext: input.resultContext as any,
+                        insight: input.insight,
+                    },
+                    trigger: input.trigger as any,
+                },
+                connection: entry.instance,
+                connectionId,
+                tabId: input.tabId ?? null,
+                locale: context.locale ?? routing.defaultLocale,
+                organizationId: context.organizationId,
+                userId: context.userId,
+            }),
+    );
 }

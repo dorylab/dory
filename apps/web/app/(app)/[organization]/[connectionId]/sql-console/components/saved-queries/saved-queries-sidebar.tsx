@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { FolderPlus, GripVertical, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { FolderPlus, GripVertical, MoreHorizontal } from 'lucide-react';
 import {
     DndContext,
     DragOverlay,
@@ -33,17 +33,20 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/registry/new-york-v4/ui/hover-card';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { authClient } from '@/lib/auth-client';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { cn } from '@dory/web-utils';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { useLocale, useTranslations } from 'next-intl';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import posthog from 'posthog-js';
 import { AccountRequiredSheet } from '@/components/auth/account-required-sheet';
+import type { AuditItem } from '@dory/shared/types/audit';
+import { savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
 import { FolderItem, type FolderData } from './folder-item';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
@@ -77,8 +80,22 @@ type SavedQueriesSidebarProps = {
     onSelect?: (item: SavedQueryItem) => void;
 };
 
+type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'sql_text' | 'status' | 'duration_ms' | 'error_message'>;
+
+type ApiResponse<T> = {
+    code: number;
+    message?: string;
+    data?: T;
+};
+
 function summarizeSql(sqlText: string) {
     return sqlText.replace(/\s+/g, ' ').trim();
+}
+
+function buildHistoryQueryTitle(item: QueryHistoryItem, fallback: string) {
+    const summary = summarizeSql(item.sql_text);
+    if (!summary) return fallback;
+    return summary.length > 64 ? `${summary.slice(0, 61)}...` : summary;
 }
 
 const FOLDER_DND_PREFIX = 'folder:';
@@ -189,6 +206,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const { data: session } = authClient.useSession();
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection.id ?? null;
+    const sessionUserId = session?.user?.id ?? null;
     const isAnonymous = isAnonymousUser(session?.user);
     const scrollRootRef = useRef<HTMLDivElement | null>(null);
     const scrollRestoreRef = useRef<{ top: number } | null>(null);
@@ -207,6 +225,12 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const [hoverOpenId, setHoverOpenId] = useState<string | null>(null);
     const [searchValue, setSearchValue] = useState('');
     const [hoverBlockOnceId, setHoverBlockOnceId] = useState<string | null>(null);
+    const [queryViewByConnection, setQueryViewByConnection] = useAtom(savedQueriesViewByConnectionAtom);
+    const queryView = connectionId ? (queryViewByConnection[connectionId] ?? 'my-queries') : 'my-queries';
+    const isMyQueriesView = queryView === 'my-queries';
+    const [historyItems, setHistoryItems] = useState<QueryHistoryItem[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+    const [historyError, setHistoryError] = useState<string | null>(null);
 
     // Folder-specific state
     const [expandedFolders, setExpandedFolders] = useState<Set<string>>(loadExpandedFolders);
@@ -228,6 +252,20 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         if (typeof window === 'undefined') return;
         window.dispatchEvent(new CustomEvent('saved-queries-updated'));
     }, []);
+
+    const setQueryView = useCallback(
+        (nextView: SavedQueriesView) => {
+            if (!connectionId) return;
+            setQueryViewByConnection(prev => {
+                if (prev[connectionId] === nextView) return prev;
+                return {
+                    ...prev,
+                    [connectionId]: nextView,
+                };
+            });
+        },
+        [connectionId, setQueryViewByConnection],
+    );
 
     const toggleFolder = useCallback((folderId: string) => {
         setExpandedFolders(prev => {
@@ -306,12 +344,59 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         [fetchFolders, fetchList],
     );
 
+    const fetchQueryHistory = useCallback(async () => {
+        setHistoryError(null);
+
+        if (isAnonymous) {
+            setHistoryItems([]);
+            return;
+        }
+
+        if (!connectionId || !sessionUserId) {
+            setHistoryItems([]);
+            setHistoryError(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            return;
+        }
+
+        setHistoryLoading(true);
+        try {
+            const params = new URLSearchParams({
+                limit: '50',
+                sources: 'user_sql_console,console',
+                statuses: 'success,error,canceled',
+                user_id: sessionUserId,
+                connection_id: connectionId,
+            });
+            const res = await authFetch(`/api/query-audit?${params.toString()}`);
+            const payload = (await res.json().catch(() => null)) as ApiResponse<{ items?: QueryHistoryItem[] }> | null;
+
+            if (!res.ok || payload?.code !== 0) {
+                throw new Error(payload?.message ?? t('SavedQueries.QueryHistoryLoadFailed'));
+            }
+
+            setHistoryItems(payload.data?.items ?? []);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : t('SavedQueries.QueryHistoryLoadFailed');
+            setHistoryError(message);
+            setHistoryItems([]);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }, [connectionId, isAnonymous, sessionUserId, t]);
+
     useEffect(() => {
+        if (!isMyQueriesView) return;
         fetchAll();
-    }, [fetchAll]);
+    }, [fetchAll, isMyQueriesView]);
+
+    useEffect(() => {
+        if (queryView !== 'query-history') return;
+        fetchQueryHistory();
+    }, [fetchQueryHistory, queryView]);
 
     useEffect(() => {
         const handler = () => {
+            if (!isMyQueriesView) return;
             setLimit(50);
             setHasMore(true);
             fetchAll();
@@ -320,7 +405,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         return () => {
             window.removeEventListener('saved-queries-updated', handler);
         };
-    }, [fetchAll]);
+    }, [fetchAll, isMyQueriesView]);
 
     useEffect(() => {
         return () => {
@@ -963,141 +1048,214 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     return (
         <div className="flex h-full flex-col min-h-0 gap-2 px-2 pb-3 pt-1">
-            <div className="flex items-center gap-1.5 px-1">
-                <Input
-                    value={searchValue}
-                    onChange={event => setSearchValue(event.target.value)}
-                    placeholder={t('SavedQueries.SearchPlaceholder')}
-                    className="h-8 min-w-0 flex-1"
-                />
-                <div className="flex shrink-0 items-center gap-0.5">
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCreateFolderOpen(true)} aria-label={t('SavedQueries.Folders.CreateFolder')}>
-                                <FolderPlus className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">{t('SavedQueries.Folders.CreateFolder')}</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => {
-                                    setLimit(50);
-                                    setHasMore(true);
-                                    fetchAll();
-                                }}
-                                disabled={loading}
-                                aria-label={t('Refresh')}
-                            >
-                                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">{t('Refresh')}</TooltipContent>
-                    </Tooltip>
-                </div>
+            <div className="px-1">
+                <Select value={queryView} onValueChange={value => setQueryView(value as SavedQueriesView)}>
+                    <SelectTrigger size="sm" className="w-full justify-between bg-background">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
+                        <SelectItem value="my-queries">{t('SavedQueries.MyQueries')}</SelectItem>
+                        <SelectItem value="query-history">{t('SavedQueries.QueryHistory')}</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
-            <div ref={scrollRootRef} className="flex-1 min-h-0">
-                <ScrollArea className="h-full pr-2">
-                    {!hasContent ? (
-                        <div className="text-xs text-muted-foreground py-6 text-center">{emptyHint}</div>
-                    ) : isSearching ? (
-                        <div className="space-y-1">{rootItems.map(item => renderQueryItem(item))}</div>
-                    ) : (
-                        <div ref={dndContainerRef}>
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={collisionDetection}
-                                modifiers={dndModifiers}
-                                onDragStart={handleDragStart}
-                                onDragOver={handleDragOver}
-                                onDragEnd={handleDragEnd}
-                                onDragCancel={handleDragCancel}
-                            >
-                                <div className="space-y-1">
-                                    {/* Folders with DnD reorder */}
-                                    <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
-                                        {folders.map(folder => {
-                                            const folderItems = folderQueryMap.get(folder.id) ?? [];
-                                            const isExpanded = expandedFolders.has(folder.id);
-                                            return (
-                                                <SortableFolderWrapper key={folder.id} id={folder.id}>
-                                                    {({ listeners, attributes, isDragging }) => (
-                                                        <FolderItem
-                                                            folder={folder}
-                                                            expanded={isExpanded}
-                                                            isDropTarget={activeDropFolderId === folder.id}
-                                                            isAbsorbing={absorbingFolderId === folder.id}
-                                                            onToggle={() => toggleFolder(folder.id)}
-                                                            onRename={openRenameFolder}
-                                                            onDelete={openDeleteFolder}
-                                                            t={t}
-                                                            dragHandleListeners={listeners}
-                                                            dragHandleAttributes={attributes}
-                                                            isDragging={isDragging}
-                                                        >
-                                                            {folderItems.length === 0 ? (
-                                                                <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground">
-                                                                    <span aria-hidden className="h-4 w-4 shrink-0" />
-                                                                    <span>{t('SavedQueries.Folders.EmptyFolder')}</span>
-                                                                </div>
-                                                            ) : (
-                                                                <SortableContext items={folderItems.map(item => getQueryDndId(item.id))} strategy={verticalListSortingStrategy}>
-                                                                    {folderItems.map(item => (
-                                                                        <SortableQueryWrapper key={item.id} id={item.id} folderId={folder.id}>
-                                                                            {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
-                                                                        </SortableQueryWrapper>
-                                                                    ))}
-                                                                </SortableContext>
-                                                            )}
-                                                        </FolderItem>
-                                                    )}
-                                                </SortableFolderWrapper>
-                                            );
-                                        })}
-                                    </SortableContext>
-                                    <DragOverlay dropAnimation={null}>
-                                        {activeFolderForOverlay && (
-                                            <div className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 shadow-md">
-                                                <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                                                <span className="text-sm font-medium">{activeFolderForOverlay.name}</span>
-                                            </div>
-                                        )}
-                                    </DragOverlay>
-                                    {/* Separator between folders and root queries */}
-                                    {folders.length > 0 && rootItems.length > 0 && <div className="border-t border-border/40 my-1.5" />}
-                                    {/* Root-level queries with DnD reorder */}
-                                    <SortableContext items={rootItems.map(item => getQueryDndId(item.id))} strategy={verticalListSortingStrategy}>
-                                        {rootItems.map(item => (
-                                            <SortableQueryWrapper key={item.id} id={item.id} folderId={null}>
-                                                {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
-                                            </SortableQueryWrapper>
-                                        ))}
-                                    </SortableContext>
-                                    {loadingMore ? <div className="py-3 text-center text-xs text-muted-foreground">{t('SavedQueries.Loading')}</div> : null}
-                                </div>
-                                <DragOverlay dropAnimation={null}>
-                                    {activeQueryForOverlay && (
-                                        <div
-                                            className={cn(
-                                                'rounded-md border bg-background px-3 py-1.5 shadow-md',
-                                                'transition-[transform,opacity,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transform-none motion-reduce:transition-none',
-                                                activeDropFolderId && 'scale-[0.9] opacity-90 shadow-[0_8px_18px_-14px_hsl(var(--foreground)/0.45)]',
-                                            )}
-                                        >
-                                            <div className="text-sm font-medium truncate max-w-[200px]">{activeQueryForOverlay.title}</div>
-                                            <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">{summarizeSql(activeQueryForOverlay.sqlText ?? '')}</div>
-                                        </div>
-                                    )}
-                                </DragOverlay>
-                            </DndContext>
+            {isMyQueriesView ? (
+                <>
+                    <div className="flex items-center gap-1.5 px-1">
+                        <Input
+                            value={searchValue}
+                            onChange={event => setSearchValue(event.target.value)}
+                            placeholder={t('SavedQueries.SearchPlaceholder')}
+                            className="h-8 min-w-0 flex-1"
+                        />
+                        <div className="flex shrink-0 items-center gap-0.5">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => setCreateFolderOpen(true)}
+                                        aria-label={t('SavedQueries.Folders.CreateFolder')}
+                                    >
+                                        <FolderPlus className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom">{t('SavedQueries.Folders.CreateFolder')}</TooltipContent>
+                            </Tooltip>
                         </div>
-                    )}
-                </ScrollArea>
-            </div>
+                    </div>
+                    <div ref={scrollRootRef} className="flex-1 min-h-0">
+                        <ScrollArea className="h-full pr-2">
+                            {!hasContent ? (
+                                <div className="text-xs text-muted-foreground py-6 text-center">{emptyHint}</div>
+                            ) : isSearching ? (
+                                <div className="space-y-1">{rootItems.map(item => renderQueryItem(item))}</div>
+                            ) : (
+                                <div ref={dndContainerRef}>
+                                    <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={collisionDetection}
+                                        modifiers={dndModifiers}
+                                        onDragStart={handleDragStart}
+                                        onDragOver={handleDragOver}
+                                        onDragEnd={handleDragEnd}
+                                        onDragCancel={handleDragCancel}
+                                    >
+                                        <div className="space-y-1">
+                                            {/* Folders with DnD reorder */}
+                                            <SortableContext items={folderIds} strategy={verticalListSortingStrategy}>
+                                                {folders.map(folder => {
+                                                    const folderItems = folderQueryMap.get(folder.id) ?? [];
+                                                    const isExpanded = expandedFolders.has(folder.id);
+                                                    return (
+                                                        <SortableFolderWrapper key={folder.id} id={folder.id}>
+                                                            {({ listeners, attributes, isDragging }) => (
+                                                                <FolderItem
+                                                                    folder={folder}
+                                                                    expanded={isExpanded}
+                                                                    isDropTarget={activeDropFolderId === folder.id}
+                                                                    isAbsorbing={absorbingFolderId === folder.id}
+                                                                    onToggle={() => toggleFolder(folder.id)}
+                                                                    onRename={openRenameFolder}
+                                                                    onDelete={openDeleteFolder}
+                                                                    t={t}
+                                                                    dragHandleListeners={listeners}
+                                                                    dragHandleAttributes={attributes}
+                                                                    isDragging={isDragging}
+                                                                >
+                                                                    {folderItems.length === 0 ? (
+                                                                        <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground">
+                                                                            <span aria-hidden className="h-4 w-4 shrink-0" />
+                                                                            <span>{t('SavedQueries.Folders.EmptyFolder')}</span>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <SortableContext
+                                                                            items={folderItems.map(item => getQueryDndId(item.id))}
+                                                                            strategy={verticalListSortingStrategy}
+                                                                        >
+                                                                            {folderItems.map(item => (
+                                                                                <SortableQueryWrapper key={item.id} id={item.id} folderId={folder.id}>
+                                                                                    {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
+                                                                                </SortableQueryWrapper>
+                                                                            ))}
+                                                                        </SortableContext>
+                                                                    )}
+                                                                </FolderItem>
+                                                            )}
+                                                        </SortableFolderWrapper>
+                                                    );
+                                                })}
+                                            </SortableContext>
+                                            <DragOverlay dropAnimation={null}>
+                                                {activeFolderForOverlay && (
+                                                    <div className="flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 shadow-md">
+                                                        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                                                        <span className="text-sm font-medium">{activeFolderForOverlay.name}</span>
+                                                    </div>
+                                                )}
+                                            </DragOverlay>
+                                            {/* Separator between folders and root queries */}
+                                            {folders.length > 0 && rootItems.length > 0 && <div className="border-t border-border/40 my-1.5" />}
+                                            {/* Root-level queries with DnD reorder */}
+                                            <SortableContext items={rootItems.map(item => getQueryDndId(item.id))} strategy={verticalListSortingStrategy}>
+                                                {rootItems.map(item => (
+                                                    <SortableQueryWrapper key={item.id} id={item.id} folderId={null}>
+                                                        {({ listeners, attributes }) => renderQueryItem(item, { listeners, attributes })}
+                                                    </SortableQueryWrapper>
+                                                ))}
+                                            </SortableContext>
+                                            {loadingMore ? <div className="py-3 text-center text-xs text-muted-foreground">{t('SavedQueries.Loading')}</div> : null}
+                                        </div>
+                                        <DragOverlay dropAnimation={null}>
+                                            {activeQueryForOverlay && (
+                                                <div
+                                                    className={cn(
+                                                        'rounded-md border bg-background px-3 py-1.5 shadow-md',
+                                                        'transition-[transform,opacity,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transform-none motion-reduce:transition-none',
+                                                        activeDropFolderId && 'scale-[0.9] opacity-90 shadow-[0_8px_18px_-14px_hsl(var(--foreground)/0.45)]',
+                                                    )}
+                                                >
+                                                    <div className="text-sm font-medium truncate max-w-[200px]">{activeQueryForOverlay.title}</div>
+                                                    <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                                                        {summarizeSql(activeQueryForOverlay.sqlText ?? '')}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </DragOverlay>
+                                    </DndContext>
+                                </div>
+                            )}
+                        </ScrollArea>
+                    </div>
+                </>
+            ) : (
+                <div className="flex-1 min-h-0 px-1">
+                    <ScrollArea className="h-full pr-2">
+                        {historyLoading ? (
+                            <div className="text-xs text-muted-foreground py-6 text-center">{t('SavedQueries.QueryHistoryLoading')}</div>
+                        ) : historyError ? (
+                            <div className="text-xs text-destructive py-6 text-center">{historyError}</div>
+                        ) : historyItems.length === 0 ? (
+                            <div className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-4 text-sm">
+                                <div className="font-medium text-foreground">{t('SavedQueries.QueryHistoryEmptyTitle')}</div>
+                                <p className="mt-1 text-xs leading-5 text-muted-foreground">{t('SavedQueries.QueryHistoryEmptyDescription')}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-1">
+                                {historyItems.map(item => {
+                                    const displaySql = item.sql_text ?? '';
+                                    const summary = summarizeSql(displaySql);
+                                    return (
+                                        <HoverCard key={item.id} openDelay={200} closeDelay={120}>
+                                            <HoverCardTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className={cn(
+                                                        'group flex w-full flex-col items-start rounded-md px-2 py-1.5 text-left transition-colors',
+                                                        'border border-transparent hover:border-muted-foreground/20 hover:bg-muted/40',
+                                                    )}
+                                                    onClick={() => {
+                                                        onSelect?.({
+                                                            id: `history:${item.id}`,
+                                                            title: buildHistoryQueryTitle(item, t('SavedQueries.QueryHistoryUntitled')),
+                                                            sqlText: item.sql_text,
+                                                            connectionId,
+                                                            createdAt: item.created_at,
+                                                            updatedAt: item.created_at,
+                                                        });
+                                                    }}
+                                                >
+                                                    <div className="flex w-full items-center justify-between gap-2">
+                                                        <span className="min-w-0 truncate text-sm font-medium">{summary || t('SavedQueries.QueryHistoryUntitled')}</span>
+                                                        <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{item.status}</span>
+                                                    </div>
+                                                    <div className="mt-0.5 flex w-full items-center gap-2 text-[11px] text-muted-foreground">
+                                                        <span className="truncate">{formatTime(item.created_at, locale)}</span>
+                                                        {item.duration_ms === null || item.duration_ms === undefined ? null : (
+                                                            <span className="shrink-0">{t('SavedQueries.QueryHistoryDuration', { value: String(item.duration_ms) })}</span>
+                                                        )}
+                                                    </div>
+                                                    {item.error_message ? <div className="mt-0.5 line-clamp-1 text-[11px] text-destructive">{item.error_message}</div> : null}
+                                                </button>
+                                            </HoverCardTrigger>
+                                            <HoverCardContent side="right" align="start" sideOffset={12} className="w-[420px] p-0 z-40">
+                                                <div className="space-y-4 p-4">
+                                                    <div className="space-y-1">
+                                                        <div className="text-lg font-semibold text-foreground">{t('SavedQueries.QueryHistory')}</div>
+                                                        <div className="text-xs text-muted-foreground">{formatTime(item.created_at, locale)}</div>
+                                                    </div>
+                                                    <SmartCodeBlock value={displaySql || ' '} type="sql" maxHeightClassName="max-h-64" />
+                                                </div>
+                                            </HoverCardContent>
+                                        </HoverCard>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </ScrollArea>
+                </div>
+            )}
 
             {/* Rename query dialog */}
             <Dialog open={renameOpen} onOpenChange={setRenameOpen}>

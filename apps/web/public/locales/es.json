@@ -1281,6 +1281,14 @@
             "Loading": "Cargando consultas guardadas...",
             "Empty": "No hay consultas guardadas",
             "Title": "Consultas guardadas",
+            "MyQueries": "Mis consultas",
+            "QueryHistory": "Historial de consultas",
+            "QueryHistoryLoading": "Cargando historial de consultas...",
+            "QueryHistoryLoadFailed": "No se pudo cargar el historial de consultas",
+            "QueryHistoryEmptyTitle": "No hay historial de consultas",
+            "QueryHistoryEmptyDescription": "Ejecuta SQL desde la consola y tus consultas recientes aparecerán aquí.",
+            "QueryHistoryUntitled": "Consulta SQL",
+            "QueryHistoryDuration": "{value} ms",
             "SearchPlaceholder": "Buscar consultas guardadas",
             "SearchEmpty": "No hay consultas guardadas coincidentes",
             "MoreActions": "Más acciones",
@@ -1884,7 +1892,8 @@
         "Refresh": "Actualizar",
         "Sidebar": {
             "Tables": "Tablas",
-            "SavedQueries": "Consultas guardadas"
+            "SavedQueries": "Consultas guardadas",
+            "Queries": "Consultas"
         },
         "VTable": {
             "Header": {
@@ -3053,6 +3062,7 @@
         "StarNotificationDescription": "Dale una estrella en GitHub para ayudar a que más gente descubra el proyecto.",
         "StarNotificationAction": "Dar estrella en GitHub",
         "DismissStarNotification": "Cerrar aviso de estrella de GitHub",
+        "Organization": "Organización",
         "OrganizationSetting": "Configuración de la organización",
         "LogOut": "Cerrar sesión",
         "Update": "Actualizar",
@@ -3077,9 +3087,11 @@
         "Title": "Configuración de la organización",
         "Description": "Gestiona los detalles y el acceso de la organización.",
         "Nav": {
-            "Organization": "Organización",
-            "Ai": "AI",
-            "Billing": "Planes y suscripciones"
+            "Organization": "General",
+            "Members": "Miembros",
+            "Ai": "AI Providers",
+            "QueryAudit": "Query Audit",
+            "Billing": "Facturación"
         },
         "Organization": {
             "CardTitle": "Detalles",
@@ -3101,6 +3113,22 @@
                 "SlugRequired": "El slug es obligatorio",
                 "SlugInvalid": "El slug solo puede contener letras minúsculas, números y guiones"
             }
+        },
+        "Members": {
+            "Title": "Miembros",
+            "Description": "Consulta las personas con acceso a esta organización.",
+            "LoadFailed": "No se pudieron cargar los miembros.",
+            "Empty": "No se encontraron miembros.",
+            "Table": {
+                "Member": "Miembro",
+                "Role": "Rol",
+                "Status": "Estado",
+                "Joined": "Se unió"
+            }
+        },
+        "QueryAudit": {
+            "Title": "Query Audit",
+            "Description": "Registros de auditoría de consultas SQL de esta organización."
         },
         "Ai": {
             "Title": "Configuración de IA",

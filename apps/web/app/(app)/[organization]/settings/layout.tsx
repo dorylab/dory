@@ -1,27 +1,45 @@
 import type React from 'react';
 import { getTranslations } from 'next-intl/server';
 import { isBillingSettingsVisibleForServer } from '@dory/shared/runtime';
-import { OrganizationSettingsTabs } from './organization-settings-tabs';
+import { OrganizationSettingsShell } from './organization-settings-shell';
+import type { OrganizationSettingsTab } from './organization-settings-tabs';
 
 export default async function OrganizationSettingsLayout({ children, params }: { children: React.ReactNode; params: Promise<{ organization: string }> }) {
     const { organization } = await params;
     const t = await getTranslations('OrganizationSettings');
-    const navItems: Array<{ slug: 'organization' | 'ai' | 'billing'; label: string }> = [
+    const navItems: OrganizationSettingsTab[] = [
         { slug: 'organization', label: t('Nav.Organization') },
+        { slug: 'members', label: t('Nav.Members') },
         { slug: 'ai', label: t('Nav.Ai') },
+        { slug: 'query-audit', label: t('Nav.QueryAudit') },
         ...(isBillingSettingsVisibleForServer() ? ([{ slug: 'billing', label: t('Nav.Billing') }] as const) : []),
     ];
+    const meta: Record<OrganizationSettingsTab['slug'], { title: string; description: string }> = {
+        organization: {
+            title: t('Nav.Organization'),
+            description: t('Organization.CardDescription'),
+        },
+        members: {
+            title: t('Members.Title'),
+            description: t('Members.Description'),
+        },
+        ai: {
+            title: t('Ai.Title'),
+            description: t('Ai.Description'),
+        },
+        'query-audit': {
+            title: t('QueryAudit.Title'),
+            description: t('QueryAudit.Description'),
+        },
+        billing: {
+            title: t('Billing.Title'),
+            description: t('Billing.Description'),
+        },
+    };
 
     return (
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
-            <div className="space-y-2">
-                <h1 className="text-2xl font-semibold tracking-tight">{t('Title')}</h1>
-                <p className="text-sm text-muted-foreground">{t('Description')}</p>
-            </div>
-
-            <OrganizationSettingsTabs organization={organization} items={navItems} />
-
+        <OrganizationSettingsShell organization={organization} items={navItems} meta={meta}>
             {children}
-        </div>
+        </OrganizationSettingsShell>
     );
 }

@@ -24,23 +24,8 @@ export async function resolveOrganizationAccess(organizationId: string, userId: 
     const now = Date.now();
 
     if (cached && cached.expiresAt > now) {
-        // console.log('[authz] resolveOrganizationAccess:cache-hit', {
-        //     organizationId,
-        //     userId,
-        //     proxy,
-        //     expiresInMs: cached.expiresAt - now,
-        // });
         return cached.value;
     }
-
-    console.log('[authz] resolveOrganizationAccess', {
-        organizationId,
-        userId,
-        proxy,
-        runtime: process.env.DORY_RUNTIME ?? null,
-        publicRuntime: process.env.NEXT_PUBLIC_DORY_RUNTIME ?? null,
-        cloudApiUrl: process.env.DORY_CLOUD_API_URL ?? process.env.NEXT_PUBLIC_DORY_CLOUD_API_URL ?? null,
-    });
 
     const value = proxy
         ? await resolveDesktopOrganizationAccess(organizationId, userId)

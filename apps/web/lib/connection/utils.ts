@@ -6,6 +6,7 @@ import { BaseConfig } from '@dory/drivers/types';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
 import { parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
 import { buildStoredConnectionConfig } from '@/lib/connection/config';
+import { createSqlAuditConnectionSnapshot, isSqlAuditConnectionSnapshotCurrent, patchDriverPoolForSqlAudit, type SqlAuditConnectionSnapshot } from '@/lib/server/sql-audit';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
 
@@ -71,10 +72,10 @@ export function normalizeOptions(raw: unknown): string | Record<string, unknown>
 function isLocalFilesDatasetOptions(options: unknown) {
     return Boolean(
         options &&
-            typeof options === 'object' &&
-            !Array.isArray(options) &&
-            (options as Record<string, unknown>).managedBy === 'local-files' &&
-            (options as Record<string, unknown>).mode === 'localFilesDataset',
+        typeof options === 'object' &&
+        !Array.isArray(options) &&
+        (options as Record<string, unknown>).managedBy === 'local-files' &&
+        (options as Record<string, unknown>).mode === 'localFilesDataset',
     );
 }
 
@@ -103,19 +104,20 @@ async function withLocalFilesSchema(organizationId: string, record: ConnectionLi
     };
 }
 
-async function ensurePoolWithLatest(config: BaseConfig) {
+async function ensurePoolWithLatest(config: BaseConfig, auditSnapshot: SqlAuditConnectionSnapshot) {
     const existing = await getDriverPool(config.id);
     const needRefresh =
         existing &&
         ((config.configVersion && existing.config.configVersion !== config.configVersion) ||
             (config.updatedAt && existing.config.updatedAt !== config.updatedAt) ||
-            JSON.stringify(existing.config.options ?? {}) !== JSON.stringify(config.options ?? {}));
+            JSON.stringify(existing.config.options ?? {}) !== JSON.stringify(config.options ?? {}) ||
+            !isSqlAuditConnectionSnapshotCurrent(existing, auditSnapshot));
 
     if (needRefresh) {
         await destroyDriverPool(config.id);
     }
 
-    return ensureDriverPool(config);
+    return patchDriverPoolForSqlAudit(await ensureDriverPool(config), auditSnapshot);
 }
 
 export async function ensureConnectionPoolForUser(userId: string, organizationId: string, connectionId: string, identityId?: string | null) {
@@ -137,9 +139,10 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
     const sshConfig: SshWithSecrets | null = record.ssh ? { ...record.ssh, ...(sshSecrets ?? {}) } : sshSecrets ? ({ enabled: true, ...sshSecrets } as SshWithSecrets) : null;
 
     const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig, code => createConnectionError(code as ConnectionErrorCode));
-    const entry = await ensurePoolWithLatest(config);
+    const auditSnapshot = createSqlAuditConnectionSnapshot(record, identity);
+    const entry = await ensurePoolWithLatest(config, auditSnapshot);
 
-    return { entry, config, identity };
+    return { entry: patchDriverPoolForSqlAudit(entry, auditSnapshot), config, identity };
 }
 
 export function mapNamesToLabelValue(names: string[]) {

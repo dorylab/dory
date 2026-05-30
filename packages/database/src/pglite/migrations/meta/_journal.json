@@ -85,6 +85,13 @@
       "when": 1779285907000,
       "tag": "0011_organization_ai_providers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780045857584,
+      "tag": "0012_query_audit_identity_snapshot",
+      "breakpoints": true
     }
   ]
 }

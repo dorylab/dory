@@ -1,7 +1,6 @@
-
 import { PgAuditLoggerRepository } from './logger';
 import { PgAuditQueryRepository } from './query';
-import { IAuditService, AuditPayload, AuditSearchParams, AuditSearchResult, OverviewFilters, OverviewResponse } from '@dory/shared/types/audit';
+import { IAuditService, AuditPayload, AuditSearchParams, AuditSearchResult, OverviewFilters, OverviewResponse, QueryStatus } from '@dory/shared/types/audit';
 
 export function createPgAuditService(): IAuditService {
     const logger = new PgAuditLoggerRepository();
@@ -17,6 +16,10 @@ export function createPgAuditService(): IAuditService {
 
     return {
         // Write
+        async log(payload: AuditPayload & { status: QueryStatus }) {
+            await ensureInit();
+            return logger.log(payload);
+        },
         async logSuccess(payload: AuditPayload) {
             await ensureInit();
             return logger.logSuccess(payload);
@@ -24,6 +27,14 @@ export function createPgAuditService(): IAuditService {
         async logError(payload: AuditPayload & { errorMessage: string }) {
             await ensureInit();
             return logger.logError(payload);
+        },
+        async logDenied(payload: AuditPayload & { errorMessage: string }) {
+            await ensureInit();
+            return logger.logDenied(payload);
+        },
+        async logCanceled(payload: AuditPayload & { errorMessage?: string | null }) {
+            await ensureInit();
+            return logger.logCanceled(payload);
         },
 
         // Read
@@ -35,6 +46,8 @@ export function createPgAuditService(): IAuditService {
             return query.overview(filters);
         },
 
-        async readById(organizationId, id) { return query.readById(organizationId, id); },
+        async readById(organizationId, id) {
+            return query.readById(organizationId, id);
+        },
     };
 }

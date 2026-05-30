@@ -320,7 +320,7 @@ export default function SQLConsoleClient({
                                     {t('Sidebar.Tables')}
                                 </TabsTrigger>
                                 <TabsTrigger value="saved" className="flex-1">
-                                    {t('Sidebar.SavedQueries')}
+                                    {t('Sidebar.Queries')}
                                 </TabsTrigger>
                             </TabsList>
                             {/* <Separator /> */}

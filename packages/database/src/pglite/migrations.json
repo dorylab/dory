@@ -217,5 +217,17 @@
     "bps": true,
     "folderMillis": 1779285907000,
     "hash": "b1e85a39007ddc49dfa12ff3d06e59cfeb5744893e03e47da32e38324b12ac14"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"query_audit\" ADD COLUMN \"identity_id\" text;\n",
+      "\nALTER TABLE \"query_audit\" ADD COLUMN \"identity_name\" text;\n",
+      "\nALTER TABLE \"query_audit\" ADD COLUMN \"identity_username\" text;\n",
+      "\nALTER TABLE \"query_audit\" ADD COLUMN \"identity_role\" text;\n",
+      "\nALTER TABLE \"query_audit\" ADD COLUMN \"identity_database\" text;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1780045857584,
+    "hash": "81504bc45e08330fd6dc3fd59a597e4fbb607d888bfe4783472509f5acb958dd"
   }
 ]

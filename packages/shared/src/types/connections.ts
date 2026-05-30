@@ -208,6 +208,7 @@ export interface ConnectionListIdentity {
     database: string | null;
     enabled?: boolean;
     status?: ConnectionIdentityStatus;
+    updatedAt?: Date;
 }
 
 export interface ConnectionListItem {

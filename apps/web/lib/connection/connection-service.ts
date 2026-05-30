@@ -5,6 +5,7 @@ import { destroyDriverPool, ensureDriverPool, getDriverPool, type DriverPoolEntr
 import { parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
 import type { ConnectionListItem, ConnectionSsh } from '@dory/shared/types/connections';
 import { buildStoredConnectionConfig } from '@/lib/connection/config';
+import { createSqlAuditConnectionSnapshot, isSqlAuditConnectionSnapshotCurrent, patchDriverPoolForSqlAudit } from '@/lib/server/sql-audit';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
 
@@ -45,7 +46,6 @@ async function withLocalFilesSchema(organizationId: string, record: ConnectionLi
 
 export async function getOrCreateConnectionPool(organizationId: string, connectionId: string): Promise<DriverPoolEntry | undefined> {
     const existing = await getDriverPool(connectionId);
-    if (existing && !isLocalFilesDatasetOptions(existing.config.options)) return existing;
 
     const db = await getDBService();
     const record = await db.connections.getById(organizationId, connectionId).then(item => (item ? withLocalFilesSchema(organizationId, item) : item));
@@ -53,6 +53,11 @@ export async function getOrCreateConnectionPool(organizationId: string, connecti
 
     const identity = pickConnectionIdentity(record.identities, null);
     if (!identity) return undefined;
+    const auditSnapshot = createSqlAuditConnectionSnapshot(record, identity);
+
+    if (existing && !isLocalFilesDatasetOptions(existing.config.options) && isSqlAuditConnectionSnapshotCurrent(existing, auditSnapshot)) {
+        return patchDriverPoolForSqlAudit(existing, auditSnapshot);
+    }
 
     const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
 
@@ -63,9 +68,13 @@ export async function getOrCreateConnectionPool(organizationId: string, connecti
     if (existing) {
         const currentOptions = JSON.stringify(existing.config.options ?? {});
         const nextOptions = JSON.stringify(config.options ?? {});
-        if (currentOptions !== nextOptions || (config.updatedAt && existing.config.updatedAt !== config.updatedAt)) {
+        if (
+            currentOptions !== nextOptions ||
+            (config.updatedAt && existing.config.updatedAt !== config.updatedAt) ||
+            !isSqlAuditConnectionSnapshotCurrent(existing, auditSnapshot)
+        ) {
             await destroyDriverPool(config.id);
         }
     }
-    return ensureDriverPool(config);
+    return patchDriverPoolForSqlAudit(await ensureDriverPool(config), auditSnapshot);
 }
