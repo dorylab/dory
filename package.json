@@ -58,7 +58,8 @@
         "test:e2e:demo-flow": "playwright test tests/e2e/demo-connection-sql-console.spec.ts --project=chromium --no-deps",
         "test:e2e:demo-flow:record": "node ./scripts/run-demo-flow-recording.mjs",
         "release-notes": "yarn workspace web run release-notes",
-        "stripe": "stripe listen --forward-to localhost:3000/api/auth/stripe/webhook"
+        "stripe": "stripe listen --forward-to localhost:3000/api/auth/stripe/webhook",
+        "tree": "tree -d -I 'node_modules|.next|dist|public|playwright-report|.yarn|.github|release|localdata|test*'"
     },
     "workspaces": [
         "apps/*",
