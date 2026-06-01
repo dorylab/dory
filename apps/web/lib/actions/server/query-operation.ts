@@ -1,0 +1,270 @@
+import { randomUUID } from 'node:crypto';
+
+import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
+import { runWithSqlAudit } from '@/lib/server/sql-audit';
+import type { ActionContext } from '@dory/actions';
+import type { BaseConnection } from '@dory/drivers/core';
+import type { QuerySource } from '@dory/shared/types/audit';
+import type { WebActionServices } from './types';
+
+export const MAX_ACTION_STATEMENTS = 100;
+
+function preciseDateNow(): Date {
+    return new Date(performance.timeOrigin + performance.now());
+}
+
+export function parseSqlOp(s: string): string {
+    const first = s.trim().split(/\s+/)[0]?.toUpperCase() || 'SQL';
+    if (['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'REPLACE'].includes(first)) return first;
+    if (['CREATE', 'ALTER', 'DROP', 'TRUNCATE', 'RENAME'].includes(first)) return 'DDL';
+    if (['BEGIN', 'START', 'COMMIT', 'ROLLBACK', 'SAVEPOINT', 'RELEASE'].includes(first)) return 'TXN';
+    return first;
+}
+
+function makeTitle(s: string): string {
+    const op = parseSqlOp(s);
+    const preview = s.trim().slice(0, 40).replace(/\s+/g, ' ');
+    return `${op}: ${preview}`;
+}
+
+function queryAuditSource(ctx: ActionContext<WebActionServices>, source?: string | null): QuerySource {
+    if (isQuerySource(ctx.auditSource)) return ctx.auditSource;
+    if (ctx.actor.type === 'mcp') return 'mcp_sql_runner';
+    if (ctx.actor.type === 'automation') return source === 'ai' ? 'automation_ai_sql' : 'automation_sql';
+    if (ctx.actor.type === 'agent') return 'ai_sql_runner';
+    return 'user_sql_console';
+}
+
+function isQuerySource(value?: string | null): value is QuerySource {
+    return (
+        value === 'console' ||
+        value === 'chatbot' ||
+        value === 'api' ||
+        value === 'task' ||
+        value === 'user_sql_console' ||
+        value === 'user_table_preview' ||
+        value === 'dory_schema_metadata' ||
+        value === 'dory_monitoring' ||
+        value === 'ai_sql_runner' ||
+        value === 'ai_table_preview' ||
+        value === 'ai_schema_metadata' ||
+        value === 'ai_analysis' ||
+        value === 'automation_sql' ||
+        value === 'automation_ai_sql' ||
+        value === 'automation_schema_metadata' ||
+        value === 'mcp_sql_runner' ||
+        value === 'mcp_table_preview' ||
+        value === 'mcp_schema_metadata' ||
+        value === 'mcp_monitoring' ||
+        value === 'mcp_analysis'
+    );
+}
+
+async function executeOne(connection: BaseConnection, statement: string, context: { database?: string | null }, options?: { queryId?: string }) {
+    const startedAt = preciseDateNow();
+    const perfStart = performance.now();
+
+    try {
+        const result = await connection.queryWithContext(statement, {
+            database: context.database ?? undefined,
+            queryId: options?.queryId,
+        });
+        const rows = result.rows ?? [];
+        const finishedAt = preciseDateNow();
+        const durationMs = performance.now() - perfStart;
+        const isArrayRows = Array.isArray(rows);
+        const affectedRows = !isArrayRows && rows && typeof rows === 'object' && 'affectedRows' in rows ? (rows as any).affectedRows : null;
+        const rowCount = result.rowCount ?? (isArrayRows ? rows.length : affectedRows != null ? 1 : 0);
+
+        return {
+            ok: true as const,
+            resultRows: isArrayRows ? rows : affectedRows != null ? [{ ok: true, affectedRows }] : [],
+            qrs: {
+                sqlText: statement,
+                sqlOp: parseSqlOp(statement),
+                title: makeTitle(statement),
+                columns: result.columns ?? null,
+                rowCount,
+                limited: result.limited ?? false,
+                limit: result.limit ?? null,
+                affectedRows,
+                status: 'success' as const,
+                errorMessage: null,
+                errorCode: null,
+                errorSqlState: null,
+                errorMeta: null,
+                warnings: null,
+                startedAt,
+                finishedAt,
+                durationMs: Math.round(durationMs),
+            },
+        };
+    } catch (err: any) {
+        const finishedAt = preciseDateNow();
+        const durationMs = performance.now() - perfStart;
+        return {
+            ok: false as const,
+            resultRows: [{ error: String(err?.message || err), code: err?.code, sql: statement }],
+            qrs: {
+                sqlText: statement,
+                sqlOp: parseSqlOp(statement),
+                title: makeTitle(statement),
+                columns: null,
+                rowCount: 0,
+                affectedRows: null,
+                status: 'error' as const,
+                errorMessage: String(err?.message || err),
+                errorCode: err?.code ?? null,
+                errorSqlState: err?.sqlState ?? err?.sqlstate ?? null,
+                errorMeta: err
+                    ? {
+                          errno: err?.errno ?? null,
+                          name: err?.name ?? null,
+                      }
+                    : null,
+                warnings: null,
+                startedAt,
+                finishedAt,
+                durationMs: Math.round(durationMs),
+            },
+        };
+    }
+}
+
+export async function executeSqlAction(
+    ctx: ActionContext<WebActionServices>,
+    input: {
+        connectionId?: string | null;
+        identityId?: string | null;
+        database?: string | null;
+        sql: string;
+        stopOnError?: boolean | null;
+        sessionId?: string | null;
+        tabId?: string | null;
+        source?: string | null;
+        refId?: string | null;
+    },
+) {
+    const connectionId = input.connectionId?.trim() || ctx.currentConnectionId?.trim();
+    if (!connectionId) {
+        throw new Error('Missing connectionId.');
+    }
+
+    const statements = splitMultiSQL(input.sql).filter(s => !!s.trim());
+    const stopOnError = input.stopOnError ?? false;
+    const sessionId = input.sessionId || randomUUID();
+    const auditSource = queryAuditSource(ctx, input.source);
+
+    if (!statements.length) {
+        const now = Math.round(performance.timeOrigin + performance.now());
+        return {
+            session: {
+                sessionId,
+                userId: ctx.userId,
+                tabId: input.tabId ?? null,
+                connectionId,
+                database: input.database ?? null,
+                sqlText: input.sql,
+                status: 'success',
+                errorMessage: null,
+                startedAt: now,
+                finishedAt: now,
+                durationMs: 0,
+                resultSetCount: 0,
+                stopOnError,
+                source: input.source ?? null,
+            },
+            queryResultSets: [],
+            results: [],
+            meta: {
+                refId: input.refId || randomUUID(),
+                durationMs: 0,
+                totalSets: 0,
+                stopOnError,
+            },
+        };
+    }
+
+    if (statements.length > MAX_ACTION_STATEMENTS) {
+        throw new Error(`Too many statements (${statements.length}). Maximum is ${MAX_ACTION_STATEMENTS}.`);
+    }
+
+    const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);
+    return runWithSqlAudit(
+        {
+            organizationId: ctx.organizationId,
+            userId: ctx.userId,
+            source: auditSource,
+            connectionId,
+            identityId: input.identityId ?? null,
+            databaseName: input.database ?? null,
+            tabId: input.tabId ?? null,
+            queryId: sessionId,
+            extraJson: {
+                actionId: 'query.execute',
+                actorType: ctx.actor.type,
+                actionRunId: ctx.actionRunId ?? null,
+                requestId: ctx.requestId ?? null,
+            },
+        },
+        async () => {
+            const sessT0 = performance.now();
+            const overallStartedAt = Math.round(performance.timeOrigin + sessT0);
+            const queryResultSets: Array<Record<string, unknown>> = [];
+            const results: unknown[][] = [];
+            let hitError = false;
+            let firstErrorMsg: string | null = null;
+
+            for (let i = 0; i < statements.length; i += 1) {
+                const statement = statements[i]!;
+                const execOne = await executeOne(entry.instance, statement, { database: input.database }, { queryId: sessionId });
+                const qrs = {
+                    sessionId,
+                    setIndex: i,
+                    ...execOne.qrs,
+                };
+                queryResultSets.push(qrs);
+                results.push(execOne.resultRows);
+
+                if (!execOne.ok) {
+                    hitError = true;
+                    if (!firstErrorMsg) firstErrorMsg = qrs.errorMessage;
+                    if (stopOnError) break;
+                }
+            }
+
+            const sessT1 = performance.now();
+            const overallDuration = Math.max(0, Math.round(sessT1 - sessT0));
+            const overallFinishedAt = Math.max(overallStartedAt, Math.round(performance.timeOrigin + sessT1));
+            const status: 'success' | 'error' = hitError ? 'error' : 'success';
+
+            return {
+                session: {
+                    sessionId,
+                    userId: ctx.userId,
+                    tabId: input.tabId ?? null,
+                    connectionId,
+                    database: input.database ?? null,
+                    sqlText: input.sql,
+                    status,
+                    errorMessage: hitError ? firstErrorMsg : null,
+                    startedAt: overallStartedAt,
+                    finishedAt: overallFinishedAt,
+                    durationMs: overallDuration,
+                    resultSetCount: queryResultSets.length,
+                    stopOnError,
+                    source: input.source ?? null,
+                },
+                queryResultSets,
+                results,
+                meta: {
+                    refId: input.refId || randomUUID(),
+                    durationMs: overallDuration,
+                    totalSets: queryResultSets.length,
+                    stopOnError,
+                },
+            };
+        },
+    );
+}

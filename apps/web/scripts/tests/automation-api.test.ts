@@ -6,7 +6,7 @@ import {
     isReadOnlyQuery,
     MAX_STATEMENTS,
     AI_ROW_LIMIT,
-} from '../../app/api/automation/utils';
+} from '../../lib/automation/utils';
 
 // ---------------------------------------------------------------------------
 // resolveOrganizationIdFromHeaders

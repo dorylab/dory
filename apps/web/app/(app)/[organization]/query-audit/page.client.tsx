@@ -15,17 +15,12 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 import { cn } from '@dory/web-utils';
 import { getAuditSourceGroup, type AuditItem, type AuditSearchResult, type AuditSourceGroup, type QuerySource, type QueryStatus } from '@dory/shared/types/audit';
+import { executeActionClient } from '@/lib/actions/client';
 
 type QueryAuditPageClientProps = {
     organizationId: string;
     showHeader?: boolean;
     embedded?: boolean;
-};
-
-type ApiResponse<T> = {
-    code: number;
-    message?: string;
-    data?: T;
 };
 
 type StatusFilter = 'all' | QueryStatus;
@@ -305,23 +300,13 @@ function StatusBadge({ status }: { status: QueryStatus }) {
 }
 
 async function fetchQueryAuditRecords(input: { q: string; status: StatusFilter; sourceGroup: SourceGroupFilter; pageIndex: number; pageSize: number }): Promise<AuditSearchResult> {
-    const url = new URL('/api/query-audit', window.location.origin);
-    url.searchParams.set('limit', String(input.pageSize));
-    url.searchParams.set('offset', String(input.pageIndex * input.pageSize));
-    if (input.q) url.searchParams.set('q', input.q);
-    if (input.status !== 'all') url.searchParams.set('statuses', input.status);
-    if (input.sourceGroup !== 'all') url.searchParams.set('sources', SOURCES_BY_GROUP[input.sourceGroup].join(','));
-
-    const response = await fetch(url.toString(), {
-        credentials: 'include',
+    return executeActionClient<AuditSearchResult>('query.auditSearch', {
+        limit: input.pageSize,
+        offset: input.pageIndex * input.pageSize,
+        q: input.q || undefined,
+        statuses: input.status !== 'all' ? [input.status] : undefined,
+        sources: input.sourceGroup !== 'all' ? SOURCES_BY_GROUP[input.sourceGroup] : undefined,
     });
-    const payload = (await response.json().catch(() => null)) as ApiResponse<AuditSearchResult> | null;
-
-    if (!response.ok || payload?.code !== 0 || !payload.data) {
-        throw new Error(payload?.message ?? 'Failed to load query audit records');
-    }
-
-    return payload.data;
 }
 
 function formatDateTime(value: string) {

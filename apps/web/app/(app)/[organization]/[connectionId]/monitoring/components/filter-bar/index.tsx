@@ -12,6 +12,7 @@ import type { TimeRange, QueryType } from '@dory/shared/types/monitoring';
 import type { ClickHouseUser } from '@dory/shared/types/privileges';
 import type { ResponseObject } from '@dory/shared';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { isSuccess } from '@/lib/result';
 import { useAtomValue } from 'jotai';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
@@ -74,18 +75,8 @@ export function QueryInsightsFilterBar({ users = [], databases = [], onRefresh, 
         enabled: Boolean(connectionId),
         queryFn: async ({ signal }) => {
             if (!connectionId) return [];
-            const response = await authFetch(`/api/connection/${connectionId}/databases`, {
-                method: 'GET',
-                signal,
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const res = (await response.json()) as ResponseObject<DatabaseOption[]>;
-            if (!isSuccess(res)) {
-                throw new Error(res.message || t('Errors.FetchDatabases'));
-            }
-            const list = res.data ?? [];
+            const res = await executeActionClient<{ databases: DatabaseOption[] }>('schema.listDatabases', { connectionId }, { currentConnectionId: connectionId, signal });
+            const list = res.databases ?? [];
             return Array.from(new Set(list.map(item => item?.value || item?.label).filter((db): db is string => Boolean(db))));
         },
         staleTime: 5 * 60_000,

@@ -4,10 +4,8 @@ import * as React from 'react';
 import { ColumnDef, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@dory/shared';
 import type { TableIndexInfo } from '@dory/shared/types/table-info';
 import { formatBytes } from '../stats/components/formatters';
 
@@ -28,19 +26,8 @@ export function TableIndexesTab({ connectionId, database, table, emptyText }: Ta
         setLoading(true);
 
         try {
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodeURIComponent(database)}/tables/${encodeURIComponent(table)}/indexes`, {
-                method: 'GET',
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const res = (await response.json()) as ResponseObject<TableIndexInfo[]>;
-
-            if (!isSuccess(res)) {
-                throw new Error(res.message || 'Failed to fetch indexes');
-            }
-
-            setRows(res.data ?? []);
+            const res = await executeActionClient<{ indexes: TableIndexInfo[] }>('table.getIndexes', { connectionId, database, table }, { currentConnectionId: connectionId });
+            setRows(res.indexes ?? []);
         } catch (error) {
             console.error('Failed to fetch table indexes:', error);
             setRows([]);

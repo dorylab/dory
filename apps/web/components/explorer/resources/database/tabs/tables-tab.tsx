@@ -12,9 +12,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { buildExplorerObjectPath } from '@/lib/explorer/build-path';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 
@@ -113,18 +111,8 @@ export default function DatabaseTables({ catalog, database }: DatabaseTablesProp
         if (!connectionId || !databaseName) return;
         setLoading(true);
         try {
-            const encodedDb = encodeURIComponent(databaseName);
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodedDb}/tables`, {
-                method: 'GET',
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const res = (await response.json()) as ResponseObject<DatabaseTableApiRow[]>;
-            if (!isSuccess(res)) {
-                throw new Error(res.message || t('Failed to fetch tables'));
-            }
-            const nextRows = (res.data ?? []).map(item => ({
+            const res = await executeActionClient<{ tables: DatabaseTableApiRow[] }>('schema.listTables', { connectionId, database: databaseName }, { currentConnectionId: connectionId });
+            const nextRows = (res.tables ?? []).map(item => ({
                 name: item.value || item.name,
                 label: item.label ?? item.name,
                 engine: item.engine ?? null,

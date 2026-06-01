@@ -1,6 +1,8 @@
 import { useAtom } from 'jotai';
 import { useEffect } from 'react';
 import { schemaCacheAtom } from '@/shared/stores/schema.store';
+import type { SchemaResponse } from '@/shared/stores/schema.store';
+import { executeActionClient } from '@/lib/actions/client';
 
 export function useSchema(connectionId?: string, database?: string) {
     const [schemaCache, setSchemaCache] = useAtom(schemaCacheAtom);
@@ -11,10 +13,7 @@ export function useSchema(connectionId?: string, database?: string) {
             return;
         }
 
-        const url = database ? `/api/connection/${connectionId}/schema?database=${encodeURIComponent(database)}` : `/api/connection/${connectionId}/schema`;
-
-        fetch(url)
-            .then(res => res.json())
+        executeActionClient<SchemaResponse>('schema.get', { connectionId, database }, { currentConnectionId: connectionId })
             .then(data => {
                 setSchemaCache(prev => ({ ...prev, [cacheKey]: data }));
             });
@@ -22,9 +21,7 @@ export function useSchema(connectionId?: string, database?: string) {
 
     const refresh = async () => {
         if (!connectionId) return;
-        const url = database ? `/api/connection/${connectionId}/schema?database=${encodeURIComponent(database)}` : `/api/connection/${connectionId}/schema`;
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await executeActionClient<SchemaResponse>('schema.get', { connectionId, database }, { currentConnectionId: connectionId });
         setSchemaCache(prev => ({ ...prev, [cacheKey]: data }));
     };
 

@@ -10,9 +10,7 @@ import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 
@@ -84,18 +82,8 @@ export default function DatabaseViews({ database }: DatabaseViewsProps) {
         if (!connectionId || !databaseName) return;
         setLoading(true);
         try {
-            const encodedDb = encodeURIComponent(databaseName);
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodedDb}/views`, {
-                method: 'GET',
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const res = (await response.json()) as ResponseObject<DatabaseViewApiRow[]>;
-            if (!isSuccess(res)) {
-                throw new Error(res.message || t('Failed to fetch views'));
-            }
-            const nextRows = (res.data ?? []).map(item => ({
+            const res = await executeActionClient<{ views: DatabaseViewApiRow[] }>('schema.listViews', { connectionId, database: databaseName }, { currentConnectionId: connectionId });
+            const nextRows = (res.views ?? []).map(item => ({
                 name: item.value || item.name,
                 label: item.label ?? item.name,
                 engine: item.engine ?? null,

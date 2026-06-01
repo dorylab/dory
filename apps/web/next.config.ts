@@ -37,7 +37,7 @@ type NextWebpackOptionsShape = {
 
 const nextConfig = {
     output: 'standalone',
-    transpilePackages: ['@dory/database', '@dory/i18n', '@dory/shared', '@dory/ui', '@dory/web-utils'],
+    transpilePackages: ['@dory/actions', '@dory/database', '@dory/i18n', '@dory/shared', '@dory/ui', '@dory/web-utils'],
     serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron'],
     outputFileTracingRoot: path.join(__dirname, '../../'),
     outputFileTracingIncludes: {

@@ -260,13 +260,7 @@ test('proxy body normalization clears client model overrides before cloud forwar
 
 test('AI routes delegate transport decisions to route dispatch helpers', () => {
     const guardedRoutes = [
-        '../../app/api/ai/result-insights/route.ts',
-        '../../app/api/ai/schema-explanations/route.ts',
-        '../../app/api/ai/schema-tags/route.ts',
         '../../app/api/ai/stream/route.ts',
-        '../../app/api/ai/tab-title/route.ts',
-        '../../app/api/ai/table-summary/route.ts',
-        '../../app/api/automation/ai/ask/route.ts',
         '../../app/api/chat/route.ts',
         '../../app/api/copilot/action/inline-ask/route.ts',
         '../../app/api/copilot/action/route.ts',

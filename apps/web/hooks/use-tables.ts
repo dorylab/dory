@@ -1,8 +1,6 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { useEffect } from 'react';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom, tablesAtom } from '@/shared/stores/app.store';
 
 const inflightTableRequests = new Map<string, Promise<void>>();
@@ -52,7 +50,6 @@ export function useTables(databases: string) {
             return;
         }
 
-        const encodedDb = encodeURIComponent(requestedDatabase);
         const request = (async () => {
             setTablesState(prev => {
                 if (prev.connectionId !== requestedConnectionId || prev.database !== requestedDatabase) {
@@ -66,27 +63,27 @@ export function useTables(databases: string) {
             });
 
             try {
-                const requestInit = {
-                    method: 'GET',
-                    headers: {
-                        'X-Connection-ID': requestedConnectionId,
-                    },
-                };
-                const [tablesResponse, viewsResponse] = await Promise.all([
-                    authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/tables`, requestInit),
-                    authFetch(`/api/connection/${requestedConnectionId}/databases/${encodedDb}/views`, requestInit),
+                const [tablesResult, viewsResult] = await Promise.all([
+                    executeActionClient<{ tables: any[] }>(
+                        'schema.listTables',
+                        { connectionId: requestedConnectionId, database: requestedDatabase },
+                        { currentConnectionId: requestedConnectionId },
+                    ),
+                    executeActionClient<{ views: any[] }>(
+                        'schema.listViews',
+                        { connectionId: requestedConnectionId, database: requestedDatabase },
+                        { currentConnectionId: requestedConnectionId },
+                    ).catch(() => null),
                 ]);
-                const tablesResult = (await tablesResponse.json()) as ResponseObject<any[]>;
-                const viewsResult = (await viewsResponse.json().catch(() => null)) as ResponseObject<any[]> | null;
 
-                if (isSuccess(tablesResult)) {
+                if (tablesResult) {
                     const merged = new Map<string, any>();
-                    for (const item of tablesResult.data ?? []) {
+                    for (const item of tablesResult.tables ?? []) {
                         const key = String(item?.value ?? item?.name ?? item?.label ?? '');
                         if (key) merged.set(key, item);
                     }
-                    if (viewsResult && isSuccess(viewsResult)) {
-                        for (const item of viewsResult.data ?? []) {
+                    if (viewsResult) {
+                        for (const item of viewsResult.views ?? []) {
                             const key = String(item?.value ?? item?.name ?? item?.label ?? '');
                             if (key && !merged.has(key)) {
                                 merged.set(key, item);

@@ -26,7 +26,7 @@ import CopilotPanel from '../copilot-panel';
 import { SaveSqlDialog } from './save-sql-dialog';
 import type { SqlModeProps } from './types';
 import { authClient } from '@/lib/auth-client';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { AuthLinkSheet } from '@/components/auth/auth-link-sheet';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { useTranslations } from 'next-intl';
@@ -209,14 +209,8 @@ export function SqlMode({
             return;
         }
         try {
-            const res = await authFetch('/api/sql-console/saved-queries', {
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const data = await res.json().catch(() => null);
-            if (!res.ok || (data && data.code !== 0)) return;
-            setSavedQueries((data?.data ?? []) as SavedQueryItem[]);
+            const data = await executeActionClient<{ savedQueries: SavedQueryItem[] }>('savedQuery.list', { connectionId }, { currentConnectionId: connectionId });
+            setSavedQueries(data.savedQueries ?? []);
         } catch {
             // ignore
         }

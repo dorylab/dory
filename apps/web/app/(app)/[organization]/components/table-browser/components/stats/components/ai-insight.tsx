@@ -8,7 +8,7 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { CheckCircle2, Loader2, RotateCw } from 'lucide-react';
 import type { TableStats } from '@dory/shared/types/table-info';
 import { tableQueryKeys } from '../../table-queries';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { useTranslations } from 'next-intl';
 
 type TableHealthReportCardProps = {
@@ -41,19 +41,15 @@ export function TableHealthReportCard({ tableStats, databaseName, tableName, con
         gcTime: 1000 * 60 * 30,
         refetchOnWindowFocus: false,
         queryFn: async () => {
-            const res = await authFetch('/api/ai/table-stats-insights', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            const data = await executeActionClient<InsightsPayload>(
+                'ai.tableStatsInsights',
+                {
                     stats: tableStats,
                     database: databaseName,
                     table: tableName,
-                }),
-            });
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-            const data = (await res.json()) as InsightsPayload;
+                },
+                { currentConnectionId: connectionId },
+            );
             const newInsights = data?.insights?.length ? data.insights : fallbackInsights;
             const newSuggestion = data?.suggestion || fallbackSuggestion;
             return {

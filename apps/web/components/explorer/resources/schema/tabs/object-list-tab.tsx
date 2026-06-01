@@ -7,13 +7,11 @@ import { Search } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { buildExplorerObjectPath } from '@/lib/explorer/build-path';
 import type { ExplorerBaseParams, ExplorerObjectKind } from '@/lib/explorer/types';
-import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@dory/shared';
 import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 import type { DatabaseObjectRow } from '@dory/drivers/types';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
@@ -28,6 +26,12 @@ type ObjectListTabProps = {
     emptyText: string;
     filteredEmptyText: string;
 };
+
+const ENDPOINT_ACTIONS = {
+    tables: { id: 'schema.listTables', key: 'tables' },
+    views: { id: 'schema.listViews', key: 'views' },
+    sequences: { id: 'schema.listSequences', key: 'sequences' },
+} as const;
 
 const toNumberOrNull = (value?: number | string | null) => {
     if (value === null || value === undefined) return null;
@@ -58,17 +62,9 @@ export function ObjectListTab(props: ObjectListTabProps) {
         if (!connectionId || !database) return;
         setLoading(true);
         try {
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodeURIComponent(database)}/${endpoint}`, {
-                method: 'GET',
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const res = (await response.json()) as ResponseObject<DatabaseObjectRow[]>;
-            if (!isSuccess(res)) {
-                throw new Error(res.message || `Failed to fetch ${endpoint}`);
-            }
-            setRows(res.data ?? []);
+            const action = ENDPOINT_ACTIONS[endpoint];
+            const res = await executeActionClient<Record<string, DatabaseObjectRow[]>>(action.id, { connectionId, database }, { currentConnectionId: connectionId });
+            setRows(res[action.key] ?? []);
         } catch (error) {
             console.error(`Failed to fetch postgres ${endpoint}:`, error);
             setRows([]);

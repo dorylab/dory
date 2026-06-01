@@ -2,9 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useColumns } from '@/hooks/use-columns';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import type { TableStats, TablePropertiesRow } from '@dory/shared/types/table-info';
 import type { TableProperties } from './structure/properties-section';
 import type { ColumnInfo } from '../type';
@@ -86,49 +84,44 @@ async function fetchSemanticColumns({
     }
 
     try {
-        const tagsResponse = await authFetch('/api/ai/schema-tags', {
-            method: 'POST',
-            signal,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Connection-ID': connectionId,
-            },
-            body: JSON.stringify({
+        const tagsRes = await executeActionClient<{ columns?: { name: string; semanticTags?: string[] }[] }>(
+            'ai.schemaTags',
+            {
+                connectionId,
                 database: databaseName,
                 table: tableName,
                 columns,
                 dbType,
-            }),
-        });
-        const tagsRes = (await tagsResponse.json()) as ResponseObject<{ columns?: { name: string; semanticTags?: string[] }[] }>;
+            },
+            {
+                currentConnectionId: connectionId,
+                signal,
+            },
+        );
 
-        const tagColumns = (tagsRes as any)?.columns ?? tagsRes?.data?.columns;
+        const tagColumns = tagsRes?.columns;
         (tagColumns ?? []).forEach((col: { name?: string; semanticTags?: string[] }) => {
             if (!col?.name) return;
             const key = col.name.toLowerCase();
             tagMap[key] = Array.isArray(col.semanticTags) ? col.semanticTags : [];
         });
 
-        const explanationsResponse = await authFetch('/api/ai/schema-explanations', {
-            method: 'POST',
-            signal,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Connection-ID': connectionId,
-            },
-            body: JSON.stringify({
+        const explanationsRes = await executeActionClient<{ columns?: { name: string; semanticSummary?: string | null }[] }>(
+            'ai.schemaExplanations',
+            {
                 database: databaseName,
                 table: tableName,
                 columns,
                 connectionId,
                 dbType,
-            }),
-        });
-        const explanationsRes = (await explanationsResponse.json()) as ResponseObject<{
-            columns?: { name: string; semanticSummary?: string | null }[];
-        }>;
+            },
+            {
+                currentConnectionId: connectionId,
+                signal,
+            },
+        );
 
-        const explanationColumns = (explanationsRes as any)?.columns ?? explanationsRes?.data?.columns;
+        const explanationColumns = explanationsRes?.columns;
         (explanationColumns ?? []).forEach((col: { name?: string; semanticSummary?: string | null }) => {
             if (!col?.name) return;
             const key = col.name.toLowerCase();
@@ -279,21 +272,23 @@ export function useTablePropertiesQuery({
             if (!connectionId) {
                 throw new Error('Missing connection');
             }
-            const encodedDb = encodeURIComponent(databaseName as string);
-            const encodedTable = encodeURIComponent(tableName as string);
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodedDb}/tables/${encodedTable}/properties`, {
-                method: 'GET',
-                signal,
-                headers: {
-                    'X-Connection-ID': connectionId,
+            const res = await executeActionClient<{ properties: TablePropertiesRow | null }>(
+                'table.getProperties',
+                {
+                    connectionId,
+                    database: databaseName as string,
+                    table: tableName as string,
                 },
-            });
-            const res = (await response.json()) as ResponseObject<TablePropertiesRow>;
+                {
+                    currentConnectionId: connectionId,
+                    signal,
+                },
+            );
 
-            if (isSuccess(res) && res.data) {
-                return { ...res.data } as TableProperties;
+            if (res.properties) {
+                return { ...res.properties } as TableProperties;
             }
-            throw new Error(res.message || 'Failed to load table properties');
+            throw new Error('Failed to load table properties');
         },
     });
 }
@@ -317,21 +312,23 @@ export function useTableStatsQuery({
             if (!connectionId) {
                 throw new Error('Missing connection');
             }
-            const encodedDb = encodeURIComponent(databaseName as string);
-            const encodedTable = encodeURIComponent(tableName as string);
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodedDb}/tables/${encodedTable}/stats`, {
-                method: 'GET',
-                signal,
-                headers: {
-                    'X-Connection-ID': connectionId,
+            const res = await executeActionClient<{ stats: TableStats | null }>(
+                'table.getStats',
+                {
+                    connectionId,
+                    database: databaseName as string,
+                    table: tableName as string,
                 },
-            });
-            const res = (await response.json()) as ResponseObject<TableStats>;
+                {
+                    currentConnectionId: connectionId,
+                    signal,
+                },
+            );
 
-            if (isSuccess(res) && res.data) {
-                return res.data;
+            if (res.stats) {
+                return res.stats;
             }
-            throw new Error(res.message || 'Failed to load table stats');
+            throw new Error('Failed to load table stats');
         },
     });
 }
@@ -355,24 +352,21 @@ export function useTableDdlQuery({
             if (!connectionId) {
                 throw new Error('Missing connection');
             }
-            const encodedDb = encodeURIComponent(databaseName as string);
-            const encodedTable = encodeURIComponent(tableName as string);
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodedDb}/tables/${encodedTable}/ddl`, {
-                method: 'GET',
-                signal,
-                headers: {
-                    'X-Connection-ID': connectionId,
+            const res = await executeActionClient<{ ddl: string | null }>(
+                'table.getDdl',
+                {
+                    connectionId,
+                    database: databaseName as string,
+                    table: tableName as string,
                 },
-            });
-            const res = (await response.json()) as ResponseObject<string>;
+                {
+                    currentConnectionId: connectionId,
+                    signal,
+                },
+            );
 
-            if (isSuccess(res)) {
-                return typeof res.data === 'string' ? res.data : null;
-            }
-
-            throw new Error(res.message || 'Failed to load table DDL');
+            return typeof res.ddl === 'string' ? res.ddl : null;
         },
     });
 }
-
 

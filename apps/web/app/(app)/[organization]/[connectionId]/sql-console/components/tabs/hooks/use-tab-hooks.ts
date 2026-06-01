@@ -8,8 +8,7 @@ import { useTranslations } from 'next-intl';
 
 import { activeTabIdAtom, currentConnectionAtom, tabsAtom } from '@/shared/stores/app.store';
 import { currentTabResultAtom, sessionIdByTabAtom } from '../../../sql-console.store';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
 
@@ -84,17 +83,7 @@ export function useSQLTabs() {
     async function saveTabToServer(tabId: string, tab: TabPayload) {
         if (!connectionId) return;
 
-        await authFetch(`/api/sql-console/tabs`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Connection-ID': connectionId,
-            },
-            body: JSON.stringify({
-                tabId,
-                state: tab,
-            }),
-        });
+        await executeActionClient('tab.save', { connectionId, tabId, state: tab }, { currentConnectionId: connectionId });
     }
 
     // ---------------------------------------------------
@@ -200,16 +189,10 @@ export function useSQLTabs() {
 
         (async () => {
             try {
-                const response = await authFetch(`/api/sql-console/tabs`, {
-                    method: 'GET',
-                    headers: {
-                        'X-Connection-ID': connectionId,
-                    },
-                });
-                const res = (await response.json()) as ResponseObject<UITabPayload[]>;
+                const res = await executeActionClient<UITabPayload[]>('tab.list', { connectionId }, { currentConnectionId: connectionId });
 
-                if (res.code === 1 && Array.isArray(res.data)) {
-                    const serverTabs = [...res.data].sort((a, b) => {
+                if (Array.isArray(res)) {
+                    const serverTabs = [...res].sort((a, b) => {
                         const orderDelta = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
                         if (orderDelta !== 0) return orderDelta;
                         const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -400,12 +383,7 @@ export function useSQLTabs() {
         }
 
         if (connectionId) {
-            await authFetch(`/api/sql-console/tabs?tabId=${tabId}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
+            await executeActionClient('tab.delete', { connectionId, tabId }, { currentConnectionId: connectionId });
         }
     };
 
@@ -440,16 +418,7 @@ export function useSQLTabs() {
         setActiveTabId(tabId);
 
         if (connectionId) {
-            await Promise.all(
-                toClose.map(tab =>
-                    authFetch(`/api/sql-console/tabs?tabId=${tab.tabId}`, {
-                        method: 'DELETE',
-                        headers: {
-                            'X-Connection-ID': connectionId,
-                        },
-                    }),
-                ),
-            );
+            await Promise.all(toClose.map(tab => executeActionClient('tab.delete', { connectionId, tabId: tab.tabId }, { currentConnectionId: connectionId })));
         }
     };
 

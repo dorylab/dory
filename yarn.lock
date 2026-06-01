@@ -2294,6 +2294,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@dory/actions@npm:0.1.0, @dory/actions@workspace:packages/actions":
+  version: 0.0.0-use.local
+  resolution: "@dory/actions@workspace:packages/actions"
+  dependencies:
+    "@dory/shared": "npm:0.1.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  languageName: unknown
+  linkType: soft
+
 "@dory/analysis@npm:0.1.0, @dory/analysis@workspace:packages/analysis":
   version: 0.0.0-use.local
   resolution: "@dory/analysis@workspace:packages/analysis"
@@ -22772,6 +22782,7 @@ __metadata:
     "@dnd-kit/modifiers": "npm:^9.0.0"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@dory/actions": "npm:0.1.0"
     "@dory/analysis": "npm:0.1.0"
     "@dory/database": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"

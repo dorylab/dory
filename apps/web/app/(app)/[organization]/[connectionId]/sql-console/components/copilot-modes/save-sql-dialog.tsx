@@ -11,7 +11,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { SearchableSelect, type SelectOption } from '@/components/@dory/ui/searchable-select';
 import { useAtomValue } from 'jotai';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { useTranslations } from 'next-intl';
 import { authClient } from '@/lib/auth-client';
@@ -76,21 +76,16 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
         const loadFolders = async () => {
             setLoadingFolders(true);
             try {
-                const res = await authFetch('/api/sql-console/saved-query-folders', {
-                    headers: {
-                        'X-Connection-ID': connectionId,
-                    },
-                });
-                const data = await res.json().catch(() => null);
-
-                if (!res.ok || (data && data.code !== 0)) {
-                    throw new Error(data?.message ?? t('SaveSql.Errors.LoadFoldersFailed'));
-                }
+                const data = await executeActionClient<Array<{ id: string; name: string }>>(
+                    'savedQuery.listFolders',
+                    { connectionId },
+                    { currentConnectionId: connectionId },
+                );
 
                 if (cancelled) return;
 
-                const nextOptions = Array.isArray(data?.data)
-                    ? data.data.map((folder: { id: string; name: string }) => ({
+                const nextOptions = Array.isArray(data)
+                    ? data.map((folder: { id: string; name: string }) => ({
                           value: folder.id,
                           label: folder.name,
                       }))
@@ -142,27 +137,17 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
         setError(null);
 
         try {
-            const res = await authFetch('/api/sql-console/saved-queries', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Connection-ID': connectionId,
-                },
-                body: JSON.stringify({
+            await executeActionClient(
+                'savedQuery.create',
+                {
+                    connectionId,
                     title: title.trim(),
                     description: description.trim() ? description.trim() : null,
                     folderId: folderId || null,
                     sqlText,
-                }),
-            });
-
-            const data = await res.json().catch(() => null);
-            if (!res.ok || (data && data.code !== 0)) {
-                const message = data?.message ?? t('SaveSql.Errors.SaveFailed');
-                setError(message);
-                toast.error(message);
-                return;
-            }
+                },
+                { currentConnectionId: connectionId },
+            );
 
             toast.success(t('SaveSql.Success'));
             if (typeof window !== 'undefined') {

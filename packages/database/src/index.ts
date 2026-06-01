@@ -13,6 +13,7 @@ import { PostgresBillingRepository } from './postgres/impl/billing';
 import { PostgresMcpRepository } from './postgres/impl/mcp';
 import { PostgresLocalFilesRepository } from './postgres/impl/local-files';
 import { PostgresOrganizationAiProvidersRepository } from './postgres/impl/organization-ai-providers';
+import { PostgresActionAuditRepository } from './postgres/impl/action-audit';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -23,6 +24,7 @@ export type PostgresDBService = {
     tabState: PostgresTabStateRepository;
     chat: PostgresChatRepository;
     audit: ReturnType<typeof createPgAuditService>;
+    actionAudit: PostgresActionAuditRepository;
     // datasource: PostgresDatasourceRepository;
     organizations: PostgresOrganizationsRepository;
     connections: PostgresConnectionsRepository;
@@ -95,10 +97,14 @@ export async function getDBService(): Promise<DBService> {
             const organizationAiProvidersRepo = new PostgresOrganizationAiProvidersRepository();
             await organizationAiProvidersRepo.init();
 
+            const actionAuditRepo = new PostgresActionAuditRepository();
+            await actionAuditRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
                 audit: createPgAuditService(),
+                actionAudit: actionAuditRepo,
                 organizations: organizationsRepo,
                 connections: connectionsRepo,
                 aiSchemaCache: aiSchemaCacheRepo,

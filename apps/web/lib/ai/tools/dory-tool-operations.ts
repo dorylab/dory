@@ -28,6 +28,8 @@ export type DoryToolOperationContext = {
     locale?: Locale;
     restrictToCurrentConnection?: boolean;
     auditSource?: QuerySource;
+    actionRunId?: string | null;
+    requestId?: string | null;
 };
 
 export type SchemaSearchItem =
@@ -210,6 +212,8 @@ function withDoryToolSqlAudit<T>(
             databaseName: input.database ?? input.databaseName ?? null,
             extraJson: {
                 identityId: input.identityId ?? null,
+                actionRunId: context.actionRunId ?? null,
+                requestId: context.requestId ?? null,
             },
         },
         operation,
@@ -493,7 +497,7 @@ export async function runReadonlySqlOperation(
 ) {
     const connectionId = resolveConnectionId(context, input.connectionId);
     const { entry } = await getConnectionEntry(context, connectionId, input.identityId);
-    const auditSource = readonlySqlAuditSource(input.source);
+    const auditSource = context.auditSource ?? readonlySqlAuditSource(input.source);
     let statements: string[];
     try {
         statements = getReadonlyMcpStatements(input.sql);
@@ -509,6 +513,8 @@ export async function runReadonlySqlOperation(
                 connectionSnapshot: getSqlAuditConnectionSnapshot(entry),
                 extraJson: {
                     identityId: input.identityId ?? null,
+                    actionRunId: context.actionRunId ?? null,
+                    requestId: context.requestId ?? null,
                 },
             },
             {
@@ -539,6 +545,8 @@ export async function runReadonlySqlOperation(
                 queryId: sessionId,
                 extraJson: {
                     identityId: input.identityId ?? null,
+                    actionRunId: context.actionRunId ?? null,
+                    requestId: context.requestId ?? null,
                 },
             },
             () =>

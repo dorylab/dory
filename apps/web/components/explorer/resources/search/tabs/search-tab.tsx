@@ -5,15 +5,13 @@ import Link from 'next/link';
 import { ColumnDef, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Search } from 'lucide-react';
 import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { buildExplorerObjectPath, buildExplorerSchemaPath } from '@/lib/explorer/build-path';
 import type { ExplorerBaseParams } from '@/lib/explorer/types';
 import type { DatabaseFunctionMeta, DatabaseMeta, DatabaseObjectRow } from '@dory/drivers/types';
-import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@dory/shared';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
 
@@ -110,42 +108,27 @@ export function SearchResourceTab({ baseParams, database, placeholder, emptyText
         if (!connectionId || !database) return;
         setLoading(true);
         try {
-            const headers = {
-                'X-Connection-ID': connectionId,
-            };
-            const encodedDatabase = encodeURIComponent(database);
-
-            const [schemasResponse, tablesResponse, viewsResponse, functionsResponse, sequencesResponse] = await Promise.all([
-                authFetch(`/api/connection/${connectionId}/databases/${encodedDatabase}/schemas`, { method: 'GET', headers }),
-                authFetch(`/api/connection/${connectionId}/databases/${encodedDatabase}/tables`, { method: 'GET', headers }),
-                authFetch(`/api/connection/${connectionId}/databases/${encodedDatabase}/views`, { method: 'GET', headers }),
-                authFetch(`/api/connection/${connectionId}/databases/${encodedDatabase}/functions`, { method: 'GET', headers }),
-                authFetch(`/api/connection/${connectionId}/databases/${encodedDatabase}/sequences`, { method: 'GET', headers }),
+            const [schemas, tables, views, functions, sequences] = await Promise.all([
+                executeActionClient<DatabaseMeta[]>('schema.listSchemas', { connectionId, database }, { currentConnectionId: connectionId }).catch(() => []),
+                executeActionClient<{ tables: DatabaseObjectRow[] }>('schema.listTables', { connectionId, database }, { currentConnectionId: connectionId }).catch(() => ({ tables: [] })),
+                executeActionClient<{ views: DatabaseObjectRow[] }>('schema.listViews', { connectionId, database }, { currentConnectionId: connectionId }).catch(() => ({ views: [] })),
+                executeActionClient<{ functions: DatabaseFunctionMeta[] }>('schema.listFunctions', { connectionId, database }, { currentConnectionId: connectionId }).catch(() => ({
+                    functions: [],
+                })),
+                executeActionClient<{ sequences: DatabaseObjectRow[] }>('schema.listSequences', { connectionId, database }, { currentConnectionId: connectionId }).catch(() => ({
+                    sequences: [],
+                })),
             ]);
-
-            const [schemas, tables, views, functions, sequences] = (await Promise.all([
-                schemasResponse.json(),
-                tablesResponse.json(),
-                viewsResponse.json(),
-                functionsResponse.json(),
-                sequencesResponse.json(),
-            ])) as [
-                ResponseObject<DatabaseMeta[]>,
-                ResponseObject<DatabaseObjectRow[]>,
-                ResponseObject<DatabaseObjectRow[]>,
-                ResponseObject<DatabaseFunctionMeta[]>,
-                ResponseObject<DatabaseObjectRow[]>,
-            ];
 
             setRows(
                 toSearchEntries(
                     baseParams,
                     database,
-                    isSuccess(schemas) ? (schemas.data ?? []) : [],
-                    isSuccess(tables) ? (tables.data ?? []) : [],
-                    isSuccess(views) ? (views.data ?? []) : [],
-                    isSuccess(functions) ? (functions.data ?? []) : [],
-                    isSuccess(sequences) ? (sequences.data ?? []) : [],
+                    schemas,
+                    tables.tables ?? [],
+                    views.views ?? [],
+                    functions.functions ?? [],
+                    sequences.sequences ?? [],
                 ),
             );
         } catch (error) {

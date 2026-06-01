@@ -5,12 +5,10 @@ import { ColumnDef, getCoreRowModel, useReactTable } from '@tanstack/react-table
 import { Search } from 'lucide-react';
 import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import type { DatabaseExtensionMeta } from '@dory/drivers/types';
-import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@dory/shared';
 import { useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
 
 type ExtensionsTabProps = {
@@ -31,13 +29,8 @@ export function ExtensionsTab(props: ExtensionsTabProps) {
         if (!connectionId || !database) return;
         setLoading(true);
         try {
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodeURIComponent(database)}/extensions`, {
-                method: 'GET',
-                headers: { 'X-Connection-ID': connectionId },
-            });
-            const res = (await response.json()) as ResponseObject<DatabaseExtensionMeta[]>;
-            if (!isSuccess(res)) throw new Error(res.message || 'Failed to fetch extensions');
-            setRows(res.data ?? []);
+            const res = await executeActionClient<{ extensions: DatabaseExtensionMeta[] }>('schema.listExtensions', { connectionId, database }, { currentConnectionId: connectionId });
+            setRows(res.extensions ?? []);
         } catch (error) {
             console.error('Failed to fetch extensions:', error);
             setRows([]);

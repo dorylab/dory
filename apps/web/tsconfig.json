@@ -21,6 +21,8 @@
         "paths": {
             "@/www/*": ["../www/*"],
             "@/*": ["./*"],
+            "@dory/actions": ["../../packages/actions/src/index.ts"],
+            "@dory/actions/*": ["../../packages/actions/src/*"],
             "@dory/analysis": ["../../packages/analysis/src/index.ts"],
             "@dory/analysis/*": ["../../packages/analysis/src/*"],
             "@dory/auth-core": ["../../packages/auth-core/src/index.ts"],

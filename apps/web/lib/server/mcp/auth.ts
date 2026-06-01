@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getDBService } from '@dory/database';
+import { hasActionScope } from '@dory/actions';
 import type { OrganizationAccess } from '@/lib/server/authz';
 import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 import { isDesktopRuntime } from '@dory/shared/runtime';
@@ -224,7 +225,10 @@ export function issueMcpDesktopGrant({
     };
 }
 
-export function verifyMcpDesktopGrant(grant: string | null, { now = Date.now(), secret, ignoreExpiration = false }: { now?: number; secret?: string; ignoreExpiration?: boolean } = {}) {
+export function verifyMcpDesktopGrant(
+    grant: string | null,
+    { now = Date.now(), secret, ignoreExpiration = false }: { now?: number; secret?: string; ignoreExpiration?: boolean } = {},
+) {
     if (!grant) return null;
     const [encodedPayload, signature, extra] = grant.split('.');
     if (!encodedPayload || !signature || extra) return null;
@@ -244,7 +248,10 @@ export function verifyMcpDesktopGrant(grant: string | null, { now = Date.now(), 
     return payload;
 }
 
-export async function buildMcpAuthContextForDesktopGrant(grant: string | null, deps: McpDesktopGrantAccessDeps & { ignoreExpiration?: boolean } = {}): Promise<McpTokenAccessResult> {
+export async function buildMcpAuthContextForDesktopGrant(
+    grant: string | null,
+    deps: McpDesktopGrantAccessDeps & { ignoreExpiration?: boolean } = {},
+): Promise<McpTokenAccessResult> {
     let payload: McpDesktopGrantPayload | null;
     try {
         payload = verifyMcpDesktopGrant(grant, { now: deps.now, secret: deps.secret, ignoreExpiration: deps.ignoreExpiration });
@@ -324,9 +331,5 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
 }
 
 export function hasMcpScope(context: McpAuthContext, scope: string) {
-    if (scope === 'schema:read' && context.scopes.includes('connections:read')) {
-        return true;
-    }
-
-    return context.scopes.includes(scope);
+    return hasActionScope(context.scopes, scope);
 }
