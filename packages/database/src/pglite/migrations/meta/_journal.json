@@ -92,6 +92,20 @@
       "when": 1780045857584,
       "tag": "0012_query_audit_identity_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1780045857585,
+      "tag": "0013_action_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1780303200000,
+      "tag": "0014_mcp_authorization_requests",
+      "breakpoints": true
     }
   ]
 }

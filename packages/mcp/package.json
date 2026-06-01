@@ -1,0 +1,31 @@
+{
+    "name": "@getdory/mcp",
+    "version": "0.1.0",
+    "description": "Dory MCP stdio bridge",
+    "type": "module",
+    "bin": {
+        "dory-mcp": "./dist/cli.js"
+    },
+    "files": [
+        "dist",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "node ./scripts/clean-dist.mjs && tsc -p tsconfig.build.json && node ./scripts/mark-bin.mjs",
+        "prepack": "yarn run build",
+        "typecheck": "tsc --noEmit",
+        "test": "node --import tsx --test \"src/**/*.test.ts\""
+    },
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@types/node": "^25.5.2",
+        "tsx": "^4.21.0",
+        "typescript": "^6.0.2"
+    },
+    "engines": {
+        "node": ">=18"
+    }
+}

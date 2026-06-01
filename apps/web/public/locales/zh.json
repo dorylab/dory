@@ -2523,7 +2523,13 @@
             "InvalidTokenPayload": "无效的 MCP token 请求内容。",
             "MissingTokenId": "缺少 MCP token id。",
             "TokenNotFound": "未找到 MCP token。",
-            "DesktopGrantUnavailable": "MCP 桌面端授权只在桌面运行时可用。"
+            "DesktopGrantUnavailable": "MCP 桌面端授权只在桌面运行时可用。",
+            "InvalidLinkPayload": "无效的 MCP 授权请求内容。",
+            "LinkNotFound": "未找到 MCP 授权请求。",
+            "LinkVerifierMismatch": "MCP 授权校验码不匹配。",
+            "LinkConsumed": "这个 MCP 授权请求已经被使用。",
+            "LinkInvalidApproval": "MCP 授权批准信息不完整。",
+            "LinkApprovalUnavailable": "这个 MCP 授权请求不能再更新。"
         },
         "OrganizationAiProviders": {
             "ApiKeyRequired": "这个 AI 服务需要填写 API Key。",
@@ -2537,6 +2543,39 @@
             "DisabledProviderCannotBeDefault": "请先启用这个 AI 服务，再设为默认。",
             "SystemProviderUnavailable": "Dory AI 暂不可用。",
             "TestFailed": "AI 服务测试失败：{reason}"
+        }
+    },
+    "McpAuthorize": {
+        "Eyebrow": "Agent 访问",
+        "Title": "连接这个 MCP client",
+        "Description": "只有在你刚刚在这台机器上运行了 Dory MCP 登录命令时，才批准这个请求。",
+        "UnknownClient": "未知 MCP client",
+        "SignedInAs": "当前登录：{user}",
+        "Expires": "过期时间",
+        "Scopes": "权限",
+        "RequestUnavailable": "这个授权请求不可用。",
+        "MissingOrganization": "请先选择或创建一个组织，再批准 MCP 访问。",
+        "Approve": "批准",
+        "Deny": "拒绝",
+        "Approved": "已批准 MCP 访问。你可以回到终端。",
+        "Denied": "已拒绝 MCP 访问。",
+        "Failed": "更新 MCP 授权失败。",
+        "State": {
+            "missing": "缺失",
+            "not_found": "未找到",
+            "pending": "待批准",
+            "approved": "已批准",
+            "denied": "已拒绝",
+            "expired": "已过期",
+            "consumed": "已连接"
+        },
+        "Messages": {
+            "missing": "请从 Dory MCP 登录命令打开授权链接。",
+            "not_found": "这个授权请求不存在或已被移除。",
+            "approved": "这个 MCP client 已批准。",
+            "denied": "这个授权请求已被拒绝。",
+            "expired": "这个授权请求已过期。请重新运行登录命令。",
+            "consumed": "这个 MCP client 已经连接。"
         }
     },
     "Ai": {
@@ -2969,11 +3008,14 @@
                 "Copied": "已复制",
                 "SetupTitle": "MCP 配置方法",
                 "SetupDescription": "桌面端 client 通过本地 endpoint 连接，不需要手动填写凭据。",
+                "WebSetupDescription": "Web client 通过 Dory npm bridge 连接。登录命令会打开浏览器授权页，并把凭据保存在本机。",
                 "SetupTabs": {
                     "General": "通用"
                 },
                 "General": {
                     "Endpoint": "Endpoint",
+                    "Server": "Server",
+                    "LoginTitle": "授权这台机器",
                     "JsonTitle": "通用 JSON 配置"
                 },
                 "Codex": {
@@ -2984,6 +3026,17 @@
                     "CliTitle": "Claude Code CLI",
                     "JsonTitle": ".mcp.json"
                 },
+                "ClientsTitle": "已连接的 MCP client",
+                "ClientsDescription": "这些 client 使用浏览器授权创建的个人 MCP token。",
+                "ClientActive": "启用中",
+                "ClientInactive": "已停用",
+                "ClientCreated": "创建于 {date}",
+                "ClientLastUsed": "上次使用 {date}",
+                "ClientNeverUsed": "尚未使用",
+                "RevokeClient": "撤销",
+                "ClientsEmpty": "还没有连接 MCP client。",
+                "ClientRevoked": "已撤销 MCP client。",
+                "ClientRevokeFailed": "撤销 MCP client 失败。",
                 "WebAuthorizationStatus": "Web MCP 授权稍后提供。现在可以使用桌面端本地 MCP。"
             }
         },

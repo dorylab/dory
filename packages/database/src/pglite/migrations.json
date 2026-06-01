@@ -229,5 +229,28 @@
     "bps": true,
     "folderMillis": 1780045857584,
     "hash": "81504bc45e08330fd6dc3fd59a597e4fbb607d888bfe4783472509f5acb958dd"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"action_audit\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"action_run_id\" text NOT NULL,\n    \"request_id\" text,\n    \"action_id\" text NOT NULL,\n    \"action_version\" integer NOT NULL,\n    \"status\" text NOT NULL,\n    \"risk\" text NOT NULL,\n    \"effects\" jsonb,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"actor_type\" text NOT NULL,\n    \"actor_id\" text,\n    \"projection\" text NOT NULL,\n    \"source\" text,\n    \"resource\" jsonb,\n    \"input_hash\" text,\n    \"redacted_input_summary\" jsonb,\n    \"redacted_output_summary\" jsonb,\n    \"error_code\" text,\n    \"error_message\" text,\n    \"duration_ms\" integer NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_action_audit_org_created\" ON \"action_audit\" USING btree (\"organization_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_action_audit_run\" ON \"action_audit\" USING btree (\"action_run_id\");\n",
+      "\nCREATE INDEX \"idx_action_audit_action_created\" ON \"action_audit\" USING btree (\"action_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_action_audit_actor_created\" ON \"action_audit\" USING btree (\"actor_type\",\"created_at\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1780045857585,
+    "hash": "6090fb9e6287cd599a86b1463ea67aee04913a6c91be736f908be45c9cb72e1c"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"mcp_authorization_requests\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"client_name\" text NOT NULL,\n    \"verifier_hash\" text NOT NULL,\n    \"scopes\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"status\" text DEFAULT 'pending' NOT NULL,\n    \"organization_id\" text,\n    \"user_id\" text,\n    \"mcp_token_id\" text,\n    \"approved_at\" timestamp with time zone,\n    \"denied_at\" timestamp with time zone,\n    \"consumed_at\" timestamp with time zone,\n    \"expires_at\" timestamp with time zone NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_mcp_authorization_requests_status_expires\" ON \"mcp_authorization_requests\" USING btree (\"status\",\"expires_at\");\n",
+      "\nCREATE INDEX \"idx_mcp_authorization_requests_org_user_created\" ON \"mcp_authorization_requests\" USING btree (\"organization_id\",\"user_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_mcp_authorization_requests_token\" ON \"mcp_authorization_requests\" USING btree (\"mcp_token_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1780303200000,
+    "hash": "2e2c34ff995e310c78257d5ac8362720d629bd6de0c6e658ee1320f2d1242186"
   }
 ]

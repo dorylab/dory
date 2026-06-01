@@ -3,6 +3,24 @@ import { DEFAULT_ACTION_PROJECTION_BY_ACTOR } from '@dory/actions';
 import { executeAction } from '../execute';
 import type { WebActionServices } from '../types';
 
+function isZodObjectSchema(schema: unknown) {
+    if (!schema || typeof schema !== 'object') return false;
+
+    const candidate = schema as {
+        _zod?: { def?: { type?: string; shape?: unknown } };
+        _def?: { typeName?: string; type?: string };
+        shape?: unknown;
+    };
+
+    return (
+        candidate._zod?.def?.type === 'object' ||
+        candidate._zod?.def?.shape !== undefined ||
+        candidate._def?.typeName === 'ZodObject' ||
+        candidate._def?.type === 'object' ||
+        candidate.shape !== undefined
+    );
+}
+
 export function structuredMcpActionResult(data: unknown) {
     return {
         content: [
@@ -32,7 +50,7 @@ export function actionToMcpTool(
         title: action.exposure.mcp.title,
         description: action.exposure.mcp.description,
         inputSchema: action.inputSchema,
-        outputSchema,
+        outputSchema: isZodObjectSchema(outputSchema) ? outputSchema : undefined,
         execute: async (input: unknown) => {
             const ctx = await createContext();
             return structuredMcpActionResult(await executeAction(ctx, action.id, input ?? {}));

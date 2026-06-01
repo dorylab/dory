@@ -1,10 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ActionActorType, ActionContext } from '@dory/actions';
+import { z } from 'zod';
 import { actionToAgentTool } from '@/lib/actions/server/adapters/agent';
-import { actionToMcpTool } from '@/lib/actions/server/adapters/mcp';
+import { actionToMcpTool, structuredMcpActionResult } from '@/lib/actions/server/adapters/mcp';
 import { executeUiAction } from '@/lib/actions/server/adapters/ui';
+import { defineWebAction } from '@/lib/actions/server/define-web-action';
 import type { WebActionServices } from '@/lib/actions/server/types';
 import { webActionRegistry } from '@/lib/actions/server/registry';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
@@ -125,4 +130,62 @@ test('tab.create uses the same tabs:write gate through UI, Agent, and MCP adapte
     const mcp = createServices();
     const mcpTool = actionToMcpTool(tabCreateAction, () => createContext('mcp', [], mcp.services));
     await assert.rejects(() => mcpTool.execute(tabCreateInput), /Missing action scope "tabs:write"/);
+});
+
+test('MCP adapter omits non-object output schemas so SDK output validation does not crash', async () => {
+    const action = defineWebAction({
+        id: 'connection.get',
+        domain: 'connection',
+        kind: 'query',
+        risk: 'read',
+        inputSchema: z.object({}),
+        outputSchema: z.unknown(),
+        permissions: [],
+        scopes: [],
+        actors: ['mcp'],
+        mcp: {
+            name: 'dory_unknown_output',
+            title: 'Unknown output',
+            description: 'Returns a non-object-schema output.',
+        },
+        handler: () => ({ ok: true }),
+    });
+    const mcpTool = actionToMcpTool(action, () => createContext('mcp', [], createServices().services));
+
+    assert.equal(mcpTool.outputSchema, undefined);
+
+    const server = new McpServer({
+        name: 'dory-test',
+        version: '1.0.0',
+    });
+    server.registerTool(
+        mcpTool.name,
+        {
+            title: mcpTool.title,
+            description: mcpTool.description,
+            inputSchema: mcpTool.inputSchema as any,
+            outputSchema: mcpTool.outputSchema as any,
+        },
+        async () => structuredMcpActionResult({ ok: true }),
+    );
+
+    const client = new Client({
+        name: 'action-adapter-test',
+        version: '1.0.0',
+    });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+        await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+        const result = (await client.callTool({
+            name: mcpTool.name,
+            arguments: {},
+        })) as any;
+
+        const text = result.content[0]?.type === 'text' ? result.content[0].text : '';
+        assert.deepEqual(JSON.parse(text), { ok: true });
+    } finally {
+        await client.close().catch(() => undefined);
+        await server.close().catch(() => undefined);
+    }
 });

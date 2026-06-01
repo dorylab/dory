@@ -2575,7 +2575,46 @@
             "InvalidTokenPayload": "Invalid MCP token payload.",
             "MissingTokenId": "Missing MCP token id.",
             "TokenNotFound": "MCP token not found.",
-            "DesktopGrantUnavailable": "MCP desktop grants are only available in the desktop runtime."
+            "DesktopGrantUnavailable": "MCP desktop grants are only available in the desktop runtime.",
+            "InvalidLinkPayload": "Invalid MCP authorization payload.",
+            "LinkNotFound": "MCP authorization request was not found.",
+            "LinkVerifierMismatch": "MCP authorization verifier did not match.",
+            "LinkConsumed": "MCP authorization request was already consumed.",
+            "LinkInvalidApproval": "MCP authorization approval is incomplete.",
+            "LinkApprovalUnavailable": "MCP authorization request can no longer be updated."
+        }
+    },
+    "McpAuthorize": {
+        "Eyebrow": "Agent access",
+        "Title": "Connect this MCP client",
+        "Description": "Approve this request only if you started the Dory MCP login command on this machine.",
+        "UnknownClient": "Unknown MCP client",
+        "SignedInAs": "Signed in as {user}",
+        "Expires": "Expires",
+        "Scopes": "Access",
+        "RequestUnavailable": "This authorization request is unavailable.",
+        "MissingOrganization": "Choose or create an organization before approving MCP access.",
+        "Approve": "Approve",
+        "Deny": "Deny",
+        "Approved": "MCP access approved. You can return to your terminal.",
+        "Denied": "MCP access denied.",
+        "Failed": "Failed to update MCP authorization.",
+        "State": {
+            "missing": "Missing",
+            "not_found": "Not found",
+            "pending": "Pending",
+            "approved": "Approved",
+            "denied": "Denied",
+            "expired": "Expired",
+            "consumed": "Connected"
+        },
+        "Messages": {
+            "missing": "Open the authorization link from the Dory MCP login command.",
+            "not_found": "This authorization request does not exist or has been removed.",
+            "approved": "This MCP client has been approved.",
+            "denied": "This authorization request was denied.",
+            "expired": "This authorization request expired. Run the login command again.",
+            "consumed": "This MCP client is already connected."
         }
     },
     "Ai": {
@@ -3002,11 +3041,14 @@
                 "Copied": "Copied",
                 "SetupTitle": "MCP setup",
                 "SetupDescription": "Desktop clients connect through the local endpoint. No manual credential is needed.",
+                "WebSetupDescription": "Web clients connect through the Dory npm bridge. The login command opens a browser approval page and stores credentials locally.",
                 "SetupTabs": {
                     "General": "General"
                 },
                 "General": {
                     "Endpoint": "Endpoint",
+                    "Server": "Server",
+                    "LoginTitle": "Authorize this machine",
                     "JsonTitle": "Generic JSON config"
                 },
                 "Codex": {
@@ -3017,6 +3059,17 @@
                     "CliTitle": "Claude Code CLI",
                     "JsonTitle": ".mcp.json"
                 },
+                "ClientsTitle": "Connected MCP clients",
+                "ClientsDescription": "These clients use personal MCP tokens created through browser authorization.",
+                "ClientActive": "Active",
+                "ClientInactive": "Inactive",
+                "ClientCreated": "Created {date}",
+                "ClientLastUsed": "Last used {date}",
+                "ClientNeverUsed": "Never used",
+                "RevokeClient": "Revoke",
+                "ClientsEmpty": "No MCP clients are connected yet.",
+                "ClientRevoked": "MCP client revoked.",
+                "ClientRevokeFailed": "Failed to revoke MCP client.",
                 "WebAuthorizationStatus": "Web MCP authorization is coming later. Desktop local MCP is available now."
             },
             "About": {

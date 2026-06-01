@@ -3678,6 +3678,20 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@getdory/mcp@workspace:packages/mcp":
+  version: 0.0.0-use.local
+  resolution: "@getdory/mcp@workspace:packages/mcp"
+  dependencies:
+    "@modelcontextprotocol/sdk": "npm:^1.29.0"
+    "@types/node": "npm:^25.5.2"
+    tsx: "npm:^4.21.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  bin:
+    dory-mcp: ./dist/cli.js
+  languageName: unknown
+  linkType: soft
+
 "@hono/node-server@npm:^1.19.9":
   version: 1.19.13
   resolution: "@hono/node-server@npm:1.19.13"
