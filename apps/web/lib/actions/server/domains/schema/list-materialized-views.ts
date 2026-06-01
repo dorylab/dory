@@ -1,0 +1,23 @@
+import { z } from 'zod';
+import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
+import { defineWebAction } from '../../define-web-action';
+import { resolveConnectionId } from '../../operation-context';
+import { readConnection } from '../../policies';
+import { unknownOutputSchema } from '../../schemas';
+
+export const schemaListMaterializedViewsAction = defineWebAction({
+    id: 'schema.listMaterializedViews',
+    domain: 'schema',
+    kind: 'query',
+    risk: 'read',
+    inputSchema: z.object({ connectionId: z.string().min(1).optional(), database: z.string().min(1), identityId: z.string().min(1).optional() }),
+    outputSchema: unknownOutputSchema,
+    permissions: readConnection,
+    scopes: ['schema:read'],
+    actors: ['user', 'agent', 'automation'],
+    handler: async (ctx, input) => {
+        const connectionId = resolveConnectionId(ctx, input);
+        const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);
+        return { materializedViews: await entry.instance.listMaterializedViews(input.database).catch(() => []) };
+    },
+});

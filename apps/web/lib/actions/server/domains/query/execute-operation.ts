@@ -6,7 +6,7 @@ import { runWithSqlAudit } from '@/lib/server/sql-audit';
 import type { ActionContext } from '@dory/actions';
 import type { BaseConnection } from '@dory/drivers/core';
 import type { QuerySource } from '@dory/shared/types/audit';
-import type { WebActionServices } from './types';
+import type { WebActionServices } from '../../types';
 
 export const MAX_ACTION_STATEMENTS = 100;
 
