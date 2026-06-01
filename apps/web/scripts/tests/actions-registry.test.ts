@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ActionRegistry, defineAction, executeAction, listMcpActions } from '@dory/actions';
-import type { ActionContext } from '@dory/actions';
+import { ActionRegistry, assertActionAllowed, defineAction, executeAction, listMcpActions } from '@dory/actions';
+import type { ActionActorType, ActionContext, ActionId } from '@dory/actions';
+import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
+import { webActionRegistry } from '@/lib/actions/server/registry';
 import { z } from 'zod';
 
 const permissions = {
@@ -27,6 +29,40 @@ function context(scopes: string[] = ['connections:read']): ActionContext {
         },
         services: {},
     };
+}
+
+function roleContext(
+    role: 'viewer' | 'member' | 'admin' | 'owner',
+    actorType: ActionActorType = 'user',
+    scopes: string[] = ['connections:read', 'schema:read', 'query:read', 'query:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run'],
+): ActionContext {
+    return {
+        organizationId: 'org',
+        userId: 'user',
+        access: {
+            isMember: true,
+            role,
+            permissions: getOrganizationPermissionMap(role),
+        },
+        actor: {
+            type: actorType,
+            scopes,
+            id: actorType === 'mcp' ? 'token' : 'user',
+        },
+        services: {},
+    };
+}
+
+async function assertAllowed(actionId: ActionId, ctx: ActionContext, input: unknown = {}) {
+    const action = webActionRegistry.get(actionId);
+    assert.ok(action, `Expected action ${actionId} to be registered.`);
+    await assertActionAllowed(ctx, action, input, { confirmationToken: 'confirm' });
+}
+
+async function assertDenied(actionId: ActionId, ctx: ActionContext, pattern: RegExp, input: unknown = {}) {
+    const action = webActionRegistry.get(actionId);
+    assert.ok(action, `Expected action ${actionId} to be registered.`);
+    await assert.rejects(() => assertActionAllowed(ctx, action, input, { confirmationToken: 'confirm' }), pattern);
 }
 
 function testAction(overrides: Partial<Parameters<typeof defineAction>[0]> = {}) {
@@ -266,4 +302,87 @@ test('MCP action listing hides destructive actions', () => {
             .sort(),
         ['dory_list_connections'],
     );
+});
+
+test('web registry enforces role and actor permission matrix', async () => {
+    await assertAllowed('query.readOnlyExecute', roleContext('viewer'), { sql: 'select 1' });
+    await assertDenied('query.execute', roleContext('viewer'), /Missing permission workspace:write/, { sql: 'select 1' });
+
+    await assertAllowed('query.execute', roleContext('member'), { sql: 'select 1' });
+    await assertDenied('connection.create', roleContext('member', 'user', ['connections:write']), /Missing permission connection:create/, { payload: {} });
+
+    await assertAllowed('connection.create', roleContext('admin', 'user', ['connections:write']), { payload: {} });
+    await assertAllowed('connection.create', roleContext('owner', 'user', ['connections:write']), { payload: {} });
+
+    await assertDenied('query.execute', roleContext('member', 'agent', ['query:write']), /Actor type "agent" is not allowed/, { sql: 'select 1' });
+    await assertDenied('query.execute', roleContext('member', 'mcp', ['query:write']), /Actor type "mcp" is not allowed/, { sql: 'select 1' });
+    await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['connections:read']), { query: 'users' });
+});
+
+test('web registry projects connection.list for MCP without leaking canonical connection shape', async () => {
+    const fakeConnection = {
+        connection: {
+            id: 'conn-1',
+            name: 'Warehouse',
+            type: 'postgres',
+            engine: 'postgres',
+            database: 'analytics',
+            status: 'active',
+            environment: 'prod',
+            lastCheckStatus: 'ok',
+        },
+        identities: [
+            {
+                id: 'identity-1',
+                name: 'Analyst',
+                username: 'analyst',
+                isDefault: true,
+                database: 'analytics',
+                password: 'hidden',
+            },
+        ],
+        ssh: {
+            host: 'bastion.example.com',
+            privateKey: 'hidden',
+        },
+    };
+    const baseContext = roleContext('viewer', 'mcp', ['connections:read']);
+    const ctx = {
+        ...baseContext,
+        services: {
+            db: {
+                connections: {
+                    list: async () => [fakeConnection],
+                },
+            },
+        },
+    } as ActionContext<any>;
+
+    const output = await executeAction<{ connections: Array<Record<string, unknown>> }>(webActionRegistry as any, ctx, 'connection.list', {});
+
+    assert.deepEqual(output, {
+        connections: [
+            {
+                id: 'conn-1',
+                name: 'Warehouse',
+                type: 'postgres',
+                engine: 'postgres',
+                database: 'analytics',
+                status: 'active',
+                environment: 'prod',
+                lastCheckStatus: 'ok',
+                identities: [
+                    {
+                        id: 'identity-1',
+                        name: 'Analyst',
+                        username: 'analyst',
+                        isDefault: true,
+                        database: 'analytics',
+                    },
+                ],
+            },
+        ],
+    });
+    assert.equal('connection' in output.connections[0]!, false);
+    assert.equal('ssh' in output.connections[0]!, false);
 });
