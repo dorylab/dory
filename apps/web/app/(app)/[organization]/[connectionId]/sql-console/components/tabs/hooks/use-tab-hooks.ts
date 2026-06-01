@@ -86,6 +86,28 @@ export function useSQLTabs() {
         await executeActionClient('tab.save', { connectionId, tabId, state: tab }, { currentConnectionId: connectionId });
     }
 
+    async function createTabOnServer(tab: UITabPayload) {
+        if (!connectionId) return;
+
+        await executeActionClient(
+            'tab.create',
+            {
+                connectionId,
+                tabId: tab.tabId,
+                tabType: tab.tabType,
+                tabName: tab.tabName,
+                content: tab.tabType === 'sql' ? (tab.content ?? '') : undefined,
+                databaseName: tab.tabType === 'table' ? (tab.databaseName ?? null) : null,
+                tableName: tab.tabType === 'table' ? (tab.tableName ?? null) : null,
+                activeSubTab: tab.tabType === 'table' ? (tab.activeSubTab ?? 'data') : null,
+                orderIndex: tab.orderIndex,
+                createdAt: typeof tab.createdAt === 'undefined' ? undefined : String(tab.createdAt),
+                resultMeta: tab.tabType === 'sql' ? (tab.resultMeta ?? null) : null,
+            },
+            { currentConnectionId: connectionId },
+        );
+    }
+
     // ---------------------------------------------------
     
     // ---------------------------------------------------
@@ -295,8 +317,8 @@ export function useSQLTabs() {
             setActiveTabId(tabId);
         }
 
-        void saveTabToServer(tabId, newTab).catch(err => {
-            console.error('save new tab error', err);
+        void createTabOnServer(newTab).catch(err => {
+            console.error('create new tab error', err);
         });
         return tabId;
     };
@@ -335,8 +357,8 @@ export function useSQLTabs() {
         setSessionIdMap(prev => ({ ...prev, [tabId]: '' }));
         setActiveTabId(tabId);
 
-        void saveTabToServer(tabId, newTab).catch(err => {
-            console.error('save new table tab error', err);
+        void createTabOnServer(newTab).catch(err => {
+            console.error('create new table tab error', err);
         });
         return newTab;
     };

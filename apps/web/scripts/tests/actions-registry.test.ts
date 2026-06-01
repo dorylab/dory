@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ActionRegistry, assertActionAllowed, defineAction, executeAction, listMcpActions } from '@dory/actions';
+import { ActionRegistry, assertActionAllowed, buildActionManifest, defineAction, executeAction, listMcpActions } from '@dory/actions';
 import type { ActionActorType, ActionContext, ActionId } from '@dory/actions';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 import { webActionRegistry } from '@/lib/actions/server/registry';
@@ -34,7 +34,7 @@ function context(scopes: string[] = ['connections:read']): ActionContext {
 function roleContext(
     role: 'viewer' | 'member' | 'admin' | 'owner',
     actorType: ActionActorType = 'user',
-    scopes: string[] = ['connections:read', 'schema:read', 'query:read', 'query:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run'],
+    scopes: string[] = ['connections:read', 'schema:read', 'query:read', 'query:write', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run'],
 ): ActionContext {
     return {
         organizationId: 'org',
@@ -317,6 +317,23 @@ test('web registry enforces role and actor permission matrix', async () => {
     await assertDenied('query.execute', roleContext('member', 'agent', ['query:write']), /Actor type "agent" is not allowed/, { sql: 'select 1' });
     await assertDenied('query.execute', roleContext('member', 'mcp', ['query:write']), /Actor type "mcp" is not allowed/, { sql: 'select 1' });
     await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['connections:read']), { query: 'users' });
+    await assertDenied('tab.create', roleContext('viewer', 'user', ['tabs:write']), /Missing permission workspace:write/, { connectionId: 'conn', tabType: 'sql' });
+    await assertAllowed('tab.create', roleContext('member', 'user', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });
+    await assertAllowed('tab.create', roleContext('member', 'agent', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });
+    await assertAllowed('tab.create', roleContext('member', 'mcp', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });
+});
+
+test('web action manifest exposes tab.create as a single action contract across adapters', () => {
+    const manifest = buildActionManifest(webActionRegistry, new Date('2026-06-01T00:00:00.000Z'));
+    const tabCreate = manifest.actions.find(action => action.id === 'tab.create');
+
+    assert.ok(tabCreate);
+    assert.equal(tabCreate.version, 1);
+    assert.equal(tabCreate.domain, 'tab');
+    assert.equal(tabCreate.kind, 'command');
+    assert.deepEqual(tabCreate.requiredScopes, ['tabs:write']);
+    assert.deepEqual(tabCreate.allowedActors, ['user', 'agent', 'mcp', 'automation']);
+    assert.equal(tabCreate.mcp?.name, 'dory_create_tab');
 });
 
 test('web registry projects connection.list for MCP without leaking canonical connection shape', async () => {

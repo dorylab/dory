@@ -7,7 +7,7 @@ import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 export const MCP_DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
-export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'saved_queries:read', 'monitoring:read'] as const;
+export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'monitoring:read'] as const;
 
 const MCP_DESKTOP_GRANT_TYPE = 'dory_mcp_desktop_grant';
 const MCP_DESKTOP_GRANT_TTL_MS = 12 * 60 * 60 * 1000;

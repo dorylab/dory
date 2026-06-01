@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type { ActionId } from '@dory/actions';
 import { ActionError, toActionError } from '@dory/actions';
-import { executeAction } from '@/lib/actions/server/execute';
+import { executeUiAction } from '@/lib/actions/server/adapters/ui';
 import { resolveActionRequest } from '@/lib/actions/server/context';
 
 export const runtime = 'nodejs';
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
             throw new ActionError('ACTION_INPUT_INVALID', 'Missing actionId.', { status: 400 });
         }
 
-        const data = await executeAction(ctx, body.actionId as ActionId, body.input ?? {}, {
+        const data = await executeUiAction(ctx, body.actionId as ActionId, body.input ?? {}, {
             confirmationToken: body.confirmationToken,
             reason: body.reason,
         });

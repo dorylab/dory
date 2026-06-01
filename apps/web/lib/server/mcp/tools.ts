@@ -1,24 +1,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { listMcpActions } from '@dory/actions';
-import { executeAction } from '@/lib/actions/server/execute';
+import { actionToMcpTool } from '@/lib/actions/server/adapters/mcp';
 import { webActionRegistry } from '@/lib/actions/server/registry';
 import type { McpAuthContext } from './auth';
 export { clampDoryToolLimit as clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '@/lib/ai/tools/dory-tool-utils';
 
-function structured(data: unknown) {
-    return {
-        content: [
-            {
-                type: 'text' as const,
-                text: JSON.stringify(data, null, 2),
-            },
-        ],
-        structuredContent: data as Record<string, unknown>,
-    };
-}
-
 export function registerDoryMcpTools(server: McpServer, context: McpAuthContext) {
-    const tools = listMcpActions(webActionRegistry as any, 'mcp');
+    const tools = listMcpActions(webActionRegistry as any, 'mcp').map(tool =>
+        actionToMcpTool(tool.action as any, async () => {
+            const { createMcpActionContext } = await import('@/lib/actions/server/context');
+            return createMcpActionContext(context);
+        }),
+    );
 
     for (const tool of tools) {
         server.registerTool(
@@ -29,11 +22,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
                 inputSchema: tool.inputSchema as any,
                 outputSchema: tool.outputSchema as any,
             },
-            async (input: unknown) => {
-                const { createMcpActionContext } = await import('@/lib/actions/server/context');
-                const actionContext = await createMcpActionContext(context);
-                return structured(await executeAction(actionContext, tool.action.id, input ?? {}));
-            },
+            async (input: unknown) => tool.execute(input),
         );
     }
 }

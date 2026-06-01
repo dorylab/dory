@@ -70,7 +70,10 @@ test('generateMcpToken returns one-time token metadata without storing the raw t
 });
 
 test('default MCP scopes cover v1 read and analysis capabilities', () => {
-    assert.deepEqual([...MCP_DEFAULT_SCOPES], ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'saved_queries:read', 'monitoring:read']);
+    assert.deepEqual(
+        [...MCP_DEFAULT_SCOPES],
+        ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'monitoring:read'],
+    );
 });
 
 test('connections:read remains compatible with schema read tools', () => {

@@ -28,7 +28,7 @@ const TRUSTED_USER_SCOPES = [
     'action:destructive',
 ];
 
-const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'saved_queries:read', 'analysis:run', 'monitoring:read'];
+const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:write', 'saved_queries:read', 'analysis:run', 'monitoring:read'];
 
 export type ResolvedActionRequest = {
     ctx: ActionContext<WebActionServices>;
