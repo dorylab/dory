@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ActionRegistry, assertActionAllowed, buildActionManifest, defineAction, executeAction, listMcpActions } from '@dory/actions';
-import type { ActionActorType, ActionContext, ActionId } from '@dory/actions';
+import { ActionError, ActionRegistry, assertActionAllowed, buildActionManifest, defineAction, executeAction, listMcpActions } from '@dory/actions';
+import type { ActionActorType, ActionAuditRecord, ActionContext, ActionId } from '@dory/actions';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 import { webActionRegistry } from '@/lib/actions/server/registry';
 import { z } from 'zod';
@@ -139,7 +139,7 @@ test('executeAction validates input and channel scopes', async () => {
 
     await assert.rejects(() => executeAction(registry, context([]), 'connection.get', { id: 'conn' }), /Missing action scope/);
     await assert.rejects(() => executeAction(registry, context(), 'connection.get', { id: '' }), /Invalid input/);
-    assert.deepEqual(await executeAction(registry, context(), 'connection.get', { id: 'conn' }), { id: 'conn' });
+    assert.deepEqual((await executeAction(registry, context(), 'connection.get', { id: 'conn' })).data, { id: 'conn' });
 });
 
 test('executeAction applies actor projection schemas', async () => {
@@ -176,7 +176,7 @@ test('executeAction applies actor projection schemas', async () => {
         }),
     );
 
-    assert.deepEqual(await executeAction(registry, context(), 'connection.list', {}), { connections: [{ id: 'conn' }] });
+    assert.deepEqual((await executeAction(registry, context(), 'connection.list', {})).data, { connections: [{ id: 'conn' }] });
 });
 
 test('executeAction writes denied action audit events', async () => {
@@ -227,6 +227,123 @@ test('executeAction writes denied action audit events', async () => {
     assert.deepEqual((events[0] as any).redactedInputSummary, { id: 'conn' });
 });
 
+test('executeAction returns execution metadata and writes matching audit events', async () => {
+    const registry = new ActionRegistry();
+    registry.register(
+        defineAction({
+            id: 'connection.get',
+            version: 1,
+            domain: 'connection',
+            kind: 'query',
+            risk: 'read',
+            inputSchema: z.object({ id: z.string().min(1) }),
+            outputSchema: z.object({ id: z.string() }),
+            permission: {
+                scopes: ['connections:read'],
+            },
+            exposure: {
+                actors: ['mcp'],
+            },
+            audit: {
+                sourceByActor: {
+                    mcp: 'mcp_connection_lookup',
+                },
+                allowInputFields: ['id'],
+            },
+            handler: (_ctx, input) => ({ id: input.id }),
+        }),
+    );
+    const events: unknown[] = [];
+    const ctx = {
+        ...context(),
+        requestId: 'request-1',
+        actor: {
+            ...context().actor,
+            id: 'token-1',
+        },
+        audit: {
+            record: (event: ActionAuditRecord) => {
+                events.push(event);
+            },
+        },
+    };
+
+    const envelope = await executeAction<{ id: string }>(registry, ctx, 'connection.get', { id: 'conn' });
+
+    assert.deepEqual(envelope.data, { id: 'conn' });
+    assert.equal(envelope.execution.actionId, 'connection.get');
+    assert.equal(envelope.execution.requestId, 'request-1');
+    assert.equal(envelope.execution.actorType, 'mcp');
+    assert.equal(envelope.execution.actorId, 'token-1');
+    assert.equal(envelope.execution.source, 'mcp_connection_lookup');
+    assert.equal(envelope.execution.status, 'success');
+    assert.equal(envelope.execution.projection, 'mcp');
+    assert.ok(envelope.execution.actionRunId);
+    assert.ok(Date.parse(envelope.execution.startedAt));
+    assert.ok(Date.parse(envelope.execution.finishedAt));
+    assert.ok(envelope.execution.durationMs >= 0);
+
+    assert.equal(events.length, 1);
+    const event = events[0] as any;
+    assert.equal(event.actionRunId, envelope.execution.actionRunId);
+    assert.equal(event.createdAt, envelope.execution.finishedAt);
+    assert.equal(event.durationMs, envelope.execution.durationMs);
+    assert.equal(event.source, envelope.execution.source);
+    assert.deepEqual(event.redactedInputSummary, { id: 'conn' });
+});
+
+test('executeAction writes invalid and error audit metadata', async () => {
+    const registry = new ActionRegistry();
+    registry.register(
+        defineAction({
+            id: 'connection.get',
+            version: 1,
+            domain: 'connection',
+            kind: 'query',
+            risk: 'read',
+            inputSchema: z.object({ id: z.string().min(1) }),
+            outputSchema: z.object({ id: z.string() }),
+            permission: {
+                scopes: ['connections:read'],
+            },
+            exposure: {
+                actors: ['mcp'],
+            },
+            audit: {
+                sourceByActor: {
+                    mcp: 'mcp_connection_lookup',
+                },
+                allowInputFields: ['id'],
+            },
+            handler: (_ctx, input) => {
+                throw new ActionError('ACTION_RESOURCE_FORBIDDEN', `failed ${input.id}`);
+            },
+        }),
+    );
+    const events: unknown[] = [];
+    const ctx = {
+        ...context(),
+        audit: {
+            record: (event: ActionAuditRecord) => {
+                events.push(event);
+            },
+        },
+    };
+
+    await assert.rejects(() => executeAction(registry, ctx, 'connection.get', { id: '' }), /Invalid input/);
+    await assert.rejects(() => executeAction(registry, ctx, 'connection.get', { id: 'conn' }), /failed conn/);
+
+    assert.equal((events[0] as any).status, 'invalid');
+    assert.equal((events[0] as any).errorCode, 'ACTION_INPUT_INVALID');
+    assert.equal((events[0] as any).source, 'mcp_connection_lookup');
+    assert.ok(Date.parse((events[0] as any).createdAt));
+
+    assert.equal((events[1] as any).status, 'error');
+    assert.equal((events[1] as any).errorCode, 'ACTION_RESOURCE_FORBIDDEN');
+    assert.equal((events[1] as any).source, 'mcp_connection_lookup');
+    assert.ok(Date.parse((events[1] as any).createdAt));
+});
+
 test('destructive actions require destructive scope and confirmation', async () => {
     const registry = new ActionRegistry();
     registry.register(
@@ -252,7 +369,64 @@ test('destructive actions require destructive scope and confirmation', async () 
 
     await assert.rejects(() => executeAction(registry, context(['connections:write']), 'connection.delete', { id: 'conn' }), /action:destructive/);
     await assert.rejects(() => executeAction(registry, context(['connections:write', 'action:destructive']), 'connection.delete', { id: 'conn' }), /requires confirmation/);
-    assert.deepEqual(await executeAction(registry, context(['connections:write', 'action:destructive']), 'connection.delete', { id: 'conn' }, { confirmationToken: 'confirm' }), {
+    assert.deepEqual(
+        (await executeAction(registry, context(['connections:write', 'action:destructive']), 'connection.delete', { id: 'conn' }, { confirmationToken: 'confirm' })).data,
+        {
+            ok: true,
+        },
+    );
+});
+
+test('write actions must explicitly declare confirmation policy', async () => {
+    const registry = new ActionRegistry();
+    registry.register(
+        defineAction({
+            id: 'connection.update',
+            version: 1,
+            domain: 'connection',
+            kind: 'command',
+            risk: 'write',
+            inputSchema: z.object({ id: z.string() }),
+            outputSchema: z.object({ ok: z.boolean() }),
+            permission: {
+                scopes: ['connections:write'],
+            },
+            exposure: {
+                actors: ['mcp'],
+            },
+            audit: {},
+            handler: () => ({ ok: true }),
+        }),
+    );
+
+    await assert.rejects(() => executeAction(registry, context(['connections:write']), 'connection.update', { id: 'conn' }), /confirmation policy/);
+});
+
+test('write actions honor explicit confirmation policy', async () => {
+    const registry = new ActionRegistry();
+    registry.register(
+        defineAction({
+            id: 'connection.update',
+            version: 1,
+            domain: 'connection',
+            kind: 'command',
+            risk: 'write',
+            inputSchema: z.object({ id: z.string() }),
+            outputSchema: z.object({ ok: z.boolean() }),
+            permission: {
+                scopes: ['connections:write'],
+                confirmation: { required: true },
+            },
+            exposure: {
+                actors: ['mcp'],
+            },
+            audit: {},
+            handler: () => ({ ok: true }),
+        }),
+    );
+
+    await assert.rejects(() => executeAction(registry, context(['connections:write']), 'connection.update', { id: 'conn' }), /requires confirmation/);
+    assert.deepEqual((await executeAction(registry, context(['connections:write']), 'connection.update', { id: 'conn' }, { confirmationToken: 'confirm' })).data, {
         ok: true,
     });
 });
@@ -331,6 +505,7 @@ test('web action manifest exposes tab.create as a single action contract across 
     assert.equal(tabCreate.version, 1);
     assert.equal(tabCreate.domain, 'tab');
     assert.equal(tabCreate.kind, 'command');
+    assert.equal(tabCreate.requiresConfirmation, false);
     assert.deepEqual(tabCreate.requiredScopes, ['tabs:write']);
     assert.deepEqual(tabCreate.allowedActors, ['user', 'agent', 'mcp', 'automation']);
     assert.equal(tabCreate.mcp?.name, 'dory_create_tab');
@@ -375,7 +550,7 @@ test('web registry projects connection.list for MCP without leaking canonical co
         },
     } as ActionContext<any>;
 
-    const output = await executeAction<{ connections: Array<Record<string, unknown>> }>(webActionRegistry as any, ctx, 'connection.list', {});
+    const { data: output } = await executeAction<{ connections: Array<Record<string, unknown>> }>(webActionRegistry as any, ctx, 'connection.list', {});
 
     assert.deepEqual(output, {
         connections: [

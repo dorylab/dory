@@ -1,5 +1,6 @@
 import type { Locale } from '@dory/i18n/routing';
 import type { ActionContext } from '@dory/actions';
+import { randomUUID } from 'node:crypto';
 import { webActionRegistry } from '@/lib/actions/server/registry';
 import type { WebActionServices } from '@/lib/actions/server/types';
 import { createWebActionAuditSink } from '@/lib/actions/server/action-audit';
@@ -37,6 +38,7 @@ async function createActionContext(options: CreateDoryChatToolsOptions): Promise
             scopes: AGENT_SCOPES,
             id: options.userId,
         },
+        requestId: randomUUID(),
         audit: createWebActionAuditSink(db),
         services: {
             db,

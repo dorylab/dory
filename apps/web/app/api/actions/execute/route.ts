@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
             throw new ActionError('ACTION_INPUT_INVALID', 'Missing actionId.', { status: 400 });
         }
 
-        const data = await executeUiAction(ctx, body.actionId as ActionId, body.input ?? {}, {
+        const { data, execution } = await executeUiAction(ctx, body.actionId as ActionId, body.input ?? {}, {
             confirmationToken: body.confirmationToken,
             reason: body.reason,
         });
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
             ok: true,
             actionId: body.actionId,
             data,
+            execution,
         });
     } catch (error) {
         return errorResponse(error);

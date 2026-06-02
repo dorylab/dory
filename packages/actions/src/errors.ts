@@ -8,6 +8,7 @@ export type ActionErrorCode =
     | 'ACTION_ACTOR_NOT_ALLOWED'
     | 'ACTION_RESOURCE_FORBIDDEN'
     | 'ACTION_CONFIRMATION_REQUIRED'
+    | 'ACTION_CONFIRMATION_POLICY_MISSING'
     | 'ACTION_EXECUTION_FAILED';
 
 export class ActionError extends Error {
@@ -38,6 +39,7 @@ export function statusForActionErrorCode(code: ActionErrorCode): number {
         case 'ACTION_RESOURCE_FORBIDDEN':
         case 'ACTION_CONFIRMATION_REQUIRED':
             return 403;
+        case 'ACTION_CONFIRMATION_POLICY_MISSING':
         case 'ACTION_EXECUTION_FAILED':
         default:
             return 500;

@@ -24,6 +24,7 @@ export const queryExecuteAction = defineWebAction({
     permissions: writeWorkspace,
     scopes: ['query:write'],
     actors: ['user', 'automation'],
+    requiresConfirmation: false,
     audit: {
         sourceByActor: {
             user: 'user_sql_console',

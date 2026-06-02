@@ -13,6 +13,7 @@ export const connectionUpdateAction = defineWebAction({
     permissions: updateConnection,
     scopes: ['connections:write'],
     actors: ['user', 'automation'],
+    requiresConfirmation: false,
     handler: async (ctx, input) => {
         const updated = await ctx.services.db.connections.update(ctx.organizationId, input.id, input.patch as any);
         await ctx.services.db.syncOperations.enqueue({

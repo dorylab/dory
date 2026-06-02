@@ -53,7 +53,8 @@ export function actionToMcpTool(
         outputSchema: isZodObjectSchema(outputSchema) ? outputSchema : undefined,
         execute: async (input: unknown) => {
             const ctx = await createContext();
-            return structuredMcpActionResult(await executeAction(ctx, action.id, input ?? {}));
+            const { data } = await executeAction(ctx, action.id, input ?? {});
+            return structuredMcpActionResult(data);
         },
     };
 }

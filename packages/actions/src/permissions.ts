@@ -70,8 +70,16 @@ export async function assertActionAllowed(ctx: ActionContext<any>, action: Actio
         });
     }
 
-    if (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false && !options.confirmationToken) {
-        throw new ActionError('ACTION_CONFIRMATION_REQUIRED', `Destructive action "${action.id}" requires confirmation.`, {
+    if (action.risk === 'write' && action.permission.confirmation?.required === undefined) {
+        throw new ActionError('ACTION_CONFIRMATION_POLICY_MISSING', `Write action "${action.id}" must explicitly declare its confirmation policy.`, {
+            status: 500,
+            details: { actionId: action.id },
+        });
+    }
+
+    const requiresConfirmation = action.permission.confirmation?.required ?? (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false);
+    if (requiresConfirmation && !options.confirmationToken) {
+        throw new ActionError('ACTION_CONFIRMATION_REQUIRED', `Action "${action.id}" requires confirmation.`, {
             status: 403,
             details: { actionId: action.id },
         });

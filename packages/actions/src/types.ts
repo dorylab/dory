@@ -49,6 +49,9 @@ export type ActionPermissionPolicy<TInput = unknown, TServices = unknown> = {
     scopes?: ActionScope[];
     scopeAliases?: Partial<Record<ActionScope, ActionScope[]>>;
     resource?: (ctx: ActionContext<TServices>, input: TInput) => Promise<void> | void;
+    confirmation?: {
+        required: boolean;
+    };
     destructive?: {
         scope?: ActionScope;
         requireConfirmation?: boolean;
@@ -109,6 +112,26 @@ export type ActionAuditRecord = {
 
 export type ActionAuditSink = {
     record: (event: ActionAuditRecord) => Promise<void> | void;
+};
+
+export type ActionExecutionMetadata = {
+    actionRunId: string;
+    requestId?: string | null;
+    actionId: ActionId;
+    version: number;
+    actorType: ActionActorType;
+    actorId?: string | null;
+    source?: string | null;
+    projection: ActionProjection;
+    status: ActionAuditStatus;
+    startedAt: string;
+    finishedAt: string;
+    durationMs: number;
+};
+
+export type ActionExecutionEnvelope<TOutput = unknown> = {
+    data: TOutput;
+    execution: ActionExecutionMetadata;
 };
 
 export type ActionContext<TServices = unknown> = {

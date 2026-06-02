@@ -84,6 +84,7 @@ function auditSignature(auditEvents: unknown[]) {
     const event = auditEvents[0] as any;
     return {
         actionId: event.actionId,
+        hasRequestId: typeof event.requestId === 'string' && event.requestId.length > 0,
         status: event.status,
         risk: event.risk,
         effects: event.effects,
@@ -106,7 +107,7 @@ test('tab.create can be executed through UI, Agent, and MCP adapters with the sa
     const mcpTool = actionToMcpTool(tabCreateAction, () => createContext('mcp', ['tabs:write'], mcp.services, mcpAudit));
     const mcpOutput = await mcpTool.execute(tabCreateInput);
 
-    assert.equal((uiOutput as any).tabId, 'tab-1');
+    assert.equal((uiOutput.data as any).tabId, 'tab-1');
     assert.equal(agentOutput.ok, true);
     assert.equal(agentOutput.tabId, 'tab-1');
     assert.equal((mcpOutput.structuredContent as any).tabId, 'tab-1');

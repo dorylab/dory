@@ -8,6 +8,7 @@ export type ActionManifestEntry = {
     kind: ActionKind;
     risk: ActionRisk;
     effects?: ActionEffect[];
+    requiresConfirmation: boolean;
     requiredPermissions: Array<{ resource: string; action: string }>;
     requiredScopes: ActionScope[];
     allowedActors: ActionActorType[];
@@ -33,6 +34,7 @@ export function actionToManifestEntry(action: ActionDefinition<any, any, any>): 
         kind: action.kind,
         risk: action.risk,
         effects: action.effects,
+        requiresConfirmation: action.permission.confirmation?.required ?? (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false),
         requiredPermissions: (action.permission.organization ?? []).map(requirement => ({
             resource: requirement.resource,
             action: requirement.action,

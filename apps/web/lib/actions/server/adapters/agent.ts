@@ -35,7 +35,7 @@ export function actionToAgentTool(
         execute: async input => {
             try {
                 const ctx = await createContext();
-                const output = await executeAction<Record<string, unknown>>(ctx, action.id, input ?? {});
+                const { data: output } = await executeAction<Record<string, unknown>>(ctx, action.id, input ?? {});
                 return toAgentToolResult(output && typeof output === 'object' && !Array.isArray(output) ? output : { data: output });
             } catch (error) {
                 return toAgentToolError(error);

@@ -13,6 +13,7 @@ export const connectionCreateAction = defineWebAction({
     permissions: createConnection,
     scopes: ['connections:write'],
     actors: ['user', 'automation'],
+    requiresConfirmation: false,
     handler: async (ctx, input) => {
         const created = await ctx.services.db.connections.create(ctx.userId, ctx.organizationId, input.payload as any);
         await ctx.services.db.syncOperations.enqueue({

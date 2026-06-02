@@ -1,5 +1,5 @@
 import { authFetch } from '@/lib/client/auth-fetch';
-import type { ActionId } from '@dory/actions';
+import type { ActionExecutionEnvelope, ActionId } from '@dory/actions';
 
 export type ExecuteActionClientOptions = {
     organizationId?: string;
@@ -10,6 +10,15 @@ export type ExecuteActionClientOptions = {
 };
 
 export async function executeActionClient<TOutput = unknown>(actionId: ActionId, input: unknown, options: ExecuteActionClientOptions = {}): Promise<TOutput> {
+    const envelope = await executeActionClientEnvelope<TOutput>(actionId, input, options);
+    return envelope.data;
+}
+
+export async function executeActionClientEnvelope<TOutput = unknown>(
+    actionId: ActionId,
+    input: unknown,
+    options: ExecuteActionClientOptions = {},
+): Promise<ActionExecutionEnvelope<TOutput>> {
     const response = await authFetch('/api/actions/execute', {
         method: 'POST',
         headers: {
@@ -26,7 +35,7 @@ export async function executeActionClient<TOutput = unknown>(actionId: ActionId,
         signal: options.signal,
     });
 
-    const payload = (await response.json().catch(() => null)) as { ok?: boolean; data?: TOutput; message?: string; code?: string } | null;
+    const payload = (await response.json().catch(() => null)) as ({ ok?: boolean; message?: string; code?: string } & Partial<ActionExecutionEnvelope<TOutput>>) | null;
     if (!response.ok || !payload?.ok) {
         throw Object.assign(new Error(payload?.message ?? `Action failed: ${actionId}`), {
             code: payload?.code,
@@ -34,5 +43,8 @@ export async function executeActionClient<TOutput = unknown>(actionId: ActionId,
         });
     }
 
-    return payload.data as TOutput;
+    return {
+        data: payload.data as TOutput,
+        execution: payload.execution!,
+    };
 }
