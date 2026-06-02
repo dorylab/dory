@@ -69,8 +69,10 @@ export function AppSidebar({ initialUser = null, organizationId, ...props }: App
     const organization = params.organization;
     const connectionId = params.connectionId;
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const defaultDatabase = currentConnection && currentConnection.connection.id === connectionId ? getExplorerDefaultDatabase(currentConnection.connection) : null;
-    const currentConnectionType = currentConnection && currentConnection.connection.id === connectionId ? currentConnection.connection.type : null;
+    const currentConnectionRecord = currentConnection?.connection;
+    const currentRouteConnection = currentConnectionRecord && currentConnectionRecord.id === connectionId ? currentConnectionRecord : null;
+    const defaultDatabase = currentRouteConnection ? getExplorerDefaultDatabase(currentRouteConnection) : null;
+    const currentConnectionType = currentRouteConnection?.type ?? null;
     const supportsOperationalPages = currentConnectionType === 'clickhouse';
     const explorerUrl =
         connectionId && defaultDatabase

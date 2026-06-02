@@ -510,7 +510,7 @@ export const PromptInput = ({
       }
 
       if (capped.length > 0) {
-        controller?.attachments.add(capped);
+        controller?.attachments?.add(capped);
       }
     },
     [matchesAccept, maxFileSize, maxFiles, onError, files.length, controller]
@@ -519,7 +519,7 @@ export const PromptInput = ({
   const clearAttachments = useCallback(
     () =>
       usingProvider
-        ? controller?.attachments.clear()
+        ? controller?.attachments?.clear()
         : setItems((prev) => {
             for (const file of prev) {
               if (file.url) {

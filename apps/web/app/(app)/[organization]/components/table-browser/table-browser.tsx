@@ -32,7 +32,7 @@ export default function TableBrowser({ activeTab, updateTab }: TableBrowserProps
     }, [activeTab?.tabType, activeTab?.activeSubTab]);
 
     const [currentTab, setCurrentTab] = useState<TableSubTab>(initialTab);
-    const driver = currentConnection?.connection.id === activeTab?.connectionId ? currentConnection.connection.type : undefined;
+    const driver = currentConnection?.connection?.id === activeTab?.connectionId ? currentConnection.connection.type : undefined;
 
     useEffect(() => {
         setCurrentTab(initialTab);

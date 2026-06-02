@@ -149,8 +149,8 @@ export function SqlMode({
     const canSave = activeTab?.tabType === 'sql';
     const defaultSaveTitle = useMemo(() => activeTab?.tabName ?? t('Tabs.NewQuery'), [activeTab?.tabName, t]);
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id ?? null;
-    const limitDialect: SelectLimitDialect = currentConnection?.connection.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection.type === 'oracle' ? 'oracle' : 'default';
+    const connectionId = currentConnection?.connection?.id ?? null;
+    const limitDialect: SelectLimitDialect = currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
     const generateSqlFromPrompt = useSqlInlineAskAI();
     const handleRunQuery = () => {
         if (!activeTab || isRunning) return;
@@ -305,7 +305,7 @@ export function SqlMode({
                 editorText: editorSql,
                 selection,
                 baselineDatabase: activeDatabase || null,
-                dialect: normalizeSqlDialect(currentConnection?.connection.type),
+                dialect: normalizeSqlDialect(currentConnection?.connection?.type),
                 meta: {
                     tabId: activeTab.tabId,
                     tabName: activeTab.tabName,
@@ -317,7 +317,7 @@ export function SqlMode({
             const generatedSql = await generateSqlFromPrompt({
                 prompt,
                 connectionId,
-                connectionType: currentConnection?.connection.type ?? null,
+                connectionType: currentConnection?.connection?.type ?? null,
                 database: activeDatabase || null,
                 activeSchema: activeSchema || null,
                 candidateTables: buildInlineAskCandidateTables(prompt, editorSql, tables, activeDatabase || null, activeSchema || null),
@@ -354,7 +354,7 @@ export function SqlMode({
         activeSchema,
         activeTab,
         connectionId,
-        currentConnection?.connection.type,
+        currentConnection?.connection?.type,
         editorRef,
         generateSqlFromPrompt,
         getSqlText,

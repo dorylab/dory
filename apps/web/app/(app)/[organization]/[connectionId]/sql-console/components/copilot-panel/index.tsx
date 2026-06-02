@@ -118,7 +118,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
 
         let cancelled = false;
 
-        const connectionId = tabConnectionId ?? currentConnection?.connection.id ?? undefined;
+        const connectionId = tabConnectionId ?? currentConnection?.connection?.id ?? undefined;
         const editorSqlText = typeof tabContent === 'string' ? tabContent : '';
         const lastUpdatedAt = sessionFinishedAt ?? sessionStartedAt ?? undefined;
 
@@ -150,7 +150,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         tabType,
         tabConnectionId,
         activeDatabase,
-        currentConnection?.connection.id,
+        currentConnection?.connection?.id,
         (currentConnection as any)?.connection?.type,
         sessionFinishedAt,
         sessionStartedAt,
@@ -192,7 +192,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
             meta: {
                 tabId,
                 tabName,
-                connectionId: tabConnectionId ?? currentConnection?.connection.id ?? undefined,
+                connectionId: tabConnectionId ?? currentConnection?.connection?.id ?? undefined,
             },
         });
     }, [
@@ -201,7 +201,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         sessionErrorCode,
         activeDatabase,
         activeSchema,
-        currentConnection?.connection.id,
+        currentConnection?.connection?.id,
         sessionFinishedAt,
         sessionStartedAt,
         tabId,
@@ -408,7 +408,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
                                         }}
                                         analysisRequestId={analysisRequest?.id ?? null}
                                         tabId={activeTabId}
-                                        connectionId={tabConnectionId ?? currentConnection?.connection.id ?? null}
+                                        connectionId={tabConnectionId ?? currentConnection?.connection?.id ?? null}
                                         databaseName={activeDatabase || null}
                                     />
                                 </Activity>

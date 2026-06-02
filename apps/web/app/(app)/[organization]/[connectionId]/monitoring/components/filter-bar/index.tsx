@@ -43,7 +43,7 @@ type ThresholdMode = 'dynamic' | 'fixed';
 export function QueryInsightsFilterBar({ users = [], databases = [], onRefresh, enableDynamicThreshold = false, dynamicThresholdMs }: Props) {
     const [filters, setFilters] = useQueryInsightsFilters();
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id ?? null;
+    const connectionId = currentConnection?.connection?.id ?? null;
     const t = useTranslations('Monitoring');
     const locale = useLocale();
 

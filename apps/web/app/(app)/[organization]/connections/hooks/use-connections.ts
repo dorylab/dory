@@ -147,24 +147,26 @@ export function useUpdateConnection(callback?: MutationCallbacks<ConnectionRespo
 
     return useMutation<ConnectionResponse, unknown, UpdateConnectionPayload>({
         mutationFn: variables => updateConnection(variables),
-        onSuccess: (res, _variables) => {
+        onSuccess: (res, variables) => {
             if (isSuccess(res)) {
                 toast.success(t('Connection updated'));
                 const updated = res?.data;
+                const updatedConnectionId = updated?.connection?.id;
+                const fallbackConnectionId = variables.id ?? variables.connection?.id;
 
-                if (updated?.connection.id) {
+                if (updatedConnectionId) {
                     const snapshot = getSnapshot();
                     const next = snapshot.map(item =>
-                        item.connection.id === updated.connection.id ? { ...item, ...updated } : item,
+                        item.connection.id === updatedConnectionId ? { ...item, ...updated } : item,
                     );
                     setAll(next);
                     posthog.capture('connection_updated', {
                         connection_type: updated.connection.type,
-                        connection_id: updated.connection.id,
+                        connection_id: updatedConnectionId,
                     });
                 } else {
                     invalidate();
-                    posthog.capture('connection_updated', {});
+                    posthog.capture('connection_updated', fallbackConnectionId ? { connection_id: fallbackConnectionId } : {});
                 }
 
                 callback?.onSuccess?.(res);

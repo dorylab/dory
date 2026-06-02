@@ -181,14 +181,14 @@ function buildFallbackOverview(
 
 export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id as string | undefined;
+    const connectionId = currentConnection?.connection?.id as string | undefined;
     const t = useTranslations('TableBrowser');
 
     const columnsQuery = useTableColumnsQuery({
         databaseName,
         tableName,
         connectionId,
-        dbType: currentConnection?.connection.type,
+        dbType: currentConnection?.connection?.type,
     });
     const propertiesQuery = useTablePropertiesQuery({ databaseName, tableName, connectionId });
     const statsQuery = useTableStatsQuery({ databaseName, tableName, connectionId });
@@ -230,16 +230,16 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
             const data = await executeActionClient<AiOverviewResponse>(
                 'ai.tableSummary',
                 {
-                    connectionId: currentConnection?.connection.id,
+                    connectionId: currentConnection?.connection?.id,
                     database: databaseName,
                     table: tableName,
                     columns,
                     properties,
-                    dbType: currentConnection?.connection.type,
+                    dbType: currentConnection?.connection?.type,
                     ignoreCache,
                 },
                 {
-                    currentConnectionId: currentConnection?.connection.id,
+                    currentConnectionId: currentConnection?.connection?.id,
                 },
             );
             console.log('AI Overview response:', data);

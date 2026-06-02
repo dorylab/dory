@@ -61,7 +61,7 @@ export function useSqlQueryRunner({
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const limitDialect: SelectLimitDialect = currentConnection?.connection.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection.type === 'oracle' ? 'oracle' : 'default';
+    const limitDialect: SelectLimitDialect = currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
 
     const editorRef = useRef<SQLEditorHandle | null>(null);
     const abortControllersRef = useRef<Record<string, AbortController | undefined>>({});

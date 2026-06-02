@@ -78,7 +78,7 @@ export default function DatabaseViews({ database }: DatabaseViewsProps) {
     }, [databaseParam]);
 
     const loadViews = React.useCallback(async () => {
-        const connectionId = currentConnection?.connection.id;
+        const connectionId = currentConnection?.connection?.id;
         if (!connectionId || !databaseName) return;
         setLoading(true);
         try {
@@ -100,7 +100,7 @@ export default function DatabaseViews({ database }: DatabaseViewsProps) {
         } finally {
             setLoading(false);
         }
-    }, [currentConnection?.connection.id, databaseName]);
+    }, [currentConnection?.connection?.id, databaseName]);
 
     React.useEffect(() => {
         loadViews();

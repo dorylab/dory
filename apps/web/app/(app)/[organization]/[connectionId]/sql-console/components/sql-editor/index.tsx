@@ -86,8 +86,8 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
             activeTab,
             editorTheme,
             editorSettings,
-            currentConnectionId: currentConnection?.connection.id,
-            currentConnectionType: currentConnection?.connection.type,
+            currentConnectionId: currentConnection?.connection?.id,
+            currentConnectionType: currentConnection?.connection?.type,
             containerRef,
             onContentChange: handleContentChange,
             onRunQuery,
@@ -100,7 +100,7 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         useSyncEditorContent(editorRef, activeTab);
         const { hasSelection, handleCopy, handlePaste, handleCut, handleFormat, handleToggleCase, handleExecuteSelection, handleExecuteSql } = useSqlEditorActions({
             editorRef,
-            currentConnectionType: currentConnection?.connection.type,
+            currentConnectionType: currentConnection?.connection?.type,
             onRunQuery,
             formatHandlerRef,
         });

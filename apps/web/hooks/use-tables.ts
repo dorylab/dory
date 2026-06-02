@@ -8,7 +8,7 @@ const inflightTableRequests = new Map<string, Promise<void>>();
 export function useTables(databases: string) {
     const [tablesState, setTablesState] = useAtom(tablesAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id ?? null;
+    const connectionId = currentConnection?.connection?.id ?? null;
     const requestKey = connectionId && databases ? `${connectionId}::${databases}` : null;
 
     useEffect(() => {

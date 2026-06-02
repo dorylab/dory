@@ -12,7 +12,7 @@ export function useDatabases() {
     const params = useParams<{ connectionId?: string | string[]; connection?: string | string[] }>();
     const routeConnectionParam = params?.connectionId ?? params?.connection;
     const routeConnectionId = Array.isArray(routeConnectionParam) ? routeConnectionParam[0] : routeConnectionParam;
-    const connectionId = routeConnectionId ?? currentConnection?.connection.id ?? null;
+    const connectionId = routeConnectionId ?? currentConnection?.connection?.id ?? null;
 
     useEffect(() => {
         if (!connectionId) {

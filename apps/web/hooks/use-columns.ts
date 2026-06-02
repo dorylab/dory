@@ -10,7 +10,7 @@ export function useColumns() {
     const currentConnection = useAtomValue(currentConnectionAtom);
 
     const refresh = async (database: string, table: string) => {
-        const connectionId = currentConnection?.connection.id as string | undefined;
+        const connectionId = currentConnection?.connection?.id as string | undefined;
         if (!connectionId) {
             return;
         }

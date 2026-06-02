@@ -290,7 +290,7 @@ export class PostgresConnectionsRepository {
         }
     }
 
-    async update(organizationId: string, connectionId: string, payload: ConnectionPayload): Promise<any> {
+    async update(organizationId: string, connectionId: string, payload: ConnectionPayload): Promise<ConnectionListItem> {
         const connectionPayload = { ...payload.connection } as any;
         // Avoid writing id back
         if ('id' in connectionPayload) {
@@ -332,7 +332,7 @@ export class PostgresConnectionsRepository {
                 } as any);
             }
         }
-        return updatedConnection;
+        return this.toConnectionListItem(this.db, organizationId, updatedConnection);
     }
 
     async patchConnectionFields(organizationId: string, connectionId: string, payload: Partial<typeof connections.$inferInsert>): Promise<ConnectionListItem> {
@@ -650,7 +650,7 @@ export class PostgresConnectionsRepository {
         // Has object -> upsert
         const secret: ConnectionIdentitySecret = {
             identityId: identity.id,
-            passwordEncrypted: payload?.secret.passwordEncrypted ?? null,
+            passwordEncrypted: payload.secret?.passwordEncrypted ?? null,
             vaultRef: payload.secret.vaultRef ?? null,
             secretRef: payload.secret.secretRef ?? null,
         } as any;

@@ -364,7 +364,7 @@ function createAuth() {
                               organization: {
                                   enabled: true,
                                   getCustomerCreateParams: async (_organization, ctx) => ({
-                                      email: ctx.context.session?.user.email ?? undefined,
+                                      email: ctx.context.session?.user?.email ?? undefined,
                                   }),
                               },
                               subscription: {

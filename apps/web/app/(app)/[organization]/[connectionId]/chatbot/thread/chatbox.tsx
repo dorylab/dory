@@ -322,7 +322,7 @@ const ChatBotComp = ({
                 console.error(t('Errors.CacheSqlFailed'), error);
             }
             const organization = params?.organization;
-            const connectionIdTarget = params?.connectionId ?? currentConnection?.connection.id;
+            const connectionIdTarget = params?.connectionId ?? currentConnection?.connection?.id;
             const targetPath = organization && connectionIdTarget ? `/${organization}/${connectionIdTarget}/sql-console` : '/sql-console';
             router.push(targetPath);
         },
@@ -354,13 +354,13 @@ const ChatBotComp = ({
         try {
             const tabId = mode === 'copilot' ? (copilotEnvelope?.meta?.tabId ?? null) : null;
             if (mode === 'copilot' && !tabId) return;
-            const connectionId = copilotEnvelope?.meta?.connectionId ?? params?.connectionId ?? currentConnection?.connection.id ?? null;
+            const connectionId = copilotEnvelope?.meta?.connectionId ?? params?.connectionId ?? currentConnection?.connection?.id ?? null;
 
             const databaseForContext =
                 mode === 'copilot'
                     ? copilotEnvelope?.surface === 'sql'
                         ? (copilotEnvelope.context.baseline.database ?? resolvedActiveDatabase)
-                        : (copilotEnvelope?.context.database ?? resolvedActiveDatabase)
+                        : (copilotEnvelope?.context?.database ?? resolvedActiveDatabase)
                     : resolvedActiveDatabase;
             const schemaForContext = mode === 'copilot' ? (copilotEnvelope?.surface === 'table' ? (copilotEnvelope.context.table.schema ?? null) : null) : resolvedActiveSchema;
 

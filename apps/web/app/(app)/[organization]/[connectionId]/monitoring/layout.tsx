@@ -24,8 +24,8 @@ export default function QueryInsightsLayout({ children }: QueryInsightsLayoutPro
     const currentConnection = useAtomValue(currentConnectionAtom);
     console.log('QueryInsightsLayout params:', params);
     const { organization, connectionId } = params as { organization: string; connectionId: string };
-    const isCurrentRouteConnection = currentConnection?.connection.id === connectionId;
-    const isClickhouseConnection = isCurrentRouteConnection && currentConnection?.connection.type === 'clickhouse';
+    const isCurrentRouteConnection = currentConnection?.connection?.id === connectionId;
+    const isClickhouseConnection = isCurrentRouteConnection && currentConnection?.connection?.type === 'clickhouse';
 
     
     const currentTab = useMemo<'overview' | 'logs' | 'slow-queries' | 'error-queries'>(() => {

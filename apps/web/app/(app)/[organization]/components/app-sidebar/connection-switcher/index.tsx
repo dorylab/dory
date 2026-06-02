@@ -264,7 +264,7 @@ export function ConnectionSwitcher() {
 
     const displayedConnection = activeConnection;
     const displayedIdentity = activeIdentity;
-    const displayedLabel = displayedConnection?.connection.name ?? (isInitialLoading ? t('Loading connections') : t('No connections yet'));
+    const displayedLabel = displayedConnection?.connection?.name ?? (isInitialLoading ? t('Loading connections') : t('No connections yet'));
 
     const pendingLoadingKey = pendingConnection ? makeLoadingKey(pendingConnection.connection.id, pendingIdentity?.id) : null;
     const activeLoadingKey = displayedConnection ? makeLoadingKey(displayedConnection.connection.id, displayedIdentity?.id) : null;
@@ -278,7 +278,7 @@ export function ConnectionSwitcher() {
 
     const clearPendingConnect = useCallback(
         (connectionItem: ConnectionListItem, loadingKey: string, options?: { clearSwitching?: boolean }) => {
-            setPendingConnection(current => (current?.connection.id === connectionItem.connection.id ? null : current));
+            setPendingConnection(current => (current?.connection?.id === connectionItem.connection.id ? null : current));
             setPendingIdentity(null);
             setNavigatingConnectionId(current => (current === connectionItem.connection.id ? null : current));
             if (options?.clearSwitching) {
@@ -442,7 +442,7 @@ export function ConnectionSwitcher() {
                                         <DropdownMenuSubTrigger
                                             className={cn(
                                                 'gap-2 p-2',
-                                                (activeConnection?.connection.id === connection.connection.id || pendingConnection?.connection.id === connection.connection.id) &&
+                                                (activeConnection?.connection?.id === connection.connection.id || pendingConnection?.connection?.id === connection.connection.id) &&
                                                     'bg-sidebar-accent text-sidebar-accent-foreground',
                                             )}
                                         >
@@ -471,8 +471,8 @@ export function ConnectionSwitcher() {
                                                 const identityLoading = Boolean(connectLoadings?.[identityKey]);
 
                                                 const isActive =
-                                                    (activeConnection?.connection.id === connection.connection.id && activeIdentity?.id === identity.id) ||
-                                                    (pendingConnection?.connection.id === connection.connection.id && pendingIdentity?.id === identity.id);
+                                                    (activeConnection?.connection?.id === connection.connection.id && activeIdentity?.id === identity.id) ||
+                                                    (pendingConnection?.connection?.id === connection.connection.id && pendingIdentity?.id === identity.id);
 
                                                 return (
                                                     <DropdownMenuItem
@@ -500,7 +500,7 @@ export function ConnectionSwitcher() {
                                         onClick={() => handleSelect(connection)}
                                         className={cn(
                                             'gap-2 p-2',
-                                            (activeConnection?.connection.id === connection.connection.id || pendingConnection?.connection.id === connection.connection.id) &&
+                                            (activeConnection?.connection?.id === connection.connection.id || pendingConnection?.connection?.id === connection.connection.id) &&
                                                 'bg-sidebar-accent text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground',
                                         )}
                                     >

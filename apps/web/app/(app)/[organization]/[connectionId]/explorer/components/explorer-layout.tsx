@@ -46,7 +46,9 @@ export function ExplorerLayout({ defaultLayout = [25, 85], children }: ExplorerL
     }>();
     const organization = resolveParam(params?.organization);
     const connectionId = resolveParam(params?.connectionId);
-    const driver = currentConnection && currentConnection.connection.id === connectionId ? currentConnection.connection.type : undefined;
+    const currentConnectionRecord = currentConnection?.connection;
+    const currentRouteConnection = currentConnectionRecord && currentConnectionRecord.id === connectionId ? currentConnectionRecord : null;
+    const driver = currentRouteConnection?.type;
     const route = useMemo(
         () =>
             resolveExplorerRoute({

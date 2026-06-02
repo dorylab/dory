@@ -101,12 +101,12 @@ function LimitationList(props: { limitations?: string[]; t: ReturnType<typeof us
 }
 
 function findResultRefFromSession(session: AnalysisSession): AnalysisResultRef | null {
-    const artifact = session.outcome?.artifacts.find(item => item.type === 'result_ref');
+    const artifact = session.outcome?.artifacts?.find(item => item.type === 'result_ref');
     return artifact?.type === 'result_ref' ? artifact.resultRef : null;
 }
 
 function findSqlFromSession(session: AnalysisSession): string | null {
-    const artifact = session.outcome?.artifacts.find(item => item.type === 'sql');
+    const artifact = session.outcome?.artifacts?.find(item => item.type === 'sql');
     return artifact?.type === 'sql' ? artifact.sql : null;
 }
 

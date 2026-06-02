@@ -23,8 +23,8 @@ export function usePrivilegesConnectionReady() {
     const currentConnection = useAtomValue(currentConnectionAtom);
     const isConnectionListLoading = useAtomValue(connectionListLoadingAtom);
     const connectLoadings = useAtomValue(connectionLoadingAtom);
-    const connectionId = currentConnection?.connection.id;
-    const connectionType = currentConnection?.connection.type;
+    const connectionId = currentConnection?.connection?.id;
+    const connectionType = currentConnection?.connection?.type;
     const isCurrentRouteConnection = Boolean(routeConnectionId && connectionId === routeConnectionId);
     const isClickhouseConnection = isCurrentRouteConnection && connectionType === 'clickhouse';
     const isConnectionLoading = Boolean(

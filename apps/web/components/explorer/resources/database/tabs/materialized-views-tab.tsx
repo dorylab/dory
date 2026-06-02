@@ -75,7 +75,7 @@ export default function DatabaseMaterializedViews({ database }: DatabaseMaterial
     }, [databaseParam]);
 
     const loadViews = React.useCallback(async () => {
-        const connectionId = currentConnection?.connection.id;
+        const connectionId = currentConnection?.connection?.id;
         if (!connectionId || !databaseName) return;
         setLoading(true);
         try {
@@ -100,7 +100,7 @@ export default function DatabaseMaterializedViews({ database }: DatabaseMaterial
         } finally {
             setLoading(false);
         }
-    }, [currentConnection?.connection.id, databaseName]);
+    }, [currentConnection?.connection?.id, databaseName]);
 
     React.useEffect(() => {
         loadViews();

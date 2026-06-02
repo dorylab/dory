@@ -22,7 +22,7 @@ type TableStatsProps = {
 
 function ClickhouseTableStatsView({ databaseName, tableName }: Omit<TableStatsProps, 'driver'>) {
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id;
+    const connectionId = currentConnection?.connection?.id;
     const t = useTranslations('TableStats');
 
     const statsQuery = useTableStatsQuery({ databaseName, tableName, connectionId });

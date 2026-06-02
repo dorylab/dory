@@ -31,8 +31,8 @@ export function RootView({ organization, connectionId, catalog }: RootViewProps)
     const currentConnection = useAtomValue(currentConnectionAtom);
 
     const items = useMemo(() => (Array.isArray(databases) ? (databases as DatabaseItem[]) : []), [databases]);
-    const isLocalFilesExplorer = currentConnection?.connection.id === connectionId && isLocalFilesDataset(currentConnection.connection.options);
-    const preferredDatabase = currentConnection && currentConnection.connection.id === connectionId ? currentConnection.connection.database : null;
+    const isLocalFilesExplorer = currentConnection?.connection?.id === connectionId && isLocalFilesDataset(currentConnection.connection.options);
+    const preferredDatabase = currentConnection?.connection?.id === connectionId ? currentConnection.connection.database : null;
 
     useEffect(() => {
         if (isLocalFilesExplorer && items[0]?.value) {

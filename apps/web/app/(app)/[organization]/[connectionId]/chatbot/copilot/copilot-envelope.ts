@@ -122,9 +122,9 @@ export function toPromptContext(envelope: CopilotEnvelopeV1): Record<string, unk
                 errorMessage: context.resultSet.errorMessage ? truncateText(context.resultSet.errorMessage, 2000) : null,
                 errorCode: context.resultSet.errorCode ?? null,
                 errorSqlState: context.resultSet.errorSqlState ?? null,
-                rowCount: context.resultSet.rowCount ?? stats?.summary.rowCount ?? null,
-                limited: context.resultSet.limited ?? stats?.summary.limited ?? null,
-                limit: context.resultSet.limit ?? stats?.summary.limit ?? null,
+                rowCount: context.resultSet.rowCount ?? stats?.summary?.rowCount ?? null,
+                limited: context.resultSet.limited ?? stats?.summary?.limited ?? null,
+                limit: context.resultSet.limit ?? stats?.summary?.limit ?? null,
                 durationMs: context.resultSet.durationMs ?? null,
                 columns: (context.resultSet.columns ?? []).map(column => ({
                     name: column.name,

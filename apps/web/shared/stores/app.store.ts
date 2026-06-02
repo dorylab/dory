@@ -49,7 +49,7 @@ const DEFAULT_CONNECTION_KEY = '__default__';
 const tabsByConnectionAtom = atomWithStorage<Record<string, UITabPayload[]>>('tabsByConnection', {});
 const activeTabIdByConnectionAtom = atomWithStorage<Record<string, string>>('activeTabIdByConnection', {});
 
-const resolveConnectionKey = (get: Getter) => get(currentConnectionAtom)?.connection.id ?? DEFAULT_CONNECTION_KEY;
+const resolveConnectionKey = (get: Getter) => get(currentConnectionAtom)?.connection?.id ?? DEFAULT_CONNECTION_KEY;
 
 export const activeDatabaseAtom = atom(
     get => {

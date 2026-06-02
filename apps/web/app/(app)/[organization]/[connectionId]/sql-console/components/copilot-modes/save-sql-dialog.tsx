@@ -32,7 +32,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const searchParams = useSearchParams();
     const currentConnection = useAtomValue(currentConnectionAtom);
     const { data: session } = authClient.useSession();
-    const connectionId = currentConnection?.connection.id ?? null;
+    const connectionId = currentConnection?.connection?.id ?? null;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [folderId, setFolderId] = useState('');

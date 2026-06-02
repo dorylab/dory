@@ -36,7 +36,7 @@ export function useSchemas(database?: string, enabled = true) {
             return;
         }
 
-        const connectionId = routeConnectionId ?? currentConnection?.connection.id;
+        const connectionId = routeConnectionId ?? currentConnection?.connection?.id;
         if (!connectionId) {
             setSchemas([]);
             return;
