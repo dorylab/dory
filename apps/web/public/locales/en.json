@@ -3341,7 +3341,7 @@
                 "Features": {
                     "ConnectPopularDatabases": "Connect popular databases",
                     "SqlEditorAndQueryResults": "SQL editor + query results",
-                    "BasicCharts": "Basic charts",
+                    "BasicCharts": "Charts & exports",
                     "AiQuotaIncluded": "AI quota included",
                     "SavePersonalQueries": "Save personal queries",
                     "CommunitySupport": "Community support"
@@ -3356,7 +3356,7 @@
                     "HigherAiQuotaAndFasterResponses": "Higher AI quota & faster responses",
                     "ByokAiFeatures": "BYOK (Use your own AI key)",
                     "EarlyAccessToUpcomingFeatures": "Early access to upcoming features",
-                    "AdvancedChartsAndExports": "Advanced charts & exports",
+                    "AdvancedChartsAndExports": "Query Audit",
                     "PrioritySupport": "Priority support"
                 }
             },
