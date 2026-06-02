@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { BadgeCheck, Bot, Building2, ClipboardList, Users } from 'lucide-react';
+import { BadgeCheck, Bot, Building2, Users } from 'lucide-react';
 
 import { cn } from '@dory/web-utils';
 
 export type OrganizationSettingsTab = {
-    slug: 'organization' | 'members' | 'ai' | 'query-audit' | 'billing';
+    slug: 'organization' | 'members' | 'ai' | 'billing';
     label: string;
 };
 
@@ -15,7 +15,6 @@ const tabIcons = {
     organization: Building2,
     members: Users,
     ai: Bot,
-    'query-audit': ClipboardList,
     billing: BadgeCheck,
 } satisfies Record<OrganizationSettingsTab['slug'], typeof Building2>;
 
