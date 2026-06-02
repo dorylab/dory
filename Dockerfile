@@ -16,6 +16,7 @@ COPY package.json yarn.lock ./
 COPY apps/web/package.json ./apps/web/
 COPY apps/electron/package.json ./apps/electron/
 COPY apps/admin/package.json ./apps/admin/
+COPY packages/actions/package.json ./packages/actions/
 COPY packages/analysis/package.json ./packages/analysis/
 COPY packages/auth-core/package.json ./packages/auth-core/
 COPY packages/database/package.json ./packages/database/
@@ -23,6 +24,7 @@ COPY packages/drivers/package.json ./packages/drivers/
 COPY packages/ee/package.json ./packages/ee/
 COPY packages/files/package.json ./packages/files/
 COPY packages/i18n/package.json ./packages/i18n/
+COPY packages/mcp/package.json ./packages/mcp/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web-utils/package.json ./packages/web-utils/
