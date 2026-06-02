@@ -2864,6 +2864,22 @@
             "Collapse": "Contraer gráfico",
             "Expand": "Expandir gráfico"
         },
+        "Mermaid": {
+            "Title": "Mermaid",
+            "CopySource": "Copiar fuente",
+            "Copied": "Copiado",
+            "CopyFailed": "No se pudo copiar la fuente Mermaid",
+            "DownloadSvg": "Descargar SVG",
+            "DownloadFailed": "No se pudo descargar el diagrama Mermaid",
+            "ViewFullscreen": "Ver en pantalla completa",
+            "ZoomIn": "Acercar",
+            "ZoomOut": "Alejar",
+            "ResetView": "Restablecer vista",
+            "Rendering": "Renderizando diagrama...",
+            "Waiting": "Esperando a que el diagrama esté completo...",
+            "RenderError": "Error al renderizar Mermaid: {error}",
+            "Retry": "Reintentar"
+        },
         "ModeToggle": {
             "ToggleTheme": "Cambiar tema",
             "Light": "Claro",

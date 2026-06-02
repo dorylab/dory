@@ -7,10 +7,7 @@ import {
   CollapsibleTrigger,
 } from "@/registry/new-york-v4/ui/collapsible";
 import { cn } from "@dory/web-utils";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
+import { doryStreamdownPlugins } from "@/components/ai-elements/dory-streamdown";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { createContext, memo, useContext, useEffect, useState } from "react";
@@ -181,9 +178,7 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Streamdown plugins={{ code, mermaid, math, cjk }}>
-        {children}
-      </Streamdown>
+      <Streamdown plugins={doryStreamdownPlugins}>{children}</Streamdown>
     </CollapsibleContent>
   )
 );

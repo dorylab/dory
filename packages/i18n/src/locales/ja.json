@@ -2864,6 +2864,22 @@
             "Collapse": "グラフを折りたたむ",
             "Expand": "グラフを展開"
         },
+        "Mermaid": {
+            "Title": "Mermaid",
+            "CopySource": "ソースをコピー",
+            "Copied": "コピーしました",
+            "CopyFailed": "Mermaid ソースのコピーに失敗しました",
+            "DownloadSvg": "SVG をダウンロード",
+            "DownloadFailed": "Mermaid 図のダウンロードに失敗しました",
+            "ViewFullscreen": "全画面表示",
+            "ZoomIn": "拡大",
+            "ZoomOut": "縮小",
+            "ResetView": "表示をリセット",
+            "Rendering": "図をレンダリング中...",
+            "Waiting": "図の内容が完了するのを待っています...",
+            "RenderError": "Mermaid のレンダリングに失敗しました: {error}",
+            "Retry": "再試行"
+        },
         "ModeToggle": {
             "ToggleTheme": "テーマを切り替え",
             "Light": "ライト",

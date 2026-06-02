@@ -19,6 +19,7 @@ import {
 import { getReadonlyMcpStatements } from '../../lib/server/mcp/sql-safety';
 import { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '../../lib/server/mcp/tools';
 import { getMcpLinkExpiresAt, getMcpLinkScopes, hashMcpLinkVerifier, mcpLinkPollSchema, mcpLinkStartSchema, MCP_LINK_TTL_MS } from '../../lib/server/mcp/link';
+import { createExternalRequestUrl } from '../../lib/server/request-origin';
 
 function createAccess(overrides: Partial<OrganizationAccess> = {}): OrganizationAccess {
     return {
@@ -59,6 +60,25 @@ function createTokenRecord(overrides: Partial<McpAccessTokenRecord> = {}): McpAc
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
         ...overrides,
     };
+}
+
+function withBetterAuthUrl<T>(value: string | undefined, fn: () => T) {
+    const previous = process.env.BETTER_AUTH_URL;
+    if (value === undefined) {
+        delete process.env.BETTER_AUTH_URL;
+    } else {
+        process.env.BETTER_AUTH_URL = value;
+    }
+
+    try {
+        return fn();
+    } finally {
+        if (previous === undefined) {
+            delete process.env.BETTER_AUTH_URL;
+        } else {
+            process.env.BETTER_AUTH_URL = previous;
+        }
+    }
 }
 
 function createAuthorizationRequestRecord(overrides: Partial<McpAuthorizationRequestRecord> = {}): McpAuthorizationRequestRecord {
@@ -256,6 +276,45 @@ test('web MCP link defaults use existing MCP scopes and ten minute expiry', () =
 
     assert.deepEqual(getMcpLinkScopes(), [...MCP_DEFAULT_SCOPES]);
     assert.equal(getMcpLinkExpiresAt(now).getTime(), now + MCP_LINK_TTL_MS);
+});
+
+test('web MCP link URLs prefer the externally reachable request host', () => {
+    withBetterAuthUrl(undefined, () => {
+        assert.equal(
+            createExternalRequestUrl(
+                new Request('http://0.0.0.0:3000/api/mcp/link/start', {
+                    headers: {
+                        host: 'localhost:3000',
+                    },
+                }),
+                '/mcp/authorize',
+            ),
+            'http://localhost:3000/mcp/authorize',
+        );
+
+        assert.equal(
+            createExternalRequestUrl(
+                new Request('http://0.0.0.0:3000/api/mcp/link/start', {
+                    headers: {
+                        'x-forwarded-host': 'dory.example.com',
+                        'x-forwarded-proto': 'https',
+                    },
+                }),
+                '/mcp/authorize',
+            ),
+            'https://dory.example.com/mcp/authorize',
+        );
+    });
+});
+
+test('web MCP link URLs prefer BETTER_AUTH_URL when configured', () => {
+    withBetterAuthUrl('https://dory.example.com/base-path', () => {
+        assert.equal(createExternalRequestUrl(new Request('http://0.0.0.0:3000/api/mcp/link/start'), '/mcp/authorize'), 'https://dory.example.com/mcp/authorize');
+    });
+
+    withBetterAuthUrl('dory.example.com', () => {
+        assert.equal(createExternalRequestUrl(new Request('http://0.0.0.0:3000/api/mcp/link/start'), '/mcp/authorize'), 'https://dory.example.com/mcp/authorize');
+    });
 });
 
 test('web MCP authorization repository state resolver covers terminal and pending states', () => {

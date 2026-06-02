@@ -3,11 +3,12 @@ import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { ResponseUtil } from '@/lib/result';
 import { getDefaultMcpScopes, serializeMcpToken } from '@/lib/server/mcp/settings';
+import { createExternalRequestUrl } from '@/lib/server/request-origin';
 
 export const runtime = 'nodejs';
 
 function getEndpoint(req: Request) {
-    return new URL('/api/mcp', req.url).toString();
+    return createExternalRequestUrl(req, '/api/mcp');
 }
 
 export const GET = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
