@@ -4,6 +4,7 @@ import { ErrorCodes } from '@dory/shared/errors';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { ResponseUtil } from '@/lib/result';
 import { getMcpLinkExpiresAt, getMcpLinkScopes, mcpLinkStartSchema } from '@/lib/server/mcp/link';
+import { createExternalRequestUrl } from '@/lib/server/request-origin';
 
 export const runtime = 'nodejs';
 
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
         scopes: getMcpLinkScopes(parsed.data.scopes),
         expiresAt,
     });
-    const authorizeUrl = new URL('/mcp/authorize', req.url);
+    const authorizeUrl = new URL(createExternalRequestUrl(req, '/mcp/authorize'));
     authorizeUrl.searchParams.set('requestId', record.id);
 
     return NextResponse.json(

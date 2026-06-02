@@ -2866,6 +2866,22 @@
             "Collapse": "Collapse chart",
             "Expand": "Expand chart"
         },
+        "Mermaid": {
+            "Title": "Mermaid",
+            "CopySource": "Copy source",
+            "Copied": "Copied",
+            "CopyFailed": "Failed to copy Mermaid source",
+            "DownloadSvg": "Download SVG",
+            "DownloadFailed": "Failed to download Mermaid diagram",
+            "ViewFullscreen": "View fullscreen",
+            "ZoomIn": "Zoom in",
+            "ZoomOut": "Zoom out",
+            "ResetView": "Reset view",
+            "Rendering": "Rendering diagram...",
+            "Waiting": "Waiting for complete diagram...",
+            "RenderError": "Mermaid render failed: {error}",
+            "Retry": "Retry"
+        },
         "ModeToggle": {
             "ToggleTheme": "Toggle theme",
             "Light": "Light",

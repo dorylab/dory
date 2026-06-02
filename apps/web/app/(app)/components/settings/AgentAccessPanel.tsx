@@ -63,6 +63,36 @@ async function readJson<T>(res: Response): Promise<T> {
     return json.data as T;
 }
 
+function getEndpointOrigin(endpoint: string) {
+    try {
+        return new URL(endpoint).origin;
+    } catch {
+        return endpoint.replace(/\/api\/mcp\/?$/, '');
+    }
+}
+
+function getCurrentOrigin() {
+    if (typeof window === 'undefined') return null;
+    return window.location.origin;
+}
+
+function isUnspecifiedHost(target: string) {
+    try {
+        const hostname = new URL(target).hostname;
+        return hostname === '0.0.0.0' || hostname === '::';
+    } catch {
+        return false;
+    }
+}
+
+function getWebSetupTarget(endpoint: string) {
+    const endpointOrigin = getEndpointOrigin(endpoint);
+    if (isUnspecifiedHost(endpointOrigin)) {
+        return getCurrentOrigin() ?? endpointOrigin;
+    }
+    return endpointOrigin;
+}
+
 export function AgentAccessPanel() {
     const t = useTranslations('DoryUI.Settings.AgentAccess');
     const [settings, setSettings] = useState<McpSettingsPayload | null>(null);
@@ -78,13 +108,7 @@ export function AgentAccessPanel() {
 
     const setupSnippets = useMemo<McpSetupSnippets | null>(() => {
         if (!effectiveEndpoint) return null;
-        const webTarget = (() => {
-            try {
-                return new URL(effectiveEndpoint).origin;
-            } catch {
-                return effectiveEndpoint.replace(/\/api\/mcp\/?$/, '');
-            }
-        })();
+        const webTarget = getWebSetupTarget(effectiveEndpoint);
         const target = isDesktop ? effectiveEndpoint : webTarget;
 
         if (!isDesktop) {

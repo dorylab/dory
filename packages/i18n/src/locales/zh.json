@@ -2868,6 +2868,22 @@
             "Collapse": "折叠图表",
             "Expand": "展开图表"
         },
+        "Mermaid": {
+            "Title": "Mermaid",
+            "CopySource": "复制源码",
+            "Copied": "已复制",
+            "CopyFailed": "复制 Mermaid 源码失败",
+            "DownloadSvg": "下载 SVG",
+            "DownloadFailed": "下载 Mermaid 图失败",
+            "ViewFullscreen": "全屏查看",
+            "ZoomIn": "放大",
+            "ZoomOut": "缩小",
+            "ResetView": "重置视图",
+            "Rendering": "正在渲染图表…",
+            "Waiting": "等待图表内容完整…",
+            "RenderError": "Mermaid 渲染失败：{error}",
+            "Retry": "重试"
+        },
         "ModeToggle": {
             "ToggleTheme": "切换主题",
             "Light": "浅色",

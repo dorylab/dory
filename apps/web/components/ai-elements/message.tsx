@@ -12,11 +12,7 @@ import {
   TooltipTrigger,
 } from "@/registry/new-york-v4/ui/tooltip";
 import { cn } from "@dory/web-utils";
-import { cjk } from "@streamdown/cjk";
-import { code } from "@streamdown/code";
-import { math } from "@streamdown/math";
-import { mermaid } from "@streamdown/mermaid";
-import { SmartCodeBlock } from "@/components/@dory/ui/code-block/code-block";
+import { doryStreamdownPlugins } from "@/components/ai-elements/dory-streamdown";
 import type { UIMessage } from "ai";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
@@ -28,7 +24,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Streamdown, type CustomRendererProps } from "streamdown";
+import { Streamdown } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"];
@@ -319,79 +315,6 @@ export const MessageBranchPage = ({
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
-const doryCodeRendererLanguages = [
-  "sql",
-  "pgsql",
-  "postgres",
-  "postgresql",
-  "mysql",
-  "sqlite",
-  "json",
-  "jsonc",
-  "javascript",
-  "js",
-  "typescript",
-  "ts",
-  "tsx",
-  "jsx",
-  "bash",
-  "sh",
-  "shell",
-  "python",
-  "py",
-  "yaml",
-  "yml",
-  "html",
-  "css",
-  "markdown",
-  "md",
-  "text",
-  "txt",
-];
-
-const DoryMarkdownCodeBlock = ({
-  code,
-  language,
-}: CustomRendererProps) => {
-  const normalizedLanguage = language.toLowerCase();
-  const displayCode = code.trimEnd();
-  const type =
-    normalizedLanguage.includes("sql") ||
-    normalizedLanguage === "pgsql" ||
-    normalizedLanguage === "postgres" ||
-    normalizedLanguage === "postgresql" ||
-    normalizedLanguage === "mysql" ||
-    normalizedLanguage === "sqlite"
-      ? "sql"
-      : normalizedLanguage === "json" || normalizedLanguage === "jsonc"
-        ? "json"
-        : "text";
-
-  return (
-    <SmartCodeBlock
-      className="mt-3"
-      label={language || undefined}
-      value={displayCode}
-      type={type}
-      showLineNumbers
-      maxHeightClassName="max-h-[min(32rem,70vh)]"
-    />
-  );
-};
-
-const messageResponsePlugins = {
-  code,
-  mermaid,
-  math,
-  cjk,
-  renderers: [
-    {
-      language: doryCodeRendererLanguages,
-      component: DoryMarkdownCodeBlock,
-    },
-  ],
-};
-
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
@@ -399,7 +322,7 @@ export const MessageResponse = memo(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
         className
       )}
-      plugins={messageResponsePlugins}
+      plugins={doryStreamdownPlugins}
       {...props}
     />
   ),
