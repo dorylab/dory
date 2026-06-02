@@ -12,6 +12,7 @@ export function OrganizationAppShell({
     organizationId,
     billingManagementAvailable,
     desktopBillingHandoff,
+    enterpriseLicense,
 }: {
     children: React.ReactNode;
     defaultOpen: boolean;
@@ -19,6 +20,7 @@ export function OrganizationAppShell({
     organizationId: string;
     billingManagementAvailable: boolean;
     desktopBillingHandoff: boolean;
+    enterpriseLicense: boolean;
 }) {
     return (
         <SettingsProvider
@@ -44,6 +46,7 @@ export function OrganizationAppShell({
                         collapsible="icon"
                         initialUser={initialUser}
                         organizationId={organizationId}
+                        enterpriseLicense={enterpriseLicense}
                     />
                     <SidebarInset className="flex min-h-0 flex-col" style={{ height: 'calc(100% - 1rem)', width: 'calc(100% - 248px)' }}>
                         <AppContentShell>{children}</AppContentShell>

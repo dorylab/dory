@@ -26,10 +26,6 @@ export default async function OrganizationSettingsLayout({ children, params }: {
             title: t('Ai.Title'),
             description: t('Ai.Description'),
         },
-        'query-audit': {
-            title: t('QueryAudit.Title'),
-            description: t('QueryAudit.Description'),
-        },
         billing: {
             title: t('Billing.Title'),
             description: t('Billing.Description'),

@@ -153,6 +153,13 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
         t('Pro.Features.EarlyAccessToUpcomingFeatures'),
         t('Pro.Features.PrioritySupport'),
     ];
+    const proUpgradeFeatures = [
+        t('Pro.Features.UnlimitedDatabaseConnections'),
+        t('Pro.Features.HigherAiQuotaAndFasterResponses'),
+        t('Pro.Features.ByokAiFeatures'),
+        t('Pro.Features.EarlyAccessToUpcomingFeatures'),
+        t('Pro.Features.PrioritySupport'),
+    ];
     const refreshButton = useMemo(
         () =>
             billingManagementAvailable ? (
@@ -262,7 +269,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
                         <div className="mt-2 text-2xl font-semibold">{t('Pro.Title')}</div>
                         <div className="mt-1 text-sm text-muted-foreground">{t('Pro.Price')}</div>
                         <ul className="mt-4 space-y-3 text-sm">
-                            {proFeatures.map(feature => (
+                            {proUpgradeFeatures.map(feature => (
                                 <li key={feature} className="flex items-center gap-2">
                                     <Check className="size-4 text-primary" />
                                     <span>{feature}</span>

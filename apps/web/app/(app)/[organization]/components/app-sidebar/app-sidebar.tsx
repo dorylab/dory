@@ -27,6 +27,7 @@ import type { ConnectionListItem } from '@dory/shared/types/connections';
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     initialUser?: User | null;
     organizationId: string;
+    enterpriseLicense: boolean;
 };
 
 const GITHUB_REPO_URL = 'https://github.com/dorylab/dory';
@@ -62,7 +63,7 @@ function getExplorerDefaultDatabase(connection?: ConnectionListItem['connection'
     return null;
 }
 
-export function AppSidebar({ initialUser = null, organizationId, ...props }: AppSidebarProps) {
+export function AppSidebar({ initialUser = null, organizationId, enterpriseLicense, ...props }: AppSidebarProps) {
     const params = useParams<{ organization: string; connectionId?: string }>();
     const resolvedUser = initialUser ?? null;
     const t = useTranslations('AppSidebar');
@@ -298,7 +299,7 @@ export function AppSidebar({ initialUser = null, organizationId, ...props }: App
             <Separator />
 
             <SidebarFooter>
-                <NavUser user={resolvedUser as any} organizationId={organizationId} />
+                <NavUser user={resolvedUser as any} organizationId={organizationId} enterpriseLicense={enterpriseLicense} />
             </SidebarFooter>
         </Sidebar>
     );
