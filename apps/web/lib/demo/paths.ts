@@ -39,16 +39,16 @@ function getDemoResourceCacheRoot(): string {
 }
 
 function ensureRuntimeResourceCopy(sourcePath: string, filename: string): string {
-    const targetPath = path.join(getDemoResourceCacheRoot(), filename);
+    const targetPath = path.join(/* turbopackIgnore: true */ getDemoResourceCacheRoot(), filename);
     try {
         const sourceStat = fs.statSync(sourcePath);
-        const targetStat = fs.existsSync(targetPath) ? fs.statSync(targetPath) : null;
+        const targetStat = fs.existsSync(/* turbopackIgnore: true */ targetPath) ? fs.statSync(/* turbopackIgnore: true */ targetPath) : null;
         const needsCopy = !targetStat || targetStat.size !== sourceStat.size || Math.trunc(targetStat.mtimeMs) < Math.trunc(sourceStat.mtimeMs);
 
         if (needsCopy) {
-            fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-            fs.copyFileSync(sourcePath, targetPath);
-            fs.chmodSync(targetPath, 0o644);
+            fs.mkdirSync(path.dirname(/* turbopackIgnore: true */ targetPath), { recursive: true });
+            fs.copyFileSync(sourcePath, /* turbopackIgnore: true */ targetPath);
+            fs.chmodSync(/* turbopackIgnore: true */ targetPath, 0o644);
         }
 
         return targetPath;
