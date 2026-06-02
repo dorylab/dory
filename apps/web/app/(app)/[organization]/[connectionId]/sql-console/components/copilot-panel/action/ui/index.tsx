@@ -173,7 +173,7 @@ export function ActionTab({ input, onApplySql, onExecuted, autoRun, onAutoRunHan
             const res = await onApplySql?.(result.fixedSql, {
                 intent: lastIntent ?? undefined,
                 risk: result.risk,
-                originalSql: input?.lastExecution.sql,
+                originalSql: input?.lastExecution?.sql,
                 operation: 'apply',
             });
             if (res && typeof res === 'object' && 'previousSql' in res && typeof res.previousSql === 'string') {
@@ -182,7 +182,7 @@ export function ActionTab({ input, onApplySql, onExecuted, autoRun, onAutoRunHan
         } catch (err) {
             console.error('[ActionTab.handleApply] Failed to apply SQL to editor', err);
         }
-    }, [result, onApplySql, lastIntent, input?.lastExecution.sql]);
+    }, [result, onApplySql, lastIntent, input?.lastExecution?.sql]);
 
     const handleUndoApply = useCallback(async () => {
         if (!undoSnapshot) return;
@@ -199,7 +199,7 @@ export function ActionTab({ input, onApplySql, onExecuted, autoRun, onAutoRunHan
         return (
             <ActionResultPanel
                 result={result}
-                originalSql={input?.lastExecution.sql}
+                originalSql={input?.lastExecution?.sql}
                 actionTitle={selectedActionTitle}
                 running={running}
                 errorMessage={runError}

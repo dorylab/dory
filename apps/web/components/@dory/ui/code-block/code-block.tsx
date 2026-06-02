@@ -162,7 +162,7 @@ export function SmartCodeBlock({
             >
                 <div
                     className={cn(
-                        'absolute right-1 top-1 z-10 flex items-center gap-0.5',
+                        'absolute right-1 top-1 z-10 flex items-center gap-1.5',
                         'opacity-0 transition-opacity group-hover:opacity-100',
                         (copied || actions) && 'opacity-100',
                     )}

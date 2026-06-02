@@ -139,7 +139,7 @@ async function cleanupIncompleteLocalFilesConnection(ctx: LocalFilesContext, nam
         const options = parseOptions(item.connection.options);
         return typeof options.datasetId !== 'string' || !options.datasetId;
     });
-    if (!incompleteConnection?.connection.id) return;
+    if (!incompleteConnection?.connection?.id) return;
     await ctx.db.connections.delete(ctx.organizationId, incompleteConnection.connection.id);
 }
 

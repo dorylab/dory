@@ -1,3 +1,5 @@
+import type { ConnectionType } from './connections';
+
 export type QuerySource =
     | 'console'
     | 'chatbot'
@@ -81,6 +83,11 @@ export type AuditItem = {
     rows_written?: number | null;
     connection_id?: string | null;
     connection_name?: string | null;
+    connection_type?: ConnectionType | null;
+    connection_host?: string | null;
+    connection_port?: number | null;
+    connection_http_port?: number | null;
+    connection_endpoint?: string | null;
     identity_id?: string | null;
     identity_name?: string | null;
     identity_username?: string | null;

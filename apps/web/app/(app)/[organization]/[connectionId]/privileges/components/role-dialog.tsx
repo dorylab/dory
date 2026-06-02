@@ -45,7 +45,7 @@ export function RoleDialog({ open, mode, onClose, onSubmit, isSubmitting, initia
         defaultValues: {
             name: initialRole?.name ?? '',
             privileges:
-                initialRole?.privileges.map(priv => ({
+                initialRole?.privileges?.map(priv => ({
                     privilege: priv.privilege ?? '',
                     database: priv.database ?? '*',
                     table: priv.table ?? '*',
@@ -65,7 +65,7 @@ export function RoleDialog({ open, mode, onClose, onSubmit, isSubmitting, initia
         if (!open) return;
 
         const defaults =
-            initialRole?.privileges.map(priv => ({
+            initialRole?.privileges?.map(priv => ({
                 privilege: priv.privilege ?? '',
                 database: priv.database ?? '*',
                 table: priv.table ?? '*',

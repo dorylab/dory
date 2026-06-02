@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { useParams, usePathname, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { IconDotsVertical, IconLogin2, IconLogout } from '@tabler/icons-react';
-import { ClipboardList } from 'lucide-react';
+import { ClipboardList, LockKeyhole } from 'lucide-react';
 import { Avatar, AvatarImage } from '@/registry/new-york-v4/ui/avatar';
 import BoringAvatar from 'boring-avatars';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
@@ -17,6 +17,7 @@ import { User } from 'better-auth';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { getOrganizationBillingStatus } from '@/lib/billing/api';
 import { getOrganizationAccess } from '@/lib/organization/api';
+import { useSettings } from '../../../components/settings/settings';
 import { cn } from '@dory/web-utils';
 
 function PlanBadge({ label, plan }: { label: string; plan: 'hobby' | 'pro' }) {
@@ -39,6 +40,7 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
     const searchParams = useSearchParams();
     const t = useTranslations('AppSidebar');
     const planT = useTranslations('OrganizationSettings.Billing.Plan');
+    const { openSettings } = useSettings();
     const collapsed = state === 'collapsed';
     const [authSheetOpen, setAuthSheetOpen] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -70,7 +72,15 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
     const plan = billingStatusQuery.data?.plan ?? null;
     const planLabel = plan === 'pro' ? planT('Pro') : plan === 'hobby' ? planT('Hobby') : null;
     const canViewQueryAudit = accessQuery.data?.role === 'owner' || accessQuery.data?.role === 'admin';
+    const canUseQueryAudit = plan === 'pro';
+    const queryAuditPlanResolved = plan !== null || billingStatusQuery.isError;
     const organizationSlug = params.organization ?? pathname?.split('/').filter(Boolean)[0] ?? '';
+
+    function handleLockedQueryAudit(event: Event) {
+        event.preventDefault();
+        setMenuOpen(false);
+        window.setTimeout(() => openSettings('billing'), 0);
+    }
 
     function handleSignIn() {
         setMenuOpen(false);
@@ -123,15 +133,26 @@ export function NavUser({ user, organizationId }: { user: User | null; organizat
                     {t('GuestSession.SignIn')}
                 </DropdownMenuItem>
             ) : null}
-            {canViewQueryAudit && organizationSlug ? (
+            {canViewQueryAudit && organizationSlug && queryAuditPlanResolved ? (
                 <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild onSelect={() => setMenuOpen(false)}>
-                        <Link href={`/${organizationSlug}/query-audit`}>
+                    {canUseQueryAudit ? (
+                        <DropdownMenuItem asChild onSelect={() => setMenuOpen(false)}>
+                            <Link href={`/${organizationSlug}/query-audit`}>
+                                <ClipboardList />
+                                Query Audit
+                            </Link>
+                        </DropdownMenuItem>
+                    ) : (
+                        <DropdownMenuItem onSelect={handleLockedQueryAudit}>
                             <ClipboardList />
-                            Query Audit
-                        </Link>
-                    </DropdownMenuItem>
+                            <span className="min-w-0 flex-1">Query Audit</span>
+                            <span className="ml-auto inline-flex h-4 shrink-0 items-center gap-1 rounded-full border border-primary/25 bg-primary/10 px-1.5 text-[10px] font-medium leading-none text-primary">
+                                <LockKeyhole className="size-2.5" />
+                                Pro
+                            </span>
+                        </DropdownMenuItem>
+                    )}
                 </>
             ) : null}
             <DropdownMenuItem

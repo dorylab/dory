@@ -17,7 +17,7 @@ const SID = (tabId: string) => `sqlconsole:sessionId:${tabId}`;
 
 export function useSQLTabs() {
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id ?? null;
+    const connectionId = currentConnection?.connection?.id ?? null;
     const params = useParams<{ connectionId?: string | string[]; connection?: string | string[] }>();
     const routeConnectionParam = params?.connectionId ?? params?.connection;
     const routeConnectionId = Array.isArray(routeConnectionParam) ? routeConnectionParam[0] : routeConnectionParam;

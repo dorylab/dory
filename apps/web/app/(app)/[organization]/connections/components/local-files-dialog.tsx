@@ -246,7 +246,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
         try {
             const trimmedPath = filePath.trim();
             const activeInspectResult =
-                inspectResult?.source.path === trimmedPath
+                inspectResult?.source?.path === trimmedPath
                     ? inspectResult
                     : await inspectLocalFiles({
                           source: {
@@ -260,7 +260,7 @@ export function LocalFilesDialog({ open, onOpenChange, onSuccess, mode = 'create
                           return result.data;
                       });
             const activeRelations = activeInspectResult.relations;
-            const activeSelectedRelations = inspectResult?.source.path === trimmedPath ? selectedRelationList : activeRelations;
+            const activeSelectedRelations = inspectResult?.source?.path === trimmedPath ? selectedRelationList : activeRelations;
             if (activeSelectedRelations.length === 0) {
                 throw new Error('No supported sheets or tables were found in this file.');
             }

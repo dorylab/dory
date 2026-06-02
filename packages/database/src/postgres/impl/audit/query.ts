@@ -1,6 +1,7 @@
 // studio/lib/database/pg/impl/audit/query.ts
 import { and, desc, eq, gte, inArray, ilike, lte, sql, SQLWrapper } from 'drizzle-orm';
 import { queryAudit } from '../../schemas/audit';
+import { connections } from '../../schemas/connections';
 import { getClient } from '../../client';
 import type { AuditItem, AuditSearchParams, AuditSearchResult, OverviewFilters, OverviewResponse, QuerySource, QueryStatus } from '@dory/shared/types/audit';
 import type { PostgresDBClient } from '@dory/shared';
@@ -21,6 +22,71 @@ const dec = (raw?: string | null): Cursor | null => {
 };
 
 const msToDate = (ms?: number) => (typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms) : undefined);
+
+function parseConnectionOptions(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'object' && !Array.isArray(raw)) return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+        } catch {
+            return {};
+        }
+    }
+    return {};
+}
+
+function parsePort(value: unknown) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : undefined;
+    }
+    return undefined;
+}
+
+function parseHostUrl(rawHost: string) {
+    try {
+        return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(rawHost) ? rawHost : `http://${rawHost}`);
+    } catch {
+        return null;
+    }
+}
+
+function getConnectionEndpoint(input: { type?: string | null; host?: string | null; port?: number | null; httpPort?: number | null; options?: unknown }) {
+    const rawHost = input.host?.trim();
+    if (!rawHost && !input.port && !input.httpPort) return null;
+
+    if (input.type === 'clickhouse') {
+        const options = parseConnectionOptions(input.options);
+        const parsedUrl = rawHost ? parseHostUrl(rawHost) : null;
+        const ssl =
+            typeof options.ssl === 'boolean'
+                ? options.ssl
+                : typeof options.useSSL === 'boolean'
+                  ? options.useSSL
+                  : typeof options.protocol === 'string'
+                    ? options.protocol.toLowerCase().startsWith('https')
+                    : parsedUrl?.protocol === 'https:';
+        const protocol = ssl ? 'https' : 'http';
+        const host = parsedUrl?.hostname || rawHost;
+        const port =
+            parsePort(input.httpPort) ??
+            parsePort(options.httpPort) ??
+            (parsedUrl?.port ? Number(parsedUrl.port) : undefined) ??
+            (input.port && input.port !== 9000 ? input.port : undefined) ??
+            (ssl ? 8443 : 8123);
+
+        if (host && port) return `${protocol}://${host}:${port}`;
+        if (host) return `${protocol}://${host}`;
+        return `:${port}`;
+    }
+
+    if (rawHost && input.port) return `${rawHost}:${input.port}`;
+    if (rawHost) return rawHost;
+    return `:${input.port ?? input.httpPort}`;
+}
 
 export class PgAuditQueryRepository {
     async search(params: AuditSearchParams): Promise<AuditSearchResult> {
@@ -80,8 +146,16 @@ export class PgAuditQueryRepository {
             .where(whereCondition);
 
         const rows = await db
-            .select()
+            .select({
+                audit: queryAudit,
+                connectionType: connections.type,
+                connectionHost: connections.host,
+                connectionPort: connections.port,
+                connectionHttpPort: connections.httpPort,
+                connectionOptions: connections.options,
+            })
             .from(queryAudit)
+            .leftJoin(connections, and(eq(queryAudit.connectionId, connections.id), eq(queryAudit.organizationId, connections.organizationId)))
             .where(whereCondition)
             .orderBy(desc(queryAudit.createdAt), desc(queryAudit.id))
             .offset(offset)
@@ -91,36 +165,51 @@ export class PgAuditQueryRepository {
         const slice = hasMore ? rows.slice(0, limit) : rows;
 
         // Drizzle returns schema field names (camelCase)
-        const items: AuditItem[] = slice.map(r => ({
-            id: r.id,
-            created_at: r.createdAt.toISOString(),
+        const items: AuditItem[] = slice.map(row => {
+            const r = row.audit;
 
-            organizationId: r.organizationId,
-            user_id: r.userId,
+            return {
+                id: r.id,
+                created_at: r.createdAt.toISOString(),
 
-            source: r.source as any,
-            status: r.status as any,
+                organizationId: r.organizationId,
+                user_id: r.userId,
 
-            duration_ms: r.durationMs ?? null,
-            error_message: r.errorMessage ?? null,
-            rows_read: r.rowsRead ?? null,
-            bytes_read: r.bytesRead ?? null,
-            rows_written: r.rowsWritten ?? null,
+                source: r.source as any,
+                status: r.status as any,
 
-            connection_id: r.connectionId ?? null,
-            connection_name: r.connectionName ?? null,
-            identity_id: r.identityId ?? null,
-            identity_name: r.identityName ?? null,
-            identity_username: r.identityUsername ?? null,
-            identity_role: r.identityRole ?? null,
-            identity_database: r.identityDatabase ?? null,
-            database_name: r.databaseName ?? null,
+                duration_ms: r.durationMs ?? null,
+                error_message: r.errorMessage ?? null,
+                rows_read: r.rowsRead ?? null,
+                bytes_read: r.bytesRead ?? null,
+                rows_written: r.rowsWritten ?? null,
 
-            sql_text: r.sqlText,
-            extra_json: (r.extraJson as any) ?? null,
-        }));
+                connection_id: r.connectionId ?? null,
+                connection_name: r.connectionName ?? null,
+                connection_type: (row.connectionType as any) ?? null,
+                connection_host: row.connectionHost ?? null,
+                connection_port: row.connectionPort ?? null,
+                connection_http_port: row.connectionHttpPort ?? null,
+                connection_endpoint: getConnectionEndpoint({
+                    type: row.connectionType,
+                    host: row.connectionHost,
+                    port: row.connectionPort,
+                    httpPort: row.connectionHttpPort,
+                    options: row.connectionOptions,
+                }),
+                identity_id: r.identityId ?? null,
+                identity_name: r.identityName ?? null,
+                identity_username: r.identityUsername ?? null,
+                identity_role: r.identityRole ?? null,
+                identity_database: r.identityDatabase ?? null,
+                database_name: r.databaseName ?? null,
 
-        const last = slice[slice.length - 1];
+                sql_text: r.sqlText,
+                extra_json: (r.extraJson as any) ?? null,
+            };
+        });
+
+        const last = slice[slice.length - 1]?.audit;
         const nextCursor = hasMore && last ? enc({ created_at_ms: last.createdAt.getTime(), id: last.id }) : null;
 
         return { items, total: Number(totalRow?.total ?? 0), nextCursor };
@@ -273,13 +362,22 @@ export class PgAuditQueryRepository {
 
     async readById(organizationId: string, id: string): Promise<AuditItem | null> {
         const db = (await getClient()) as PostgresDBClient;
-        const [r] = await db
-            .select()
+        const [row] = await db
+            .select({
+                audit: queryAudit,
+                connectionType: connections.type,
+                connectionHost: connections.host,
+                connectionPort: connections.port,
+                connectionHttpPort: connections.httpPort,
+                connectionOptions: connections.options,
+            })
             .from(queryAudit)
+            .leftJoin(connections, and(eq(queryAudit.connectionId, connections.id), eq(queryAudit.organizationId, connections.organizationId)))
             .where(and(eq(queryAudit.id, id), eq(queryAudit.organizationId, organizationId)))
             .limit(1);
-        if (!r) return null;
+        if (!row) return null;
 
+        const r = row.audit;
         return {
             id: r.id,
             created_at: r.createdAt.toISOString(),
@@ -298,6 +396,17 @@ export class PgAuditQueryRepository {
 
             connection_id: r.connectionId ?? null,
             connection_name: r.connectionName ?? null,
+            connection_type: (row.connectionType as any) ?? null,
+            connection_host: row.connectionHost ?? null,
+            connection_port: row.connectionPort ?? null,
+            connection_http_port: row.connectionHttpPort ?? null,
+            connection_endpoint: getConnectionEndpoint({
+                type: row.connectionType,
+                host: row.connectionHost,
+                port: row.connectionPort,
+                httpPort: row.connectionHttpPort,
+                options: row.connectionOptions,
+            }),
             identity_id: r.identityId ?? null,
             identity_name: r.identityName ?? null,
             identity_username: r.identityUsername ?? null,

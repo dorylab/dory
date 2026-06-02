@@ -352,7 +352,7 @@ export function AgentAccessPanel() {
                         <div className="text-sm font-medium">{t('ClientsTitle')}</div>
                         <div className="mt-1 text-xs text-muted-foreground">{t('ClientsDescription')}</div>
                     </div>
-                    {settings?.tokens.length ? (
+                    {settings?.tokens?.length ? (
                         <div className="divide-y rounded-md border">
                             {settings.tokens.map(token => (
                                 <div key={token.id} className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">

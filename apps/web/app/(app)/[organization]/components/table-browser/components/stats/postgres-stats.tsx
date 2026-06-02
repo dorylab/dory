@@ -17,7 +17,7 @@ type Props = {
 
 export default function PostgresTableStatsView({ databaseName, tableName }: Props) {
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id;
+    const connectionId = currentConnection?.connection?.id;
     const t = useTranslations('PostgresTableStats');
 
     const statsQuery = useTableStatsQuery({ databaseName, tableName, connectionId });

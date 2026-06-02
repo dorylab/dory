@@ -10,7 +10,7 @@ export function tryHeuristicFix(ctx: ActionContext): ActionResult | null {
     const sql = ctx.sql;
 
     if (msg.includes('unknown table expression identifier')) {
-        const m = ctx.error?.message.match(/identifier\s+'([^']+)'/i);
+        const m = ctx.error?.message?.match(/identifier\s+'([^']+)'/i);
         const ident = m?.[1];
 
         if (ident) {

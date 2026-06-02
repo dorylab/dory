@@ -27,7 +27,7 @@ async function withLocalFilesSchema(organizationId: string, record: ConnectionLi
 
     const db = await getDBService();
     const dataset = await db.localFiles.getDatasetByConnectionId(organizationId, record.connection.id);
-    if (!dataset?.dataset.schemaName) {
+    if (!dataset?.dataset?.schemaName) {
         return record;
     }
 

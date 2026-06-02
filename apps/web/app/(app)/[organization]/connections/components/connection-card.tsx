@@ -141,7 +141,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                                 <p>{connectionTypeLabel}</p>
                             </TooltipContent>
                         </Tooltip>
-                        <OverflowTooltip text={connectionItem?.connection.name} className="mb-1 block min-h-6 min-w-0 max-w-full truncate text-base font-medium" />
+                        <OverflowTooltip text={connectionItem?.connection?.name} className="mb-1 block min-h-6 min-w-0 max-w-full truncate text-base font-medium" />
                     </div>
                     {connectLoading ? (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">

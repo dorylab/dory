@@ -3380,7 +3380,7 @@
                 "Features": {
                     "ConnectPopularDatabases": "主要なデータベースに接続",
                     "SqlEditorAndQueryResults": "SQL エディタ + クエリ結果",
-                    "BasicCharts": "基本的なチャート",
+                    "BasicCharts": "Charts & exports",
                     "AiQuotaIncluded": "AI クォータ込み",
                     "SavePersonalQueries": "個人用クエリを保存",
                     "CommunitySupport": "コミュニティサポート"
@@ -3395,7 +3395,7 @@
                     "HigherAiQuotaAndFasterResponses": "より高い AI クォータと高速な応答",
                     "ByokAiFeatures": "BYOK (Use your own AI key)",
                     "EarlyAccessToUpcomingFeatures": "近日公開機能への先行アクセス",
-                    "AdvancedChartsAndExports": "高度なチャートとエクスポート",
+                    "AdvancedChartsAndExports": "Query Audit",
                     "PrioritySupport": "優先サポート"
                 }
             },

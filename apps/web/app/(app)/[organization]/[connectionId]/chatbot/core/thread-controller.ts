@@ -105,7 +105,7 @@ export function useChatThread(params: UseChatThreadParams) {
             const database =
                 copilotEnvelope?.surface === 'sql'
                     ? copilotEnvelope.context.baseline.database ?? null
-                    : copilotEnvelope?.context.database ?? null;
+                    : copilotEnvelope?.context?.database ?? null;
 
             const table =
                 copilotEnvelope?.surface === 'table'

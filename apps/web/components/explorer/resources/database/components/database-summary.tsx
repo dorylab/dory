@@ -146,7 +146,7 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
     const databaseName = decodeParam(database ?? resolveParam(params?.database) ?? '') ?? '';
     const catalogName = decodeParam(catalog ?? resolveParam(params?.catalog) ?? null) ?? null;
     const organizationId = resolveParam(params?.organization);
-    const connectionId = resolveParam(params?.connectionId) ?? currentConnection?.connection.id;
+    const connectionId = resolveParam(params?.connectionId) ?? currentConnection?.connection?.id;
     const nullTooltip = t('Null tooltip');
     const summaryTitle = schema ? t('Schema Summary') : t('Database Summary');
     const summaryDescription = schema ? t('Schema summary description') : t('Database summary description');
@@ -293,7 +293,7 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
 
     const columnHeadline = useMemo(() => {
         return t('Avg columns insight', {
-            value: formatMetricValue(summary?.columnComplexity.averageColumnsPerTable, formatDecimal),
+            value: formatMetricValue(summary?.columnComplexity?.averageColumnsPerTable, formatDecimal),
         });
     }, [summary, t]);
 
@@ -517,12 +517,12 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
                             <InsightPanel title={t('Column shape')} headline={columnHeadline}>
                                 <div>
                                     {t('Max columns insight', {
-                                        value: formatMetricValue(summary?.columnComplexity.maxColumns, formatNumber),
+                                        value: formatMetricValue(summary?.columnComplexity?.maxColumns, formatNumber),
                                     })}
                                 </div>
                                 <div>
                                     {t('Widest insight', {
-                                        table: summary?.columnComplexity.maxColumnsTable ?? '—',
+                                        table: summary?.columnComplexity?.maxColumnsTable ?? '—',
                                     })}
                                 </div>
                             </InsightPanel>

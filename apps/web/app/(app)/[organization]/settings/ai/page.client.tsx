@@ -473,8 +473,8 @@ export default function AISettingsPageClient({ onOpenBillingSettings }: AISettin
     });
 
     const providers = providersQuery.data?.providers ?? [];
-    const canManageProviders = providersQuery.data?.organizationProviderCapability.enabled === true;
-    const organizationProvidersAvailable = providersQuery.data?.providerResolution.managementMode === 'organization_editable';
+    const canManageProviders = providersQuery.data?.organizationProviderCapability?.enabled === true;
+    const organizationProvidersAvailable = providersQuery.data?.providerResolution?.managementMode === 'organization_editable';
     const upgradeTarget = providersQuery.data?.upgradeTarget ?? 'enterprise';
     const isDesktopRuntime = providersQuery.data?.runtime === 'desktop';
     const systemProviders = providers.filter(provider => provider.source === 'system');

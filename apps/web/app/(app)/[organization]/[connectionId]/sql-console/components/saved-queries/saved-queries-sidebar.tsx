@@ -199,7 +199,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const locale = useLocale();
     const { data: session } = authClient.useSession();
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id ?? null;
+    const connectionId = currentConnection?.connection?.id ?? null;
     const sessionUserId = session?.user?.id ?? null;
     const isAnonymous = isAnonymousUser(session?.user);
     const scrollRootRef = useRef<HTMLDivElement | null>(null);

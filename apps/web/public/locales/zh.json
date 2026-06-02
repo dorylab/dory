@@ -3343,7 +3343,7 @@
                 "Features": {
                     "ConnectPopularDatabases": "连接主流数据库",
                     "SqlEditorAndQueryResults": "SQL 编辑器 + 查询结果",
-                    "BasicCharts": "基础图表",
+                    "BasicCharts": "Charts & exports",
                     "AiQuotaIncluded": "包含 AI 额度",
                     "SavePersonalQueries": "保存个人查询",
                     "CommunitySupport": "社区支持"
@@ -3358,7 +3358,7 @@
                     "HigherAiQuotaAndFasterResponses": "更高的 AI 额度和更快的响应",
                     "ByokAiFeatures": "BYOK（使用自己的 AI Key）",
                     "EarlyAccessToUpcomingFeatures": "优先体验即将推出的功能",
-                    "AdvancedChartsAndExports": "高级图表与导出",
+                    "AdvancedChartsAndExports": "Query Audit",
                     "PrioritySupport": "优先支持"
                 }
             },

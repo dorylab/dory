@@ -77,7 +77,7 @@ export default function DatabaseTables({ catalog, database }: DatabaseTablesProp
         database?: string | string[];
     }>();
     const organizationId = resolveParam(params?.organization);
-    const connectionId = resolveParam(params?.connectionId) ?? currentConnection?.connection.id;
+    const connectionId = resolveParam(params?.connectionId) ?? currentConnection?.connection?.id;
     const catalogParam = resolveParam(params?.catalog);
     const databaseParam = database ?? resolveParam(params?.database);
     const catalogName = React.useMemo(() => {

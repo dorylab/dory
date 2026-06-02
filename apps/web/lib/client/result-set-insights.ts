@@ -451,7 +451,7 @@ function selectRepresentativeSampleRows(rows: Array<Record<string, unknown>> | n
 
     const outlierPattern = patterns.find(pattern => pattern.kind === 'outlier');
     const outlierColumn = outlierPattern?.columns[0];
-    const outlierValue = outlierPattern?.metrics.value;
+    const outlierValue = outlierPattern?.metrics?.value;
     if (outlierColumn && outlierValue != null) {
         addRow(
             pickUniqueRow(candidates, seen, row => {
@@ -490,7 +490,7 @@ function selectRepresentativeSampleRows(rows: Array<Record<string, unknown>> | n
 
 export function buildKeyColumns(columns: ResultColumnMeta[] | null | undefined, stats: ResultSetStatsV1 | null | undefined): InsightKeyColumns {
     const profiledColumns = columns ?? [];
-    const timeColumn = stats?.summary.primaryTimeColumn ?? profiledColumns.find(column => column.semanticRole === 'time')?.name;
+    const timeColumn = stats?.summary?.primaryTimeColumn ?? profiledColumns.find(column => column.semanticRole === 'time')?.name;
 
     return {
         time: timeColumn ?? undefined,
@@ -506,7 +506,7 @@ function buildQuickSummary(context: InsightRuleContext, keyColumns: InsightKeyCo
     const rowCount = summary?.rowCount ?? null;
     const columnCount = summary?.columnCount ?? columns?.length ?? 0;
     const kindLabel = labelForKind(summary?.kind ?? 'unknown', t);
-    const autoChart = stats?.autoChartProfile?.emptyReason ? null : stats?.autoChartProfile?.chartState.chartType;
+    const autoChart = stats?.autoChartProfile?.emptyReason ? null : stats?.autoChartProfile?.chartState?.chartType;
     const chartStatus = summary?.isGoodForChart || autoChart ? t('Insights.QuickSummary.ChartReady') : t('Insights.QuickSummary.ExplorationReady');
 
     const title = t('Insights.QuickSummary.Title', {
@@ -576,7 +576,7 @@ export function buildInsightFacts(context: InsightRuleContext): InsightFact[] {
                 columnCount: summary.columnCount,
                 recommendedChart: stats?.autoChartProfile?.emptyReason
                     ? (summary.recommendedChart ?? 'table')
-                    : (stats?.autoChartProfile?.chartState.chartType ?? summary.recommendedChart ?? 'table'),
+                    : (stats?.autoChartProfile?.chartState?.chartType ?? summary.recommendedChart ?? 'table'),
             },
         });
     }
@@ -905,7 +905,7 @@ function buildRecommendedActions(context: InsightRuleContext, keyColumns: Insigh
     const primaryMeasureThreshold = (() => {
         const spreadThreshold = facts.find(fact => fact.type === 'measure_spread' && fact.columns?.[0] === primaryMeasure)?.metrics?.p95;
         if (typeof spreadThreshold === 'number' && Number.isFinite(spreadThreshold)) return spreadThreshold;
-        const outlierThreshold = patterns.find(pattern => pattern.kind === 'outlier' && pattern.columns[0] === primaryMeasure)?.metrics.value;
+        const outlierThreshold = patterns.find(pattern => pattern.kind === 'outlier' && pattern.columns[0] === primaryMeasure)?.metrics?.value;
         if (typeof outlierThreshold === 'number' && Number.isFinite(outlierThreshold)) return outlierThreshold;
         return null;
     })();

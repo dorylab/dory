@@ -117,7 +117,7 @@ export function ComboboxSubmenu({
 
     const selectedStandaloneOption = standaloneOptions.find(option => option.value === value) ?? null;
     const selectedGroup = groupOptions.find(group => group.children.some(child => child.value === value)) ?? null;
-    const selectedChildOption = selectedGroup?.children.find(child => child.value === value) ?? null;
+    const selectedChildOption = selectedGroup?.children?.find(child => child.value === value) ?? null;
     const resolvedSelectedLabel = selectedLabel ?? selectedStandaloneOption?.label ?? selectedChildOption?.label ?? triggerPlaceholder;
 
     useEffect(() => {

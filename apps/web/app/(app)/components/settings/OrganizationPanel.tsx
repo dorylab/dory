@@ -81,7 +81,7 @@ export function OrganizationPanel() {
 
     const organization = organizationQuery.data;
     const access = accessQuery.data;
-    const canUpdate = Boolean(access?.permissions.organization.update);
+    const canUpdate = Boolean(access?.permissions?.organization?.update);
     const isInitialLoading = organizationQuery.isLoading && !organization;
 
     if (isInitialLoading) {

@@ -17,7 +17,7 @@ export function useQuery() {
     const run = useCallback(
         async (payload: any, options?: { signal?: AbortSignal }) => {
             console.log('useQuery run', payload);
-            if (!currentConnection?.connection.id) {
+            if (!currentConnection?.connection?.id) {
                 toast.error('No active connection');
                 return;
             }
@@ -41,7 +41,7 @@ export function useQuery() {
                 throw e;
             }
         },
-        [currentConnection?.connection.id],
+        [currentConnection?.connection?.id],
     );
 
     return {

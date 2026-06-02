@@ -21,7 +21,7 @@ type TableStructureProps = {
 
 export default function TableStructure({ databaseName, tableName }: TableStructureProps) {
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection.id as string | undefined;
+    const connectionId = currentConnection?.connection?.id as string | undefined;
 
     const columnsQuery = useTableStructureColumnsQuery({
         databaseName,
@@ -33,7 +33,7 @@ export default function TableStructure({ databaseName, tableName }: TableStructu
         databaseName,
         tableName,
         connectionId,
-        dbType: currentConnection?.connection.type,
+        dbType: currentConnection?.connection?.type,
         columns: baseColumns,
     });
     const propertiesQuery = useTablePropertiesQuery({ databaseName, tableName, connectionId });
