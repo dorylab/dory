@@ -43,6 +43,17 @@ function parseConnectionOptions(raw: unknown): Record<string, unknown> {
     return {};
 }
 
+function hasProtocol(rawHost: string) {
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(rawHost);
+}
+
+function formatClickhouseHostForForm(rawHost: unknown, ssl: boolean) {
+    if (typeof rawHost !== 'string') return '';
+    const trimmed = rawHost.trim();
+    if (!trimmed || hasProtocol(trimmed)) return trimmed;
+    return ssl ? `https://${trimmed}` : trimmed;
+}
+
 export function createClickhouseConnectionDefaults() {
     return {
         type: 'clickhouse',
@@ -74,7 +85,7 @@ export function normalizeClickhouseConnectionForForm(connection: any) {
     return {
         ...createClickhouseConnectionDefaults(),
         ...connection,
-        host: parsedHost.host ?? connection?.host ?? '',
+        host: formatClickhouseHostForForm(connection?.host, ssl),
         port: typeof connection?.port === 'number' ? connection.port : 9000,
         httpPort: connection?.httpPort ?? parsedHost.httpPort ?? (ssl ? 8443 : 8123),
         ssl,
