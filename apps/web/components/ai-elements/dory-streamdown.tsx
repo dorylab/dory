@@ -380,8 +380,8 @@ function DoryMarkdownMermaidBlock({ code: source, isIncomplete }: CustomRenderer
             <MermaidViewport svg={svg} error={error} isPending={isIncomplete} isRendering={isRendering} onRetry={handleRetry} />
 
             <Dialog open={isFullscreenOpen} onOpenChange={setIsFullscreenOpen}>
-                <DialogContent className="h-[calc(100vh-2rem)] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden p-0" showCloseButton>
-                    <DialogTitle className="border-b border-border/50 bg-muted/20 px-4 py-3 text-sm font-medium">{t('Mermaid.Title')}</DialogTitle>
+                <DialogContent className="h-screen w-screen !max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden rounded-none border-0 p-0" showCloseButton>
+                    <DialogTitle className="border-b border-border/50 bg-muted/20 px-4 py-3 pr-12 text-sm font-medium">{t('Mermaid.Title')}</DialogTitle>
                     <MermaidViewport svg={svg} error={error} isPending={isIncomplete} isRendering={isRendering} onRetry={handleRetry} fullscreen />
                 </DialogContent>
             </Dialog>
