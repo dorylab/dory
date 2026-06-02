@@ -1,14 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, RefreshCw, Search } from 'lucide-react';
+import { AlertCircle, CircleUserRound, Database, Link2, Maximize2, Plug, RefreshCw, Search, User } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { format as formatSql } from 'sql-formatter';
 
+import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
 import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/registry/new-york-v4/ui/hover-card';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
@@ -16,6 +21,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@dory/web-utils';
 import { getAuditSourceGroup, type AuditItem, type AuditSearchResult, type AuditSourceGroup, type QuerySource, type QueryStatus } from '@dory/shared/types/audit';
 import { executeActionClient } from '@/lib/actions/client';
+import { DatabaseTypeIcon, getDatabaseTypeMeta } from '../connections/components/database-type-icon';
 
 type QueryAuditPageClientProps = {
     organizationId: string;
@@ -27,6 +33,7 @@ type StatusFilter = 'all' | QueryStatus;
 type SourceGroupFilter = 'all' | AuditSourceGroup;
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const SQL_PREVIEW_MAX_LENGTH = 64;
 
 const QUERY_SOURCES: QuerySource[] = [
     'console',
@@ -89,6 +96,7 @@ export default function QueryAuditPageClient({ organizationId, showHeader = true
     const [sourceGroup, setSourceGroup] = useState<SourceGroupFilter>('all');
     const [pageIndex, setPageIndex] = useState(0);
     const [pageSize, setPageSize] = useState(50);
+    const [selectedSqlItem, setSelectedSqlItem] = useState<AuditItem | null>(null);
 
     const query = useQuery({
         queryKey: ['query-audit', organizationId, submittedSearchText, status, sourceGroup, pageIndex, pageSize],
@@ -106,6 +114,7 @@ export default function QueryAuditPageClient({ organizationId, showHeader = true
 
     const rows = query.data?.items ?? [];
     const total = query.data?.total ?? rows.length;
+    const selectedSqlText = useMemo(() => (selectedSqlItem ? formatAuditSql(selectedSqlItem.sql_text) : ''), [selectedSqlItem]);
 
     function submitSearch(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
@@ -188,15 +197,14 @@ export default function QueryAuditPageClient({ organizationId, showHeader = true
             ) : null}
 
             <div className="min-h-[360px] flex-1 overflow-auto rounded-md border">
-                <Table className="min-w-[1280px]">
+                <Table className="min-w-[1460px]">
                     <TableHeader>
                         <TableRow>
                             <TableHead className="w-[170px]">Time</TableHead>
                             <TableHead className="w-[110px]">Status</TableHead>
                             <TableHead className="w-[145px]">Source</TableHead>
-                            <TableHead className="w-[210px]">Connection</TableHead>
-                            <TableHead className="w-[190px]">DB identity</TableHead>
-                            <TableHead>SQL</TableHead>
+                            <TableHead className="w-[300px]">Data source</TableHead>
+                            <TableHead className="w-[540px] min-w-[540px]">SQL</TableHead>
                             <TableHead className="w-[110px] text-right">Duration</TableHead>
                             <TableHead className="w-[90px] text-right">Rows</TableHead>
                         </TableRow>
@@ -205,16 +213,16 @@ export default function QueryAuditPageClient({ organizationId, showHeader = true
                         {query.isLoading ? (
                             Array.from({ length: 8 }).map((_, index) => (
                                 <TableRow key={index}>
-                                    <TableCell colSpan={8}>
+                                    <TableCell colSpan={7}>
                                         <Skeleton className="h-5 w-full" />
                                     </TableCell>
                                 </TableRow>
                             ))
                         ) : rows.length ? (
-                            rows.map(item => <QueryAuditRow key={item.id} item={item} />)
+                            rows.map(item => <QueryAuditRow key={item.id} item={item} onViewSql={setSelectedSqlItem} />)
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={8} className="h-28 text-center text-muted-foreground">
+                                <TableCell colSpan={7} className="h-28 text-center text-muted-foreground">
                                     No audit records found.
                                 </TableCell>
                             </TableRow>
@@ -235,14 +243,29 @@ export default function QueryAuditPageClient({ organizationId, showHeader = true
                 }}
                 className="px-0 py-0"
             />
+
+            <Dialog open={Boolean(selectedSqlItem)} onOpenChange={open => !open && setSelectedSqlItem(null)}>
+                <DialogContent className="max-h-[85vh] sm:max-w-5xl">
+                    <DialogHeader>
+                        <DialogTitle>SQL</DialogTitle>
+                        <DialogDescription>{selectedSqlItem ? `${formatDateTime(selectedSqlItem.created_at)} · ${selectedSqlItem.status}` : null}</DialogDescription>
+                    </DialogHeader>
+                    {selectedSqlItem ? (
+                        <div className="min-h-0 space-y-3">
+                            <SmartCodeBlock value={selectedSqlText} type="sql" showLineNumbers maxHeightClassName="max-h-[55vh]" />
+                            {selectedSqlItem.error_message ? <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{selectedSqlItem.error_message}</div> : null}
+                        </div>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
 
-function QueryAuditRow({ item }: { item: AuditItem }) {
+function QueryAuditRow({ item, onViewSql }: { item: AuditItem; onViewSql: (item: AuditItem) => void }) {
     const rowCount = item.rows_written ?? item.rows_read ?? null;
-    const connectionLabel = item.connection_name || item.connection_id || 'Unknown';
-    const identityLabel = item.identity_username || item.identity_name || item.identity_id || 'Unknown';
+    const sqlText = useMemo(() => formatAuditSql(item.sql_text), [item.sql_text]);
+    const sqlPreview = useMemo(() => formatInlineSql(sqlText), [sqlText]);
 
     return (
         <TableRow>
@@ -259,27 +282,114 @@ function QueryAuditRow({ item }: { item: AuditItem }) {
                 </div>
             </TableCell>
             <TableCell>
-                <div className="max-w-[200px] truncate" title={connectionLabel}>
-                    {connectionLabel}
-                </div>
-                {item.database_name ? <div className="max-w-[200px] truncate text-xs text-muted-foreground">{item.database_name}</div> : null}
+                <DataSourceCell item={item} />
             </TableCell>
-            <TableCell>
-                <div className="max-w-[180px] truncate" title={identityLabel}>
-                    {identityLabel}
+            <TableCell className="w-[540px] min-w-[540px] align-middle">
+                <div className="flex min-w-0 items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded bg-muted/60 px-2 py-1 font-mono text-xs text-foreground" title={sqlPreview}>
+                        {sqlPreview}
+                    </code>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0 rounded-full" onClick={() => onViewSql(item)} aria-label="View full SQL" title="View full SQL">
+                        <Maximize2 className="size-3.5" />
+                    </Button>
                 </div>
-                {item.identity_role || item.identity_database ? (
-                    <div className="max-w-[180px] truncate text-xs text-muted-foreground">{[item.identity_role, item.identity_database].filter(Boolean).join(' / ')}</div>
-                ) : null}
-            </TableCell>
-            <TableCell>
-                <code className="line-clamp-2 whitespace-normal break-all rounded bg-muted px-1.5 py-1 text-xs">{item.sql_text}</code>
                 {item.error_message ? <div className="mt-1 line-clamp-2 text-xs text-destructive">{item.error_message}</div> : null}
             </TableCell>
             <TableCell className="text-right text-muted-foreground">{formatDuration(item.duration_ms)}</TableCell>
             <TableCell className="text-right text-muted-foreground">{rowCount ?? '-'}</TableCell>
         </TableRow>
     );
+}
+
+function DataSourceCell({ item }: { item: AuditItem }) {
+    const connectionLabel = item.connection_name || item.connection_id || 'Unknown';
+    const connectionType = item.connection_type ?? 'unknown';
+    const typeMeta = getDatabaseTypeMeta(connectionType);
+    const typeLabel = item.connection_type ? typeMeta.label : 'Unknown';
+    const hostPortLabel = formatHostPort(item);
+    const detailRows = [
+        { label: 'Endpoint', value: hostPortLabel, icon: Link2 },
+        { label: 'Database', value: item.database_name, icon: Database },
+        { label: 'User', value: item.identity_username || item.identity_name || null, icon: CircleUserRound },
+        { label: 'Role', value: item.identity_role, icon: User },
+        { label: 'Source', value: item.source, icon: Plug },
+    ].filter(row => row.value);
+
+    return (
+        <HoverCard openDelay={120} closeDelay={80}>
+            <HoverCardTrigger asChild>
+                <div className="group flex w-fit max-w-[280px] cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring" tabIndex={0}>
+                    <div className="flex size-6 shrink-0 items-center justify-center rounded-md border bg-background transition-colors group-hover:border-foreground/30">
+                        <DatabaseTypeIcon type={connectionType} className="max-h-4 max-w-4" fallbackClassName="text-[10px]" />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="truncate font-medium text-foreground transition-colors group-hover:text-foreground" title={connectionLabel}>
+                            {connectionLabel}
+                        </div>
+                    </div>
+                </div>
+            </HoverCardTrigger>
+            <HoverCardContent align="start" side="right" className="w-80 p-3">
+                <div className="flex items-start gap-3">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-background">
+                        <DatabaseTypeIcon type={connectionType} className="max-h-6 max-w-6" />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{connectionLabel}</div>
+                        <div className="text-xs text-muted-foreground">{typeLabel}</div>
+                    </div>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                    {detailRows.map(row => (
+                        <DetailRow key={row.label} icon={row.icon} label={row.label} value={String(row.value)} />
+                    ))}
+                </div>
+            </HoverCardContent>
+        </HoverCard>
+    );
+}
+
+function DetailRow({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
+    return (
+        <div className="grid grid-cols-[124px_minmax(0,1fr)] gap-2 text-xs">
+            <span className="flex min-w-0 items-center gap-1.5 text-muted-foreground">
+                <Icon className="size-3.5 shrink-0" />
+                <span className="truncate">{label}</span>
+            </span>
+            <span className="truncate font-medium" title={value}>
+                {value}
+            </span>
+        </div>
+    );
+}
+
+function formatHostPort(item: AuditItem) {
+    if (item.connection_endpoint) return item.connection_endpoint;
+
+    const host = item.connection_host?.trim();
+    if (!host) return null;
+
+    const port = item.connection_port ?? item.connection_http_port;
+    return port ? `${host}:${port}` : host;
+}
+
+function formatAuditSql(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+
+    const normalized = trimmed.replace(/\n{3,}/g, '\n\n');
+
+    try {
+        return formatSql(normalized, { language: 'sql' }).trim();
+    } catch {
+        return normalized;
+    }
+}
+
+function formatInlineSql(value: string) {
+    const inlineSql = value.replace(/\s+/g, ' ').trim();
+    if (inlineSql.length <= SQL_PREVIEW_MAX_LENGTH) return inlineSql;
+    return `${inlineSql.slice(0, SQL_PREVIEW_MAX_LENGTH - 3).trimEnd()}...`;
 }
 
 function StatusBadge({ status }: { status: QueryStatus }) {

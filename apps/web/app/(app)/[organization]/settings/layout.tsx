@@ -11,7 +11,6 @@ export default async function OrganizationSettingsLayout({ children, params }: {
         { slug: 'organization', label: t('Nav.Organization') },
         { slug: 'members', label: t('Nav.Members') },
         { slug: 'ai', label: t('Nav.Ai') },
-        { slug: 'query-audit', label: t('Nav.QueryAudit') },
         ...(isBillingSettingsVisibleForServer() ? ([{ slug: 'billing', label: t('Nav.Billing') }] as const) : []),
     ];
     const meta: Record<OrganizationSettingsTab['slug'], { title: string; description: string }> = {
