@@ -1,9 +1,7 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { buildColumnCacheKey } from '@/app/(app)/[organization]/components/table-browser/utils';
 import { columnsAtom, columnsCacheAtom, currentConnectionAtom } from '@/shared/stores/app.store';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
 
 export function useColumns() {
@@ -32,30 +30,16 @@ export function useColumns() {
             return cachedColumns;
         }
 
-        const encodedDb = encodeURIComponent(database);
-        const encodedTable = encodeURIComponent(table);
-
-        const response = await authFetch(`/api/connection/${connectionId}/databases/${encodedDb}/tables/${encodedTable}/columns`, {
-            method: 'GET',
-            headers: {
-                'X-Connection-ID': connectionId,
-            },
-        });
-
-        const res = (await response.json()) as ResponseObject<TableColumn[]>;
-
-        if (isSuccess(res)) {
-            const columns = res.data || [];
-            setTableColumns(columns);
-            if (cacheKey) {
-                setColumnsCache(prev => ({
-                    ...prev,
-                    [cacheKey]: { columns, updatedAt: Date.now() },
-                }));
-            }
-            return columns;
+        const res = await executeActionClient<{ columns: TableColumn[] }>('schema.describeTable', { connectionId, database, table }, { currentConnectionId: connectionId });
+        const columns = res.columns || [];
+        setTableColumns(columns);
+        if (cacheKey) {
+            setColumnsCache(prev => ({
+                ...prev,
+                [cacheKey]: { columns, updatedAt: Date.now() },
+            }));
         }
-        return [];
+        return columns;
     };
 
     return {

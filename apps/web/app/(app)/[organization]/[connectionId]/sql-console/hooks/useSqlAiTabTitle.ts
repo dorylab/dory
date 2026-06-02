@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { SQLTab, UITabPayload } from '@dory/shared/types/tabs';
 import { shouldAutoNameTab } from '../utils';
 import { UpdateTab } from '../types';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { useTranslations } from 'next-intl';
 
 export function useSqlAiTabTitle(activeDatabase: string | null | undefined, updateTab: UpdateTab) {
@@ -18,24 +18,10 @@ export function useSqlAiTabTitle(activeDatabase: string | null | undefined, upda
             if (!options?.force && !shouldAutoNameTab(tab, { defaultNames: [t('Tabs.NewQuery'), t('Tabs.UntitledQuery')] })) return;
 
             try {
-                const res = await authFetch('/api/ai/tab-title', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        sql: sqlText,
-                        database: activeDatabase ?? null,
-                        source: 'sql-console',
-                    }),
+                const data = await executeActionClient<{ title?: string | null }>('ai.tabTitle', {
+                    sql: sqlText,
+                    database: activeDatabase ?? null,
                 });
-
-                if (!res.ok) {
-                    console.error('[requestAITabTitle] request failed', await res.text());
-                    return;
-                }
-
-                const data = (await res.json()) as { title?: string };
                 const title = data.title?.trim();
                 if (!title) return;
 

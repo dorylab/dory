@@ -1,12 +1,13 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { getDBService } from '@dory/database';
+import { hasActionScope } from '@dory/actions';
 import type { OrganizationAccess } from '@/lib/server/authz';
 import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 export const MCP_DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
-export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'saved_queries:read', 'monitoring:read'] as const;
+export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'monitoring:read'] as const;
 
 const MCP_DESKTOP_GRANT_TYPE = 'dory_mcp_desktop_grant';
 const MCP_DESKTOP_GRANT_TTL_MS = 12 * 60 * 60 * 1000;
@@ -224,7 +225,10 @@ export function issueMcpDesktopGrant({
     };
 }
 
-export function verifyMcpDesktopGrant(grant: string | null, { now = Date.now(), secret, ignoreExpiration = false }: { now?: number; secret?: string; ignoreExpiration?: boolean } = {}) {
+export function verifyMcpDesktopGrant(
+    grant: string | null,
+    { now = Date.now(), secret, ignoreExpiration = false }: { now?: number; secret?: string; ignoreExpiration?: boolean } = {},
+) {
     if (!grant) return null;
     const [encodedPayload, signature, extra] = grant.split('.');
     if (!encodedPayload || !signature || extra) return null;
@@ -244,7 +248,10 @@ export function verifyMcpDesktopGrant(grant: string | null, { now = Date.now(), 
     return payload;
 }
 
-export async function buildMcpAuthContextForDesktopGrant(grant: string | null, deps: McpDesktopGrantAccessDeps & { ignoreExpiration?: boolean } = {}): Promise<McpTokenAccessResult> {
+export async function buildMcpAuthContextForDesktopGrant(
+    grant: string | null,
+    deps: McpDesktopGrantAccessDeps & { ignoreExpiration?: boolean } = {},
+): Promise<McpTokenAccessResult> {
     let payload: McpDesktopGrantPayload | null;
     try {
         payload = verifyMcpDesktopGrant(grant, { now: deps.now, secret: deps.secret, ignoreExpiration: deps.ignoreExpiration });
@@ -324,9 +331,5 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
 }
 
 export function hasMcpScope(context: McpAuthContext, scope: string) {
-    if (scope === 'schema:read' && context.scopes.includes('connections:read')) {
-        return true;
-    }
-
-    return context.scopes.includes(scope);
+    return hasActionScope(context.scopes, scope);
 }

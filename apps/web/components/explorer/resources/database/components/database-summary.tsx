@@ -10,8 +10,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/registry/new-york-v4/ui/alert';
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { buildExplorerListPath, buildExplorerObjectPath } from '@/lib/explorer/build-path';
@@ -20,7 +19,6 @@ import { cn } from '@dory/web-utils';
 import { splitQualifiedName } from '@/components/explorer/core/explorer-store';
 import { formatBytes, formatNumber } from '@/app/(app)/[organization]/components/table-browser/components/stats/components/formatters';
 import type { DatabaseSummary as DatabaseSummaryData, DatabaseSummaryRecommendation, DatabaseSummaryTable } from '@dory/drivers/types';
-import type { ResponseObject } from '@dory/shared';
 
 type DatabaseSummaryProps = {
     baseParams?: ExplorerBaseParams;
@@ -192,26 +190,19 @@ export default function DatabaseSummary({ baseParams, catalog, database, schema 
             setError(null);
 
             try {
-                const encodedDb = encodeURIComponent(databaseName);
-                const query = new URLSearchParams();
-                if (catalogName) query.set('catalog', catalogName);
-                if (schema) query.set('schema', schema);
-                const url = `/api/connection/${connectionId}/databases/${encodedDb}/summary${query.toString() ? `?${query.toString()}` : ''}`;
-
-                const response = await authFetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'X-Connection-ID': connectionId,
+                const res = await executeActionClient<{ summary: DatabaseSummaryData }>(
+                    'schema.getDatabaseSummary',
+                    {
+                        connectionId,
+                        database: databaseName,
+                        catalog: catalogName ?? undefined,
+                        schema: schema ?? undefined,
                     },
-                });
-                const res = (await response.json()) as ResponseObject<DatabaseSummaryData>;
-
-                if (!isSuccess(res)) {
-                    throw new Error(res.message || t('Failed to fetch summary'));
-                }
+                    { currentConnectionId: connectionId },
+                );
 
                 if (!ignore) {
-                    setSummary(res.data ?? null);
+                    setSummary(res.summary ?? null);
                 }
             } catch (err) {
                 console.error('Failed to fetch database summary:', err);

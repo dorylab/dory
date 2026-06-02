@@ -1,8 +1,6 @@
 import { useAtom, useAtomValue } from 'jotai';
 import { useCallback, useState } from 'react';
-import { isSuccess } from '@/lib/result';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { toast } from 'sonner';
 
@@ -25,25 +23,14 @@ export function useQuery() {
             }
             try {
                 console.log('query start');
-                const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-                if (currentConnection?.connection.id) {
-                    headers['X-Connection-ID'] = currentConnection.connection.id;
-                }
-
-                const response = await authFetch(`/api/query`, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(payload),
-                    signal: options?.signal,
-                });
-                const res = (await response.json()) as ResponseObject<any>;
+                const data = await executeActionClient('query.execute', {
+                    ...payload,
+                    connectionId: currentConnection.connection.id,
+                }, { signal: options?.signal, currentConnectionId: currentConnection.connection.id });
+                const res = { code: 0, message: 'success', data };
                 console.log('query end');
                 console.log(res);
-                if (isSuccess(res)) {
-                    setResult(res);
-                } else {
-                    toast.error(res.message || 'Request Failed');
-                }
+                setResult(res);
                 return { ...res, sql: payload.sql };
             } catch (e: any) {
                 console.log(e);

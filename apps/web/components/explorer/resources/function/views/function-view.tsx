@@ -8,10 +8,8 @@ import { format as formatSql } from 'sql-formatter';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { splitQualifiedName, useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import { cn } from '@dory/web-utils';
-import type { ResponseObject } from '@dory/shared';
 import type { DatabaseFunctionDependency, DatabaseFunctionDetail, DatabaseFunctionParameter, DatabaseFunctionReturnColumn } from '@dory/drivers/types';
 import type { ExplorerResource } from '@/lib/explorer/types';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -176,20 +174,17 @@ export function FunctionView({ resource }: FunctionViewProps) {
             setLoading(true);
             setError(null);
             try {
-                const params = new URLSearchParams();
-                if (resource.schema) params.set('schema', resource.schema);
-                const response = await authFetch(
-                    `/api/connection/${connectionId}/databases/${encodeURIComponent(resource.database)}/functions/${encodeURIComponent(resource.name)}${params.size ? `?${params.toString()}` : ''}`,
+                const result = await executeActionClient<{ function: DatabaseFunctionDetail | null }>(
+                    'schema.getFunctionDetail',
                     {
-                        method: 'GET',
-                        headers: {
-                            'X-Connection-ID': connectionId,
-                        },
+                        connectionId,
+                        database: resource.database,
+                        functionName: resource.name,
+                        schema: resource.schema ?? null,
                     },
+                    { currentConnectionId: connectionId },
                 );
-                const result = (await response.json()) as ResponseObject<DatabaseFunctionDetail>;
-                if (!isSuccess(result)) throw new Error(result.message || 'Failed to load function detail');
-                if (!cancelled) setDetail(result.data ?? null);
+                if (!cancelled) setDetail(result.function ?? null);
             } catch (err) {
                 if (!cancelled) {
                     setDetail(null);

@@ -2573,7 +2573,46 @@
             "InvalidTokenPayload": "Carga del token MCP no válida.",
             "MissingTokenId": "Falta el id del token MCP.",
             "TokenNotFound": "No se encontró el token MCP.",
-            "DesktopGrantUnavailable": "Las concesiones MCP de escritorio solo están disponibles en el runtime de escritorio."
+            "DesktopGrantUnavailable": "Las concesiones MCP de escritorio solo están disponibles en el runtime de escritorio.",
+            "InvalidLinkPayload": "Carga de autorización MCP no válida.",
+            "LinkNotFound": "No se encontró la solicitud de autorización MCP.",
+            "LinkVerifierMismatch": "El verificador de autorización MCP no coincide.",
+            "LinkConsumed": "La solicitud de autorización MCP ya fue consumida.",
+            "LinkInvalidApproval": "La aprobación de autorización MCP está incompleta.",
+            "LinkApprovalUnavailable": "La solicitud de autorización MCP ya no se puede actualizar."
+        }
+    },
+    "McpAuthorize": {
+        "Eyebrow": "Acceso de agentes",
+        "Title": "Conectar este cliente MCP",
+        "Description": "Aprueba esta solicitud solo si iniciaste el comando de inicio de sesión de Dory MCP en esta máquina.",
+        "UnknownClient": "Cliente MCP desconocido",
+        "SignedInAs": "Sesión iniciada como {user}",
+        "Expires": "Caduca",
+        "Scopes": "Acceso",
+        "RequestUnavailable": "Esta solicitud de autorización no está disponible.",
+        "MissingOrganization": "Elige o crea una organización antes de aprobar el acceso MCP.",
+        "Approve": "Aprobar",
+        "Deny": "Denegar",
+        "Approved": "Acceso MCP aprobado. Puedes volver a la terminal.",
+        "Denied": "Acceso MCP denegado.",
+        "Failed": "No se pudo actualizar la autorización MCP.",
+        "State": {
+            "missing": "Falta",
+            "not_found": "No encontrada",
+            "pending": "Pendiente",
+            "approved": "Aprobada",
+            "denied": "Denegada",
+            "expired": "Caducada",
+            "consumed": "Conectado"
+        },
+        "Messages": {
+            "missing": "Abre el enlace de autorización desde el comando de inicio de sesión de Dory MCP.",
+            "not_found": "Esta solicitud de autorización no existe o fue eliminada.",
+            "approved": "Este cliente MCP fue aprobado.",
+            "denied": "Esta solicitud de autorización fue denegada.",
+            "expired": "Esta solicitud de autorización caducó. Ejecuta de nuevo el comando de inicio de sesión.",
+            "consumed": "Este cliente MCP ya está conectado."
         }
     },
     "Ai": {
@@ -3006,11 +3045,14 @@
                 "Copied": "Copiado",
                 "SetupTitle": "Configuración de MCP",
                 "SetupDescription": "Los clientes de escritorio se conectan mediante el endpoint local. No hace falta introducir credenciales manualmente.",
+                "WebSetupDescription": "Los clientes web se conectan mediante el bridge npm de Dory. El comando de inicio de sesión abre una página de aprobación en el navegador y guarda las credenciales localmente.",
                 "SetupTabs": {
                     "General": "General"
                 },
                 "General": {
                     "Endpoint": "Endpoint",
+                    "Server": "Servidor",
+                    "LoginTitle": "Autorizar esta máquina",
                     "JsonTitle": "Configuración JSON genérica"
                 },
                 "Codex": {
@@ -3021,6 +3063,17 @@
                     "CliTitle": "Claude Code CLI",
                     "JsonTitle": ".mcp.json"
                 },
+                "ClientsTitle": "Clientes MCP conectados",
+                "ClientsDescription": "Estos clientes usan tokens MCP personales creados mediante autorización en el navegador.",
+                "ClientActive": "Activo",
+                "ClientInactive": "Inactivo",
+                "ClientCreated": "Creado el {date}",
+                "ClientLastUsed": "Último uso el {date}",
+                "ClientNeverUsed": "Nunca usado",
+                "RevokeClient": "Revocar",
+                "ClientsEmpty": "Aún no hay clientes MCP conectados.",
+                "ClientRevoked": "Cliente MCP revocado.",
+                "ClientRevokeFailed": "No se pudo revocar el cliente MCP.",
                 "WebAuthorizationStatus": "La autorización MCP web llegará más adelante. El MCP local de escritorio ya está disponible."
             }
         },

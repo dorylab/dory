@@ -2,9 +2,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { currentConnectionAtom, databasesAtom } from '@/shared/stores/app.store';
 import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import type { ResponseObject } from '@dory/shared';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 
 const inflightDatabaseRequests = new Map<string, Promise<void>>();
 
@@ -55,28 +53,18 @@ export function useDatabases() {
 
         const request = (async () => {
             setDatabasesState(prev => ({ ...prev, loading: true }));
-            const response = await authFetch(`/api/connection/${requestedConnectionId}/databases`, {
-                method: 'GET',
-                headers: {
-                    'X-Connection-ID': requestedConnectionId,
-                },
-            });
-            const res = (await response.json()) as ResponseObject<any>;
-            if (isSuccess(res)) {
-                setDatabasesState(prev => {
-                    if (prev.connectionId !== requestedConnectionId && prev.items.length > 0) {
-                        return prev;
-                    }
+            const result = await executeActionClient<{ databases: any[] }>('schema.listDatabases', { connectionId: requestedConnectionId }, { currentConnectionId: requestedConnectionId });
+            setDatabasesState(prev => {
+                if (prev.connectionId !== requestedConnectionId && prev.items.length > 0) {
+                    return prev;
+                }
 
-                    return {
-                        connectionId: requestedConnectionId,
-                        items: res.data ?? [],
-                        loading: false,
-                    };
-                });
-            } else {
-                setDatabasesState(prev => ({ ...prev, loading: false }));
-            }
+                return {
+                    connectionId: requestedConnectionId,
+                    items: result.databases ?? [],
+                    loading: false,
+                };
+            });
         })();
 
         inflightDatabaseRequests.set(requestKey, request);

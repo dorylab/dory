@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
+import type { McpAccessTokenRecord, McpAuthorizationRequestRecord } from '@dory/database/postgres/impl/mcp';
+import { resolveMcpAuthorizationPollState } from '@dory/database/postgres/impl/mcp';
 import type { OrganizationAccess } from '../../lib/server/authz';
 import {
     authenticateMcpRequest,
@@ -17,6 +18,7 @@ import {
 } from '../../lib/server/mcp/auth';
 import { getReadonlyMcpStatements } from '../../lib/server/mcp/sql-safety';
 import { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '../../lib/server/mcp/tools';
+import { getMcpLinkExpiresAt, getMcpLinkScopes, hashMcpLinkVerifier, mcpLinkPollSchema, mcpLinkStartSchema, MCP_LINK_TTL_MS } from '../../lib/server/mcp/link';
 
 function createAccess(overrides: Partial<OrganizationAccess> = {}): OrganizationAccess {
     return {
@@ -59,6 +61,26 @@ function createTokenRecord(overrides: Partial<McpAccessTokenRecord> = {}): McpAc
     };
 }
 
+function createAuthorizationRequestRecord(overrides: Partial<McpAuthorizationRequestRecord> = {}): McpAuthorizationRequestRecord {
+    return {
+        id: 'request-id',
+        clientName: 'Codex',
+        verifierHash: hashMcpLinkVerifier('verifier-secret'),
+        scopes: ['connections:read'],
+        status: 'pending',
+        organizationId: null,
+        userId: null,
+        mcpTokenId: null,
+        approvedAt: null,
+        deniedAt: null,
+        consumedAt: null,
+        expiresAt: new Date('2026-01-01T00:10:00.000Z'),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        ...overrides,
+    };
+}
+
 test('generateMcpToken returns one-time token metadata without storing the raw token', () => {
     const generated = generateMcpToken();
 
@@ -70,7 +92,10 @@ test('generateMcpToken returns one-time token metadata without storing the raw t
 });
 
 test('default MCP scopes cover v1 read and analysis capabilities', () => {
-    assert.deepEqual([...MCP_DEFAULT_SCOPES], ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'saved_queries:read', 'monitoring:read']);
+    assert.deepEqual(
+        [...MCP_DEFAULT_SCOPES],
+        ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'monitoring:read'],
+    );
 });
 
 test('connections:read remains compatible with schema read tools', () => {
@@ -190,6 +215,76 @@ test('desktop MCP grant auth context rejects invalid grants', async () => {
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.equal(result.status, 401);
+});
+
+test('web MCP link verifier hashing is deterministic and never exposes the verifier', () => {
+    const verifier = 'web-mcp-verifier-secret';
+    const hash = hashMcpLinkVerifier(verifier);
+
+    assert.match(hash, /^[a-f0-9]{64}$/);
+    assert.equal(hash, hashMcpLinkVerifier(verifier));
+    assert.notEqual(hash, verifier);
+});
+
+test('web MCP link schemas validate start and poll payloads', () => {
+    assert.equal(
+        mcpLinkStartSchema.safeParse({
+            clientName: 'Codex',
+            verifierHash: 'a'.repeat(64),
+            scopes: ['connections:read'],
+        }).success,
+        true,
+    );
+    assert.equal(
+        mcpLinkStartSchema.safeParse({
+            clientName: '',
+            verifierHash: 'not-a-hash',
+        }).success,
+        false,
+    );
+    assert.equal(
+        mcpLinkPollSchema.safeParse({
+            requestId: 'request',
+            verifier: 'long-enough-verifier',
+        }).success,
+        true,
+    );
+});
+
+test('web MCP link defaults use existing MCP scopes and ten minute expiry', () => {
+    const now = Date.parse('2026-01-01T00:00:00.000Z');
+
+    assert.deepEqual(getMcpLinkScopes(), [...MCP_DEFAULT_SCOPES]);
+    assert.equal(getMcpLinkExpiresAt(now).getTime(), now + MCP_LINK_TTL_MS);
+});
+
+test('web MCP authorization repository state resolver covers terminal and pending states', () => {
+    const now = new Date('2026-01-01T00:01:00.000Z');
+    const verifierHash = hashMcpLinkVerifier('verifier-secret');
+
+    assert.equal(resolveMcpAuthorizationPollState(null, { verifierHash, now }).status, 'not_found');
+    assert.equal(resolveMcpAuthorizationPollState(createAuthorizationRequestRecord(), { verifierHash, now }).status, 'pending');
+    assert.equal(resolveMcpAuthorizationPollState(createAuthorizationRequestRecord({ status: 'approved' }), { verifierHash, now }).status, 'approved');
+    assert.equal(resolveMcpAuthorizationPollState(createAuthorizationRequestRecord({ status: 'denied' }), { verifierHash, now }).status, 'denied');
+    assert.equal(
+        resolveMcpAuthorizationPollState(
+            createAuthorizationRequestRecord({
+                expiresAt: new Date('2025-12-31T23:59:59.000Z'),
+            }),
+            { verifierHash, now },
+        ).status,
+        'expired',
+    );
+    assert.equal(
+        resolveMcpAuthorizationPollState(
+            createAuthorizationRequestRecord({
+                consumedAt: new Date('2026-01-01T00:02:00.000Z'),
+            }),
+            { verifierHash, now },
+        ).status,
+        'consumed',
+    );
+    assert.equal(resolveMcpAuthorizationPollState(createAuthorizationRequestRecord(), { verifierHash: 'b'.repeat(64), now }).status, 'verifier_mismatch');
 });
 
 test('MCP request auth keeps missing bearer behavior outside desktop runtime', async () => {

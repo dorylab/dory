@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { useParams } from 'next/navigation';
-import { authFetch } from '@/lib/client/auth-fetch';
-import { isSuccess } from '@/lib/result';
+import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import type { ResponseObject } from '@dory/shared';
 
 type SchemaOption = {
     value: string;
@@ -52,20 +50,8 @@ export function useSchemas(database?: string, enabled = true) {
         }
 
         const request = (async () => {
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodeURIComponent(database)}/schemas`, {
-                method: 'GET',
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const payload = (await response.json()) as ResponseObject<SchemaOption[]>;
-
-            if (isSuccess(payload)) {
-                setSchemas(payload.data ?? []);
-                return;
-            }
-
-            setSchemas([]);
+            const payload = await executeActionClient<SchemaOption[]>('schema.listSchemas', { connectionId, database }, { currentConnectionId: connectionId });
+            setSchemas(payload ?? []);
         })();
 
         inflightSchemaRequests.set(requestKey, request);

@@ -1,5 +1,5 @@
-import { authFetch } from '@/lib/client/auth-fetch';
 import type { ResponseObject } from '@dory/shared';
+import { executeActionClient } from '@/lib/actions/client';
 
 type FetchTablePreviewParams = {
     connectionId: string;
@@ -24,23 +24,24 @@ export async function fetchTablePreview({
     source,
     signal,
 }: FetchTablePreviewParams) {
-    const encodedDb = encodeURIComponent(databaseName);
-    const encodedTable = encodeURIComponent(tableName);
-    const response = await authFetch(`/api/connection/${connectionId}/databases/${encodedDb}/tables/${encodedTable}/preview`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Connection-ID': connectionId,
-        },
-        body: JSON.stringify({
+    const data = await executeActionClient(
+        'table.preview',
+        {
+            connectionId,
+            database: databaseName,
+            table: tableName,
             limit,
             offset,
             sessionId,
             tabId,
             source,
-        }),
-        signal,
-    });
+        },
+        { currentConnectionId: connectionId, signal },
+    );
 
-    return (await response.json()) as ResponseObject<any>;
+    return {
+        code: 0,
+        message: 'success',
+        data,
+    } as ResponseObject<any>;
 }

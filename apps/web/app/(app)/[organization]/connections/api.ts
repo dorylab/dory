@@ -1,4 +1,3 @@
-import { isSuccess } from '@/lib/result';
 import type { ResponseObject } from '@dory/shared';
 import { ConnectionListItem, CreateConnectionPayload } from '@dory/shared/types/connections';
 import type {
@@ -9,6 +8,7 @@ import type {
     LocalFilesUpdateRequest,
 } from '@dory/shared/types/local-files';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { translate } from '@dory/i18n/translate';
 import { getClientLocale } from '@dory/i18n/client';
 
@@ -33,18 +33,16 @@ function translateConnectionsApi(key: string) {
     return translate(getClientLocale(), key);
 }
 
-export async function addConnection(params: CreateConnectionPayload): Promise<ResponseObject<ConnectionListItem>> {
-    const res = await fetchJsonResponse<ConnectionListItem>(
-        '/api/connection',
-        {
-            method: 'POST',
-            body: JSON.stringify(params),
-            headers: { 'Content-Type': 'application/json' },
-        },
-        translateConnectionsApi('Connections.Api.AddFailed'),
-    );
+function actionResponse<T>(data: T): ResponseObject<T> {
+    return {
+        code: 0,
+        message: 'success',
+        data,
+    };
+}
 
-    return res;
+export async function addConnection(params: CreateConnectionPayload): Promise<ResponseObject<ConnectionListItem>> {
+    return actionResponse(await executeActionClient<ConnectionListItem>('connection.create', { payload: params }));
 }
 
 export async function updateConnection(params: CreateConnectionPayload & { id?: string }): Promise<ResponseObject<ConnectionListItem>> {
@@ -54,57 +52,21 @@ export async function updateConnection(params: CreateConnectionPayload & { id?: 
         throw new Error(translateConnectionsApi('Connections.Api.UpdateRequiresId'));
     }
 
-    const res = await fetchJsonResponse<ConnectionListItem>(
-        `/api/connection?id=${encodeURIComponent(id)}`,
-        {
-            method: 'PATCH',
-            body: JSON.stringify(params),
-            headers: { 'Content-Type': 'application/json' },
-        },
-        translateConnectionsApi('Connections.Api.UpdateFailed'),
-    );
-
-    return res;
+    return actionResponse(await executeActionClient<ConnectionListItem>('connection.update', { id, patch: params }));
 }
 
 export async function getConnections(): Promise<{ data: ConnectionListItem[] }> {
-    const res = await fetchJsonResponse<ConnectionListItem[]>('/api/connection', { method: 'GET' }, translateConnectionsApi('Connections.Api.ListFailed'));
-
-    if (!isSuccess(res)) {
-        throw new Error(res.message || translateConnectionsApi('Connections.Api.ListFailed'));
-    }
-
-    return { data: res.data ?? [] };
+    const res = await executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {});
+    return { data: res.connections ?? [] };
 }
 
 export async function deleteConnection(id: string): Promise<ResponseObject<null>> {
-    const res = await fetchJsonResponse<null>(
-        `/api/connection?id=${encodeURIComponent(id)}`,
-        {
-            method: 'DELETE',
-        },
-        translateConnectionsApi('Connections.Api.DeleteFailed'),
-    );
-
-    if (!isSuccess(res)) {
-        throw new Error(res.message || translateConnectionsApi('Connections.Api.DeleteFailed'));
-    }
-
-    return res;
+    await executeActionClient('connection.delete', { id }, { confirmationToken: 'connection.delete' });
+    return actionResponse(null);
 }
 
 export async function getConnectionDetail(id: string): Promise<{ data: ConnectionListItem }> {
-    const res = await fetchJsonResponse<ConnectionListItem>(
-        `/api/connection?id=${encodeURIComponent(id)}`,
-        { method: 'GET' },
-        translateConnectionsApi('Connections.Api.DetailFailed'),
-    );
-
-    if (!isSuccess(res)) {
-        throw new Error(res.message || translateConnectionsApi('Connections.Api.DetailFailed'));
-    }
-
-    const detail = res.data;
+    const detail = await executeActionClient<ConnectionListItem>('connection.get', { id });
     if (!detail) {
         throw new Error(translateConnectionsApi('Connections.Api.DetailNotFound'));
     }
@@ -113,17 +75,7 @@ export async function getConnectionDetail(id: string): Promise<{ data: Connectio
 }
 
 export async function testConnection(params: CreateConnectionPayload & { timeout?: number }): Promise<ResponseObject<unknown>> {
-    const res = await fetchJsonResponse<unknown>(
-        '/api/connection/test',
-        {
-            method: 'POST',
-            body: JSON.stringify(params),
-            headers: { 'Content-Type': 'application/json' },
-        },
-        translateConnectionsApi('Connections.Api.TestFailed'),
-    );
-
-    return res;
+    return actionResponse(await executeActionClient('connection.test', { payload: params }));
 }
 
 type ConnectConnectionResult = {
@@ -137,21 +89,9 @@ type ConnectConnectionResult = {
 };
 
 export async function connectConnection(params: ConnectionListItem): Promise<ResponseObject<ConnectConnectionResult>> {
-    const res = await fetchJsonResponse<ConnectConnectionResult>(
-        '/api/connection/connect',
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(params),
-        },
-        translateConnectionsApi('Connections.Api.ConnectFailed'),
-    );
-
-    if (!isSuccess(res)) {
-        throw new Error(res.message || translateConnectionsApi('Connections.Api.ConnectFailed'));
-    }
-
-    return res;
+    const connectionId = params.connection.id;
+    const identityId = (params as ConnectionListItem & { identityId?: string | null }).identityId ?? params.identities.find(identity => identity.isDefault)?.id ?? null;
+    return actionResponse(await executeActionClient<ConnectConnectionResult>('connection.connect', { connectionId, identityId }));
 }
 
 export async function inspectLocalFiles(params: LocalFilesInspectRequest): Promise<ResponseObject<LocalFilesInspectResponse>> {

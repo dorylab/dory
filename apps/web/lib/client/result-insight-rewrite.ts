@@ -1,4 +1,5 @@
 import type { InsightRewriteRequest, InsightRewriteResponse } from './result-set-insights';
+import { executeActionClient } from '@/lib/actions/client';
 
 const insightRewriteCache = new Map<string, InsightRewriteResponse | null>();
 const insightRewriteInflight = new Map<string, Promise<InsightRewriteResponse | null>>();
@@ -25,17 +26,10 @@ export async function fetchInsightRewrite(cacheKey: string) {
     const inflight = insightRewriteInflight.get(cacheKey);
     if (inflight) return inflight;
 
-    const request = fetch('/api/ai/result-insights', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: cacheKey,
-    })
-        .then(async response => {
-            const payload = (await response.json().catch(() => null)) as InsightRewriteResponse | null;
-            insightRewriteCache.set(cacheKey, payload ?? null);
-            return payload ?? null;
+    const request = executeActionClient<InsightRewriteResponse | null>('ai.resultInsights', JSON.parse(cacheKey))
+        .then(payload => {
+            insightRewriteCache.set(cacheKey, payload);
+            return payload;
         })
         .catch(() => {
             insightRewriteCache.set(cacheKey, null);

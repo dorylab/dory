@@ -2520,7 +2520,13 @@
             "InvalidTokenPayload": "MCP トークンのリクエスト内容が無効です。",
             "MissingTokenId": "MCP トークン ID がありません。",
             "TokenNotFound": "MCP トークンが見つかりません。",
-            "DesktopGrantUnavailable": "MCP デスクトップ grant はデスクトップ runtime でのみ利用できます。"
+            "DesktopGrantUnavailable": "MCP デスクトップ grant はデスクトップ runtime でのみ利用できます。",
+            "InvalidLinkPayload": "MCP 認可リクエストが無効です。",
+            "LinkNotFound": "MCP 認可リクエストが見つかりません。",
+            "LinkVerifierMismatch": "MCP 認可 verifier が一致しません。",
+            "LinkConsumed": "MCP 認可リクエストはすでに使用されています。",
+            "LinkInvalidApproval": "MCP 認可の承認情報が不完全です。",
+            "LinkApprovalUnavailable": "MCP 認可リクエストはもう更新できません。"
         },
         "OrganizationAiProviders": {
             "ApiKeyRequired": "この AI サービスには API キーが必要です。",
@@ -2534,6 +2540,39 @@
             "DisabledProviderCannotBeDefault": "デフォルトに設定する前に、この AI サービスを有効化してください。",
             "SystemProviderUnavailable": "Dory AI は利用できません。",
             "TestFailed": "AI サービスのテストに失敗しました: {reason}"
+        }
+    },
+    "McpAuthorize": {
+        "Eyebrow": "エージェントアクセス",
+        "Title": "この MCP クライアントを接続",
+        "Description": "このマシンで Dory MCP のログインコマンドを開始した場合のみ、このリクエストを承認してください。",
+        "UnknownClient": "不明な MCP クライアント",
+        "SignedInAs": "{user} としてサインイン中",
+        "Expires": "有効期限",
+        "Scopes": "アクセス権",
+        "RequestUnavailable": "この認可リクエストは利用できません。",
+        "MissingOrganization": "MCP アクセスを承認する前に、組織を選択または作成してください。",
+        "Approve": "承認",
+        "Deny": "拒否",
+        "Approved": "MCP アクセスを承認しました。ターミナルに戻れます。",
+        "Denied": "MCP アクセスを拒否しました。",
+        "Failed": "MCP 認可の更新に失敗しました。",
+        "State": {
+            "missing": "不足",
+            "not_found": "見つかりません",
+            "pending": "保留中",
+            "approved": "承認済み",
+            "denied": "拒否済み",
+            "expired": "期限切れ",
+            "consumed": "接続済み"
+        },
+        "Messages": {
+            "missing": "Dory MCP ログインコマンドから認可リンクを開いてください。",
+            "not_found": "この認可リクエストは存在しないか、削除されています。",
+            "approved": "この MCP クライアントは承認済みです。",
+            "denied": "この認可リクエストは拒否されました。",
+            "expired": "この認可リクエストは期限切れです。ログインコマンドをもう一度実行してください。",
+            "consumed": "この MCP クライアントはすでに接続済みです。"
         }
     },
     "Ai": {
@@ -2966,11 +3005,14 @@
                 "Copied": "コピー済み",
                 "SetupTitle": "MCP セットアップ",
                 "SetupDescription": "デスクトップクライアントはローカルエンドポイント経由で接続します。手動の認証情報は不要です。",
+                "WebSetupDescription": "Web クライアントは Dory の npm bridge 経由で接続します。ログインコマンドはブラウザの承認ページを開き、認証情報をローカルに保存します。",
                 "SetupTabs": {
                     "General": "一般"
                 },
                 "General": {
                     "Endpoint": "エンドポイント",
+                    "Server": "サーバー",
+                    "LoginTitle": "このマシンを認可",
                     "JsonTitle": "汎用 JSON 設定"
                 },
                 "Codex": {
@@ -2981,6 +3023,17 @@
                     "CliTitle": "Claude Code CLI",
                     "JsonTitle": ".mcp.json"
                 },
+                "ClientsTitle": "接続済み MCP クライアント",
+                "ClientsDescription": "これらのクライアントは、ブラウザ認可で作成された個人用 MCP トークンを使用します。",
+                "ClientActive": "有効",
+                "ClientInactive": "無効",
+                "ClientCreated": "{date} に作成",
+                "ClientLastUsed": "最終使用: {date}",
+                "ClientNeverUsed": "未使用",
+                "RevokeClient": "取り消す",
+                "ClientsEmpty": "接続済みの MCP クライアントはまだありません。",
+                "ClientRevoked": "MCP クライアントを取り消しました。",
+                "ClientRevokeFailed": "MCP クライアントの取り消しに失敗しました。",
                 "WebAuthorizationStatus": "Web MCP authorization は後日提供予定です。現在はデスクトップのローカル MCP を利用できます。"
             }
         },

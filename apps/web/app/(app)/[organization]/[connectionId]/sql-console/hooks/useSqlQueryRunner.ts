@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { useDB } from '@/lib/client/use-pglite';
 import { useQuery } from '@/hooks/use-query';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { fetchTablePreview } from '../../../components/table-browser/lib/fetch-table-preview';
 import { SQLTab } from '@dory/shared/types/tabs';
 import { runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
@@ -244,13 +244,7 @@ export function useSqlQueryRunner({
                 return;
             }
 
-            authFetch('/api/query/cancel', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ sessionId }),
-            }).catch(error => {
+            executeActionClient('query.cancel', { sessionId }).catch(error => {
                 console.error('[SQLConsoleClient.cancelQuery] cancel API failed', error);
             });
         },

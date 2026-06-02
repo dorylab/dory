@@ -12,12 +12,10 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useDatabases } from '@/hooks/use-databases';
-import type { ResponseObject } from '@dory/shared';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { getDriverCapabilities } from '@/lib/explorer/capabilities';
 import { isLocalFilesDataset } from '@/lib/explorer/local-files';
-import { isSuccess } from '@/lib/result';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import { ExplorerSidebarTree } from './explorer-sidebar-tree';
 import { buildLocalFilesSidebarModel } from './local-files-sidebar';
@@ -46,6 +44,12 @@ const GROUP_ENDPOINTS = {
     functions: 'functions',
 } as const;
 const GROUP_KEYS = Object.keys(GROUP_ENDPOINTS) as (keyof GroupState)[];
+const GROUP_ACTIONS = {
+    tables: { id: 'schema.listTables', key: 'tables' },
+    views: { id: 'schema.listViews', key: 'views' },
+    materializedViews: { id: 'schema.listMaterializedViews', key: 'materializedViews' },
+    functions: { id: 'schema.listFunctions', key: 'functions' },
+} as const;
 
 function resolveParam(value?: string | string[]) {
     return Array.isArray(value) ? value[0] : value;
@@ -158,16 +162,8 @@ export function ExplorerSidebar({
                 if (!connectionId || !supportsSchemas) return [];
 
                 try {
-                    const response = await authFetch(`/api/connection/${connectionId}/databases/${encodeURIComponent(entry.value)}/schemas`, {
-                        method: 'GET',
-                        signal,
-                        headers: {
-                            'X-Connection-ID': connectionId,
-                        },
-                    });
-                    const payload = (await response.json()) as ResponseObject<TargetOption[]>;
-                    if (!isSuccess(payload)) return [];
-                    return normalizeEntries(payload.data ?? []);
+                    const payload = await executeActionClient<TargetOption[]>('schema.listSchemas', { connectionId, database: entry.value }, { currentConnectionId: connectionId, signal });
+                    return normalizeEntries(payload ?? []);
                 } catch (error) {
                     console.error('Failed to load schemas:', error);
                     return [];
@@ -187,16 +183,13 @@ export function ExplorerSidebar({
                     if (!connectionId) return [];
 
                     try {
-                        const response = await authFetch(`/api/connection/${connectionId}/databases/${encodeURIComponent(entry.value)}/${GROUP_ENDPOINTS[group]}`, {
-                            method: 'GET',
-                            signal,
-                            headers: {
-                                'X-Connection-ID': connectionId,
-                            },
-                        });
-                        const payload = (await response.json()) as ResponseObject<TargetOption[]>;
-                        if (!isSuccess(payload)) return [];
-                        return normalizeEntries(payload.data ?? []);
+                        const action = GROUP_ACTIONS[group];
+                        const payload = await executeActionClient<Record<string, TargetOption[]>>(
+                            action.id,
+                            { connectionId, database: entry.value },
+                            { currentConnectionId: connectionId, signal },
+                        );
+                        return normalizeEntries(payload?.[action.key] ?? []);
                     } catch (error) {
                         console.error('Failed to load database objects:', error);
                         return [];

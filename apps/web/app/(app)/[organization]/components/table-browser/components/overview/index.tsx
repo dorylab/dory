@@ -6,7 +6,7 @@ import { useAtomValue } from 'jotai';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { useTranslations } from 'next-intl';
 import type { TableProperties } from '../structure/properties-section';
 import { OverviewHeader } from './components/overview-header';
@@ -227,25 +227,21 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
             const ignoreCache = ignoreAiCacheRef.current;
             ignoreAiCacheRef.current = false;
 
-            const res = await authFetch('/api/ai/table-summary', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            const data = await executeActionClient<AiOverviewResponse>(
+                'ai.tableSummary',
+                {
+                    connectionId: currentConnection?.connection.id,
                     database: databaseName,
                     table: tableName,
                     columns,
                     properties,
-                    connectionId: currentConnection?.connection.id,
                     dbType: currentConnection?.connection.type,
                     ignoreCache,
-                }),
-            });
-
-            if (!res.ok) {
-                throw new Error(await res.text());
-            }
-
-            const data = (await res.json()) as AiOverviewResponse;
+                },
+                {
+                    currentConnectionId: currentConnection?.connection.id,
+                },
+            );
             console.log('AI Overview response:', data);
             
             return {

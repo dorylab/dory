@@ -2294,6 +2294,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@dory/actions@npm:0.1.0, @dory/actions@workspace:packages/actions":
+  version: 0.0.0-use.local
+  resolution: "@dory/actions@workspace:packages/actions"
+  dependencies:
+    "@dory/shared": "npm:0.1.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  languageName: unknown
+  linkType: soft
+
 "@dory/analysis@npm:0.1.0, @dory/analysis@workspace:packages/analysis":
   version: 0.0.0-use.local
   resolution: "@dory/analysis@workspace:packages/analysis"
@@ -3667,6 +3677,20 @@ __metadata:
   checksum: 10c0/885b02c8b0d75b2d215da25f3b639158c4fbe8fefe0d79163304534b9a6d0710db4b7699f7cd3cc1a730792bff04cbe19f4850a62d3e105a663eaeec88f38332
   languageName: node
   linkType: hard
+
+"@getdory/mcp@workspace:packages/mcp":
+  version: 0.0.0-use.local
+  resolution: "@getdory/mcp@workspace:packages/mcp"
+  dependencies:
+    "@modelcontextprotocol/sdk": "npm:^1.29.0"
+    "@types/node": "npm:^25.5.2"
+    tsx: "npm:^4.21.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  bin:
+    dory-mcp: ./dist/cli.js
+  languageName: unknown
+  linkType: soft
 
 "@hono/node-server@npm:^1.19.9":
   version: 1.19.13
@@ -22772,6 +22796,7 @@ __metadata:
     "@dnd-kit/modifiers": "npm:^9.0.0"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
+    "@dory/actions": "npm:0.1.0"
     "@dory/analysis": "npm:0.1.0"
     "@dory/database": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"

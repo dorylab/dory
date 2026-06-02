@@ -5,13 +5,11 @@ import Link from 'next/link';
 import { ColumnDef, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { Search } from 'lucide-react';
 import { StickyDataTable } from '@/components/@dory/ui/sticky-data-table';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { buildExplorerSchemaPath } from '@/lib/explorer/build-path';
 import type { ExplorerBaseParams } from '@/lib/explorer/types';
-import { isSuccess } from '@/lib/result';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { TooltipProvider } from '@/registry/new-york-v4/ui/tooltip';
-import type { ResponseObject } from '@dory/shared';
 import type { DatabaseMeta } from '@dory/drivers/types';
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { useExplorerConnectionContext } from '@/components/explorer/core/explorer-store';
@@ -35,13 +33,8 @@ export function SchemasTab(props: SchemasTabProps) {
         if (!connectionId || !database) return;
         setLoading(true);
         try {
-            const response = await authFetch(`/api/connection/${connectionId}/databases/${encodeURIComponent(database)}/schemas`, {
-                method: 'GET',
-                headers: { 'X-Connection-ID': connectionId },
-            });
-            const res = (await response.json()) as ResponseObject<DatabaseMeta[]>;
-            if (!isSuccess(res)) throw new Error(res.message || 'Failed to fetch schemas');
-            setRows(res.data ?? []);
+            const res = await executeActionClient<DatabaseMeta[]>('schema.listSchemas', { connectionId, database }, { currentConnectionId: connectionId });
+            setRows(res ?? []);
         } catch (error) {
             console.error('Failed to fetch schemas:', error);
             setRows([]);

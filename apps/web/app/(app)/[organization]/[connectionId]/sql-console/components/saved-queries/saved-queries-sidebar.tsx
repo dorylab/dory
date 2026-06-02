@@ -36,7 +36,7 @@ import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
-import { authFetch } from '@/lib/client/auth-fetch';
+import { executeActionClient } from '@/lib/actions/client';
 import { authClient } from '@/lib/auth-client';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { cn } from '@dory/web-utils';
@@ -81,12 +81,6 @@ type SavedQueriesSidebarProps = {
 };
 
 type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'sql_text' | 'status' | 'duration_ms' | 'error_message'>;
-
-type ApiResponse<T> = {
-    code: number;
-    message?: string;
-    data?: T;
-};
 
 function summarizeSql(sqlText: string) {
     return sqlText.replace(/\s+/g, ' ').trim();
@@ -282,16 +276,16 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
             setFolders([]);
             return;
         }
+        if (!connectionId) {
+            setFolders([]);
+            return;
+        }
         try {
-            const res = await authFetch('/api/sql-console/saved-query-folders');
-            const data = await res.json().catch(() => null);
-            if (res.ok && data?.code === 0) {
-                setFolders(data.data ?? []);
-            }
+            setFolders(await executeActionClient<FolderData[]>('savedQuery.listFolders', { connectionId }, { currentConnectionId: connectionId }));
         } catch {
             /* ignore */
         }
-    }, [isAnonymous]);
+    }, [connectionId, isAnonymous]);
 
     const fetchList = useCallback(
         async (nextLimit: number, options?: { silent?: boolean }) => {
@@ -312,16 +306,12 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                 return;
             }
             try {
-                const res = await authFetch(`/api/sql-console/saved-queries?limit=${nextLimit}`, {
-                    headers: {
-                        'X-Connection-ID': connectionId,
-                    },
-                });
-                const data = await res.json().catch(() => null);
-                if (!res.ok || (data && data.code !== 0)) {
-                    throw new Error(data?.message ?? t('SavedQueries.LoadFailed'));
-                }
-                const nextItems = (data?.data ?? []) as SavedQueryItem[];
+                const data = await executeActionClient<{ savedQueries: SavedQueryItem[] }>(
+                    'savedQuery.list',
+                    { connectionId, limit: nextLimit },
+                    { currentConnectionId: connectionId },
+                );
+                const nextItems = data.savedQueries ?? [];
                 setItems(nextItems);
                 setHasMore(nextItems.length >= nextLimit);
             } catch (err) {
@@ -360,21 +350,19 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
         setHistoryLoading(true);
         try {
-            const params = new URLSearchParams({
-                limit: '50',
-                sources: 'user_sql_console,console',
-                statuses: 'success,error,canceled',
-                user_id: sessionUserId,
-                connection_id: connectionId,
-            });
-            const res = await authFetch(`/api/query-audit?${params.toString()}`);
-            const payload = (await res.json().catch(() => null)) as ApiResponse<{ items?: QueryHistoryItem[] }> | null;
+            const payload = await executeActionClient<{ items?: QueryHistoryItem[] }>(
+                'query.auditSearch',
+                {
+                    limit: 50,
+                    sources: ['user_sql_console', 'console'],
+                    statuses: ['success', 'error', 'canceled'],
+                    userId: sessionUserId,
+                    connectionId,
+                },
+                { currentConnectionId: connectionId },
+            );
 
-            if (!res.ok || payload?.code !== 0) {
-                throw new Error(payload?.message ?? t('SavedQueries.QueryHistoryLoadFailed'));
-            }
-
-            setHistoryItems(payload.data?.items ?? []);
+            setHistoryItems(payload.items ?? []);
         } catch (err) {
             const message = err instanceof Error ? err.message : t('SavedQueries.QueryHistoryLoadFailed');
             setHistoryError(message);
@@ -502,19 +490,11 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                 return;
             }
             try {
-                const res = await authFetch(`/api/sql-console/saved-queries?id=${itemId}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Connection-ID': connectionId,
-                    },
-                    body: patch ? JSON.stringify(patch) : undefined,
-                });
-                const data = await res.json().catch(() => null);
-                if (!res.ok || (data && data.code !== 0)) {
-                    throw new Error(data?.message ?? t('SavedQueries.LoadFailed'));
-                }
-                const updated = (data?.data ?? patch) as SavedQueryItem;
+                const updated = await executeActionClient<SavedQueryItem>(
+                    'savedQuery.update',
+                    { connectionId, id: itemId, patch: patch ?? {} },
+                    { currentConnectionId: connectionId },
+                );
                 setItems(prev => prev.map(item => (item.id === itemId ? { ...item, ...updated } : item)));
                 notifySavedQueriesUpdated();
             } catch (err) {
@@ -532,16 +512,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
             return false;
         }
         try {
-            const res = await authFetch(`/api/sql-console/saved-queries?id=${item.id}`, {
-                method: 'DELETE',
-                headers: {
-                    'X-Connection-ID': connectionId,
-                },
-            });
-            const data = await res.json().catch(() => null);
-            if (!res.ok || (data && data.code !== 0)) {
-                throw new Error(data?.message ?? t('SavedQueries.LoadFailed'));
-            }
+            await executeActionClient('savedQuery.delete', { connectionId, id: item.id }, { currentConnectionId: connectionId });
             setItems(prev => prev.filter(entry => entry.id !== item.id));
             posthog.capture('saved_query_deleted', { query_id: item.id, connection_id: connectionId });
             notifySavedQueriesUpdated();
@@ -602,15 +573,8 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     // Folder actions
     const handleCreateFolder = async (name: string) => {
-        const res = await authFetch('/api/sql-console/saved-query-folders', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name }),
-        });
-        const data = await res.json().catch(() => null);
-        if (!res.ok || (data && data.code !== 0)) {
-            throw new Error(data?.message ?? t('SavedQueries.LoadFailed'));
-        }
+        if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+        await executeActionClient('savedQuery.createFolder', { connectionId, name }, { currentConnectionId: connectionId });
         await fetchFolders();
     };
 
@@ -629,15 +593,8 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         }
         setRenameFolderSaving(true);
         try {
-            const res = await authFetch(`/api/sql-console/saved-query-folders?id=${renameFolderTarget.id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: next }),
-            });
-            const data = await res.json().catch(() => null);
-            if (!res.ok || (data && data.code !== 0)) {
-                throw new Error(data?.message ?? t('SavedQueries.LoadFailed'));
-            }
+            if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            await executeActionClient('savedQuery.updateFolder', { connectionId, id: renameFolderTarget.id, patch: { name: next } }, { currentConnectionId: connectionId });
             await fetchFolders();
             setRenameFolderOpen(false);
         } finally {
@@ -647,13 +604,8 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     const deleteFolder = async (folder: FolderData) => {
         try {
-            const res = await authFetch(`/api/sql-console/saved-query-folders?id=${folder.id}`, {
-                method: 'DELETE',
-            });
-            const data = await res.json().catch(() => null);
-            if (!res.ok || (data && data.code !== 0)) {
-                throw new Error(data?.message ?? t('SavedQueries.LoadFailed'));
-            }
+            if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            await executeActionClient('savedQuery.deleteFolder', { connectionId, id: folder.id }, { currentConnectionId: connectionId });
             await fetchFolders();
             // Refresh queries since folderId was reset to null
             await fetchList(limit);
@@ -742,32 +694,23 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
             if (currentFolderId !== destinationFolderId) {
                 const nextPosition = destinationItems.reduce((max, item) => Math.max(max, item.position ?? 0), 0) + 1000;
-                const patchRes = await authFetch(`/api/sql-console/saved-queries?id=${activeQuery.id}`, {
-                    method: 'PATCH',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...(connectionId ? { 'X-Connection-ID': connectionId } : {}),
-                    },
-                    body: JSON.stringify({
+                if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+                await executeActionClient(
+                    'savedQuery.update',
+                    {
+                        connectionId,
+                        id: activeQuery.id,
+                        patch: {
                         folderId: destinationFolderId,
                         position: nextPosition,
-                    }),
-                });
-                const patchData = await patchRes.json().catch(() => null);
-                if (!patchRes.ok || (patchData && patchData.code !== 0)) {
-                    throw new Error(patchData?.message ?? t('SavedQueries.LoadFailed'));
-                }
+                        },
+                    },
+                    { currentConnectionId: connectionId },
+                );
             }
 
-            const reorderRes = await authFetch('/api/sql-console/saved-queries/reorder', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ folderId: destinationFolderId, orderedIds }),
-            });
-            const reorderData = await reorderRes.json().catch(() => null);
-            if (!reorderRes.ok || (reorderData && reorderData.code !== 0)) {
-                throw new Error(reorderData?.message ?? t('SavedQueries.LoadFailed'));
-            }
+            if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            await executeActionClient('savedQuery.reorder', { connectionId, folderId: destinationFolderId, orderedIds }, { currentConnectionId: connectionId });
         },
         [connectionId, getScopeItems, t],
     );
@@ -832,11 +775,9 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                 const reordered = arrayMove(folders, oldIndex, newIndex);
                 setFolders(reordered);
                 try {
-                    await authFetch('/api/sql-console/saved-query-folders/reorder', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ orderedIds: reordered.map(f => f.id) }),
-                    });
+                    if (connectionId) {
+                        await executeActionClient('savedQuery.reorderFolders', { connectionId, orderedIds: reordered.map(f => f.id) }, { currentConnectionId: connectionId });
+                    }
                 } catch {
                     /* optimistic update */
                 }
