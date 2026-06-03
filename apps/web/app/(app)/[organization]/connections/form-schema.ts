@@ -54,6 +54,30 @@ export const ConnectionDialogFormSchema = z
             privateKey: z.string().optional().nullable(),
             passphrase: z.string().optional().nullable(),
         }),
+        tls: z
+            .object({
+                mode: z.enum(['disable', 'prefer', 'require', 'verify-ca', 'verify-identity']).optional(),
+                caCertificateSource: z.enum(['path', 'content']).optional(),
+                caCertificatePath: z.string().optional().nullable(),
+                caCertificateContent: z.string().optional().nullable(),
+                hasCaCertificateContent: z.boolean().optional(),
+                clientCertificateSource: z.enum(['path', 'content']).optional(),
+                clientCertificatePath: z.string().optional().nullable(),
+                clientCertificateContent: z.string().optional().nullable(),
+                hasClientCertificateContent: z.boolean().optional(),
+                clientPrivateKeySource: z.enum(['path', 'content']).optional(),
+                clientPrivateKeyPath: z.string().optional().nullable(),
+                clientPrivateKeyContent: z.string().optional().nullable(),
+                hasClientPrivateKeyContent: z.boolean().optional(),
+                clientPrivateKeyPassphrase: z.string().optional().nullable(),
+                hasClientPrivateKeyPassphrase: z.boolean().optional(),
+                serverName: z.string().optional().nullable(),
+                ciphers: z.string().optional().nullable(),
+                minVersion: z.string().optional().nullable(),
+                maxVersion: z.string().optional().nullable(),
+            })
+            .optional()
+            .nullable(),
     })
     .superRefine((value, ctx) => {
         const driver = getConnectionDriver(value.connection.type);

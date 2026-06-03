@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { BaseConnection } from '@dory/drivers/core';
 import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { isTlsNegotiationError, isTlsPreferMode, withTlsDisabledOptions } from '@dory/drivers/core/tls';
 import { createPostgresMetadataCapability, type PostgresMetadataAPI } from './capabilities/metadata';
 import { createPostgresTableInfoCapability } from './capabilities/table-info';
 import { PostgresDialect } from './dialect';
@@ -22,10 +23,23 @@ export class PostgresDatasource extends BaseConnection {
 
     protected async _init(): Promise<void> {
         await this.setupSshIfNeeded(resolvePostgresPort(this.config));
-        const pool = this.getOrCreatePool(this.config.database);
-        this.primaryPool = pool;
-        const client = await pool.connect();
-        client.release();
+        try {
+            const pool = this.getOrCreatePool(this.config.database);
+            this.primaryPool = pool;
+            const client = await pool.connect();
+            client.release();
+        } catch (error) {
+            if (!isTlsPreferMode(this.config.options) || !isTlsNegotiationError(error)) {
+                throw error;
+            }
+            await this.close();
+            (this.config as any).options = withTlsDisabledOptions(this.config).options;
+            await this.setupSshIfNeeded(resolvePostgresPort(this.config));
+            const pool = this.getOrCreatePool(this.config.database);
+            this.primaryPool = pool;
+            const client = await pool.connect();
+            client.release();
+        }
     }
 
     private getOrCreatePool(database?: string | null): Pool {

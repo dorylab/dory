@@ -2,7 +2,6 @@ import { type RefinementCtx } from 'zod';
 import { UseFormReturn } from 'react-hook-form';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
-import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { FieldHelp, PortField } from './shared';
 
 function parseMysqlHostDraft(rawHost: unknown): { host?: string; port?: number; database?: string; ssl?: boolean } {
@@ -141,24 +140,6 @@ export function MysqlConnectionFields({ form }: { form: UseFormReturn<any> }) {
                             <Input placeholder="app_db" {...field} value={field.value ?? ''} />
                         </FormControl>
                         <FormMessage />
-                    </FormItem>
-                )}
-            />
-
-            <FormField
-                control={form.control}
-                name="connection.ssl"
-                render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                        <div>
-                            <div className="flex items-center gap-1.5">
-                                <FormLabel className="text-sm font-medium">SSL</FormLabel>
-                                <FieldHelp text="Turn this on when the MySQL server requires TLS." />
-                            </div>
-                        </div>
-                        <FormControl>
-                            <Switch checked={Boolean(field.value)} onCheckedChange={field.onChange} />
-                        </FormControl>
                     </FormItem>
                 )}
             />

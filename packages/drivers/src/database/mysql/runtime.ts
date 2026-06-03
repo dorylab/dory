@@ -4,6 +4,7 @@ import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import { buildMysqlTlsOptions, getDriverTlsOptions } from '@dory/drivers/core/tls';
 import { MySqlDialect } from './dialect';
 
 type MySqlRuntimeOptions = {
@@ -98,9 +99,15 @@ function extractRuntimeOptions(config: BaseConfig): MySqlRuntimeOptions {
     const options = (config.options ?? {}) as Record<string, unknown>;
     const sslOption = options.ssl;
     const hostConfig = parseHostInput(config.host, config.port);
+    const tlsOption = getDriverTlsOptions(options);
 
     let ssl: SslOptions | undefined;
-    if (typeof sslOption === 'boolean') {
+    const tlsSsl = buildMysqlTlsOptions(tlsOption);
+    if (tlsSsl) {
+        ssl = tlsSsl as SslOptions;
+    } else if (typeof tlsOption?.mode === 'string' && tlsOption.mode === 'disable') {
+        ssl = undefined;
+    } else if (typeof sslOption === 'boolean') {
         ssl = sslOption ? { rejectUnauthorized: false } : undefined;
     } else if (sslOption && typeof sslOption === 'object') {
         ssl = sslOption as SslOptions;
@@ -117,7 +124,7 @@ function extractRuntimeOptions(config: BaseConfig): MySqlRuntimeOptions {
     };
 }
 
-function buildPoolConfig(config: BaseConfig, databaseOverride?: string, connectionOverride?: MySqlConnectionOverride): PoolOptions {
+export function buildMySqlPoolConfig(config: BaseConfig, databaseOverride?: string, connectionOverride?: MySqlConnectionOverride): PoolOptions {
     const hostConfig = parseHostInput(config.host, config.port);
     const runtime = extractRuntimeOptions(config);
 
@@ -194,7 +201,7 @@ export function resolveMysqlPort(config: BaseConfig): number {
 }
 
 export function createMySqlPool(config: BaseConfig, databaseOverride?: string, connectionOverride?: MySqlConnectionOverride): Pool {
-    return createPool(buildPoolConfig(config, databaseOverride, connectionOverride));
+    return createPool(buildMySqlPoolConfig(config, databaseOverride, connectionOverride));
 }
 
 export async function pingMySql(pool: Pool): Promise<HealthInfo & { version?: string }> {

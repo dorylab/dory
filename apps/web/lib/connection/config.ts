@@ -40,9 +40,10 @@ export function buildStoredConnectionConfig(
     connection: StoredDriverConnection,
     identity: StoredDriverIdentity & { password?: string | null },
     ssh?: (StoredDriverSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null }) | null,
+    tls?: Parameters<typeof buildStoredDriverConnectionConfig>[3],
     createError?: ErrorFactory,
 ) {
-    return buildStoredDriverConnectionConfig(withDemoDuckDbReadOnlyOptions(connection), identity, ssh, createError, resolveStoredDatabasePath);
+    return buildStoredDriverConnectionConfig(withDemoDuckDbReadOnlyOptions(connection), identity, ssh, tls, createError, resolveStoredDatabasePath);
 }
 
 export function buildTestConnectionConfig(

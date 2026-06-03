@@ -10,6 +10,7 @@ import {
     connectionIdentitySecrets,
     connections,
     connectionSsh,
+    connectionTls,
     invitation,
     jwks,
     organizationMembers,
@@ -254,6 +255,28 @@ const RECOVERY_TABLES: RecoveryTableSpec[] = [
         ],
     },
     {
+        key: 'connection_tls',
+        sourceTables: ['connection_tls'],
+        targetTable: connectionTls,
+        columns: [
+            { target: 'connectionId', sources: ['connection_id'], required: true },
+            { target: 'mode', required: true },
+            { target: 'caCertificatePath', sources: ['ca_certificate_path'] },
+            { target: 'clientCertificatePath', sources: ['client_certificate_path'] },
+            { target: 'clientPrivateKeyPath', sources: ['client_private_key_path'] },
+            { target: 'serverName', sources: ['server_name'] },
+            { target: 'ciphers' },
+            { target: 'minVersion', sources: ['min_version'] },
+            { target: 'maxVersion', sources: ['max_version'] },
+            { target: 'caCertificateEncrypted', sources: ['ca_certificate_encrypted'] },
+            { target: 'clientCertificateEncrypted', sources: ['client_certificate_encrypted'] },
+            { target: 'clientPrivateKeyEncrypted', sources: ['client_private_key_encrypted'] },
+            { target: 'clientPrivateKeyPassphraseEncrypted', sources: ['client_private_key_passphrase_encrypted'] },
+            { target: 'createdAt', sources: ['created_at'], required: true },
+            { target: 'updatedAt', sources: ['updated_at'], required: true },
+        ],
+    },
+    {
         key: 'tabs',
         sourceTables: ['tabs'],
         targetTable: tabs,
@@ -465,9 +488,7 @@ async function extractTableSnapshot(db: PGlite, spec: RecoveryTableSpec): Promis
         };
     }
 
-    const result = await db.query<Record<string, unknown>>(
-        `SELECT ${selectColumns.join(', ')} FROM ${quoteIdentifier(source.tableName)}`,
-    );
+    const result = await db.query<Record<string, unknown>>(`SELECT ${selectColumns.join(', ')} FROM ${quoteIdentifier(source.tableName)}`);
 
     return {
         key: spec.key,
@@ -513,11 +534,7 @@ async function insertRows(targetDb: PostgresDBClient, targetTable: unknown, rows
     }
 }
 
-export async function exportWorkspaceRecoverySnapshot(
-    sourceDataDir: string,
-    snapshotPath: string,
-    PGliteImpl: new (options: { dataDir: string }) => PGlite = PGlite,
-) {
+export async function exportWorkspaceRecoverySnapshot(sourceDataDir: string, snapshotPath: string, PGliteImpl: new (options: { dataDir: string }) => PGlite = PGlite) {
     const sourceDb = new PGliteImpl({ dataDir: sourceDataDir });
 
     try {

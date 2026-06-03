@@ -9,6 +9,7 @@
         ".": "./src/index.ts",
         "./types": "./src/types/index.ts",
         "./core": "./src/core/index.ts",
+        "./core/tls": "./src/core/tls.ts",
         "./database": "./src/database/index.ts",
         "./database/register": "./src/database/register.ts",
         "./database/clickhouse/privileges": "./src/database/clickhouse/capabilities/privileges.ts",

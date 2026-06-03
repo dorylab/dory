@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import RequiredMark from '../../require-mark';
 import { CONNECTION_TYPE_OPTIONS, getConnectionDriver } from './drivers';
 import { DatabaseTypeIcon } from '../../database-type-icon';
+import { createTlsDefaultsForConnectionType } from '../tls/utils';
 
 export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
     const { form } = props;
@@ -32,6 +33,12 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
         form.setValue('connection.path', currentConnection.path ?? nextDefaults.path ?? null, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.duckdbMode', nextDefaults.duckdbMode, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.ssl', nextDefaults.ssl, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.encrypt', nextDefaults.encrypt, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.trustServerCertificate', nextDefaults.trustServerCertificate, {
+            shouldDirty: true,
+            shouldValidate: false,
+        });
+        form.setValue('tls', createTlsDefaultsForConnectionType(nextType), { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.description', currentConnection.description ?? nextDefaults.description, {
             shouldDirty: true,
             shouldValidate: false,

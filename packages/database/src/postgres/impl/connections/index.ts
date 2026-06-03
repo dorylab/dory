@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
-import { connections, connectionIdentities, connectionIdentitySecrets, connectionSsh } from '@dory/database/postgres/schemas/connections';
+import { connections, connectionIdentities, connectionIdentitySecrets, connectionSsh, connectionTls } from '@dory/database/postgres/schemas/connections';
 import { getDBEngineViaType } from '@dory/database/utils';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { decrypt, encrypt } from '@dory/shared/utils/crypto';
@@ -20,6 +20,8 @@ import type {
     ConnectionListIdentity,
     ConnectionItem,
     ConnectionIdentityUpdateInput,
+    ConnectionTls,
+    ConnectionTlsUpsertInput,
 } from '@dory/shared/types/connections';
 import { DbExecutor } from '@dory/database/types';
 import { getClient } from '../../client';
@@ -131,6 +133,12 @@ export class PostgresConnectionsRepository {
             });
         }
 
+        const tlsRows = await this.db.select().from(connectionTls).where(inArray(connectionTls.connectionId, connectionIds));
+        const tlsMap = new Map<string, ConnectionTls>();
+        for (const row of tlsRows) {
+            tlsMap.set(row.connectionId, this.toTlsConfig(row));
+        }
+
         // 3) Fetch identities (for stats + list display)
         const identityRows = await this.db
             .select({
@@ -188,6 +196,7 @@ export class PostgresConnectionsRepository {
                     connection: connectionMap.get(row.id),
                     identities: identitiesMap.get(row.id) ?? [],
                     ssh: sshMap.get(row.id) ?? null,
+                    tls: tlsMap.get(row.id) ?? null,
                 };
             })
             .filter(item => !this.isHiddenManagedConnection(item.connection));
@@ -235,7 +244,7 @@ export class PostgresConnectionsRepository {
     /* ---------------- Create: create Connection + default Identity + SSH -------------------- */
 
     async create(userId: string, organizationId: string, payload: ConnectionPayload): Promise<ConnectionListItem> {
-        const { connection, identities, ssh } = payload;
+        const { connection, identities, ssh, tls } = payload;
         try {
             return await this.db.transaction(async tx => {
                 const engine = connection.engine ?? getDBEngineViaType(connection.type);
@@ -260,6 +269,10 @@ export class PostgresConnectionsRepository {
                         connectionId: created.id,
                         enabled: false,
                     });
+                }
+
+                if (tls) {
+                    await this.saveTlsConfig(tx, created.id, tls);
                 }
 
                 // Default identity (optional)
@@ -314,6 +327,10 @@ export class PostgresConnectionsRepository {
         const sshPayload = payload.ssh;
         if (sshPayload) {
             await this.saveSshConfig(this.db, connectionId, sshPayload);
+        }
+
+        if (typeof payload.tls !== 'undefined') {
+            await this.saveTlsConfig(this.db, connectionId, payload.tls);
         }
 
         if (payload.identities && payload.identities.length > 0) {
@@ -425,6 +442,9 @@ export class PostgresConnectionsRepository {
               }
             : null;
 
+        const [tlsRow] = await db.select().from(connectionTls).where(eq(connectionTls.connectionId, row.id)).limit(1);
+        const tlsConfig: ConnectionTls | null = tlsRow ? this.toTlsConfig(tlsRow) : null;
+
         // 2) Identities list
         const identityRows = await db
             .select({
@@ -479,6 +499,7 @@ export class PostgresConnectionsRepository {
             connection,
             identities,
             ssh: sshConfig,
+            tls: tlsConfig,
         };
     }
 
@@ -518,6 +539,70 @@ export class PostgresConnectionsRepository {
         await db.insert(connectionSsh).values({
             connectionId,
             enabled: false,
+            ...payload,
+        });
+    }
+
+    private toTlsConfig(row: typeof connectionTls.$inferSelect): ConnectionTls {
+        return {
+            connectionId: row.connectionId,
+            mode: row.mode as ConnectionTls['mode'],
+            caCertificatePath: row.caCertificatePath,
+            clientCertificatePath: row.clientCertificatePath,
+            clientPrivateKeyPath: row.clientPrivateKeyPath,
+            serverName: row.serverName,
+            ciphers: row.ciphers,
+            minVersion: row.minVersion,
+            maxVersion: row.maxVersion,
+            hasCaCertificateContent: Boolean(row.caCertificateEncrypted),
+            hasClientCertificateContent: Boolean(row.clientCertificateEncrypted),
+            hasClientPrivateKeyContent: Boolean(row.clientPrivateKeyEncrypted),
+            hasClientPrivateKeyPassphrase: Boolean(row.clientPrivateKeyPassphraseEncrypted),
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+        };
+    }
+
+    private async saveTlsConfig(db: DbExecutor, connectionId: string, input: Omit<ConnectionTlsUpsertInput, 'connectionId'> | null) {
+        if (!input) {
+            await (db as any).delete(connectionTls).where(eq(connectionTls.connectionId, connectionId));
+            return;
+        }
+
+        const payload: Record<string, unknown> = {};
+        if (typeof input.mode !== 'undefined') payload.mode = input.mode ?? 'disable';
+        if (typeof input.caCertificatePath !== 'undefined') payload.caCertificatePath = input.caCertificatePath ?? null;
+        if (typeof input.clientCertificatePath !== 'undefined') payload.clientCertificatePath = input.clientCertificatePath ?? null;
+        if (typeof input.clientPrivateKeyPath !== 'undefined') payload.clientPrivateKeyPath = input.clientPrivateKeyPath ?? null;
+        if (typeof input.serverName !== 'undefined') payload.serverName = input.serverName ?? null;
+        if (typeof input.ciphers !== 'undefined') payload.ciphers = input.ciphers ?? null;
+        if (typeof input.minVersion !== 'undefined') payload.minVersion = input.minVersion ?? null;
+        if (typeof input.maxVersion !== 'undefined') payload.maxVersion = input.maxVersion ?? null;
+
+        if (typeof input.caCertificateContent !== 'undefined') {
+            payload.caCertificateEncrypted = input.caCertificateContent ? await encrypt(input.caCertificateContent) : null;
+        }
+        if (typeof input.clientCertificateContent !== 'undefined') {
+            payload.clientCertificateEncrypted = input.clientCertificateContent ? await encrypt(input.clientCertificateContent) : null;
+        }
+        if (typeof input.clientPrivateKeyContent !== 'undefined') {
+            payload.clientPrivateKeyEncrypted = input.clientPrivateKeyContent ? await encrypt(input.clientPrivateKeyContent) : null;
+        }
+        if (typeof input.clientPrivateKeyPassphrase !== 'undefined') {
+            payload.clientPrivateKeyPassphraseEncrypted = input.clientPrivateKeyPassphrase ? await encrypt(input.clientPrivateKeyPassphrase) : null;
+        }
+
+        const existing = await db.select().from(connectionTls).where(eq(connectionTls.connectionId, connectionId)).limit(1);
+
+        if (existing[0]) {
+            if (Object.keys(payload).length === 0) return;
+            await db.update(connectionTls).set(payload).where(eq(connectionTls.connectionId, connectionId));
+            return;
+        }
+
+        await db.insert(connectionTls).values({
+            connectionId,
+            mode: 'disable',
             ...payload,
         });
     }
@@ -720,6 +805,46 @@ export class PostgresConnectionsRepository {
             password: await safeDecrypt(sshRow.passwordEncrypted),
             privateKey: await safeDecrypt(sshRow.privateKeyEncrypted),
             passphrase: await safeDecrypt(sshRow.passphraseEncrypted),
+        };
+    }
+
+    async getTlsPlainSecrets(
+        organizationId: string,
+        connectionId: string,
+    ): Promise<{
+        caCertificateContent: string | null;
+        clientCertificateContent: string | null;
+        clientPrivateKeyContent: string | null;
+        clientPrivateKeyPassphrase: string | null;
+    } | null> {
+        const [tlsRow] = await this.db
+            .select({
+                caCertificateEncrypted: connectionTls.caCertificateEncrypted,
+                clientCertificateEncrypted: connectionTls.clientCertificateEncrypted,
+                clientPrivateKeyEncrypted: connectionTls.clientPrivateKeyEncrypted,
+                clientPrivateKeyPassphraseEncrypted: connectionTls.clientPrivateKeyPassphraseEncrypted,
+            })
+            .from(connectionTls)
+            .innerJoin(connections, eq(connectionTls.connectionId, connections.id))
+            .where(and(eq(connectionTls.connectionId, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
+            .limit(1);
+        if (!tlsRow) return null;
+
+        const safeDecrypt = async (cipher?: string | null) => {
+            if (!cipher) return null;
+            try {
+                return await decrypt(cipher);
+            } catch (e) {
+                console.error('[connections] decrypt tls secret failed', e);
+                return null;
+            }
+        };
+
+        return {
+            caCertificateContent: await safeDecrypt(tlsRow.caCertificateEncrypted),
+            clientCertificateContent: await safeDecrypt(tlsRow.clientCertificateEncrypted),
+            clientPrivateKeyContent: await safeDecrypt(tlsRow.clientPrivateKeyEncrypted),
+            clientPrivateKeyPassphrase: await safeDecrypt(tlsRow.clientPrivateKeyPassphraseEncrypted),
         };
     }
 }

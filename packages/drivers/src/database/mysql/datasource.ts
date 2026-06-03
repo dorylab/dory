@@ -2,6 +2,7 @@ import type { Pool } from 'mysql2/promise';
 import { BaseConnection } from '@dory/drivers/core';
 import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { isTlsNegotiationError, isTlsPreferMode, withTlsDisabledOptions } from '@dory/drivers/core/tls';
 import { createMysqlMetadataCapability, type MysqlMetadataAPI } from './capabilities/metadata';
 import { createMysqlTableInfoCapability } from './capabilities/table-info';
 import { MySqlDialect } from './dialect';
@@ -22,10 +23,23 @@ export class MySqlDatasource extends BaseConnection {
 
     protected async _init(): Promise<void> {
         await this.setupSshIfNeeded(resolveMysqlPort(this.config));
-        const pool = this.getOrCreatePool(this.config.database);
-        this.primaryPool = pool;
-        const connection = await pool.getConnection();
-        connection.release();
+        try {
+            const pool = this.getOrCreatePool(this.config.database);
+            this.primaryPool = pool;
+            const connection = await pool.getConnection();
+            connection.release();
+        } catch (error) {
+            if (!isTlsPreferMode(this.config.options) || !isTlsNegotiationError(error)) {
+                throw error;
+            }
+            await this.close();
+            (this.config as any).options = withTlsDisabledOptions(this.config).options;
+            await this.setupSshIfNeeded(resolveMysqlPort(this.config));
+            const pool = this.getOrCreatePool(this.config.database);
+            this.primaryPool = pool;
+            const connection = await pool.getConnection();
+            connection.release();
+        }
     }
 
     private getPoolKey(database?: string | null) {

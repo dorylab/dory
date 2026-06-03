@@ -252,5 +252,13 @@
     "bps": true,
     "folderMillis": 1780303200000,
     "hash": "2e2c34ff995e310c78257d5ac8362720d629bd6de0c6e658ee1320f2d1242186"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"connection_tls\" (\n    \"connection_id\" text PRIMARY KEY NOT NULL,\n    \"mode\" text DEFAULT 'disable' NOT NULL,\n    \"ca_certificate_path\" text,\n    \"client_certificate_path\" text,\n    \"client_private_key_path\" text,\n    \"server_name\" text,\n    \"ciphers\" text,\n    \"min_version\" text,\n    \"max_version\" text,\n    \"ca_certificate_encrypted\" text,\n    \"client_certificate_encrypted\" text,\n    \"client_private_key_encrypted\" text,\n    \"client_private_key_passphrase_encrypted\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone NOT NULL,\n    CONSTRAINT \"chk_connection_tls_mode\" CHECK (\"connection_tls\".\"mode\" IN ('disable', 'prefer', 'require', 'verify-ca', 'verify-identity'))\n);\n"
+    ],
+    "bps": true,
+    "folderMillis": 1780476000000,
+    "hash": "1ffeaa419ab449b7ff9abc52f792beeb3c38a942ab8283862f87e2d2a85c6bb3"
   }
 ]
