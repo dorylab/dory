@@ -1,8 +1,10 @@
-import { UseFormReturn, useWatch } from 'react-hook-form';
+import { type FieldValues, UseFormReturn, useWatch } from 'react-hook-form';
 import { Check } from 'lucide-react';
 import { cn } from '@dory/web-utils';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Label } from '@/registry/new-york-v4/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/registry/new-york-v4/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { useTranslations } from 'next-intl';
 import RequiredMark from '../../require-mark';
@@ -11,9 +13,9 @@ import { DatabaseTypeIcon } from '../../database-type-icon';
 import { createTlsDefaultsForConnectionType } from '../tls/utils';
 import { CONNECTION_ENVIRONMENT_OPTIONS, CONNECTION_TAG_COLOR_OPTIONS, normalizeConnectionEnvironmentValue, normalizeConnectionTagColorValue } from '../../../constants';
 
-const EMPTY_ENVIRONMENT_SELECT_VALUE = '__none__';
+const EMPTY_ENVIRONMENT_RADIO_VALUE = '__none__';
 
-export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
+export default function ConnectionForm(props: { form: UseFormReturn<FieldValues> }) {
     const { form } = props;
     const { control } = form;
     const t = useTranslations('Connections.ConnectionContent');
@@ -127,12 +129,12 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
     );
 }
 
-export function ConnectionMetadataForm(props: { form: UseFormReturn<any> }) {
+export function ConnectionMetadataForm(props: { form: UseFormReturn<FieldValues> }) {
     const { form } = props;
     const tc = useTranslations('Connections');
 
     return (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+        <div className="space-y-4">
             <FormField
                 control={form.control}
                 name="connection.environment"
@@ -142,23 +144,22 @@ export function ConnectionMetadataForm(props: { form: UseFormReturn<any> }) {
                     return (
                         <FormItem className="space-y-2">
                             <FormLabel>{tc('Environment')}</FormLabel>
-                            <Select
-                                value={environmentValue || EMPTY_ENVIRONMENT_SELECT_VALUE}
-                                onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_SELECT_VALUE ? '' : value)}
-                            >
-                                <FormControl>
-                                    <SelectTrigger className="w-full min-w-0">
-                                        <SelectValue placeholder={tc('ConnectionMetadata.EnvironmentOptions.None')} />
-                                    </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
+                            <FormControl>
+                                <RadioGroup
+                                    className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2"
+                                    value={environmentValue || EMPTY_ENVIRONMENT_RADIO_VALUE}
+                                    onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_RADIO_VALUE ? '' : value)}
+                                >
                                     {CONNECTION_ENVIRONMENT_OPTIONS.map(option => (
-                                        <SelectItem key={option.value || EMPTY_ENVIRONMENT_SELECT_VALUE} value={option.value || EMPTY_ENVIRONMENT_SELECT_VALUE}>
-                                            {tc(option.translationKey)}
-                                        </SelectItem>
+                                        <div key={option.value || 'none'} className="flex items-center gap-1.5">
+                                            <RadioGroupItem id={`connection-environment-${option.value || 'none'}`} value={option.value || EMPTY_ENVIRONMENT_RADIO_VALUE} />
+                                            <Label htmlFor={`connection-environment-${option.value || 'none'}`} className="cursor-pointer text-sm text-muted-foreground">
+                                                {tc(option.translationKey)}
+                                            </Label>
+                                        </div>
                                     ))}
-                                </SelectContent>
-                            </Select>
+                                </RadioGroup>
+                            </FormControl>
                             <FormMessage />
                         </FormItem>
                     );
@@ -175,7 +176,7 @@ export function ConnectionMetadataForm(props: { form: UseFormReturn<any> }) {
                         <FormItem className="space-y-2">
                             <FormLabel>{tc('Tag')}</FormLabel>
                             <FormControl>
-                                <div role="radiogroup" aria-label={tc('Tag')} className="flex h-9 min-w-0 flex-wrap items-center gap-2 overflow-hidden">
+                                <div role="radiogroup" aria-label={tc('Tag')} className="flex min-h-9 min-w-0 flex-wrap items-center gap-2">
                                     {CONNECTION_TAG_COLOR_OPTIONS.map(option => {
                                         const selected = tagValue === option.value;
                                         const isEmptyOption = option.value === '';
