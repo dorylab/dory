@@ -340,7 +340,12 @@ export class PostgresConnectionsRepository {
                 }
 
                 const { password, ...restIdentity } = identity;
-                const secret = typeof password === 'undefined' ? undefined : { passwordEncrypted: await encrypt(password ?? '') };
+                const secret =
+                    typeof password === 'undefined' || (typeof password === 'string' && password.trim() === '')
+                        ? undefined
+                        : password === null
+                          ? null
+                          : { passwordEncrypted: await encrypt(password) };
 
                 await this.updateIdentityWithSecret(this.db, organizationId, connectionId, {
                     ...restIdentity,
@@ -730,6 +735,7 @@ export class PostgresConnectionsRepository {
         const [existing] = await db.select().from(connectionIdentitySecrets).where(eq(connectionIdentitySecrets.identityId, identity.id));
 
         if (payload.secret === null) {
+            await (db as any).delete(connectionIdentitySecrets).where(eq(connectionIdentitySecrets.identityId, identity.id));
             return null;
         }
         // Has object -> upsert
@@ -740,7 +746,11 @@ export class PostgresConnectionsRepository {
             secretRef: payload.secret.secretRef ?? null,
         } as any;
 
-        return await db.update(connectionIdentitySecrets).set(secret).where(eq(connectionIdentitySecrets.identityId, identity.id));
+        if (existing) {
+            return await db.update(connectionIdentitySecrets).set(secret).where(eq(connectionIdentitySecrets.identityId, identity.id));
+        }
+
+        return await db.insert(connectionIdentitySecrets).values(secret);
     }
 
     /**

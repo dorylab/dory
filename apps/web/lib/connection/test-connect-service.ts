@@ -7,6 +7,7 @@ import { getDBService } from '@dory/database';
 import { TestConnectionPayload } from '@dory/shared/types/connections';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/lib/connection/utils';
 import { buildTestConnectionConfig } from '@/lib/connection/config';
+import { resolveTestIdentityPassword } from '@/lib/connection/secrets';
 
 type SSHConfigWithSecrets = NonNullable<TestConnectionPayload['ssh']> & {
     password?: string | null;
@@ -58,7 +59,7 @@ export async function testConnectService(organizationId: string, payload: TestCo
         }
     };
 
-    const testPassword = payload?.identity?.password ?? plainPassword;
+    const testPassword = resolveTestIdentityPassword(payload?.identity?.password, plainPassword);
     const resolvedSsh = await resolveSshSecrets(organizationId, payload, db);
     const resolvedTls = await resolveTlsSecrets(organizationId, payload, db);
     const config = buildTestConnectionConfig({ ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh, tls: resolvedTls }, code =>

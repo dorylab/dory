@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { checkServerIdentity } from 'tls';
 import type { ConnectionOptions, SecureContextOptions } from 'tls';
 
 export type TlsMode = 'disable' | 'prefer' | 'require' | 'verify-ca' | 'verify-identity';
@@ -69,12 +70,14 @@ export function buildNodeTlsConnectionOptions(tlsOptions: DriverTlsOptions | und
 
     const secure = buildSecureContextOptions(tlsOptions);
     const rejectUnauthorized = mode === 'verify-ca' || mode === 'verify-identity';
+    const serverName = typeof tlsOptions?.serverName === 'string' && tlsOptions.serverName.trim() ? tlsOptions.serverName.trim() : undefined;
 
     return {
         ...secure,
-        servername: tlsOptions?.serverName ?? undefined,
+        servername: serverName,
         rejectUnauthorized,
         ...(mode === 'verify-ca' ? { checkServerIdentity: () => undefined } : {}),
+        ...(mode === 'verify-identity' && serverName ? { checkServerIdentity: (_host, cert) => checkServerIdentity(serverName, cert) } : {}),
     };
 }
 

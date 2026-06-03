@@ -2,10 +2,21 @@ import { InputPassword } from '@/components/originui/input-password';
 import { UseFormReturn } from 'react-hook-form';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
 import { useTranslations } from 'next-intl';
 import RequiredMark from '../../require-mark';
 
-export default function IdentitiyForm({ form }: { form: UseFormReturn<any> }) {
+export default function IdentitiyForm({
+    form,
+    isEditMode = false,
+    savePassword = true,
+    onSavePasswordChange,
+}: {
+    form: UseFormReturn<any>;
+    isEditMode?: boolean;
+    savePassword?: boolean;
+    onSavePasswordChange?: (checked: boolean) => void;
+}) {
     const { control } = form;
     const t = useTranslations('Connections.ConnectionContent');
     return (
@@ -56,6 +67,18 @@ export default function IdentitiyForm({ form }: { form: UseFormReturn<any> }) {
                         <FormControl>
                             <InputPassword type="password" autoComplete="new-password" {...field} value={field.value ?? ''} />
                         </FormControl>
+                        {isEditMode && savePassword ? <p className="text-xs text-muted-foreground">{t('Password Keep Saved Hint')}</p> : null}
+                        {!savePassword ? <p className="text-xs text-muted-foreground">{t('Password Not Saved Hint')}</p> : null}
+                        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Checkbox
+                                checked={savePassword}
+                                onCheckedChange={checked => {
+                                    const nextChecked = checked === true;
+                                    onSavePasswordChange?.(nextChecked);
+                                }}
+                            />
+                            <span>{t('Save Password')}</span>
+                        </label>
                         <FormMessage />
                     </FormItem>
                 )}

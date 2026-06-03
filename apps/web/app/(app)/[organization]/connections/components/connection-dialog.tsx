@@ -48,6 +48,7 @@ export function ConnectionDialog({
     const [testing, setTesting] = useState(false);
     const [sshOpen, setSshOpen] = useState(false);
     const [tlsOpen, setTlsOpen] = useState(false);
+    const [savePassword, setSavePassword] = useState(true);
     const currentConnection = useAtomValue(currentConnectionAtom);
     const t = useTranslations('Connections');
     const tc = useTranslations('Connections.ConnectionContent');
@@ -78,6 +79,7 @@ export function ConnectionDialog({
 
     const resetDialogState = () => {
         setTesting(false);
+        setSavePassword(true);
         reset(NEW_CONNECTION_DEFAULT_VALUES);
     };
 
@@ -130,6 +132,22 @@ export function ConnectionDialog({
         };
     };
 
+    const normalizeIdentityPasswordForSubmit = (identityValues: any, intent: 'save' | 'test') => {
+        if (!savePassword && identityValues) {
+            if (intent === 'test' && typeof identityValues.password === 'string' && identityValues.password.trim() !== '') {
+                return identityValues;
+            }
+            return { ...identityValues, password: null };
+        }
+
+        if (!isEditMode || !identityValues || typeof identityValues.password !== 'string' || identityValues.password.trim() !== '') {
+            return identityValues;
+        }
+
+        const { password: _password, ...identityWithoutPassword } = identityValues;
+        return identityWithoutPassword;
+    };
+
     useEffect(() => {
         if (!open) return;
 
@@ -150,6 +168,7 @@ export function ConnectionDialog({
                 nextValues.connection.host = buildNeonConnectionStringForForm(connectionItem.connection, formIdentity);
             }
             reset(nextValues);
+            setSavePassword(true);
             const loadedConnectionType = nextValues.connection?.type;
             setSshOpen(connectionItem.connection?.type === 'neon' ? false : Boolean((connectionItem as any).ssh?.enabled));
             setTlsOpen(TLS_SUPPORTED_CONNECTION_TYPES.has(loadedConnectionType) && nextValues.tls?.mode !== 'disable');
@@ -158,6 +177,7 @@ export function ConnectionDialog({
                 ...(NEW_CONNECTION_DEFAULT_VALUES as any),
                 tls: createTlsDefaultsForConnectionType((NEW_CONNECTION_DEFAULT_VALUES as any).connection?.type),
             });
+            setSavePassword(true);
             setSshOpen(Boolean((NEW_CONNECTION_DEFAULT_VALUES as any).ssh?.enabled));
             setTlsOpen(false);
         }
@@ -174,7 +194,7 @@ export function ConnectionDialog({
             const tlsPayload = hidesTlsForm ? null : normalizeTlsForSubmit(values.connection?.type, values.tls);
             const driver = getConnectionDriver(values.connection?.type);
             const normalizedConnection = driver.normalizeForSubmit(values.connection);
-            const normalizedIdentity = normalizeIdentityValues(values.identity);
+            const normalizedIdentity = normalizeIdentityPasswordForSubmit(normalizeIdentityValues(values.identity), 'save');
 
             const savedValues = {
                 connection: isEditMode ? { ...normalizedConnection, id: connectionId } : normalizedConnection,
@@ -216,7 +236,7 @@ export function ConnectionDialog({
         const tlsPayload = hidesTlsForm ? null : normalizeTlsForSubmit(values.connection?.type, values.tls);
         const driver = getConnectionDriver(values.connection?.type);
         const normalizedConnection = driver.normalizeForSubmit(values.connection);
-        const normalizedIdentity = normalizeIdentityValues(values.identity);
+        const normalizedIdentity = normalizeIdentityPasswordForSubmit(normalizeIdentityValues(values.identity), 'test');
         let testPayload = { ...values, ssh: sshPayload };
         if (mode === 'Edit') {
             const mergedSsh = sshPayload ? { ...currentConnection?.ssh, ...sshPayload } : (currentConnection?.ssh ?? null);
@@ -292,7 +312,14 @@ export function ConnectionDialog({
                                         <ConnectionForm form={form} />
 
                                         {!hidesIdentityForm ? <p className="text-xs text-muted-foreground mt-3">{t('Authentication Info')}</p> : null}
-                                        {!hidesIdentityForm ? <IdentityForm form={form} /> : null}
+                                        {!hidesIdentityForm ? (
+                                            <IdentityForm
+                                                form={form}
+                                                isEditMode={isEditMode}
+                                                savePassword={savePassword}
+                                                onSavePasswordChange={setSavePassword}
+                                            />
+                                        ) : null}
                                     </div>
                                 </section>
 

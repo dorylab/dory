@@ -102,6 +102,16 @@ test('driver TLS runtime mapping matches pg, mysql2, and tedious expectations', 
     assert.equal(typeof (pgConfig.ssl as any).checkServerIdentity, 'function');
     assert.equal((pgConfig.ssl as any).ca, 'CA');
 
+    const pgIdentityConfig = buildPostgresPoolConfig({
+        ...base,
+        options: { tls: { ...base.options.tls, mode: 'verify-identity', serverName: 'wrong.local' } },
+    });
+    const identityError = (pgIdentityConfig.ssl as any).checkServerIdentity('localhost', {
+        subjectaltname: 'DNS:localhost, IP Address:127.0.0.1',
+        subject: { CN: 'localhost' },
+    });
+    assert.match(identityError?.message, /wrong\.local/);
+
     const mysqlConfig = buildMySqlPoolConfig({ ...base, type: 'mysql' });
     assert.equal((mysqlConfig.ssl as any).rejectUnauthorized, true);
     assert.equal((mysqlConfig.ssl as any).verifyIdentity, false);
