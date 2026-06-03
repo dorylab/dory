@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { ChevronDown, ChevronUp, Loader2, Lock, Server, Shield } from 'lucide-react';
+import { Cable, ChevronDown, ChevronUp, Loader2, Lock, Server, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
@@ -23,7 +23,7 @@ import ConnectionForm from './forms/connection';
 import IdentityForm from './forms/identity';
 
 import { useCreateConnection, useTestConnection, useUpdateConnection } from '../hooks/use-connections';
-import { NEW_CONNECTION_DEFAULT_VALUES } from '../constants';
+import { NEW_CONNECTION_DEFAULT_VALUES, normalizeConnectionEnvironmentValue, normalizeConnectionTagColorValue } from '../constants';
 import { ConnectionDialogFormSchema } from '../form-schema';
 import { useAtomValue } from 'jotai';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
@@ -148,11 +148,22 @@ export function ConnectionDialog({
         return identityWithoutPassword;
     };
 
-    const normalizeConnectionValuesForSubmit = (connectionValues: Record<string, unknown> | null | undefined, tlsPayload: { mode?: string | null } | null) => {
-        if (connectionValues?.type !== 'clickhouse') return connectionValues;
+    const normalizeConnectionMetadataValues = (connectionValues: Record<string, unknown> | null | undefined): Record<string, unknown> | null | undefined => {
+        if (!connectionValues) return connectionValues;
 
         return {
             ...connectionValues,
+            environment: normalizeConnectionEnvironmentValue(connectionValues.environment),
+            tags: normalizeConnectionTagColorValue(connectionValues.tags),
+        };
+    };
+
+    const normalizeConnectionValuesForSubmit = (connectionValues: Record<string, unknown> | null | undefined, tlsPayload: { mode?: string | null } | null) => {
+        const normalizedConnectionValues = normalizeConnectionMetadataValues(connectionValues);
+        if (normalizedConnectionValues?.type !== 'clickhouse') return normalizedConnectionValues;
+
+        return {
+            ...normalizedConnectionValues,
             ssl: (tlsPayload?.mode ?? 'disable') !== 'disable',
         };
     };
@@ -165,7 +176,7 @@ export function ConnectionDialog({
             const formIdentity = connectionItem.identities?.find((iden: any) => iden.isDefault) || {};
             const driver = getConnectionDriver(connectionItem.connection?.type ?? connectionItem.connection?.engine);
             const nextValues = {
-                connection: driver.normalizeForForm(connectionItem.connection),
+                connection: normalizeConnectionMetadataValues(driver.normalizeForForm(connectionItem.connection)),
                 ssh: connectionItem.ssh ? { ...connectionItem.ssh } : { ...(NEW_CONNECTION_DEFAULT_VALUES as any).ssh },
                 tls: normalizeTlsForForm(connectionItem.connection, (connectionItem as any).tls),
                 identity: {
@@ -321,12 +332,7 @@ export function ConnectionDialog({
 
                                         {!hidesIdentityForm ? <p className="text-xs text-muted-foreground mt-3">{t('Authentication Info')}</p> : null}
                                         {!hidesIdentityForm ? (
-                                            <IdentityForm
-                                                form={form}
-                                                isEditMode={isEditMode}
-                                                savePassword={savePassword}
-                                                onSavePasswordChange={setSavePassword}
-                                            />
+                                            <IdentityForm form={form} isEditMode={isEditMode} savePassword={savePassword} onSavePasswordChange={setSavePassword} />
                                         ) : null}
                                     </div>
                                 </section>
@@ -433,6 +439,7 @@ export function ConnectionDialog({
                         <DialogFooter className="shrink-0 pt-4 mt-2 bg-background flex lg:justify-between">
                             <div>
                                 <Button type="button" onClick={handleTestConnection} disabled={submitting || testing} data-testid="test-connection">
+                                    {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Cable className="mr-2 h-4 w-4" />}
                                     {testing ? t('Testing Connection') : tc('TestConnection')}
                                 </Button>
                             </div>

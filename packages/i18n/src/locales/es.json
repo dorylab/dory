@@ -184,18 +184,18 @@
         "about": "Ir a la página Acerca de"
     },
     "Connections": {
-        "Connections": "Conexiones",
-        "All Connections": "Todas las conexiones",
+        "Connections": "Fuentes de datos",
+        "All Connections": "Todas las fuentes de datos",
         "about": "acerca de",
         "Search": {
-            "placeholder": "Buscar conexiones",
-            "emptyTitle": "No hay conexiones coincidentes",
-            "emptyDescription": "No pudimos encontrar conexiones para \"{query}\".",
+            "placeholder": "Buscar fuentes de datos",
+            "emptyTitle": "No hay fuentes de datos coincidentes",
+            "emptyDescription": "No pudimos encontrar fuentes de datos para \"{query}\".",
             "emptyHint": "Prueba otra palabra clave o borra la búsqueda"
         },
         "Empty": {
-            "title": "Conecta una base de datos o abre un archivo",
-            "description": "Dory es un espacio de trabajo moderno para SQL e IA. Añade una conexión de base de datos o abre archivos locales para empezar a explorar.",
+            "title": "Conecta una fuente de datos o abre un archivo",
+            "description": "Dory es un espacio de trabajo moderno para SQL e IA. Añade una fuente de datos o abre archivos locales para empezar a explorar.",
             "supportHint": "Actualmente compatible con ClickHouse · Más motores próximamente",
             "feature1": "Ejecuta consultas SQL y explora esquemas",
             "feature2": "Haz preguntas en lenguaje natural y obtén respuestas",
@@ -204,18 +204,18 @@
             "openFiles": "Open Files"
         },
         "Connecting": "Conectando...",
-        "Refresh Connection": "Actualizar conexión",
+        "Refresh Connection": "Actualizar fuente de datos",
         "Confirm": "Confirmar",
         "Connected": "Conectado",
         "Disconnected": "Desconectado",
         "Unknown": "Desconocido",
         "Last check": "Última comprobación: {time}",
         "Latency": "Latencia: {latency}ms",
-        "title": "Conexiones",
-        "description": "Añade y gestiona conexiones de base de datos",
-        "Add Connection": "Añadir conexión",
-        "Create Connection": "Crear conexión",
-        "Connection name": "Nombre de la conexión",
+        "title": "Fuentes de datos",
+        "description": "Añade y gestiona fuentes de datos",
+        "Add Connection": "Añadir fuente de datos",
+        "Create Connection": "Crear",
+        "Connection name": "Nombre de la fuente de datos",
         "Host": "Servidor",
         "Port": "Puerto",
         "Database": "Base de datos",
@@ -225,55 +225,55 @@
         "Cancel": "Cancelar",
         "Delete": "Eliminar",
         "Test": "Probar",
-        "Connection Info": "Información de la conexión",
+        "Connection Info": "Información de la fuente de datos",
         "Authentication Info": "Autenticación",
         "Enable": "Habilitar",
-        "Testing Connection": "Probando conexión...",
+        "Testing Connection": "Probando...",
         "Saving": "Guardando...",
         "Creating": "Creando...",
         "Save Changes": "Guardar cambios",
-        "Fix Form Errors Before Testing": "Corrige los errores del formulario antes de probar la conexión",
+        "Fix Form Errors Before Testing": "Corrige los errores del formulario antes de probar la fuente de datos",
         "Placeholder": "Marcador de posición",
-        "Missing connection id": "Falta el ID de conexión",
-        "Connection failed": "La conexión falló",
+        "Missing connection id": "Falta el ID de la fuente de datos",
+        "Connection failed": "No se pudo conectar a la fuente de datos",
         "Request error": "Error de solicitud",
-        "Connection created": "Conexión creada",
-        "Create connection failed": "No se pudo crear la conexión",
-        "Connection updated": "Conexión actualizada",
-        "Update connection failed": "No se pudo actualizar la conexión",
-        "Connection deleted": "Conexión eliminada",
-        "Delete connection failed": "No se pudo eliminar la conexión",
-        "Connection test success": "La prueba de conexión fue exitosa, versión: {version}",
-        "Connection test failed": "La prueba de conexión falló",
+        "Connection created": "Fuente de datos creada",
+        "Create connection failed": "No se pudo crear la fuente de datos",
+        "Connection updated": "Fuente de datos actualizada",
+        "Update connection failed": "No se pudo actualizar la fuente de datos",
+        "Connection deleted": "Fuente de datos eliminada",
+        "Delete connection failed": "No se pudo eliminar la fuente de datos",
+        "Connection test success": "La prueba de la fuente de datos fue exitosa, versión: {version}",
+        "Connection test failed": "La prueba de la fuente de datos falló",
         "Delete Dialog Title": "¿Estás absolutamente seguro?",
-        "Delete Dialog Description": "Esta acción no se puede deshacer. Eliminará permanentemente tu fuente de datos y quitará sus datos de nuestros servidores.",
-        "Loading connections": "Cargando conexiones...",
-        "No connections yet": "Todavía no hay conexiones",
+        "Delete Dialog Description": "Esta acción no se puede deshacer. Eliminará permanentemente esta fuente de datos y sus datos.",
+        "Loading connections": "Cargando fuentes de datos...",
+        "No connections yet": "Todavía no hay fuentes de datos",
         "Connect to": "Conectar a {name}",
         "Unknown host": "Host desconocido",
-        "Unnamed connection": "Conexión sin nombre",
-        "Add connection to get started": "Añade una nueva conexión para empezar",
+        "Unnamed connection": "Fuente de datos sin nombre",
+        "Add connection to get started": "Añade una fuente de datos para empezar",
         "Identities": "Identidades",
         "Default Identity": "Identidad predeterminada",
-        "Connection name is required": "El nombre de la conexión es obligatorio",
+        "Connection name is required": "El nombre de la fuente de datos es obligatorio",
         "Host is required": "El host es obligatorio",
         "Close & Edit": "Cerrar y editar",
-        "refreshConnection": "Actualizar conexión",
+        "refreshConnection": "Actualizar fuente de datos",
         "ConnectionContent": {
             "Create": {
-                "title": "Crear conexión",
-                "description": "Crear una nueva conexión"
+                "title": "Crear fuente de datos",
+                "description": "Crear una nueva fuente de datos"
             },
             "Edit": {
-                "title": "Editar conexión",
-                "description": "Editar conexión"
+                "title": "Editar fuente de datos",
+                "description": "Editar fuente de datos"
             },
-            "Refresh Connection": "Actualizar conexión",
-            "Delete": "Eliminar conexión",
+            "Refresh Connection": "Actualizar fuente de datos",
+            "Delete": "Eliminar fuente de datos",
             "Database": "Base de datos",
             "General": "General",
-            "Connection Name": "Nombre de la conexión",
-            "Connection Name Placeholder": "Dale un nombre descriptivo a tu conexión",
+            "Connection Name": "Nombre de la fuente de datos",
+            "Connection Name Placeholder": "Dale un nombre descriptivo a tu fuente de datos",
             "Type": "Tipo",
             "Select Database Type": "Selecciona el tipo de base de datos",
             "Host": "Servidor",
@@ -297,7 +297,7 @@
             "SSL": "SSL",
             "Cancel": "Cancelar",
             "Save": "Guardar",
-            "TestConnection": "Probar conexión",
+            "TestConnection": "Probar",
             "Use SSH tunnel": "Usar túnel SSH",
             "Hostname or IP address": "Nombre de host o dirección IP",
             "SSH Host": "Host SSH",
@@ -318,15 +318,39 @@
             "Please enter your password": "Introduce tu contraseña"
         },
         "Api": {
-            "AddFailed": "No se pudo crear la conexión",
-            "UpdateRequiresId": "updateConnection requiere un id",
-            "UpdateFailed": "No se pudo actualizar la conexión",
-            "ListFailed": "No se pudieron obtener las conexiones",
-            "DeleteFailed": "No se pudo eliminar la conexión",
-            "DetailFailed": "No se pudieron obtener los detalles de la conexión",
-            "DetailNotFound": "No se encontraron los detalles de la conexión",
-            "TestFailed": "La prueba de conexión falló",
-            "ConnectFailed": "La conexión falló"
+            "AddFailed": "No se pudo crear la fuente de datos",
+            "UpdateRequiresId": "Actualizar una fuente de datos requiere un id",
+            "UpdateFailed": "No se pudo actualizar la fuente de datos",
+            "ListFailed": "No se pudieron obtener las fuentes de datos",
+            "DeleteFailed": "No se pudo eliminar la fuente de datos",
+            "DetailFailed": "No se pudieron obtener los detalles de la fuente de datos",
+            "DetailNotFound": "No se encontraron los detalles de la fuente de datos",
+            "TestFailed": "La prueba de la fuente de datos falló",
+            "ConnectFailed": "No se pudo conectar a la fuente de datos"
+        },
+        "Connection Name": "Nombre de la fuente de datos",
+        "Environment": "Entorno",
+        "Tag": "Etiqueta",
+        "Fix Form Errors Before Saving": "Corrige los errores del formulario antes de guardar la fuente de datos",
+        "ConnectionMetadata": {
+            "EnvironmentOptions": {
+                "None": "Sin entorno",
+                "Dev": "Dev",
+                "Staging": "Staging",
+                "Prod": "Prod",
+                "Personal": "Personal",
+                "Shared": "Shared"
+            },
+            "TagColors": {
+                "None": "Sin etiqueta",
+                "Red": "Rojo",
+                "Orange": "Naranja",
+                "Amber": "Ámbar",
+                "Green": "Verde",
+                "Blue": "Azul",
+                "Purple": "Morado",
+                "Gray": "Gris"
+            }
         }
     },
     "SQLConsoleSidebar": {
@@ -537,7 +561,7 @@
         }
     },
     "TableStats": {
-        "No available connection": "No se encontró ninguna conexión disponible.",
+        "No available connection": "No se encontró ninguna fuente de datos disponible.",
         "Select table to view stats": "Selecciona una tabla para ver las estadísticas.",
         "Failed to load stats": "No se pudieron cargar las estadísticas de la tabla",
         "Stats insights": "Ideas de estadísticas",
@@ -582,7 +606,7 @@
         "No TTL rule configured": "No hay ninguna regla TTL configurada."
     },
     "PostgresTableStats": {
-        "No available connection": "No se encontró ninguna conexión disponible.",
+        "No available connection": "No se encontró ninguna fuente de datos disponible.",
         "Select table to view stats": "Selecciona una tabla para ver las estadísticas.",
         "Failed to load stats": "No se pudieron cargar las estadísticas de la tabla",
         "Size": "Tamaño",
@@ -2227,8 +2251,8 @@
             "Unknown": "Unknown"
         },
         "EnsureConnection": {
-            "MissingConnectionId": "Missing Connection ID",
-            "ConnectionNotFound": "Connection not found or closed"
+            "MissingConnectionId": "Falta el ID de la fuente de datos",
+            "ConnectionNotFound": "Fuente de datos no encontrada o cerrada"
         },
         "SshTunnel": {
             "Disabled": "SSH tunnel is disabled",
@@ -2239,7 +2263,7 @@
             "MissingAgent": "SSH agent is not available"
         },
         "Connection": {
-            "CancelUnsupported": "Canceling queries is not supported for this connection"
+            "CancelUnsupported": "Cancelar consultas no es compatible con esta fuente de datos"
         },
         "Clickhouse": {
             "MissingQueryId": "Missing query ID; unable to cancel the query",
@@ -2250,7 +2274,7 @@
     "Client": {
         "Errors": {
             "InvalidRequest": "Invalid request",
-            "InvalidConnection": "Invalid connection",
+            "InvalidConnection": "Fuente de datos no válida",
             "RequestFailed": "Request failed"
         },
         "Pglite": {
@@ -2293,10 +2317,10 @@
             "Errors": {
                 "Unauthorized": "No autorizado o con permisos insuficientes",
                 "FetchCatalogFailed": "No se pudo obtener el contexto del catálogo",
-                "NotFound": "Conexión no encontrada o permisos insuficientes",
-                "MissingHost": "A la conexión le falta información del host",
-                "MissingPath": "A la conexión le falta la ruta del archivo SQLite",
-                "MissingConnectionId": "Falta el ID de conexión",
+                "NotFound": "Fuente de datos no encontrada o permisos insuficientes",
+                "MissingHost": "A la fuente de datos le falta información del host",
+                "MissingPath": "A la fuente de datos le falta la ruta del archivo SQLite",
+                "MissingConnectionId": "Falta el ID de la fuente de datos",
                 "MissingUsername": "Falta el nombre de usuario",
                 "MissingIdentity": "No se encontró una identidad disponible",
                 "MissingIdentityInfo": "Falta información de identidad",
@@ -2304,9 +2328,9 @@
                 "MissingSshPassword": "Falta la contraseña SSH",
                 "MissingSshPrivateKey": "Falta la clave privada SSH",
                 "UnsupportedType": "Este tipo de base de datos todavía no es compatible",
-                "ConnectFailed": "La conexión falló",
+                "ConnectFailed": "No se pudo conectar a la fuente de datos",
                 "SchemaReadFailed": "No se pudo leer el esquema",
-                "TestFailed": "La prueba de conexión falló"
+                "TestFailed": "La prueba de la fuente de datos falló"
             },
             "Validation": {
                 "DatabaseRequired": "El nombre de la base de datos es obligatorio",
@@ -2332,7 +2356,7 @@
         },
         "SqlConsole": {
             "Tabs": {
-                "MissingConnectionContext": "Falta el contexto de conexión",
+                "MissingConnectionContext": "Falta el contexto de la fuente de datos",
                 "TabIdMismatch": "tabId no coincide con state.tabId",
                 "DatabaseNotInitialized": "La base de datos no está inicializada",
                 "MissingTabId": "Falta tabId"
@@ -2347,14 +2371,14 @@
         },
         "Query": {
             "Errors": {
-                "MissingConnectionId": "Falta el ID de conexión",
+                "MissingConnectionId": "Falta el ID de la fuente de datos",
                 "DatabaseNameRequired": "El nombre de la base de datos es obligatorio",
                 "DatabaseNameTooLong": "El nombre de la base de datos es demasiado largo",
                 "DatabaseNameInvalid": "El formato del nombre de la base de datos no es válido",
                 "ConnectionFailed": "No se pudo conectar a la base de datos",
                 "TooManyStatements": "Se permiten como máximo {max} sentencias por solicitud; se recibieron {count}",
                 "MissingSessionId": "Falta sessionId; no se puede cancelar la consulta",
-                "DatasourceNotFound": "Fuente de datos no encontrada o conexión cerrada",
+                "DatasourceNotFound": "Fuente de datos no encontrada o cerrada",
                 "CancelNotSupported": "La fuente de datos actual no admite cancelar consultas"
             }
         },
@@ -2376,7 +2400,7 @@
                 "MissingTabId": "Falta tabId",
                 "FetchCopilotSessionFailed": "No se pudo obtener la sesión de Copilot",
                 "InvalidSessionType": "Tipo de sesión no válido",
-                "ConnectionIdRequired": "Se requiere el ID de conexión",
+                "ConnectionIdRequired": "Se requiere el ID de la fuente de datos",
                 "ListSessionsFailed": "No se pudieron obtener las sesiones",
                 "CopilotCreationNotAllowed": "Las sesiones de Copilot no se pueden crear desde este endpoint",
                 "CreateSessionFailed": "No se pudo crear la sesión",
@@ -2387,10 +2411,10 @@
                     "Description": "Recupera los fragmentos de documentos más relevantes para la pregunta del usuario y devuelve pasajes de contexto para responder."
                 },
                 "ListConnections": {
-                    "Description": "Lista las conexiones de base de datos disponibles en la organización actual sin devolver secretos."
+                    "Description": "Lista las fuentes de datos disponibles en la organización actual sin devolver secretos."
                 },
                 "ListDatabases": {
-                    "Description": "Lista las bases de datos de la conexión Dory actual."
+                    "Description": "Lista las bases de datos de la fuente de datos Dory actual."
                 },
                 "ListTables": {
                     "Description": "Lista las tablas de una base de datos usando metadatos del driver de Dory."
@@ -2402,16 +2426,16 @@
                     "Description": "Devuelve un resumen compacto de la base de datos con conteos de objetos, estimaciones de tamaño y tablas recomendadas para empezar."
                 },
                 "GetTableProfile": {
-                    "Description": "Devuelve metadatos de tabla, columnas, estadísticas, índices, propiedades y DDL cuando la conexión lo admite."
+                    "Description": "Devuelve metadatos de tabla, columnas, estadísticas, índices, propiedades y DDL cuando la fuente de datos lo admite."
                 },
                 "SearchSchema": {
                     "Description": "Busca tablas, vistas y columnas por nombre, tipo o comentario usando metadatos del driver de Dory."
                 },
                 "ListSavedQueries": {
-                    "Description": "Lista consultas SQL guardadas para la conexión actual."
+                    "Description": "Lista consultas SQL guardadas para la fuente de datos actual."
                 },
                 "GetSavedQuery": {
-                    "Description": "Obtiene una consulta SQL guardada por id para la conexión actual."
+                    "Description": "Obtiene una consulta SQL guardada por id para la fuente de datos actual."
                 },
                 "GetMonitoringSummary": {
                     "Description": "Devuelve un resumen de monitoreo de consultas y muestras opcionales de línea de tiempo, consultas lentas y consultas con error."
@@ -2426,7 +2450,7 @@
                     "Description": "Construye el perfil automático de gráfico de Dory a partir de filas y columnas de resultado."
                 },
                 "RunAnalysis": {
-                    "Description": "Ejecuta una acción de análisis de Dory sobre un contexto de resultado y la conexión actual."
+                    "Description": "Ejecuta una acción de análisis de Dory sobre un contexto de resultado y la fuente de datos actual."
                 }
             },
             "Prompt": {
@@ -2445,9 +2469,9 @@
                 }
             },
             "SqlRunner": {
-                "Description": "Una herramienta para ejecutar consultas SQL de solo lectura en la conexión actual de base de datos.\nUso:\n- Solo acepta una sentencia SELECT / SHOW / DESCRIBE / DESC / EXPLAIN; no INSERT/UPDATE/DELETE.\n- Para preguntas sobre consultas, agregaciones, informes o métricas, genera primero el SQL, llama a esta herramienta y responde con base en los resultados.\n- Debe respetar el dialecto actual de la base de datos.\n- Si el esquema no está claro, usa primero el contexto de esquema proporcionado y luego consultas de metadatos apropiadas para ese dialecto.\n- No uses la sintaxis exclusiva de MySQL DESCRIBE / SHOW COLUMNS en PostgreSQL.",
+                "Description": "Una herramienta para ejecutar consultas SQL de solo lectura en la fuente de datos actual.\nUso:\n- Solo acepta una sentencia SELECT / SHOW / DESCRIBE / DESC / EXPLAIN; no INSERT/UPDATE/DELETE.\n- Para preguntas sobre consultas, agregaciones, informes o métricas, genera primero el SQL, llama a esta herramienta y responde con base en los resultados.\n- Debe respetar el dialecto actual de la base de datos.\n- Si el esquema no está claro, usa primero el contexto de esquema proporcionado y luego consultas de metadatos apropiadas para ese dialecto.\n- No uses la sintaxis exclusiva de MySQL DESCRIBE / SHOW COLUMNS en PostgreSQL.",
                 "SqlRequired": "El SQL no puede estar vacío",
-                "MissingConnection": "Falta información de conexión a la base de datos; no se puede ejecutar la consulta.",
+                "MissingConnection": "Falta información de la fuente de datos; no se puede ejecutar la consulta.",
                 "ReadOnlyOnly": "Solo se permiten consultas de solo lectura (SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA). No incluyas sentencias de escritura o actualización.",
                 "SelectAllNotAllowed": "No se permite usar SELECT * en el SQL generado por el chatbot. Selecciona solo las columnas necesarias para responder.",
                 "OrderByIndexMissing": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, y no se confirmó que tengan índice. Reduce las columnas seleccionadas o revisa los índices primero.",
@@ -2530,10 +2554,10 @@
         },
         "Privileges": {
             "Errors": {
-                "MissingConnectionId": "Falta el ID de conexión",
+                "MissingConnectionId": "Falta el ID de la fuente de datos",
                 "NotClickhouse": "La fuente de datos actual no admite la gestión de privilegios de ClickHouse",
                 "Fallback": "La operación falló. Inténtalo de nuevo más tarde",
-                "ConnectionUnavailable": "La conexión actual no está disponible. Inténtalo de nuevo más tarde",
+                "ConnectionUnavailable": "La fuente de datos actual no está disponible. Inténtalo de nuevo más tarde",
                 "UserNotFound": "Usuario no encontrado",
                 "RoleNotFound": "Rol no encontrado"
             },
@@ -2638,7 +2662,7 @@
         },
         "SchemaTags": {
             "InvalidParams": "Parámetros de solicitud no válidos",
-            "MissingConnectionContext": "Falta el contexto de conexión",
+            "MissingConnectionContext": "Falta el contexto de la fuente de datos",
             "MissingOrganizationIdFallback": "Falta organizationId; se usarán etiquetas heurísticas locales",
             "Tags": {
                 "PrimaryKey": "clave primaria",
@@ -2803,7 +2827,7 @@
                 "Blocked": "Bloqueado"
             },
             "Notice": {
-                "ReadOnlyRestriction": "Esta conexión solo permite consultas de solo lectura. Las sentencias CREATE / INSERT / UPDATE / DELETE deben ejecutarse manualmente en el editor SQL."
+                "ReadOnlyRestriction": "Esta fuente de datos solo permite consultas de solo lectura. Las sentencias CREATE / INSERT / UPDATE / DELETE deben ejecutarse manualmente en el editor SQL."
             },
             "FollowUp": {
                 "Button": "Continuar con este resultado",
@@ -3026,10 +3050,10 @@
             },
             "Data": {
                 "ExportLabel": "Exportar espacio de trabajo",
-                "ExportDescription": "Descarga conexiones y consultas guardadas como un archivo JSON. No se incluyen contraseñas ni claves.",
+                "ExportDescription": "Descarga fuentes de datos y consultas guardadas como un archivo JSON. No se incluyen contraseñas ni claves.",
                 "ExportAction": "Exportar",
                 "ImportLabel": "Importar espacio de trabajo",
-                "ImportDescription": "Importa conexiones y consultas guardadas desde un archivo JSON exportado previamente.",
+                "ImportDescription": "Importa fuentes de datos y consultas guardadas desde un archivo JSON exportado previamente.",
                 "ImportAction": "Importar",
                 "ExportSuccess": "Espacio de trabajo exportado correctamente.",
                 "ExportFailed": "La exportación falló",
@@ -3038,7 +3062,7 @@
                 "ImportFailedRetry": "La importación falló. Inténtalo de nuevo.",
                 "InvalidJson": "Archivo JSON no válido.",
                 "ImportSummary": {
-                    "Connections": "{count} conexión(es)",
+                    "Connections": "{count} fuente(s) de datos",
                     "Folders": "{count} carpeta(s)",
                     "Queries": "{count} consulta(s)",
                     "QueriesSkipped": "{count} consulta(s) omitida(s)",
@@ -3117,14 +3141,14 @@
             "ConnectionFailed": "La conexión a la base de datos falló",
             "InitFailed": "La inicialización de la base de datos falló. Revisa la configuración o el estado de la conexión.",
             "NotInitialized": "La base de datos no está inicializada",
-            "ConnectionCreateFailed": "No se pudo crear la conexión",
+            "ConnectionCreateFailed": "No se pudo crear la fuente de datos",
             "NotOrganizationMember": "No eres miembro de la organización",
             "NotAdmin": "No tienes privilegios de administrador",
-            "ConnectionIdentityCreateFailed": "No se pudo crear la identidad de conexión",
-            "ConnectionIdentityUpdateFailed": "No se pudo actualizar la identidad de conexión: registro no encontrado o permisos insuficientes",
-            "ConnectionDuplicateName": "Ya existe una conexión con el mismo nombre",
-            "ConnectionNotFound": "Conexión no encontrada o permisos insuficientes",
-            "ConnectionIdentityInvalid": "La información de identidad de conexión está incompleta",
+            "ConnectionIdentityCreateFailed": "No se pudo crear la identidad de la fuente de datos",
+            "ConnectionIdentityUpdateFailed": "No se pudo actualizar la identidad de la fuente de datos: registro no encontrado o permisos insuficientes",
+            "ConnectionDuplicateName": "Ya existe una fuente de datos con el mismo nombre",
+            "ConnectionNotFound": "Fuente de datos no encontrada o permisos insuficientes",
+            "ConnectionIdentityInvalid": "La información de identidad de la fuente de datos está incompleta",
             "ConnectionIdentityUpdateRequiresId": "Actualizar la identidad requiere un id",
             "ConnectionIdentityMissingId": "Falta el id de identidad",
             "ConnectionIdentityNameRequired": "El nombre es obligatorio",
@@ -3410,7 +3434,7 @@
                 "Title": "Pro (Recomendado)",
                 "Price": "Starting at $9/mo",
                 "Features": {
-                    "UnlimitedDatabaseConnections": "Conexiones ilimitadas a bases de datos",
+                    "UnlimitedDatabaseConnections": "Fuentes de datos ilimitadas",
                     "HigherAiQuotaAndFasterResponses": "Mayor cuota de IA y respuestas más rápidas",
                     "ByokAiFeatures": "BYOK (Usa tu propia clave de IA)",
                     "EarlyAccessToUpcomingFeatures": "Acceso anticipado a próximas funciones",

@@ -184,18 +184,18 @@
         "about": "情報ページへ移動"
     },
     "Connections": {
-        "Connections": "接続",
-        "All Connections": "すべての接続",
+        "Connections": "データソース",
+        "All Connections": "すべてのデータソース",
         "about": "情報",
         "Search": {
-            "placeholder": "接続を検索",
-            "emptyTitle": "一致する接続がありません",
-            "emptyDescription": "\"{query}\" に一致する接続は見つかりませんでした。",
+            "placeholder": "データソースを検索",
+            "emptyTitle": "一致するデータソースがありません",
+            "emptyDescription": "\"{query}\" に一致するデータソースは見つかりませんでした。",
             "emptyHint": "別のキーワードを試すか、検索をクリアしてください"
         },
         "Empty": {
-            "title": "データベースに接続、またはファイルを開く",
-            "description": "Dory は SQL と AI のためのモダンなデータワークスペースです。データベース接続を追加するか、ローカルファイルを開いて探索を始めましょう。",
+            "title": "データソースに接続、またはファイルを開く",
+            "description": "Dory は SQL と AI のためのモダンなデータワークスペースです。データソースを追加するか、ローカルファイルを開いて探索を始めましょう。",
             "supportHint": "現在は ClickHouse をサポート · 今後さらに対応予定",
             "feature1": "SQL クエリを実行し、スキーマを閲覧",
             "feature2": "自然言語で質問して回答を取得",
@@ -204,18 +204,18 @@
             "openFiles": "Open Files"
         },
         "Connecting": "接続中...",
-        "Refresh Connection": "接続を更新",
+        "Refresh Connection": "データソースを更新",
         "Confirm": "確認",
         "Connected": "接続済み",
         "Disconnected": "未接続",
         "Unknown": "不明",
         "Last check": "最終確認: {time}",
         "Latency": "遅延: {latency}ms",
-        "title": "接続",
-        "description": "データベース接続を追加・管理します",
-        "Add Connection": "接続を追加",
-        "Create Connection": "接続を作成",
-        "Connection name": "接続名",
+        "title": "データソース",
+        "description": "データソースを追加・管理します",
+        "Add Connection": "データソースを追加",
+        "Create Connection": "作成",
+        "Connection name": "データソース名",
         "Host": "ホスト",
         "Port": "ポート",
         "Database": "データベース",
@@ -225,56 +225,56 @@
         "Cancel": "キャンセル",
         "Delete": "削除",
         "Test": "テスト",
-        "Connection Info": "接続情報",
+        "Connection Info": "データソース情報",
         "Authentication Info": "認証",
         "Enable": "有効化",
-        "Testing Connection": "接続をテスト中...",
+        "Testing Connection": "テスト中...",
         "Saving": "保存中...",
         "Creating": "作成中...",
         "Save Changes": "変更を保存",
-        "Fix Form Errors Before Testing": "接続をテストする前にフォームのエラーを修正してください",
-        "Fix Form Errors Before Saving": "接続を保存する前にフォームのエラーを修正してください",
+        "Fix Form Errors Before Testing": "データソースをテストする前にフォームのエラーを修正してください",
+        "Fix Form Errors Before Saving": "データソースを保存する前にフォームのエラーを修正してください",
         "Placeholder": "プレースホルダー",
-        "Missing connection id": "接続 ID がありません",
-        "Connection failed": "接続に失敗しました",
+        "Missing connection id": "データソース ID がありません",
+        "Connection failed": "データソースへの接続に失敗しました",
         "Request error": "リクエストエラー",
-        "Connection created": "接続を作成しました",
-        "Create connection failed": "接続の作成に失敗しました",
-        "Connection updated": "接続を更新しました",
-        "Update connection failed": "接続の更新に失敗しました",
-        "Connection deleted": "接続を削除しました",
-        "Delete connection failed": "接続の削除に失敗しました",
-        "Connection test success": "接続テストに成功しました。バージョン: {version}",
-        "Connection test failed": "接続テストに失敗しました",
+        "Connection created": "データソースを作成しました",
+        "Create connection failed": "データソースの作成に失敗しました",
+        "Connection updated": "データソースを更新しました",
+        "Update connection failed": "データソースの更新に失敗しました",
+        "Connection deleted": "データソースを削除しました",
+        "Delete connection failed": "データソースの削除に失敗しました",
+        "Connection test success": "データソーステストに成功しました。バージョン: {version}",
+        "Connection test failed": "データソーステストに失敗しました",
         "Delete Dialog Title": "本当に削除しますか？",
-        "Delete Dialog Description": "この操作は元に戻せません。このデータソースとそのデータは完全に削除されます。",
-        "Loading connections": "接続を読み込み中...",
-        "No connections yet": "まだ接続がありません",
+        "Delete Dialog Description": "この操作は元に戻せません。このデータソースと関連データは完全に削除されます。",
+        "Loading connections": "データソースを読み込み中...",
+        "No connections yet": "まだデータソースがありません",
         "Connect to": "{name} に接続",
         "Unknown host": "不明なホスト",
-        "Unnamed connection": "名前のない接続",
-        "Add connection to get started": "開始するには新しい接続を追加してください",
+        "Unnamed connection": "名前のないデータソース",
+        "Add connection to get started": "開始するにはデータソースを追加してください",
         "Identities": "ID 情報",
         "Default Identity": "デフォルト ID",
-        "Connection name is required": "接続名は必須です",
+        "Connection name is required": "データソース名は必須です",
         "Host is required": "ホストは必須です",
         "Close & Edit": "閉じて編集",
-        "refreshConnection": "接続を更新",
+        "refreshConnection": "データソースを更新",
         "ConnectionContent": {
             "Create": {
-                "title": "接続を作成",
-                "description": "新しい接続を作成します"
+                "title": "データソースを作成",
+                "description": "新しいデータソースを作成します"
             },
             "Edit": {
-                "title": "接続を編集",
-                "description": "接続を編集します"
+                "title": "データソースを編集",
+                "description": "データソースを編集します"
             },
-            "Refresh Connection": "接続を更新",
-            "Delete": "接続を削除",
+            "Refresh Connection": "データソースを更新",
+            "Delete": "データソースを削除",
             "Database": "データベース",
             "General": "一般",
-            "Connection Name": "接続名",
-            "Connection Name Placeholder": "接続に分かりやすい名前を付けてください",
+            "Connection Name": "データソース名",
+            "Connection Name Placeholder": "データソースに分かりやすい名前を付けてください",
             "Type": "種類",
             "Select Database Type": "データベースの種類を選択",
             "Host": "ホスト",
@@ -298,7 +298,7 @@
             "SSL": "SSL",
             "Cancel": "キャンセル",
             "Save": "保存",
-            "TestConnection": "接続をテスト",
+            "TestConnection": "テスト",
             "Use SSH tunnel": "SSH トンネルを使用",
             "Hostname or IP address": "ホスト名または IP アドレス",
             "SSH Host": "SSH ホスト",
@@ -319,15 +319,38 @@
             "Please enter your password": "パスワードを入力してください"
         },
         "Api": {
-            "AddFailed": "接続の作成に失敗しました",
-            "UpdateRequiresId": "updateConnection には id が必要です",
-            "UpdateFailed": "接続の更新に失敗しました",
-            "ListFailed": "接続の取得に失敗しました",
-            "DeleteFailed": "接続の削除に失敗しました",
-            "DetailFailed": "接続詳細の取得に失敗しました",
-            "DetailNotFound": "接続詳細が見つかりません",
-            "TestFailed": "接続テストに失敗しました",
-            "ConnectFailed": "接続に失敗しました"
+            "AddFailed": "データソースの作成に失敗しました",
+            "UpdateRequiresId": "データソースの更新には id が必要です",
+            "UpdateFailed": "データソースの更新に失敗しました",
+            "ListFailed": "データソースの取得に失敗しました",
+            "DeleteFailed": "データソースの削除に失敗しました",
+            "DetailFailed": "データソース詳細の取得に失敗しました",
+            "DetailNotFound": "データソース詳細が見つかりません",
+            "TestFailed": "データソーステストに失敗しました",
+            "ConnectFailed": "データソースへの接続に失敗しました"
+        },
+        "Connection Name": "データソース名",
+        "Environment": "環境",
+        "Tag": "タグ",
+        "ConnectionMetadata": {
+            "EnvironmentOptions": {
+                "None": "環境なし",
+                "Dev": "Dev",
+                "Staging": "Staging",
+                "Prod": "Prod",
+                "Personal": "Personal",
+                "Shared": "Shared"
+            },
+            "TagColors": {
+                "None": "タグなし",
+                "Red": "Red",
+                "Orange": "Orange",
+                "Amber": "Amber",
+                "Green": "Green",
+                "Blue": "Blue",
+                "Purple": "Purple",
+                "Gray": "Gray"
+            }
         }
     },
     "SQLConsoleSidebar": {
@@ -539,7 +562,7 @@
         }
     },
     "TableStats": {
-        "No available connection": "利用可能な接続が見つかりません。",
+        "No available connection": "利用可能なデータソースが見つかりません。",
         "Select table to view stats": "統計を見るにはテーブルを選択してください。",
         "Failed to load stats": "テーブル統計を読み込めませんでした",
         "Stats insights": "統計インサイト",
@@ -584,7 +607,7 @@
         "No TTL rule configured": "TTL ルールは設定されていません。"
     },
     "PostgresTableStats": {
-        "No available connection": "利用可能な接続が見つかりません。",
+        "No available connection": "利用可能なデータソースが見つかりません。",
         "Select table to view stats": "統計を見るにはテーブルを選択してください。",
         "Failed to load stats": "テーブル統計を読み込めませんでした",
         "Size": "サイズ",
@@ -2229,8 +2252,8 @@
             "Unknown": "Unknown"
         },
         "EnsureConnection": {
-            "MissingConnectionId": "Missing Connection ID",
-            "ConnectionNotFound": "Connection not found or closed"
+            "MissingConnectionId": "データソース ID がありません",
+            "ConnectionNotFound": "データソースが見つからないか閉じられています"
         },
         "SshTunnel": {
             "Disabled": "SSH tunnel is disabled",
@@ -2241,7 +2264,7 @@
             "MissingAgent": "SSH agent is not available"
         },
         "Connection": {
-            "CancelUnsupported": "Canceling queries is not supported for this connection"
+            "CancelUnsupported": "このデータソースではクエリのキャンセルはサポートされていません"
         },
         "Clickhouse": {
             "MissingQueryId": "Missing query ID; unable to cancel the query",
@@ -2252,7 +2275,7 @@
     "Client": {
         "Errors": {
             "InvalidRequest": "Invalid request",
-            "InvalidConnection": "Invalid connection",
+            "InvalidConnection": "無効なデータソースです",
             "RequestFailed": "Request failed"
         },
         "Pglite": {
@@ -2282,10 +2305,10 @@
             "Errors": {
                 "Unauthorized": "認証されていないか、権限が不足しています",
                 "FetchCatalogFailed": "カタログコンテキストの取得に失敗しました",
-                "NotFound": "接続が見つからないか、権限が不足しています",
-                "MissingHost": "接続にホスト情報がありません",
-                "MissingPath": "接続に SQLite ファイルパス情報がありません",
-                "MissingConnectionId": "接続 ID がありません",
+                "NotFound": "データソースが見つからないか、権限が不足しています",
+                "MissingHost": "データソースにホスト情報がありません",
+                "MissingPath": "データソースに SQLite ファイルパス情報がありません",
+                "MissingConnectionId": "データソース ID がありません",
                 "MissingUsername": "ユーザー名がありません",
                 "MissingIdentity": "利用可能な ID 情報が見つかりません",
                 "MissingIdentityInfo": "ID 情報がありません",
@@ -2293,9 +2316,9 @@
                 "MissingSshPassword": "SSH パスワードがありません",
                 "MissingSshPrivateKey": "SSH 秘密鍵がありません",
                 "UnsupportedType": "このデータベース種類はまだサポートされていません",
-                "ConnectFailed": "接続に失敗しました",
+                "ConnectFailed": "データソースへの接続に失敗しました",
                 "SchemaReadFailed": "スキーマの読み取りに失敗しました",
-                "TestFailed": "接続テストに失敗しました"
+                "TestFailed": "データソーステストに失敗しました"
             },
             "Validation": {
                 "DatabaseRequired": "データベース名は必須です",
@@ -2321,7 +2344,7 @@
         },
         "SqlConsole": {
             "Tabs": {
-                "MissingConnectionContext": "接続コンテキストがありません",
+                "MissingConnectionContext": "データソースコンテキストがありません",
                 "TabIdMismatch": "tabId が state.tabId と一致しません",
                 "DatabaseNotInitialized": "データベースが初期化されていません",
                 "MissingTabId": "tabId がありません"
@@ -2336,14 +2359,14 @@
         },
         "Query": {
             "Errors": {
-                "MissingConnectionId": "接続 ID がありません",
+                "MissingConnectionId": "データソース ID がありません",
                 "DatabaseNameRequired": "データベース名は必須です",
                 "DatabaseNameTooLong": "データベース名が長すぎます",
                 "DatabaseNameInvalid": "データベース名の形式が無効です",
                 "ConnectionFailed": "データベースへの接続に失敗しました",
                 "TooManyStatements": "1 リクエストあたり許可されるステートメントは最大 {max} 件です。実際: {count}",
                 "MissingSessionId": "sessionId がないため、クエリをキャンセルできません",
-                "DatasourceNotFound": "データソースが見つからないか、接続が閉じられています",
+                "DatasourceNotFound": "データソースが見つからないか閉じられています",
                 "CancelNotSupported": "現在のデータソースはクエリのキャンセルをサポートしていません"
             }
         },
@@ -2365,7 +2388,7 @@
                 "MissingTabId": "tabId がありません",
                 "FetchCopilotSessionFailed": "Copilot セッションの取得に失敗しました",
                 "InvalidSessionType": "無効なセッション種別です",
-                "ConnectionIdRequired": "接続IDが必要です",
+                "ConnectionIdRequired": "データソース ID が必要です",
                 "ListSessionsFailed": "セッションの取得に失敗しました",
                 "CopilotCreationNotAllowed": "このエンドポイントでは Copilot セッションを作成できません",
                 "CreateSessionFailed": "セッションの作成に失敗しました",
@@ -2374,6 +2397,24 @@
             "Tools": {
                 "Rag": {
                     "Description": "ユーザーの質問に最も関連する文書断片を取得し、回答のためのコンテキストを返します。"
+                },
+                "ListConnections": {
+                    "Description": "現在の組織で利用できるデータソースを、シークレットを含めずに一覧します。"
+                },
+                "ListDatabases": {
+                    "Description": "現在の Dory データソースのデータベースを一覧します。"
+                },
+                "GetTableProfile": {
+                    "Description": "データソースが対応している場合、テーブルのメタデータ、列、統計、インデックス、プロパティ、DDL を返します。"
+                },
+                "ListSavedQueries": {
+                    "Description": "現在のデータソースの保存済み SQL クエリを一覧します。"
+                },
+                "GetSavedQuery": {
+                    "Description": "現在のデータソースの保存済み SQL クエリを id で取得します。"
+                },
+                "RunAnalysis": {
+                    "Description": "結果コンテキストと現在のデータソースに対して Dory の分析アクションを実行します。"
                 }
             },
             "Prompt": {
@@ -2392,9 +2433,9 @@
                 }
             },
             "SqlRunner": {
-                "Description": "現在のデータベース接続に対して読み取り専用 SQL を実行するツールです。\n使い方:\n- 受け付けるのは単一の SELECT / SHOW / DESCRIBE / DESC / EXPLAIN 文のみです。INSERT/UPDATE/DELETE は不可です。\n- クエリ、集計、レポート、指標に関する質問では、先に SQL を生成してこのツールを呼び、結果に基づいて回答してください。\n- 現在のデータベース方言に合わせる必要があります。\n- スキーマが不明な場合は、まず提供済みの schema context を使い、その後で方言に合ったメタデータ問い合わせを使って確認してください。\n- PostgreSQL では MySQL 専用の DESCRIBE / SHOW COLUMNS 構文を使わないでください。",
+                "Description": "現在のデータソースに対して読み取り専用 SQL を実行するツールです。\n使い方:\n- 受け付けるのは単一の SELECT / SHOW / DESCRIBE / DESC / EXPLAIN 文のみです。INSERT/UPDATE/DELETE は不可です。\n- クエリ、集計、レポート、指標に関する質問では、先に SQL を生成してこのツールを呼び、結果に基づいて回答してください。\n- 現在のデータベース方言に合わせる必要があります。\n- スキーマが不明な場合は、まず提供済みの schema context を使い、その後で方言に合ったメタデータ問い合わせを使って確認してください。\n- PostgreSQL では MySQL 専用の DESCRIBE / SHOW COLUMNS 構文を使わないでください。",
                 "SqlRequired": "SQL は空にできません",
-                "MissingConnection": "データベース接続情報がないため、クエリを実行できません。",
+                "MissingConnection": "データソース情報がないため、クエリを実行できません。",
                 "ReadOnlyOnly": "読み取り専用クエリ（SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA）のみ許可されています。書き込みや更新文は含めないでください。",
                 "SelectAllNotAllowed": "chatbot が生成する SQL では SELECT * は使用できません。必要な列だけを選択してください。",
                 "OrderByIndexMissing": "このクエリは高コストの可能性があります: テーブル {table} の ORDER BY 列 {columns} にインデックスが確認できません。まず取得列を絞るか、インデックスを確認してください。",
@@ -2477,10 +2518,10 @@
         },
         "Privileges": {
             "Errors": {
-                "MissingConnectionId": "接続 ID がありません",
+                "MissingConnectionId": "データソース ID がありません",
                 "NotClickhouse": "現在のデータソースは ClickHouse 権限管理をサポートしていません",
                 "Fallback": "操作に失敗しました。後でもう一度お試しください",
-                "ConnectionUnavailable": "現在の接続は利用できません。後でもう一度お試しください",
+                "ConnectionUnavailable": "現在のデータソースは利用できません。後でもう一度お試しください",
                 "UserNotFound": "ユーザーが見つかりません",
                 "RoleNotFound": "ロールが見つかりません"
             },
@@ -2598,7 +2639,7 @@
         },
         "SchemaTags": {
             "InvalidParams": "無効なリクエストパラメーターです",
-            "MissingConnectionContext": "接続コンテキストがありません",
+            "MissingConnectionContext": "データソースコンテキストがありません",
             "MissingOrganizationIdFallback": "organizationId がないため、ローカルのヒューリスティックタグを使用します",
             "Tags": {
                 "PrimaryKey": "主キー",
@@ -2763,7 +2804,7 @@
                 "Blocked": "ブロック済み"
             },
             "Notice": {
-                "ReadOnlyRestriction": "この接続では読み取り専用クエリのみ許可されています。CREATE / INSERT / UPDATE / DELETE 文は SQL エディターで手動実行してください。"
+                "ReadOnlyRestriction": "このデータソースでは読み取り専用クエリのみ許可されています。CREATE / INSERT / UPDATE / DELETE 文は SQL エディターで手動実行してください。"
             },
             "FollowUp": {
                 "Button": "この結果をさらに分析",
@@ -2986,10 +3027,10 @@
             },
             "Data": {
                 "ExportLabel": "ワークスペースをエクスポート",
-                "ExportDescription": "接続と保存済みクエリを JSON ファイルとしてダウンロードします。パスワードやキーは含まれません。",
+                "ExportDescription": "データソースと保存済みクエリを JSON ファイルとしてダウンロードします。パスワードやキーは含まれません。",
                 "ExportAction": "エクスポート",
                 "ImportLabel": "ワークスペースをインポート",
-                "ImportDescription": "以前エクスポートした JSON ファイルから接続と保存済みクエリをインポートします。",
+                "ImportDescription": "以前エクスポートした JSON ファイルからデータソースと保存済みクエリをインポートします。",
                 "ImportAction": "インポート",
                 "ExportSuccess": "ワークスペースをエクスポートしました。",
                 "ExportFailed": "エクスポートに失敗しました",
@@ -2998,7 +3039,7 @@
                 "ImportFailedRetry": "インポートに失敗しました。もう一度お試しください。",
                 "InvalidJson": "無効な JSON ファイルです。",
                 "ImportSummary": {
-                    "Connections": "{count} 件の接続",
+                    "Connections": "{count} 件のデータソース",
                     "Folders": "{count} 個のフォルダー",
                     "Queries": "{count} 件のクエリ",
                     "QueriesSkipped": "{count} 件のクエリをスキップ",
@@ -3077,14 +3118,14 @@
             "ConnectionFailed": "データベース接続に失敗しました",
             "InitFailed": "データベースの初期化に失敗しました。設定または接続状態を確認してください。",
             "NotInitialized": "データベースが初期化されていません",
-            "ConnectionCreateFailed": "接続の作成に失敗しました",
+            "ConnectionCreateFailed": "データソースの作成に失敗しました",
             "NotOrganizationMember": "あなたは組織メンバーではありません",
             "NotAdmin": "管理者権限がありません",
-            "ConnectionIdentityCreateFailed": "接続 ID 情報の作成に失敗しました",
-            "ConnectionIdentityUpdateFailed": "接続 ID 情報の更新に失敗しました: レコードが見つからないか、権限が不足しています",
-            "ConnectionDuplicateName": "同じ名前の接続がすでに存在します",
-            "ConnectionNotFound": "接続が見つからないか、権限が不足しています",
-            "ConnectionIdentityInvalid": "接続 ID 情報が不完全です",
+            "ConnectionIdentityCreateFailed": "データソース ID 情報の作成に失敗しました",
+            "ConnectionIdentityUpdateFailed": "データソース ID 情報の更新に失敗しました: レコードが見つからないか、権限が不足しています",
+            "ConnectionDuplicateName": "同じ名前のデータソースがすでに存在します",
+            "ConnectionNotFound": "データソースが見つからないか、権限が不足しています",
+            "ConnectionIdentityInvalid": "データソース ID 情報が不完全です",
             "ConnectionIdentityUpdateRequiresId": "ID 情報の更新には id が必要です",
             "ConnectionIdentityMissingId": "ID 情報の id がありません",
             "ConnectionIdentityNameRequired": "名前は必須です",
@@ -3370,7 +3411,7 @@
                 "Title": "Pro（おすすめ）",
                 "Price": "Starting at $9/mo",
                 "Features": {
-                    "UnlimitedDatabaseConnections": "無制限のデータベース接続",
+                    "UnlimitedDatabaseConnections": "無制限のデータソース",
                     "HigherAiQuotaAndFasterResponses": "より高い AI クォータと高速な応答",
                     "ByokAiFeatures": "BYOK (Use your own AI key)",
                     "EarlyAccessToUpcomingFeatures": "近日公開機能への先行アクセス",
