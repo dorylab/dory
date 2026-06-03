@@ -17,7 +17,6 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
     const { form } = props;
     const { control } = form;
     const t = useTranslations('Connections.ConnectionContent');
-    const tc = useTranslations('Connections');
     const connectionType = useWatch({
         control,
         name: 'connection.type',
@@ -123,93 +122,97 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
                     )}
                 />
             </div>
-            <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-                <FormField
-                    control={control}
-                    name="connection.environment"
-                    render={({ field }) => {
-                        const environmentValue = normalizeConnectionEnvironmentValue(field.value);
-
-                        return (
-                            <FormItem className="space-y-2">
-                                <FormLabel>{tc('Environment')}</FormLabel>
-                                <Select
-                                    value={environmentValue || EMPTY_ENVIRONMENT_SELECT_VALUE}
-                                    onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_SELECT_VALUE ? '' : value)}
-                                >
-                                    <FormControl>
-                                        <SelectTrigger className="w-full min-w-0">
-                                            <SelectValue placeholder={tc('ConnectionMetadata.EnvironmentOptions.None')} />
-                                        </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                        {CONNECTION_ENVIRONMENT_OPTIONS.map(option => (
-                                            <SelectItem key={option.value || EMPTY_ENVIRONMENT_SELECT_VALUE} value={option.value || EMPTY_ENVIRONMENT_SELECT_VALUE}>
-                                                {tc(option.translationKey)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        );
-                    }}
-                />
-
-                <FormField
-                    control={control}
-                    name="connection.tags"
-                    render={({ field }) => {
-                        const tagValue = normalizeConnectionTagColorValue(field.value);
-
-                        return (
-                            <FormItem className="space-y-2">
-                                <FormLabel>{tc('Tag')}</FormLabel>
-                                <FormControl>
-                                    <div
-                                        role="radiogroup"
-                                        aria-label={tc('Tag')}
-                                        className="flex min-h-9 flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-2 py-1 shadow-xs"
-                                    >
-                                        {CONNECTION_TAG_COLOR_OPTIONS.map(option => {
-                                            const selected = tagValue === option.value;
-                                            const isEmptyOption = option.value === '';
-
-                                            return (
-                                                <button
-                                                    key={option.value || 'none'}
-                                                    type="button"
-                                                    role="radio"
-                                                    aria-checked={selected}
-                                                    aria-label={tc(option.translationKey)}
-                                                    title={tc(option.translationKey)}
-                                                    className={cn(
-                                                        'inline-flex h-7 items-center justify-center rounded-full border text-xs transition-[color,box-shadow,background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                                                        isEmptyOption ? 'px-2.5' : 'w-7 px-0',
-                                                        selected ? option.selectedClassName : 'border-border bg-background text-muted-foreground hover:bg-muted',
-                                                    )}
-                                                    onClick={() => field.onChange(option.value)}
-                                                >
-                                                    {isEmptyOption ? (
-                                                        <span className="font-medium">{tc(option.translationKey)}</span>
-                                                    ) : (
-                                                        <span className="relative flex h-4 w-4 items-center justify-center">
-                                                            <span className={cn('absolute inset-0 rounded-full', option.swatchClassName)} />
-                                                            {selected ? <Check className="relative h-3 w-3 text-white drop-shadow-sm" /> : null}
-                                                        </span>
-                                                    )}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        );
-                    }}
-                />
-            </div>
             <DriverFields key={connectionType} form={form} />
+        </div>
+    );
+}
+
+export function ConnectionMetadataForm(props: { form: UseFormReturn<any> }) {
+    const { form } = props;
+    const tc = useTranslations('Connections');
+
+    return (
+        <div className="grid gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+            <FormField
+                control={form.control}
+                name="connection.environment"
+                render={({ field }) => {
+                    const environmentValue = normalizeConnectionEnvironmentValue(field.value);
+
+                    return (
+                        <FormItem className="space-y-2">
+                            <FormLabel>{tc('Environment')}</FormLabel>
+                            <Select
+                                value={environmentValue || EMPTY_ENVIRONMENT_SELECT_VALUE}
+                                onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_SELECT_VALUE ? '' : value)}
+                            >
+                                <FormControl>
+                                    <SelectTrigger className="w-full min-w-0">
+                                        <SelectValue placeholder={tc('ConnectionMetadata.EnvironmentOptions.None')} />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {CONNECTION_ENVIRONMENT_OPTIONS.map(option => (
+                                        <SelectItem key={option.value || EMPTY_ENVIRONMENT_SELECT_VALUE} value={option.value || EMPTY_ENVIRONMENT_SELECT_VALUE}>
+                                            {tc(option.translationKey)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                        </FormItem>
+                    );
+                }}
+            />
+
+            <FormField
+                control={form.control}
+                name="connection.tags"
+                render={({ field }) => {
+                    const tagValue = normalizeConnectionTagColorValue(field.value);
+
+                    return (
+                        <FormItem className="space-y-2">
+                            <FormLabel>{tc('Tag')}</FormLabel>
+                            <FormControl>
+                                <div role="radiogroup" aria-label={tc('Tag')} className="flex h-9 min-w-0 flex-wrap items-center gap-2 overflow-hidden">
+                                    {CONNECTION_TAG_COLOR_OPTIONS.map(option => {
+                                        const selected = tagValue === option.value;
+                                        const isEmptyOption = option.value === '';
+
+                                        return (
+                                            <button
+                                                key={option.value || 'none'}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={selected}
+                                                aria-label={tc(option.translationKey)}
+                                                title={tc(option.translationKey)}
+                                                className={cn(
+                                                    'inline-flex h-7 items-center justify-center rounded-full border text-xs transition-[color,box-shadow,background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                                    isEmptyOption ? 'px-2.5' : 'w-7 px-0',
+                                                    selected ? option.selectedClassName : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                                                )}
+                                                onClick={() => field.onChange(option.value)}
+                                            >
+                                                {isEmptyOption ? (
+                                                    <span className="font-medium">{tc(option.translationKey)}</span>
+                                                ) : (
+                                                    <span className="relative flex h-4 w-4 items-center justify-center">
+                                                        <span className={cn('absolute inset-0 rounded-full', option.swatchClassName)} />
+                                                        {selected ? <Check className="relative h-3 w-3 text-white drop-shadow-sm" /> : null}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    );
+                }}
+            />
         </div>
     );
 }

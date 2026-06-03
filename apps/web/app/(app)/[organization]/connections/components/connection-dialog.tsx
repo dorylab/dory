@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { Cable, ChevronDown, ChevronUp, Loader2, Lock, Server, Shield } from 'lucide-react';
+import { Cable, ChevronDown, ChevronUp, KeyRound, Loader2, Lock, Server, Shield, Tags, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
@@ -19,7 +19,7 @@ import type { ConnectionListItem } from '@dory/shared/types/connections';
 
 import SSHConnectionForm from './forms/ssh/ssh-form';
 import { TLSConnectionForm } from './forms/tls/tls-form';
-import ConnectionForm from './forms/connection';
+import ConnectionForm, { ConnectionMetadataForm } from './forms/connection';
 import IdentityForm from './forms/identity';
 
 import { useCreateConnection, useTestConnection, useUpdateConnection } from '../hooks/use-connections';
@@ -32,6 +32,15 @@ import { buildNeonConnectionStringForForm, normalizeNeonIdentityFromConnectionSt
 import { createTlsDefaultsForConnectionType, normalizeTlsForForm, normalizeTlsForSubmit, TLS_SUPPORTED_CONNECTION_TYPES } from './forms/tls/utils';
 
 type Mode = 'Create' | 'Edit';
+
+function ConnectionFormGroupLabel({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+    return (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>{children}</span>
+        </p>
+    );
+}
 
 export function ConnectionDialog({
     open,
@@ -318,22 +327,21 @@ export function ConnectionDialog({
                         <ScrollArea className="overflow-hidden pr-2 h-[70vh]">
                             <div className="space-y-4 pb-4">
                                 <section className="rounded-xl border border-border/70 bg-background/80 p-4 space-y-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-                                            <Server className="h-3 w-3 text-muted-foreground" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('Connection Info')}</span>
-                                        </div>
+                                    <div className="space-y-3">
+                                        <ConnectionFormGroupLabel icon={Server}>{tc('General')}</ConnectionFormGroupLabel>
+                                        <ConnectionForm form={form} />
                                     </div>
 
-                                    <div className="space-y-4">
-                                        <ConnectionForm form={form} />
-
-                                        {!hidesIdentityForm ? <p className="text-xs text-muted-foreground mt-3">{t('Authentication Info')}</p> : null}
-                                        {!hidesIdentityForm ? (
+                                    {!hidesIdentityForm ? (
+                                        <div className="space-y-3">
+                                            <ConnectionFormGroupLabel icon={KeyRound}>{t('Authentication Info')}</ConnectionFormGroupLabel>
                                             <IdentityForm form={form} isEditMode={isEditMode} savePassword={savePassword} onSavePasswordChange={setSavePassword} />
-                                        ) : null}
+                                        </div>
+                                    ) : null}
+
+                                    <div className="space-y-3">
+                                        <ConnectionFormGroupLabel icon={Tags}>{t('Metadata')}</ConnectionFormGroupLabel>
+                                        <ConnectionMetadataForm form={form} />
                                     </div>
                                 </section>
 

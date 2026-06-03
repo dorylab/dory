@@ -227,6 +227,7 @@
         "Test": "Test",
         "Connection Info": "Data source info",
         "Authentication Info": "Authentication",
+        "Metadata": "Metadata",
         "Enable": "Enable",
         "Testing Connection": "Testing...",
         "Saving": "Saving...",

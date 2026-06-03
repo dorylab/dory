@@ -227,6 +227,7 @@
         "Test": "テスト",
         "Connection Info": "データソース情報",
         "Authentication Info": "認証",
+        "Metadata": "メタデータ",
         "Enable": "有効化",
         "Testing Connection": "テスト中...",
         "Saving": "保存中...",

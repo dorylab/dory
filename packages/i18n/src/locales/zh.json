@@ -231,6 +231,7 @@
         "Test": "测试",
         "Connection Info": "数据源信息",
         "Authentication Info": "认证信息",
+        "Metadata": "元数据",
         "Enable": "启用",
         "Testing Connection": "测试中...",
         "Saving": "保存中...",
