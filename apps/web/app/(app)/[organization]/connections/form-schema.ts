@@ -19,6 +19,18 @@ function getLowerPathExtension(value: string) {
     return match?.[1]?.toLowerCase() ?? '';
 }
 
+function hasTrimmedString(value: unknown) {
+    return typeof value === 'string' && value.trim() !== '';
+}
+
+function hasCertificateValue(tls: Record<string, unknown> | null | undefined, sourceName: string, pathName: string, contentName: string, hasContentName: string) {
+    if (!tls) return false;
+    if (tls[sourceName] === 'content') {
+        return hasTrimmedString(tls[contentName]) || tls[hasContentName] === true;
+    }
+    return hasTrimmedString(tls[pathName]);
+}
+
 export const ConnectionDialogFormSchema = z
     .object({
         connection: z.object({
@@ -151,6 +163,35 @@ export const ConnectionDialogFormSchema = z
                 });
             }
             return;
+        }
+
+        if (value.connection.type === 'clickhouse') {
+            const tlsMode = value.tls?.mode ?? 'disable';
+            if (tlsMode === 'verify-ca' || tlsMode === 'verify-identity') {
+                if (!hasCertificateValue(value.tls, 'caCertificateSource', 'caCertificatePath', 'caCertificateContent', 'hasCaCertificateContent')) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['tls', value.tls?.caCertificateSource === 'content' ? 'caCertificateContent' : 'caCertificatePath'],
+                        message: 'Please provide a CA certificate',
+                    });
+                }
+            }
+            if (tlsMode === 'verify-identity') {
+                if (!hasCertificateValue(value.tls, 'clientCertificateSource', 'clientCertificatePath', 'clientCertificateContent', 'hasClientCertificateContent')) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['tls', value.tls?.clientCertificateSource === 'content' ? 'clientCertificateContent' : 'clientCertificatePath'],
+                        message: 'Please provide a client certificate',
+                    });
+                }
+                if (!hasCertificateValue(value.tls, 'clientPrivateKeySource', 'clientPrivateKeyPath', 'clientPrivateKeyContent', 'hasClientPrivateKeyContent')) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['tls', value.tls?.clientPrivateKeySource === 'content' ? 'clientPrivateKeyContent' : 'clientPrivateKeyPath'],
+                        message: 'Please provide a client private key',
+                    });
+                }
+            }
         }
 
         if (!value.connection.host?.trim()) {

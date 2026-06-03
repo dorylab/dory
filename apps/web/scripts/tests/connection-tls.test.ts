@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildStoredConnectionConfig } from '@dory/drivers/config';
+import { buildClickhouseClientConfigOptions, isClickhouseTlsEnabled } from '../../../../packages/drivers/src/database/clickhouse/runtime';
 import { buildMySqlPoolConfig } from '../../../../packages/drivers/src/database/mysql/runtime';
 import { buildPostgresPoolConfig } from '../../../../packages/drivers/src/database/postgres/runtime';
 import { buildSqlServerPoolConfig } from '../../../../packages/drivers/src/database/sqlserver/runtime';
@@ -33,6 +34,67 @@ test('connection TLS submit normalization preserves saved content and clears pat
 test('Neon is not exposed as a configurable TLS connection type', () => {
     assert.equal(TLS_SUPPORTED_CONNECTION_TYPES.has('neon'), false);
     assert.equal(normalizeTlsForSubmit('neon', { mode: 'verify-identity' }), null);
+});
+
+test('ClickHouse TLS submit normalization uses ClickHouse-specific modes and fields', () => {
+    assert.equal(TLS_SUPPORTED_CONNECTION_TYPES.has('clickhouse'), true);
+
+    const httpsOnly = normalizeTlsForSubmit('clickhouse', {
+        mode: 'require',
+        caCertificatePath: '/srv/ca.crt',
+        clientCertificatePath: '/srv/client.crt',
+        clientPrivateKeyPath: '/srv/client.key',
+        serverName: 'ignored.example.com',
+    });
+
+    assert.ok(httpsOnly);
+    assert.equal(httpsOnly.mode, 'require');
+    assert.equal(httpsOnly.caCertificatePath, null);
+    assert.equal(httpsOnly.clientCertificatePath, null);
+    assert.equal(httpsOnly.clientPrivateKeyPath, null);
+    assert.equal(httpsOnly.serverName, null);
+
+    const legacyPrefer = normalizeTlsForSubmit('clickhouse', { mode: 'prefer' });
+    assert.ok(legacyPrefer);
+    assert.equal(legacyPrefer.mode, 'require');
+
+    const customCa = normalizeTlsForSubmit('clickhouse', {
+        mode: 'verify-ca',
+        caCertificateSource: 'content',
+        caCertificateContent: 'CA',
+        clientCertificatePath: '/srv/client.crt',
+        clientPrivateKeyPath: '/srv/client.key',
+    });
+
+    assert.ok(customCa);
+    assert.equal(customCa.mode, 'verify-ca');
+    assert.equal(customCa.caCertificateContent, 'CA');
+    assert.equal(customCa.clientCertificatePath, null);
+    assert.equal(customCa.clientPrivateKeyPath, null);
+
+    const mutualTls = normalizeTlsForSubmit('clickhouse', {
+        mode: 'verify-identity',
+        caCertificateSource: 'content',
+        caCertificateContent: 'CA',
+        clientCertificateSource: 'content',
+        clientCertificateContent: 'CERT',
+        clientPrivateKeySource: 'content',
+        clientPrivateKeyContent: 'KEY',
+        clientPrivateKeyPassphrase: 'ignored',
+        ciphers: 'ignored',
+        minVersion: 'TLSv1.2',
+        maxVersion: 'TLSv1.3',
+        serverName: 'ignored.example.com',
+    });
+
+    assert.ok(mutualTls);
+    assert.equal(mutualTls.mode, 'verify-identity');
+    assert.equal(mutualTls.caCertificateContent, 'CA');
+    assert.equal(mutualTls.clientCertificateContent, 'CERT');
+    assert.equal(mutualTls.clientPrivateKeyContent, 'KEY');
+    assert.equal(mutualTls.clientPrivateKeyPassphrase, null);
+    assert.equal(mutualTls.ciphers, null);
+    assert.equal(mutualTls.serverName, null);
 });
 
 test('connection sync payload redacts TLS secret material', () => {
@@ -126,4 +188,69 @@ test('driver TLS runtime mapping matches pg, mysql2, and tedious expectations', 
     assert.equal(sqlServerConfig.options?.trustServerCertificate, false);
     assert.equal(sqlServerConfig.options?.serverName, 'db.example.com');
     assert.equal((sqlServerConfig.options?.cryptoCredentialsDetails as any)?.key, 'KEY');
+});
+
+test('ClickHouse TLS runtime mapping matches @clickhouse/client expectations', () => {
+    const base = {
+        id: 'c1',
+        host: 'ch.example.com',
+        port: 9000,
+        username: 'default',
+        password: 'pw',
+        database: 'default',
+        type: 'clickhouse' as const,
+        options: {
+            httpPort: 8443,
+            tls: {
+                mode: 'require',
+            },
+        },
+    };
+
+    assert.equal(isClickhouseTlsEnabled(base), true);
+    const httpsOnlyConfig = buildClickhouseClientConfigOptions(base);
+    assert.equal(httpsOnlyConfig.url, 'https://ch.example.com:8443');
+    assert.equal(httpsOnlyConfig.tls, undefined);
+
+    const customCaConfig = buildClickhouseClientConfigOptions({
+        ...base,
+        options: {
+            ...base.options,
+            tls: {
+                mode: 'verify-ca',
+                caCertificateContent: 'CA',
+            },
+        },
+    });
+    assert.equal(customCaConfig.tls?.ca_cert.toString(), 'CA');
+    assert.equal('cert' in customCaConfig.tls!, false);
+
+    const mutualTlsConfig = buildClickhouseClientConfigOptions({
+        ...base,
+        options: {
+            ...base.options,
+            tls: {
+                mode: 'verify-identity',
+                caCertificateContent: 'CA',
+                clientCertificateContent: 'CERT',
+                clientPrivateKeyContent: 'KEY',
+            },
+        },
+    });
+    assert.equal(mutualTlsConfig.tls?.ca_cert.toString(), 'CA');
+    assert.equal((mutualTlsConfig.tls as any)?.cert.toString(), 'CERT');
+    assert.equal((mutualTlsConfig.tls as any)?.key.toString(), 'KEY');
+
+    assert.equal(
+        isClickhouseTlsEnabled({
+            ...base,
+            options: {
+                ssl: true,
+                tls: {
+                    mode: 'disable',
+                },
+            },
+        }),
+        false,
+    );
 });

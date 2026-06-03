@@ -148,6 +148,15 @@ export function ConnectionDialog({
         return identityWithoutPassword;
     };
 
+    const normalizeConnectionValuesForSubmit = (connectionValues: Record<string, unknown> | null | undefined, tlsPayload: { mode?: string | null } | null) => {
+        if (connectionValues?.type !== 'clickhouse') return connectionValues;
+
+        return {
+            ...connectionValues,
+            ssl: (tlsPayload?.mode ?? 'disable') !== 'disable',
+        };
+    };
+
     useEffect(() => {
         if (!open) return;
 
@@ -169,9 +178,8 @@ export function ConnectionDialog({
             }
             reset(nextValues);
             setSavePassword(true);
-            const loadedConnectionType = nextValues.connection?.type;
             setSshOpen(connectionItem.connection?.type === 'neon' ? false : Boolean((connectionItem as any).ssh?.enabled));
-            setTlsOpen(TLS_SUPPORTED_CONNECTION_TYPES.has(loadedConnectionType) && nextValues.tls?.mode !== 'disable');
+            setTlsOpen(false);
         } else {
             reset({
                 ...(NEW_CONNECTION_DEFAULT_VALUES as any),
@@ -193,7 +201,7 @@ export function ConnectionDialog({
                 : normalizeSshValues(values.ssh, isEditMode ? connectionId : null);
             const tlsPayload = hidesTlsForm ? null : normalizeTlsForSubmit(values.connection?.type, values.tls);
             const driver = getConnectionDriver(values.connection?.type);
-            const normalizedConnection = driver.normalizeForSubmit(values.connection);
+            const normalizedConnection = driver.normalizeForSubmit(normalizeConnectionValuesForSubmit(values.connection, tlsPayload));
             const normalizedIdentity = normalizeIdentityPasswordForSubmit(normalizeIdentityValues(values.identity), 'save');
 
             const savedValues = {
@@ -235,7 +243,7 @@ export function ConnectionDialog({
         const sshPayload = hidesSshForm ? { enabled: false, host: null, port: null, username: null, authMethod: null } : normalizeSshValues(values.ssh);
         const tlsPayload = hidesTlsForm ? null : normalizeTlsForSubmit(values.connection?.type, values.tls);
         const driver = getConnectionDriver(values.connection?.type);
-        const normalizedConnection = driver.normalizeForSubmit(values.connection);
+        const normalizedConnection = driver.normalizeForSubmit(normalizeConnectionValuesForSubmit(values.connection, tlsPayload));
         const normalizedIdentity = normalizeIdentityPasswordForSubmit(normalizeIdentityValues(values.identity), 'test');
         let testPayload = { ...values, ssh: sshPayload };
         if (mode === 'Edit') {

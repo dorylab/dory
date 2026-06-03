@@ -24,6 +24,12 @@ const TLS_MODE_OPTIONS = {
         { value: 'require', label: 'Require' },
         { value: 'verify-identity', label: 'Verify identity' },
     ],
+    clickhouse: [
+        { value: 'disable', label: 'Disable' },
+        { value: 'require', label: 'HTTPS' },
+        { value: 'verify-ca', label: 'HTTPS + CA certificate' },
+        { value: 'verify-identity', label: 'Mutual TLS' },
+    ],
 };
 
 type CertificateFieldProps = {
@@ -126,8 +132,12 @@ function CertificateField({ form, label, sourceName, pathName, contentName, hasC
 
 export function TLSConnectionForm({ form, connectionType }: { form: UseFormReturn<any>; connectionType?: string }) {
     const mode = form.watch('tls.mode') ?? 'disable';
-    const modeOptions = connectionType === 'sqlserver' ? TLS_MODE_OPTIONS.sqlserver : TLS_MODE_OPTIONS.default;
+    const modeOptions = connectionType === 'sqlserver' ? TLS_MODE_OPTIONS.sqlserver : connectionType === 'clickhouse' ? TLS_MODE_OPTIONS.clickhouse : TLS_MODE_OPTIONS.default;
     const enabled = mode !== 'disable';
+    const isClickhouse = connectionType === 'clickhouse';
+    const showCaCertificate = enabled && (!isClickhouse || mode === 'verify-ca' || mode === 'verify-identity');
+    const showClientCertificate = enabled && (!isClickhouse || mode === 'verify-identity');
+    const showAdvancedFields = enabled && !isClickhouse;
 
     return (
         <div className="flex flex-col gap-4 rounded-lg bg-background/60 p-4">
@@ -158,107 +168,117 @@ export function TLSConnectionForm({ form, connectionType }: { form: UseFormRetur
 
             {enabled ? (
                 <>
-                    <CertificateField
-                        form={form}
-                        label="CA certificate"
-                        sourceName="tls.caCertificateSource"
-                        pathName="tls.caCertificatePath"
-                        contentName="tls.caCertificateContent"
-                        hasContentName="tls.hasCaCertificateContent"
-                        placeholder="Paste PEM-formatted CA certificate"
-                    />
-                    <CertificateField
-                        form={form}
-                        label="Client certificate"
-                        sourceName="tls.clientCertificateSource"
-                        pathName="tls.clientCertificatePath"
-                        contentName="tls.clientCertificateContent"
-                        hasContentName="tls.hasClientCertificateContent"
-                        placeholder="Paste PEM-formatted client certificate"
-                    />
-                    <CertificateField
-                        form={form}
-                        label="Client private key"
-                        sourceName="tls.clientPrivateKeySource"
-                        pathName="tls.clientPrivateKeyPath"
-                        contentName="tls.clientPrivateKeyContent"
-                        hasContentName="tls.hasClientPrivateKeyContent"
-                        placeholder="Paste PEM-formatted client private key"
-                    />
+                    {showCaCertificate ? (
+                        <CertificateField
+                            form={form}
+                            label="CA certificate"
+                            sourceName="tls.caCertificateSource"
+                            pathName="tls.caCertificatePath"
+                            contentName="tls.caCertificateContent"
+                            hasContentName="tls.hasCaCertificateContent"
+                            placeholder="Paste PEM-formatted CA certificate"
+                        />
+                    ) : null}
+                    {showClientCertificate ? (
+                        <>
+                            <CertificateField
+                                form={form}
+                                label="Client certificate"
+                                sourceName="tls.clientCertificateSource"
+                                pathName="tls.clientCertificatePath"
+                                contentName="tls.clientCertificateContent"
+                                hasContentName="tls.hasClientCertificateContent"
+                                placeholder="Paste PEM-formatted client certificate"
+                            />
+                            <CertificateField
+                                form={form}
+                                label="Client private key"
+                                sourceName="tls.clientPrivateKeySource"
+                                pathName="tls.clientPrivateKeyPath"
+                                contentName="tls.clientPrivateKeyContent"
+                                hasContentName="tls.hasClientPrivateKeyContent"
+                                placeholder="Paste PEM-formatted client private key"
+                            />
+                        </>
+                    ) : null}
 
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <FormField
-                            control={form.control}
-                            name="tls.clientPrivateKeyPassphrase"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-col gap-2">
-                                    <FormLabel>Private key passphrase</FormLabel>
-                                    <FormControl>
-                                        <Input type="password" autoComplete="new-password" placeholder="Optional" {...field} value={field.value ?? ''} />
-                                    </FormControl>
-                                    {form.watch('tls.hasClientPrivateKeyPassphrase') && !field.value ? (
-                                        <span className="text-xs text-muted-foreground">Saved passphrase will be reused.</span>
-                                    ) : null}
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="tls.serverName"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-col gap-2">
-                                    <FormLabel>Server name</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="db.example.com" {...field} value={field.value ?? ''} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
+                    {showAdvancedFields ? (
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <FormField
+                                control={form.control}
+                                name="tls.clientPrivateKeyPassphrase"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col gap-2">
+                                        <FormLabel>Private key passphrase</FormLabel>
+                                        <FormControl>
+                                            <Input type="password" autoComplete="new-password" placeholder="Optional" {...field} value={field.value ?? ''} />
+                                        </FormControl>
+                                        {form.watch('tls.hasClientPrivateKeyPassphrase') && !field.value ? (
+                                            <span className="text-xs text-muted-foreground">Saved passphrase will be reused.</span>
+                                        ) : null}
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="tls.serverName"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col gap-2">
+                                        <FormLabel>Server name</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="db.example.com" {...field} value={field.value ?? ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    ) : null}
 
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <FormField
-                            control={form.control}
-                            name="tls.ciphers"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-col gap-2">
-                                    <FormLabel>Cipher suites</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Optional" {...field} value={field.value ?? ''} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="tls.minVersion"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-col gap-2">
-                                    <FormLabel>Min TLS</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="TLSv1.2" {...field} value={field.value ?? ''} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="tls.maxVersion"
-                            render={({ field }) => (
-                                <FormItem className="flex flex-col gap-2">
-                                    <FormLabel>Max TLS</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="TLSv1.3" {...field} value={field.value ?? ''} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
+                    {showAdvancedFields ? (
+                        <div className="grid gap-4 md:grid-cols-3">
+                            <FormField
+                                control={form.control}
+                                name="tls.ciphers"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col gap-2">
+                                        <FormLabel>Cipher suites</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="Optional" {...field} value={field.value ?? ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="tls.minVersion"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col gap-2">
+                                        <FormLabel>Min TLS</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="TLSv1.2" {...field} value={field.value ?? ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="tls.maxVersion"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col gap-2">
+                                        <FormLabel>Max TLS</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="TLSv1.3" {...field} value={field.value ?? ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
+                    ) : null}
                 </>
             ) : null}
         </div>

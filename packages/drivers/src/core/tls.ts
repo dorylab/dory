@@ -19,6 +19,16 @@ export type DriverTlsOptions = {
     clientPrivateKeyPassphrase?: string | null;
 };
 
+export type ClickhouseTlsOptions =
+    | {
+          ca_cert: Buffer;
+      }
+    | {
+          ca_cert: Buffer;
+          cert: Buffer;
+          key: Buffer;
+      };
+
 export function normalizeTlsMode(value: unknown): TlsMode | undefined {
     if (typeof value !== 'string') return undefined;
     const mode = value.trim().toLowerCase();
@@ -42,6 +52,11 @@ function readPemContent(content: unknown, pathValue: unknown): string | undefine
         return fs.readFileSync(pathValue.trim(), 'utf8');
     }
     return undefined;
+}
+
+function readPemBuffer(content: unknown, pathValue: unknown): Buffer | undefined {
+    const pem = readPemContent(content, pathValue);
+    return pem ? Buffer.from(pem) : undefined;
 }
 
 export function buildSecureContextOptions(tlsOptions: DriverTlsOptions | undefined): SecureContextOptions {
@@ -92,6 +107,29 @@ export function buildMysqlTlsOptions(tlsOptions: DriverTlsOptions | undefined, l
         rejectUnauthorized: mode === 'verify-ca' || mode === 'verify-identity',
         verifyIdentity: mode === 'verify-identity',
     };
+}
+
+export function buildClickhouseTlsOptions(tlsOptions: DriverTlsOptions | undefined): ClickhouseTlsOptions | undefined {
+    const mode = normalizeTlsMode(tlsOptions?.mode);
+    if (!mode || mode === 'disable' || mode === 'prefer' || mode === 'require') return undefined;
+
+    const ca_cert = readPemBuffer(tlsOptions?.caCertificateContent, tlsOptions?.caCertificatePath);
+    if (!ca_cert) return undefined;
+
+    if (mode === 'verify-identity') {
+        const cert = readPemBuffer(tlsOptions?.clientCertificateContent, tlsOptions?.clientCertificatePath);
+        const key = readPemBuffer(tlsOptions?.clientPrivateKeyContent, tlsOptions?.clientPrivateKeyPath);
+
+        if (cert && key) {
+            return {
+                ca_cert,
+                cert,
+                key,
+            };
+        }
+    }
+
+    return { ca_cert };
 }
 
 export function isTlsPreferMode(options: Record<string, unknown> | undefined): boolean {

@@ -2,7 +2,6 @@ import { type RefinementCtx } from 'zod';
 import { UseFormReturn } from 'react-hook-form';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
-import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { FieldHelp, PortField } from './shared';
 
 function parseClickhouseHostDraft(rawHost: unknown): { host?: string; httpPort?: number; ssl?: boolean; database?: string } {
@@ -97,7 +96,7 @@ export function normalizeClickhouseConnectionForSubmit(connection: any) {
     const options = parseConnectionOptions(connection?.options);
     const { ssl: _ssl, ...restConnection } = connection ?? {};
     const parsedHost = parseClickhouseHostDraft(connection?.host);
-    const ssl = parsedHost.ssl ?? Boolean(connection?.ssl);
+    const ssl = typeof connection?.ssl === 'boolean' ? connection.ssl : (parsedHost.ssl ?? false);
     const httpPort =
         typeof connection?.httpPort === 'number' && Number.isFinite(connection.httpPort)
             ? connection.httpPort
@@ -172,24 +171,6 @@ export function ClickhouseConnectionFields({ form }: { form: UseFormReturn<any> 
                             <Input placeholder="default" {...field} value={field.value ?? ''} />
                         </FormControl>
                         <FormMessage />
-                    </FormItem>
-                )}
-            />
-
-            <FormField
-                control={form.control}
-                name="connection.ssl"
-                render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-                        <div>
-                            <div className="flex items-center gap-1.5">
-                                <FormLabel className="text-sm font-medium">SSL</FormLabel>
-                                <FieldHelp text="Turn this on for ClickHouse Cloud or any HTTPS endpoint." />
-                            </div>
-                        </div>
-                        <FormControl>
-                            <Switch checked={Boolean(field.value)} onCheckedChange={field.onChange} />
-                        </FormControl>
                     </FormItem>
                 )}
             />

@@ -1,4 +1,4 @@
-export const TLS_SUPPORTED_CONNECTION_TYPES = new Set(['postgres', 'mysql', 'mariadb', 'sqlserver']);
+export const TLS_SUPPORTED_CONNECTION_TYPES = new Set(['postgres', 'mysql', 'mariadb', 'sqlserver', 'clickhouse']);
 
 export function createTlsDefaultsForConnectionType(connectionType?: string) {
     return {
@@ -42,7 +42,9 @@ function legacyModeForConnection(connection: any): string {
     const type = connection?.type ?? connection?.engine;
     const options = parseOptions(connection?.options);
     const tls = options.tls && typeof options.tls === 'object' && !Array.isArray(options.tls) ? (options.tls as Record<string, unknown>) : null;
-    if (typeof tls?.mode === 'string') return tls.mode;
+    if (typeof tls?.mode === 'string') {
+        return type === 'clickhouse' && tls.mode === 'prefer' ? 'require' : tls.mode;
+    }
 
     if (type === 'postgres') {
         if (typeof options.sslmode === 'string') {
@@ -61,6 +63,24 @@ function legacyModeForConnection(connection: any): string {
     if (type === 'sqlserver') {
         if (options.encrypt === false) return 'disable';
         return options.trustServerCertificate === false ? 'verify-identity' : 'require';
+    }
+
+    if (type === 'clickhouse') {
+        const protocol = typeof options.protocol === 'string' ? options.protocol.toLowerCase() : '';
+        const hasCustomCa = Boolean(tls?.caCertificatePath);
+        const hasClientCertificate = Boolean(tls?.clientCertificatePath);
+        const hasClientPrivateKey = Boolean(tls?.clientPrivateKeyPath);
+
+        if (hasClientCertificate && hasClientPrivateKey) return 'verify-identity';
+        if (hasCustomCa) return 'verify-ca';
+        if (options.ssl === true || options.useSSL === true || protocol.startsWith('https')) return 'require';
+        if (typeof connection?.host === 'string') {
+            try {
+                return new URL(connection.host).protocol === 'https:' ? 'require' : 'disable';
+            } catch {
+                return 'disable';
+            }
+        }
     }
 
     return 'disable';
@@ -108,10 +128,75 @@ function contentValue(values: any, contentName: string, hasName: string) {
     return values?.[hasName] ? undefined : null;
 }
 
+function normalizeClickhouseTlsForSubmit(mode: string, values: any) {
+    const clickhouseMode = mode === 'prefer' ? 'require' : mode;
+    const useCaContent = values?.caCertificateSource === 'content';
+    const useClientCertContent = values?.clientCertificateSource === 'content';
+    const useClientKeyContent = values?.clientPrivateKeySource === 'content';
+
+    const disabled = {
+        caCertificatePath: null,
+        caCertificateContent: null,
+        clientCertificatePath: null,
+        clientCertificateContent: null,
+        clientPrivateKeyPath: null,
+        clientPrivateKeyContent: null,
+        clientPrivateKeyPassphrase: null,
+        serverName: null,
+        ciphers: null,
+        minVersion: null,
+        maxVersion: null,
+    };
+
+    if (clickhouseMode === 'disable' || clickhouseMode === 'require') {
+        return {
+            mode: clickhouseMode,
+            ...disabled,
+        };
+    }
+
+    const caFields = {
+        caCertificatePath: useCaContent ? null : textOrNull(values?.caCertificatePath),
+        caCertificateContent: useCaContent ? contentValue(values, 'caCertificateContent', 'hasCaCertificateContent') : null,
+    };
+
+    if (clickhouseMode === 'verify-identity') {
+        return {
+            mode: clickhouseMode,
+            ...caFields,
+            clientCertificatePath: useClientCertContent ? null : textOrNull(values?.clientCertificatePath),
+            clientCertificateContent: useClientCertContent ? contentValue(values, 'clientCertificateContent', 'hasClientCertificateContent') : null,
+            clientPrivateKeyPath: useClientKeyContent ? null : textOrNull(values?.clientPrivateKeyPath),
+            clientPrivateKeyContent: useClientKeyContent ? contentValue(values, 'clientPrivateKeyContent', 'hasClientPrivateKeyContent') : null,
+            clientPrivateKeyPassphrase: null,
+            serverName: null,
+            ciphers: null,
+            minVersion: null,
+            maxVersion: null,
+        };
+    }
+
+    return {
+        mode: 'verify-ca',
+        ...caFields,
+        clientCertificatePath: null,
+        clientCertificateContent: null,
+        clientPrivateKeyPath: null,
+        clientPrivateKeyContent: null,
+        clientPrivateKeyPassphrase: null,
+        serverName: null,
+        ciphers: null,
+        minVersion: null,
+        maxVersion: null,
+    };
+}
+
 export function normalizeTlsForSubmit(connectionType: string | undefined, values: any) {
     if (!connectionType || !TLS_SUPPORTED_CONNECTION_TYPES.has(connectionType)) return null;
 
     const mode = typeof values?.mode === 'string' ? values.mode : connectionType === 'sqlserver' ? 'require' : 'disable';
+    if (connectionType === 'clickhouse') return normalizeClickhouseTlsForSubmit(mode, values);
+
     if (mode === 'disable') {
         return {
             mode: 'disable',
