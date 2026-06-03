@@ -368,17 +368,25 @@ export function buildAiProvidersViewModel(options: {
     globalProvider?: AiProviderSummary | null;
     env?: GlobalAiProviderEnv;
 }): AiProvidersViewModel {
-    const resolution = getAiProviderResolution(options);
-    const hasOrganizationDefault = resolution.activeProvider.source === 'organization';
-    const organizationRows = options.organizationProviders.map(provider => {
-        const row = buildOrganizationProviderRow(provider);
-        const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
-        return {
-            ...row,
-            isDefault: isEffectiveDefault,
-            status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
-        };
+    const isDockerRuntime = options.runtime === 'docker';
+    const resolution = getAiProviderResolution({
+        ...options,
+        entitlementMode: isDockerRuntime ? 'self-hosted-license' : options.entitlementMode,
+        license: isDockerRuntime ? 'oss' : options.license,
+        billingPlan: isDockerRuntime ? null : options.billingPlan,
     });
+    const hasOrganizationDefault = resolution.activeProvider.source === 'organization';
+    const organizationRows = isDockerRuntime
+        ? []
+        : options.organizationProviders.map(provider => {
+              const row = buildOrganizationProviderRow(provider);
+              const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
+              return {
+                  ...row,
+                  isDefault: isEffectiveDefault,
+                  status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
+              };
+          });
     const defaultProviderId = organizationRows.find(row => row.isDefault && row.status !== 'disabled')?.id ?? 'system';
     const rows = [buildSystemProviderRow(resolution.globalProvider, !hasOrganizationDefault), ...organizationRows];
     const providers = [...rows].sort((left, right) => {

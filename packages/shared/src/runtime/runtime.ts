@@ -29,6 +29,8 @@ export function normalizeLicense(value: string | null | undefined): DoryLicense 
 }
 
 export function getLicenseForServer(): DoryLicense {
+    if (getRuntimeForServer() === 'docker') return 'oss';
+
     return normalizeLicense(process.env.DORY_LICENSE) ?? 'oss';
 }
 
@@ -41,7 +43,7 @@ export function isDesktopRuntime(): boolean {
 }
 
 export function isBillingAvailableRuntimeValue(value: DoryRuntime | null | undefined): boolean {
-    return value === 'web' || value === 'docker';
+    return value === 'web';
 }
 
 export function isBillingAvailableRuntime(): boolean {
