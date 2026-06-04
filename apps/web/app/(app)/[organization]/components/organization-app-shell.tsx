@@ -28,6 +28,7 @@ export function OrganizationAppShell({
         <SettingsProvider
             includeOrganizationSettings
             includeBillingSettings={billingManagementAvailable || desktopBillingHandoff}
+            currentOrganizationId={organizationId}
             runtime={runtime}
             billingManagementAvailable={billingManagementAvailable}
             desktopBillingHandoff={desktopBillingHandoff}

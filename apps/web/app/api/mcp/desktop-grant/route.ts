@@ -1,15 +1,25 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
-import { withOrganizationHandler } from '@/app/api/utils/with-organization-handler';
+import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
+import { getSessionFromRequest } from '@/lib/auth/session';
 import { ResponseUtil } from '@/lib/result';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
+import { resolveMcpDesktopGrantOrganizationId } from '@/lib/server/mcp/desktop-grant';
 import { issueMcpDesktopGrant, MCP_DEFAULT_SCOPES } from '@/lib/server/mcp/auth';
 import { ErrorCodes } from '@dory/shared/errors';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export const runtime = 'nodejs';
 
-export const POST = withOrganizationHandler(async ({ organizationId, userId }) => {
+type DesktopGrantRequestBody = {
+    organizationSlugOrId?: unknown;
+};
+
+async function readDesktopGrantRequestBody(req: Request): Promise<DesktopGrantRequestBody | null> {
+    return (await req.json().catch(() => null)) as DesktopGrantRequestBody | null;
+}
+
+export async function POST(req: NextRequest) {
     const locale = await getApiLocale();
 
     if (!isDesktopRuntime()) {
@@ -22,6 +32,8 @@ export const POST = withOrganizationHandler(async ({ organizationId, userId }) =
         );
     }
 
+    const session = await getSessionFromRequest(req);
+    const userId = session?.user?.id ?? null;
     if (!userId) {
         return NextResponse.json(
             ResponseUtil.error({
@@ -33,6 +45,24 @@ export const POST = withOrganizationHandler(async ({ organizationId, userId }) =
     }
 
     try {
+        const body = await readDesktopGrantRequestBody(req);
+        const requestedOrganizationSlugOrId = typeof body?.organizationSlugOrId === 'string' ? body.organizationSlugOrId : null;
+        const organizationId = await resolveMcpDesktopGrantOrganizationId({
+            userId,
+            sessionOrganizationId: resolveCurrentOrganizationId(session),
+            requestedOrganizationSlugOrId,
+        });
+
+        if (!organizationId) {
+            return NextResponse.json(
+                ResponseUtil.error({
+                    code: ErrorCodes.UNAUTHORIZED,
+                    message: translateApi('Api.Errors.MissingOrganizationContext', undefined, locale),
+                }),
+                { status: 401 },
+            );
+        }
+
         const access = await resolveOrganizationAccess(organizationId, userId);
         if (!access?.isMember || !access.permissions.workspace.read || !access.permissions.connection.read) {
             return NextResponse.json(
@@ -66,4 +96,4 @@ export const POST = withOrganizationHandler(async ({ organizationId, userId }) =
             { status: 500 },
         );
     }
-});
+}

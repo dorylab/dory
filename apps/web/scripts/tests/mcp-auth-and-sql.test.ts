@@ -17,6 +17,7 @@ import {
     verifyMcpDesktopGrant,
 } from '../../lib/server/mcp/auth';
 import { getReadonlyMcpStatements } from '../../lib/server/mcp/sql-safety';
+import { resolveMcpDesktopGrantOrganizationId } from '../../lib/server/mcp/desktop-grant';
 import { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '../../lib/server/mcp/tools';
 import { getMcpLinkExpiresAt, getMcpLinkScopes, hashMcpLinkVerifier, mcpLinkPollSchema, mcpLinkStartSchema, MCP_LINK_TTL_MS } from '../../lib/server/mcp/link';
 import { createExternalRequestUrl } from '../../lib/server/request-origin';
@@ -235,6 +236,28 @@ test('desktop MCP grant auth context rejects invalid grants', async () => {
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.equal(result.status, 401);
+});
+
+test('desktop MCP grant organization resolution can use the requested route organization', async () => {
+    const organizationId = await resolveMcpDesktopGrantOrganizationId({
+        userId: 'owner-user',
+        sessionOrganizationId: null,
+        requestedOrganizationSlugOrId: 'workspace',
+        findOrganizationBySlugOrId: async (slugOrId, userId) => (slugOrId === 'workspace' && userId === 'owner-user' ? { id: 'org' } : null),
+    });
+
+    assert.equal(organizationId, 'org');
+});
+
+test('desktop MCP grant organization resolution keeps explicit ids when lookup misses', async () => {
+    const organizationId = await resolveMcpDesktopGrantOrganizationId({
+        userId: 'owner-user',
+        sessionOrganizationId: null,
+        requestedOrganizationSlugOrId: 'org-id',
+        findOrganizationBySlugOrId: async () => null,
+    });
+
+    assert.equal(organizationId, 'org-id');
 });
 
 test('web MCP link verifier hashing is deterministic and never exposes the verifier', () => {

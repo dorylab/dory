@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useParams } from 'next/navigation';
 import { Check, Copy, Trash2 } from 'lucide-react';
 import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -93,7 +94,7 @@ function getWebSetupTarget(endpoint: string) {
     return endpointOrigin;
 }
 
-export function AgentAccessPanel() {
+export function AgentAccessPanel({ currentOrganizationId = null }: { currentOrganizationId?: string | null }) {
     const t = useTranslations('DoryUI.Settings.AgentAccess');
     const [settings, setSettings] = useState<McpSettingsPayload | null>(null);
     const [mcpProxy, setMcpProxy] = useState<McpProxyState | null>(null);
@@ -101,7 +102,9 @@ export function AgentAccessPanel() {
     const [proxyBusy, setProxyBusy] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const { data: session } = authClient.useSession();
+    const params = useParams<{ organization?: string }>();
     const userId = session?.user?.id ?? null;
+    const organizationSlugOrId = currentOrganizationId ?? params.organization;
     const isDesktop = isDesktopRuntime();
     const effectiveEndpoint = isDesktop ? (mcpProxy?.endpoint ?? settings?.endpoint) : settings?.endpoint;
     const [deletingTokenId, setDeletingTokenId] = useState<string | null>(null);
@@ -249,6 +252,10 @@ export function AgentAccessPanel() {
                           await readJson<McpDesktopGrantPayload>(
                               await authFetch('/api/mcp/desktop-grant', {
                                   method: 'POST',
+                                  headers: {
+                                      'Content-Type': 'application/json',
+                                  },
+                                  body: JSON.stringify({ organizationSlugOrId }),
                               }),
                           )
                       ).grant,

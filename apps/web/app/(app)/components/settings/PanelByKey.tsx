@@ -20,11 +20,13 @@ const BillingSettingsPageClient = dynamic<BillingSettingsPageClientProps>(() => 
 
 export function PanelByKey({
     keyName,
+    currentOrganizationId,
     runtime,
     billingManagementAvailable,
     desktopBillingHandoff,
 }: {
     keyName: CategoryKey;
+    currentOrganizationId?: string | null;
     runtime?: string | null;
     billingManagementAvailable: boolean;
     desktopBillingHandoff: boolean;
@@ -47,7 +49,7 @@ export function PanelByKey({
         case 'data':
             return <DataPanel />;
         case 'agentAccess':
-            return <AgentAccessPanel />;
+            return <AgentAccessPanel currentOrganizationId={currentOrganizationId} />;
         case 'shortcuts':
             return <ShortcutsPanel />;
         case 'security':

@@ -15,12 +15,14 @@ import { SettingsHeaderActionContext, SettingsPanelActionSlot } from './settings
 export function SettingsContent({
     active,
     categories,
+    currentOrganizationId,
     runtime,
     billingManagementAvailable,
     desktopBillingHandoff,
 }: {
     active: CategoryKey;
     categories: Array<{ key: CategoryKey; icon: ElementType; title: string; description?: string }>;
+    currentOrganizationId?: string | null;
     runtime?: string | null;
     billingManagementAvailable: boolean;
     desktopBillingHandoff: boolean;
@@ -53,7 +55,13 @@ export function SettingsContent({
                 <Separator className="my-4 shrink-0" />
                 <ScrollArea className="h-0 min-h-0 flex-1">
                     <div className="px-6 pb-6">
-                        <PanelByKey keyName={active} runtime={runtime} billingManagementAvailable={billingManagementAvailable} desktopBillingHandoff={desktopBillingHandoff} />
+                        <PanelByKey
+                            keyName={active}
+                            currentOrganizationId={currentOrganizationId}
+                            runtime={runtime}
+                            billingManagementAvailable={billingManagementAvailable}
+                            desktopBillingHandoff={desktopBillingHandoff}
+                        />
                     </div>
                 </ScrollArea>
             </section>
