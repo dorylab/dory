@@ -107,14 +107,14 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
             <div
                 data-testid="connection-card"
                 data-connection-id={id}
-                className="group flex cursor-pointer flex-col rounded-xl border p-4"
+                className="group flex cursor-pointer flex-col rounded-xl border p-3"
                 onClick={() => {
                     if (!connectLoading) {
                         onConnect(connectionItem, true);
                     }
                 }}
             >
-                <div className="mb-2 grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
+                <div className="mb-1.5 grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
                     <div className="flex h-9 w-9 items-center justify-center">
                         <Tooltip>
                             <TooltipTrigger asChild>
@@ -173,7 +173,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                     <OverflowTooltip text={locationLabel} className="block min-w-0 max-w-full truncate text-sm text-muted-foreground" />
                 </div>
 
-                <div className="-mb-0.5 mt-2.5 grid min-h-9 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
+                <div className="-mb-0.5 mt-2 grid min-h-9 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
                     <div className="flex h-9 w-9 items-center justify-center">
                         <Tooltip>
                             <TooltipTrigger asChild>

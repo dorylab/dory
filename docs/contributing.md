@@ -33,6 +33,7 @@ Primary source areas:
 - `apps/web/lib`
 - `apps/web/hooks`
 - `apps/web/shared`
+- `packages/i18n/src`
 - `apps/admin/app`
 - `apps/admin/lib`
 - `apps/electron/main`
@@ -88,6 +89,7 @@ yarn pglite:migrate:compile
   - trailing commas
 - Use strict TypeScript patterns. Do not weaken types to force builds through.
 - In `apps/web`, prefer the existing `@/*` alias where it helps readability.
+- Shared locale JSON for the web app lives in `packages/i18n/src/locales`; do not add or regenerate `apps/web/public/locales`.
 
 ## Runtime Rules
 

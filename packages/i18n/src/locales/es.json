@@ -115,6 +115,7 @@
                 "ConfirmDescription": "Crearemos un espacio de trabajo de invitado para ti de inmediato. Si más tarde inicias sesión, mantendremos este espacio de trabajo en tu cuenta.",
                 "Confirm": "Crear espacio de trabajo de invitado",
                 "Cancel": "Volver",
+                "Starting": "Preparando espacio de trabajo...",
                 "StartFailed": "No se pudo iniciar el espacio de trabajo de invitado"
             },
             "Demo": {
@@ -235,13 +236,13 @@
         "Test": "Probar",
         "Connection Info": "Información de la fuente de datos",
         "Authentication Info": "Autenticación",
-        "Metadata": "Metadatos",
         "Enable": "Habilitar",
         "Testing Connection": "Probando...",
         "Saving": "Guardando...",
         "Creating": "Creando...",
         "Save Changes": "Guardar cambios",
         "Fix Form Errors Before Testing": "Corrige los errores del formulario antes de probar la fuente de datos",
+        "Fix Form Errors Before Saving": "Corrige los errores del formulario antes de guardar la fuente de datos",
         "Placeholder": "Marcador de posición",
         "Missing connection id": "Falta el ID de la fuente de datos",
         "Connection failed": "No se pudo conectar a la fuente de datos",
@@ -303,9 +304,7 @@
             "Choose": "Elegir",
             "Clear": "Limpiar",
             "SSH": "SSH",
-            "SSH Tunnel": "Túnel SSH",
             "SSL": "SSL",
-            "TLS/SSL": "TLS/SSL",
             "Cancel": "Cancelar",
             "Save": "Guardar",
             "TestConnection": "Probar",
@@ -326,7 +325,9 @@
             "Select File": "Seleccionar archivo",
             "Use SSL": "Usar SSL",
             "Please upload": "Sube tu archivo de clave privada",
-            "Please enter your password": "Introduce tu contraseña"
+            "Please enter your password": "Introduce tu contraseña",
+            "SSH Tunnel": "Túnel SSH",
+            "TLS/SSL": "TLS/SSL"
         },
         "Api": {
             "AddFailed": "No se pudo crear la fuente de datos",
@@ -342,7 +343,6 @@
         "Connection Name": "Nombre de la fuente de datos",
         "Environment": "Entorno",
         "Tag": "Etiqueta",
-        "Fix Form Errors Before Saving": "Corrige los errores del formulario antes de guardar la fuente de datos",
         "ConnectionMetadata": {
             "EnvironmentOptions": {
                 "None": "Sin entorno",
@@ -362,7 +362,8 @@
                 "Purple": "Morado",
                 "Gray": "Gris"
             }
-        }
+        },
+        "Metadata": "Metadatos"
     },
     "SQLConsoleSidebar": {
         "Select database": "Seleccionar base de datos",
@@ -376,6 +377,7 @@
         "Failed to load databases": "No se pudieron cargar las bases de datos",
         "Filter tables": "Filtrar tablas",
         "Refresh tables": "Actualizar tablas",
+        "Loading tables": "Cargando tablas",
         "No matching tables found": "No se encontraron tablas coincidentes",
         "Collapse": "Contraer",
         "Expand": "Expandir",
@@ -456,9 +458,6 @@
         },
         "Column name": "Nombre",
         "Column type": "Tipo",
-        "Column summary": "Resumen de columna",
-        "Field details": "Detalles del campo",
-        "AI explanation": "Explicación de IA",
         "Nullable": "Acepta nulos",
         "Yes": "Sí",
         "No": "No",
@@ -520,7 +519,10 @@
             "Status": "estado",
             "Label": "etiqueta",
             "Name": "nombre"
-        }
+        },
+        "Column summary": "Resumen de columna",
+        "Field details": "Detalles del campo",
+        "AI explanation": "Explicación de IA"
     },
     "PostgresExplorer": {
         "Tabs": {
@@ -2316,19 +2318,6 @@
             "ClosePage": "Cerrar página",
             "Hint": "Si la aplicación no se abre automáticamente, haz clic en \"Volver a Dory\"."
         },
-        "OrganizationAiProviders": {
-            "ApiKeyRequired": "Este servicio de IA requiere una clave API.",
-            "BaseUrlRequired": "Este servicio de IA requiere un endpoint.",
-            "ProviderIncomplete": "Completa este servicio de IA antes de establecerlo como predeterminado.",
-            "UnsupportedModel": "Elige un modelo compatible con este servicio de IA.",
-            "UnsupportedProvider": "Elige un servicio de IA compatible.",
-            "OrganizationProviderUnavailableInOss": "La IA personalizada requiere Dory Pro en Desktop o Enterprise Edition en self-hosting.",
-            "SystemProviderReadOnly": "Dory AI está gestionado por Dory y no se puede editar aquí.",
-            "ProviderNotFound": "No se encontró la IA personalizada.",
-            "DisabledProviderCannotBeDefault": "Habilita este servicio de IA antes de establecerlo como predeterminado.",
-            "SystemProviderUnavailable": "Dory AI no está disponible.",
-            "TestFailed": "Error al probar el servicio de IA: {reason}"
-        },
         "Connection": {
             "Errors": {
                 "Unauthorized": "No autorizado o con permisos insuficientes",
@@ -2432,6 +2421,18 @@
                 "ListDatabases": {
                     "Description": "Lista las bases de datos de la fuente de datos Dory actual."
                 },
+                "GetTableProfile": {
+                    "Description": "Devuelve metadatos de tabla, columnas, estadísticas, índices, propiedades y DDL cuando la fuente de datos lo admite."
+                },
+                "ListSavedQueries": {
+                    "Description": "Lista consultas SQL guardadas para la fuente de datos actual."
+                },
+                "GetSavedQuery": {
+                    "Description": "Obtiene una consulta SQL guardada por id para la fuente de datos actual."
+                },
+                "RunAnalysis": {
+                    "Description": "Ejecuta una acción de análisis de Dory sobre un contexto de resultado y la fuente de datos actual."
+                },
                 "ListTables": {
                     "Description": "Lista las tablas de una base de datos usando metadatos del driver de Dory."
                 },
@@ -2441,17 +2442,8 @@
                 "GetDatabaseSummary": {
                     "Description": "Devuelve un resumen compacto de la base de datos con conteos de objetos, estimaciones de tamaño y tablas recomendadas para empezar."
                 },
-                "GetTableProfile": {
-                    "Description": "Devuelve metadatos de tabla, columnas, estadísticas, índices, propiedades y DDL cuando la fuente de datos lo admite."
-                },
                 "SearchSchema": {
                     "Description": "Busca tablas, vistas y columnas por nombre, tipo o comentario usando metadatos del driver de Dory."
-                },
-                "ListSavedQueries": {
-                    "Description": "Lista consultas SQL guardadas para la fuente de datos actual."
-                },
-                "GetSavedQuery": {
-                    "Description": "Obtiene una consulta SQL guardada por id para la fuente de datos actual."
                 },
                 "GetMonitoringSummary": {
                     "Description": "Devuelve un resumen de monitoreo de consultas y muestras opcionales de línea de tiempo, consultas lentas y consultas con error."
@@ -2464,9 +2456,6 @@
                 },
                 "BuildChartProfile": {
                     "Description": "Construye el perfil automático de gráfico de Dory a partir de filas y columnas de resultado."
-                },
-                "RunAnalysis": {
-                    "Description": "Ejecuta una acción de análisis de Dory sobre un contexto de resultado y la fuente de datos actual."
                 }
             },
             "Prompt": {
@@ -2623,6 +2612,19 @@
             "LinkConsumed": "La solicitud de autorización MCP ya fue consumida.",
             "LinkInvalidApproval": "La aprobación de autorización MCP está incompleta.",
             "LinkApprovalUnavailable": "La solicitud de autorización MCP ya no se puede actualizar."
+        },
+        "OrganizationAiProviders": {
+            "ApiKeyRequired": "Este servicio de IA requiere una clave API.",
+            "BaseUrlRequired": "Este servicio de IA requiere un endpoint.",
+            "ProviderIncomplete": "Completa este servicio de IA antes de establecerlo como predeterminado.",
+            "UnsupportedModel": "Elige un modelo compatible con este servicio de IA.",
+            "UnsupportedProvider": "Elige un servicio de IA compatible.",
+            "OrganizationProviderUnavailableInOss": "La IA personalizada requiere Dory Pro en Desktop o Enterprise Edition en self-hosting.",
+            "SystemProviderReadOnly": "Dory AI está gestionado por Dory y no se puede editar aquí.",
+            "ProviderNotFound": "No se encontró la IA personalizada.",
+            "DisabledProviderCannotBeDefault": "Habilita este servicio de IA antes de establecerlo como predeterminado.",
+            "SystemProviderUnavailable": "Dory AI no está disponible.",
+            "TestFailed": "Error al probar el servicio de IA: {reason}"
         }
     },
     "McpAuthorize": {
@@ -2685,11 +2687,8 @@
                 "Identifier": "identificador",
                 "Key": "clave",
                 "Time": "tiempo",
-                "Date": "fecha",
-                "Timestamp": "marca de tiempo",
                 "Name": "nombre",
                 "Dimension": "dimensión",
-                "Category": "categoría",
                 "Description": "descripción",
                 "Status": "estado",
                 "Type": "tipo",
@@ -2697,8 +2696,6 @@
                 "Address": "dirección",
                 "Amount": "importe",
                 "Metric": "métrica",
-                "Measure": "medida",
-                "Numeric": "numérico",
                 "Geo": "geo",
                 "Contact": "contacto",
                 "Network": "red",
@@ -2710,6 +2707,11 @@
                 "Column": "columna",
                 "LowCardinality": "baja cardinalidad",
                 "Json": "JSON",
+                "Date": "fecha",
+                "Timestamp": "marca de tiempo",
+                "Category": "categoría",
+                "Measure": "medida",
+                "Numeric": "numérico",
                 "Text": "texto"
             },
             "Summary": {

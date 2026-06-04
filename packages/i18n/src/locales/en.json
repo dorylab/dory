@@ -115,6 +115,7 @@
                 "ConfirmDescription": "We will create a guest workspace for you right away. If you later sign in, we will keep this workspace with your account.",
                 "Confirm": "Create guest workspace",
                 "Cancel": "Back",
+                "Starting": "Preparing workspace...",
                 "StartFailed": "Failed to start guest workspace"
             },
             "Demo": {
@@ -235,13 +236,13 @@
         "Test": "Test",
         "Connection Info": "Data source info",
         "Authentication Info": "Authentication",
-        "Metadata": "Metadata",
         "Enable": "Enable",
         "Testing Connection": "Testing...",
         "Saving": "Saving...",
         "Creating": "Creating...",
         "Save Changes": "Save changes",
         "Fix Form Errors Before Testing": "Fix the form errors before testing the data source",
+        "Fix Form Errors Before Saving": "Fix the form errors before saving the data source",
         "Placeholder": "Placeholder",
         "Missing connection id": "Missing data source ID",
         "Connection failed": "Failed to connect to data source",
@@ -303,9 +304,7 @@
             "Choose": "Choose",
             "Clear": "Clear",
             "SSH": "SSH",
-            "SSH Tunnel": "SSH Tunnel",
             "SSL": "SSL",
-            "TLS/SSL": "TLS/SSL",
             "Cancel": "Cancel",
             "Save": "Save",
             "TestConnection": "Test",
@@ -326,7 +325,9 @@
             "Select File": "Select file",
             "Use SSL": "Use SSL",
             "Please upload": "Please upload your private key file",
-            "Please enter your password": "Please enter your password"
+            "Please enter your password": "Please enter your password",
+            "SSH Tunnel": "SSH Tunnel",
+            "TLS/SSL": "TLS/SSL"
         },
         "Api": {
             "AddFailed": "Failed to create data source",
@@ -342,7 +343,6 @@
         "Connection Name": "Data source name",
         "Environment": "Environment",
         "Tag": "Tag",
-        "Fix Form Errors Before Saving": "Fix the form errors before saving the data source",
         "ConnectionMetadata": {
             "EnvironmentOptions": {
                 "None": "No environment",
@@ -362,7 +362,8 @@
                 "Purple": "Purple",
                 "Gray": "Gray"
             }
-        }
+        },
+        "Metadata": "Metadata"
     },
     "SQLConsoleSidebar": {
         "Select database": "Select database",
@@ -457,9 +458,6 @@
         },
         "Column name": "Name",
         "Column type": "Type",
-        "Column summary": "Column summary",
-        "Field details": "Field details",
-        "AI explanation": "AI explanation",
         "Nullable": "Nullable",
         "Yes": "YES",
         "No": "NO",
@@ -521,7 +519,10 @@
             "Status": "status",
             "Label": "label",
             "Name": "name"
-        }
+        },
+        "Column summary": "Column summary",
+        "Field details": "Field details",
+        "AI explanation": "AI explanation"
     },
     "PostgresExplorer": {
         "Tabs": {
@@ -2318,19 +2319,6 @@
             "ClosePage": "Close page",
             "Hint": "If the app does not open automatically, click \"Back to Dory\"."
         },
-        "OrganizationAiProviders": {
-            "ApiKeyRequired": "This AI service requires an API key.",
-            "BaseUrlRequired": "This AI service requires an endpoint.",
-            "ProviderIncomplete": "Complete this AI service before setting it as default.",
-            "UnsupportedModel": "Choose a supported model for this AI service.",
-            "UnsupportedProvider": "Choose a supported AI service.",
-            "OrganizationProviderUnavailableInOss": "Custom AI requires Dory Pro on Desktop or Enterprise Edition for self-hosting.",
-            "SystemProviderReadOnly": "Dory AI is managed by Dory and cannot be edited here.",
-            "ProviderNotFound": "Custom AI not found.",
-            "DisabledProviderCannotBeDefault": "Enable this AI service before setting it as default.",
-            "SystemProviderUnavailable": "Dory AI is not available.",
-            "TestFailed": "AI service test failed: {reason}"
-        },
         "Connection": {
             "Errors": {
                 "Unauthorized": "Unauthorized or insufficient permissions",
@@ -2434,6 +2422,18 @@
                 "ListDatabases": {
                     "Description": "List databases for the current Dory data source."
                 },
+                "GetTableProfile": {
+                    "Description": "Return table metadata, columns, stats, indexes, properties, and DDL when supported by the data source."
+                },
+                "ListSavedQueries": {
+                    "Description": "List saved SQL queries for the current data source."
+                },
+                "GetSavedQuery": {
+                    "Description": "Get a saved SQL query by id for the current data source."
+                },
+                "RunAnalysis": {
+                    "Description": "Run a Dory analysis action against a result context and the current data source."
+                },
                 "ListTables": {
                     "Description": "List tables in a database using Dory driver metadata."
                 },
@@ -2443,17 +2443,8 @@
                 "GetDatabaseSummary": {
                     "Description": "Return a compact database summary with object counts, size estimates, and recommended starting tables."
                 },
-                "GetTableProfile": {
-                    "Description": "Return table metadata, columns, stats, indexes, properties, and DDL when supported by the data source."
-                },
                 "SearchSchema": {
                     "Description": "Search tables, views, and columns by name, type, or comment using Dory driver metadata."
-                },
-                "ListSavedQueries": {
-                    "Description": "List saved SQL queries for the current data source."
-                },
-                "GetSavedQuery": {
-                    "Description": "Get a saved SQL query by id for the current data source."
                 },
                 "GetMonitoringSummary": {
                     "Description": "Return query monitoring summary and optional timeline, slow query, and error query samples."
@@ -2466,9 +2457,6 @@
                 },
                 "BuildChartProfile": {
                     "Description": "Build Dory automatic chart profile from result rows and columns."
-                },
-                "RunAnalysis": {
-                    "Description": "Run a Dory analysis action against a result context and the current data source."
                 }
             },
             "Prompt": {
@@ -2625,6 +2613,19 @@
             "LinkConsumed": "MCP authorization request was already consumed.",
             "LinkInvalidApproval": "MCP authorization approval is incomplete.",
             "LinkApprovalUnavailable": "MCP authorization request can no longer be updated."
+        },
+        "OrganizationAiProviders": {
+            "ApiKeyRequired": "This AI service requires an API key.",
+            "BaseUrlRequired": "This AI service requires an endpoint.",
+            "ProviderIncomplete": "Complete this AI service before setting it as default.",
+            "UnsupportedModel": "Choose a supported model for this AI service.",
+            "UnsupportedProvider": "Choose a supported AI service.",
+            "OrganizationProviderUnavailableInOss": "Custom AI requires Dory Pro on Desktop or Enterprise Edition for self-hosting.",
+            "SystemProviderReadOnly": "Dory AI is managed by Dory and cannot be edited here.",
+            "ProviderNotFound": "Custom AI not found.",
+            "DisabledProviderCannotBeDefault": "Enable this AI service before setting it as default.",
+            "SystemProviderUnavailable": "Dory AI is not available.",
+            "TestFailed": "AI service test failed: {reason}"
         }
     },
     "McpAuthorize": {
@@ -2687,11 +2688,8 @@
                 "Identifier": "identifier",
                 "Key": "key",
                 "Time": "time",
-                "Date": "date",
-                "Timestamp": "timestamp",
                 "Name": "name",
                 "Dimension": "dimension",
-                "Category": "category",
                 "Description": "description",
                 "Status": "status",
                 "Type": "type",
@@ -2699,8 +2697,6 @@
                 "Address": "address",
                 "Amount": "amount",
                 "Metric": "metric",
-                "Measure": "measure",
-                "Numeric": "numeric",
                 "Geo": "geo",
                 "Contact": "contact",
                 "Network": "network",
@@ -2712,6 +2708,11 @@
                 "Column": "column",
                 "LowCardinality": "low-cardinality",
                 "Json": "json",
+                "Date": "date",
+                "Timestamp": "timestamp",
+                "Category": "category",
+                "Measure": "measure",
+                "Numeric": "numeric",
                 "Text": "text"
             },
             "Summary": {
@@ -2983,15 +2984,15 @@
                     "Title": "Data Management",
                     "Description": "Export and import workspace data."
                 },
-                "AgentAccess": {
-                    "Label": "MCP",
-                    "Title": "MCP",
-                    "Description": "Expose a local MCP endpoint for Codex, Claude Code, and other agents."
-                },
                 "About": {
                     "Label": "About",
                     "Title": "About",
                     "Description": "Version, licenses and credits."
+                },
+                "AgentAccess": {
+                    "Label": "MCP",
+                    "Title": "MCP",
+                    "Description": "Expose a local MCP endpoint for Codex, Claude Code, and other agents."
                 }
             },
             "Appearance": {
@@ -3095,6 +3096,12 @@
                     "Empty": "Nothing to import."
                 }
             },
+            "About": {
+                "Subtitle": "Next-generation Data Studio",
+                "Version": "Version",
+                "GitHub": "GitHub",
+                "Footer": "© 2026 Dory Lab · Built with love"
+            },
             "AgentAccess": {
                 "Loading": "Loading MCP settings...",
                 "LoadFailed": "Failed to load MCP settings.",
@@ -3136,12 +3143,6 @@
                 "ClientRevoked": "MCP client revoked.",
                 "ClientRevokeFailed": "Failed to revoke MCP client.",
                 "WebAuthorizationStatus": "Web MCP authorization is coming later. Desktop local MCP is available now."
-            },
-            "About": {
-                "Subtitle": "Next-generation Data Studio",
-                "Version": "Version",
-                "GitHub": "GitHub",
-                "Footer": "© 2026 Dory Lab · Built with love"
             }
         },
         "QueryClient": {

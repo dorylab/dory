@@ -119,6 +119,7 @@
                 "ConfirmDescription": "我们会立即为你创建一个访客工作区。如果你之后登录，我们会将这个工作区保留到你的账号下。",
                 "Confirm": "创建访客工作区",
                 "Cancel": "返回",
+                "Starting": "正在准备工作区...",
                 "StartFailed": "启动访客工作区失败"
             },
             "Demo": {
@@ -239,13 +240,13 @@
         "Test": "测试",
         "Connection Info": "数据源信息",
         "Authentication Info": "认证信息",
-        "Metadata": "元数据",
         "Enable": "启用",
         "Testing Connection": "测试中...",
         "Saving": "保存中...",
         "Creating": "创建中...",
         "Save Changes": "保存修改",
         "Fix Form Errors Before Testing": "请先修正表单中的错误再测试数据源",
+        "Fix Form Errors Before Saving": "请先修正表单中的错误再保存数据源",
         "Placeholder": "占位",
         "Missing connection id": "缺少数据源 ID",
         "Connection failed": "数据源连接失败",
@@ -305,9 +306,7 @@
             "Choose": "选择",
             "Clear": "清除",
             "SSH": "SSH",
-            "SSH Tunnel": "SSH 隧道",
             "SSL": "SSL",
-            "TLS/SSL": "TLS/SSL",
             "Cancel": "取消",
             "Save": "保存",
             "TestConnection": "测试",
@@ -329,7 +328,9 @@
             "Use SSL": "使用 SSL",
             "Please upload": "请上传你的私钥文件",
             "Please enter your password": "请输入你的密码",
-            "Refresh Connection": "刷新数据源"
+            "Refresh Connection": "刷新数据源",
+            "SSH Tunnel": "SSH 隧道",
+            "TLS/SSL": "TLS/SSL"
         },
         "Api": {
             "AddFailed": "新增数据源失败",
@@ -345,7 +346,6 @@
         "Connection name": "数据源名称",
         "Environment": "环境",
         "Tag": "标签",
-        "Fix Form Errors Before Saving": "请先修正表单中的错误再保存数据源",
         "refreshConnection": "刷新数据源",
         "ConnectionMetadata": {
             "EnvironmentOptions": {
@@ -366,7 +366,8 @@
                 "Purple": "紫色",
                 "Gray": "灰色"
             }
-        }
+        },
+        "Metadata": "元数据"
     },
     "SQLConsoleSidebar": {
         "Select database": "选择数据库",
@@ -461,9 +462,6 @@
         },
         "Column name": "名称",
         "Column type": "类型",
-        "Column summary": "字段说明",
-        "Field details": "字段详情",
-        "AI explanation": "AI 说明",
         "Nullable": "可为空",
         "Yes": "是",
         "No": "否",
@@ -525,7 +523,10 @@
             "Status": "状态",
             "Label": "标签",
             "Name": "名称"
-        }
+        },
+        "Column summary": "字段说明",
+        "Field details": "字段详情",
+        "AI explanation": "AI 说明"
     },
     "PostgresExplorer": {
         "Tabs": {
@@ -2322,19 +2323,6 @@
             "ClosePage": "关闭页面",
             "Hint": "如果没有自动返回，请点击“返回 Dory”。"
         },
-        "OrganizationAiProviders": {
-            "ApiKeyRequired": "这个 AI 服务需要填写 API Key。",
-            "BaseUrlRequired": "这个 AI 服务需要填写 Endpoint。",
-            "ProviderIncomplete": "请先补全这个 AI 服务，再设为默认。",
-            "UnsupportedModel": "请选择这个 AI 服务支持的模型。",
-            "UnsupportedProvider": "请选择支持的 AI 服务。",
-            "OrganizationProviderUnavailableInOss": "桌面版需要 Dory Pro 才能使用自定义 AI；自托管需要 Enterprise Edition。",
-            "SystemProviderReadOnly": "Dory AI 由 Dory 托管，不能在这里编辑。",
-            "ProviderNotFound": "未找到自定义 AI。",
-            "DisabledProviderCannotBeDefault": "请先启用这个 AI 服务，再设为默认。",
-            "SystemProviderUnavailable": "Dory AI 暂不可用。",
-            "TestFailed": "AI 服务测试失败：{reason}"
-        },
         "Connection": {
             "Errors": {
                 "Unauthorized": "用户未登录或无权限",
@@ -2438,6 +2426,18 @@
                 "ListDatabases": {
                     "Description": "列出当前 Dory 数据源中的数据库。"
                 },
+                "GetTableProfile": {
+                    "Description": "返回表的元数据、列、统计信息、索引、属性和 DDL（取决于数据源支持情况）。"
+                },
+                "ListSavedQueries": {
+                    "Description": "列出当前数据源的已保存 SQL 查询。"
+                },
+                "GetSavedQuery": {
+                    "Description": "按 id 获取当前数据源的一条已保存 SQL 查询。"
+                },
+                "RunAnalysis": {
+                    "Description": "基于结果上下文和当前数据源运行 Dory 分析动作。"
+                },
                 "ListTables": {
                     "Description": "使用 Dory driver 元数据列出数据库中的表。"
                 },
@@ -2447,17 +2447,8 @@
                 "GetDatabaseSummary": {
                     "Description": "返回数据库概要，包括对象数量、大小估算和推荐优先查看的表。"
                 },
-                "GetTableProfile": {
-                    "Description": "返回表的元数据、列、统计信息、索引、属性和 DDL（取决于数据源支持情况）。"
-                },
                 "SearchSchema": {
                     "Description": "使用 Dory driver 元数据按名称、类型或注释搜索表、视图和列。"
-                },
-                "ListSavedQueries": {
-                    "Description": "列出当前数据源的已保存 SQL 查询。"
-                },
-                "GetSavedQuery": {
-                    "Description": "按 id 获取当前数据源的一条已保存 SQL 查询。"
                 },
                 "GetMonitoringSummary": {
                     "Description": "返回查询监控概要，并可包含时间线、慢查询和错误查询样本。"
@@ -2470,9 +2461,6 @@
                 },
                 "BuildChartProfile": {
                     "Description": "根据结果行和列构建 Dory 自动图表画像。"
-                },
-                "RunAnalysis": {
-                    "Description": "基于结果上下文和当前数据源运行 Dory 分析动作。"
                 }
             },
             "Prompt": {
@@ -2629,6 +2617,19 @@
             "LinkConsumed": "这个 MCP 授权请求已经被使用。",
             "LinkInvalidApproval": "MCP 授权批准信息不完整。",
             "LinkApprovalUnavailable": "这个 MCP 授权请求不能再更新。"
+        },
+        "OrganizationAiProviders": {
+            "ApiKeyRequired": "这个 AI 服务需要填写 API Key。",
+            "BaseUrlRequired": "这个 AI 服务需要填写 Endpoint。",
+            "ProviderIncomplete": "请先补全这个 AI 服务，再设为默认。",
+            "UnsupportedModel": "请选择这个 AI 服务支持的模型。",
+            "UnsupportedProvider": "请选择支持的 AI 服务。",
+            "OrganizationProviderUnavailableInOss": "桌面版需要 Dory Pro 才能使用自定义 AI；自托管需要 Enterprise Edition。",
+            "SystemProviderReadOnly": "Dory AI 由 Dory 托管，不能在这里编辑。",
+            "ProviderNotFound": "未找到自定义 AI。",
+            "DisabledProviderCannotBeDefault": "请先启用这个 AI 服务，再设为默认。",
+            "SystemProviderUnavailable": "Dory AI 暂不可用。",
+            "TestFailed": "AI 服务测试失败：{reason}"
         }
     },
     "McpAuthorize": {
@@ -2691,11 +2692,8 @@
                 "Identifier": "标识",
                 "Key": "键",
                 "Time": "时间",
-                "Date": "日期",
-                "Timestamp": "时间戳",
                 "Name": "名称",
                 "Dimension": "维度",
-                "Category": "分类",
                 "Description": "描述",
                 "Status": "状态",
                 "Type": "类型",
@@ -2703,8 +2701,6 @@
                 "Address": "地址",
                 "Amount": "金额",
                 "Metric": "指标",
-                "Measure": "度量",
-                "Numeric": "数值",
                 "Geo": "地理",
                 "Contact": "联系方式",
                 "Network": "网络",
@@ -2716,6 +2712,11 @@
                 "Column": "字段",
                 "LowCardinality": "LowCardinality",
                 "Json": "JSON",
+                "Date": "日期",
+                "Timestamp": "时间戳",
+                "Category": "分类",
+                "Measure": "度量",
+                "Numeric": "数值",
                 "Text": "文本"
             },
             "Summary": {
@@ -2987,15 +2988,15 @@
                     "Title": "数据管理",
                     "Description": "导出和导入工作区数据。"
                 },
-                "AgentAccess": {
-                    "Label": "MCP",
-                    "Title": "MCP",
-                    "Description": "为 Codex、Claude Code 和其他 Agent 开启本地 MCP endpoint。"
-                },
                 "About": {
                     "Label": "关于",
                     "Title": "关于",
                     "Description": "版本、许可证与鸣谢。"
+                },
+                "AgentAccess": {
+                    "Label": "MCP",
+                    "Title": "MCP",
+                    "Description": "为 Codex、Claude Code 和其他 Agent 开启本地 MCP endpoint。"
                 }
             },
             "Appearance": {
@@ -3099,6 +3100,12 @@
                     "Empty": "没有可导入的数据。"
                 }
             },
+            "About": {
+                "Subtitle": "新一代数据工作台",
+                "Version": "版本",
+                "GitHub": "GitHub",
+                "Footer": "© 2026 Dory Lab · 用心打造"
+            },
             "AgentAccess": {
                 "Loading": "正在加载 MCP 设置...",
                 "LoadFailed": "加载 MCP 设置失败。",
@@ -3140,12 +3147,6 @@
                 "ClientRevoked": "已撤销 MCP client。",
                 "ClientRevokeFailed": "撤销 MCP client 失败。",
                 "WebAuthorizationStatus": "Web MCP 授权稍后提供。现在可以使用桌面端本地 MCP。"
-            },
-            "About": {
-                "Subtitle": "新一代数据工作台",
-                "Version": "版本",
-                "GitHub": "GitHub",
-                "Footer": "© 2026 Dory Lab · 用心打造"
             }
         },
         "QueryClient": {

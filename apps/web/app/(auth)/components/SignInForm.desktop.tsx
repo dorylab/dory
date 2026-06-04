@@ -327,26 +327,28 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
 
                                 {showGuestOption ? (
                                     <div className="border-border text-muted-foreground border-t pt-4">
-                                        {t('SignIn.Guest.Prompt')}{' '}
-                                        <button
-                                            type="button"
-                                            className="text-foreground inline-flex min-h-5 cursor-pointer items-center justify-center gap-1.5 align-baseline underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline disabled:opacity-70"
-                                            disabled={guestActionLoading}
-                                            aria-busy={guestActionLoading}
-                                            onClick={() => {
-                                                void onGuestContinue();
-                                            }}
-                                            data-testid="guest-sign-in"
-                                        >
-                                            {guestActionLoading ? (
-                                                <>
-                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                                                    <span>{t('SignIn.Guest.Starting')}</span>
-                                                </>
-                                            ) : (
-                                                t('SignIn.Guest.Link')
-                                            )}
-                                        </button>
+                                        <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5">
+                                            <span>{t('SignIn.Guest.Prompt')}</span>
+                                            <button
+                                                type="button"
+                                                className="text-foreground inline-flex min-h-5 items-center justify-center gap-1.5 align-middle leading-none cursor-pointer underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline disabled:opacity-70"
+                                                disabled={guestActionLoading}
+                                                aria-busy={guestActionLoading}
+                                                onClick={() => {
+                                                    void onGuestContinue();
+                                                }}
+                                                data-testid="guest-sign-in"
+                                            >
+                                                {guestActionLoading ? (
+                                                    <>
+                                                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" aria-hidden="true" />
+                                                        <span>{t('SignIn.Guest.Starting')}</span>
+                                                    </>
+                                                ) : (
+                                                    t('SignIn.Guest.Link')
+                                                )}
+                                            </button>
+                                        </div>
                                     </div>
                                 ) : null}
                             </div>
