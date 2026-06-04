@@ -27,6 +27,46 @@ type TicketUser = {
     activeOrganizationId?: string | null;
 };
 
+function getTicketUserDisplayName(user: TicketUser): string {
+    return user.name?.trim() || user.email?.split('@')[0]?.trim() || 'User';
+}
+
+async function resolveLocalTicketUser(user: TicketUser): Promise<TicketUser | null> {
+    const db = await getClient();
+    const [idUser] = await db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.id, user.id)).limit(1);
+    const [emailUser] = idUser || !user.email ? [] : await db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, user.email)).limit(1);
+    const resolvedUserId = idUser?.id ?? emailUser?.id ?? user.id;
+
+    if (!idUser && !emailUser) {
+        if (!user.email) {
+            return null;
+        }
+
+        await db.insert(schema.user).values({
+            id: resolvedUserId,
+            email: user.email,
+            name: getTicketUserDisplayName(user),
+            image: user.image,
+            emailVerified: user.emailVerified,
+        });
+    } else {
+        await db
+            .update(schema.user)
+            .set({
+                name: getTicketUserDisplayName(user),
+                image: user.image,
+                emailVerified: user.emailVerified,
+                updatedAt: new Date(),
+            })
+            .where(eq(schema.user.id, resolvedUserId));
+    }
+
+    return {
+        ...user,
+        id: resolvedUserId,
+    };
+}
+
 async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: string | null; anonymousActiveOrganizationId?: string | null }) {
     const auth = await getAuth();
     const ctx = await auth.$context;
@@ -48,13 +88,18 @@ async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: 
         parsed = null;
     }
 
-    const user = parsed?.user;
-    if (!user?.id) {
+    const ticketUser = parsed?.user;
+    if (!ticketUser?.id) {
         await ctx.internalAdapter.deleteVerificationByIdentifier(params.ticket);
         return NextResponse.json({ error: 'invalid_ticket_payload' }, { status: 400 });
     }
 
     await ctx.internalAdapter.deleteVerificationByIdentifier(params.ticket);
+
+    const user = await resolveLocalTicketUser(ticketUser);
+    if (!user?.id) {
+        return NextResponse.json({ error: 'invalid_ticket_user' }, { status: 400 });
+    }
 
     const session = await ctx.internalAdapter.createSession(user.id, false);
     if (!session) {

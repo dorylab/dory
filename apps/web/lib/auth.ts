@@ -24,6 +24,7 @@ import { canManageOrganizationBilling } from './billing/authz';
 import { buildDefaultOrganizationValues, linkAnonymousOrganizationToUser } from './auth/anonymous';
 import { isAnonymousUser } from './auth/anonymous-user';
 import { appendClearAnonymousRecoveryCookieHeader } from './auth/anonymous-recovery';
+import { createElectronEmailVerificationState } from './auth/electron-email-verification';
 import { ensureConfiguredInitUser } from './auth/init-user';
 
 const REQUIRE_EMAIL_VERIFICATION = parseEnvFlag(process.env.NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION);
@@ -39,6 +40,37 @@ type SessionWithActiveOrganization = {
     userId: string;
     activeOrganizationId?: string | null;
 };
+
+function withElectronEmailVerificationState(url: string, user: { id: string; email: string }): string {
+    try {
+        const verificationUrl = new URL(url);
+        const callbackURL = verificationUrl.searchParams.get('callbackURL');
+        if (!callbackURL) return url;
+
+        const callbackUrl = new URL(callbackURL, verificationUrl.origin);
+        if (callbackUrl.pathname !== '/api/electron/auth/finalize') return url;
+
+        const state = createElectronEmailVerificationState({
+            userId: user.id,
+            email: user.email,
+        });
+        if (!state) {
+            throw new Error('missing_electron_email_verification_state_secret');
+        }
+
+        callbackUrl.pathname = '/api/electron/auth/finalize-email-verification';
+        callbackUrl.search = '';
+        callbackUrl.searchParams.set('state', state);
+        verificationUrl.searchParams.set('callbackURL', callbackUrl.toString());
+
+        return verificationUrl.toString();
+    } catch (error) {
+        if (error instanceof Error && error.message === 'missing_electron_email_verification_state_secret') {
+            throw error;
+        }
+        return url;
+    }
+}
 
 function createAuth() {
     return (async () => {
@@ -575,10 +607,14 @@ function createAuth() {
                 sendVerificationEmail: async ({ user, url, token }, request) => {
                     const locale = await getServerLocale();
                     const t = (key: string, values?: Record<string, unknown>) => translate(locale, key, values);
+                    const deliveryUrl = withElectronEmailVerificationState(url, {
+                        id: user.id,
+                        email: user.email,
+                    });
                     await sendEmail({
                         to: user.email,
                         subject: t('Auth.Emails.VerifyEmail.Subject'),
-                        text: t('Auth.Emails.VerifyEmail.Text', { url }),
+                        text: t('Auth.Emails.VerifyEmail.Text', { url: deliveryUrl }),
                         html: `
                             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #0f172a; padding: 24px;">
                                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
@@ -590,7 +626,7 @@ function createAuth() {
                                     ${t('Auth.Emails.VerifyEmail.Intro')}
                                 </p>
                                 <p style="margin: 0 0 24px;">
-                                    <a href="${url}" style="display: inline-block; padding: 10px 18px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 14px;">
+                                    <a href="${deliveryUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 18px; background: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 14px;">
                                         ${t('Auth.Emails.VerifyEmail.Button')}
                                     </a>
                                 </p>
@@ -598,7 +634,7 @@ function createAuth() {
                                     ${t('Auth.Emails.VerifyEmail.Fallback')}
                                 </p>
                                 <p style="margin: 0; font-size: 12px; color: #2563eb; word-break: break-all;">
-                                    <a href="${url}" style="color: #2563eb; text-decoration: underline;">${url}</a>
+                                    <a href="${deliveryUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; text-decoration: underline;">${deliveryUrl}</a>
                                 </p>
                             </div>
                         `.trim(),

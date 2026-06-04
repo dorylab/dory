@@ -5,6 +5,7 @@ import {
     resolveCurrentOrganizationId,
     resolveCurrentOrganizationIdStrict,
 } from '../../lib/auth/current-organization';
+import { createElectronEmailVerificationState, verifyElectronEmailVerificationState } from '../../lib/auth/electron-email-verification';
 import {
     buildElectronTicketUser,
     buildSessionOrganizationPatch,
@@ -147,6 +148,35 @@ test('buildElectronTicketUser only includes active organization in new tickets',
             activeOrganizationId: 'org_active',
         },
     );
+});
+
+test('electron email verification state is signed and expires', () => {
+    const previousSecret = process.env.BETTER_AUTH_SECRET;
+    process.env.BETTER_AUTH_SECRET = 'test-secret';
+
+    try {
+        const state = createElectronEmailVerificationState({
+            userId: 'user_email',
+            email: 'NewUser@Example.com',
+            now: 1_000,
+            ttlMs: 1_000,
+        });
+
+        assert.ok(state);
+        assert.deepEqual(verifyElectronEmailVerificationState(state, 1_500), {
+            userId: 'user_email',
+            email: 'newuser@example.com',
+            expiresAt: 2_000,
+        });
+        assert.equal(verifyElectronEmailVerificationState(`${state}tampered`, 1_500), null);
+        assert.equal(verifyElectronEmailVerificationState(state, 2_001), null);
+    } finally {
+        if (previousSecret === undefined) {
+            delete process.env.BETTER_AUTH_SECRET;
+        } else {
+            process.env.BETTER_AUTH_SECRET = previousSecret;
+        }
+    }
 });
 
 test('buildSessionOrganizationPatch only returns a patch when active organization exists', () => {

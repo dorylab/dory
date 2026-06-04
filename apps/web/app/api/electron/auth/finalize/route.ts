@@ -25,6 +25,14 @@ type TicketUser = {
     activeOrganizationId?: string | null;
 };
 
+type DebugSessionUser = {
+    isAnonymous?: unknown;
+};
+
+type DebugSession = {
+    activeOrganizationId?: unknown;
+};
+
 function normalizeCookieName(name: string): string[] {
     const baseName = name.replace(/^__Secure-/, '').replace(/^__Host-/, '');
     return Array.from(new Set([baseName, `__Secure-${baseName}`, `__Host-${baseName}`]));
@@ -277,9 +285,9 @@ export async function GET(req: Request) {
     console.log('[electron-auth][finalize] active session resolved', {
         userId: activeSession?.user?.id ?? null,
         email: activeSession?.user?.email ?? null,
-        isAnonymous: activeSession?.user && 'isAnonymous' in activeSession.user ? (activeSession.user as any).isAnonymous : null,
+        isAnonymous: activeSession?.user && 'isAnonymous' in activeSession.user ? (activeSession.user as DebugSessionUser).isAnonymous : null,
         activeOrganizationId:
-            activeSession?.session && 'activeOrganizationId' in activeSession.session ? (activeSession.session as any).activeOrganizationId ?? null : null,
+            activeSession?.session && 'activeOrganizationId' in activeSession.session ? ((activeSession.session as DebugSession).activeOrganizationId ?? null) : null,
     });
     if (!activeSession?.session?.token) {
         return NextResponse.json({ error: 'missing_session_cookie' }, { status: 401 });
