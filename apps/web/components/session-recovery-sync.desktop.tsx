@@ -9,6 +9,16 @@ type McpDesktopGrantPayload = {
     grant: string;
 };
 
+const MCP_RECOVERY_RETRY_DELAYS_MS = [0, 1000, 3000, 7000];
+
+function wait(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function logMcpRecoveryError(error: unknown) {
+    window.logBridge?.log('warn', '[mcp] automatic recovery failed:', error instanceof Error ? error.message : String(error));
+}
+
 async function issueMcpDesktopGrant(): Promise<string> {
     const response = await fetch('/api/mcp/desktop-grant', {
         method: 'POST',
@@ -45,16 +55,32 @@ export function SessionRecoverySync() {
                 return;
             }
 
-            const state = await window.mcpBridge?.getState(currentUserId).catch(() => null);
-            if (!state?.enabled || state.running || syncRunId !== mcpSyncRunIdRef.current) {
-                return;
-            }
+            for (const retryDelay of MCP_RECOVERY_RETRY_DELAYS_MS) {
+                if (retryDelay > 0) {
+                    await wait(retryDelay);
+                }
+                if (syncRunId !== mcpSyncRunIdRef.current) {
+                    return;
+                }
 
-            const grant = await issueMcpDesktopGrant();
-            if (syncRunId !== mcpSyncRunIdRef.current) {
-                return;
+                try {
+                    const state = await window.mcpBridge?.getState(currentUserId);
+                    if (!state?.enabled || state.running || syncRunId !== mcpSyncRunIdRef.current) {
+                        return;
+                    }
+
+                    const grant = await issueMcpDesktopGrant();
+                    if (syncRunId !== mcpSyncRunIdRef.current) {
+                        return;
+                    }
+                    const nextState = await window.mcpBridge?.start(grant, currentUserId);
+                    if (!nextState?.enabled || nextState.running || syncRunId !== mcpSyncRunIdRef.current) {
+                        return;
+                    }
+                } catch (error) {
+                    logMcpRecoveryError(error);
+                }
             }
-            await window.mcpBridge?.start(grant, currentUserId).catch(() => undefined);
         };
 
         void syncMcpProxy();

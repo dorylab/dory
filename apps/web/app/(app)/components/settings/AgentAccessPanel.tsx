@@ -202,6 +202,12 @@ export function AgentAccessPanel() {
         setLoading(true);
         setMessage(null);
         try {
+            if (isDesktop) {
+                await loadMcpProxyState();
+                setSettings(null);
+                return;
+            }
+
             const settingsPromise = authFetch('/api/mcp/settings').then(readJson<McpSettingsPayload>);
             const proxyPromise = loadMcpProxyState().catch(error => {
                 setMcpProxy(current =>
@@ -222,7 +228,7 @@ export function AgentAccessPanel() {
         } finally {
             setLoading(false);
         }
-    }, [loadMcpProxyState, t]);
+    }, [isDesktop, loadMcpProxyState, t]);
 
     useEffect(() => {
         void loadSettings();
