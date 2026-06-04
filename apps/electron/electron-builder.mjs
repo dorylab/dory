@@ -60,8 +60,10 @@ const config = {
     asarUnpack: ['**/*.node'],
     dmg: {
         title: '${productName}-${version}-${arch}',
+        writeUpdateInfo: false,
     },
     afterSign: './scripts/notarize.js',
+    afterAllArtifactBuild: './scripts/notarize-artifacts.js',
     mac: {
         icon: '../web/public/logo.icns',
         category: 'public.app-category.developer-tools',
