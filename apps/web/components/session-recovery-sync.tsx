@@ -1,5 +1,6 @@
 'use client';
 
-export function SessionRecoverySync() {
+export function SessionRecoverySync(props: { initialUserId?: string | null }) {
+    void props;
     return null;
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import type { User } from 'better-auth';
 import { SidebarInset, SidebarProvider } from '@/registry/new-york-v4/ui/sidebar';
 import { SettingsProvider } from '../../components/settings/settings';
 import { AppContentShell } from './app-sidebar/app-content-shell';
@@ -17,7 +18,7 @@ export function OrganizationAppShell({
 }: {
     children: React.ReactNode;
     defaultOpen: boolean;
-    initialUser: any;
+    initialUser: User | null;
     organizationId: string;
     runtime: string;
     billingManagementAvailable: boolean;
@@ -29,6 +30,7 @@ export function OrganizationAppShell({
             includeOrganizationSettings
             includeBillingSettings={billingManagementAvailable || desktopBillingHandoff}
             currentOrganizationId={organizationId}
+            initialUserId={initialUser?.id ?? null}
             runtime={runtime}
             billingManagementAvailable={billingManagementAvailable}
             desktopBillingHandoff={desktopBillingHandoff}

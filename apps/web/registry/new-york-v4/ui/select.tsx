@@ -7,41 +7,8 @@ import { cva } from 'class-variance-authority';
 
 import { cn } from '@dory/web-utils';
 
-type SelectOpenContextValue = {
-    open: boolean;
-    setOpen: (open: boolean) => void;
-};
-
-const SelectOpenContext = React.createContext<SelectOpenContextValue | null>(null);
-
-function Select({ open, onOpenChange, ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-    const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
-    const isControlled = open !== undefined;
-    const currentOpen = isControlled ? open : uncontrolledOpen;
-
-    const handleOpenChange = React.useCallback(
-        (nextOpen: boolean) => {
-            if (!isControlled) {
-                setUncontrolledOpen(nextOpen);
-            }
-            onOpenChange?.(nextOpen);
-        },
-        [isControlled, onOpenChange],
-    );
-
-    const contextValue = React.useMemo<SelectOpenContextValue>(
-        () => ({
-            open: currentOpen,
-            setOpen: handleOpenChange,
-        }),
-        [currentOpen, handleOpenChange],
-    );
-
-    return (
-        <SelectOpenContext.Provider value={contextValue}>
-            <SelectPrimitive.Root data-slot="select" open={currentOpen} onOpenChange={handleOpenChange} {...props} />
-        </SelectOpenContext.Provider>
-    );
+function Select({ ...props }: React.ComponentProps<typeof SelectPrimitive.Root>) {
+    return <SelectPrimitive.Root data-slot="select" {...props} />;
 }
 
 function SelectGroup({ ...props }: React.ComponentProps<typeof SelectPrimitive.Group>) {
@@ -72,50 +39,12 @@ function SelectTrigger({
     className,
     size = 'default',
     children,
-    onClick,
-    onMouseDownCapture,
-    onPointerDownCapture,
     ...props
 }: React.ComponentProps<typeof SelectPrimitive.Trigger> & {
     size?: 'sm' | 'default' | 'control';
 }) {
-    const selectOpenContext = React.useContext(SelectOpenContext);
-    const wasOpenOnPointerDownRef = React.useRef(false);
-
-    function openFromMouse(event: React.SyntheticEvent<React.ElementRef<typeof SelectPrimitive.Trigger>>) {
-        if (event.defaultPrevented || wasOpenOnPointerDownRef.current || event.currentTarget.getAttribute('aria-expanded') === 'true') {
-            return;
-        }
-        selectOpenContext?.setOpen(true);
-    }
-
-    function handlePointerDownCapture(event: React.PointerEvent<React.ElementRef<typeof SelectPrimitive.Trigger>>) {
-        wasOpenOnPointerDownRef.current = event.currentTarget.getAttribute('aria-expanded') === 'true';
-        onPointerDownCapture?.(event);
-        openFromMouse(event);
-    }
-
-    function handleMouseDownCapture(event: React.MouseEvent<React.ElementRef<typeof SelectPrimitive.Trigger>>) {
-        wasOpenOnPointerDownRef.current = event.currentTarget.getAttribute('aria-expanded') === 'true';
-        onMouseDownCapture?.(event);
-        openFromMouse(event);
-    }
-
-    function handleClick(event: React.MouseEvent<React.ElementRef<typeof SelectPrimitive.Trigger>>) {
-        onClick?.(event);
-        openFromMouse(event);
-    }
-
     return (
-        <SelectPrimitive.Trigger
-            data-slot="select-trigger"
-            data-size={size}
-            className={cn(selectTriggerVariants({ size }), className)}
-            onClick={handleClick}
-            onMouseDownCapture={handleMouseDownCapture}
-            onPointerDownCapture={handlePointerDownCapture}
-            {...props}
-        >
+        <SelectPrimitive.Trigger data-slot="select-trigger" data-size={size} className={cn(selectTriggerVariants({ size }), className)} {...props}>
             {children}
             <SelectPrimitive.Icon asChild>
                 <ChevronDownIcon className="size-4 opacity-50" />
@@ -124,7 +53,7 @@ function SelectTrigger({
     );
 }
 
-function SelectContent({ className, children, position = 'item-aligned', align = 'center', ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+function SelectContent({ className, children, position = 'popper', align = 'center', ...props }: React.ComponentProps<typeof SelectPrimitive.Content>) {
     return (
         <SelectPrimitive.Portal>
             <SelectPrimitive.Content

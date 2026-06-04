@@ -13,6 +13,7 @@ import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { authClient } from '@/lib/auth-client';
+import { useDelayedLoading } from '@/hooks/useDelayedLoading';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { SettingsRow } from './SettingsRow';
 
@@ -94,7 +95,7 @@ function getWebSetupTarget(endpoint: string) {
     return endpointOrigin;
 }
 
-export function AgentAccessPanel({ currentOrganizationId = null }: { currentOrganizationId?: string | null }) {
+export function AgentAccessPanel({ currentOrganizationId = null, initialUserId = null }: { currentOrganizationId?: string | null; initialUserId?: string | null }) {
     const t = useTranslations('DoryUI.Settings.AgentAccess');
     const [settings, setSettings] = useState<McpSettingsPayload | null>(null);
     const [mcpProxy, setMcpProxy] = useState<McpProxyState | null>(null);
@@ -103,7 +104,7 @@ export function AgentAccessPanel({ currentOrganizationId = null }: { currentOrga
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const { data: session } = authClient.useSession();
     const params = useParams<{ organization?: string }>();
-    const userId = session?.user?.id ?? null;
+    const userId = session?.user?.id ?? initialUserId;
     const organizationSlugOrId = currentOrganizationId ?? params.organization;
     const isDesktop = isDesktopRuntime();
     const effectiveEndpoint = isDesktop ? (mcpProxy?.endpoint ?? settings?.endpoint) : settings?.endpoint;
@@ -202,7 +203,7 @@ export function AgentAccessPanel({ currentOrganizationId = null }: { currentOrga
     }, [isDesktop, userId]);
 
     const loadSettings = useCallback(async () => {
-        setLoading(true);
+        setLoading(!isDesktop);
         setMessage(null);
         try {
             if (isDesktop) {
@@ -310,7 +311,9 @@ export function AgentAccessPanel({ currentOrganizationId = null }: { currentOrga
             <Check className="h-3.5 w-3.5" />
         </>
     );
-    const isInitialLoading = loading && !settings;
+    const showProxyLoading = useDelayedLoading(isDesktop && !mcpProxy, 200);
+    const isInitialLoading = !isDesktop && loading && !settings;
+    const proxyDisabled = proxyBusy || loading || !userId || typeof window === 'undefined' || !window.mcpBridge;
 
     return (
         <div className="space-y-6">
@@ -320,14 +323,16 @@ export function AgentAccessPanel({ currentOrganizationId = null }: { currentOrga
                         {mcpProxy ? (
                             <Switch
                                 checked={mcpProxy.enabled}
-                                disabled={proxyBusy || loading || !userId || typeof window === 'undefined' || !window.mcpBridge}
+                                disabled={proxyDisabled}
                                 onCheckedChange={checked => {
                                     void toggleMcpProxy(checked);
                                 }}
                                 aria-label={t('ProxyLabel')}
                             />
-                        ) : (
+                        ) : showProxyLoading ? (
                             <Skeleton className="h-5 w-8 rounded-full" />
+                        ) : (
+                            <div className="h-5 w-8" />
                         )}
                     </SettingsRow>
                     {mcpProxy?.enabled && !mcpProxy.running ? (

@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import type { User } from 'better-auth';
 import type React from 'react';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
@@ -53,7 +54,7 @@ export default async function TeamLayout({ children, params }: { children: React
     return (
         <OrganizationAppShell
             defaultOpen={defaultOpen}
-            initialUser={session.user as any}
+            initialUser={session.user as User}
             organizationId={organization.id}
             runtime={getRuntimeForServer() ?? 'web'}
             billingManagementAvailable={isBillingManagementAvailableForServer()}

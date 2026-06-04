@@ -11,7 +11,7 @@ export default async function AppRootLayout({ children }: { children: React.Reac
     return (
         <SWRConfigWrapper>
             <QueryClientWrapper>
-                <SessionRecoverySync />
+                <SessionRecoverySync initialUserId={bootstrap.session.user.id} />
                 {children}
             </QueryClientWrapper>
         </SWRConfigWrapper>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ElementType } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
@@ -16,6 +16,7 @@ export function SettingsContent({
     active,
     categories,
     currentOrganizationId,
+    initialUserId,
     runtime,
     billingManagementAvailable,
     desktopBillingHandoff,
@@ -23,6 +24,7 @@ export function SettingsContent({
     active: CategoryKey;
     categories: Array<{ key: CategoryKey; icon: ElementType; title: string; description?: string }>;
     currentOrganizationId?: string | null;
+    initialUserId?: string | null;
     runtime?: string | null;
     billingManagementAvailable: boolean;
     desktopBillingHandoff: boolean;
@@ -32,10 +34,6 @@ export function SettingsContent({
     const TitleIcon = meta?.icon ?? MonitorCog;
     const [headerAction, setHeaderAction] = useState<ReactNode>(null);
     const headerActionContext = useMemo(() => ({ setHeaderAction }), []);
-
-    useEffect(() => {
-        setHeaderAction(null);
-    }, [active]);
 
     return (
         <SettingsHeaderActionContext.Provider value={headerActionContext}>
@@ -58,6 +56,7 @@ export function SettingsContent({
                         <PanelByKey
                             keyName={active}
                             currentOrganizationId={currentOrganizationId}
+                            initialUserId={initialUserId}
                             runtime={runtime}
                             billingManagementAvailable={billingManagementAvailable}
                             desktopBillingHandoff={desktopBillingHandoff}

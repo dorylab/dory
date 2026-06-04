@@ -18,6 +18,7 @@ export function SettingsProvider({
     includeOrganizationSettings = false,
     includeBillingSettings = false,
     currentOrganizationId = null,
+    initialUserId = null,
     runtime = null,
     billingManagementAvailable = false,
     desktopBillingHandoff = false,
@@ -26,6 +27,7 @@ export function SettingsProvider({
     includeOrganizationSettings?: boolean;
     includeBillingSettings?: boolean;
     currentOrganizationId?: string | null;
+    initialUserId?: string | null;
     runtime?: string | null;
     billingManagementAvailable?: boolean;
     desktopBillingHandoff?: boolean;
@@ -63,6 +65,7 @@ export function SettingsProvider({
                 includeOrganizationSettings={includeOrganizationSettings}
                 includeBillingSettings={includeBillingSettings}
                 currentOrganizationId={currentOrganizationId}
+                initialUserId={initialUserId}
                 runtime={runtime}
                 billingManagementAvailable={billingManagementAvailable}
                 desktopBillingHandoff={desktopBillingHandoff}
