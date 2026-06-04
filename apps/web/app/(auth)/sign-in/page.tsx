@@ -69,7 +69,6 @@ export default async function SignInPage({
             <div className="relative z-20 w-full max-w-md">
                 <SignInForm
                     resumeAnonymousSession={resumeAnonymousSession}
-                    showGuestOption={false}
                 />
             </div>
             {/* <div className="absolute z-10 inset-0 h-full w-full bg-[#0f172a]">
