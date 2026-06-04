@@ -1,8 +1,11 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useLocale } from 'next-intl';
 import { useColumns } from '@/hooks/use-columns';
 import { executeActionClient } from '@/lib/actions/client';
+import { generateColumnInsights } from '@/lib/schema/column-insights';
+import type { ColumnInsights } from '@/lib/schema/column-insights';
 import type { TableStats, TablePropertiesRow } from '@dory/shared/types/table-info';
 import type { TableProperties } from './structure/properties-section';
 import type { ColumnInfo } from '../type';
@@ -11,22 +14,15 @@ const STALE_TIME = 1000 * 60 * 5;
 const GC_TIME = STALE_TIME * 2;
 
 export const tableQueryKeys = {
-    columns: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-columns', connectionId, databaseName, tableName] as const,
-    structureColumns: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-structure-columns', connectionId, databaseName, tableName] as const,
-    columnInsights: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-column-insights', connectionId, databaseName, tableName] as const,
-    properties: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-properties', connectionId, databaseName, tableName] as const,
-    stats: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-stats', connectionId, databaseName, tableName] as const,
-    ddl: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-ddl', connectionId, databaseName, tableName] as const,
-    aiOverview: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-ai-overview', connectionId, databaseName, tableName] as const,
-    aiStatsInsights: (connectionId?: string, databaseName?: string, tableName?: string) =>
-        ['table-stats-insights', connectionId, databaseName, tableName] as const,
+    columns: (connectionId?: string, databaseName?: string, tableName?: string, locale?: string) => ['table-columns', connectionId, databaseName, tableName, locale] as const,
+    structureColumns: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-structure-columns', connectionId, databaseName, tableName] as const,
+    columnInsights: (connectionId?: string, databaseName?: string, tableName?: string, locale?: string) =>
+        ['table-column-insights', connectionId, databaseName, tableName, locale] as const,
+    properties: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-properties', connectionId, databaseName, tableName] as const,
+    stats: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-stats', connectionId, databaseName, tableName] as const,
+    ddl: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-ddl', connectionId, databaseName, tableName] as const,
+    aiOverview: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-ai-overview', connectionId, databaseName, tableName] as const,
+    aiStatsInsights: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-stats-insights', connectionId, databaseName, tableName] as const,
 };
 
 function normalizeColumns(raw: any[]): ColumnInfo[] {
@@ -39,11 +35,6 @@ function normalizeColumns(raw: any[]): ColumnInfo[] {
     }));
     return normalized.filter(col => col.name);
 }
-
-type ColumnInsights = {
-    tags: Record<string, string[]>;
-    summaries: Record<string, string | null>;
-};
 
 async function fetchBaseColumns({
     databaseName,
@@ -58,13 +49,36 @@ async function fetchBaseColumns({
     return normalizeColumns(raw ?? []);
 }
 
-async function fetchSemanticColumns({
+function getRuleColumnInsights({ columns, locale }: { columns: ColumnInfo[]; locale?: string }) {
+    return generateColumnInsights(columns, locale) satisfies ColumnInsights;
+}
+
+function getRuleTagsOnlyColumnInsights({ columns, locale }: { columns: ColumnInfo[]; locale?: string }) {
+    const insights = getRuleColumnInsights({ columns, locale });
+    const summaries: Record<string, string | null> = {};
+
+    insights.columns.forEach(column => {
+        summaries[column.name.toLowerCase()] = null;
+    });
+
+    return {
+        ...insights,
+        summaries,
+        columns: insights.columns.map(column => ({
+            ...column,
+            semanticSummary: null,
+        })),
+    } satisfies ColumnInsights;
+}
+
+async function fetchColumnInsights({
     columns,
     databaseName,
     tableName,
     connectionId,
     dbType,
     signal,
+    locale,
 }: {
     columns: ColumnInfo[];
     databaseName: string;
@@ -72,40 +86,15 @@ async function fetchSemanticColumns({
     connectionId?: string;
     dbType?: string;
     signal?: AbortSignal;
+    locale?: string;
 }) {
-    const tagMap: Record<string, string[]> = {};
-    const summaryMap: Record<string, string | null> = {};
+    const insights = getRuleTagsOnlyColumnInsights({ columns, locale });
 
     if (!connectionId) {
-        return {
-            tags: tagMap,
-            summaries: summaryMap,
-        } satisfies ColumnInsights;
+        return insights;
     }
 
     try {
-        const tagsRes = await executeActionClient<{ columns?: { name: string; semanticTags?: string[] }[] }>(
-            'ai.schemaTags',
-            {
-                connectionId,
-                database: databaseName,
-                table: tableName,
-                columns,
-                dbType,
-            },
-            {
-                currentConnectionId: connectionId,
-                signal,
-            },
-        );
-
-        const tagColumns = tagsRes?.columns;
-        (tagColumns ?? []).forEach((col: { name?: string; semanticTags?: string[] }) => {
-            if (!col?.name) return;
-            const key = col.name.toLowerCase();
-            tagMap[key] = Array.isArray(col.semanticTags) ? col.semanticTags : [];
-        });
-
         const explanationsRes = await executeActionClient<{ columns?: { name: string; semanticSummary?: string | null }[] }>(
             'ai.schemaExplanations',
             {
@@ -121,20 +110,24 @@ async function fetchSemanticColumns({
             },
         );
 
-        const explanationColumns = explanationsRes?.columns;
-        (explanationColumns ?? []).forEach((col: { name?: string; semanticSummary?: string | null }) => {
+        const summaries = { ...insights.summaries };
+        (explanationsRes?.columns ?? []).forEach(col => {
             if (!col?.name) return;
-            const key = col.name.toLowerCase();
-            summaryMap[key] = col.semanticSummary ?? null;
+            summaries[col.name.toLowerCase()] = col.semanticSummary?.trim() || null;
         });
-    } catch (error) {
-        console.error('Failed to load schema tags/explanations', error);
-    }
 
-    return {
-        tags: tagMap,
-        summaries: summaryMap,
-    } satisfies ColumnInsights;
+        return {
+            ...insights,
+            summaries,
+            columns: insights.columns.map(col => ({
+                ...col,
+                semanticSummary: summaries[col.name.toLowerCase()] ?? col.semanticSummary ?? null,
+            })),
+        } satisfies ColumnInsights;
+    } catch (error) {
+        console.error('Failed to load schema explanations', error);
+        return insights;
+    }
 }
 
 function applySemanticColumns(columns: ColumnInfo[], insights: ColumnInsights) {
@@ -151,21 +144,12 @@ function applySemanticColumns(columns: ColumnInfo[], insights: ColumnInsights) {
     });
 }
 
-export function useTableColumnsQuery({
-    databaseName,
-    tableName,
-    connectionId,
-    dbType,
-}: {
-    databaseName?: string;
-    tableName?: string;
-    connectionId?: string;
-    dbType?: string;
-}) {
+export function useTableColumnsQuery({ databaseName, tableName, connectionId, dbType }: { databaseName?: string; tableName?: string; connectionId?: string; dbType?: string }) {
     const { refresh: fetchColumns } = useColumns();
+    const locale = useLocale();
 
     return useQuery({
-        queryKey: tableQueryKeys.columns(connectionId, databaseName, tableName),
+        queryKey: tableQueryKeys.columns(connectionId, databaseName, tableName, locale),
         enabled: Boolean(connectionId && databaseName && tableName),
         staleTime: STALE_TIME,
         gcTime: GC_TIME,
@@ -178,13 +162,14 @@ export function useTableColumnsQuery({
             });
             if (!normalized.length) return { columns: [] as ColumnInfo[] };
 
-            const insights = await fetchSemanticColumns({
+            const insights = await fetchColumnInsights({
                 columns: normalized,
                 databaseName: databaseName as string,
                 tableName: tableName as string,
                 connectionId,
                 dbType,
                 signal,
+                locale,
             });
 
             return { columns: applySemanticColumns(normalized, insights) };
@@ -192,15 +177,7 @@ export function useTableColumnsQuery({
     });
 }
 
-export function useTableStructureColumnsQuery({
-    databaseName,
-    tableName,
-    connectionId,
-}: {
-    databaseName?: string;
-    tableName?: string;
-    connectionId?: string;
-}) {
+export function useTableStructureColumnsQuery({ databaseName, tableName, connectionId }: { databaseName?: string; tableName?: string; connectionId?: string }) {
     const { refresh: fetchColumns } = useColumns();
 
     return useQuery({
@@ -234,34 +211,33 @@ export function useTableColumnInsightsQuery({
     dbType?: string;
     columns: ColumnInfo[];
 }) {
+    const locale = useLocale();
+
     return useQuery({
-        queryKey: tableQueryKeys.columnInsights(connectionId, databaseName, tableName),
+        queryKey: tableQueryKeys.columnInsights(connectionId, databaseName, tableName, locale),
         enabled: Boolean(connectionId && databaseName && tableName && columns.length),
         staleTime: STALE_TIME,
         gcTime: GC_TIME,
         refetchOnWindowFocus: false,
+        placeholderData: getRuleTagsOnlyColumnInsights({
+            columns,
+            locale,
+        }),
         queryFn: async ({ signal }) => {
-            return fetchSemanticColumns({
+            return fetchColumnInsights({
                 columns,
                 databaseName: databaseName as string,
                 tableName: tableName as string,
                 connectionId,
                 dbType,
                 signal,
+                locale,
             });
         },
     });
 }
 
-export function useTablePropertiesQuery({
-    databaseName,
-    tableName,
-    connectionId,
-}: {
-    databaseName?: string;
-    tableName?: string;
-    connectionId?: string;
-}) {
+export function useTablePropertiesQuery({ databaseName, tableName, connectionId }: { databaseName?: string; tableName?: string; connectionId?: string }) {
     return useQuery({
         queryKey: tableQueryKeys.properties(connectionId, databaseName, tableName),
         enabled: Boolean(connectionId && databaseName && tableName),
@@ -293,15 +269,7 @@ export function useTablePropertiesQuery({
     });
 }
 
-export function useTableStatsQuery({
-    databaseName,
-    tableName,
-    connectionId,
-}: {
-    databaseName?: string;
-    tableName?: string;
-    connectionId?: string;
-}) {
+export function useTableStatsQuery({ databaseName, tableName, connectionId }: { databaseName?: string; tableName?: string; connectionId?: string }) {
     return useQuery({
         queryKey: tableQueryKeys.stats(connectionId, databaseName, tableName),
         enabled: Boolean(connectionId && databaseName && tableName),
@@ -333,15 +301,7 @@ export function useTableStatsQuery({
     });
 }
 
-export function useTableDdlQuery({
-    databaseName,
-    tableName,
-    connectionId,
-}: {
-    databaseName?: string;
-    tableName?: string;
-    connectionId?: string;
-}) {
+export function useTableDdlQuery({ databaseName, tableName, connectionId }: { databaseName?: string; tableName?: string; connectionId?: string }) {
     return useQuery({
         queryKey: tableQueryKeys.ddl(connectionId, databaseName, tableName),
         enabled: Boolean(connectionId && databaseName && tableName),
@@ -369,4 +329,3 @@ export function useTableDdlQuery({
         },
     });
 }
-

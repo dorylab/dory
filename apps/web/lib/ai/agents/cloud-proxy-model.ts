@@ -1,11 +1,13 @@
 import 'server-only';
 
 import type { LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3GenerateResult, LanguageModelV3StreamPart, LanguageModelV3StreamResult } from '@ai-sdk/provider';
+import type { ModelRole } from '@/lib/ai/model/types';
 
 type DoryCloudProxyLanguageModelOptions = {
     baseUrl: string;
     headers?: HeadersInit;
     model?: string | null;
+    role?: ModelRole;
 };
 
 function headersToObject(headers: Headers): Record<string, string> {
@@ -81,6 +83,7 @@ export function createDoryCloudProxyLanguageModel(options: DoryCloudProxyLanguag
             headers,
             body: JSON.stringify({
                 model: options.model ?? null,
+                role: options.role ?? null,
                 callOptions: withoutAbortSignal(callOptions),
             }),
             signal,

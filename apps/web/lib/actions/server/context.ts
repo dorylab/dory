@@ -89,7 +89,7 @@ export async function resolveActionRequest(req: NextRequest): Promise<ResolvedAc
             currentConnectionId,
             requestId: req.headers.get('x-request-id') ?? randomUUID(),
             audit: createWebActionAuditSink(db),
-            services: { db },
+            services: { db, req },
         },
     };
 }
