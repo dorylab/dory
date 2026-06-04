@@ -119,6 +119,7 @@
                 "ConfirmDescription": "我们会立即为你创建一个访客工作区。如果你之后登录，我们会将这个工作区保留到你的账号下。",
                 "Confirm": "创建访客工作区",
                 "Cancel": "返回",
+                "Starting": "正在准备工作区...",
                 "StartFailed": "启动访客工作区失败"
             },
             "Demo": {

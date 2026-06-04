@@ -17,6 +17,7 @@ export function SettingsModal({
     includeOrganizationSettings = false,
     includeBillingSettings = false,
     currentOrganizationId = null,
+    initialUserId = null,
     runtime = null,
     billingManagementAvailable = false,
     desktopBillingHandoff = false,
@@ -28,6 +29,7 @@ export function SettingsModal({
     includeOrganizationSettings?: boolean;
     includeBillingSettings?: boolean;
     currentOrganizationId?: string | null;
+    initialUserId?: string | null;
     runtime?: string | null;
     billingManagementAvailable?: boolean;
     desktopBillingHandoff?: boolean;
@@ -67,6 +69,7 @@ export function SettingsModal({
                         active={resolvedActiveCategory}
                         categories={categories}
                         currentOrganizationId={currentOrganizationId}
+                        initialUserId={initialUserId}
                         runtime={runtime}
                         billingManagementAvailable={billingManagementAvailable}
                         desktopBillingHandoff={desktopBillingHandoff}

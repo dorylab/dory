@@ -36,7 +36,7 @@ async function issueMcpDesktopGrant(organizationSlugOrId?: string): Promise<stri
     return (json.data as McpDesktopGrantPayload).grant;
 }
 
-export function SessionRecoverySync() {
+export function SessionRecoverySync({ initialUserId = null }: { initialUserId?: string | null }) {
     const { data: session } = authClient.useSession();
     const params = useParams<{ organization?: string }>();
     const organizationSlugOrId = params.organization;
@@ -48,7 +48,7 @@ export function SessionRecoverySync() {
             return;
         }
 
-        const currentUserId = session?.user?.id ?? null;
+        const currentUserId = session?.user?.id ?? initialUserId;
         const previousUserId = previousUserIdRef.current;
         previousUserIdRef.current = currentUserId;
         const syncRunId = ++mcpSyncRunIdRef.current;
@@ -91,7 +91,7 @@ export function SessionRecoverySync() {
         };
 
         void syncMcpProxy();
-    }, [organizationSlugOrId, session?.user?.id]);
+    }, [initialUserId, organizationSlugOrId, session?.user?.id]);
 
     return null;
 }

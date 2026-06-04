@@ -115,6 +115,7 @@
                 "ConfirmDescription": "Crearemos un espacio de trabajo de invitado para ti de inmediato. Si más tarde inicias sesión, mantendremos este espacio de trabajo en tu cuenta.",
                 "Confirm": "Crear espacio de trabajo de invitado",
                 "Cancel": "Volver",
+                "Starting": "Preparando espacio de trabajo...",
                 "StartFailed": "No se pudo iniciar el espacio de trabajo de invitado"
             },
             "Demo": {

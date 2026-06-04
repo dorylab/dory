@@ -115,6 +115,7 @@
                 "ConfirmDescription": "We will create a guest workspace for you right away. If you later sign in, we will keep this workspace with your account.",
                 "Confirm": "Create guest workspace",
                 "Cancel": "Back",
+                "Starting": "Preparing workspace...",
                 "StartFailed": "Failed to start guest workspace"
             },
             "Demo": {

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
 import { IconBrandGithub } from '@tabler/icons-react';
+import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { InputPassword } from '@/components/originui/input-password';
@@ -329,13 +330,22 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
                                         {t('SignIn.Guest.Prompt')}{' '}
                                         <button
                                             type="button"
-                                            className="text-foreground cursor-pointer underline-offset-4 hover:underline"
+                                            className="text-foreground inline-flex min-h-5 cursor-pointer items-center justify-center gap-1.5 align-baseline underline-offset-4 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline disabled:opacity-70"
+                                            disabled={guestActionLoading}
+                                            aria-busy={guestActionLoading}
                                             onClick={() => {
                                                 void onGuestContinue();
                                             }}
                                             data-testid="guest-sign-in"
                                         >
-                                            {t('SignIn.Guest.Link')}
+                                            {guestActionLoading ? (
+                                                <>
+                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                                                    <span>{t('SignIn.Guest.Starting')}</span>
+                                                </>
+                                            ) : (
+                                                t('SignIn.Guest.Link')
+                                            )}
                                         </button>
                                     </div>
                                 ) : null}
