@@ -134,7 +134,7 @@
             "EmailLabel": "Recipient email",
             "Change": "Change",
             "Hint": "Didn't receive it? Check your spam or promotions folder, or click “Resend verification email” later.",
-            "OpenMailApp": "Open mail app",
+            "EmailLinkNotWorkingSignIn": "Email link not working? Sign in",
             "ResendCooldown": "Resend ({seconds}s)",
             "Resend": "Resend verification email"
         },

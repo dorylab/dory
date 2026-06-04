@@ -134,7 +134,7 @@
             "EmailLabel": "送信先メール",
             "Change": "変更",
             "Hint": "届いていませんか？迷惑メールやプロモーションフォルダを確認するか、後で「認証メールを再送信」をクリックしてください。",
-            "OpenMailApp": "メールアプリを開く",
+            "EmailLinkNotWorkingSignIn": "メールリンクが反応しない？ログインへ",
             "ResendCooldown": "再送信 ({seconds}s)",
             "Resend": "認証メールを再送信"
         },

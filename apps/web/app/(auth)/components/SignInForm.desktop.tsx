@@ -28,9 +28,9 @@ export function SignInForm({
     className,
     callbackURL: callbackURLOverride,
     onRequestSignUp,
-    showGuestOption: _showGuestOption,
-    showDemoOption: _showDemoOption,
-    resumeAnonymousSession: _resumeAnonymousSession,
+    showGuestOption = true,
+    showDemoOption = false,
+    resumeAnonymousSession = false,
     ...props
 }: SignInFormProps) {
     const t = useTranslations('Auth');
@@ -41,8 +41,16 @@ export function SignInForm({
     const [pwd, setPwd] = useState('');
     const [err, setErr] = useState<string | null>(null);
     const [msg, setMsg] = useState<string | null>(null);
-    const { data: session } = authClient.useSession();
+    const [guestActionLoading, setGuestActionLoading] = useState(false);
+    const [demoActionLoading, setDemoActionLoading] = useState(false);
+    const { data: session, refetch: refetchSession } = authClient.useSession();
     const callbackURL = callbackURLOverride || searchParams?.get('callbackURL') || '/';
+    const canShowDemoOption = showDemoOption;
+    const secondaryActionLoading = guestActionLoading || demoActionLoading;
+
+    function getErrorMessage(error: unknown, fallback: string) {
+        return error instanceof Error && error.message ? error.message : fallback;
+    }
 
     useEffect(() => {
         if (!window.authBridge?.onCallback) return;
@@ -113,13 +121,13 @@ export function SignInForm({
                 throw new Error(data?.message || (provider === 'github' ? t('SignIn.GithubStartFailed') : t('SignIn.GoogleStartFailed')));
             }
             await window.authBridge?.openExternal(data.url);
-        } catch (e: any) {
-            setErr(e?.message ?? (provider === 'github' ? t('SignIn.GithubStartFailed') : t('SignIn.GoogleStartFailed')));
+        } catch (error: unknown) {
+            setErr(getErrorMessage(error, provider === 'github' ? t('SignIn.GithubStartFailed') : t('SignIn.GoogleStartFailed')));
         }
     }
 
     async function submitEmailPassword() {
-        if (loading) return;
+        if (loading || secondaryActionLoading) return;
 
         setErr(null);
         setMsg(null);
@@ -143,10 +151,11 @@ export function SignInForm({
             posthog.capture('user_signed_in', { method: 'email' });
             router.refresh();
             router.push(callbackURL);
-        } catch (e: any) {
-            setErr(e?.message ?? t('SignIn.NetworkErrorRetry'));
-            posthog.capture('user_sign_in_failed', { method: 'email', error: e?.message });
-            posthog.captureException(e);
+        } catch (error: unknown) {
+            const message = getErrorMessage(error, t('SignIn.NetworkErrorRetry'));
+            setErr(message);
+            posthog.capture('user_sign_in_failed', { method: 'email', error: message });
+            posthog.captureException(error);
         } finally {
             setLoading(false);
         }
@@ -181,10 +190,82 @@ export function SignInForm({
                 return;
             }
             setMsg(t('SignIn.ResetEmailSent'));
-        } catch (e: any) {
-            setErr(e?.message ?? t('SignIn.SendFailedRetry'));
+        } catch (error: unknown) {
+            setErr(getErrorMessage(error, t('SignIn.SendFailedRetry')));
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function onGuestContinue() {
+        if (loading || secondaryActionLoading) return;
+
+        setErr(null);
+        setMsg(null);
+        setGuestActionLoading(true);
+
+        try {
+            if (resumeAnonymousSession) {
+                const recoverResponse = await fetch('/api/auth/anonymous/recover', {
+                    method: 'POST',
+                    credentials: 'include',
+                });
+
+                if (!recoverResponse.ok) {
+                    const payload = await recoverResponse.json().catch(() => null);
+                    throw new Error(typeof payload?.error === 'string' ? payload.error : t('SignIn.Guest.StartFailed'));
+                }
+            } else {
+                const result = await authClient.signIn.anonymous();
+                if (result?.error) {
+                    throw new Error(result.error.message || t('SignIn.Guest.StartFailed'));
+                }
+            }
+
+            const response = await fetch('/api/auth/anonymous/bootstrap', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok || !payload?.organizationSlug) {
+                throw new Error(typeof payload?.error === 'string' ? payload.error : t('SignIn.Guest.StartFailed'));
+            }
+
+            router.refresh();
+            router.push(`/${payload.organizationSlug}/connections`);
+        } catch (nextError) {
+            setErr(nextError instanceof Error ? nextError.message : t('SignIn.Guest.StartFailed'));
+        } finally {
+            setGuestActionLoading(false);
+        }
+    }
+
+    async function onDemoContinue() {
+        if (loading || secondaryActionLoading) return;
+
+        setErr(null);
+        setMsg(null);
+        setDemoActionLoading(true);
+
+        try {
+            const response = await fetch('/api/auth/demo', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(typeof payload?.error === 'string' ? payload.error : t('SignIn.Demo.StartFailed'));
+            }
+
+            await refetchSession();
+            router.refresh();
+            router.push(callbackURL);
+        } catch (nextError) {
+            setErr(nextError instanceof Error ? nextError.message : t('SignIn.Demo.StartFailed'));
+        } finally {
+            setDemoActionLoading(false);
         }
     }
 
@@ -237,9 +318,39 @@ export function SignInForm({
                                 <InputPassword name="password" id="password" required value={pwd} onChange={e => setPwd(e.target.value)} autoComplete="current-password" />
                             </div>
 
-                            <Button type="button" className="w-full" disabled={loading} onClick={() => void submitEmailPassword()}>
+                            <Button type="button" className="w-full" disabled={loading || secondaryActionLoading} onClick={() => void submitEmailPassword()}>
                                 {loading ? t('SignIn.Submitting') : t('SignIn.Submit')}
                             </Button>
+
+                            {showGuestOption ? (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    variant="secondary"
+                                    disabled={loading || secondaryActionLoading}
+                                    onClick={() => {
+                                        void onGuestContinue();
+                                    }}
+                                    data-testid="guest-sign-in"
+                                >
+                                    {guestActionLoading ? t('SignIn.Submitting') : resumeAnonymousSession ? t('SignIn.Guest.ResumeAction') : t('SignIn.Guest.Action')}
+                                </Button>
+                            ) : null}
+
+                            {canShowDemoOption ? (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    variant="secondary"
+                                    disabled={loading || secondaryActionLoading}
+                                    onClick={() => {
+                                        void onDemoContinue();
+                                    }}
+                                    data-testid="demo-sign-in"
+                                >
+                                    {demoActionLoading ? t('SignIn.Submitting') : t('SignIn.Demo.Action')}
+                                </Button>
+                            ) : null}
 
                             <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
                                 <span className="bg-background text-muted-foreground relative z-10 px-2">{t('SignIn.OrContinueWith')}</span>

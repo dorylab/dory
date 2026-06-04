@@ -138,7 +138,7 @@
             "EmailLabel": "收件邮箱",
             "Change": "更换",
             "Hint": "没收到？检查垃圾箱/推广邮件；或稍后点击“重发验证邮件”。",
-            "OpenMailApp": "打开邮箱 App",
+            "EmailLinkNotWorkingSignIn": "邮件链接无响应？前往登录",
             "ResendCooldown": "重发 ({seconds}s)",
             "Resend": "重发验证邮件"
         },
