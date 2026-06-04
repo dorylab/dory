@@ -59,7 +59,7 @@ export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setR
 
     return (
         <aside
-            className="fixed z-20 right-0 border-l bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-lg flex flex-col"
+            className="fixed z-[100] right-0 border-l bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-lg flex flex-col"
             style={{ width: inspectorWidth, top: inspectorTopOffset, height: `calc(100% - ${inspectorTopOffset}px)` }}
         >
             {/* drag handle */}
