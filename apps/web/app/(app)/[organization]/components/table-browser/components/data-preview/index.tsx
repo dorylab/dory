@@ -5,6 +5,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { RotateCw } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { useQuery } from '@tanstack/react-query';
 
 import { fetchTablePreview } from '../../lib/fetch-table-preview';
 import { isSuccess } from '@/lib/result';
@@ -28,6 +29,29 @@ type PreviewResultSet = {
     columns?: Array<Record<string, unknown>> | null;
 };
 
+type PreviewStats = {
+    filteredCount: number;
+    totalCount: number;
+};
+
+type PreviewCacheEntry = {
+    columns: PreviewColumn[];
+    rows: ResultRow[];
+    stats: PreviewStats;
+};
+
+type InspectorPayload =
+    | {
+          row: number;
+          col: string;
+          value: unknown;
+      }
+    | {
+          row: number;
+          rowData: Record<string, unknown>;
+      }
+    | null;
+
 type DataPreviewProps = {
     connectionId?: string;
     databaseName?: string;
@@ -44,9 +68,47 @@ type TableDataPreviewProps = {
     tableName?: string;
 };
 
+const PREVIEW_STALE_TIME = 1000 * 60 * 5;
+const PREVIEW_GC_TIME = PREVIEW_STALE_TIME * 2;
+const EMPTY_ROWS: ResultRow[] = [];
+
 function normalizeParam(value?: string | string[]) {
     if (!value) return undefined;
     return Array.isArray(value) ? value[0] : value;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+    return error instanceof Error ? error.message : fallback;
+}
+
+function getColumnName(column: unknown) {
+    if (!column || typeof column !== 'object' || !('name' in column)) return null;
+    const name = column.name;
+    return typeof name === 'string' && name.trim() ? name : null;
+}
+
+function isString(value: string | null): value is string {
+    return value !== null;
+}
+
+function buildPreviewQueryKey({
+    connectionId,
+    databaseName,
+    tableName,
+    storageKey,
+    source,
+    pageIndex,
+    pageSize,
+}: {
+    connectionId?: string;
+    databaseName?: string;
+    tableName?: string;
+    storageKey?: string;
+    source: string;
+    pageIndex: number;
+    pageSize: number;
+}) {
+    return ['table-preview', source, connectionId, databaseName, tableName, storageKey, pageIndex, pageSize] as const;
 }
 
 function mapPreviewRows(rows: Record<string, unknown>[], rowKeyPrefix: string): ResultRow[] {
@@ -72,27 +134,23 @@ function buildColumns(rows: Record<string, unknown>[], resultSet?: PreviewResult
     return Object.keys(rows[0] ?? {}).map(name => ({ name }));
 }
 
-function DataPreview({
-    connectionId,
-    databaseName,
-    tableName,
-    storageKey,
-    source = 'table-browser-data-preview',
-    emptyMessage,
-}: DataPreviewProps) {
+function DataPreview(props: DataPreviewProps) {
+    const { connectionId, databaseName, tableName, source = 'table-browser-data-preview' } = props;
+    const resetKey = [source, connectionId, databaseName, tableName].join('::');
+
+    return <DataPreviewInner key={resetKey} {...props} source={source} />;
+}
+
+function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, source = 'table-browser-data-preview', emptyMessage }: DataPreviewProps) {
     const t = useTranslations('TableBrowser');
     const sessionMeta = useAtomValue(currentSessionMetaAtom);
     const setSessionMeta = useSetAtom(currentSessionMetaAtom);
 
     const [query, setQuery] = useState('');
-    const [rows, setRows] = useState<ResultRow[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [hasLoaded, setHasLoaded] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [stats, setStats] = useState({ filteredCount: 0, totalCount: 0 });
+    const [vtableStats, setVtableStats] = useState<{ filteredCount: number } | null>(null);
     const [inspectorOpen, setInspectorOpen] = useState(false);
     const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
-    const [inspectorPayload, setInspectorPayload] = useState<any>(null);
+    const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
     const [pageIndex, setPageIndex] = useState(0);
@@ -101,96 +159,90 @@ function DataPreview({
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
     const totalRowEstimate = tableProperties?.totalRows ?? null;
 
-    useEffect(() => {
-        setRows([]);
-        setLoading(Boolean(connectionId && databaseName && tableName));
-        setHasLoaded(false);
-        setSessionMeta({});
-        setQuery('');
-        setStats({ filteredCount: 0, totalCount: 0 });
-        setInspectorOpen(false);
-        setInspectorMode(null);
-        setInspectorPayload(null);
-        setRowViewMode('table');
-        setError(null);
-        setPageIndex(0);
-    }, [connectionId, databaseName, tableName, setSessionMeta]);
-
-    const runPreview = useCallback(
-        async (signal?: AbortSignal) => {
-            if (!connectionId || !databaseName || !tableName) return;
-
-            setLoading(true);
-            setError(null);
-
-            try {
-                const res = await fetchTablePreview({
-                    connectionId,
-                    databaseName,
-                    tableName,
-                    limit: pageSize,
-                    offset: pageIndex * pageSize,
-                    source,
-                    signal,
-                });
-
-                if (!isSuccess(res as any)) {
-                    setError(res?.message ?? t('Failed to load data preview'));
-                    return;
-                }
-
-                const firstSet = (res?.data?.queryResultSets?.[0] ?? null) as PreviewResultSet | null;
-                const rawRows = Array.isArray(res?.data?.results?.[0]) ? (res.data.results[0] as Record<string, unknown>[]) : [];
-                const nextStorageKey = storageKey ?? `preview:${connectionId}:${databaseName}:${tableName}`;
-                const mappedRows = mapPreviewRows(rawRows, nextStorageKey);
-
-                setSessionMeta({ columns: buildColumns(rawRows, firstSet) });
-                setRows(mappedRows);
-                setStats({
-                    filteredCount: mappedRows.length,
-                    totalCount: mappedRows.length,
-                });
-            } catch (e: any) {
-                if (e?.name === 'AbortError') return;
-                setError(e?.message ?? t('Failed to load data preview'));
-            } finally {
-                if (!signal?.aborted) {
-                    setLoading(false);
-                    setHasLoaded(true);
-                }
-            }
-        },
-        [connectionId, databaseName, source, storageKey, tableName, setSessionMeta, t, pageSize, pageIndex],
+    const previewQueryKey = useMemo(
+        () =>
+            buildPreviewQueryKey({
+                connectionId,
+                databaseName,
+                tableName,
+                storageKey,
+                source,
+                pageIndex,
+                pageSize,
+            }),
+        [connectionId, databaseName, pageIndex, pageSize, source, storageKey, tableName],
     );
 
+    const previewQuery = useQuery({
+        queryKey: previewQueryKey,
+        enabled: Boolean(connectionId && databaseName && tableName),
+        staleTime: PREVIEW_STALE_TIME,
+        gcTime: PREVIEW_GC_TIME,
+        refetchOnMount: false,
+        refetchOnWindowFocus: false,
+        queryFn: async ({ signal }) => {
+            if (!connectionId || !databaseName || !tableName) {
+                throw new Error(t('Failed to load data preview'));
+            }
+
+            const res = await fetchTablePreview({
+                connectionId,
+                databaseName,
+                tableName,
+                limit: pageSize,
+                offset: pageIndex * pageSize,
+                source,
+                signal,
+            });
+
+            if (!isSuccess(res)) {
+                throw new Error(res?.message ?? t('Failed to load data preview'));
+            }
+
+            const firstSet = (res?.data?.queryResultSets?.[0] ?? null) as PreviewResultSet | null;
+            const rawRows = Array.isArray(res?.data?.results?.[0]) ? (res.data.results[0] as Record<string, unknown>[]) : [];
+            const nextStorageKey = storageKey ?? `preview:${connectionId}:${databaseName}:${tableName}`;
+            const mappedRows = mapPreviewRows(rawRows, nextStorageKey);
+
+            return {
+                columns: buildColumns(rawRows, firstSet),
+                rows: mappedRows,
+                stats: {
+                    filteredCount: mappedRows.length,
+                    totalCount: mappedRows.length,
+                },
+            } satisfies PreviewCacheEntry;
+        },
+    });
+
+    const previewData = previewQuery.data;
+    const rows = useMemo(() => previewData?.rows ?? EMPTY_ROWS, [previewData]);
+    const loading = previewQuery.isLoading;
+    const refreshing = previewQuery.isFetching;
+    const error = previewData ? null : previewQuery.error ? getErrorMessage(previewQuery.error, t('Failed to load data preview')) : null;
+
     useEffect(() => {
-        if (!connectionId || !databaseName || !tableName) return;
+        if (!previewData) {
+            setSessionMeta({});
+            return;
+        }
 
-        const controller = new AbortController();
-        void runPreview(controller.signal);
-
-        return () => controller.abort();
-    }, [connectionId, databaseName, tableName, runPreview]);
+        setSessionMeta({ columns: previewData.columns });
+    }, [previewData, setSessionMeta]);
 
     const filteredResults = useMemo(() => {
         const keyword = query.trim().toLowerCase();
         if (!keyword) return rows;
 
-        const columns = (sessionMeta?.columns ?? [])
-            .map((column: any) => column?.name)
-            .filter(Boolean);
+        const metaColumns = Array.isArray(sessionMeta?.columns) ? (sessionMeta.columns as unknown[]) : [];
+        const columns = metaColumns.map(getColumnName).filter(isString);
 
         if (columns.length === 0) return rows;
 
         return rows.filter(row => {
             for (const column of columns) {
                 const value = row.rowData?.[column];
-                const normalized =
-                    value == null
-                        ? ''
-                        : typeof value === 'object'
-                            ? JSON.stringify(value)
-                            : String(value);
+                const normalized = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
 
                 if (normalized.toLowerCase().includes(keyword)) {
                     return true;
@@ -201,73 +253,82 @@ function DataPreview({
         });
     }, [query, rows, sessionMeta]);
 
-    useEffect(() => {
-        if (filteredResults.length === 0) {
-            setStats({
+    const stats = useMemo<PreviewStats>(() => {
+        if (query.trim() && filteredResults.length === 0) {
+            return {
                 filteredCount: 0,
                 totalCount: rows.length,
-            });
+            };
         }
-    }, [filteredResults.length, rows.length]);
 
-    const onStatsChange = useCallback(
-        (nextStats: { filteredCount: number }) => {
-            setStats({
-                filteredCount: nextStats.filteredCount,
+        if (vtableStats) {
+            return {
+                filteredCount: vtableStats.filteredCount,
                 totalCount: filteredResults.length,
-            });
-        },
-        [filteredResults.length],
-    );
+            };
+        }
+
+        return previewData?.stats ?? { filteredCount: rows.length, totalCount: rows.length };
+    }, [filteredResults.length, previewData?.stats, query, rows.length, vtableStats]);
+
+    const onStatsChange = useCallback((nextStats: { filteredCount: number }) => {
+        setVtableStats({
+            filteredCount: nextStats.filteredCount,
+        });
+    }, []);
+
+    const handleQueryChange = useCallback((nextQuery: string) => {
+        setQuery(nextQuery);
+        setVtableStats(null);
+    }, []);
+
+    const handleClearQuery = useCallback(() => {
+        setQuery('');
+        setVtableStats(null);
+    }, []);
 
     const handlePageChange = useCallback((newPageIndex: number) => {
+        setVtableStats(null);
         setPageIndex(newPageIndex);
     }, []);
 
     const handlePageSizeChange = useCallback((newPageSize: number) => {
+        setVtableStats(null);
         setPageSize(newPageSize);
         setPageIndex(0);
     }, []);
 
     const handleRefresh = useCallback(() => {
-        if (loading) return;
-        void runPreview();
-    }, [loading, runPreview]);
+        if (refreshing) return;
+        void previewQuery.refetch();
+    }, [previewQuery, refreshing]);
 
     if (!connectionId || !databaseName || !tableName) {
-        return (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                {emptyMessage ?? t('No table preview')}
-            </div>
-        );
+        return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{emptyMessage ?? t('No table preview')}</div>;
     }
 
     if (error) {
         return (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <div>{error}</div>
-                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-                    <RotateCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+                    <RotateCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                     {t('Refresh')}
                 </Button>
             </div>
         );
     }
 
-    if (!hasLoaded || (loading && rows.length === 0)) {
-        return (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                {t('Loading preview')}
-            </div>
-        );
+    if (loading && rows.length === 0) {
+        return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{t('Loading preview')}</div>;
     }
 
     if (rows.length === 0 && !loading) {
         return (
             <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
                 <div>{t('No data')}</div>
-                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-                    <RotateCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+                    <RotateCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
                     {t('Refresh')}
                 </Button>
             </div>
@@ -280,13 +341,13 @@ function DataPreview({
                 <VTableSearchBar
                     query={query}
                     className="w-96 pl-0"
-                    onQueryChange={setQuery}
-                    onClearQuery={() => setQuery('')}
+                    onQueryChange={handleQueryChange}
+                    onClearQuery={handleClearQuery}
                     filteredCount={query.trim() ? stats.filteredCount : undefined}
                     totalCount={query.trim() ? stats.totalCount : undefined}
                 />
-                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={loading}>
-                    <RotateCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
+                    <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     {t('Refresh')}
                 </Button>
             </div>
@@ -308,7 +369,7 @@ function DataPreview({
                 pageSize={pageSize}
                 totalRowEstimate={totalRowEstimate}
                 currentPageRowCount={rows.length}
-                loading={loading}
+                loading={refreshing}
                 onPageChange={handlePageChange}
                 onPageSizeChange={handlePageSizeChange}
             />
@@ -339,15 +400,7 @@ export default function TableDataPreview({ activeTab, connectionId, databaseName
     const resolvedDatabase = activeTab?.tabType === 'table' ? activeTab.databaseName : databaseName;
     const resolvedTable = activeTab?.tabType === 'table' ? activeTab.tableName : tableName;
 
-    return (
-        <DataPreview
-            connectionId={resolvedConnectionId}
-            databaseName={resolvedDatabase}
-            tableName={resolvedTable}
-            storageKey={storageKey}
-            source="table-tab-data-preview"
-        />
-    );
+    return <DataPreview connectionId={resolvedConnectionId} databaseName={resolvedDatabase} tableName={resolvedTable} storageKey={storageKey} source="table-tab-data-preview" />;
 }
 
 export function UrlDataPreview() {
@@ -363,13 +416,5 @@ export function UrlDataPreview() {
         return `url:${connectionId}:${databaseName}:${tableName}:data-preview`;
     }, [currentConnection?.connection?.id, databaseName, tableName]);
 
-    return (
-        <DataPreview
-            connectionId={currentConnection?.connection?.id}
-            databaseName={databaseName}
-            tableName={tableName}
-            storageKey={storageKey}
-            source="catalog-data-preview"
-        />
-    );
+    return <DataPreview connectionId={currentConnection?.connection?.id} databaseName={databaseName} tableName={tableName} storageKey={storageKey} source="catalog-data-preview" />;
 }
