@@ -17,12 +17,7 @@ import { SemanticLayerSection } from './components/semantic-layer-section';
 import { SnippetsSection } from './components/snippets-section';
 import type { AiOverview, SemanticGroups } from './types';
 import type { ColumnInfo } from '../../type';
-import {
-    tableQueryKeys,
-    useTableColumnsQuery,
-    useTablePropertiesQuery,
-    useTableStatsQuery,
-} from '../table-queries';
+import { tableQueryKeys, useTableColumnsQuery, useTablePropertiesQuery, useTableStatsQuery } from '../table-queries';
 import { translate } from '@dory/i18n/translate';
 import { routing } from '@dory/i18n/routing';
 
@@ -85,32 +80,19 @@ function buildSemanticGroups(columns: ColumnInfo[]): SemanticGroups {
             }
         };
 
-        if (
-            tags.some(t => SEMANTIC_MATCHERS.keys.some(matcher => t.includes(matcher))) ||
-            lower.endsWith('_id') ||
-            lower === 'id'
-        ) {
+        if (tags.some(t => SEMANTIC_MATCHERS.keys.some(matcher => t.includes(matcher))) || lower.endsWith('_id') || lower === 'id') {
             push('keys');
         }
 
-        if (
-            tags.some(t => SEMANTIC_MATCHERS.time.some(matcher => t.includes(matcher))) ||
-            /time|date|ts/.test(lower)
-        ) {
+        if (tags.some(t => SEMANTIC_MATCHERS.time.some(matcher => t.includes(matcher))) || /time|date|ts/.test(lower)) {
             push('time');
         }
 
-        if (
-            tags.some(t => SEMANTIC_MATCHERS.geo.some(matcher => t.includes(matcher))) ||
-            /(lon|lng|lat)/.test(lower)
-        ) {
+        if (tags.some(t => SEMANTIC_MATCHERS.geo.some(matcher => t.includes(matcher))) || /(lon|lng|lat)/.test(lower)) {
             push('geo');
         }
 
-        if (
-            tags.some(t => SEMANTIC_MATCHERS.metrics.some(matcher => t.includes(matcher))) ||
-            (col.type || '').toLowerCase().match(/(int|float|decimal|double)/)
-        ) {
+        if (tags.some(t => SEMANTIC_MATCHERS.metrics.some(matcher => t.includes(matcher))) || (col.type || '').toLowerCase().match(/(int|float|decimal|double)/)) {
             push('metrics');
         }
 
@@ -128,11 +110,11 @@ function buildSemanticGroups(columns: ColumnInfo[]): SemanticGroups {
 function buildFallbackOverview(
     t: ReturnType<typeof useTranslations>,
     {
-    databaseName,
-    tableName,
-    columns,
-    properties,
-}: {
+        databaseName,
+        tableName,
+        columns,
+        properties,
+    }: {
         databaseName?: string;
         tableName?: string;
         columns: ColumnInfo[];
@@ -198,11 +180,10 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
     const stats = statsQuery.data ?? null;
 
     const loadingColumns = columnsQuery.isLoading;
-    const loadingColumnTags = columnsQuery.isFetching && !columnsQuery.isLoading;
     const loadingProperties = propertiesQuery.isLoading;
     const loadingStats = statsQuery.isLoading;
 
-    const aiBlocked = loadingColumns || loadingColumnTags || loadingProperties || !columns.length;
+    const aiBlocked = loadingColumns || loadingProperties || !columns.length;
 
     const fallbackOverview = useMemo(
         () =>
@@ -243,16 +224,12 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
                 },
             );
             console.log('AI Overview response:', data);
-            
+
             return {
                 summary: (data.summary || fallbackOverview.summary).trim(),
                 detail: (data.detail || fallbackOverview.detail).trim(),
-                highlights: (data.highlights || fallbackOverview.highlights || [])
-                    .filter(item => item?.field && item?.description)
-                    .slice(0, 6),
-                snippets: (data.snippets || fallbackOverview.snippets || [])
-                    .filter(item => item?.sql)
-                    .slice(0, 5),
+                highlights: (data.highlights || fallbackOverview.highlights || []).filter(item => item?.field && item?.description).slice(0, 6),
+                snippets: (data.snippets || fallbackOverview.snippets || []).filter(item => item?.sql).slice(0, 5),
             } as AiOverview;
         },
     });
@@ -263,17 +240,13 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
     const aiUpdatedAt = aiOverviewQuery.dataUpdatedAt ? new Date(aiOverviewQuery.dataUpdatedAt) : null;
 
     const semanticGroups = useMemo(() => buildSemanticGroups(columns), [columns]);
-    const loadingAny = loadingColumns || loadingColumnTags || loadingProperties;
+    const loadingAny = loadingColumns || loadingProperties;
     const overviewLoading = aiLoading || aiBlocked || !aiOverview;
     const highlights = aiOverview?.highlights ?? [];
     const snippets = aiOverview?.snippets ?? [];
 
     if (!databaseName || !tableName) {
-        return (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                {t('Select table to view overview')}
-            </div>
-        );
+        return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{t('Select table to view overview')}</div>;
     }
 
     return (

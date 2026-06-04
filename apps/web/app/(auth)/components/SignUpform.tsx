@@ -86,8 +86,9 @@ export function SignUpForm({ className, callbackURL: callbackURLOverride, onRequ
 
     if (stage === 'verify') {
         return (
-            <div className={cn('flex flex-col gap-6', className)} {...props}>
+            <div className={cn('mx-auto flex w-full max-w-2xl flex-col gap-6', className)} {...props}>
                 <VerifyEmailPanel
+                    className="max-w-2xl"
                     defaultEmail={emailForVerify}
                     callbackURL={callbackURLOverride || '/'}
                     onRequestSignIn={onRequestSignIn}
@@ -118,7 +119,7 @@ export function SignUpForm({ className, callbackURL: callbackURLOverride, onRequ
 
     //--Original registration form
     return (
-        <div className={cn('flex min-w-0 flex-col gap-6', className)} {...props}>
+        <div className={cn('mx-auto flex min-w-0 w-full max-w-md flex-col gap-6', className)} {...props}>
             <Card className="overflow-hidden p-0">
                 <CardContent className="grid p-0 md:grid-cols-1">
                     <form className="p-6 md:p-8" onSubmit={onSubmit} noValidate data-testid="sign-up-form">

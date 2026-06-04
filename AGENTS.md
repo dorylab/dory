@@ -42,6 +42,7 @@ Treat these as the primary source of truth:
 - `apps/admin/app`
 - `apps/admin/lib`
 - `apps/electron/main`
+- `packages/i18n/src`
 - `packages/auth-core/src`
 - `tests/e2e`
 
@@ -165,6 +166,7 @@ Preferred route flow:
 - Use `ensureConnection` for connection-backed APIs
 - UI should stay inside the existing theme system; do not ship pages or components that visually bypass the current themed component stack
 - Check `apps/web/.env.example` when adding env-dependent behavior
+- Shared i18n message JSON lives in `packages/i18n/src/locales`; do not recreate `apps/web/public/locales`.
 
 ### `apps/admin`
 

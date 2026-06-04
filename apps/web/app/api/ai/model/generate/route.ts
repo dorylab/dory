@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { ModelRole } from '@/lib/ai/model/types';
 import { resolveAiRouteExecution, requireLocalAiRouteModel, isLocalMissingAiEnvError } from '@/lib/ai/execution/route-dispatch';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
@@ -9,6 +10,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
     try {
         const body = (await req.json()) as {
             model?: string | null;
+            role?: ModelRole | null;
             callOptions?: Record<string, unknown>;
         };
 
@@ -16,7 +18,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
             req,
             db,
             organizationId,
-            role: 'chat',
+            role: body.role ?? 'chat',
             requestedModel: body.model ?? null,
             allowCloudProxy: false,
             includeModel: true,

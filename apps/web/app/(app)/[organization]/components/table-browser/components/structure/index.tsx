@@ -7,12 +7,7 @@ import { PropertiesSection, TableProperties } from './properties-section';
 import { DdlSection } from './ddl-section';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import {
-    useTableColumnInsightsQuery,
-    useTableDdlQuery,
-    useTablePropertiesQuery,
-    useTableStructureColumnsQuery,
-} from '../table-queries';
+import { useTableColumnInsightsQuery, useTableDdlQuery, useTablePropertiesQuery, useTableStructureColumnsQuery } from '../table-queries';
 
 type TableStructureProps = {
     databaseName?: string;
@@ -49,12 +44,12 @@ export default function TableStructure({ databaseName, tableName }: TableStructu
 
         return baseColumns.map(col => {
             const key = col.name.toLowerCase();
-            const hasAiSummary = Object.prototype.hasOwnProperty.call(summaries, key);
+            const hasSummary = Object.prototype.hasOwnProperty.call(summaries, key);
 
             return {
                 ...col,
                 semanticTags: tags[key] ?? [],
-                semanticSummary: hasAiSummary ? summaries[key] ?? null : null,
+                semanticSummary: hasSummary ? (summaries[key] ?? null) : null,
             };
         });
     }, [baseColumns, columnInsightsQuery.data]);
@@ -62,19 +57,13 @@ export default function TableStructure({ databaseName, tableName }: TableStructu
     const ddl = ddlQuery.data ?? null;
 
     const loadingColumns = columnsQuery.isLoading;
-    const loadingColumnTags = Boolean(baseColumns.length) && columnInsightsQuery.isFetching;
     const loadingTableProperties = propertiesQuery.isLoading;
     const loadingDdl = ddlQuery.isLoading;
 
     return (
         <ScrollArea className="h-full pr-3">
             <div className="space-y-6 pb-6">
-                <ColumnsSection
-                    tableName={tableName}
-                    loading={loadingColumns}
-                    loadingTags={loadingColumnTags}
-                    columns={columns}
-                />
+                <ColumnsSection tableName={tableName} loading={loadingColumns} columns={columns} />
                 <PropertiesSection properties={tableProperties} loading={loadingTableProperties} />
                 {/* <ConstraintsSection constraints={constraints} /> */}
                 <DdlSection ddl={ddl} loading={loadingDdl} />

@@ -115,6 +115,7 @@
                 "ConfirmDescription": "すぐにゲストワークスペースを作成します。後でサインインしても、このワークスペースはあなたのアカウントに引き継がれます。",
                 "Confirm": "ゲストワークスペースを作成",
                 "Cancel": "戻る",
+                "Starting": "ワークスペースを準備中...",
                 "StartFailed": "ゲストワークスペースの開始に失敗しました"
             },
             "Demo": {
@@ -235,13 +236,13 @@
         "Test": "テスト",
         "Connection Info": "データソース情報",
         "Authentication Info": "認証",
-        "Metadata": "メタデータ",
         "Enable": "有効化",
         "Testing Connection": "テスト中...",
         "Saving": "保存中...",
         "Creating": "作成中...",
         "Save Changes": "変更を保存",
         "Fix Form Errors Before Testing": "データソースをテストする前にフォームのエラーを修正してください",
+        "Fix Form Errors Before Saving": "データソースを保存する前にフォームのエラーを修正してください",
         "Placeholder": "プレースホルダー",
         "Missing connection id": "データソース ID がありません",
         "Connection failed": "データソースへの接続に失敗しました",
@@ -303,9 +304,7 @@
             "Choose": "選択",
             "Clear": "クリア",
             "SSH": "SSH",
-            "SSH Tunnel": "SSH トンネル",
             "SSL": "SSL",
-            "TLS/SSL": "TLS/SSL",
             "Cancel": "キャンセル",
             "Save": "保存",
             "TestConnection": "テスト",
@@ -326,7 +325,9 @@
             "Select File": "ファイルを選択",
             "Use SSL": "SSL を使用",
             "Please upload": "秘密鍵ファイルをアップロードしてください",
-            "Please enter your password": "パスワードを入力してください"
+            "Please enter your password": "パスワードを入力してください",
+            "SSH Tunnel": "SSH トンネル",
+            "TLS/SSL": "TLS/SSL"
         },
         "Api": {
             "AddFailed": "データソースの作成に失敗しました",
@@ -342,7 +343,6 @@
         "Connection Name": "データソース名",
         "Environment": "環境",
         "Tag": "タグ",
-        "Fix Form Errors Before Saving": "データソースを保存する前にフォームのエラーを修正してください",
         "ConnectionMetadata": {
             "EnvironmentOptions": {
                 "None": "環境なし",
@@ -362,7 +362,8 @@
                 "Purple": "Purple",
                 "Gray": "Gray"
             }
-        }
+        },
+        "Metadata": "メタデータ"
     },
     "SQLConsoleSidebar": {
         "Select database": "データベースを選択",
@@ -376,6 +377,7 @@
         "Failed to load databases": "データベースを読み込めませんでした",
         "Filter tables": "テーブルを絞り込み",
         "Refresh tables": "テーブルを再読み込み",
+        "Loading tables": "テーブルを読み込み中",
         "No matching tables found": "一致するテーブルが見つかりません",
         "Collapse": "折りたたむ",
         "Expand": "展開",
@@ -517,7 +519,10 @@
             "Status": "状態",
             "Label": "ラベル",
             "Name": "名前"
-        }
+        },
+        "Column summary": "列の概要",
+        "Field details": "フィールド詳細",
+        "AI explanation": "AI 説明"
     },
     "PostgresExplorer": {
         "Tabs": {
@@ -2313,19 +2318,6 @@
             "ClosePage": "ページを閉じる",
             "Hint": "アプリが自動で開かない場合は、「Dory に戻る」をクリックしてください。"
         },
-        "OrganizationAiProviders": {
-            "ApiKeyRequired": "この AI サービスには API キーが必要です。",
-            "BaseUrlRequired": "この AI サービスにはエンドポイントが必要です。",
-            "ProviderIncomplete": "デフォルトに設定する前に、この AI サービスの設定を完了してください。",
-            "UnsupportedModel": "この AI サービスでサポートされているモデルを選択してください。",
-            "UnsupportedProvider": "サポートされている AI サービスを選択してください。",
-            "OrganizationProviderUnavailableInOss": "カスタム AI を利用するには、Desktop では Dory Pro、self-hosting では Enterprise Edition が必要です。",
-            "SystemProviderReadOnly": "Dory AI は Dory によって管理されており、ここでは編集できません。",
-            "ProviderNotFound": "カスタム AI が見つかりません。",
-            "DisabledProviderCannotBeDefault": "デフォルトに設定する前に、この AI サービスを有効化してください。",
-            "SystemProviderUnavailable": "Dory AI は利用できません。",
-            "TestFailed": "AI サービスのテストに失敗しました: {reason}"
-        },
         "Connection": {
             "Errors": {
                 "Unauthorized": "認証されていないか、権限が不足しています",
@@ -2429,6 +2421,18 @@
                 "ListDatabases": {
                     "Description": "現在の Dory データソースのデータベースを一覧します。"
                 },
+                "GetTableProfile": {
+                    "Description": "データソースが対応している場合、テーブルのメタデータ、列、統計、インデックス、プロパティ、DDL を返します。"
+                },
+                "ListSavedQueries": {
+                    "Description": "現在のデータソースの保存済み SQL クエリを一覧します。"
+                },
+                "GetSavedQuery": {
+                    "Description": "現在のデータソースの保存済み SQL クエリを id で取得します。"
+                },
+                "RunAnalysis": {
+                    "Description": "結果コンテキストと現在のデータソースに対して Dory の分析アクションを実行します。"
+                },
                 "ListTables": {
                     "Description": "Dory driver のメタデータを使ってデータベース内のテーブルを一覧します。"
                 },
@@ -2438,17 +2442,8 @@
                 "GetDatabaseSummary": {
                     "Description": "オブジェクト数、サイズ推定、確認開始に適したテーブルを含むデータベース概要を返します。"
                 },
-                "GetTableProfile": {
-                    "Description": "データソースが対応している場合、テーブルのメタデータ、列、統計、インデックス、プロパティ、DDL を返します。"
-                },
                 "SearchSchema": {
                     "Description": "Dory driver のメタデータを使い、名前、型、コメントでテーブル、ビュー、列を検索します。"
-                },
-                "ListSavedQueries": {
-                    "Description": "現在のデータソースの保存済み SQL クエリを一覧します。"
-                },
-                "GetSavedQuery": {
-                    "Description": "現在のデータソースの保存済み SQL クエリを id で取得します。"
                 },
                 "GetMonitoringSummary": {
                     "Description": "クエリ監視の概要と、必要に応じてタイムライン、遅いクエリ、エラークエリのサンプルを返します。"
@@ -2461,9 +2456,6 @@
                 },
                 "BuildChartProfile": {
                     "Description": "結果行と列から Dory の自動チャートプロファイルを構築します。"
-                },
-                "RunAnalysis": {
-                    "Description": "結果コンテキストと現在のデータソースに対して Dory の分析アクションを実行します。"
                 }
             },
             "Prompt": {
@@ -2620,6 +2612,19 @@
             "LinkConsumed": "MCP 認可リクエストはすでに使用されています。",
             "LinkInvalidApproval": "MCP 認可の承認情報が不完全です。",
             "LinkApprovalUnavailable": "MCP 認可リクエストはもう更新できません。"
+        },
+        "OrganizationAiProviders": {
+            "ApiKeyRequired": "この AI サービスには API キーが必要です。",
+            "BaseUrlRequired": "この AI サービスにはエンドポイントが必要です。",
+            "ProviderIncomplete": "デフォルトに設定する前に、この AI サービスの設定を完了してください。",
+            "UnsupportedModel": "この AI サービスでサポートされているモデルを選択してください。",
+            "UnsupportedProvider": "サポートされている AI サービスを選択してください。",
+            "OrganizationProviderUnavailableInOss": "カスタム AI を利用するには、Desktop では Dory Pro、self-hosting では Enterprise Edition が必要です。",
+            "SystemProviderReadOnly": "Dory AI は Dory によって管理されており、ここでは編集できません。",
+            "ProviderNotFound": "カスタム AI が見つかりません。",
+            "DisabledProviderCannotBeDefault": "デフォルトに設定する前に、この AI サービスを有効化してください。",
+            "SystemProviderUnavailable": "Dory AI は利用できません。",
+            "TestFailed": "AI サービスのテストに失敗しました: {reason}"
         }
     },
     "McpAuthorize": {
@@ -2701,7 +2706,13 @@
                 "Nullable": "NULL 可",
                 "Column": "列",
                 "LowCardinality": "低カーディナリティ",
-                "Json": "JSON"
+                "Json": "JSON",
+                "Date": "日付",
+                "Timestamp": "タイムスタンプ",
+                "Category": "カテゴリ",
+                "Measure": "メジャー",
+                "Numeric": "数値",
+                "Text": "テキスト"
             },
             "Summary": {
                 "Tags": "タグ: {tags}",

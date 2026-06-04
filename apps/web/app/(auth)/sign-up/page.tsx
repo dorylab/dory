@@ -43,7 +43,7 @@ export default async function SignUpPage() {
             )}
         >
             <RuntimeHint className="absolute right-4 top-4 z-20" />
-            <div className="relative z-20 w-full max-w-md">
+            <div className="relative z-20 w-full max-w-2xl">
                 <SignUpForm />
             </div>
             <HeroBackground className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center" />
