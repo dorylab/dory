@@ -36,18 +36,12 @@ export const dynamic = 'force-dynamic';
 //     variable: '--font-manrope',
 //     display: 'swap',
 // });
-export default async function SignInPage({
-    searchParams,
-}: {
-    searchParams: Promise<{ callbackURL?: string }>;
-}) {
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ callbackURL?: string }> }) {
     const cookieStore = await cookies();
     const { callbackURL } = await searchParams;
     const recoveryToken = cookieStore.get(getAnonymousRecoveryCookieName())?.value;
     const session = await getSessionFromRequest();
-    const resumeAnonymousSession = shouldProxyAuthRequest()
-        ? Boolean(recoveryToken)
-        : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
+    const resumeAnonymousSession = shouldProxyAuthRequest() ? Boolean(recoveryToken) : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
 
     if (session) {
         redirect(callbackURL && callbackURL !== '/sign-in' ? callbackURL : '/');
@@ -66,10 +60,8 @@ export default async function SignInPage({
                 <ModeToggle />
                 <RuntimeHint />
             </div>
-            <div className="relative z-20 w-full max-w-md">
-                <SignInForm
-                    resumeAnonymousSession={resumeAnonymousSession}
-                />
+            <div className="relative z-20 w-full max-w-[30rem]">
+                <SignInForm resumeAnonymousSession={resumeAnonymousSession} />
             </div>
             {/* <div className="absolute z-10 inset-0 h-full w-full bg-[#0f172a]">
 

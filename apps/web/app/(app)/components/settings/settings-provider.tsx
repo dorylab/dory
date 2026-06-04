@@ -17,6 +17,7 @@ export function SettingsProvider({
     children,
     includeOrganizationSettings = false,
     includeBillingSettings = false,
+    currentOrganizationId = null,
     runtime = null,
     billingManagementAvailable = false,
     desktopBillingHandoff = false,
@@ -24,6 +25,7 @@ export function SettingsProvider({
     children: React.ReactNode;
     includeOrganizationSettings?: boolean;
     includeBillingSettings?: boolean;
+    currentOrganizationId?: string | null;
     runtime?: string | null;
     billingManagementAvailable?: boolean;
     desktopBillingHandoff?: boolean;
@@ -60,6 +62,7 @@ export function SettingsProvider({
                 onActiveCategoryChange={setActiveCategory}
                 includeOrganizationSettings={includeOrganizationSettings}
                 includeBillingSettings={includeBillingSettings}
+                currentOrganizationId={currentOrganizationId}
                 runtime={runtime}
                 billingManagementAvailable={billingManagementAvailable}
                 desktopBillingHandoff={desktopBillingHandoff}

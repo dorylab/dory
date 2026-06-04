@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useParams } from 'next/navigation';
 
 import { authClient } from '@/lib/auth-client';
 import { isDesktopRuntime } from '@dory/shared/runtime';
@@ -19,9 +20,13 @@ function logMcpRecoveryError(error: unknown) {
     window.logBridge?.log('warn', '[mcp] automatic recovery failed:', error instanceof Error ? error.message : String(error));
 }
 
-async function issueMcpDesktopGrant(): Promise<string> {
+async function issueMcpDesktopGrant(organizationSlugOrId?: string): Promise<string> {
     const response = await fetch('/api/mcp/desktop-grant', {
         method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ organizationSlugOrId }),
         credentials: 'include',
     });
     const json = await response.json().catch(() => null);
@@ -33,6 +38,8 @@ async function issueMcpDesktopGrant(): Promise<string> {
 
 export function SessionRecoverySync() {
     const { data: session } = authClient.useSession();
+    const params = useParams<{ organization?: string }>();
+    const organizationSlugOrId = params.organization;
     const mcpSyncRunIdRef = React.useRef(0);
     const previousUserIdRef = React.useRef<string | null | undefined>(undefined);
 
@@ -69,7 +76,7 @@ export function SessionRecoverySync() {
                         return;
                     }
 
-                    const grant = await issueMcpDesktopGrant();
+                    const grant = await issueMcpDesktopGrant(organizationSlugOrId);
                     if (syncRunId !== mcpSyncRunIdRef.current) {
                         return;
                     }
@@ -84,7 +91,7 @@ export function SessionRecoverySync() {
         };
 
         void syncMcpProxy();
-    }, [session?.user?.id]);
+    }, [organizationSlugOrId, session?.user?.id]);
 
     return null;
 }

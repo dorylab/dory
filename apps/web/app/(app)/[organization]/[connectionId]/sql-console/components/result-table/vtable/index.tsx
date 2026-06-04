@@ -895,8 +895,13 @@ export default function VTable({
                 )}
                 onMouseDown={e => onCellMouseDown(e, r, colKeyName)}
                 onMouseEnter={e => onCellMouseEnter(e, r, colKeyName)}
+                onDoubleClick={e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openCellInspector(r, colKeyName);
+                }}
                 onKeyDown={e => onCellKeyDown(e, r, colKeyName)}
-                onContextMenu={e => {
+                onContextMenu={() => {
                     
                     if (!isCellAlreadySelected(r, colKeyName)) {
                         clearAllSelections({ preserveCellAnchor: true, preserveRowAnchor: true });

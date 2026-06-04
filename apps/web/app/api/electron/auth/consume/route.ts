@@ -1,6 +1,7 @@
 import { getAuth } from '@/lib/auth';
 import { buildSessionOrganizationPatch } from '@/lib/auth/migration-state';
 import { linkAnonymousOrganizationToUser } from '@/lib/auth/anonymous-lifecycle/link';
+import { appendClearAnonymousRecoveryCookieHeader } from '@/lib/auth/anonymous-recovery';
 import { serializeSignedCookie } from 'better-call';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { getClient } from '@dory/database/postgres/client';
@@ -67,7 +68,7 @@ async function resolveLocalTicketUser(user: TicketUser): Promise<TicketUser | nu
     };
 }
 
-async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: string | null; anonymousActiveOrganizationId?: string | null }) {
+async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: string | null; anonymousActiveOrganizationId?: string | null; requestUrl?: string | null }) {
     const auth = await getAuth();
     const ctx = await auth.$context;
 
@@ -113,8 +114,9 @@ async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: 
         await ctx.internalAdapter.updateSession(session.token, sessionPatch);
     }
 
+    let linkedAnonymousUser = false;
     if (params.anonymousUserId && params.anonymousUserId !== user.id) {
-        await linkAnonymousUserLocally({
+        linkedAnonymousUser = await linkAnonymousUserLocally({
             anonymousUserId: params.anonymousUserId,
             anonymousActiveOrganizationId: params.anonymousActiveOrganizationId ?? null,
             newUserId: user.id,
@@ -133,6 +135,9 @@ async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: 
 
     const res = NextResponse.json({ ok: true });
     res.headers.append('set-cookie', cookie);
+    if (linkedAnonymousUser) {
+        appendClearAnonymousRecoveryCookieHeader(res.headers, params.requestUrl);
+    }
     return res;
 }
 
@@ -142,7 +147,7 @@ async function linkAnonymousUserLocally(params: {
     newUserId: string;
     newActiveOrganizationId: string | null;
     newSessionToken?: string | null;
-}) {
+}): Promise<boolean> {
     try {
         const db = await getClient();
         const [anonUser] = await db
@@ -155,7 +160,7 @@ async function linkAnonymousUserLocally(params: {
             console.log('[electron-auth][consume] anonymous user not found or not anonymous locally, skipping link', {
                 anonymousUserId: params.anonymousUserId,
             });
-            return;
+            return false;
         }
 
         await linkAnonymousOrganizationToUser({
@@ -170,8 +175,10 @@ async function linkAnonymousUserLocally(params: {
             anonymousUserId: params.anonymousUserId,
             newUserId: params.newUserId,
         });
+        return true;
     } catch (err) {
         console.error('[electron-auth][consume] failed to link anonymous org locally', err);
+        return false;
     }
 }
 
@@ -192,7 +199,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'invalid_request_body' }, { status: 400 });
         }
 
-        const { anonymousUserId, anonymousActiveOrganizationId } = parsed.data;
+        const { anonymousUserId } = parsed.data;
 
         console.log('[electron-auth][consume] proxying request', {
             hasAnonymousUserId: Boolean(anonymousUserId),
@@ -211,6 +218,16 @@ export async function POST(req: Request) {
             status: response.status,
         });
 
+        if (response.ok && anonymousUserId) {
+            const responseHeaders = new Headers(response.headers);
+            appendClearAnonymousRecoveryCookieHeader(responseHeaders, req.url);
+            return new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: responseHeaders,
+            });
+        }
+
         return response;
     }
 
@@ -220,5 +237,8 @@ export async function POST(req: Request) {
         ticketPrefix: body.ticket.slice(0, 16),
         hasAnonymousUserId: Boolean(body.anonymousUserId),
     });
-    return consumeTicketLocally(body);
+    return consumeTicketLocally({
+        ...body,
+        requestUrl: req.url,
+    });
 }

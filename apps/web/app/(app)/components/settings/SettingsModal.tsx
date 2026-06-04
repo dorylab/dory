@@ -16,6 +16,7 @@ export function SettingsModal({
     onActiveCategoryChange,
     includeOrganizationSettings = false,
     includeBillingSettings = false,
+    currentOrganizationId = null,
     runtime = null,
     billingManagementAvailable = false,
     desktopBillingHandoff = false,
@@ -26,6 +27,7 @@ export function SettingsModal({
     onActiveCategoryChange?: (category: CategoryKey) => void;
     includeOrganizationSettings?: boolean;
     includeBillingSettings?: boolean;
+    currentOrganizationId?: string | null;
     runtime?: string | null;
     billingManagementAvailable?: boolean;
     desktopBillingHandoff?: boolean;
@@ -64,6 +66,7 @@ export function SettingsModal({
                     <SettingsContent
                         active={resolvedActiveCategory}
                         categories={categories}
+                        currentOrganizationId={currentOrganizationId}
                         runtime={runtime}
                         billingManagementAvailable={billingManagementAvailable}
                         desktopBillingHandoff={desktopBillingHandoff}
