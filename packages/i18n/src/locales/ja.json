@@ -187,6 +187,7 @@
         "Connections": "データソース",
         "All Connections": "すべてのデータソース",
         "about": "情報",
+        "MoreActions": "その他の操作",
         "Search": {
             "placeholder": "データソースを検索",
             "emptyTitle": "一致するデータソースがありません",
@@ -223,6 +224,7 @@
         "Password": "パスワード",
         "Connect": "接続",
         "Cancel": "キャンセル",
+        "Edit": "編集",
         "Delete": "削除",
         "Test": "テスト",
         "Connection Info": "データソース情報",

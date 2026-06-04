@@ -4,10 +4,11 @@ import { MotionHighlight } from '@/components/animate-ui/effects/motion-highligh
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
 import { cn } from '@dory/web-utils';
-import { Edit2, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
+import { Edit2, EllipsisVertical, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
@@ -108,7 +109,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
             <div
                 data-testid="connection-card"
                 data-connection-id={id}
-                className="flex cursor-pointer flex-col rounded-xl border p-4"
+                className="group flex cursor-pointer flex-col rounded-xl border p-4"
                 onClick={() => {
                     if (!connectLoading) {
                         onConnect(connectionItem, true);
@@ -165,59 +166,54 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                     <OverflowTooltip text={locationLabel} className="block min-w-0 max-w-full truncate text-sm text-muted-foreground" />
                 </div>
 
-                {(environmentOption || tagColorOption) && (
-                    <div className="ml-1.5 mt-3 flex min-h-6 flex-wrap items-center gap-1.5">
-                        {environmentOption ? (
-                            <Badge variant="outline" className="border-border bg-muted/60 text-[11px] text-muted-foreground">
-                                {t(environmentOption.translationKey)}
-                            </Badge>
-                        ) : null}
+                <div className="ml-1.5 mt-3 flex min-h-6 min-w-0 items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                         {tagColorOption ? (
                             <Badge variant="outline" className={cn('gap-1.5 text-[11px]', tagColorOption.badgeClassName)}>
                                 <span className={cn('h-2 w-2 rounded-full', tagColorOption.swatchClassName)} />
                                 {t(tagColorOption.translationKey)}
                             </Badge>
                         ) : null}
+                        {environmentOption ? (
+                            <Badge variant="outline" className="border-border bg-muted/60 text-[11px] text-muted-foreground">
+                                {t(environmentOption.translationKey)}
+                            </Badge>
+                        ) : null}
                     </div>
-                )}
-
-                <div className="flex justify-between">
-                    <Tooltip>
-                        <TooltipTrigger asChild aria-hidden={false}>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                             <Button
                                 variant="ghost"
-                                className="group h-8 w-8 cursor-pointer text-n4 hover:text-n1 dark:text-n6 dark:hover:text-n1"
+                                size="icon-xs"
+                                className="shrink-0 cursor-pointer text-n4 hover:text-n1 dark:text-n6 dark:hover:text-n1"
                                 onClick={e => {
                                     e.stopPropagation();
+                                }}
+                                aria-label={t('MoreActions')}
+                            >
+                                <EllipsisVertical className="size-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+                            <DropdownMenuItem
+                                onClick={() => {
                                     onEdit(connectionItem);
                                 }}
                             >
                                 <Edit2 className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>{t('ConnectionContent.Edit.title')}</p>
-                        </TooltipContent>
-                    </Tooltip>
-
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 cursor-pointer text-n4 hover:text-n1 dark:text-n6 dark:hover:text-n1"
-                                onClick={e => {
-                                    e.stopPropagation();
+                                {t('Edit')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => {
                                     onDeleteRequest?.(connectionItem);
                                 }}
                             >
                                 <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>{t('ConnectionContent.Delete')}</p>
-                        </TooltipContent>
-                    </Tooltip>
+                                {t('Delete')}
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 </div>
             </div>
         </MotionHighlight>

@@ -187,6 +187,7 @@
         "Connections": "Data sources",
         "All Connections": "All data sources",
         "about": "about",
+        "MoreActions": "More actions",
         "Search": {
             "placeholder": "Search data sources",
             "emptyTitle": "No matching data sources",
@@ -223,6 +224,7 @@
         "Password": "Password",
         "Connect": "Connect",
         "Cancel": "Cancel",
+        "Edit": "Edit",
         "Delete": "Delete",
         "Test": "Test",
         "Connection Info": "Data source info",

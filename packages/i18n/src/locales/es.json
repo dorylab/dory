@@ -187,6 +187,7 @@
         "Connections": "Fuentes de datos",
         "All Connections": "Todas las fuentes de datos",
         "about": "acerca de",
+        "MoreActions": "Más acciones",
         "Search": {
             "placeholder": "Buscar fuentes de datos",
             "emptyTitle": "No hay fuentes de datos coincidentes",
@@ -223,6 +224,7 @@
         "Password": "Contraseña",
         "Connect": "Conectar",
         "Cancel": "Cancelar",
+        "Edit": "Editar",
         "Delete": "Eliminar",
         "Test": "Probar",
         "Connection Info": "Información de la fuente de datos",

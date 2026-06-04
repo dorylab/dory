@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 import { IconBrandGithub } from '@tabler/icons-react';
 import { parseEnvFlag } from '@/lib/env';
 import { env } from 'next-runtime-env';
+import { getEmailVerificationCallbackURL } from '@/lib/client/auth-runtime';
 
 type Stage = 'form' | 'verify';
 
@@ -42,7 +43,7 @@ export function SignUpForm({ className, callbackURL: callbackURLOverride, onRequ
             const email = String(fd.get('email') ?? '').trim();
             const password = String(fd.get('password') ?? '');
             const name = String(fd.get('name') ?? (email.split('@')[0] || ''));
-            const callbackURL = callbackURLOverride || (window.authBridge?.openExternal ? 'dory://auth-complete' : '/');
+            const callbackURL = getEmailVerificationCallbackURL(callbackURLOverride || '/');
 
             const { error } = await authClient.signUp.email(
                 { name, email, password, callbackURL },
@@ -62,7 +63,7 @@ export function SignUpForm({ className, callbackURL: callbackURLOverride, onRequ
                     setEmailForVerify(email);
                     setStage('verify');
                 } else {
-                    window.location.href = callbackURL;
+                    window.location.href = callbackURLOverride || '/';
                 }
             } else {
                 // Keep user on the form for regular errors (e.g. email already exists).
@@ -88,6 +89,7 @@ export function SignUpForm({ className, callbackURL: callbackURLOverride, onRequ
             <div className={cn('flex flex-col gap-6', className)} {...props}>
                 <VerifyEmailPanel
                     defaultEmail={emailForVerify}
+                    callbackURL={callbackURLOverride || '/'}
                     onChangeEmail={newEmail => {
                         //Return to the registration form and fill in the new email address
                         setStage('form');

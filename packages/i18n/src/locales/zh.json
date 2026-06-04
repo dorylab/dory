@@ -192,6 +192,7 @@
         "All Connections": "全部数据源",
         "Connecting": "连接中...",
         "about": "关于",
+        "MoreActions": "更多操作",
         "Search": {
             "placeholder": "搜索数据源...",
             "emptyTitle": "未找到匹配的数据源",
@@ -227,6 +228,7 @@
         "Password": "密码",
         "Connect": "连接",
         "Cancel": "取消",
+        "Edit": "编辑",
         "Delete": "删除",
         "Test": "测试",
         "Connection Info": "数据源信息",
