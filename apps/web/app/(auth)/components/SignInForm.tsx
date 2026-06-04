@@ -40,10 +40,12 @@ export function SignInForm({
     const [pwd, setPwd] = useState('');
     const [err, setErr] = useState<string | null>(null);
     const [msg, setMsg] = useState<string | null>(null);
-    const [secondaryActionLoading, setSecondaryActionLoading] = useState(false);
+    const [guestActionLoading, setGuestActionLoading] = useState(false);
+    const [demoActionLoading, setDemoActionLoading] = useState(false);
     const { data: session, refetch: refetchSession } = authClient.useSession();
     const callbackURL = callbackURLOverride || searchParams?.get('callbackURL') || '/';
     const canShowDemoOption = showDemoOption;
+    const secondaryActionLoading = guestActionLoading || demoActionLoading;
 
     async function recoverAnonymousSessionIfNeeded() {
         if (!session?.user?.isAnonymous && !resumeAnonymousSession) {
@@ -127,9 +129,11 @@ export function SignInForm({
     }
 
     async function onGuestContinue() {
+        if (loading || secondaryActionLoading) return;
+
         setErr(null);
         setMsg(null);
-        setSecondaryActionLoading(true);
+        setGuestActionLoading(true);
 
         try {
             if (resumeAnonymousSession) {
@@ -164,14 +168,16 @@ export function SignInForm({
         } catch (nextError) {
             setErr(nextError instanceof Error ? nextError.message : t('SignIn.Guest.StartFailed'));
         } finally {
-            setSecondaryActionLoading(false);
+            setGuestActionLoading(false);
         }
     }
 
     async function onDemoContinue() {
+        if (loading || secondaryActionLoading) return;
+
         setErr(null);
         setMsg(null);
-        setSecondaryActionLoading(true);
+        setDemoActionLoading(true);
 
         try {
             const response = await fetch('/api/auth/demo', {
@@ -190,7 +196,7 @@ export function SignInForm({
         } catch (nextError) {
             setErr(nextError instanceof Error ? nextError.message : t('SignIn.Demo.StartFailed'));
         } finally {
-            setSecondaryActionLoading(false);
+            setDemoActionLoading(false);
         }
     }
 
@@ -254,7 +260,7 @@ export function SignInForm({
                                         }}
                                         data-testid="guest-sign-in"
                                     >
-                                        {secondaryActionLoading ? t('SignIn.Submitting') : resumeAnonymousSession ? t('SignIn.Guest.ResumeAction') : t('SignIn.Guest.Action')}
+                                        {guestActionLoading ? t('SignIn.Submitting') : resumeAnonymousSession ? t('SignIn.Guest.ResumeAction') : t('SignIn.Guest.Action')}
                                     </Button>
                                 ) : null}
 
@@ -269,7 +275,7 @@ export function SignInForm({
                                         }}
                                         data-testid="demo-sign-in"
                                     >
-                                        {secondaryActionLoading ? t('SignIn.Submitting') : t('SignIn.Demo.Action')}
+                                        {demoActionLoading ? t('SignIn.Submitting') : t('SignIn.Demo.Action')}
                                     </Button>
                                 ) : null}
 
