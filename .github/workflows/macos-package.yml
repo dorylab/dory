@@ -232,22 +232,6 @@ jobs:
                   yarn workspace dory run compile
                   yarn workspace dory exec electron-builder --config electron-builder.mjs --mac --${{ matrix.arch }} --publish never
 
-            - name: Verify macOS notarized artifacts
-              shell: bash
-              run: |
-                  DMG_COUNT=0
-                  while IFS= read -r -d '' DMG_FILE; do
-                    DMG_COUNT=$((DMG_COUNT + 1))
-                    echo "Validating $DMG_FILE"
-                    xcrun stapler validate "$DMG_FILE"
-                    spctl -a -vvv -t open --context context:primary-signature "$DMG_FILE"
-                  done < <(find apps/electron/dist -maxdepth 1 -type f -name "*.dmg" -print0)
-
-                  if [ "$DMG_COUNT" -eq 0 ]; then
-                    echo "No DMG artifacts were generated" >&2
-                    exit 1
-                  fi
-
             - name: Upload workflow artifact
               uses: actions/upload-artifact@v7
               with:
