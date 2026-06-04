@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { type FieldErrors, type FieldValues, type Resolver, useForm, useWatch } from 'react-hook-form';
-import { Cable, KeyRound, Loader2, Lock, Server, Shield, Tags, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { FlaskConical, KeyRound, Loader2, Lock, Server, Shield, Tags, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import { cn } from '@dory/web-utils';
@@ -108,6 +108,15 @@ function ConnectionFormGroupLabel({ icon: Icon, children }: { icon: LucideIcon; 
             <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
             <span>{children}</span>
         </p>
+    );
+}
+
+function ConnectionFormSectionHeader({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+    return (
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span>{children}</span>
+        </div>
     );
 }
 
@@ -508,9 +517,9 @@ export function ConnectionDialog({
                                     ) : null}
 
                                     {activeSection === 'ssh' && !hidesSshForm ? (
-                                        <section className="space-y-4">
-                                            <div className="flex items-center justify-between gap-3 border-b pb-4">
-                                                <ConnectionFormGroupLabel icon={Shield}>{tc('SSH Tunnel')}</ConnectionFormGroupLabel>
+                                        <section className="space-y-5">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <ConnectionFormSectionHeader icon={Shield}>{tc('SSH Tunnel')}</ConnectionFormSectionHeader>
                                                 <FormField
                                                     control={control}
                                                     name="ssh.enabled"
@@ -529,28 +538,8 @@ export function ConnectionDialog({
                                     ) : null}
 
                                     {activeSection === 'tls' && !hidesTlsForm ? (
-                                        <section className="space-y-4">
-                                            <div className="flex items-center justify-between gap-3 border-b pb-4">
-                                                <ConnectionFormGroupLabel icon={Lock}>{tc('TLS/SSL')}</ConnectionFormGroupLabel>
-                                                <FormField
-                                                    control={control}
-                                                    name="tls.mode"
-                                                    render={({ field }) => (
-                                                        <FormItem className="flex items-center gap-2">
-                                                            <FormLabel className="text-xs text-muted-foreground">{t('Enable')}</FormLabel>
-                                                            <FormControl>
-                                                                <Switch
-                                                                    checked={field.value !== 'disable'}
-                                                                    onCheckedChange={checked => {
-                                                                        const nextMode = checked ? 'require' : 'disable';
-                                                                        field.onChange(nextMode);
-                                                                    }}
-                                                                />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
-                                            </div>
+                                        <section className="space-y-5">
+                                            <ConnectionFormSectionHeader icon={Lock}>{tc('TLS/SSL')}</ConnectionFormSectionHeader>
                                             <TLSConnectionForm form={form} connectionType={connectionType} />
                                         </section>
                                     ) : null}
@@ -567,8 +556,8 @@ export function ConnectionDialog({
 
                         <DialogFooter className="flex shrink-0 border-t bg-background px-5 py-4 lg:justify-between">
                             <div>
-                                <Button type="button" onClick={handleTestConnection} disabled={submitting || testing} data-testid="test-connection">
-                                    {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Cable className="mr-2 h-4 w-4" />}
+                                <Button type="button" size="sm" className="gap-1" onClick={handleTestConnection} disabled={submitting || testing} data-testid="test-connection">
+                                    {testing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="mr-1 h-3.5 w-3.5" />}
                                     {testing ? t('Testing Connection') : tc('TestConnection')}
                                 </Button>
                             </div>

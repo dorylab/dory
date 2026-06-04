@@ -20,10 +20,19 @@ type SignInFormProps = React.ComponentProps<'div'> & {
     callbackURL?: string;
     onRequestSignUp?: () => void;
     showGuestOption?: boolean;
+    showDemoOption?: boolean;
     resumeAnonymousSession?: boolean;
 };
 
-export function SignInForm({ className, callbackURL: callbackURLOverride, onRequestSignUp, showGuestOption = true, resumeAnonymousSession = false, ...props }: SignInFormProps) {
+export function SignInForm({
+    className,
+    callbackURL: callbackURLOverride,
+    onRequestSignUp,
+    showGuestOption = true,
+    showDemoOption = false,
+    resumeAnonymousSession = false,
+    ...props
+}: SignInFormProps) {
     const t = useTranslations('Auth');
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -33,6 +42,7 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
     const [err, setErr] = useState<string | null>(null);
     const [msg, setMsg] = useState<string | null>(null);
     const [guestActionLoading, setGuestActionLoading] = useState(false);
+    const [demoActionLoading, setDemoActionLoading] = useState(false);
     const { data: session } = authClient.useSession();
     const callbackURL = callbackURLOverride || searchParams?.get('callbackURL') || '/';
 
@@ -166,6 +176,39 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
         }
     }
 
+    async function onDemoContinue() {
+        if (demoActionLoading) return;
+
+        setErr(null);
+        setMsg(null);
+        setDemoActionLoading(true);
+
+        try {
+            const response = await fetch('/api/auth/demo', {
+                method: 'POST',
+                credentials: 'include',
+            });
+            const payload = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(typeof payload?.error === 'string' ? payload.error : t('SignIn.Demo.StartFailed'));
+            }
+
+            const organizationSlug = typeof payload?.organizationSlug === 'string' ? payload.organizationSlug : null;
+            const destination = callbackURL && callbackURL !== '/' ? callbackURL : organizationSlug ? `/${organizationSlug}/connections` : '/';
+
+            posthog.capture('user_signed_in', { method: 'demo' });
+            router.refresh();
+            router.push(destination);
+        } catch (nextError) {
+            const message = nextError instanceof Error ? nextError.message : t('SignIn.Demo.StartFailed');
+            setErr(message);
+            posthog.capture('user_sign_in_failed', { method: 'demo', error: message });
+        } finally {
+            setDemoActionLoading(false);
+        }
+    }
+
     return (
         <>
             <div className={cn('flex min-w-0 flex-col gap-6', className)} {...props}>
@@ -267,6 +310,27 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
                                 <Button type="submit" className="w-full" disabled={loading}>
                                     {loading ? t('SignIn.Submitting') : t('SignIn.Submit')}
                                 </Button>
+
+                                {showDemoOption ? (
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        className="w-full"
+                                        disabled={demoActionLoading || loading}
+                                        aria-busy={demoActionLoading}
+                                        onClick={() => void onDemoContinue()}
+                                        data-testid="demo-sign-in"
+                                    >
+                                        {demoActionLoading ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                                <span>{t('SignIn.Submitting')}</span>
+                                            </>
+                                        ) : (
+                                            t('SignIn.Demo.Action')
+                                        )}
+                                    </Button>
+                                ) : null}
 
                                 <div className="space-y-2 text-center text-sm">
                                     <div>

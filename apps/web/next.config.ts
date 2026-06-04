@@ -12,6 +12,8 @@ const desktopRuntimeAliases: Record<string, string> = isDesktopRuntime
           '@/lib/auth/auth-proxy': './lib/auth/auth-proxy.desktop.ts',
           '@/components/session-recovery-sync': './components/session-recovery-sync.desktop.tsx',
           '@/app/(auth)/components/SignInForm': './app/(auth)/components/SignInForm.desktop.tsx',
+          '@/app/(app)/[organization]/connections/components/forms/tls/certificate-field':
+              './app/(app)/[organization]/connections/components/forms/tls/certificate-field.desktop.tsx',
       }
     : {};
 const desktopRuntimeWebpackAliases = Object.fromEntries(Object.entries(desktopRuntimeAliases).map(([key, value]) => [key, path.resolve(__dirname, value)]));
