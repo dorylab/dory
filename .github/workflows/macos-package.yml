@@ -240,7 +240,7 @@ jobs:
                     DMG_COUNT=$((DMG_COUNT + 1))
                     echo "Validating $DMG_FILE"
                     xcrun stapler validate "$DMG_FILE"
-                    spctl -a -vvv -t open "$DMG_FILE"
+                    spctl -a -vvv -t open --context context:primary-signature "$DMG_FILE"
                   done < <(find apps/electron/dist -maxdepth 1 -type f -name "*.dmg" -print0)
 
                   if [ "$DMG_COUNT" -eq 0 ]; then
