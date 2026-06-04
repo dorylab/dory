@@ -202,6 +202,10 @@
             "emptyDescription": "未找到符合 \"{query}\" 的数据源。",
             "emptyHint": "尝试其他关键词，或清空搜索"
         },
+        "Filters": {
+            "Label": "筛选",
+            "Clear": "清空筛选"
+        },
         "Empty": {
             "title": "连接数据源或打开文件",
             "description": "Dory 是面向 SQL 与 AI 的现代数据工作台，添加数据源或打开本地文件即可开始探索。",

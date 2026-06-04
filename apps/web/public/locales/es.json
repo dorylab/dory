@@ -197,6 +197,10 @@
             "emptyDescription": "No pudimos encontrar fuentes de datos para \"{query}\".",
             "emptyHint": "Prueba otra palabra clave o borra la búsqueda"
         },
+        "Filters": {
+            "Label": "Filtrar",
+            "Clear": "Borrar filtros"
+        },
         "Empty": {
             "title": "Conecta una fuente de datos o abre un archivo",
             "description": "Dory es un espacio de trabajo moderno para SQL e IA. Añade una fuente de datos o abre archivos locales para empezar a explorar.",

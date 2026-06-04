@@ -4,7 +4,8 @@ import { useTranslations } from 'next-intl';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Search } from '@/components/animate-ui/icons/search';
 import { useEffect, useId, useMemo } from 'react';
-import { connectionSearchQueryAtom, connectionsAtom, searchResultAtom } from '../states';
+import { connectionEnvironmentFilterAtom, connectionSearchQueryAtom, connectionTagFilterAtom, connectionsAtom, searchResultAtom } from '../states';
+import { normalizeConnectionEnvironmentValue, normalizeConnectionTagColorValue } from '../constants';
 
 const options: IFuseOptions<any> = {
     keys: [
@@ -28,6 +29,8 @@ const options: IFuseOptions<any> = {
 export function ConnectionSearch() {
     const t = useTranslations('Connections');
     const connections = useAtomValue(connectionsAtom);
+    const environmentFilters = useAtomValue(connectionEnvironmentFilterAtom);
+    const tagFilters = useAtomValue(connectionTagFilterAtom);
     const id = useId();
     const setSearchResult = useSetAtom(searchResultAtom);
     const [searchQuery, setSearchQuery] = useAtom(connectionSearchQueryAtom);
@@ -36,12 +39,17 @@ export function ConnectionSearch() {
     const trimmedSearchQuery = searchQuery.trim();
 
     useEffect(() => {
-        if (trimmedSearchQuery) {
-            setSearchResult(fuse.search(trimmedSearchQuery).map(item => item.item));
-        } else {
-            setSearchResult(connections ?? []);
-        }
-    }, [connections, fuse, setSearchResult, trimmedSearchQuery]);
+        const searchMatches = trimmedSearchQuery ? fuse.search(trimmedSearchQuery).map(item => item.item) : (connections ?? []);
+        const nextResults = searchMatches.filter(item => {
+            const environment = normalizeConnectionEnvironmentValue(item.connection.environment);
+            const tag = normalizeConnectionTagColorValue(item.connection.tags);
+            const matchesEnvironment = environmentFilters.length === 0 || environmentFilters.includes(environment);
+            const matchesTag = tagFilters.length === 0 || tagFilters.includes(tag);
+            return matchesEnvironment && matchesTag;
+        });
+
+        setSearchResult(nextResults);
+    }, [connections, environmentFilters, fuse, setSearchResult, tagFilters, trimmedSearchQuery]);
 
     return (
         <div className="*:not-first:mt-2">

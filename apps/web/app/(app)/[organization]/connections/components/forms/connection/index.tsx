@@ -1,10 +1,8 @@
 import { type FieldValues, UseFormReturn, useWatch } from 'react-hook-form';
-import { Check } from 'lucide-react';
+import { Check, CircleOff, Code2, FlaskConical, Rocket, User, Users } from 'lucide-react';
 import { cn } from '@dory/web-utils';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
-import { Label } from '@/registry/new-york-v4/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/registry/new-york-v4/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { useTranslations } from 'next-intl';
 import RequiredMark from '../../require-mark';
@@ -12,8 +10,17 @@ import { CONNECTION_TYPE_OPTIONS, getConnectionDriver } from './drivers';
 import { DatabaseTypeIcon } from '../../database-type-icon';
 import { createTlsDefaultsForConnectionType } from '../tls/utils';
 import { CONNECTION_ENVIRONMENT_OPTIONS, CONNECTION_TAG_COLOR_OPTIONS, normalizeConnectionEnvironmentValue, normalizeConnectionTagColorValue } from '../../../constants';
+import type { ConnectionEnvironmentValue } from '../../../constants';
 
-const EMPTY_ENVIRONMENT_RADIO_VALUE = '__none__';
+const EMPTY_ENVIRONMENT_SELECT_VALUE = '__none__';
+const ENVIRONMENT_OPTION_ICONS = {
+    '': CircleOff,
+    dev: Code2,
+    staging: FlaskConical,
+    prod: Rocket,
+    personal: User,
+    shared: Users,
+} satisfies Record<ConnectionEnvironmentValue, typeof CircleOff>;
 
 export default function ConnectionForm(props: { form: UseFormReturn<FieldValues> }) {
     const { form } = props;
@@ -140,30 +147,34 @@ export function ConnectionMetadataForm(props: { form: UseFormReturn<FieldValues>
                 name="connection.environment"
                 render={({ field }) => {
                     const environmentValue = normalizeConnectionEnvironmentValue(field.value);
+                    const selectedEnvironmentOption = CONNECTION_ENVIRONMENT_OPTIONS.find(option => option.value === environmentValue) ?? CONNECTION_ENVIRONMENT_OPTIONS[0];
+                    const SelectedEnvironmentIcon = ENVIRONMENT_OPTION_ICONS[selectedEnvironmentOption.value];
 
                     return (
                         <FormItem className="space-y-2">
                             <FormLabel>{tc('Environment')}</FormLabel>
-                            <FormControl>
-                                <RadioGroup
-                                    className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2"
-                                    value={environmentValue || EMPTY_ENVIRONMENT_RADIO_VALUE}
-                                    onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_RADIO_VALUE ? '' : value)}
-                                >
-                                    {CONNECTION_ENVIRONMENT_OPTIONS.map(option => (
-                                        <div key={option.value || 'none'} className="flex items-center gap-1.5">
-                                            <RadioGroupItem
-                                                id={`connection-environment-${option.value || 'none'}`}
-                                                value={option.value || EMPTY_ENVIRONMENT_RADIO_VALUE}
-                                                className="cursor-pointer"
-                                            />
-                                            <Label htmlFor={`connection-environment-${option.value || 'none'}`} className="cursor-pointer text-sm text-muted-foreground">
+                            <Select value={environmentValue || EMPTY_ENVIRONMENT_SELECT_VALUE} onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_SELECT_VALUE ? '' : value)}>
+                                <FormControl>
+                                    <SelectTrigger className="w-full max-w-64">
+                                        <span className="flex min-w-0 items-center gap-2">
+                                            <SelectedEnvironmentIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                            <SelectValue>{tc(selectedEnvironmentOption.translationKey)}</SelectValue>
+                                        </span>
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent align="start">
+                                    {CONNECTION_ENVIRONMENT_OPTIONS.map(option => {
+                                        const Icon = ENVIRONMENT_OPTION_ICONS[option.value];
+
+                                        return (
+                                            <SelectItem key={option.value || 'none'} value={option.value || EMPTY_ENVIRONMENT_SELECT_VALUE}>
+                                                <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                                                 {tc(option.translationKey)}
-                                            </Label>
-                                        </div>
-                                    ))}
-                                </RadioGroup>
-                            </FormControl>
+                                            </SelectItem>
+                                        );
+                                    })}
+                                </SelectContent>
+                            </Select>
                             <FormMessage />
                         </FormItem>
                     );
