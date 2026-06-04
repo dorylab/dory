@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Label } from '@/registry/new-york-v4/ui/label';
@@ -15,6 +16,7 @@ export function VerifyEmailPanel(props: {
     callbackURL?: string;
     onChangeEmail?: (email: string) => void; //Optional: Allow changing mailboxes within the panel
     onRequestSignIn?: () => void;
+    className?: string;
 }) {
     const t = useTranslations('Auth');
     const { data: session } = authClient.useSession();
@@ -112,7 +114,7 @@ export function VerifyEmailPanel(props: {
     }
 
     return (
-        <div className="rounded-xl border border-border bg-card text-card-foreground p-4 md:p-6 space-y-4">
+        <div className={cn('w-full space-y-4 rounded-xl border border-border bg-card p-4 text-card-foreground md:p-6', props.className)}>
             <div className="flex items-start gap-3">
                 <Mail className="mt-0.5 h-5 w-5 text-muted-foreground" />
                 <div>
@@ -146,18 +148,18 @@ export function VerifyEmailPanel(props: {
             )}
             {msg && <p className="text-sm text-green-600 dark:text-green-400">{msg}</p>}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2 sm:grid-cols-2">
                 {props.onRequestSignIn ? (
-                    <Button type="button" onClick={props.onRequestSignIn} variant="outline">
+                    <Button type="button" onClick={props.onRequestSignIn} variant="outline" className="w-full">
                         {t('VerifyEmail.EmailLinkNotWorkingSignIn')}
                     </Button>
                 ) : (
-                    <Button asChild variant="outline">
+                    <Button asChild variant="outline" className="w-full">
                         <Link href={signInHref}>{t('VerifyEmail.EmailLinkNotWorkingSignIn')}</Link>
                     </Button>
                 )}
 
-                <Button type="button" onClick={resend} disabled={resendLoading || cooldown > 0} className="inline-flex items-center gap-2">
+                <Button type="button" onClick={resend} disabled={resendLoading || cooldown > 0} className="inline-flex w-full items-center justify-center gap-2">
                     {resendLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
                     {cooldown > 0 ? t('VerifyEmail.ResendCooldown', { seconds: cooldown }) : t('VerifyEmail.Resend')}
                 </Button>
