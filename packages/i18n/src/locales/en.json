@@ -372,6 +372,8 @@
         "Databases": "Databases",
         "Schemas": "Schemas",
         "No results": "No results found",
+        "Loading databases": "Loading databases",
+        "Failed to load databases": "Failed to load databases",
         "Filter tables": "Filter tables",
         "Refresh tables": "Refresh tables",
         "Loading tables": "Loading tables",

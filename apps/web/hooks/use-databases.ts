@@ -1,10 +1,11 @@
+import { useQuery } from '@tanstack/react-query';
 import { useAtom, useAtomValue } from 'jotai';
 import { currentConnectionAtom, databasesAtom } from '@/shared/stores/app.store';
 import { useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { executeActionClient } from '@/lib/actions/client';
 
-const inflightDatabaseRequests = new Map<string, Promise<void>>();
+type DatabaseOption = { label: string; value: string };
 
 export function useDatabases() {
     const [databasesState, setDatabasesState] = useAtom(databasesAtom);
@@ -13,6 +14,19 @@ export function useDatabases() {
     const routeConnectionParam = params?.connectionId ?? params?.connection;
     const routeConnectionId = Array.isArray(routeConnectionParam) ? routeConnectionParam[0] : routeConnectionParam;
     const connectionId = routeConnectionId ?? currentConnection?.connection?.id ?? null;
+    const currentConnectionId = currentConnection?.connection?.id ?? null;
+    const connectionContextReady = !routeConnectionId || currentConnectionId === routeConnectionId;
+
+    const query = useQuery({
+        queryKey: ['schema', 'databases', connectionId],
+        enabled: Boolean(connectionId && connectionContextReady),
+        queryFn: async () => {
+            if (!connectionId) return [];
+            const result = await executeActionClient<{ databases: DatabaseOption[] }>('schema.listDatabases', { connectionId }, { currentConnectionId: connectionId });
+            return result.databases ?? [];
+        },
+        staleTime: 5 * 60_000,
+    });
 
     useEffect(() => {
         if (!connectionId) {
@@ -20,64 +34,35 @@ export function useDatabases() {
                 connectionId: null,
                 items: [],
                 loading: false,
+                error: null,
             });
             return;
         }
 
-        if (databasesState.connectionId === connectionId && databasesState.items.length > 0) {
-            return;
-        }
-
-        if (databasesState.connectionId !== connectionId) {
-            setDatabasesState({
+        if (!connectionContextReady) {
+            setDatabasesState(prev => ({
                 connectionId,
-                items: [],
+                items: prev.connectionId === connectionId ? prev.items : [],
                 loading: true,
-            });
-        }
-
-        void refresh(connectionId);
-    }, [connectionId, databasesState.connectionId, databasesState.items.length, setDatabasesState]);
-
-    const refresh = async (requestedConnectionId = connectionId ?? undefined) => {
-        if (!requestedConnectionId) {
+                error: null,
+            }));
             return;
         }
 
-        const requestKey = requestedConnectionId;
-        const existingRequest = inflightDatabaseRequests.get(requestKey);
-        if (existingRequest) {
-            await existingRequest;
-            return;
-        }
-
-        const request = (async () => {
-            setDatabasesState(prev => ({ ...prev, loading: true }));
-            const result = await executeActionClient<{ databases: any[] }>('schema.listDatabases', { connectionId: requestedConnectionId }, { currentConnectionId: requestedConnectionId });
-            setDatabasesState(prev => {
-                if (prev.connectionId !== requestedConnectionId && prev.items.length > 0) {
-                    return prev;
-                }
-
-                return {
-                    connectionId: requestedConnectionId,
-                    items: result.databases ?? [],
-                    loading: false,
-                };
-            });
-        })();
-
-        inflightDatabaseRequests.set(requestKey, request);
-        try {
-            await request;
-        } finally {
-            inflightDatabaseRequests.delete(requestKey);
-        }
-    };
+        setDatabasesState({
+            connectionId,
+            items: query.data ?? [],
+            loading: query.isPending || (query.isFetching && !query.data),
+            error: query.error instanceof Error ? query.error.message : null,
+        });
+    }, [connectionContextReady, connectionId, query.data, query.error, query.isFetching, query.isPending, setDatabasesState]);
 
     return {
         databases: databasesState.connectionId === connectionId ? databasesState.items : [],
         loading: databasesState.loading,
-        refresh,
+        error: databasesState.connectionId === connectionId ? databasesState.error : null,
+        refresh: async () => {
+            await query.refetch();
+        },
     };
 }

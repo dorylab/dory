@@ -17,6 +17,7 @@ export type DatabasesState = {
     connectionId: string | null;
     items: { label: string; value: string }[];
     loading: boolean;
+    error: string | null;
 };
 
 export type TablesState = {
@@ -30,6 +31,7 @@ export const databasesAtom = atom<DatabasesState>({
     connectionId: null,
     items: [],
     loading: false,
+    error: null,
 });
 export const tablesAtom = atom<TablesState>({
     connectionId: null,

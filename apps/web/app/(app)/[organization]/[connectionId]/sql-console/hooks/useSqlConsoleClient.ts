@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useAtom } from 'jotai';
 import { authClient } from '@/lib/auth-client';
 import { activeDatabaseAtom } from '@/shared/stores/app.store';
@@ -19,6 +19,14 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
     const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs } = useSQLTabs();
     const activeTab = useMemo(() => tabs.find(t => t.tabId === activeTabId), [tabs, activeTabId]);
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
+
+    useEffect(() => {
+        if (activeTab?.tabType !== 'table' || !activeTab.databaseName || activeTab.databaseName === activeDatabase) {
+            return;
+        }
+
+        setActiveDatabase(activeTab.databaseName);
+    }, [activeDatabase, activeTab, setActiveDatabase]);
 
     const { requestAITabTitle, manualRenameTab } = useSqlAiTabTitle(activeDatabase, updateTab);
 

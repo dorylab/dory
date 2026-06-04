@@ -370,6 +370,8 @@
         "Databases": "データベース",
         "Schemas": "スキーマ",
         "No results": "結果が見つかりません",
+        "Loading databases": "データベースを読み込み中",
+        "Failed to load databases": "データベースを読み込めませんでした",
         "Filter tables": "テーブルを絞り込み",
         "Refresh tables": "テーブルを再読み込み",
         "Loading tables": "テーブルを読み込み中",

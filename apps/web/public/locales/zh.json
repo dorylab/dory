@@ -374,6 +374,8 @@
         "Databases": "数据库",
         "Schemas": "模式",
         "No results": "未找到匹配项",
+        "Loading databases": "正在加载数据库",
+        "Failed to load databases": "数据库加载失败",
         "Filter tables": "筛选表",
         "Refresh tables": "刷新表",
         "Loading tables": "正在加载表",

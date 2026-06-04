@@ -370,6 +370,8 @@
         "Databases": "Bases de datos",
         "Schemas": "Esquemas",
         "No results": "No se encontraron resultados",
+        "Loading databases": "Cargando bases de datos",
+        "Failed to load databases": "No se pudieron cargar las bases de datos",
         "Filter tables": "Filtrar tablas",
         "Refresh tables": "Actualizar tablas",
         "Loading tables": "Cargando tablas",
