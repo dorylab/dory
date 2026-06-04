@@ -90,6 +90,7 @@ export function SignUpForm({ className, callbackURL: callbackURLOverride, onRequ
                 <VerifyEmailPanel
                     defaultEmail={emailForVerify}
                     callbackURL={callbackURLOverride || '/'}
+                    onRequestSignIn={onRequestSignIn}
                     onChangeEmail={newEmail => {
                         //Return to the registration form and fill in the new email address
                         setStage('form');

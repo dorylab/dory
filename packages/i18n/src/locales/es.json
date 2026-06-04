@@ -134,7 +134,7 @@
             "EmailLabel": "Correo del destinatario",
             "Change": "Cambiar",
             "Hint": "¿No lo recibiste? Revisa tu carpeta de spam o promociones, o haz clic más tarde en “Reenviar correo de verificación”.",
-            "OpenMailApp": "Abrir la app de correo",
+            "EmailLinkNotWorkingSignIn": "¿El enlace no responde? Inicia sesión",
             "ResendCooldown": "Reenviar ({seconds}s)",
             "Resend": "Reenviar correo de verificación"
         },

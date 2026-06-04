@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
@@ -13,15 +14,18 @@ export function VerifyEmailPanel(props: {
     defaultEmail: string;
     callbackURL?: string;
     onChangeEmail?: (email: string) => void; //Optional: Allow changing mailboxes within the panel
+    onRequestSignIn?: () => void;
 }) {
     const t = useTranslations('Auth');
     const { data: session } = authClient.useSession();
     const [email, setEmail] = useState(props.defaultEmail);
     const [cooldown, setCooldown] = useState(0);
-    const [loading, setLoading] = useState(false);
+    const [callbackLoading, setCallbackLoading] = useState(false);
+    const [resendLoading, setResendLoading] = useState(false);
     const [msg, setMsg] = useState<string | null>(null);
     const [err, setErr] = useState<string | null>(null);
     const callbackURL = props.callbackURL || '/';
+    const signInHref = `/sign-in?callbackURL=${encodeURIComponent(callbackURL)}`;
 
     useEffect(() => {
         if (!cooldown) return;
@@ -47,9 +51,9 @@ export function VerifyEmailPanel(props: {
                     return;
                 }
 
-                setLoading(true);
                 setErr(null);
                 setMsg(null);
+                setCallbackLoading(true);
 
                 const consumeRes = await fetch('/api/electron/auth/consume', {
                     method: 'POST',
@@ -73,7 +77,7 @@ export function VerifyEmailPanel(props: {
             } catch {
                 setErr(t('SignIn.InvalidCallback'));
             } finally {
-                setLoading(false);
+                setCallbackLoading(false);
             }
         });
 
@@ -85,7 +89,7 @@ export function VerifyEmailPanel(props: {
     async function resend() {
         setErr(null);
         setMsg(null);
-        setLoading(true);
+        setResendLoading(true);
         try {
             const verificationCallbackURL = getEmailVerificationCallbackURL(callbackURL);
             const res = await authFetch('/api/auth/resend-verification', {
@@ -103,12 +107,8 @@ export function VerifyEmailPanel(props: {
         } catch {
             setErr(t('VerifyEmail.NetworkError'));
         } finally {
-            setLoading(false);
+            setResendLoading(false);
         }
-    }
-
-    function openMailApp() {
-        window.open(`mailto:${email}`, '_blank'); //Simple placeholder; you can also jump to common webmail
     }
 
     return (
@@ -138,15 +138,27 @@ export function VerifyEmailPanel(props: {
             </div>
 
             {err && <p className="text-sm text-red-600 dark:text-red-400">{err}</p>}
+            {callbackLoading && (
+                <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t('SignIn.Submitting')}
+                </p>
+            )}
             {msg && <p className="text-sm text-green-600 dark:text-green-400">{msg}</p>}
 
             <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={openMailApp} variant="outline">
-                    {t('VerifyEmail.OpenMailApp')}
-                </Button>
+                {props.onRequestSignIn ? (
+                    <Button type="button" onClick={props.onRequestSignIn} variant="outline">
+                        {t('VerifyEmail.EmailLinkNotWorkingSignIn')}
+                    </Button>
+                ) : (
+                    <Button asChild variant="outline">
+                        <Link href={signInHref}>{t('VerifyEmail.EmailLinkNotWorkingSignIn')}</Link>
+                    </Button>
+                )}
 
-                <Button type="button" onClick={resend} disabled={loading || cooldown > 0} className="inline-flex items-center gap-2">
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+                <Button type="button" onClick={resend} disabled={resendLoading || cooldown > 0} className="inline-flex items-center gap-2">
+                    {resendLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
                     {cooldown > 0 ? t('VerifyEmail.ResendCooldown', { seconds: cooldown }) : t('VerifyEmail.Resend')}
                 </Button>
             </div>
