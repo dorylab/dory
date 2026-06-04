@@ -9,6 +9,8 @@ const __dirname = dirname(__filename);
 
 const APPLE_TICKET_WAIT_MS = 15_000;
 const APPLE_TICKET_MAX_ATTEMPTS = 8;
+const APPLE_NOTARIZE_WAIT_MS = 60_000;
+const APPLE_NOTARIZE_MAX_ATTEMPTS = 3;
 
 dotenvConfig({ path: resolve(__dirname, '../.env.apple'), quiet: true });
 
@@ -86,15 +88,56 @@ async function retryStaple(targetPath) {
     }
 }
 
+function getErrorMessage(error) {
+    return String(error?.message || error);
+}
+
+function isTransientNotarizeFailure(message) {
+    return (
+        message.includes('The operation was canceled') ||
+        message.includes('The operation was cancelled') ||
+        message.includes('ECONNRESET') ||
+        message.includes('ETIMEDOUT') ||
+        message.includes('ESOCKETTIMEDOUT')
+    );
+}
+
+function sleep(ms) {
+    return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
+
+async function runNotarize(targetPath) {
+    await notarize({
+        appPath: targetPath,
+        ...getNotarizeCredentials(),
+    });
+}
+
 export async function notarizeTarget(targetPath) {
     try {
-        await notarize({
-            appPath: targetPath,
-            ...getNotarizeCredentials(),
-        });
+        for (let attempt = 1; attempt <= APPLE_NOTARIZE_MAX_ATTEMPTS; attempt += 1) {
+            try {
+                await runNotarize(targetPath);
+                break;
+            } catch (error) {
+                const message = getErrorMessage(error);
+                const shouldRetry =
+                    isTransientNotarizeFailure(message) && attempt < APPLE_NOTARIZE_MAX_ATTEMPTS;
+
+                if (!shouldRetry) {
+                    throw error;
+                }
+
+                console.warn(
+                    `⌛ Apple notarization attempt ${attempt}/${APPLE_NOTARIZE_MAX_ATTEMPTS} failed with a transient error, waiting ${APPLE_NOTARIZE_WAIT_MS / 1000}s before retrying...`,
+                );
+                console.warn(message);
+                await sleep(APPLE_NOTARIZE_WAIT_MS);
+            }
+        }
         console.log(`✅ Apple notarization + initial stapling succeeded for ${targetPath}.`);
     } catch (error) {
-        const message = String(error?.message || error);
+        const message = getErrorMessage(error);
         const isStaplePropagationFailure =
             message.includes('Failed to staple your application') || message.includes('Record not found');
 
