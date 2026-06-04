@@ -20,19 +20,10 @@ type SignInFormProps = React.ComponentProps<'div'> & {
     callbackURL?: string;
     onRequestSignUp?: () => void;
     showGuestOption?: boolean;
-    showDemoOption?: boolean;
     resumeAnonymousSession?: boolean;
 };
 
-export function SignInForm({
-    className,
-    callbackURL: callbackURLOverride,
-    onRequestSignUp,
-    showGuestOption = true,
-    showDemoOption = false,
-    resumeAnonymousSession = false,
-    ...props
-}: SignInFormProps) {
+export function SignInForm({ className, callbackURL: callbackURLOverride, onRequestSignUp, showGuestOption = true, resumeAnonymousSession = false, ...props }: SignInFormProps) {
     const t = useTranslations('Auth');
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -42,11 +33,8 @@ export function SignInForm({
     const [err, setErr] = useState<string | null>(null);
     const [msg, setMsg] = useState<string | null>(null);
     const [guestActionLoading, setGuestActionLoading] = useState(false);
-    const [demoActionLoading, setDemoActionLoading] = useState(false);
-    const { data: session, refetch: refetchSession } = authClient.useSession();
+    const { data: session } = authClient.useSession();
     const callbackURL = callbackURLOverride || searchParams?.get('callbackURL') || '/';
-    const canShowDemoOption = showDemoOption;
-    const secondaryActionLoading = guestActionLoading || demoActionLoading;
 
     function getErrorMessage(error: unknown, fallback: string) {
         return error instanceof Error && error.message ? error.message : fallback;
@@ -127,7 +115,7 @@ export function SignInForm({
     }
 
     async function submitEmailPassword() {
-        if (loading || secondaryActionLoading) return;
+        if (loading) return;
 
         setErr(null);
         setMsg(null);
@@ -198,7 +186,7 @@ export function SignInForm({
     }
 
     async function onGuestContinue() {
-        if (loading || secondaryActionLoading) return;
+        if (guestActionLoading) return;
 
         setErr(null);
         setMsg(null);
@@ -241,34 +229,6 @@ export function SignInForm({
         }
     }
 
-    async function onDemoContinue() {
-        if (loading || secondaryActionLoading) return;
-
-        setErr(null);
-        setMsg(null);
-        setDemoActionLoading(true);
-
-        try {
-            const response = await fetch('/api/auth/demo', {
-                method: 'POST',
-                credentials: 'include',
-            });
-            const payload = await response.json().catch(() => null);
-
-            if (!response.ok) {
-                throw new Error(typeof payload?.error === 'string' ? payload.error : t('SignIn.Demo.StartFailed'));
-            }
-
-            await refetchSession();
-            router.refresh();
-            router.push(callbackURL);
-        } catch (nextError) {
-            setErr(nextError instanceof Error ? nextError.message : t('SignIn.Demo.StartFailed'));
-        } finally {
-            setDemoActionLoading(false);
-        }
-    }
-
     return (
         <div className={cn('flex min-w-0 flex-col gap-6', className)} {...props}>
             <Card className="overflow-hidden p-0">
@@ -291,6 +251,38 @@ export function SignInForm({
                                 </div>
                             ) : null}
 
+                            <div className="grid grid-cols-2 gap-4">
+                                <Button
+                                    variant="outline"
+                                    type="button"
+                                    className="w-full"
+                                    aria-label={t('SignIn.LoginWithGithub')}
+                                    onClick={() => void signInViaProvider('github')}
+                                >
+                                    <IconBrandGithub size={20} />
+                                    <span>GitHub</span>
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    type="button"
+                                    className="w-full"
+                                    aria-label={t('SignIn.LoginWithGoogle')}
+                                    onClick={() => void signInViaProvider('google')}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                        <path
+                                            d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
+                                            fill="currentColor"
+                                        />
+                                    </svg>
+                                    <span>Google</span>
+                                </Button>
+                            </div>
+
+                            <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
+                                <span className="bg-background text-muted-foreground relative z-10 px-2">{t('SignIn.OrContinueWith')}</span>
+                            </div>
+
                             <div className="grid gap-3">
                                 <Label htmlFor="email">{t('SignIn.Email')}</Label>
                                 <Input
@@ -307,82 +299,46 @@ export function SignInForm({
                             <div className="grid gap-3">
                                 <div className="flex items-center">
                                     <Label htmlFor="password">{t('SignIn.Password')}</Label>
-                                    <button
-                                        type="button"
-                                        onClick={onForgotPassword}
-                                        className="ml-auto text-sm underline-offset-2 hover:underline"
-                                    >
+                                    <button type="button" onClick={onForgotPassword} className="ml-auto text-sm underline-offset-2 hover:underline">
                                         {t('SignIn.ForgotPassword')}
                                     </button>
                                 </div>
                                 <InputPassword name="password" id="password" required value={pwd} onChange={e => setPwd(e.target.value)} autoComplete="current-password" />
                             </div>
 
-                            <Button type="button" className="w-full" disabled={loading || secondaryActionLoading} onClick={() => void submitEmailPassword()}>
+                            <Button type="button" className="w-full" disabled={loading} onClick={() => void submitEmailPassword()}>
                                 {loading ? t('SignIn.Submitting') : t('SignIn.Submit')}
                             </Button>
 
-                            {showGuestOption ? (
-                                <Button
-                                    type="button"
-                                    className="w-full"
-                                    variant="secondary"
-                                    disabled={loading || secondaryActionLoading}
-                                    onClick={() => {
-                                        void onGuestContinue();
-                                    }}
-                                    data-testid="guest-sign-in"
-                                >
-                                    {guestActionLoading ? t('SignIn.Submitting') : resumeAnonymousSession ? t('SignIn.Guest.ResumeAction') : t('SignIn.Guest.Action')}
-                                </Button>
-                            ) : null}
+                            <div className="space-y-2 text-center text-sm">
+                                <div>
+                                    {t('SignIn.NoAccount')}{' '}
+                                    {onRequestSignUp ? (
+                                        <button type="button" className="cursor-pointer underline underline-offset-4" onClick={onRequestSignUp}>
+                                            {t('SignIn.SignUp')}
+                                        </button>
+                                    ) : (
+                                        <Link href={`/sign-up?callbackURL=${encodeURIComponent(callbackURL)}`} className="cursor-pointer underline underline-offset-4">
+                                            {t('SignIn.SignUp')}
+                                        </Link>
+                                    )}
+                                </div>
 
-                            {canShowDemoOption ? (
-                                <Button
-                                    type="button"
-                                    className="w-full"
-                                    variant="secondary"
-                                    disabled={loading || secondaryActionLoading}
-                                    onClick={() => {
-                                        void onDemoContinue();
-                                    }}
-                                    data-testid="demo-sign-in"
-                                >
-                                    {demoActionLoading ? t('SignIn.Submitting') : t('SignIn.Demo.Action')}
-                                </Button>
-                            ) : null}
-
-                            <div className="after:border-border relative text-center text-sm after:absolute after:inset-0 after:top-1/2 after:z-0 after:flex after:items-center after:border-t">
-                                <span className="bg-background text-muted-foreground relative z-10 px-2">{t('SignIn.OrContinueWith')}</span>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <Button variant="outline" type="button" className="w-full" onClick={() => void signInViaProvider('github')}>
-                                    <IconBrandGithub size={30} />
-                                    <span className="sr-only">{t('SignIn.LoginWithGithub')}</span>
-                                </Button>
-                                <Button variant="outline" type="button" className="w-full" onClick={() => void signInViaProvider('google')}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                                        <path
-                                            d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"
-                                            fill="currentColor"
-                                        />
-                                    </svg>
-                                    <span className="sr-only">{t('SignIn.LoginWithGoogle')}</span>
-                                </Button>
-                            </div>
-
-                            <div className="text-center text-sm">
-                                {t('SignIn.NoAccount')}{' '}
-                                {onRequestSignUp ? (
-                                    <button type="button" className="underline underline-offset-4" onClick={onRequestSignUp}>
-                                        {t('SignIn.SignUp')}
-                                    </button>
-                                ) : (
-                                    <Link href={`/sign-up?callbackURL=${encodeURIComponent(callbackURL)}`} className="underline underline-offset-4">
-                                        {t('SignIn.SignUp')}
-                                    </Link>
-                                )}
+                                {showGuestOption ? (
+                                    <div className="border-border text-muted-foreground border-t pt-4">
+                                        {t('SignIn.Guest.Prompt')}{' '}
+                                        <button
+                                            type="button"
+                                            className="text-foreground cursor-pointer underline-offset-4 hover:underline"
+                                            onClick={() => {
+                                                void onGuestContinue();
+                                            }}
+                                            data-testid="guest-sign-in"
+                                        >
+                                            {t('SignIn.Guest.Link')}
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                     </form>

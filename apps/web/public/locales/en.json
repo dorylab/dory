@@ -106,6 +106,8 @@
             "NoAccount": "Don't have an account?",
             "SignUp": "Sign up",
             "Guest": {
+                "Prompt": "Just exploring?",
+                "Link": "Try Dory without an account",
                 "Action": "Continue as guest",
                 "ResumeAction": "Open existing guest workspace",
                 "Tooltip": "Best for first-time visitors. If you later sign in, we will keep your current guest workspace with your account.",

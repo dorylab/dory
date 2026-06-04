@@ -106,6 +106,8 @@
             "NoAccount": "¿No tienes una cuenta?",
             "SignUp": "Registrarse",
             "Guest": {
+                "Prompt": "¿Solo quieres probar?",
+                "Link": "Entrar al espacio de invitado",
                 "Action": "Continuar como invitado",
                 "ResumeAction": "Abrir espacio de invitado existente",
                 "Tooltip": "Ideal para quienes visitan por primera vez. Si más tarde inicias sesión, mantendremos tu espacio de trabajo de invitado actual en tu cuenta.",

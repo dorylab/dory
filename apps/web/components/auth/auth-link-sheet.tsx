@@ -39,12 +39,7 @@ export function AuthLinkSheet({ open, onOpenChange, callbackURL }: AuthLinkSheet
                             <TabsTrigger value="sign-up">{t('AuthRequired.SignUpTab')}</TabsTrigger>
                         </TabsList>
                         <TabsContent value="sign-in" className="mt-4">
-                            <SignInForm
-                                callbackURL={callbackURL}
-                                onRequestSignUp={() => setTab('sign-up')}
-                                showDemoOption={false}
-                                showGuestOption={false}
-                            />
+                            <SignInForm callbackURL={callbackURL} onRequestSignUp={() => setTab('sign-up')} showGuestOption={false} />
                         </TabsContent>
                         <TabsContent value="sign-up" className="mt-4">
                             <SignUpForm callbackURL={callbackURL} onRequestSignIn={() => setTab('sign-in')} />
