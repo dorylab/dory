@@ -152,7 +152,11 @@ export function ConnectionMetadataForm(props: { form: UseFormReturn<FieldValues>
                                 >
                                     {CONNECTION_ENVIRONMENT_OPTIONS.map(option => (
                                         <div key={option.value || 'none'} className="flex items-center gap-1.5">
-                                            <RadioGroupItem id={`connection-environment-${option.value || 'none'}`} value={option.value || EMPTY_ENVIRONMENT_RADIO_VALUE} />
+                                            <RadioGroupItem
+                                                id={`connection-environment-${option.value || 'none'}`}
+                                                value={option.value || EMPTY_ENVIRONMENT_RADIO_VALUE}
+                                                className="cursor-pointer"
+                                            />
                                             <Label htmlFor={`connection-environment-${option.value || 'none'}`} className="cursor-pointer text-sm text-muted-foreground">
                                                 {tc(option.translationKey)}
                                             </Label>
@@ -190,7 +194,7 @@ export function ConnectionMetadataForm(props: { form: UseFormReturn<FieldValues>
                                                 aria-label={tc(option.translationKey)}
                                                 title={tc(option.translationKey)}
                                                 className={cn(
-                                                    'inline-flex h-7 items-center justify-center rounded-full border text-xs transition-[color,box-shadow,background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                                    'inline-flex h-7 cursor-pointer items-center justify-center rounded-full border text-xs transition-[color,box-shadow,background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                                                     isEmptyOption ? 'px-2.5' : 'w-7 px-0',
                                                     selected ? option.selectedClassName : 'border-border bg-background text-muted-foreground hover:bg-muted',
                                                 )}
