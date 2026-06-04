@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
 import { updateConnection } from '../../policies';
 import { unknownOutputSchema } from '../../schemas';
+import { sanitizeConnectionSyncPayload } from './sanitize';
 
 export const connectionUpdateAction = defineWebAction({
     id: 'connection.update',
@@ -16,12 +17,13 @@ export const connectionUpdateAction = defineWebAction({
     requiresConfirmation: false,
     handler: async (ctx, input) => {
         const updated = await ctx.services.db.connections.update(ctx.organizationId, input.id, input.patch as any);
+        const syncPayload = sanitizeConnectionSyncPayload(input.patch);
         await ctx.services.db.syncOperations.enqueue({
             organizationId: ctx.organizationId,
             entityType: 'connection',
             entityId: input.id,
             operation: 'update',
-            payload: input.patch,
+            payload: syncPayload,
         });
         return updated;
     },

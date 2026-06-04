@@ -40,16 +40,33 @@ export type StoredDriverSsh = {
     passphrase?: string | null;
 };
 
+export type StoredDriverTls = {
+    mode?: string | null;
+    caCertificatePath?: string | null;
+    clientCertificatePath?: string | null;
+    clientPrivateKeyPath?: string | null;
+    serverName?: string | null;
+    ciphers?: string | null;
+    minVersion?: string | null;
+    maxVersion?: string | null;
+    caCertificateContent?: string | null;
+    clientCertificateContent?: string | null;
+    clientPrivateKeyContent?: string | null;
+    clientPrivateKeyPassphrase?: string | null;
+};
+
 export type StoredDriverConnectionListItem = {
     connection: StoredDriverConnection;
     identities: StoredDriverIdentity[];
     ssh: StoredDriverSsh | null;
+    tls?: StoredDriverTls | null;
 };
 
 export type TestDriverConnectionPayload = {
     connection: StoredDriverConnection & { name?: string | null };
     identity: StoredDriverIdentity;
     ssh?: StoredDriverSsh | null;
+    tls?: StoredDriverTls | null;
     timeout?: number;
 };
 
@@ -57,6 +74,12 @@ export type DriverPathResolver = (path?: string | null) => string | undefined;
 
 type IdentityWithPassword = StoredDriverIdentity & { password?: string | null };
 type SshWithSecrets = StoredDriverSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
+type TlsWithSecrets = StoredDriverTls & {
+    caCertificateContent?: string | null;
+    clientCertificateContent?: string | null;
+    clientPrivateKeyContent?: string | null;
+    clientPrivateKeyPassphrase?: string | null;
+};
 type TestIdentity = TestDriverConnectionPayload['identity'];
 type TestSshWithSecrets = NonNullable<TestDriverConnectionPayload['ssh']> & {
     password?: string | null;
@@ -116,6 +139,7 @@ function buildOptions(
         privateKey?: string | null;
         passphrase?: string | null;
     } | null,
+    tls?: TlsWithSecrets | null,
 ) {
     const options = parseConnectionOptions(rawOptions) ?? {};
 
@@ -138,6 +162,23 @@ function buildOptions(
         };
     }
 
+    if (tls?.mode && tls.mode !== 'disable') {
+        (options as any).tls = {
+            mode: tls.mode,
+            caCertificatePath: tls.caCertificatePath ?? undefined,
+            clientCertificatePath: tls.clientCertificatePath ?? undefined,
+            clientPrivateKeyPath: tls.clientPrivateKeyPath ?? undefined,
+            serverName: tls.serverName ?? undefined,
+            ciphers: tls.ciphers ?? undefined,
+            minVersion: tls.minVersion ?? undefined,
+            maxVersion: tls.maxVersion ?? undefined,
+            caCertificateContent: tls.caCertificateContent ?? undefined,
+            clientCertificateContent: tls.clientCertificateContent ?? undefined,
+            clientPrivateKeyContent: tls.clientPrivateKeyContent ?? undefined,
+            clientPrivateKeyPassphrase: tls.clientPrivateKeyPassphrase ?? undefined,
+        };
+    }
+
     return options;
 }
 
@@ -145,6 +186,7 @@ export function buildStoredConnectionConfig(
     connection: StoredDriverConnection,
     identity: IdentityWithPassword,
     ssh?: SshWithSecrets | null,
+    tls?: TlsWithSecrets | null,
     createError: ErrorFactory = defaultErrorFactory,
     resolveStoredPath: DriverPathResolver = path => path?.trim() || undefined,
 ): DriverConfig {
@@ -184,7 +226,7 @@ export function buildStoredConnectionConfig(
         throw createError('missing_username');
     }
 
-    const options = buildOptions(connection.options, { httpPort: connection.httpPort, port: connection.port }, ssh);
+    const options = buildOptions(connection.options, { httpPort: connection.httpPort, port: connection.port }, ssh, tls);
     const database = identity.database ?? (connection as any).database ?? undefined;
     const port = typeof connection.httpPort === 'number' ? connection.httpPort : connection.port;
     const updatedAt = connection.updatedAt instanceof Date ? connection.updatedAt.getTime() : connection.updatedAt;
@@ -208,7 +250,7 @@ export function buildTestConnectionConfig(
     createError: ErrorFactory = defaultErrorFactory,
     resolveStoredPath: DriverPathResolver = path => path?.trim() || undefined,
 ): DriverConfig {
-    const { connection, ssh, identity } = payload;
+    const { connection, ssh, tls, identity } = payload;
     const type = resolveConnectionType(connection.type ?? connection.engine ?? 'clickhouse');
 
     if (type === 'sqlite' || type === 'duckdb') {
@@ -246,7 +288,7 @@ export function buildTestConnectionConfig(
         throw createError('missing_username');
     }
 
-    const options = buildOptions(connection.options, { httpPort: connection.httpPort, port: connection.port }, ssh);
+    const options = buildOptions(connection.options, { httpPort: connection.httpPort, port: connection.port }, ssh, tls as TlsWithSecrets | null);
     const database = identity.database ?? connection.database ?? undefined;
     const id = connection.name ? `test-${connection.name}` : `test-${connection.host}`;
 

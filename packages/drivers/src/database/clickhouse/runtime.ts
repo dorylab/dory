@@ -2,6 +2,7 @@ import { createClient, type ClickHouseClient, type ClickHouseClientConfigOptions
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
+import { buildClickhouseTlsOptions, getDriverTlsOptions, normalizeTlsMode } from '@dory/drivers/core/tls';
 import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { ClickhouseDialect } from './dialect';
@@ -50,6 +51,11 @@ export function resolveClickhouseHttpPort(config: BaseConfig): number | undefine
 
 export function isClickhouseTlsEnabled(config: BaseConfig): boolean {
     const raw = config.options as Record<string, unknown> | undefined;
+    const tlsMode = normalizeTlsMode(getDriverTlsOptions(raw)?.mode);
+    if (tlsMode) {
+        return tlsMode !== 'disable';
+    }
+
     if (raw) {
         if (typeof raw.ssl === 'boolean') return raw.ssl;
         if (typeof raw.useSSL === 'boolean') return raw.useSSL;
@@ -100,11 +106,19 @@ function extractSettings(config: BaseConfig): ClickHouseSettings | undefined {
     return Object.keys(normalized).length ? normalized : undefined;
 }
 
-export function createClickhouseClient(config: BaseConfig, options?: { database?: string; hostOverride?: string; httpPortOverride?: number }): ClickHouseClient {
+type ClickhouseClientRuntimeOptions = {
+    database?: string;
+    hostOverride?: string;
+    httpPortOverride?: number;
+};
+
+export function buildClickhouseClientConfigOptions(config: BaseConfig, options?: ClickhouseClientRuntimeOptions): ClickHouseClientConfigOptions {
     const httpPort = options?.httpPortOverride ?? resolveClickhouseHttpPort(config);
     const useTls = isClickhouseTlsEnabled(config);
-    const url = buildUrl(options?.hostOverride ?? config.host, httpPort, useTls && !options?.hostOverride);
+    const useHttps = useTls && !options?.hostOverride;
+    const url = buildUrl(options?.hostOverride ?? config.host, httpPort, useHttps);
     const requestTimeout = resolveRequestTimeout(config);
+    const rawOptions = (config.options ?? {}) as Record<string, unknown>;
 
     const clientOptions: ClickHouseClientConfigOptions = {
         url,
@@ -114,12 +128,21 @@ export function createClickhouseClient(config: BaseConfig, options?: { database?
         request_timeout: requestTimeout,
     };
 
+    const tls = useHttps ? buildClickhouseTlsOptions(getDriverTlsOptions(rawOptions)) : undefined;
+    if (tls) {
+        clientOptions.tls = tls;
+    }
+
     const settings = extractSettings(config);
     if (settings) {
         clientOptions.clickhouse_settings = settings;
     }
 
-    return createClient(clientOptions);
+    return clientOptions;
+}
+
+export function createClickhouseClient(config: BaseConfig, options?: ClickhouseClientRuntimeOptions): ClickHouseClient {
+    return createClient(buildClickhouseClientConfigOptions(config, options));
 }
 
 export async function pingClickhouse(client: ClickHouseClient): Promise<HealthInfo & { version?: string }> {

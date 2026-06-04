@@ -106,6 +106,13 @@
       "when": 1780303200000,
       "tag": "0014_mcp_authorization_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1780476000000,
+      "tag": "0015_connection_tls",
+      "breakpoints": true
     }
   ]
 }

@@ -192,6 +192,7 @@
         "All Connections": "全部数据源",
         "Connecting": "连接中...",
         "about": "关于",
+        "MoreActions": "更多操作",
         "Search": {
             "placeholder": "搜索数据源...",
             "emptyTitle": "未找到匹配的数据源",
@@ -199,8 +200,8 @@
             "emptyHint": "尝试其他关键词，或清空搜索"
         },
         "Empty": {
-            "title": "连接数据库或打开文件",
-            "description": "Dory 是面向 SQL 与 AI 的现代数据工作台，添加数据库连接或打开本地文件即可开始探索。",
+            "title": "连接数据源或打开文件",
+            "description": "Dory 是面向 SQL 与 AI 的现代数据工作台，添加数据源或打开本地文件即可开始探索。",
             "supportHint": "当前支持 ClickHouse · 更多引擎即将上线",
             "feature1": "运行 SQL 查询并浏览模式",
             "feature2": "使用自然语言提问并获取答案",
@@ -214,12 +215,12 @@
         "Unknown": "未知",
         "Last check": "上次检查：{time}",
         "Latency": "延迟：{latency}ms",
-        "Refresh Connection": "刷新连接",
+        "Refresh Connection": "刷新数据源",
         "title": "数据源",
         "description": "管理你的数据源",
-        "Add Connection": "添加连接",
-        "Create Connection": "创建连接",
-        "Connection Name": "连接名称",
+        "Add Connection": "添加数据源",
+        "Create Connection": "创建",
+        "Connection Name": "数据源名称",
         "Host": "主机",
         "Port": "端口",
         "Database": "数据库",
@@ -227,54 +228,56 @@
         "Password": "密码",
         "Connect": "连接",
         "Cancel": "取消",
+        "Edit": "编辑",
         "Delete": "删除",
         "Test": "测试",
-        "Connection Info": "连接信息",
+        "Connection Info": "数据源信息",
         "Authentication Info": "认证信息",
+        "Metadata": "元数据",
         "Enable": "启用",
-        "Testing Connection": "测试连接中...",
+        "Testing Connection": "测试中...",
         "Saving": "保存中...",
         "Creating": "创建中...",
         "Save Changes": "保存修改",
-        "Fix Form Errors Before Testing": "请先修正表单中的错误再测试连接",
+        "Fix Form Errors Before Testing": "请先修正表单中的错误再测试数据源",
         "Placeholder": "占位",
-        "Missing connection id": "缺少连接 ID",
-        "Connection failed": "连接失败",
+        "Missing connection id": "缺少数据源 ID",
+        "Connection failed": "数据源连接失败",
         "Request error": "请求异常",
-        "Connection created": "连接创建成功",
-        "Create connection failed": "创建连接失败",
-        "Connection updated": "连接已更新",
-        "Update connection failed": "更新连接失败",
-        "Connection deleted": "连接已删除",
-        "Delete connection failed": "删除连接失败",
-        "Connection test success": "连接测试成功，版本：{version}",
-        "Connection test failed": "连接测试失败",
+        "Connection created": "数据源创建成功",
+        "Create connection failed": "创建数据源失败",
+        "Connection updated": "数据源已更新",
+        "Update connection failed": "更新数据源失败",
+        "Connection deleted": "数据源已删除",
+        "Delete connection failed": "删除数据源失败",
+        "Connection test success": "数据源测试成功，版本：{version}",
+        "Connection test failed": "数据源测试失败",
         "Delete Dialog Title": "确定要删除吗？",
-        "Delete Dialog Description": "此操作无法撤销。这将永久删除你的数据源，并从服务器移除其数据。",
-        "Loading connections": "加载连接中...",
-        "No connections yet": "暂无连接",
+        "Delete Dialog Description": "此操作无法撤销。这将永久移除该数据源及其数据。",
+        "Loading connections": "加载数据源中...",
+        "No connections yet": "暂无数据源",
         "Connect to": "连接到 {name}",
         "Unknown host": "未知主机",
-        "Unnamed connection": "未命名连接",
-        "Add connection to get started": "添加一个连接以开始使用",
+        "Unnamed connection": "未命名数据源",
+        "Add connection to get started": "添加一个数据源以开始使用",
         "Identities": "身份",
         "Default Identity": "默认身份",
-        "Connection name is required": "连接名称是必需的",
+        "Connection name is required": "数据源名称是必需的",
         "Host is required": "主机是必需的",
         "Close & Edit": "关闭并编辑",
         "ConnectionContent": {
             "Create": {
-                "title": "创建连接",
+                "title": "创建数据源",
                 "description": "创建一个新的数据源"
             },
             "Edit": {
-                "title": "编辑连接",
+                "title": "编辑数据源",
                 "description": "编辑数据源"
             },
-            "Delete": "删除连接",
+            "Delete": "删除数据源",
             "General": "常规",
-            "Connection Name": "连接名称",
-            "Connection Name Placeholder": "为你的连接取一个友好的名字",
+            "Connection Name": "数据源名称",
+            "Connection Name Placeholder": "为你的数据源取一个友好的名字",
             "Type": "类型",
             "Select Database Type": "选择数据库类型",
             "Host": "主机",
@@ -286,6 +289,9 @@
             "Database Username": "数据库用户名",
             "Database Username Placeholder": "例如：readonly_user",
             "Password Optional": "密码（可选）",
+            "Password Keep Saved Hint": "留空将保留已保存密码。",
+            "Password Not Saved Hint": "可用于本次测试，但不会保存到连接中。",
+            "Save Password": "保存密码",
             "Data Directory": "数据目录",
             "Database File": "数据库文件",
             "Select Directory": "请输入数据目录或文件的绝对路径",
@@ -296,7 +302,7 @@
             "SSL": "SSL",
             "Cancel": "取消",
             "Save": "保存",
-            "TestConnection": "测试连接",
+            "TestConnection": "测试",
             "Use SSH tunnel": "使用 SSH 隧道",
             "Hostname or IP address": "主机名或 IP 地址",
             "SSH Host": "SSH 主机",
@@ -314,18 +320,44 @@
             "Select File": "选择文件",
             "Use SSL": "使用 SSL",
             "Please upload": "请上传你的私钥文件",
-            "Please enter your password": "请输入你的密码"
+            "Please enter your password": "请输入你的密码",
+            "Refresh Connection": "刷新数据源"
         },
         "Api": {
-            "AddFailed": "新增连接失败",
-            "UpdateRequiresId": "updateConnection 需要 id",
-            "UpdateFailed": "更新连接失败",
-            "ListFailed": "获取连接列表失败",
-            "DeleteFailed": "删除连接失败",
-            "DetailFailed": "获取连接详情失败",
-            "DetailNotFound": "未找到连接详情",
-            "TestFailed": "连接测试失败",
-            "ConnectFailed": "连接失败"
+            "AddFailed": "新增数据源失败",
+            "UpdateRequiresId": "更新数据源需要 id",
+            "UpdateFailed": "更新数据源失败",
+            "ListFailed": "获取数据源列表失败",
+            "DeleteFailed": "删除数据源失败",
+            "DetailFailed": "获取数据源详情失败",
+            "DetailNotFound": "未找到数据源详情",
+            "TestFailed": "数据源测试失败",
+            "ConnectFailed": "数据源连接失败"
+        },
+        "Connection name": "数据源名称",
+        "Environment": "环境",
+        "Tag": "标签",
+        "Fix Form Errors Before Saving": "请先修正表单中的错误再保存数据源",
+        "refreshConnection": "刷新数据源",
+        "ConnectionMetadata": {
+            "EnvironmentOptions": {
+                "None": "未设置环境",
+                "Dev": "开发",
+                "Staging": "预发",
+                "Prod": "生产",
+                "Personal": "个人",
+                "Shared": "共享"
+            },
+            "TagColors": {
+                "None": "无标签",
+                "Red": "红色",
+                "Orange": "橙色",
+                "Amber": "琥珀色",
+                "Green": "绿色",
+                "Blue": "蓝色",
+                "Purple": "紫色",
+                "Gray": "灰色"
+            }
         }
     },
     "SQLConsoleSidebar": {
@@ -537,7 +569,7 @@
         }
     },
     "TableStats": {
-        "No available connection": "未找到可用的数据源连接。",
+        "No available connection": "未找到可用的数据源。",
         "Select table to view stats": "请选择一张表查看统计信息。",
         "Failed to load stats": "无法加载表统计信息",
         "Stats insights": "统计洞察",
@@ -582,7 +614,7 @@
         "No TTL rule configured": "未配置 TTL 规则。"
     },
     "PostgresTableStats": {
-        "No available connection": "未找到可用连接。",
+        "No available connection": "未找到可用的数据源。",
         "Select table to view stats": "请选择一张表以查看统计信息。",
         "Failed to load stats": "无法加载表统计信息",
         "Size": "大小",
@@ -2227,8 +2259,8 @@
             "Unknown": "未知"
         },
         "EnsureConnection": {
-            "MissingConnectionId": "缺少 Connection ID",
-            "ConnectionNotFound": "连接不存在或已关闭"
+            "MissingConnectionId": "缺少数据源 ID",
+            "ConnectionNotFound": "数据源不存在或已关闭"
         },
         "SshTunnel": {
             "Disabled": "SSH 隧道未启用",
@@ -2239,7 +2271,7 @@
             "MissingAgent": "SSH agent 不可用"
         },
         "Connection": {
-            "CancelUnsupported": "此连接不支持取消查询"
+            "CancelUnsupported": "此数据源不支持取消查询"
         },
         "Clickhouse": {
             "MissingQueryId": "缺少查询 ID，无法终止查询",
@@ -2250,7 +2282,7 @@
     "Client": {
         "Errors": {
             "InvalidRequest": "无效请求",
-            "InvalidConnection": "无效连接",
+            "InvalidConnection": "无效数据源",
             "RequestFailed": "请求失败"
         },
         "Pglite": {
@@ -2305,9 +2337,9 @@
                 "MissingSshPassword": "缺少 SSH 密码",
                 "MissingSshPrivateKey": "缺少 SSH 私钥",
                 "UnsupportedType": "暂不支持该类型的数据库",
-                "ConnectFailed": "连接失败",
+                "ConnectFailed": "数据源连接失败",
                 "SchemaReadFailed": "读取 schema 失败",
-                "TestFailed": "连接测试失败"
+                "TestFailed": "数据源测试失败"
             },
             "Validation": {
                 "DatabaseRequired": "数据库名称不能为空",
@@ -2333,7 +2365,7 @@
         },
         "SqlConsole": {
             "Tabs": {
-                "MissingConnectionContext": "缺少连接上下文",
+                "MissingConnectionContext": "缺少数据源上下文",
                 "TabIdMismatch": "tabId 与 state.tabId 不一致",
                 "DatabaseNotInitialized": "数据库未初始化",
                 "MissingTabId": "缺少 tabId"
@@ -2348,14 +2380,14 @@
         },
         "Query": {
             "Errors": {
-                "MissingConnectionId": "缺少连接 ID",
+                "MissingConnectionId": "缺少数据源 ID",
                 "DatabaseNameRequired": "数据库名不能为空",
                 "DatabaseNameTooLong": "数据库名过长",
                 "DatabaseNameInvalid": "数据库名格式不合法",
                 "ConnectionFailed": "连接数据库失败",
                 "TooManyStatements": "单次最多允许 {max} 条语句，当前为 {count} 条",
                 "MissingSessionId": "缺少 sessionId，无法取消查询",
-                "DatasourceNotFound": "数据源不存在或连接已关闭",
+                "DatasourceNotFound": "数据源不存在或已关闭",
                 "CancelNotSupported": "当前数据源不支持取消查询"
             }
         },
@@ -2377,7 +2409,7 @@
                 "MissingTabId": "缺少 tabId",
                 "FetchCopilotSessionFailed": "获取 Copilot 会话失败",
                 "InvalidSessionType": "非法的 session type",
-                "ConnectionIdRequired": "缺少 Connection ID 参数",
+                "ConnectionIdRequired": "缺少数据源 ID 参数",
                 "ListSessionsFailed": "获取会话列表失败",
                 "CopilotCreationNotAllowed": "Copilot 会话不能通过该接口创建",
                 "CreateSessionFailed": "创建会话失败",
@@ -2388,10 +2420,10 @@
                     "Description": "检索与用户问题最相关的文档片段，返回若干上下文段落用于回答。"
                 },
                 "ListConnections": {
-                    "Description": "列出当前组织可用的数据库连接，不返回密钥。"
+                    "Description": "列出当前组织可用的数据源，不返回密钥。"
                 },
                 "ListDatabases": {
-                    "Description": "列出当前 Dory 连接中的数据库。"
+                    "Description": "列出当前 Dory 数据源中的数据库。"
                 },
                 "ListTables": {
                     "Description": "使用 Dory driver 元数据列出数据库中的表。"
@@ -2403,16 +2435,16 @@
                     "Description": "返回数据库概要，包括对象数量、大小估算和推荐优先查看的表。"
                 },
                 "GetTableProfile": {
-                    "Description": "返回表的元数据、列、统计信息、索引、属性和 DDL（取决于连接支持情况）。"
+                    "Description": "返回表的元数据、列、统计信息、索引、属性和 DDL（取决于数据源支持情况）。"
                 },
                 "SearchSchema": {
                     "Description": "使用 Dory driver 元数据按名称、类型或注释搜索表、视图和列。"
                 },
                 "ListSavedQueries": {
-                    "Description": "列出当前连接的已保存 SQL 查询。"
+                    "Description": "列出当前数据源的已保存 SQL 查询。"
                 },
                 "GetSavedQuery": {
-                    "Description": "按 id 获取当前连接的一条已保存 SQL 查询。"
+                    "Description": "按 id 获取当前数据源的一条已保存 SQL 查询。"
                 },
                 "GetMonitoringSummary": {
                     "Description": "返回查询监控概要，并可包含时间线、慢查询和错误查询样本。"
@@ -2427,7 +2459,7 @@
                     "Description": "根据结果行和列构建 Dory 自动图表画像。"
                 },
                 "RunAnalysis": {
-                    "Description": "基于结果上下文和当前连接运行 Dory 分析动作。"
+                    "Description": "基于结果上下文和当前数据源运行 Dory 分析动作。"
                 }
             },
             "Prompt": {
@@ -2446,9 +2478,9 @@
                 }
             },
             "SqlRunner": {
-                "Description": "在当前数据库连接上执行只读 SQL 查询的工具。\n功能说明：\n- 只接受单条 SELECT / SHOW / DESCRIBE / DESC / EXPLAIN 语句，不允许 INSERT/UPDATE/DELETE 等写入操作。\n- 当用户问题涉及查询、统计、聚合、报表、指标分析时，请先生成 SQL 并调用本工具，再根据结果回答。\n- 必须匹配当前数据库方言。\n- 如果不确定表结构，优先使用已提供的 schema context，再使用符合当前方言的元数据查询探查。\n- 在 PostgreSQL 上不要使用 MySQL 专属的 DESCRIBE / SHOW COLUMNS 语法。",
+                "Description": "在当前数据源上执行只读 SQL 查询的工具。\n功能说明：\n- 只接受单条 SELECT / SHOW / DESCRIBE / DESC / EXPLAIN 语句，不允许 INSERT/UPDATE/DELETE 等写入操作。\n- 当用户问题涉及查询、统计、聚合、报表、指标分析时，请先生成 SQL 并调用本工具，再根据结果回答。\n- 必须匹配当前数据库方言。\n- 如果不确定表结构，优先使用已提供的 schema context，再使用符合当前方言的元数据查询探查。\n- 在 PostgreSQL 上不要使用 MySQL 专属的 DESCRIBE / SHOW COLUMNS 语法。",
                 "SqlRequired": "SQL 语句不能为空",
-                "MissingConnection": "缺少数据库连接信息，无法执行查询。",
+                "MissingConnection": "缺少数据源信息，无法执行查询。",
                 "ReadOnlyOnly": "目前仅允许执行只读查询（SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA），请勿包含写入或更新语句。",
                 "SelectAllNotAllowed": "chatbot 生成的 SQL 不允许使用 SELECT *，请只选择回答问题所需的列。",
                 "OrderByIndexMissing": "这个查询可能较重：表 {table} 上用于 ORDER BY 的列 {columns} 未确认有索引。请先缩小查询列范围，或先检查索引。",
@@ -2531,10 +2563,10 @@
         },
         "Privileges": {
             "Errors": {
-                "MissingConnectionId": "缺少数据源连接 ID",
+                "MissingConnectionId": "缺少数据源 ID",
                 "NotClickhouse": "当前数据源不支持 ClickHouse 权限管理",
                 "Fallback": "操作失败，请稍后重试",
-                "ConnectionUnavailable": "当前连接不可用，请稍后重试",
+                "ConnectionUnavailable": "当前数据源不可用，请稍后重试",
                 "UserNotFound": "指定的用户不存在",
                 "RoleNotFound": "指定的角色不存在"
             },
@@ -2639,7 +2671,7 @@
         },
         "SchemaTags": {
             "InvalidParams": "请求参数无效",
-            "MissingConnectionContext": "缺少连接上下文",
+            "MissingConnectionContext": "缺少数据源上下文",
             "MissingOrganizationIdFallback": "缺少 organizationId，已使用本地启发式标签",
             "Tags": {
                 "PrimaryKey": "主键",
@@ -2804,7 +2836,7 @@
                 "Blocked": "已拦截"
             },
             "Notice": {
-                "ReadOnlyRestriction": "当前连接仅允许只读查询。CREATE / INSERT / UPDATE / DELETE 等语句需要手动到 SQL 编辑器中执行。"
+                "ReadOnlyRestriction": "当前数据源仅允许只读查询。CREATE / INSERT / UPDATE / DELETE 等语句需要手动到 SQL 编辑器中执行。"
             },
             "FollowUp": {
                 "Button": "继续追问此结果",
@@ -3027,10 +3059,10 @@
             },
             "Data": {
                 "ExportLabel": "导出工作区",
-                "ExportDescription": "将连接和保存的查询导出为 JSON 文件，不包含密码和密钥。",
+                "ExportDescription": "将数据源和保存的查询导出为 JSON 文件，不包含密码和密钥。",
                 "ExportAction": "导出",
                 "ImportLabel": "导入工作区",
-                "ImportDescription": "从之前导出的 JSON 文件中导入连接和保存的查询。",
+                "ImportDescription": "从之前导出的 JSON 文件中导入数据源和保存的查询。",
                 "ImportAction": "导入",
                 "ExportSuccess": "工作区导出成功。",
                 "ExportFailed": "导出失败",
@@ -3039,7 +3071,7 @@
                 "ImportFailedRetry": "导入失败，请重试。",
                 "InvalidJson": "无效的 JSON 文件。",
                 "ImportSummary": {
-                    "Connections": "{count} 个连接",
+                    "Connections": "{count} 个数据源",
                     "Folders": "{count} 个文件夹",
                     "Queries": "{count} 条查询",
                     "QueriesSkipped": "{count} 条查询已跳过",
@@ -3118,14 +3150,14 @@
             "ConnectionFailed": "数据库连接失败",
             "InitFailed": "数据库初始化失败，请检查配置或连接状态",
             "NotInitialized": "数据库未初始化",
-            "ConnectionCreateFailed": "创建连接失败",
+            "ConnectionCreateFailed": "创建数据源失败",
             "NotOrganizationMember": "你不是 Organization 成员",
             "NotAdmin": "你没有 Admin 权限",
-            "ConnectionIdentityCreateFailed": "创建连接身份失败",
-            "ConnectionIdentityUpdateFailed": "更新连接身份失败，记录不存在或无权限",
-            "ConnectionDuplicateName": "同名连接已存在",
-            "ConnectionNotFound": "连接不存在或无权限操作",
-            "ConnectionIdentityInvalid": "连接身份信息不完整",
+            "ConnectionIdentityCreateFailed": "创建数据源身份失败",
+            "ConnectionIdentityUpdateFailed": "更新数据源身份失败，记录不存在或无权限",
+            "ConnectionDuplicateName": "同名数据源已存在",
+            "ConnectionNotFound": "数据源不存在或无权限操作",
+            "ConnectionIdentityInvalid": "数据源身份信息不完整",
             "ConnectionIdentityUpdateRequiresId": "更新 identity 需要 id",
             "ConnectionIdentityMissingId": "缺少 identity id",
             "ConnectionIdentityNameRequired": "name 不能为空",
@@ -3411,7 +3443,7 @@
                 "Title": "Pro（建议）",
                 "Price": "Starting at $9/mo",
                 "Features": {
-                    "UnlimitedDatabaseConnections": "无限数据库连接",
+                    "UnlimitedDatabaseConnections": "无限数据源",
                     "HigherAiQuotaAndFasterResponses": "更高的 AI 额度和更快的响应",
                     "ByokAiFeatures": "BYOK（使用自己的 AI Key）",
                     "EarlyAccessToUpcomingFeatures": "优先体验即将推出的功能",

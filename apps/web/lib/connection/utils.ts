@@ -1,7 +1,7 @@
 import { getDBService } from '@dory/database';
 import '@/lib/drivers/register-database-drivers';
 
-import type { ConnectionListItem, ConnectionSsh } from '@dory/shared/types/connections';
+import type { ConnectionListItem, ConnectionSsh, ConnectionTls } from '@dory/shared/types/connections';
 import { BaseConfig } from '@dory/drivers/types';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
 import { parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
@@ -9,6 +9,12 @@ import { buildStoredConnectionConfig } from '@/lib/connection/config';
 import { createSqlAuditConnectionSnapshot, isSqlAuditConnectionSnapshotCurrent, patchDriverPoolForSqlAudit, type SqlAuditConnectionSnapshot } from '@/lib/server/sql-audit';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
+type TlsWithSecrets = ConnectionTls & {
+    caCertificateContent?: string | null;
+    clientCertificateContent?: string | null;
+    clientPrivateKeyContent?: string | null;
+    clientPrivateKeyPassphrase?: string | null;
+};
 
 export const CONNECTION_ERROR_CODES = {
     notFound: 'connection_not_found',
@@ -137,8 +143,12 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
 
     const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
     const sshConfig: SshWithSecrets | null = record.ssh ? { ...record.ssh, ...(sshSecrets ?? {}) } : sshSecrets ? ({ enabled: true, ...sshSecrets } as SshWithSecrets) : null;
+    const tlsSecrets = await db.connections.getTlsPlainSecrets(organizationId, record.connection.id);
+    const tlsConfig: TlsWithSecrets | null = record.tls ? { ...record.tls, ...(tlsSecrets ?? {}) } : null;
 
-    const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig, code => createConnectionError(code as ConnectionErrorCode));
+    const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig, tlsConfig, code =>
+        createConnectionError(code as ConnectionErrorCode),
+    );
     const auditSnapshot = createSqlAuditConnectionSnapshot(record, identity);
     const entry = await ensurePoolWithLatest(config, auditSnapshot);
 

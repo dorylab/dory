@@ -10,6 +10,7 @@ export function OrganizationAppShell({
     defaultOpen,
     initialUser,
     organizationId,
+    runtime,
     billingManagementAvailable,
     desktopBillingHandoff,
     enterpriseLicense,
@@ -18,6 +19,7 @@ export function OrganizationAppShell({
     defaultOpen: boolean;
     initialUser: any;
     organizationId: string;
+    runtime: string;
     billingManagementAvailable: boolean;
     desktopBillingHandoff: boolean;
     enterpriseLicense: boolean;
@@ -25,7 +27,8 @@ export function OrganizationAppShell({
     return (
         <SettingsProvider
             includeOrganizationSettings
-            includeBillingSettings
+            includeBillingSettings={billingManagementAvailable || desktopBillingHandoff}
+            runtime={runtime}
             billingManagementAvailable={billingManagementAvailable}
             desktopBillingHandoff={desktopBillingHandoff}
         >

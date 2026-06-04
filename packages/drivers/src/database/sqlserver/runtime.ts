@@ -3,11 +3,14 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import { buildSecureContextOptions, getDriverTlsOptions, normalizeTlsMode } from '@dory/drivers/core/tls';
 import { SqlServerDialect } from './dialect';
 
 type SqlServerRuntimeOptions = {
     encrypt?: boolean;
     trustServerCertificate?: boolean;
+    serverName?: string;
+    cryptoCredentialsDetails?: NonNullable<SqlServerPoolConfig['options']>['cryptoCredentialsDetails'];
     queryTimeoutMs?: number;
     connectTimeoutMs?: number;
 };
@@ -83,16 +86,21 @@ function parseHostInput(host: string, fallbackPort?: number | string): ParsedHos
 function extractRuntimeOptions(config: BaseConfig): SqlServerRuntimeOptions {
     const options = (config.options ?? {}) as Record<string, unknown>;
     const hostConfig = parseHostInput(config.host, config.port);
+    const tlsOption = getDriverTlsOptions(options);
+    const tlsMode = normalizeTlsMode(tlsOption?.mode);
+    const useTlsMode = tlsMode && tlsMode !== 'prefer';
 
     return {
-        encrypt: parseBoolean(options.encrypt) ?? hostConfig.encrypt ?? true,
-        trustServerCertificate: parseBoolean(options.trustServerCertificate) ?? false,
+        encrypt: useTlsMode ? tlsMode !== 'disable' : (parseBoolean(options.encrypt) ?? hostConfig.encrypt ?? true),
+        trustServerCertificate: useTlsMode ? tlsMode !== 'verify-identity' : (parseBoolean(options.trustServerCertificate) ?? false),
+        serverName: typeof tlsOption?.serverName === 'string' && tlsOption.serverName.trim() ? tlsOption.serverName.trim() : undefined,
+        cryptoCredentialsDetails: useTlsMode && tlsMode !== 'disable' ? buildSecureContextOptions(tlsOption) : undefined,
         queryTimeoutMs: parsePositiveInt(options.request_timeout ?? options.query_timeout),
         connectTimeoutMs: parsePositiveInt(options.connect_timeout),
     };
 }
 
-function buildPoolConfig(config: BaseConfig, databaseOverride?: string, connectionOverride?: SqlServerConnectionOverride): SqlServerPoolConfig {
+export function buildSqlServerPoolConfig(config: BaseConfig, databaseOverride?: string, connectionOverride?: SqlServerConnectionOverride): SqlServerPoolConfig {
     const hostConfig = parseHostInput(config.host, config.port);
     const runtime = extractRuntimeOptions(config);
 
@@ -112,6 +120,8 @@ function buildPoolConfig(config: BaseConfig, databaseOverride?: string, connecti
         options: {
             encrypt: runtime.encrypt,
             trustServerCertificate: runtime.trustServerCertificate,
+            serverName: runtime.serverName,
+            cryptoCredentialsDetails: runtime.cryptoCredentialsDetails,
             enableArithAbort: true,
         },
     };
@@ -185,7 +195,7 @@ export function resolveSqlServerPort(config: BaseConfig): number {
 }
 
 export async function createSqlServerPool(config: BaseConfig, databaseOverride?: string, connectionOverride?: SqlServerConnectionOverride): Promise<ConnectionPool> {
-    const pool = new sql.ConnectionPool(buildPoolConfig(config, databaseOverride, connectionOverride));
+    const pool = new sql.ConnectionPool(buildSqlServerPoolConfig(config, databaseOverride, connectionOverride));
     return pool.connect();
 }
 

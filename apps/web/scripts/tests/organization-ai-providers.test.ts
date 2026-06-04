@@ -61,14 +61,23 @@ test('organization provider override is controlled by Enterprise or Pro', () => 
     assert.equal(normalizeLicense('Enterprise'), 'enterprise');
     assert.equal(normalizeLicense('unknown'), null);
     const originalLicense = process.env.DORY_LICENSE;
+    const originalRuntime = process.env.DORY_RUNTIME;
     delete process.env.DORY_LICENSE;
     assert.equal(getLicenseForServer(), 'oss');
     process.env.DORY_LICENSE = 'enterprise';
     assert.equal(getLicenseForServer(), 'enterprise');
+    process.env.DORY_RUNTIME = 'docker';
+    assert.equal(getLicenseForServer(), 'oss');
+    delete process.env.DORY_RUNTIME;
     if (originalLicense === undefined) {
         delete process.env.DORY_LICENSE;
     } else {
         process.env.DORY_LICENSE = originalLicense;
+    }
+    if (originalRuntime === undefined) {
+        delete process.env.DORY_RUNTIME;
+    } else {
+        process.env.DORY_RUNTIME = originalRuntime;
     }
 
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'self-hosted-license', license: 'enterprise', billingPlan: 'hobby' }), {
@@ -129,6 +138,10 @@ test('organization provider entitlement mode follows billing capabilities', () =
         process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
         process.env.STRIPE_PRO_MONTHLY_PRICE_ID = 'price_test';
         assert.equal(getOrganizationAiProviderEntitlementModeForServer(), 'cloud-plan');
+
+        process.env.DORY_RUNTIME = 'docker';
+        assert.equal(getOrganizationAiProviderEntitlementModeForServer(), 'self-hosted-license');
+        delete process.env.DORY_RUNTIME;
 
         process.env.DORY_LICENSE = 'oss';
         assert.equal(getOrganizationAiProviderEntitlementModeForServer(), 'self-hosted-license');
@@ -289,6 +302,38 @@ test('AI providers view model marks only the effective default in OSS', () => {
             ['system', 'active', true],
             ['provider_openai', 'enabled', false],
         ],
+    );
+});
+
+test('AI providers view model hides organization providers in Docker OSS', () => {
+    const viewModel = buildAiProvidersViewModel({
+        organizationProviders: [
+            {
+                id: 'provider_openai',
+                organizationId: 'org_123',
+                provider: 'openai',
+                model: 'gpt-5.4-mini',
+                baseUrl: 'https://api.openai.com/v1',
+                enabled: true,
+                isDefault: true,
+                hasKey: true,
+                keyHint: 'sk-o...test',
+                createdAt: '2026-05-20T00:00:00.000Z',
+                updatedAt: '2026-05-20T00:00:00.000Z',
+            },
+        ],
+        entitlementMode: 'cloud-plan',
+        license: 'enterprise',
+        billingPlan: 'pro',
+        runtime: 'docker',
+        env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen-plus', DORY_AI_API_KEY: 'sk-test' },
+    });
+
+    assert.equal(viewModel.organizationProviderCapability.enabled, false);
+    assert.equal(viewModel.defaultProviderId, 'system');
+    assert.deepEqual(
+        viewModel.providers.map(provider => [provider.id, provider.source, provider.status, provider.isDefault]),
+        [['system', 'system', 'active', true]],
     );
 });
 

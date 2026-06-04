@@ -55,8 +55,8 @@ const mermaidConfig: MermaidConfig = {
 };
 
 const MIN_SCALE = 0.45;
-const MAX_SCALE = 3;
-const ZOOM_STEP = 0.15;
+const MAX_SCALE = 8;
+const ZOOM_STEP = 0.25;
 
 const clampScale = (value: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, value));
 

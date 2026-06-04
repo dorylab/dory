@@ -6,17 +6,22 @@ import { Label } from '@/registry/new-york-v4/ui/label';
 import { Loader2, RefreshCcw, Mail } from 'lucide-react';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { useTranslations } from 'next-intl';
+import { authClient } from '@/lib/auth-client';
+import { getEmailVerificationCallbackURL } from '@/lib/client/auth-runtime';
 
 export function VerifyEmailPanel(props: {
     defaultEmail: string;
+    callbackURL?: string;
     onChangeEmail?: (email: string) => void; //Optional: Allow changing mailboxes within the panel
 }) {
     const t = useTranslations('Auth');
+    const { data: session } = authClient.useSession();
     const [email, setEmail] = useState(props.defaultEmail);
     const [cooldown, setCooldown] = useState(0);
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState<string | null>(null);
     const [err, setErr] = useState<string | null>(null);
+    const callbackURL = props.callbackURL || '/';
 
     useEffect(() => {
         if (!cooldown) return;
@@ -24,16 +29,69 @@ export function VerifyEmailPanel(props: {
         return () => clearInterval(t);
     }, [cooldown]);
 
+    useEffect(() => {
+        if (!window.authBridge?.onCallback) return;
+
+        const unsubscribe = window.authBridge.onCallback(async deepLink => {
+            try {
+                const url = new URL(deepLink);
+                const error = url.searchParams.get('error');
+                if (error) {
+                    setErr(t('SignIn.AuthFailed', { error }));
+                    return;
+                }
+
+                const ticket = url.searchParams.get('ticket');
+                if (!ticket) {
+                    setErr(t('SignIn.MissingToken'));
+                    return;
+                }
+
+                setLoading(true);
+                setErr(null);
+                setMsg(null);
+
+                const consumeRes = await fetch('/api/electron/auth/consume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ticket,
+                        anonymousUserId: session?.user?.isAnonymous ? session.user.id : null,
+                        anonymousActiveOrganizationId: session?.user?.isAnonymous
+                            ? ((session.session as { activeOrganizationId?: string | null } | undefined)?.activeOrganizationId ?? null)
+                            : null,
+                    }),
+                });
+
+                if (!consumeRes.ok) {
+                    const data = await consumeRes.json().catch(() => null);
+                    throw new Error(data?.error ?? t('SignIn.AuthFailed', { error: 'consume_failed' }));
+                }
+
+                setMsg(t('SignIn.SuccessRefreshing'));
+                window.location.assign(callbackURL);
+            } catch {
+                setErr(t('SignIn.InvalidCallback'));
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        return () => {
+            unsubscribe?.();
+        };
+    }, [callbackURL, session, t]);
+
     async function resend() {
         setErr(null);
         setMsg(null);
         setLoading(true);
         try {
-            const callbackURL = window.authBridge?.openExternal ? 'dory://auth-complete' : '/';
+            const verificationCallbackURL = getEmailVerificationCallbackURL(callbackURL);
             const res = await authFetch('/api/auth/resend-verification', {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ email, callbackURL }),
+                body: JSON.stringify({ email, callbackURL: verificationCallbackURL }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -42,7 +100,7 @@ export function VerifyEmailPanel(props: {
                 setMsg(data?.message || t('VerifyEmail.Sent'));
                 setCooldown(60);
             }
-        } catch (e) {
+        } catch {
             setErr(t('VerifyEmail.NetworkError'));
         } finally {
             setLoading(false);

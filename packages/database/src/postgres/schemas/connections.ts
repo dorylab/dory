@@ -223,3 +223,31 @@ export const connectionSsh = pgTable(
     },
     t => [check('chk_connection_ssh_port', sql`${t.port} IS NULL OR (${t.port} BETWEEN 1 AND 65535)`)],
 );
+
+export const connectionTls = pgTable(
+    'connection_tls',
+    {
+        connectionId: text('connection_id').primaryKey(),
+
+        mode: text('mode').notNull().default('disable'),
+
+        caCertificatePath: text('ca_certificate_path'),
+        clientCertificatePath: text('client_certificate_path'),
+        clientPrivateKeyPath: text('client_private_key_path'),
+        serverName: text('server_name'),
+        ciphers: text('ciphers'),
+        minVersion: text('min_version'),
+        maxVersion: text('max_version'),
+
+        caCertificateEncrypted: text('ca_certificate_encrypted'),
+        clientCertificateEncrypted: text('client_certificate_encrypted'),
+        clientPrivateKeyEncrypted: text('client_private_key_encrypted'),
+        clientPrivateKeyPassphraseEncrypted: text('client_private_key_passphrase_encrypted'),
+
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .$onUpdateFn(() => new Date()),
+    },
+    t => [check('chk_connection_tls_mode', sql`${t.mode} IN ('disable', 'prefer', 'require', 'verify-ca', 'verify-identity')`)],
+);

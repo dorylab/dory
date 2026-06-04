@@ -7,11 +7,19 @@ import { getDBService } from '@dory/database';
 import { TestConnectionPayload } from '@dory/shared/types/connections';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/lib/connection/utils';
 import { buildTestConnectionConfig } from '@/lib/connection/config';
+import { resolveTestIdentityPassword } from '@/lib/connection/secrets';
 
 type SSHConfigWithSecrets = NonNullable<TestConnectionPayload['ssh']> & {
     password?: string | null;
     privateKey?: string | null;
     passphrase?: string | null;
+};
+
+type TLSConfigWithSecrets = NonNullable<TestConnectionPayload['tls']> & {
+    caCertificateContent?: string | null;
+    clientCertificateContent?: string | null;
+    clientPrivateKeyContent?: string | null;
+    clientPrivateKeyPassphrase?: string | null;
 };
 
 type DBServiceInstance = Awaited<ReturnType<typeof getDBService>>;
@@ -20,6 +28,14 @@ function hasSshSecret(ssh?: SSHConfigWithSecrets | null): boolean {
     if (!ssh) return false;
     const { password, privateKey, passphrase } = ssh;
     const values = [password, privateKey, passphrase].filter(val => typeof val === 'string' && val.trim() !== '');
+    return values.length > 0;
+}
+
+function hasTlsSecret(tls?: TLSConfigWithSecrets | null): boolean {
+    if (!tls) return false;
+    const values = [tls.caCertificateContent, tls.clientCertificateContent, tls.clientPrivateKeyContent, tls.clientPrivateKeyPassphrase].filter(
+        val => typeof val === 'string' && val.trim() !== '',
+    );
     return values.length > 0;
 }
 
@@ -43,9 +59,10 @@ export async function testConnectService(organizationId: string, payload: TestCo
         }
     };
 
-    const testPassword = payload?.identity?.password ?? plainPassword;
+    const testPassword = resolveTestIdentityPassword(payload?.identity?.password, plainPassword);
     const resolvedSsh = await resolveSshSecrets(organizationId, payload, db);
-    const config = buildTestConnectionConfig({ ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh }, code =>
+    const resolvedTls = await resolveTlsSecrets(organizationId, payload, db);
+    const config = buildTestConnectionConfig({ ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh, tls: resolvedTls }, code =>
         createConnectionError(code as ConnectionErrorCode),
     );
     let provider = null as Awaited<ReturnType<typeof createDriver>> | null;
@@ -73,6 +90,27 @@ export async function testConnectService(organizationId: string, payload: TestCo
             });
         }
     }
+}
+
+async function resolveTlsSecrets(organizationId: string, payload: TestConnectionPayload, db: DBServiceInstance): Promise<TLSConfigWithSecrets | null> {
+    const tls = payload.tls as TLSConfigWithSecrets | null;
+
+    if (!tls || !tls.mode || tls.mode === 'disable') {
+        return tls ?? null;
+    }
+
+    const resolved: TLSConfigWithSecrets = { ...tls };
+    if (!hasTlsSecret(resolved) && payload.connection?.id) {
+        const stored = await db.connections.getTlsPlainSecrets(organizationId, payload.connection.id);
+        if (stored) {
+            resolved.caCertificateContent = stored.caCertificateContent ?? undefined;
+            resolved.clientCertificateContent = stored.clientCertificateContent ?? undefined;
+            resolved.clientPrivateKeyContent = stored.clientPrivateKeyContent ?? undefined;
+            resolved.clientPrivateKeyPassphrase = stored.clientPrivateKeyPassphrase ?? undefined;
+        }
+    }
+
+    return resolved;
 }
 
 async function resolveSshSecrets(organizationId: string, payload: TestConnectionPayload, db: DBServiceInstance): Promise<SSHConfigWithSecrets | null> {

@@ -2,6 +2,7 @@ export type ConnectionType = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'my
 export type ConnectionStatus = 'Connected' | 'Error' | 'Disconnected';
 export type ConnectionCheckStatus = 'unknown' | 'ok' | 'error';
 export type ConnectionIdentityStatus = 'active' | 'disabled';
+export type ConnectionTlsMode = 'disable' | 'prefer' | 'require' | 'verify-ca' | 'verify-identity';
 
 export interface Connection {
     id: string;
@@ -97,6 +98,28 @@ export interface ConnectionSsh {
     port: number | null;
     username: string | null;
     authMethod: string | null;
+
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface ConnectionTls {
+    connectionId: string;
+
+    mode: ConnectionTlsMode;
+
+    caCertificatePath: string | null;
+    clientCertificatePath: string | null;
+    clientPrivateKeyPath: string | null;
+    serverName: string | null;
+    ciphers: string | null;
+    minVersion: string | null;
+    maxVersion: string | null;
+
+    hasCaCertificateContent?: boolean;
+    hasClientCertificateContent?: boolean;
+    hasClientPrivateKeyContent?: boolean;
+    hasClientPrivateKeyPassphrase?: boolean;
 
     createdAt: Date;
     updatedAt: Date;
@@ -199,6 +222,25 @@ export interface ConnectionSshUpsertInput {
     passphrase?: string | null;
 }
 
+export interface ConnectionTlsUpsertInput {
+    connectionId?: string;
+
+    mode?: ConnectionTlsMode;
+
+    caCertificatePath?: string | null;
+    clientCertificatePath?: string | null;
+    clientPrivateKeyPath?: string | null;
+    serverName?: string | null;
+    ciphers?: string | null;
+    minVersion?: string | null;
+    maxVersion?: string | null;
+
+    caCertificateContent?: string | null;
+    clientCertificateContent?: string | null;
+    clientPrivateKeyContent?: string | null;
+    clientPrivateKeyPassphrase?: string | null;
+}
+
 export interface ConnectionListIdentity {
     id: string;
     name: string;
@@ -215,12 +257,14 @@ export interface ConnectionListItem {
     connection: Connection | ConnectionItem;
     identities: Array<ConnectionListIdentity>;
     ssh: ConnectionSsh | null;
+    tls?: ConnectionTls | null;
 }
 
 export interface TestConnectionPayload {
     connection: Connection;
     identity: ConnectionIdentityUpdateInput & { id?: string; password?: string | null };
     ssh: ConnectionSsh | null;
+    tls?: ConnectionTlsUpsertInput | null;
     timeout?: number;
 }
 
@@ -228,12 +272,14 @@ export interface CreateConnectionPayload {
     connection: Connection;
     identities: ConnectionListIdentity[];
     ssh: ConnectionSsh | null;
+    tls?: ConnectionTlsUpsertInput | null;
 }
 
 export interface UpdateConnectionPayload {
     connection: Connection;
     identities: ConnectionListIdentity[];
     ssh: ConnectionSsh | null;
+    tls?: ConnectionTlsUpsertInput | null;
 }
 
 export interface ConnectionIdentityWithSecret extends ConnectionIdentity {
@@ -243,6 +289,7 @@ export interface ConnectionIdentityWithSecret extends ConnectionIdentity {
 export interface ConnectionDetail extends Connection {
     identities: ConnectionIdentityWithSecret[];
     ssh: ConnectionSsh | null;
+    tls?: ConnectionTls | null;
 }
 
 export interface ConnectionQueryParams {
@@ -264,4 +311,5 @@ export interface ConnectionPayload {
     >;
 
     ssh?: ConnectionSshUpsertInput | null;
+    tls?: ConnectionTlsUpsertInput | null;
 }

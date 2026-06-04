@@ -4,7 +4,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
-import { ChevronDown, ChevronUp, Loader2, Lock, Server, Shield } from 'lucide-react';
+import { Cable, ChevronDown, ChevronUp, KeyRound, Loader2, Lock, Server, Shield, Tags, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
@@ -18,18 +18,29 @@ import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 
 import SSHConnectionForm from './forms/ssh/ssh-form';
-import ConnectionForm from './forms/connection';
+import { TLSConnectionForm } from './forms/tls/tls-form';
+import ConnectionForm, { ConnectionMetadataForm } from './forms/connection';
 import IdentityForm from './forms/identity';
 
 import { useCreateConnection, useTestConnection, useUpdateConnection } from '../hooks/use-connections';
-import { NEW_CONNECTION_DEFAULT_VALUES } from '../constants';
+import { NEW_CONNECTION_DEFAULT_VALUES, normalizeConnectionEnvironmentValue, normalizeConnectionTagColorValue } from '../constants';
 import { ConnectionDialogFormSchema } from '../form-schema';
 import { useAtomValue } from 'jotai';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { getConnectionDriver } from './forms/connection/drivers';
 import { buildNeonConnectionStringForForm, normalizeNeonIdentityFromConnectionString } from './forms/connection/drivers/neon';
+import { createTlsDefaultsForConnectionType, normalizeTlsForForm, normalizeTlsForSubmit, TLS_SUPPORTED_CONNECTION_TYPES } from './forms/tls/utils';
 
 type Mode = 'Create' | 'Edit';
+
+function ConnectionFormGroupLabel({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+    return (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Icon className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span>{children}</span>
+        </p>
+    );
+}
 
 export function ConnectionDialog({
     open,
@@ -45,7 +56,8 @@ export function ConnectionDialog({
     const [submitting, setSubmitting] = useState(false);
     const [testing, setTesting] = useState(false);
     const [sshOpen, setSshOpen] = useState(false);
-    const [sslOpen, setSslOpen] = useState(false);
+    const [tlsOpen, setTlsOpen] = useState(false);
+    const [savePassword, setSavePassword] = useState(true);
     const currentConnection = useAtomValue(currentConnectionAtom);
     const t = useTranslations('Connections');
     const tc = useTranslations('Connections.ConnectionContent');
@@ -67,15 +79,16 @@ export function ConnectionDialog({
     const isSqlite = connectionType === 'sqlite';
     const isNeon = connectionType === 'neon';
     const isDuckDb = connectionType === 'duckdb';
-    const isSqlServer = connectionType === 'sqlserver';
     const isMotherDuck = isDuckDb && duckDbMode === 'motherduck';
     const hidesIdentityForm = isSqlite || isNeon || isDuckDb;
     const hidesSshForm = isSqlite || isNeon || isDuckDb;
+    const hidesTlsForm = !TLS_SUPPORTED_CONNECTION_TYPES.has(connectionType);
 
     const isEditMode = mode === 'Edit' && Boolean(connectionItem?.connection?.id);
 
     const resetDialogState = () => {
         setTesting(false);
+        setSavePassword(true);
         reset(NEW_CONNECTION_DEFAULT_VALUES);
     };
 
@@ -128,6 +141,42 @@ export function ConnectionDialog({
         };
     };
 
+    const normalizeIdentityPasswordForSubmit = (identityValues: any, intent: 'save' | 'test') => {
+        if (!savePassword && identityValues) {
+            if (intent === 'test' && typeof identityValues.password === 'string' && identityValues.password.trim() !== '') {
+                return identityValues;
+            }
+            return { ...identityValues, password: null };
+        }
+
+        if (!isEditMode || !identityValues || typeof identityValues.password !== 'string' || identityValues.password.trim() !== '') {
+            return identityValues;
+        }
+
+        const { password: _password, ...identityWithoutPassword } = identityValues;
+        return identityWithoutPassword;
+    };
+
+    const normalizeConnectionMetadataValues = (connectionValues: Record<string, unknown> | null | undefined): Record<string, unknown> | null | undefined => {
+        if (!connectionValues) return connectionValues;
+
+        return {
+            ...connectionValues,
+            environment: normalizeConnectionEnvironmentValue(connectionValues.environment),
+            tags: normalizeConnectionTagColorValue(connectionValues.tags),
+        };
+    };
+
+    const normalizeConnectionValuesForSubmit = (connectionValues: Record<string, unknown> | null | undefined, tlsPayload: { mode?: string | null } | null) => {
+        const normalizedConnectionValues = normalizeConnectionMetadataValues(connectionValues);
+        if (normalizedConnectionValues?.type !== 'clickhouse') return normalizedConnectionValues;
+
+        return {
+            ...normalizedConnectionValues,
+            ssl: (tlsPayload?.mode ?? 'disable') !== 'disable',
+        };
+    };
+
     useEffect(() => {
         if (!open) return;
 
@@ -136,8 +185,9 @@ export function ConnectionDialog({
             const formIdentity = connectionItem.identities?.find((iden: any) => iden.isDefault) || {};
             const driver = getConnectionDriver(connectionItem.connection?.type ?? connectionItem.connection?.engine);
             const nextValues = {
-                connection: driver.normalizeForForm(connectionItem.connection),
+                connection: normalizeConnectionMetadataValues(driver.normalizeForForm(connectionItem.connection)),
                 ssh: connectionItem.ssh ? { ...connectionItem.ssh } : { ...(NEW_CONNECTION_DEFAULT_VALUES as any).ssh },
+                tls: normalizeTlsForForm(connectionItem.connection, (connectionItem as any).tls),
                 identity: {
                     ...(NEW_CONNECTION_DEFAULT_VALUES as any).identity,
                     ...formIdentity,
@@ -147,12 +197,17 @@ export function ConnectionDialog({
                 nextValues.connection.host = buildNeonConnectionStringForForm(connectionItem.connection, formIdentity);
             }
             reset(nextValues);
+            setSavePassword(true);
             setSshOpen(connectionItem.connection?.type === 'neon' ? false : Boolean((connectionItem as any).ssh?.enabled));
-            setSslOpen(Boolean(nextValues.connection?.encrypt));
+            setTlsOpen(false);
         } else {
-            reset(NEW_CONNECTION_DEFAULT_VALUES as any);
+            reset({
+                ...(NEW_CONNECTION_DEFAULT_VALUES as any),
+                tls: createTlsDefaultsForConnectionType((NEW_CONNECTION_DEFAULT_VALUES as any).connection?.type),
+            });
+            setSavePassword(true);
             setSshOpen(Boolean((NEW_CONNECTION_DEFAULT_VALUES as any).ssh?.enabled));
-            setSslOpen(false);
+            setTlsOpen(false);
         }
     }, [open, isEditMode, connectionItem, reset]);
 
@@ -164,13 +219,15 @@ export function ConnectionDialog({
             const sshPayload = hidesSshForm
                 ? { enabled: false, host: null, port: null, username: null, authMethod: null }
                 : normalizeSshValues(values.ssh, isEditMode ? connectionId : null);
+            const tlsPayload = hidesTlsForm ? null : normalizeTlsForSubmit(values.connection?.type, values.tls);
             const driver = getConnectionDriver(values.connection?.type);
-            const normalizedConnection = driver.normalizeForSubmit(values.connection);
-            const normalizedIdentity = normalizeIdentityValues(values.identity);
+            const normalizedConnection = driver.normalizeForSubmit(normalizeConnectionValuesForSubmit(values.connection, tlsPayload));
+            const normalizedIdentity = normalizeIdentityPasswordForSubmit(normalizeIdentityValues(values.identity), 'save');
 
             const savedValues = {
                 connection: isEditMode ? { ...normalizedConnection, id: connectionId } : normalizedConnection,
                 ssh: sshPayload,
+                tls: tlsPayload,
                 identities: [
                     isEditMode
                         ? {
@@ -189,9 +246,9 @@ export function ConnectionDialog({
                     id: connectionItem.connection.id,
                 };
                 console.log('Updating connection with values:', updateValues);
-                await updateConnectionMutation.mutateAsync(updateValues);
+                await updateConnectionMutation.mutateAsync(updateValues as any);
             } else {
-                await createConnectionMutation.mutateAsync(savedValues);
+                await createConnectionMutation.mutateAsync(savedValues as any);
             }
 
             onOpenChange(false);
@@ -204,9 +261,10 @@ export function ConnectionDialog({
 
     const onValidTest = async (values: any) => {
         const sshPayload = hidesSshForm ? { enabled: false, host: null, port: null, username: null, authMethod: null } : normalizeSshValues(values.ssh);
+        const tlsPayload = hidesTlsForm ? null : normalizeTlsForSubmit(values.connection?.type, values.tls);
         const driver = getConnectionDriver(values.connection?.type);
-        const normalizedConnection = driver.normalizeForSubmit(values.connection);
-        const normalizedIdentity = normalizeIdentityValues(values.identity);
+        const normalizedConnection = driver.normalizeForSubmit(normalizeConnectionValuesForSubmit(values.connection, tlsPayload));
+        const normalizedIdentity = normalizeIdentityPasswordForSubmit(normalizeIdentityValues(values.identity), 'test');
         let testPayload = { ...values, ssh: sshPayload };
         if (mode === 'Edit') {
             const mergedSsh = sshPayload ? { ...currentConnection?.ssh, ...sshPayload } : (currentConnection?.ssh ?? null);
@@ -214,9 +272,10 @@ export function ConnectionDialog({
                 connection: { ...currentConnection?.connection, ...normalizedConnection },
                 identity: { ...currentConnection?.identities?.find((iden: any) => iden.isDefault), ...normalizedIdentity },
                 ssh: mergedSsh,
+                tls: tlsPayload ?? (currentConnection as any)?.tls ?? null,
             };
         } else {
-            testPayload = { ...values, connection: normalizedConnection, identity: normalizedIdentity, ssh: sshPayload };
+            testPayload = { ...values, connection: normalizedConnection, identity: normalizedIdentity, ssh: sshPayload, tls: tlsPayload };
         }
         setTesting(true);
         try {
@@ -268,55 +327,51 @@ export function ConnectionDialog({
                         <ScrollArea className="overflow-hidden pr-2 h-[70vh]">
                             <div className="space-y-4 pb-4">
                                 <section className="rounded-xl border border-border/70 bg-background/80 p-4 space-y-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-                                            <Server className="h-3 w-3 text-muted-foreground" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('Connection Info')}</span>
-                                        </div>
+                                    <div className="space-y-3">
+                                        <ConnectionFormGroupLabel icon={Server}>{tc('General')}</ConnectionFormGroupLabel>
+                                        <ConnectionForm form={form} />
                                     </div>
 
-                                    <div className="space-y-4">
-                                        <ConnectionForm form={form} />
+                                    {!hidesIdentityForm ? (
+                                        <div className="space-y-3">
+                                            <ConnectionFormGroupLabel icon={KeyRound}>{t('Authentication Info')}</ConnectionFormGroupLabel>
+                                            <IdentityForm form={form} isEditMode={isEditMode} savePassword={savePassword} onSavePasswordChange={setSavePassword} />
+                                        </div>
+                                    ) : null}
 
-                                        {!hidesIdentityForm ? <p className="text-xs text-muted-foreground mt-3">{t('Authentication Info')}</p> : null}
-                                        {!hidesIdentityForm ? <IdentityForm form={form} /> : null}
+                                    <div className="space-y-3">
+                                        <ConnectionFormGroupLabel icon={Tags}>{t('Metadata')}</ConnectionFormGroupLabel>
+                                        <ConnectionMetadataForm form={form} />
                                     </div>
                                 </section>
 
-                                {isSqlServer ? (
+                                {!hidesTlsForm ? (
                                     <section className="mt-2 rounded-xl border border-border/70 bg-background/80">
-                                        <Collapsible open={sslOpen} onOpenChange={setSslOpen}>
+                                        <Collapsible open={tlsOpen} onOpenChange={setTlsOpen}>
                                             <div className="flex items-center justify-between px-4 py-3">
                                                 <div className="flex items-center gap-3">
                                                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
                                                         <Lock className="h-3 w-3 text-muted-foreground" />
                                                     </div>
                                                     <div className="flex flex-col">
-                                                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">SSL</span>
+                                                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">TLS/SSL</span>
                                                     </div>
                                                 </div>
 
                                                 <div className="flex items-center gap-2">
                                                     <FormField
                                                         control={control}
-                                                        name="connection.encrypt"
+                                                        name="tls.mode"
                                                         render={({ field }) => (
                                                             <FormItem className="flex items-center gap-2">
                                                                 <FormLabel className="text-xs text-muted-foreground">{t('Enable')}</FormLabel>
                                                                 <FormControl>
                                                                     <Switch
-                                                                        checked={Boolean(field.value)}
+                                                                        checked={field.value !== 'disable'}
                                                                         onCheckedChange={checked => {
-                                                                            field.onChange(checked);
-                                                                            setSslOpen(checked);
-                                                                            if (!checked) {
-                                                                                form.setValue('connection.trustServerCertificate', false, {
-                                                                                    shouldDirty: true,
-                                                                                    shouldValidate: false,
-                                                                                });
-                                                                            }
+                                                                            const nextMode = checked ? (connectionType === 'sqlserver' ? 'require' : 'require') : 'disable';
+                                                                            field.onChange(nextMode);
+                                                                            setTlsOpen(checked);
                                                                         }}
                                                                     />
                                                                 </FormControl>
@@ -326,25 +381,14 @@ export function ConnectionDialog({
 
                                                     <CollapsibleTrigger asChild>
                                                         <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:bg-muted/60">
-                                                            {sslOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                                            {tlsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                                                         </Button>
                                                     </CollapsibleTrigger>
                                                 </div>
                                             </div>
 
                                             <CollapsibleContent className="border-t border-border/60 bg-muted/20 px-4 py-4">
-                                                <FormField
-                                                    control={control}
-                                                    name="connection.trustServerCertificate"
-                                                    render={({ field }) => (
-                                                        <FormItem className="flex items-center justify-between rounded-lg border border-border/70 bg-background px-3 py-2">
-                                                            <FormLabel className="text-sm font-medium">Trust certificate</FormLabel>
-                                                            <FormControl>
-                                                                <Switch checked={Boolean(field.value)} onCheckedChange={field.onChange} />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}
-                                                />
+                                                <TLSConnectionForm form={form} connectionType={connectionType} />
                                             </CollapsibleContent>
                                         </Collapsible>
                                     </section>
@@ -403,6 +447,7 @@ export function ConnectionDialog({
                         <DialogFooter className="shrink-0 pt-4 mt-2 bg-background flex lg:justify-between">
                             <div>
                                 <Button type="button" onClick={handleTestConnection} disabled={submitting || testing} data-testid="test-connection">
+                                    {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Cable className="mr-2 h-4 w-4" />}
                                     {testing ? t('Testing Connection') : tc('TestConnection')}
                                 </Button>
                             </div>

@@ -1,13 +1,21 @@
-import { UseFormReturn, useWatch } from 'react-hook-form';
+import { type FieldValues, UseFormReturn, useWatch } from 'react-hook-form';
+import { Check } from 'lucide-react';
+import { cn } from '@dory/web-utils';
 import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Label } from '@/registry/new-york-v4/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/registry/new-york-v4/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { useTranslations } from 'next-intl';
 import RequiredMark from '../../require-mark';
 import { CONNECTION_TYPE_OPTIONS, getConnectionDriver } from './drivers';
 import { DatabaseTypeIcon } from '../../database-type-icon';
+import { createTlsDefaultsForConnectionType } from '../tls/utils';
+import { CONNECTION_ENVIRONMENT_OPTIONS, CONNECTION_TAG_COLOR_OPTIONS, normalizeConnectionEnvironmentValue, normalizeConnectionTagColorValue } from '../../../constants';
 
-export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
+const EMPTY_ENVIRONMENT_RADIO_VALUE = '__none__';
+
+export default function ConnectionForm(props: { form: UseFormReturn<FieldValues> }) {
     const { form } = props;
     const { control } = form;
     const t = useTranslations('Connections.ConnectionContent');
@@ -32,15 +40,21 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
         form.setValue('connection.path', currentConnection.path ?? nextDefaults.path ?? null, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.duckdbMode', nextDefaults.duckdbMode, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.ssl', nextDefaults.ssl, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.encrypt', nextDefaults.encrypt, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.trustServerCertificate', nextDefaults.trustServerCertificate, {
+            shouldDirty: true,
+            shouldValidate: false,
+        });
+        form.setValue('tls', createTlsDefaultsForConnectionType(nextType), { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.description', currentConnection.description ?? nextDefaults.description, {
             shouldDirty: true,
             shouldValidate: false,
         });
-        form.setValue('connection.environment', currentConnection.environment ?? nextDefaults.environment, {
+        form.setValue('connection.environment', normalizeConnectionEnvironmentValue(currentConnection.environment ?? nextDefaults.environment), {
             shouldDirty: true,
             shouldValidate: false,
         });
-        form.setValue('connection.tags', currentConnection.tags ?? nextDefaults.tags, {
+        form.setValue('connection.tags', normalizeConnectionTagColorValue(currentConnection.tags ?? nextDefaults.tags), {
             shouldDirty: true,
             shouldValidate: false,
         });
@@ -111,6 +125,99 @@ export default function ConnectionForm(props: { form: UseFormReturn<any> }) {
                 />
             </div>
             <DriverFields key={connectionType} form={form} />
+        </div>
+    );
+}
+
+export function ConnectionMetadataForm(props: { form: UseFormReturn<FieldValues> }) {
+    const { form } = props;
+    const tc = useTranslations('Connections');
+
+    return (
+        <div className="space-y-4">
+            <FormField
+                control={form.control}
+                name="connection.environment"
+                render={({ field }) => {
+                    const environmentValue = normalizeConnectionEnvironmentValue(field.value);
+
+                    return (
+                        <FormItem className="space-y-2">
+                            <FormLabel>{tc('Environment')}</FormLabel>
+                            <FormControl>
+                                <RadioGroup
+                                    className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2"
+                                    value={environmentValue || EMPTY_ENVIRONMENT_RADIO_VALUE}
+                                    onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_RADIO_VALUE ? '' : value)}
+                                >
+                                    {CONNECTION_ENVIRONMENT_OPTIONS.map(option => (
+                                        <div key={option.value || 'none'} className="flex items-center gap-1.5">
+                                            <RadioGroupItem
+                                                id={`connection-environment-${option.value || 'none'}`}
+                                                value={option.value || EMPTY_ENVIRONMENT_RADIO_VALUE}
+                                                className="cursor-pointer"
+                                            />
+                                            <Label htmlFor={`connection-environment-${option.value || 'none'}`} className="cursor-pointer text-sm text-muted-foreground">
+                                                {tc(option.translationKey)}
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </RadioGroup>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    );
+                }}
+            />
+
+            <FormField
+                control={form.control}
+                name="connection.tags"
+                render={({ field }) => {
+                    const tagValue = normalizeConnectionTagColorValue(field.value);
+
+                    return (
+                        <FormItem className="space-y-2">
+                            <FormLabel>{tc('Tag')}</FormLabel>
+                            <FormControl>
+                                <div role="radiogroup" aria-label={tc('Tag')} className="flex min-h-9 min-w-0 flex-wrap items-center gap-2">
+                                    {CONNECTION_TAG_COLOR_OPTIONS.map(option => {
+                                        const selected = tagValue === option.value;
+                                        const isEmptyOption = option.value === '';
+
+                                        return (
+                                            <button
+                                                key={option.value || 'none'}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={selected}
+                                                aria-label={tc(option.translationKey)}
+                                                title={tc(option.translationKey)}
+                                                className={cn(
+                                                    'inline-flex h-7 cursor-pointer items-center justify-center rounded-full border text-xs transition-[color,box-shadow,background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                                                    isEmptyOption ? 'px-2.5' : 'w-7 px-0',
+                                                    selected ? option.selectedClassName : 'border-border bg-background text-muted-foreground hover:bg-muted',
+                                                )}
+                                                onClick={() => field.onChange(option.value)}
+                                            >
+                                                {isEmptyOption ? (
+                                                    <span className="font-medium">{tc(option.translationKey)}</span>
+                                                ) : (
+                                                    <span className="relative flex h-4 w-4 items-center justify-center">
+                                                        <span className={cn('absolute inset-0 rounded-full', option.swatchClassName)} />
+                                                        {selected ? <Check className="relative h-3 w-3 text-white drop-shadow-sm" /> : null}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    );
+                }}
+            />
         </div>
     );
 }

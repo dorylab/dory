@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import type React from 'react';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
-import { isBillingManagementAvailableForServer, isDesktopBillingHandoffRuntimeForServer, isEnterpriseLicenseForServer } from '@dory/shared/runtime';
+import { getRuntimeForServer, isBillingManagementAvailableForServer, isDesktopBillingHandoffRuntimeForServer, isEnterpriseLicenseForServer } from '@dory/shared/runtime';
 import { OrganizationAppShell } from './components/organization-app-shell';
 
 export default async function TeamLayout({ children, params }: { children: React.ReactNode; params: Promise<{ organization: string }> }) {
@@ -55,6 +55,7 @@ export default async function TeamLayout({ children, params }: { children: React
             defaultOpen={defaultOpen}
             initialUser={session.user as any}
             organizationId={organization.id}
+            runtime={getRuntimeForServer() ?? 'web'}
             billingManagementAvailable={isBillingManagementAvailableForServer()}
             desktopBillingHandoff={isDesktopBillingHandoffRuntimeForServer()}
             enterpriseLicense={isEnterpriseLicenseForServer()}

@@ -19,6 +19,18 @@ function getLowerPathExtension(value: string) {
     return match?.[1]?.toLowerCase() ?? '';
 }
 
+function hasTrimmedString(value: unknown) {
+    return typeof value === 'string' && value.trim() !== '';
+}
+
+function hasCertificateValue(tls: Record<string, unknown> | null | undefined, sourceName: string, pathName: string, contentName: string, hasContentName: string) {
+    if (!tls) return false;
+    if (tls[sourceName] === 'content') {
+        return hasTrimmedString(tls[contentName]) || tls[hasContentName] === true;
+    }
+    return hasTrimmedString(tls[pathName]);
+}
+
 export const ConnectionDialogFormSchema = z
     .object({
         connection: z.object({
@@ -54,6 +66,30 @@ export const ConnectionDialogFormSchema = z
             privateKey: z.string().optional().nullable(),
             passphrase: z.string().optional().nullable(),
         }),
+        tls: z
+            .object({
+                mode: z.enum(['disable', 'prefer', 'require', 'verify-ca', 'verify-identity']).optional(),
+                caCertificateSource: z.enum(['path', 'content']).optional(),
+                caCertificatePath: z.string().optional().nullable(),
+                caCertificateContent: z.string().optional().nullable(),
+                hasCaCertificateContent: z.boolean().optional(),
+                clientCertificateSource: z.enum(['path', 'content']).optional(),
+                clientCertificatePath: z.string().optional().nullable(),
+                clientCertificateContent: z.string().optional().nullable(),
+                hasClientCertificateContent: z.boolean().optional(),
+                clientPrivateKeySource: z.enum(['path', 'content']).optional(),
+                clientPrivateKeyPath: z.string().optional().nullable(),
+                clientPrivateKeyContent: z.string().optional().nullable(),
+                hasClientPrivateKeyContent: z.boolean().optional(),
+                clientPrivateKeyPassphrase: z.string().optional().nullable(),
+                hasClientPrivateKeyPassphrase: z.boolean().optional(),
+                serverName: z.string().optional().nullable(),
+                ciphers: z.string().optional().nullable(),
+                minVersion: z.string().optional().nullable(),
+                maxVersion: z.string().optional().nullable(),
+            })
+            .optional()
+            .nullable(),
     })
     .superRefine((value, ctx) => {
         const driver = getConnectionDriver(value.connection.type);
@@ -127,6 +163,35 @@ export const ConnectionDialogFormSchema = z
                 });
             }
             return;
+        }
+
+        if (value.connection.type === 'clickhouse') {
+            const tlsMode = value.tls?.mode ?? 'disable';
+            if (tlsMode === 'verify-ca' || tlsMode === 'verify-identity') {
+                if (!hasCertificateValue(value.tls, 'caCertificateSource', 'caCertificatePath', 'caCertificateContent', 'hasCaCertificateContent')) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['tls', value.tls?.caCertificateSource === 'content' ? 'caCertificateContent' : 'caCertificatePath'],
+                        message: 'Please provide a CA certificate',
+                    });
+                }
+            }
+            if (tlsMode === 'verify-identity') {
+                if (!hasCertificateValue(value.tls, 'clientCertificateSource', 'clientCertificatePath', 'clientCertificateContent', 'hasClientCertificateContent')) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['tls', value.tls?.clientCertificateSource === 'content' ? 'clientCertificateContent' : 'clientCertificatePath'],
+                        message: 'Please provide a client certificate',
+                    });
+                }
+                if (!hasCertificateValue(value.tls, 'clientPrivateKeySource', 'clientPrivateKeyPath', 'clientPrivateKeyContent', 'hasClientPrivateKeyContent')) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['tls', value.tls?.clientPrivateKeySource === 'content' ? 'clientPrivateKeyContent' : 'clientPrivateKeyPath'],
+                        message: 'Please provide a client private key',
+                    });
+                }
+            }
         }
 
         if (!value.connection.host?.trim()) {

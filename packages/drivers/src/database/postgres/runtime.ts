@@ -4,6 +4,7 @@ import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import { buildNodeTlsConnectionOptions, getDriverTlsOptions } from '@dory/drivers/core/tls';
 import { PostgresDialect } from './dialect';
 
 type PgClientLike = PoolClient & { processID?: number };
@@ -125,9 +126,13 @@ function extractRuntimeOptions(config: BaseConfig): PostgresRuntimeOptions {
     const options = (config.options ?? {}) as Record<string, unknown>;
     const sslMode = typeof options.sslmode === 'string' ? options.sslmode.toLowerCase() : undefined;
     const sslOption = options.ssl;
+    const tlsOption = getDriverTlsOptions(options);
 
     let ssl: PoolConfig['ssl'];
-    if (typeof sslOption === 'boolean') {
+    const tlsSsl = buildNodeTlsConnectionOptions(tlsOption);
+    if (typeof tlsSsl !== 'undefined') {
+        ssl = tlsSsl as PoolConfig['ssl'];
+    } else if (typeof sslOption === 'boolean') {
         ssl = sslOption ? { rejectUnauthorized: false } : false;
     } else if (sslOption && typeof sslOption === 'object') {
         ssl = sslOption as PoolConfig['ssl'];

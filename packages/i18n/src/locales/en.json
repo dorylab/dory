@@ -184,18 +184,19 @@
         "about": "Go to the about page"
     },
     "Connections": {
-        "Connections": "Connections",
-        "All Connections": "All Connections",
+        "Connections": "Data sources",
+        "All Connections": "All data sources",
         "about": "about",
+        "MoreActions": "More actions",
         "Search": {
-            "placeholder": "Search Connections",
-            "emptyTitle": "No matching connections",
-            "emptyDescription": "We couldn't find any connections for \"{query}\".",
+            "placeholder": "Search data sources",
+            "emptyTitle": "No matching data sources",
+            "emptyDescription": "We couldn't find any data sources for \"{query}\".",
             "emptyHint": "Try a different keyword or clear the search"
         },
         "Empty": {
-            "title": "Connect a database or open a file",
-            "description": "Dory is a modern SQL and AI data workspace. Add a database connection or open local files to start exploring.",
+            "title": "Connect a data source or open a file",
+            "description": "Dory is a modern SQL and AI data workspace. Add a data source or open local files to start exploring.",
             "supportHint": "Currently supports ClickHouse · More engines coming soon",
             "feature1": "Run SQL queries and browse schemas",
             "feature2": "Ask questions in natural language and get answers",
@@ -204,18 +205,18 @@
             "openFiles": "Open Files"
         },
         "Connecting": "Connecting...",
-        "Refresh Connection": "Refresh Connection",
+        "Refresh Connection": "Refresh data source",
         "Confirm": "Confirm",
         "Connected": "Connected",
         "Disconnected": "Disconnected",
         "Unknown": "Unknown",
         "Last check": "Last check: {time}",
         "Latency": "Latency: {latency}ms",
-        "title": "Connections",
-        "description": "Add and manage database connections",
-        "Add Connection": "Add Connection",
-        "Create Connection": "Create connection",
-        "Connection name": "Connection name",
+        "title": "Data sources",
+        "description": "Add and manage data sources",
+        "Add Connection": "Add data source",
+        "Create Connection": "Create",
+        "Connection name": "Data source name",
         "Host": "Host",
         "Port": "Port",
         "Database": "Database",
@@ -223,57 +224,59 @@
         "Password": "Password",
         "Connect": "Connect",
         "Cancel": "Cancel",
+        "Edit": "Edit",
         "Delete": "Delete",
         "Test": "Test",
-        "Connection Info": "Connection info",
+        "Connection Info": "Data source info",
         "Authentication Info": "Authentication",
+        "Metadata": "Metadata",
         "Enable": "Enable",
-        "Testing Connection": "Testing connection...",
+        "Testing Connection": "Testing...",
         "Saving": "Saving...",
         "Creating": "Creating...",
         "Save Changes": "Save changes",
-        "Fix Form Errors Before Testing": "Fix the form errors before testing the connection",
+        "Fix Form Errors Before Testing": "Fix the form errors before testing the data source",
         "Placeholder": "Placeholder",
-        "Missing connection id": "Missing connection id",
-        "Connection failed": "Connection failed",
+        "Missing connection id": "Missing data source ID",
+        "Connection failed": "Failed to connect to data source",
         "Request error": "Request error",
-        "Connection created": "Connection created",
-        "Create connection failed": "Failed to create connection",
-        "Connection updated": "Connection updated",
-        "Update connection failed": "Failed to update connection",
-        "Connection deleted": "Connection deleted",
-        "Delete connection failed": "Failed to delete connection",
-        "Connection test success": "Connection test succeeded, version: {version}",
-        "Connection test failed": "Connection test failed",
+        "Connection created": "Data source created",
+        "Create connection failed": "Failed to create data source",
+        "Connection updated": "Data source updated",
+        "Update connection failed": "Failed to update data source",
+        "Connection deleted": "Data source deleted",
+        "Delete connection failed": "Failed to delete data source",
+        "Connection test success": "Data source test succeeded, version: {version}",
+        "Connection test failed": "Data source test failed",
         "Delete Dialog Title": "Are you absolutely sure?",
-        "Delete Dialog Description": "This action cannot be undone. This will permanently delete your datasource and remove its data from our servers.",
-        "Loading connections": "Loading connections...",
-        "No connections yet": "No connections yet",
+        "Delete Dialog Description": "This action cannot be undone. This will permanently remove this data source and its data.",
+        "Loading connections": "Loading data sources...",
+        "No connections yet": "No data sources yet",
         "Connect to": "Connect to {name}",
         "Unknown host": "Unknown host",
-        "Unnamed connection": "Unnamed connection",
-        "Add connection to get started": "Add a new connection to get started",
+        "Unnamed connection": "Unnamed data source",
+        "Add connection to get started": "Add a data source to get started",
         "Identities": "Identities",
         "Default Identity": "Default identity",
-        "Connection name is required": "Connection name is required",
+        "Connection name is required": "Data source name is required",
         "Host is required": "Host is required",
         "Close & Edit": "Close & Edit",
-        "refreshConnection": "Refresh Connection",
+        "refreshConnection": "Refresh data source",
         "ConnectionContent": {
             "Create": {
-                "title": "Create Connection",
-                "description": "Create a new Connection"
+                "title": "Create Data Source",
+                "description": "Create a new data source"
             },
             "Edit": {
-                "title": "Edit Connection",
-                "description": "Edit Connection"
+                "title": "Edit Data Source",
+                "description": "Edit data source"
             },
-            "Refresh Connection": "Refresh Connection",
-            "Delete": "Delete Connection",
+            "Refresh Connection": "Refresh data source",
+            "Delete": "Delete data source",
             "Database": "Database",
             "General": "General",
-            "Connection Name": "Connection Name",
-            "Connection Name Placeholder": "Give your connection a friendly name",
+            "Connection Name": "Data source name",
+            "Connection Name Placeholder": "Give your data source a friendly name",
             "Type": "Type",
             "Select Database Type": "Select database type",
             "Host": "Host",
@@ -284,6 +287,9 @@
             "Database Username": "Database username",
             "Database Username Placeholder": "e.g. readonly_user",
             "Password Optional": "Password (optional)",
+            "Password Keep Saved Hint": "Leave blank to keep the saved password.",
+            "Password Not Saved Hint": "The password can be used for testing, but it will not be saved.",
+            "Save Password": "Save password",
             "Data Directory": "Data Directory",
             "Database File": "Database File",
             "Select Directory": "Enter absolute path to your data directory or file",
@@ -294,7 +300,7 @@
             "SSL": "SSL",
             "Cancel": "Cancel",
             "Save": "Save",
-            "TestConnection": "Test Connection",
+            "TestConnection": "Test",
             "Use SSH tunnel": "Use SSH tunnel",
             "Hostname or IP address": "Hostname or IP address",
             "SSH Host": "SSH Host",
@@ -315,15 +321,39 @@
             "Please enter your password": "Please enter your password"
         },
         "Api": {
-            "AddFailed": "Failed to create connection",
-            "UpdateRequiresId": "updateConnection requires an id",
-            "UpdateFailed": "Failed to update connection",
-            "ListFailed": "Failed to fetch connections",
-            "DeleteFailed": "Failed to delete connection",
-            "DetailFailed": "Failed to fetch connection details",
-            "DetailNotFound": "Connection details not found",
-            "TestFailed": "Connection test failed",
-            "ConnectFailed": "Connection failed"
+            "AddFailed": "Failed to create data source",
+            "UpdateRequiresId": "Updating a data source requires an id",
+            "UpdateFailed": "Failed to update data source",
+            "ListFailed": "Failed to fetch data sources",
+            "DeleteFailed": "Failed to delete data source",
+            "DetailFailed": "Failed to fetch data source details",
+            "DetailNotFound": "Data source details not found",
+            "TestFailed": "Data source test failed",
+            "ConnectFailed": "Failed to connect to data source"
+        },
+        "Connection Name": "Data source name",
+        "Environment": "Environment",
+        "Tag": "Tag",
+        "Fix Form Errors Before Saving": "Fix the form errors before saving the data source",
+        "ConnectionMetadata": {
+            "EnvironmentOptions": {
+                "None": "No environment",
+                "Dev": "Dev",
+                "Staging": "Staging",
+                "Prod": "Prod",
+                "Personal": "Personal",
+                "Shared": "Shared"
+            },
+            "TagColors": {
+                "None": "No tag",
+                "Red": "Red",
+                "Orange": "Orange",
+                "Amber": "Amber",
+                "Green": "Green",
+                "Blue": "Blue",
+                "Purple": "Purple",
+                "Gray": "Gray"
+            }
         }
     },
     "SQLConsoleSidebar": {
@@ -535,7 +565,7 @@
         }
     },
     "TableStats": {
-        "No available connection": "No available connection found.",
+        "No available connection": "No available data source found.",
         "Select table to view stats": "Select a table to view stats.",
         "Failed to load stats": "Unable to load table stats",
         "Stats insights": "Stats Insights",
@@ -580,7 +610,7 @@
         "No TTL rule configured": "No TTL rule configured."
     },
     "PostgresTableStats": {
-        "No available connection": "No available connection found.",
+        "No available connection": "No available data source found.",
         "Select table to view stats": "Select a table to view stats.",
         "Failed to load stats": "Unable to load table stats",
         "Size": "Size",
@@ -2225,8 +2255,8 @@
             "Unknown": "Unknown"
         },
         "EnsureConnection": {
-            "MissingConnectionId": "Missing Connection ID",
-            "ConnectionNotFound": "Connection not found or closed"
+            "MissingConnectionId": "Missing data source ID",
+            "ConnectionNotFound": "Data source not found or closed"
         },
         "SshTunnel": {
             "Disabled": "SSH tunnel is disabled",
@@ -2237,7 +2267,7 @@
             "MissingAgent": "SSH agent is not available"
         },
         "Connection": {
-            "CancelUnsupported": "Canceling queries is not supported for this connection"
+            "CancelUnsupported": "Canceling queries is not supported for this data source"
         },
         "Clickhouse": {
             "MissingQueryId": "Missing query ID; unable to cancel the query",
@@ -2248,7 +2278,7 @@
     "Client": {
         "Errors": {
             "InvalidRequest": "Invalid request",
-            "InvalidConnection": "Invalid connection",
+            "InvalidConnection": "Invalid data source",
             "RequestFailed": "Request failed"
         },
         "Pglite": {
@@ -2292,10 +2322,10 @@
             "Errors": {
                 "Unauthorized": "Unauthorized or insufficient permissions",
                 "FetchCatalogFailed": "Failed to fetch catalog context",
-                "NotFound": "Connection not found or insufficient permissions",
-                "MissingHost": "Connection is missing host information",
-                "MissingPath": "Connection is missing SQLite file path information",
-                "MissingConnectionId": "Missing connection ID",
+                "NotFound": "Data source not found or insufficient permissions",
+                "MissingHost": "Data source is missing host information",
+                "MissingPath": "Data source is missing SQLite file path information",
+                "MissingConnectionId": "Missing data source ID",
                 "MissingUsername": "Missing username",
                 "MissingIdentity": "No available identity found",
                 "MissingIdentityInfo": "Missing identity information",
@@ -2303,9 +2333,9 @@
                 "MissingSshPassword": "Missing SSH password",
                 "MissingSshPrivateKey": "Missing SSH private key",
                 "UnsupportedType": "This database type is not supported yet",
-                "ConnectFailed": "Connection failed",
+                "ConnectFailed": "Failed to connect to data source",
                 "SchemaReadFailed": "Failed to read schema",
-                "TestFailed": "Test connection failed"
+                "TestFailed": "Data source test failed"
             },
             "Validation": {
                 "DatabaseRequired": "Database name is required",
@@ -2331,7 +2361,7 @@
         },
         "SqlConsole": {
             "Tabs": {
-                "MissingConnectionContext": "Missing connection context",
+                "MissingConnectionContext": "Missing data source context",
                 "TabIdMismatch": "tabId does not match state.tabId",
                 "DatabaseNotInitialized": "Database not initialized",
                 "MissingTabId": "Missing tabId"
@@ -2346,14 +2376,14 @@
         },
         "Query": {
             "Errors": {
-                "MissingConnectionId": "Missing connection ID",
+                "MissingConnectionId": "Missing data source ID",
                 "DatabaseNameRequired": "Database name is required",
                 "DatabaseNameTooLong": "Database name is too long",
                 "DatabaseNameInvalid": "Database name format is invalid",
                 "ConnectionFailed": "Failed to connect to database",
                 "TooManyStatements": "At most {max} statements are allowed per request; got {count}",
                 "MissingSessionId": "Missing sessionId; unable to cancel query",
-                "DatasourceNotFound": "Datasource not found or connection closed",
+                "DatasourceNotFound": "Data source not found or closed",
                 "CancelNotSupported": "Current datasource does not support canceling queries"
             }
         },
@@ -2375,7 +2405,7 @@
                 "MissingTabId": "Missing tabId",
                 "FetchCopilotSessionFailed": "Failed to fetch Copilot session",
                 "InvalidSessionType": "Invalid session type",
-                "ConnectionIdRequired": "Connection ID is required",
+                "ConnectionIdRequired": "Data source ID is required",
                 "ListSessionsFailed": "Failed to fetch sessions",
                 "CopilotCreationNotAllowed": "Copilot sessions cannot be created via this endpoint",
                 "CreateSessionFailed": "Failed to create session",
@@ -2386,10 +2416,10 @@
                     "Description": "Retrieve the most relevant document snippets for the user's question and return context passages for answering."
                 },
                 "ListConnections": {
-                    "Description": "List database connections available in the current organization without returning secrets."
+                    "Description": "List data sources available in the current organization without returning secrets."
                 },
                 "ListDatabases": {
-                    "Description": "List databases for the current Dory connection."
+                    "Description": "List databases for the current Dory data source."
                 },
                 "ListTables": {
                     "Description": "List tables in a database using Dory driver metadata."
@@ -2401,16 +2431,16 @@
                     "Description": "Return a compact database summary with object counts, size estimates, and recommended starting tables."
                 },
                 "GetTableProfile": {
-                    "Description": "Return table metadata, columns, stats, indexes, properties, and DDL when supported by the connection."
+                    "Description": "Return table metadata, columns, stats, indexes, properties, and DDL when supported by the data source."
                 },
                 "SearchSchema": {
                     "Description": "Search tables, views, and columns by name, type, or comment using Dory driver metadata."
                 },
                 "ListSavedQueries": {
-                    "Description": "List saved SQL queries for the current connection."
+                    "Description": "List saved SQL queries for the current data source."
                 },
                 "GetSavedQuery": {
-                    "Description": "Get a saved SQL query by id for the current connection."
+                    "Description": "Get a saved SQL query by id for the current data source."
                 },
                 "GetMonitoringSummary": {
                     "Description": "Return query monitoring summary and optional timeline, slow query, and error query samples."
@@ -2425,7 +2455,7 @@
                     "Description": "Build Dory automatic chart profile from result rows and columns."
                 },
                 "RunAnalysis": {
-                    "Description": "Run a Dory analysis action against a result context and the current connection."
+                    "Description": "Run a Dory analysis action against a result context and the current data source."
                 }
             },
             "Prompt": {
@@ -2444,9 +2474,9 @@
                 }
             },
             "SqlRunner": {
-                "Description": "A tool to execute read-only SQL queries on the current database connection.\nUsage:\n- Only accepts a single SELECT / SHOW / DESCRIBE / DESC / EXPLAIN statement; no INSERT/UPDATE/DELETE.\n- For questions about queries, aggregations, reports, or metrics, generate SQL first, call this tool, then answer from results.\n- Always match the current database dialect.\n- If schema is unclear, prefer the provided schema context first, then use dialect-appropriate metadata queries to inspect it.\n- Do not use MySQL-only DESCRIBE / SHOW COLUMNS syntax on PostgreSQL.",
+                "Description": "A tool to execute read-only SQL queries on the current data source.\nUsage:\n- Only accepts a single SELECT / SHOW / DESCRIBE / DESC / EXPLAIN statement; no INSERT/UPDATE/DELETE.\n- For questions about queries, aggregations, reports, or metrics, generate SQL first, call this tool, then answer from results.\n- Always match the current database dialect.\n- If schema is unclear, prefer the provided schema context first, then use dialect-appropriate metadata queries to inspect it.\n- Do not use MySQL-only DESCRIBE / SHOW COLUMNS syntax on PostgreSQL.",
                 "SqlRequired": "SQL cannot be empty",
-                "MissingConnection": "Missing database connection info; unable to execute query.",
+                "MissingConnection": "Missing data source info; unable to execute query.",
                 "ReadOnlyOnly": "Only read-only queries are allowed (SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA). Do not include write or update statements.",
                 "SelectAllNotAllowed": "SELECT * is not allowed in chatbot-generated SQL. Select only the columns needed for the answer.",
                 "OrderByIndexMissing": "This query may be expensive: ORDER BY uses column(s) {columns} on table {table}, and they are not confirmed to be indexed. Narrow the selected columns or inspect indexes first.",
@@ -2529,10 +2559,10 @@
         },
         "Privileges": {
             "Errors": {
-                "MissingConnectionId": "Missing connection ID",
+                "MissingConnectionId": "Missing data source ID",
                 "NotClickhouse": "Current datasource does not support ClickHouse privilege management",
                 "Fallback": "Operation failed, please try again later",
-                "ConnectionUnavailable": "Current connection is unavailable, please try again later",
+                "ConnectionUnavailable": "Current data source is unavailable, please try again later",
                 "UserNotFound": "User not found",
                 "RoleNotFound": "Role not found"
             },
@@ -2637,7 +2667,7 @@
         },
         "SchemaTags": {
             "InvalidParams": "Invalid request parameters",
-            "MissingConnectionContext": "Missing connection context",
+            "MissingConnectionContext": "Missing data source context",
             "MissingOrganizationIdFallback": "Missing organizationId; using local heuristic tags",
             "Tags": {
                 "PrimaryKey": "primary key",
@@ -2802,7 +2832,7 @@
                 "Blocked": "Blocked"
             },
             "Notice": {
-                "ReadOnlyRestriction": "This connection only allows read-only queries. CREATE / INSERT / UPDATE / DELETE statements need to be run manually in the SQL editor."
+                "ReadOnlyRestriction": "This data source only allows read-only queries. CREATE / INSERT / UPDATE / DELETE statements need to be run manually in the SQL editor."
             },
             "FollowUp": {
                 "Button": "Follow up on this result",
@@ -3025,10 +3055,10 @@
             },
             "Data": {
                 "ExportLabel": "Export Workspace",
-                "ExportDescription": "Download connections and saved queries as a JSON file. Passwords and keys are excluded.",
+                "ExportDescription": "Download data sources and saved queries as a JSON file. Passwords and keys are excluded.",
                 "ExportAction": "Export",
                 "ImportLabel": "Import Workspace",
-                "ImportDescription": "Import connections and saved queries from a previously exported JSON file.",
+                "ImportDescription": "Import data sources and saved queries from a previously exported JSON file.",
                 "ImportAction": "Import",
                 "ExportSuccess": "Workspace exported successfully.",
                 "ExportFailed": "Export failed",
@@ -3037,7 +3067,7 @@
                 "ImportFailedRetry": "Import failed. Please try again.",
                 "InvalidJson": "Invalid JSON file.",
                 "ImportSummary": {
-                    "Connections": "{count} connection(s)",
+                    "Connections": "{count} data source(s)",
                     "Folders": "{count} folder(s)",
                     "Queries": "{count} query(ies)",
                     "QueriesSkipped": "{count} query(ies) skipped",
@@ -3116,14 +3146,14 @@
             "ConnectionFailed": "Database connection failed",
             "InitFailed": "Database initialization failed. Please check configuration or connection status.",
             "NotInitialized": "Database not initialized",
-            "ConnectionCreateFailed": "Failed to create connection",
+            "ConnectionCreateFailed": "Failed to create data source",
             "NotOrganizationMember": "You are not a organization member",
             "NotAdmin": "You do not have admin privileges",
-            "ConnectionIdentityCreateFailed": "Failed to create connection identity",
-            "ConnectionIdentityUpdateFailed": "Failed to update connection identity: record not found or insufficient permissions",
-            "ConnectionDuplicateName": "A connection with the same name already exists",
-            "ConnectionNotFound": "Connection not found or insufficient permissions",
-            "ConnectionIdentityInvalid": "Connection identity information is incomplete",
+            "ConnectionIdentityCreateFailed": "Failed to create data source identity",
+            "ConnectionIdentityUpdateFailed": "Failed to update data source identity: record not found or insufficient permissions",
+            "ConnectionDuplicateName": "A data source with the same name already exists",
+            "ConnectionNotFound": "Data source not found or insufficient permissions",
+            "ConnectionIdentityInvalid": "Data source identity information is incomplete",
             "ConnectionIdentityUpdateRequiresId": "Updating identity requires an id",
             "ConnectionIdentityMissingId": "Missing identity id",
             "ConnectionIdentityNameRequired": "Name is required",
@@ -3409,7 +3439,7 @@
                 "Title": "Pro (Recommended)",
                 "Price": "Starting at $9/mo",
                 "Features": {
-                    "UnlimitedDatabaseConnections": "Unlimited database connections",
+                    "UnlimitedDatabaseConnections": "Unlimited data sources",
                     "HigherAiQuotaAndFasterResponses": "Higher AI quota & faster responses",
                     "ByokAiFeatures": "BYOK (Use your own AI key)",
                     "EarlyAccessToUpcomingFeatures": "Early access to upcoming features",

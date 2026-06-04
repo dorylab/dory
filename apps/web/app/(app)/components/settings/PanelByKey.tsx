@@ -20,10 +20,12 @@ const BillingSettingsPageClient = dynamic<BillingSettingsPageClientProps>(() => 
 
 export function PanelByKey({
     keyName,
+    runtime,
     billingManagementAvailable,
     desktopBillingHandoff,
 }: {
     keyName: CategoryKey;
+    runtime?: string | null;
     billingManagementAvailable: boolean;
     desktopBillingHandoff: boolean;
 }) {
@@ -33,7 +35,7 @@ export function PanelByKey({
         case 'organization':
             return <OrganizationPanel />;
         case 'ai':
-            return <AISettingsPageClient onOpenBillingSettings={() => openSettings('billing')} />;
+            return <AISettingsPageClient initialRuntime={runtime} onOpenBillingSettings={() => openSettings('billing')} />;
         case 'billing':
             return <BillingSettingsPageClient billingManagementAvailable={billingManagementAvailable} desktopBillingHandoff={desktopBillingHandoff} />;
         case 'appearance':
