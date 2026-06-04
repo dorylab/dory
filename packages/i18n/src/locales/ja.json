@@ -196,6 +196,10 @@
             "emptyDescription": "\"{query}\" に一致するデータソースは見つかりませんでした。",
             "emptyHint": "別のキーワードを試すか、検索をクリアしてください"
         },
+        "Filters": {
+            "Label": "フィルター",
+            "Clear": "フィルターをクリア"
+        },
         "Empty": {
             "title": "データソースに接続、またはファイルを開く",
             "description": "Dory は SQL と AI のためのモダンなデータワークスペースです。データソースを追加するか、ローカルファイルを開いて探索を始めましょう。",
@@ -299,7 +303,9 @@
             "Choose": "選択",
             "Clear": "クリア",
             "SSH": "SSH",
+            "SSH Tunnel": "SSH トンネル",
             "SSL": "SSL",
+            "TLS/SSL": "TLS/SSL",
             "Cancel": "キャンセル",
             "Save": "保存",
             "TestConnection": "テスト",
@@ -366,6 +372,8 @@
         "Databases": "データベース",
         "Schemas": "スキーマ",
         "No results": "結果が見つかりません",
+        "Loading databases": "データベースを読み込み中",
+        "Failed to load databases": "データベースを読み込めませんでした",
         "Filter tables": "テーブルを絞り込み",
         "Refresh tables": "テーブルを再読み込み",
         "No matching tables found": "一致するテーブルが見つかりません",

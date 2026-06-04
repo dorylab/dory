@@ -6,6 +6,7 @@ import { SignInForm } from '@/app/(auth)/components/SignInForm';
 import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from '@/lib/auth/anonymous-recovery';
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { getSessionFromRequest } from '@/lib/auth/session';
+import { getRuntimeForServer } from '@dory/shared/runtime';
 // import { BubbleBackground } from '@/components/animate-ui/components/backgrounds/bubble';
 import { HeroBackground } from '../components/bg';
 import { RuntimeHint } from '../components/runtime-hint';
@@ -41,6 +42,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
     const { callbackURL } = await searchParams;
     const recoveryToken = cookieStore.get(getAnonymousRecoveryCookieName())?.value;
     const session = await getSessionFromRequest();
+    const runtime = getRuntimeForServer() ?? 'web';
     const resumeAnonymousSession = shouldProxyAuthRequest() ? Boolean(recoveryToken) : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
 
     if (session) {
@@ -61,7 +63,11 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
                 <RuntimeHint />
             </div>
             <div className="relative z-20 w-full max-w-[30rem]">
-                <SignInForm resumeAnonymousSession={resumeAnonymousSession} />
+                {runtime === 'web' ? (
+                    <SignInForm resumeAnonymousSession={resumeAnonymousSession} showDemoOption />
+                ) : (
+                    <SignInForm resumeAnonymousSession={resumeAnonymousSession} />
+                )}
             </div>
             {/* <div className="absolute z-10 inset-0 h-full w-full bg-[#0f172a]">
 

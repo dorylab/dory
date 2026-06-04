@@ -201,6 +201,10 @@
             "emptyDescription": "未找到符合 \"{query}\" 的数据源。",
             "emptyHint": "尝试其他关键词，或清空搜索"
         },
+        "Filters": {
+            "Label": "筛选",
+            "Clear": "清空筛选"
+        },
         "Empty": {
             "title": "连接数据源或打开文件",
             "description": "Dory 是面向 SQL 与 AI 的现代数据工作台，添加数据源或打开本地文件即可开始探索。",
@@ -301,7 +305,9 @@
             "Choose": "选择",
             "Clear": "清除",
             "SSH": "SSH",
+            "SSH Tunnel": "SSH 隧道",
             "SSL": "SSL",
+            "TLS/SSL": "TLS/SSL",
             "Cancel": "取消",
             "Save": "保存",
             "TestConnection": "测试",
@@ -370,6 +376,8 @@
         "Databases": "数据库",
         "Schemas": "模式",
         "No results": "未找到匹配项",
+        "Loading databases": "正在加载数据库",
+        "Failed to load databases": "数据库加载失败",
         "Filter tables": "筛选表",
         "Refresh tables": "刷新表",
         "Loading tables": "正在加载表",

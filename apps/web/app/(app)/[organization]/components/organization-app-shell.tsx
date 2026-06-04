@@ -5,6 +5,7 @@ import { SidebarInset, SidebarProvider } from '@/registry/new-york-v4/ui/sidebar
 import { SettingsProvider } from '../../components/settings/settings';
 import { AppContentShell } from './app-sidebar/app-content-shell';
 import { AppSidebar } from './app-sidebar/app-sidebar';
+import { ConnectionDialogRoot } from '../connections/components/connection-dialog-root';
 
 export function OrganizationAppShell({
     children,
@@ -46,6 +47,7 @@ export function OrganizationAppShell({
                         } as React.CSSProperties
                     }
                 >
+                    <ConnectionDialogRoot />
                     <AppSidebar
                         className="md:top-0 md:bottom-0 md:h-auto"
                         variant="inset"

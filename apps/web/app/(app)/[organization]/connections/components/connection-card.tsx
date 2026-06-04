@@ -4,17 +4,15 @@ import { MotionHighlight } from '@/components/animate-ui/effects/motion-highligh
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
-import { cn } from '@dory/web-utils';
-import { Edit2, EllipsisVertical, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
+import { Edit2, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
 import { DatabaseTypeIcon, getDatabaseTypeMeta } from './database-type-icon';
 import { FileTypeIcon, getFileTypeLabel } from './file-type-icon';
-import { getConnectionEnvironmentOption, getConnectionTagColorOption } from '../constants';
+import { getConnectionEnvironmentOption } from '../constants';
 
 type Props = {
     connectionItem: ConnectionListItem;
@@ -68,13 +66,13 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
     const lastCheckAt = connection?.lastCheckAt ? new Date(connection.lastCheckAt) : null;
     const lastCheckLatencyMs = connection?.lastCheckLatencyMs;
     const environmentOption = getConnectionEnvironmentOption(connection.environment);
-    const tagColorOption = getConnectionTagColorOption(connection.tags);
+    const isProdEnvironment = environmentOption?.value === 'prod';
 
     const derivedStatus: ConnectionCheckStatus = errorMessage ? 'error' : lastCheckStatus;
     const statusDot = derivedStatus === 'error' ? 'bg-red-500' : derivedStatus === 'ok' ? 'bg-emerald-500' : 'bg-muted-foreground/60';
 
     const statusIndicatorContent = (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex h-9 w-9 items-center justify-center text-xs text-muted-foreground">
             <span className={`h-2 w-2 rounded-full ${statusDot}`} />
             {/* {typeof lastCheckLatencyMs === 'number' && <span className="text-[11px] text-muted-foreground/80">{lastCheckLatencyMs}ms</span>} */}
         </div>
@@ -116,16 +114,16 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                     }
                 }}
             >
-                <div className="mb-2 flex items-center justify-between">
-                    <div className="flex min-w-0 items-center gap-3">
+                <div className="mb-2 grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
+                    <div className="flex h-9 w-9 items-center justify-center">
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 {isLocalFiles ? (
-                                    <div className="text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center">
+                                    <div className="text-muted-foreground flex h-9 w-9 items-center justify-center">
                                         <FileTypeIcon sourceType={localFilesMeta?.sourceType} />
                                     </div>
                                 ) : (
-                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center">
+                                    <div className="flex h-9 w-9 items-center justify-center">
                                         <DatabaseTypeIcon type={connection.type} />
                                     </div>
                                 )}
@@ -134,86 +132,93 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                                 <p>{connectionTypeLabel}</p>
                             </TooltipContent>
                         </Tooltip>
-                        <OverflowTooltip text={connectionItem?.connection?.name} className="mb-1 block min-h-6 min-w-0 max-w-full truncate text-base font-medium" />
                     </div>
-                    {connectLoading ? (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        </div>
-                    ) : (
-                        statusIndicator
-                    )}
+                    <div className="flex min-h-6 min-w-0 items-center gap-2">
+                        <OverflowTooltip text={connectionItem?.connection?.name} className="block min-w-0 max-w-full truncate text-base font-medium" />
+                        {isProdEnvironment ? (
+                            <Badge variant="outline" className="shrink-0 border-red-500/30 bg-red-500/10 px-1.5 text-[10px] font-medium text-red-700 dark:text-red-300">
+                                {t(environmentOption.translationKey)}
+                            </Badge>
+                        ) : null}
+                    </div>
+                    <div className="flex h-9 w-9 items-center justify-center">
+                        {connectLoading ? (
+                            <div className="flex h-9 w-9 items-center justify-center text-xs text-muted-foreground">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            </div>
+                        ) : (
+                            statusIndicator
+                        )}
+                    </div>
                 </div>
 
                 {isLocalFiles ? (
-                    <div className="mb-1 ml-1.5 flex min-h-6 items-center gap-2">
-                        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <div className="mb-1 grid min-h-6 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
+                        <FolderOpen className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
                         <span className="text-muted-foreground text-sm">Open Files</span>
                     </div>
                 ) : (
-                    <div className="mb-1 ml-1.5 flex min-h-6 min-w-0 items-center gap-2">
+                    <div className="mb-1 grid min-h-6 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
                         {identityUsername ? (
                             <>
-                                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <User className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
                                 <OverflowTooltip text={identityUsername} className="block min-w-0 max-w-full truncate text-sm text-muted-foreground" />
                             </>
                         ) : null}
                     </div>
                 )}
 
-                <div className="ml-1.5 flex min-h-6 max-w-[calc(100%-0.375rem)] min-w-0 items-center gap-2">
-                    <Server className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <div className="grid min-h-6 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
+                    <Server className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
                     <OverflowTooltip text={locationLabel} className="block min-w-0 max-w-full truncate text-sm text-muted-foreground" />
                 </div>
 
-                <div className="ml-1.5 mt-3 flex min-h-6 min-w-0 items-center justify-between gap-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        {tagColorOption ? (
-                            <Badge variant="outline" className={cn('gap-1.5 text-[11px]', tagColorOption.badgeClassName)}>
-                                <span className={cn('h-2 w-2 rounded-full', tagColorOption.swatchClassName)} />
-                                {t(tagColorOption.translationKey)}
-                            </Badge>
-                        ) : null}
-                        {environmentOption ? (
-                            <Badge variant="outline" className="border-border bg-muted/60 text-[11px] text-muted-foreground">
-                                {t(environmentOption.translationKey)}
-                            </Badge>
-                        ) : null}
+                <div className="-mb-0.5 mt-2.5 grid min-h-9 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
+                    <div className="flex h-9 w-9 items-center justify-center">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="h-9 w-9 cursor-pointer text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        onEdit(connectionItem);
+                                    }}
+                                    aria-label={t('Edit')}
+                                >
+                                    <Edit2 className="h-5 w-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{t('Edit')}</p>
+                            </TooltipContent>
+                        </Tooltip>
                     </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                className="shrink-0 cursor-pointer text-n4 hover:text-n1 dark:text-n6 dark:hover:text-n1"
-                                onClick={e => {
-                                    e.stopPropagation();
-                                }}
-                                aria-label={t('MoreActions')}
-                            >
-                                <EllipsisVertical className="size-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                            <DropdownMenuItem
-                                onClick={() => {
-                                    onEdit(connectionItem);
-                                }}
-                            >
-                                <Edit2 className="h-4 w-4" />
-                                {t('Edit')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => {
-                                    onDeleteRequest?.(connectionItem);
-                                }}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                                {t('Delete')}
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <span aria-hidden="true" />
+                    <div className="flex h-9 w-9 items-center justify-center">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon-xs"
+                                    className="h-9 w-9 cursor-pointer text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                        onDeleteRequest?.(connectionItem);
+                                    }}
+                                    aria-label={t('Delete')}
+                                >
+                                    <Trash2 className="h-5 w-5" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{t('Delete')}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </div>
                 </div>
             </div>
         </MotionHighlight>

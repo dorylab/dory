@@ -13,7 +13,6 @@ import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
 import { DoryLogo } from '@/components/@dory/ui/logo';
-import { ConnectionDialogRoot } from '../../connections/components/connection-dialog-root';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { User } from 'better-auth';
@@ -195,7 +194,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
 
     return (
         <Sidebar {...props}>
-            <ConnectionDialogRoot />
             <SidebarHeader className="pb-2">
                 <ConnectionSwitcher />
             </SidebarHeader>
@@ -299,7 +297,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             <Separator />
 
             <SidebarFooter>
-                <NavUser user={resolvedUser as any} organizationId={organizationId} enterpriseLicense={enterpriseLicense} />
+                <NavUser user={resolvedUser} organizationId={organizationId} enterpriseLicense={enterpriseLicense} />
             </SidebarFooter>
         </Sidebar>
     );

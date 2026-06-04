@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, Database } from 'lucide-react';
+import { Check, ChevronsUpDown, Database, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { cn } from '@/registry/new-york-v4/lib/utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -15,9 +15,11 @@ type DatabaseSelectProps = {
     databases: SidebarOption[];
     onChange: (database: string) => void;
     className?: string;
+    loading?: boolean;
+    error?: string | null;
 };
 
-export function DatabaseSelect({ value, databases, onChange, className }: DatabaseSelectProps) {
+export function DatabaseSelect({ value, databases, onChange, className, loading = false, error = null }: DatabaseSelectProps) {
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const t = useTranslations('SQLConsoleSidebar');
@@ -58,8 +60,14 @@ export function DatabaseSelect({ value, databases, onChange, className }: Databa
                     <Command shouldFilter={false}>
                         <CommandInput placeholder={t('Search databases')} value={query} onValueChange={setQuery} className="h-9" />
                         <CommandList className="max-h-64">
-                            <CommandEmpty>{t('No results')}</CommandEmpty>
+                            <CommandEmpty>{loading ? t('Loading databases') : error ? t('Failed to load databases') : t('No results')}</CommandEmpty>
                             <CommandGroup heading={t('Databases')}>
+                                {loading ? (
+                                    <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        {t('Loading databases')}
+                                    </div>
+                                ) : null}
                                 {filtered.map(database => (
                                     <CommandItem key={database.value} value={database.value} onSelect={handleSelect} className="flex items-center gap-2">
                                         <Database className="h-4 w-4 shrink-0" />

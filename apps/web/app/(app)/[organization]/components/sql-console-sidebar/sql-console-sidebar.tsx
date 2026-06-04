@@ -52,7 +52,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
         [currentConnection?.connection?.options],
     );
 
-    const { databases } = useDatabases();
+    const { databases, loading: databasesLoading, error: databasesError } = useDatabases();
 
     const databaseOptions = useMemo(
         () =>
@@ -204,7 +204,9 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
 
     return (
         <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-2 p-3">
-            {!isLocalFilesDataset && <DatabaseSelect value={activeDatabase} databases={databaseOptions} onChange={handleDatabaseChange} />}
+            {!isLocalFilesDataset && (
+                <DatabaseSelect value={activeDatabase} databases={databaseOptions} onChange={handleDatabaseChange} loading={databasesLoading} error={databasesError} />
+            )}
 
             {sidebarConfig.supportsSchemas && <SchemaSelect value={activeSchema} schemas={schemaOptions} onChange={setActiveSchema} />}
 

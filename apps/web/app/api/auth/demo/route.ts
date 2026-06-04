@@ -6,6 +6,7 @@ import { getClient } from '@dory/database/postgres/client';
 import { schema } from '@dory/database/schema';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { ensureDemoConnection } from '@/lib/demo/ensure-demo-connection';
+import { getRuntimeForServer } from '@dory/shared/runtime';
 import { serializeSignedCookie } from 'better-call';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -31,6 +32,11 @@ function slugifyOrganizationName(name: string) {
 }
 
 export async function POST(req: NextRequest) {
+    const runtime = getRuntimeForServer() ?? 'web';
+    if (runtime !== 'web') {
+        return NextResponse.json({ error: 'demo_sign_in_unavailable' }, { status: 404 });
+    }
+
     if (shouldProxyAuthRequest()) {
         return proxyAuthRequest(req);
     }
@@ -157,6 +163,7 @@ export async function POST(req: NextRequest) {
     }
 
     const activeOrganizationId = memberships[0]?.organizationId ?? null;
+    const activeOrganization = activeOrganizationId ? await db.organizations.getOrganizationBySlugOrId(activeOrganizationId) : null;
     const sessionPatch = buildSessionOrganizationPatch({
         activeOrganizationId,
     });
@@ -164,7 +171,10 @@ export async function POST(req: NextRequest) {
         await ctx.internalAdapter.updateSession(session.token, sessionPatch);
     }
 
-    const res = NextResponse.json({ ok: true });
+    const res = NextResponse.json({
+        ok: true,
+        organizationSlug: activeOrganization?.slug ?? activeOrganizationId,
+    });
     const baseAttrs = ctx.authCookies.sessionToken.attributes ?? {};
     const maxAge = ctx.sessionConfig?.expiresIn;
     const sessionCookie = await serializeSignedCookie(ctx.authCookies.sessionToken.name, session.token, ctx.secret, {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -9,9 +9,19 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { ConnectionsEmptyState } from './components/empty-state';
 
 import ConnectionList from './components/connection-list';
+import { ConnectionFilters } from './components/filters';
 import { ConnectionSearch } from './components/search';
 
-import { connectionDeleteAtom, connectionLoadingAtom, connectionOpenAtom, connectionSearchQueryAtom, connectionStatusAtom, searchResultAtom } from './states';
+import {
+    connectionDeleteAtom,
+    connectionEnvironmentFilterAtom,
+    connectionLoadingAtom,
+    connectionOpenAtom,
+    connectionSearchQueryAtom,
+    connectionStatusAtom,
+    connectionTagFilterAtom,
+    searchResultAtom,
+} from './states';
 import { useConnectConnection } from './hooks/use-connect-connection';
 import { useConnections, useDeleteConnection } from './hooks/use-connections';
 import { DeleteDialog } from './components/delete-dialog';
@@ -32,10 +42,12 @@ export default function ConnectionsPage() {
     const [currentConnection, setCurrentConnection] = useAtom(currentConnectionAtom);
     const [deleteOpen, setDeleteOpen] = useAtom(connectionDeleteAtom);
 
-    const [items, setSearchResult] = useAtom(searchResultAtom);
+    const items = useAtomValue(searchResultAtom);
     const deleteConnectionMutation = useDeleteConnection();
     const connectMutation = useConnectConnection();
     const searchQuery = useAtomValue(connectionSearchQueryAtom);
+    const environmentFilters = useAtomValue(connectionEnvironmentFilterAtom);
+    const tagFilters = useAtomValue(connectionTagFilterAtom);
 
     const connectionsRes = useConnections();
     const isLoading = connectionsRes.isLoading;
@@ -43,7 +55,8 @@ export default function ConnectionsPage() {
     const connectionItems = items ?? [];
     const trimmedSearchQuery = searchQuery.trim();
     const hasConnections = Boolean(connectionsRes.data?.length);
-    const searchActive = trimmedSearchQuery.length > 0;
+    const filtersActive = environmentFilters.length > 0 || tagFilters.length > 0;
+    const searchActive = trimmedSearchQuery.length > 0 || filtersActive;
     const showSearchEmpty = searchActive && hasConnections && connectionItems.length === 0;
     const showEmptyState = !isLoading && connectionItems.length === 0;
     const handleNewConnection = () => {
@@ -68,14 +81,6 @@ export default function ConnectionsPage() {
             return false;
         }
     };
-
-    useEffect(() => {
-        if (connectionsRes.data && connectionsRes.data.length > 0) {
-            setSearchResult(connectionsRes.data);
-        } else if (connectionsRes.data && connectionsRes.data.length === 0) {
-            setSearchResult([]);
-        }
-    }, [connectionsRes.data, setSearchResult]);
 
     function onConnect(payload: ConnectionListItem, navigateToConsole?: boolean) {
         connectMutation.mutate({ payload, navigateToConsole });
@@ -107,8 +112,9 @@ export default function ConnectionsPage() {
                 </header>
 
                 <div className="relative mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                    <div className="grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="flex w-full flex-col gap-3 sm:max-w-[520px] sm:flex-row sm:items-center">
                         <ConnectionSearch />
+                        <ConnectionFilters />
                     </div>
                     {!showEmptyState && (
                         <div className="flex gap-2">

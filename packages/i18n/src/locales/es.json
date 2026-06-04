@@ -196,6 +196,10 @@
             "emptyDescription": "No pudimos encontrar fuentes de datos para \"{query}\".",
             "emptyHint": "Prueba otra palabra clave o borra la búsqueda"
         },
+        "Filters": {
+            "Label": "Filtrar",
+            "Clear": "Borrar filtros"
+        },
         "Empty": {
             "title": "Conecta una fuente de datos o abre un archivo",
             "description": "Dory es un espacio de trabajo moderno para SQL e IA. Añade una fuente de datos o abre archivos locales para empezar a explorar.",
@@ -299,7 +303,9 @@
             "Choose": "Elegir",
             "Clear": "Limpiar",
             "SSH": "SSH",
+            "SSH Tunnel": "Túnel SSH",
             "SSL": "SSL",
+            "TLS/SSL": "TLS/SSL",
             "Cancel": "Cancelar",
             "Save": "Guardar",
             "TestConnection": "Probar",
@@ -366,6 +372,8 @@
         "Databases": "Bases de datos",
         "Schemas": "Esquemas",
         "No results": "No se encontraron resultados",
+        "Loading databases": "Cargando bases de datos",
+        "Failed to load databases": "No se pudieron cargar las bases de datos",
         "Filter tables": "Filtrar tablas",
         "Refresh tables": "Actualizar tablas",
         "No matching tables found": "No se encontraron tablas coincidentes",

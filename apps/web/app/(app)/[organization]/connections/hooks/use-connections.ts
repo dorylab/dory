@@ -11,15 +11,8 @@ import { useTranslations } from 'next-intl';
 import { isSuccess } from '@/lib/result';
 import type { ResponseObject } from '@dory/shared';
 
-import {
-    addConnection,
-    deleteConnection,
-    getConnectionDetail,
-    testConnection,
-    getConnections,
-    updateConnection,
-} from '../api';
-import { connectionsAtom, searchResultAtom } from '../states';
+import { addConnection, deleteConnection, getConnectionDetail, testConnection, getConnections, updateConnection } from '../api';
+import { connectionsAtom } from '../states';
 import { ConnectionListItem, CreateConnectionPayload } from '@dory/shared/types/connections';
 
 const CONNECTIONS_QUERY_KEY = ['connections'] as const;
@@ -36,14 +29,12 @@ type UseConnectionsOptions = Omit<UseQueryOptions<ConnectionListItem[], unknown,
 
 function useSyncConnectionsState() {
     const setConnections = useSetAtom(connectionsAtom);
-    const setSearchResult = useSetAtom(searchResultAtom);
 
     return useCallback(
         (connections: ConnectionListItem[]) => {
             setConnections(connections);
-            setSearchResult(connections);
         },
-        [setConnections, setSearchResult],
+        [setConnections],
     );
 }
 
@@ -59,10 +50,7 @@ function useConnectionsCache() {
         [queryClient, syncConnections],
     );
 
-    const getSnapshot = useCallback(
-        () => queryClient.getQueryData<ConnectionListItem[]>(CONNECTIONS_QUERY_KEY) ?? [],
-        [queryClient],
-    );
+    const getSnapshot = useCallback(() => queryClient.getQueryData<ConnectionListItem[]>(CONNECTIONS_QUERY_KEY) ?? [], [queryClient]);
 
     const invalidate = useCallback(() => {
         queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY });
@@ -79,7 +67,7 @@ export function useConnections() {
         queryFn: async () => {
             const res = (await getConnections()) as ConnectionListResponse;
             const data = res.data ?? [];
-            
+
             syncConnections(data);
             return data;
         },
@@ -140,7 +128,6 @@ export function useCreateConnection(callback?: MutationCallbacks<ConnectionRespo
     });
 }
 
-
 export function useUpdateConnection(callback?: MutationCallbacks<ConnectionResponse>) {
     const { setAll, getSnapshot, invalidate } = useConnectionsCache();
     const t = useTranslations('Connections');
@@ -156,9 +143,7 @@ export function useUpdateConnection(callback?: MutationCallbacks<ConnectionRespo
 
                 if (updatedConnectionId) {
                     const snapshot = getSnapshot();
-                    const next = snapshot.map(item =>
-                        item.connection.id === updatedConnectionId ? { ...item, ...updated } : item,
-                    );
+                    const next = snapshot.map(item => (item.connection.id === updatedConnectionId ? { ...item, ...updated } : item));
                     setAll(next);
                     posthog.capture('connection_updated', {
                         connection_type: updated.connection.type,
@@ -181,7 +166,6 @@ export function useUpdateConnection(callback?: MutationCallbacks<ConnectionRespo
         },
     });
 }
-
 
 export function useDeleteConnection(callback?: MutationCallbacks<ResponseObject<null>>) {
     const { setAll, getSnapshot } = useConnectionsCache();

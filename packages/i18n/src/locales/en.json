@@ -196,6 +196,10 @@
             "emptyDescription": "We couldn't find any data sources for \"{query}\".",
             "emptyHint": "Try a different keyword or clear the search"
         },
+        "Filters": {
+            "Label": "Filter",
+            "Clear": "Clear filters"
+        },
         "Empty": {
             "title": "Connect a data source or open a file",
             "description": "Dory is a modern SQL and AI data workspace. Add a data source or open local files to start exploring.",
@@ -299,7 +303,9 @@
             "Choose": "Choose",
             "Clear": "Clear",
             "SSH": "SSH",
+            "SSH Tunnel": "SSH Tunnel",
             "SSL": "SSL",
+            "TLS/SSL": "TLS/SSL",
             "Cancel": "Cancel",
             "Save": "Save",
             "TestConnection": "Test",
@@ -366,6 +372,8 @@
         "Databases": "Databases",
         "Schemas": "Schemas",
         "No results": "No results found",
+        "Loading databases": "Loading databases",
+        "Failed to load databases": "Failed to load databases",
         "Filter tables": "Filter tables",
         "Refresh tables": "Refresh tables",
         "Loading tables": "Loading tables",
