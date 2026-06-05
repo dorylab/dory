@@ -12,6 +12,7 @@ import { cn } from '@dory/web-utils';
 export function NavSecondary({
     items,
     disabled = false,
+    onOpenExternal,
     ...props
 }: {
     items: {
@@ -21,6 +22,7 @@ export function NavSecondary({
         external?: boolean;
     }[];
     disabled?: boolean;
+    onOpenExternal?: (event: React.MouseEvent<HTMLAnchorElement>, url: string) => void;
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
     return (
         <SidebarGroup {...props} className={cn(props.className)}>
@@ -41,6 +43,11 @@ export function NavSecondary({
                                 onClick={e => {
                                     if (disabled) {
                                         e.preventDefault();
+                                        return;
+                                    }
+
+                                    if (item.external) {
+                                        onOpenExternal?.(e, item.url);
                                     }
                                 }}
                                 className={cn(

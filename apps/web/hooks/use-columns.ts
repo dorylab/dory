@@ -4,6 +4,8 @@ import { columnsAtom, columnsCacheAtom, currentConnectionAtom } from '@/shared/s
 import { executeActionClient } from '@/lib/actions/client';
 import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
 
+const inflightColumnRequests = new Map<string, Promise<TableColumn[]>>();
+
 export function useColumns() {
     const [tableColumns, setTableColumns] = useAtom(columnsAtom);
     const [columnsCache, setColumnsCache] = useAtom(columnsCacheAtom);
@@ -24,22 +26,44 @@ export function useColumns() {
         }
 
         const cacheKey = buildColumnCacheKey(connectionId, database, table);
-        const cachedColumns = cacheKey ? columnsCache[cacheKey]?.columns ?? null : null;
+        if (!cacheKey) {
+            return;
+        }
+
+        const cachedColumns = columnsCache[cacheKey]?.columns ?? null;
         if (cachedColumns) {
             setTableColumns(cachedColumns);
             return cachedColumns;
         }
 
-        const res = await executeActionClient<{ columns: TableColumn[] }>('schema.describeTable', { connectionId, database, table }, { currentConnectionId: connectionId });
-        const columns = res.columns || [];
-        setTableColumns(columns);
-        if (cacheKey) {
-            setColumnsCache(prev => ({
-                ...prev,
-                [cacheKey]: { columns, updatedAt: Date.now() },
-            }));
+        const existingRequest = inflightColumnRequests.get(cacheKey);
+        if (existingRequest) {
+            const columns = await existingRequest;
+            setTableColumns(columns);
+            return columns;
         }
-        return columns;
+
+        const request = executeActionClient<{ columns: TableColumn[] }>(
+            'schema.describeTable',
+            { connectionId, database, table },
+            { currentConnectionId: connectionId },
+        ).then(res => res.columns || []);
+
+        inflightColumnRequests.set(cacheKey, request);
+
+        try {
+            const columns = await request;
+            setTableColumns(columns);
+            if (cacheKey) {
+                setColumnsCache(prev => ({
+                    ...prev,
+                    [cacheKey]: { columns, updatedAt: Date.now() },
+                }));
+            }
+            return columns;
+        } finally {
+            inflightColumnRequests.delete(cacheKey);
+        }
     };
 
     return {

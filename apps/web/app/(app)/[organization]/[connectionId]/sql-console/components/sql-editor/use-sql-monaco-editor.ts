@@ -137,8 +137,7 @@ const resolveTablesForColumnContext = (
         .sort((a, b) => a.dist - b.dist)
         .map(e => e.text);
 
-    if (candidates.length) return candidates;
-    return tables.map(t => normalizeTableName(resolveTableName(t))).filter(Boolean);
+    return candidates;
 };
 
 const registerDtSqlCompletion = (
@@ -176,9 +175,6 @@ const registerDtSqlCompletion = (
             const schemas = getSchemas() || [];
             const activeDb = getActiveDatabase?.() ?? '';
 
-            const offset = model.getOffsetAt(position);
-            const prefixText = sql.slice(0, offset);
-
             let suggestion: any = {};
             try {
                 suggestion = parser.getSuggestionAtCaretPosition?.(sql, caretPos) || {};
@@ -191,8 +187,6 @@ const registerDtSqlCompletion = (
                 keywords?: string[];
                 syntax?: { syntaxContextType: string; wordRanges: { text?: string }[] }[];
             };
-
-            console.log('DT SQL Completion Suggestion:', suggestion);
 
             const items: Monaco.languages.CompletionItem[] = [];
             const syntaxList = Array.isArray(syntax) ? syntax : [];
@@ -224,8 +218,6 @@ const registerDtSqlCompletion = (
                             .join('')
                             .trim() || currentWord;
                     const normalizedPrefix = (typedTablePrefix ?? '').toLowerCase();
-
-                    console.log('Table context detected, prefix:', typedTablePrefix);
 
                     const hasQualifierPrefix = typedTablePrefix.includes('.');
                     const qualifierPrefixRaw = hasQualifierPrefix ? typedTablePrefix.split('.')[0] : '';
@@ -375,10 +367,6 @@ const registerDtSqlCompletion = (
                     if (!targetTables.length) {
                         const caretOffset = model.getOffsetAt(position);
                         targetTables = resolveTablesForColumnContext(parser, sql, caretPos, tables, caretOffset);
-
-                        if (!targetTables.length) {
-                            targetTables = tables.map(t => normalizeTableName(resolveTableName(t))).filter(Boolean);
-                        }
                     }
 
                     if (targetTables.length) {

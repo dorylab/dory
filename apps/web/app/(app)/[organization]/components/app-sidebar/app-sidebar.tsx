@@ -192,6 +192,15 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
         setShowStarNotification(false);
     }, []);
 
+    const handleOpenExternal = React.useCallback((event: React.MouseEvent<HTMLAnchorElement>, url: string) => {
+        if (!window.authBridge?.openExternal) {
+            return;
+        }
+
+        event.preventDefault();
+        void window.authBridge.openExternal(url);
+    }, []);
+
     return (
         <Sidebar {...props}>
             <SidebarHeader className="pb-2">
@@ -224,7 +233,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                                     <X className="h-3 w-3" />
                                 </Button>
                                 <Button asChild size="sm" className="mt-2.5 w-full justify-center rounded-xl px-3 text-[13px]">
-                                    <a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer" className="min-w-0 gap-1.5">
+                                    <a href={GITHUB_REPO_URL} target="_blank" rel="noreferrer" className="min-w-0 gap-1.5" onClick={event => handleOpenExternal(event, GITHUB_REPO_URL)}>
                                         <IconBrandGithub size={14} />
                                         <span className="truncate whitespace-nowrap">{t('StarNotificationAction')}</span>
                                     </a>
@@ -232,7 +241,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                             </div>
                         </div>
                     ) : null}
-                    <NavSecondary items={navSecondary} />
+                    <NavSecondary items={navSecondary} onOpenExternal={handleOpenExternal} />
                 </div>
             </SidebarContent>
 
@@ -244,6 +253,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                         rel="noreferrer"
                         className="inline-flex items-center gap-2 text-muted-foreground transition-colors hover:text-foreground"
                         aria-label="Dory"
+                        onClick={event => handleOpenExternal(event, GITHUB_REPO_URL)}
                     >
                         <DoryLogo className="h-5 w-auto" />
                     </a>
