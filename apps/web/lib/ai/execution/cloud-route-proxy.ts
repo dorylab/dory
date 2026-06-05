@@ -1,19 +1,8 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { USE_CLOUD_AI } from '@/app/config/app';
-import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 
-const FORWARDED_HEADERS = [
-    'content-type',
-    'cookie',
-    'authorization',
-    'x-connection-id',
-    'accept-language',
-    'origin',
-    'referer',
-    'user-agent',
-];
+const FORWARDED_HEADERS = ['content-type', 'cookie', 'authorization', 'x-connection-id', 'accept-language', 'origin', 'referer', 'user-agent'];
 
 function rewriteCookieHeaderForUpstream(value: string): string {
     const parts = value
@@ -67,16 +56,14 @@ export function buildCloudForwardHeaders(req: NextRequest, baseUrl?: string): He
     return headers;
 }
 
-export async function proxyAiRouteIfNeeded(
+export async function proxyCloudAiRoute(
     req: NextRequest,
+    baseUrl: string | null,
     pathname: string,
     options?: {
         body?: unknown;
     },
 ): Promise<Response | null> {
-    if (!USE_CLOUD_AI) return null;
-
-    const baseUrl = getCloudApiBaseUrl();
     if (!baseUrl) {
         return new Response('CLOUD_API_NOT_CONFIGURED', {
             status: 500,
@@ -101,12 +88,7 @@ export async function proxyAiRouteIfNeeded(
 
     const method = req.method.toUpperCase();
     const shouldSendBody = method !== 'GET' && method !== 'HEAD';
-    const body =
-        !shouldSendBody
-            ? undefined
-            : options && 'body' in options
-              ? JSON.stringify(options.body)
-              : await req.text();
+    const body = !shouldSendBody ? undefined : options && 'body' in options ? JSON.stringify(options.body) : await req.text();
 
     const upstream = await fetch(target.toString(), {
         method,

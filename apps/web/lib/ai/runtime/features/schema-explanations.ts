@@ -10,7 +10,7 @@ import {
     ColumnInput,
     SchemaExplanationResponse,
 } from '../../core/schema-explanations';
-import { resolveAiActionModel } from '@/lib/ai/execution/action-model';
+import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnExplanationsOptions = {
@@ -63,9 +63,10 @@ export async function getColumnExplanationsWithCache(
         modelName: providerModelName,
         providerKey,
         gateway,
-    } = await resolveAiActionModel('schema_explanation', {
+    } = await resolveAiLanguageModel({
+        role: 'schema_explanation',
         organizationId,
-        modelName: model,
+        requestedModel: model,
         req,
     });
     const effectiveCatalog = catalog ?? 'default';

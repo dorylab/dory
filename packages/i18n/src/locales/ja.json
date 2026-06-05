@@ -1099,6 +1099,7 @@
             "NewQuery": "新規クエリ",
             "UntitledQuery": "無題のクエリ",
             "ChatQuery": "チャットクエリ",
+            "MissingConnectionContext": "データソースコンテキストがありません",
             "Rename": "名前を変更",
             "GenerateAiTitle": "AI タイトルを生成",
             "Close": "閉じる",

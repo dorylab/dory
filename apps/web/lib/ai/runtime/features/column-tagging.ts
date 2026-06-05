@@ -5,7 +5,7 @@ import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import { cleanJson } from '../../core/clean-json';
 import { buildColumnTaggingPrompt, heuristicTagging, normalizeAIResult } from '../../core/column-tagging';
 import { ColumnInput, SchemaTag, SchemaTagResponse } from '@dory/shared';
-import { resolveAiActionModel } from '@/lib/ai/execution/action-model';
+import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnTagsWithCacheOptions = {
@@ -59,9 +59,10 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
         modelName: providerModelName,
         providerKey,
         gateway,
-    } = await resolveAiActionModel('column_tagging', {
+    } = await resolveAiLanguageModel({
+        role: 'column_tagging',
         organizationId,
-        modelName: model,
+        requestedModel: model,
         req,
     });
     const effectiveCatalog = catalog ?? 'default';

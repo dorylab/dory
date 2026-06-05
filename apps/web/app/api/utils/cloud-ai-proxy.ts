@@ -1,1 +1,1 @@
-export { buildCloudForwardHeaders, proxyAiRouteIfNeeded } from '@/lib/ai/execution/cloud-route-proxy';
+export { buildCloudForwardHeaders, proxyCloudAiRoute } from '@/lib/ai/execution/cloud-route-proxy';

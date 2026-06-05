@@ -14,7 +14,7 @@ import {
     ColumnInput,
     TableSummaryResponse,
 } from '../../core/table-summary';
-import { resolveAiActionModel } from '@/lib/ai/execution/action-model';
+import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { resolveModelName } from '@/lib/ai/model/presets';
 
@@ -78,9 +78,10 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         modelName: effectiveModelName,
         providerKey,
         gateway,
-    } = await resolveAiActionModel('table_summary', {
+    } = await resolveAiLanguageModel({
+        role: 'table_summary',
         organizationId,
-        modelName: model ?? null,
+        requestedModel: model ?? null,
         defaultModelName,
         req,
     });

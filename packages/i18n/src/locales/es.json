@@ -1099,6 +1099,7 @@
             "NewQuery": "Nueva consulta",
             "UntitledQuery": "Consulta sin título",
             "ChatQuery": "Consulta de chat",
+            "MissingConnectionContext": "Falta el contexto de la fuente de datos",
             "Rename": "Renombrar",
             "GenerateAiTitle": "Generar título con IA",
             "Close": "Cerrar",

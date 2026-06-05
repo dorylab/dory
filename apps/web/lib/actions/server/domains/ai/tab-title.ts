@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { generateText } from '@/lib/ai/gateway';
-import { resolveAiActionModel } from '@/lib/ai/execution/action-model';
+import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { buildTabTitlePrompt } from '@/lib/ai/prompts/tasks/sql.title';
 import { defineWebAction } from '../../define-web-action';
@@ -14,9 +14,10 @@ async function runTabTitleAction(ctx: AiActionContext, input: { sql: string; dat
     if (!sql) return { title: null };
 
     try {
-        const { model, preset, modelName, providerKey, gateway } = await resolveAiActionModel('title', {
+        const { model, preset, modelName, providerKey, gateway } = await resolveAiLanguageModel({
+            role: 'title',
             organizationId: ctx.organizationId,
-            modelName: input.model ?? null,
+            requestedModel: input.model ?? null,
             req: ctx.services.req,
         });
         const { text } = await generateText({

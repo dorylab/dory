@@ -267,6 +267,7 @@ test('AI routes delegate transport decisions to route dispatch helpers', () => {
     ];
     const forbiddenRouteSnippets = [
         'proxyAiRouteIfNeeded',
+        'proxyCloudAiRoute',
         'getCloudApiBaseUrl',
         'shouldUseCloudProxy',
         'resolveAiExecutionTargetForOrganization',
@@ -280,4 +281,71 @@ test('AI routes delegate transport decisions to route dispatch helpers', () => {
             assert.equal(source.includes(snippet), false, `${route} should not reference ${snippet}`);
         }
     }
+});
+
+test('model proxy endpoints explicitly disable recursive cloud proxying', () => {
+    const modelRoutes = ['../../app/api/ai/model/generate/route.ts', '../../app/api/ai/model/stream/route.ts'];
+
+    for (const route of modelRoutes) {
+        const source = readFileSync(new URL(route, import.meta.url), 'utf8');
+        assert.equal(source.includes('allowCloudProxy: false'), true, `${route} should force local model execution`);
+    }
+});
+
+test('unified AI execution resolver owns cloud runtime, language model, and route proxy decisions', () => {
+    const source = readFileSync(new URL('../../lib/ai/execution/resolver.ts', import.meta.url), 'utf8');
+
+    for (const snippet of [
+        'USE_CLOUD_AI',
+        'getCloudApiBaseUrl',
+        'resolveAiLanguageModel',
+        'resolveAiRouteProxy',
+        'createDoryCloudProxyLanguageModel',
+        'allowCloudProxy: options.allowCloudProxy ?? Boolean(options.req)',
+        'defaultModelName: options.defaultModelName',
+    ]) {
+        assert.equal(source.includes(snippet), true, `resolver should include ${snippet}`);
+    }
+});
+
+test('route dispatch remains a thin compatibility wrapper over unified resolver', () => {
+    const source = readFileSync(new URL('../../lib/ai/execution/route-dispatch.ts', import.meta.url), 'utf8');
+
+    for (const forbidden of ['USE_CLOUD_AI', 'getCloudApiBaseUrl', 'createDoryCloudProxyLanguageModel', 'buildCloudForwardHeaders']) {
+        assert.equal(source.includes(forbidden), false, `route dispatch should not reference ${forbidden}`);
+    }
+    assert.equal(source.includes('resolveAiRouteProxy'), true);
+    assert.equal(source.includes('requireLocalAiModel'), true);
+});
+
+test('cloud route proxy is a low-level fetch helper without runtime policy reads', () => {
+    const source = readFileSync(new URL('../../lib/ai/execution/cloud-route-proxy.ts', import.meta.url), 'utf8');
+
+    assert.equal(source.includes('USE_CLOUD_AI'), false);
+    assert.equal(source.includes('getCloudApiBaseUrl'), false);
+    assert.equal(source.includes('proxyCloudAiRoute'), true);
+});
+
+test('action and cache AI callers use unified language model resolver', () => {
+    const callers = [
+        '../../lib/actions/server/domains/ai/tab-title.ts',
+        '../../lib/ai/runtime/features/table-summary.ts',
+        '../../lib/ai/runtime/features/column-tagging.ts',
+        '../../lib/ai/runtime/features/schema-explanations.ts',
+        '../../lib/copilot/action/server/llm-json.ts',
+        '../../lib/ai/agents/model.ts',
+    ];
+
+    for (const caller of callers) {
+        const source = readFileSync(new URL(caller, import.meta.url), 'utf8');
+        assert.equal(source.includes("from '@/lib/ai/execution/action-model'"), false, `${caller} should not import action-model`);
+        assert.equal(source.includes("from '@/lib/ai/execution/resolver'"), true, `${caller} should import unified resolver`);
+    }
+});
+
+test('table summary passes fast/default preset through defaultModelName', () => {
+    const source = readFileSync(new URL('../../lib/ai/runtime/features/table-summary.ts', import.meta.url), 'utf8');
+
+    assert.equal(source.includes("resolveModelName('table_summary', { variant: colList.length > 50 ? 'fast' : 'default' })"), true);
+    assert.equal(source.includes('defaultModelName'), true);
 });

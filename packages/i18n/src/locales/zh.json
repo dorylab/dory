@@ -1103,6 +1103,7 @@
             "NewQuery": "新查询",
             "UntitledQuery": "未命名查询",
             "ChatQuery": "聊天查询",
+            "MissingConnectionContext": "缺少数据源上下文",
             "Rename": "重命名",
             "GenerateAiTitle": "生成 AI 标题",
             "Close": "关闭",

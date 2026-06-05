@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
 import { activeTabIdAtom, currentConnectionAtom, tabsAtom } from '@/shared/stores/app.store';
@@ -11,6 +10,7 @@ import { currentTabResultAtom, sessionIdByTabAtom } from '../../../sql-console.s
 import { executeActionClient } from '@/lib/actions/client';
 import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
+import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
 
 const ACTIVE_KEY = (connectionId?: string | null) => `sqlconsole:activeTabId:${connectionId ?? 'default'}`;
 const SID = (tabId: string) => `sqlconsole:sessionId:${tabId}`;
@@ -18,9 +18,7 @@ const SID = (tabId: string) => `sqlconsole:sessionId:${tabId}`;
 export function useSQLTabs() {
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection?.id ?? null;
-    const params = useParams<{ connectionId?: string | string[]; connection?: string | string[] }>();
-    const routeConnectionParam = params?.connectionId ?? params?.connection;
-    const routeConnectionId = Array.isArray(routeConnectionParam) ? routeConnectionParam[0] : routeConnectionParam;
+    const routeConnectionId = useRouteConnectionId();
 
     const [tabs, setTabs] = useAtom(tabsAtom);
     const [activeTabId, internalSetActiveTabId] = useAtom(activeTabIdAtom);
