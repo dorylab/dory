@@ -7,41 +7,27 @@
   <style>
     :root {
       color-scheme: light;
-      --background: oklch(1 0 0);
-      --foreground: oklch(0.145 0 0);
-      --muted: oklch(0.556 0 0);
-      --muted-surface: oklch(0.97 0 0);
-      --text: var(--foreground);
-      --surface: var(--background);
-      --wash: rgba(255, 255, 255, 0.46);
-      --fade: linear-gradient(to bottom, transparent 0%, color-mix(in oklab, var(--background) 62%, transparent) 58%, var(--background) 100%);
-      --white: #ffffff;
-      --black: #000000;
-      --transparent: transparent;
-      --blue-300: #93c5fd;
-      --blue-400: #60a5fa;
-      --blue-500: #3b82f6;
-      --indigo-300: #a5b4fc;
-      --violet-200: #ddd6fe;
-      --aurora-opacity: 0.28;
-      --aurora-blend-mode: normal;
-      --aurora-filter: blur(18px);
+      --page: #f5f3ed;
+      --ink: #26251e;
+      --muted: #6f6b63;
+      --soft: #ece9df;
+      --line: rgba(23, 22, 21, 0.12);
+      --blue: #2f6cff;
+      --hero-light: rgba(49, 114, 255, 0.12);
+      --hero-wash: rgba(255, 255, 255, 0.52);
     }
 
     @media (prefers-color-scheme: dark) {
       :root {
         color-scheme: dark;
-        --background: oklch(0.145 0 0);
-        --foreground: oklch(0.985 0 0);
-        --muted: oklch(0.708 0 0);
-        --muted-surface: oklch(0.269 0 0);
-        --text: var(--foreground);
-        --surface: var(--background);
-        --wash: color-mix(in oklab, var(--background) 28%, transparent);
-        --fade: linear-gradient(to bottom, transparent 0%, color-mix(in oklab, var(--background) 50%, transparent) 58%, var(--background) 100%);
-        --aurora-opacity: 0.42;
-        --aurora-blend-mode: difference;
-        --aurora-filter: blur(10px);
+        --page: #171615;
+        --ink: #f7f7f4;
+        --muted: #b4b0a6;
+        --soft: #26241e;
+        --line: rgba(247, 247, 244, 0.13);
+        --blue: #78a7ff;
+        --hero-light: rgba(59, 130, 246, 0.14);
+        --hero-wash: rgba(255, 255, 255, 0.04);
       }
     }
 
@@ -55,106 +41,127 @@
       height: 100%;
       margin: 0;
       overflow: hidden;
-      color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--surface);
+      background: var(--page);
+      color: var(--ink);
+      font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial, sans-serif;
     }
 
     body {
+      position: relative;
       display: grid;
       place-items: center;
+      min-width: 320px;
+      padding: 32px;
     }
 
-    .aurora {
+    body::before {
       position: fixed;
-      inset: -10px;
-      z-index: 0;
-      overflow: hidden;
-      pointer-events: none;
-    }
-
-    .aurora::before,
-    .aurora::after {
-      position: absolute;
-      inset: 0;
-      background-image:
-        repeating-linear-gradient(100deg, var(--white) 0%, var(--white) 7%, var(--transparent) 10%, var(--transparent) 12%, var(--white) 16%),
-        repeating-linear-gradient(100deg, var(--blue-500) 10%, var(--indigo-300) 15%, var(--blue-300) 20%, var(--violet-200) 25%, var(--blue-400) 30%);
-      background-position: 62% 18%, 62% 18%;
-      background-size: 300%, 200%;
+      top: 0;
+      right: -24%;
+      left: -24%;
+      height: 420px;
+      background:
+        radial-gradient(circle at 50% 0%, var(--hero-light), transparent 36%),
+        linear-gradient(to bottom, var(--hero-wash), transparent 62%);
       content: "";
-      filter: var(--aurora-filter);
-      mask-image: radial-gradient(ellipse at 100% 0%, black 10%, var(--transparent) 70%);
-      opacity: var(--aurora-opacity);
-      will-change: background-position;
-    }
-
-    .aurora::after {
-      background-size: 200%, 100%;
-      mix-blend-mode: var(--aurora-blend-mode);
-      animation: aurora 60s linear infinite;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      .aurora::before,
-      .aurora::after {
-        background-image:
-          repeating-linear-gradient(100deg, var(--black) 0%, var(--black) 7%, var(--transparent) 10%, var(--transparent) 12%, var(--black) 16%),
-          repeating-linear-gradient(100deg, var(--blue-500) 10%, var(--indigo-300) 15%, var(--blue-300) 20%, var(--violet-200) 25%, var(--blue-400) 30%);
-        filter: var(--aurora-filter);
-      }
-    }
-
-    .wash {
-      position: fixed;
-      z-index: 1;
-      inset: 0;
-      background: var(--wash);
       pointer-events: none;
     }
 
-    .fade {
+    body::after {
       position: fixed;
-      z-index: 1;
       inset: auto 0 0;
-      height: 50%;
-      background: var(--fade);
+      height: 38%;
+      background:
+        linear-gradient(to bottom, transparent, color-mix(in oklab, var(--page) 94%, white 6%)),
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: auto, 46px 46px, 46px 46px;
+      opacity: 0.34;
+      content: "";
       pointer-events: none;
     }
 
-    .content {
+    .loading {
       position: relative;
-      z-index: 2;
+      z-index: 1;
       display: grid;
       justify-items: center;
-      width: min(28rem, calc(100vw - 72px));
+      width: min(360px, 100%);
       text-align: center;
-      animation: rise 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation: enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    .logo-wrap {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 116px;
+      height: 116px;
+      margin-bottom: 22px;
+      border: 1px solid color-mix(in oklab, var(--ink) 8%, transparent);
+      border-radius: 28px;
+      background: color-mix(in oklab, var(--soft) 72%, transparent);
+      box-shadow:
+        0 18px 42px rgba(23, 22, 21, 0.08),
+        inset 0 1px 0 rgba(255, 255, 255, 0.32);
+    }
+
+    .logo-wrap::before {
+      position: absolute;
+      inset: -14px;
+      border-radius: 36px;
+      background: radial-gradient(circle, color-mix(in oklab, var(--blue) 20%, transparent), transparent 62%);
+      content: "";
+      opacity: 0.72;
+      animation: breathe 2.4s ease-in-out infinite;
+    }
+
+    .logo {
+      position: relative;
+      display: block;
+      width: 72px;
+      height: 72px;
+      object-fit: contain;
+      animation: hover 2.8s ease-in-out infinite;
     }
 
     .brand {
-      font-size: 32px;
+      margin: 0;
+      color: var(--ink);
+      font-size: 34px;
       font-weight: 650;
-      line-height: 1.1;
+      line-height: 1;
       letter-spacing: 0;
-      color: var(--text);
     }
 
     .status {
-      margin-top: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 14px;
       color: var(--muted);
-      font-size: 15px;
-      line-height: 1.6;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--blue);
+      box-shadow: 0 0 0 0 color-mix(in oklab, var(--blue) 34%, transparent);
+      animation: pulse 1.7s ease-in-out infinite;
     }
 
     .progress {
       position: relative;
-      width: min(18rem, 100%);
-      height: 4px;
-      margin-top: 24px;
+      width: 164px;
+      height: 3px;
+      margin-top: 26px;
       overflow: hidden;
       border-radius: 999px;
-      background: color-mix(in oklab, var(--muted-surface) 80%, transparent);
+      background: color-mix(in oklab, var(--muted) 18%, transparent);
     }
 
     .progress::after {
@@ -162,47 +169,129 @@
       inset: 0;
       width: 38%;
       border-radius: inherit;
-      background: linear-gradient(90deg, transparent, var(--blue-500), #2dd4bf);
+      background: linear-gradient(90deg, transparent, var(--blue), transparent);
       content: "";
-      animation: progress 1.35s ease-in-out infinite;
+      animation: progress 1.28s cubic-bezier(0.65, 0, 0.35, 1) infinite;
     }
 
-    @keyframes aurora {
-      from {
-        background-position: 50% 50%, 50% 50%;
-      }
-
-      to {
-        background-position: 350% 50%, 350% 50%;
-      }
-    }
-
-    @keyframes progress {
-      0% { transform: translateX(-90%); }
-      100% { transform: translateX(265%); }
-    }
-
-    @keyframes rise {
+    @keyframes enter {
       from {
         opacity: 0;
-        transform: translateY(8px);
+        transform: translateY(7px) scale(0.985);
       }
 
       to {
         opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes breathe {
+      0%,
+      100% {
+        opacity: 0.48;
+        transform: scale(0.96);
+      }
+
+      50% {
+        opacity: 0.84;
+        transform: scale(1.04);
+      }
+    }
+
+    @keyframes hover {
+      0%,
+      100% {
         transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-3px);
+      }
+    }
+
+    @keyframes pulse {
+      0%,
+      100% {
+        box-shadow: 0 0 0 0 color-mix(in oklab, var(--blue) 30%, transparent);
+        transform: scale(1);
+      }
+
+      50% {
+        box-shadow: 0 0 0 8px transparent;
+        transform: scale(0.92);
+      }
+    }
+
+    @keyframes progress {
+      from {
+        transform: translateX(-110%);
+      }
+
+      to {
+        transform: translateX(270%);
+      }
+    }
+
+    @media (max-height: 420px), (max-width: 420px) {
+      body {
+        padding: 24px;
+      }
+
+      .logo-wrap {
+        width: 96px;
+        height: 96px;
+        margin-bottom: 18px;
+        border-radius: 24px;
+      }
+
+      .logo {
+        width: 60px;
+        height: 60px;
+      }
+
+      .brand {
+        font-size: 30px;
+      }
+
+      .progress {
+        margin-top: 22px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .loading,
+      .logo-wrap::before,
+      .logo,
+      .pulse,
+      .progress::after {
+        animation: none;
       }
     }
   </style>
 </head>
 <body>
-  <div class="aurora" aria-hidden="true"></div>
-  <div class="wash" aria-hidden="true"></div>
-  <main class="content" aria-label="Dory is starting">
-    <div class="brand">Dory</div>
-    <div class="status">Starting your workspace...</div>
+  <main class="loading" aria-label="Dory is starting">
+    <div class="logo-wrap" aria-hidden="true">
+      <img id="logoImg" class="logo" src="./logo.png" alt="" />
+    </div>
+    <h1 class="brand">Dory</h1>
+    <div class="status" role="status" aria-live="polite">
+      <span class="pulse" aria-hidden="true"></span>
+      <span>Starting workspace</span>
+    </div>
     <div class="progress" aria-hidden="true"></div>
   </main>
-  <div class="fade" aria-hidden="true"></div>
+  <script>
+    const logoImg = document.getElementById('logoImg');
+    const logoFallbacks = ['../../../public/logo.png', '../../web/public/logo.png'];
+    let logoFallbackIndex = 0;
+
+    logoImg.addEventListener('error', () => {
+      if (logoFallbackIndex >= logoFallbacks.length) return;
+      logoImg.src = logoFallbacks[logoFallbackIndex];
+      logoFallbackIndex += 1;
+    });
+  </script>
 </body>
 </html>

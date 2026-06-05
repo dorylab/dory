@@ -1,6 +1,5 @@
 import { BrowserWindow, screen, shell } from 'electron';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import Store from 'electron-store';
 import type { LogFn } from './logger.js';
 
@@ -11,7 +10,6 @@ let isQuitting = false;
 let isMainAppLoaded = false;
 const MIN_WINDOW_WIDTH = 480;
 const MIN_WINDOW_HEIGHT = 360;
-const loadingHtmlPath = fileURLToPath(new URL('./loading.html', import.meta.url));
 
 interface WindowState {
     x?: number;
@@ -47,7 +45,7 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
         height: windowState?.height ?? 800,
         x: windowState?.x,
         y: windowState?.y,
-        show: true,
+        show: false,
         frame: true,
         alwaysOnTop: false,
         transparent: false,
@@ -67,8 +65,6 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
     if (windowState?.isMaximized) {
         mainWindow.maximize();
     }
-
-    mainWindow.loadFile(loadingHtmlPath);
 
     mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
         const levelName = level >= 3 ? 'error' : level === 2 ? 'warn' : 'info';
@@ -131,6 +127,10 @@ export function loadMainWindowUrl(targetUrl: string, log: LogFn) {
         if (!currentUrl.startsWith(targetOrigin)) return;
         mainWindow.webContents.off('did-finish-load', handleAppLoad);
         isMainAppLoaded = true;
+        if (!mainWindow.isVisible()) {
+            mainWindow.show();
+        }
+        mainWindow.focus();
         mainWindow?.webContents
             .executeJavaScript(
                 '({ hasThemeBridge: !!window.themeBridge, hasLogBridge: !!window.logBridge, hasElectron: !!window.electron })',
@@ -173,6 +173,7 @@ export function setPendingAuthCallback(url: string) {
 
 export function focusMainWindow() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!isMainAppLoaded) return;
     if (mainWindow.isMinimized()) mainWindow.restore();
     if (!mainWindow.isVisible()) mainWindow.show();
     mainWindow.focus();
