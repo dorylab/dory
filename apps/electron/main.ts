@@ -57,6 +57,7 @@ const mcpProxyManager = createMcpProxyManager({
   logError,
 });
 let launchPromise: Promise<void> | null = null;
+let launchDockBounceId: number | null = null;
 
 registerThemeIpc();
 applyTheme(getStoredTheme());
@@ -64,6 +65,25 @@ log('[electron] distribution:', DISTRIBUTION);
 log('[electron] userData path:', app.getPath('userData'));
 log('[electron] stored theme on boot:', getStoredTheme());
 log('[electron] stored locale on boot:', getStoredLocale());
+
+function startLaunchDockBounce() {
+  if (process.platform !== 'darwin' || launchDockBounceId !== null) return;
+  const dock = app.dock;
+  if (!dock) return;
+  const bounceId = dock.bounce('informational');
+  if (bounceId === -1) return;
+  launchDockBounceId = bounceId;
+  log('[electron] launch dock bounce started:', bounceId);
+}
+
+function stopLaunchDockBounce() {
+  if (process.platform !== 'darwin' || launchDockBounceId === null) return;
+  const dock = app.dock;
+  if (!dock) return;
+  dock.cancelBounce(launchDockBounceId);
+  log('[electron] launch dock bounce stopped:', launchDockBounceId);
+  launchDockBounceId = null;
+}
 
 function createUpdateChannelMenuItems(options: {
   getUpdateChannel: () => UpdateChannel;
@@ -233,6 +253,7 @@ async function launch() {
 
   launchPromise = (async () => {
     try {
+      startLaunchDockBounce();
       const targetUrl = await serverManager.getAppUrl();
       log('[electron] launch targetUrl:', targetUrl);
       if (!hasMainWindow()) {
@@ -241,9 +262,12 @@ async function launch() {
           log,
         });
       }
-      loadMainWindowUrl(targetUrl, log);
+      loadMainWindowUrl(targetUrl, log, {
+        onReveal: stopLaunchDockBounce,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+      stopLaunchDockBounce();
       logError('[electron] launch error:', error);
       dialog.showErrorBox('Launch Failed', message);
       app.quit();

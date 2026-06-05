@@ -3,6 +3,11 @@ import Store from 'electron-store';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
+const THEME_BACKGROUND_COLORS = {
+    light: '#ffffff',
+    dark: '#09090b',
+};
+
 const themeStore = new Store<{ theme: ThemeMode }>({
     name: 'preferences',
     defaults: {
@@ -23,9 +28,21 @@ export function applyTheme(theme: ThemeMode) {
     nativeTheme.themeSource = theme;
 }
 
+export function getThemeBackgroundColor() {
+    return nativeTheme.shouldUseDarkColors ? THEME_BACKGROUND_COLORS.dark : THEME_BACKGROUND_COLORS.light;
+}
+
+function updateWindowBackgroundColors() {
+    const backgroundColor = getThemeBackgroundColor();
+    for (const win of BrowserWindow.getAllWindows()) {
+        win.setBackgroundColor(backgroundColor);
+    }
+}
+
 export function setStoredTheme(theme: ThemeMode) {
     themeStore.set('theme', theme);
     applyTheme(theme);
+    updateWindowBackgroundColors();
     console.log('[electron][theme] setStoredTheme:', theme);
     for (const win of BrowserWindow.getAllWindows()) {
         win.webContents.send('theme:changed', theme);
@@ -40,3 +57,5 @@ export function registerThemeIpc() {
         return getStoredTheme();
     });
 }
+
+nativeTheme.on('updated', updateWindowBackgroundColors);

@@ -2,6 +2,7 @@ import { BrowserWindow, screen, shell } from 'electron';
 import fs from 'node:fs';
 import Store from 'electron-store';
 import type { LogFn } from './logger.js';
+import { getThemeBackgroundColor } from './theme.js';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingAuthCallback: string | null = null;
@@ -35,6 +36,10 @@ interface CreateMainWindowOptions {
     log: LogFn;
 }
 
+interface LoadMainWindowUrlOptions {
+    onReveal?: () => void;
+}
+
 export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) {
     log('[electron] createMainWindow');
     log('[electron] preloadPath ->', preloadPath, 'exists:', fs.existsSync(preloadPath));
@@ -49,7 +54,7 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
         frame: true,
         alwaysOnTop: false,
         transparent: false,
-        backgroundColor: '#0b1020',
+        backgroundColor: getThemeBackgroundColor(),
         webPreferences: {
             preload: preloadPath,
             contextIsolation: true,
@@ -115,22 +120,43 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
     });
 }
 
-export function loadMainWindowUrl(targetUrl: string, log: LogFn) {
+export function loadMainWindowUrl(targetUrl: string, log: LogFn, options: LoadMainWindowUrlOptions = {}) {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     log('[electron] loadMainWindowUrl ->', targetUrl);
     isMainAppLoaded = false;
     const targetOrigin = new URL(targetUrl).origin;
+    let appLoadFinished = false;
+    let windowReadyToShow = false;
+    let revealed = false;
+
+    const revealMainWindow = () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (revealed) return;
+        if (!appLoadFinished || !windowReadyToShow) return;
+        revealed = true;
+        mainWindow.webContents.off('did-finish-load', handleAppLoad);
+        mainWindow.off('ready-to-show', handleReadyToShow);
+        if (!mainWindow.isVisible()) {
+            mainWindow.show();
+        }
+        mainWindow.focus();
+        options.onReveal?.();
+    };
+
+    const handleReadyToShow = () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        const currentUrl = mainWindow.webContents.getURL();
+        if (!currentUrl.startsWith(targetOrigin)) return;
+        windowReadyToShow = true;
+        revealMainWindow();
+    };
 
     const handleAppLoad = () => {
         if (!mainWindow || mainWindow.isDestroyed()) return;
         const currentUrl = mainWindow.webContents.getURL();
         if (!currentUrl.startsWith(targetOrigin)) return;
-        mainWindow.webContents.off('did-finish-load', handleAppLoad);
+        appLoadFinished = true;
         isMainAppLoaded = true;
-        if (!mainWindow.isVisible()) {
-            mainWindow.show();
-        }
-        mainWindow.focus();
         mainWindow?.webContents
             .executeJavaScript(
                 '({ hasThemeBridge: !!window.themeBridge, hasLogBridge: !!window.logBridge, hasElectron: !!window.electron })',
@@ -143,9 +169,11 @@ export function loadMainWindowUrl(targetUrl: string, log: LogFn) {
                 log('[electron] renderer globals check failed:', error instanceof Error ? error.message : String(error));
             });
         flushPendingAuthCallback();
+        revealMainWindow();
     };
 
     mainWindow.webContents.on('did-finish-load', handleAppLoad);
+    mainWindow.on('ready-to-show', handleReadyToShow);
     mainWindow.loadURL(targetUrl);
 }
 
@@ -155,14 +183,14 @@ export function sendAuthCallback(url: string, logWarn: LogFn) {
         pendingAuthCallback = url;
         return;
     }
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    if (!mainWindow.isVisible()) mainWindow.show();
-    mainWindow.focus();
     if (!isMainAppLoaded) {
         logWarn('[electron] main app not loaded, queueing auth callback:', url);
         pendingAuthCallback = url;
         return;
     }
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    if (!mainWindow.isVisible()) mainWindow.show();
+    mainWindow.focus();
     logWarn('[electron] sending auth callback to renderer:', url);
     mainWindow.webContents.send('auth:callback', url);
 }
