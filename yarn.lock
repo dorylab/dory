@@ -2334,7 +2334,7 @@ __metadata:
   resolution: "@dory/database@workspace:packages/database"
   dependencies:
     "@dory/shared": "npm:0.1.0"
-    "@electric-sql/pglite": "npm:^0.4.3"
+    "@electric-sql/pglite": "npm:^0.5.1"
     "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
     "@types/node": "npm:^25.5.2"
     "@types/pg": "npm:^8.20.0"
@@ -2581,13 +2581,6 @@ __metadata:
   version: 0.2.17
   resolution: "@electric-sql/pglite@npm:0.2.17"
   checksum: 10c0/4358eccb2a3de5148b8995c7dbf3cad2d80a2a193885838ec19e0381ca204c0e37f721d006ad23fcad0b694ec6089a6786b82f2ad87f18344c82e059ff37017f
-  languageName: node
-  linkType: hard
-
-"@electric-sql/pglite@npm:^0.4.3":
-  version: 0.4.3
-  resolution: "@electric-sql/pglite@npm:0.4.3"
-  checksum: 10c0/480c49655a0557ae855498f5d62f80949e4a191e7183e77e33a6e2654f8fe2424d220a68f2c46fe2c4fc430695938669dc37534fa2c64fa837d6bc3f540e46c4
   languageName: node
   linkType: hard
 

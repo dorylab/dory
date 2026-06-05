@@ -1,9 +1,8 @@
 import { getAuth } from '@/lib/auth';
 import { appendClearAnonymousRecoveryCookieHeader } from '@/lib/auth/anonymous-recovery';
 import { buildSessionOrganizationPatch } from '@/lib/auth/migration-state';
+import { createProvisionedOrganization } from '@/lib/auth/organization-provisioning';
 import { getDBService } from '@dory/database';
-import { getClient } from '@dory/database/postgres/client';
-import { schema } from '@dory/database/schema';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { ensureDemoConnection } from '@/lib/demo/ensure-demo-connection';
 import { getRuntimeForServer } from '@dory/shared/runtime';
@@ -20,6 +19,15 @@ const DEMO_USER = {
 };
 
 const LEGACY_DEMO_EMAILS = ['demo@example.com', 'demo@dory.local'];
+
+function getFirstOrganizationId(memberships: Array<{ organizationId?: unknown }>) {
+    const organizationId = memberships[0]?.organizationId;
+    return typeof organizationId === 'string' && organizationId ? organizationId : null;
+}
+
+function getOrganizationSlug(organization: { slug?: unknown } | null) {
+    return typeof organization?.slug === 'string' && organization.slug ? organization.slug : null;
+}
 
 function slugifyOrganizationName(name: string) {
     const normalized = name
@@ -113,45 +121,27 @@ export async function POST(req: NextRequest) {
         throw new Error('Database service not initialized');
     }
 
-    const existingMemberships = await db.organizations.listByUser(userId);
+    const existingMemberships = (await db.organizations.listByUser(userId)) as Array<{ organizationId?: unknown }>;
     if (existingMemberships.length === 0) {
-        const now = new Date();
         const name = `${DEMO_USER.name}'s Workspace`;
         const slug = `${slugifyOrganizationName(name)}-${userId.slice(0, 8)}`;
-        const postgres = await getClient();
 
-        const insertedOrganizations = await postgres
-            .insert(schema.organizations)
-            .values({
-                name,
-                slug,
-                ownerUserId: userId,
-                provisioningKind: 'manual',
-                createdAt: now,
-                updatedAt: now,
-            })
-            .returning({ id: schema.organizations.id });
-
-        const organizationId = insertedOrganizations[0]?.id;
-        if (!organizationId) {
-            throw new Error(`failed_to_create_demo_organization_for_${userId}`);
-        }
-
-        await postgres.insert(schema.organizationMembers).values({
+        await createProvisionedOrganization({
+            auth,
+            headers: req.headers,
             userId,
-            organizationId,
-            role: 'owner',
-            status: 'active',
-            createdAt: now,
-            joinedAt: now,
+            name,
+            slug,
+            provisioningKind: 'manual',
         });
     }
 
     // Ensure demo SQLite connection exists for the user's organization
-    const memberships = await db.organizations.listByUser(userId);
-    if (memberships.length > 0) {
+    const memberships = (await db.organizations.listByUser(userId)) as Array<{ organizationId?: unknown }>;
+    const activeOrganizationId = getFirstOrganizationId(memberships);
+    if (activeOrganizationId) {
         try {
-            await ensureDemoConnection(db, userId, memberships[0]!.organizationId);
+            await ensureDemoConnection(db, userId, activeOrganizationId);
         } catch (error) {
             console.warn('[demo] failed to ensure demo connection:', error);
         }
@@ -162,8 +152,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'FAILED_TO_CREATE_SESSION' }, { status: 500 });
     }
 
-    const activeOrganizationId = memberships[0]?.organizationId ?? null;
-    const activeOrganization = activeOrganizationId ? await db.organizations.getOrganizationBySlugOrId(activeOrganizationId) : null;
+    const activeOrganization = activeOrganizationId
+        ? ((await db.organizations.getOrganizationBySlugOrId(activeOrganizationId)) as { slug?: unknown } | null)
+        : null;
     const sessionPatch = buildSessionOrganizationPatch({
         activeOrganizationId,
     });
@@ -173,7 +164,7 @@ export async function POST(req: NextRequest) {
 
     const res = NextResponse.json({
         ok: true,
-        organizationSlug: activeOrganization?.slug ?? activeOrganizationId,
+        organizationSlug: getOrganizationSlug(activeOrganization) ?? activeOrganizationId,
     });
     const baseAttrs = ctx.authCookies.sessionToken.attributes ?? {};
     const maxAge = ctx.sessionConfig?.expiresIn;

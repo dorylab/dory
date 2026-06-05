@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await getSessionFromRequest(req);
-    if (!session?.user?.id) {
+    const userId = session?.user?.id;
+    if (typeof userId !== 'string' || !userId) {
         return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
     }
 
@@ -30,16 +31,22 @@ export async function POST(req: NextRequest) {
             session,
             headers: req.headers,
         });
+        const organizationId = typeof organization.id === 'string' ? organization.id : null;
+        if (!organizationId) {
+            throw new Error('anonymous_organization_missing_id');
+        }
+        const organizationSlug = typeof organization.slug === 'string' && organization.slug ? organization.slug : organizationId;
+        const organizationName = typeof organization.name === 'string' ? organization.name : null;
 
         const response = NextResponse.json({
-            organizationId: organization.id,
-            organizationSlug: organization.slug ?? organization.id,
-            organizationName: organization.name,
+            organizationId,
+            organizationSlug,
+            organizationName,
         });
 
         const token = await issueAnonymousRecoveryToken({
-            userId: session.user.id,
-            activeOrganizationId: organization.id,
+            userId,
+            activeOrganizationId: organizationId,
         });
         appendAnonymousRecoveryCookieHeader(response.headers, {
             requestUrl: req.url,

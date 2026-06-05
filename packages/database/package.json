@@ -26,7 +26,7 @@
     },
     "dependencies": {
         "@dory/shared": "0.1.0",
-        "@electric-sql/pglite": "^0.4.3",
+        "@electric-sql/pglite": "^0.5.1",
         "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17",
         "drizzle-orm": "^0.45.2",
         "pg": "^8.20.0"
