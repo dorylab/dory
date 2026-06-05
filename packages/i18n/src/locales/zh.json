@@ -1106,7 +1106,6 @@
             "MissingConnectionContext": "缺少数据源上下文",
             "Rename": "重命名",
             "GenerateAiTitle": "生成 AI 标题",
-            "GenerateAiTitleFailed": "生成 AI 标题失败",
             "Close": "关闭",
             "CloseOthers": "关闭其他",
             "NoActiveTab": "没有活动标签",

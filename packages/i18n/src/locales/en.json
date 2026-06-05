@@ -1102,7 +1102,6 @@
             "MissingConnectionContext": "Missing data source context",
             "Rename": "Rename",
             "GenerateAiTitle": "Generate AI title",
-            "GenerateAiTitleFailed": "Failed to generate AI title",
             "Close": "Close",
             "CloseOthers": "Close Others",
             "NoActiveTab": "No active tab",

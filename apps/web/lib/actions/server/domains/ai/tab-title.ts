@@ -84,7 +84,7 @@ async function runTabTitleAction(ctx: AiActionContext, input: { sql: string; dat
         return { title: trimTitle(text) || buildFallbackTabTitle(sql) };
     } catch (error) {
         console.error('[action/ai.tabTitle] failed:', error);
-        throw new Error('Failed to generate AI title.');
+        return { title: buildFallbackTabTitle(sql) };
     }
 }
 

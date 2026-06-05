@@ -17,7 +17,7 @@
         "test": "node --import tsx --test \"src/**/*.test.ts\""
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.29.0",
+        "@modelcontextprotocol/sdk": "1.24.0",
         "zod": "^4.3.6"
     },
     "devDependencies": {
