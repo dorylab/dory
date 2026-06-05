@@ -71,12 +71,12 @@ const config = {
         contents: [
             {
                 x: 160,
-                y: 220,
+                y: 190,
                 type: 'file',
             },
             {
                 x: 380,
-                y: 220,
+                y: 190,
                 type: 'link',
                 path: '/Applications',
             },
