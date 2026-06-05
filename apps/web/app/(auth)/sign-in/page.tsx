@@ -5,6 +5,8 @@ import { cn } from '@dory/web-utils';
 import { SignInForm } from '@/app/(auth)/components/SignInForm';
 import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from '@/lib/auth/anonymous-recovery';
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
+import { readDesktopAuthSnapshot } from '@/lib/auth/desktop-auth-snapshot';
+import { resolveDesktopSignInRedirect } from '@/lib/auth/desktop-sign-in';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 // import { BubbleBackground } from '@/components/animate-ui/components/backgrounds/bubble';
@@ -38,17 +40,31 @@ export const dynamic = 'force-dynamic';
 //     display: 'swap',
 // });
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ callbackURL?: string }> }) {
-    const cookieStore = await cookies();
     const { callbackURL } = await searchParams;
+    const runtime = getRuntimeForServer() ?? 'web';
+
+    if (runtime === 'desktop') {
+        const redirectTo = resolveDesktopSignInRedirect(readDesktopAuthSnapshot(), callbackURL);
+        if (redirectTo) {
+            redirect(redirectTo);
+        }
+
+        return <SignInShell runtime={runtime} resumeAnonymousSession={false} />;
+    }
+
+    const cookieStore = await cookies();
     const recoveryToken = cookieStore.get(getAnonymousRecoveryCookieName())?.value;
     const session = await getSessionFromRequest();
-    const runtime = getRuntimeForServer() ?? 'web';
     const resumeAnonymousSession = shouldProxyAuthRequest() ? Boolean(recoveryToken) : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
 
     if (session) {
         redirect(callbackURL && callbackURL !== '/sign-in' ? callbackURL : '/');
     }
 
+    return <SignInShell runtime={runtime} resumeAnonymousSession={resumeAnonymousSession} />;
+}
+
+function SignInShell({ runtime, resumeAnonymousSession }: { runtime: string; resumeAnonymousSession: boolean }) {
     return (
         <div
             className={cn(
@@ -63,11 +79,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
                 <RuntimeHint />
             </div>
             <div className="relative z-20 w-full max-w-[30rem]">
-                {runtime === 'web' ? (
-                    <SignInForm resumeAnonymousSession={resumeAnonymousSession} showDemoOption />
-                ) : (
-                    <SignInForm resumeAnonymousSession={resumeAnonymousSession} />
-                )}
+                {runtime === 'web' ? <SignInForm resumeAnonymousSession={resumeAnonymousSession} showDemoOption /> : <SignInForm resumeAnonymousSession={resumeAnonymousSession} />}
             </div>
             {/* <div className="absolute z-10 inset-0 h-full w-full bg-[#0f172a]">
 
