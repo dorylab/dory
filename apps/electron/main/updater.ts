@@ -32,7 +32,7 @@ import {
     getCenteredPosition,
     getDialogBackgroundColor,
     getDialogHtmlPath,
-    showDialogWithoutFocus,
+    showDialogAndFocus,
 } from './updater/utils.js';
 import { getMainWindow, setMainWindowQuitting } from './window.js';
 import { getDefaultUpdateChannelForVersion } from './updater/preferences.js';
@@ -164,11 +164,12 @@ function openAvailableDialog(title: string) {
     if (availableDialog && !availableDialog.isDestroyed()) {
         availableDialog.setTitle(title);
         availableDialog.setMovable(true);
-        showDialogWithoutFocus(availableDialog);
+        showDialogAndFocus(availableDialog);
         return;
     }
 
     const pos = getCenteredPosition(534, 180);
+    const parentWindow = getMainWindow();
     availableDialog = new BrowserWindow({
         width: 534,
         height: 180,
@@ -182,6 +183,7 @@ function openAvailableDialog(title: string) {
         show: false,
         title,
         ...pos,
+        parent: parentWindow && !parentWindow.isDestroyed() ? parentWindow : undefined,
         modal: false,
         titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
         backgroundColor: getDialogBackgroundColor(),
@@ -197,7 +199,7 @@ function openAvailableDialog(title: string) {
     availableDialog.once('ready-to-show', () => {
         if (!availableDialog || availableDialog.isDestroyed()) return;
         availableDialog.setMovable(true);
-        showDialogWithoutFocus(availableDialog);
+        showDialogAndFocus(availableDialog);
         if (isDev) {
             availableDialog.webContents.openDevTools({ mode: 'detach', activate: false });
         }
@@ -215,11 +217,12 @@ function openProgressDialog(title: string) {
     if (progressDialog && !progressDialog.isDestroyed()) {
         progressDialog.setTitle(title);
         progressDialog.setMovable(true);
-        showDialogWithoutFocus(progressDialog);
+        showDialogAndFocus(progressDialog);
         return;
     }
 
     const pos = getCenteredPosition(400, 150);
+    const parentWindow = getMainWindow();
     progressDialog = new BrowserWindow({
         width: 400,
         height: 150,
@@ -233,6 +236,7 @@ function openProgressDialog(title: string) {
         show: false,
         title,
         ...pos,
+        parent: parentWindow && !parentWindow.isDestroyed() ? parentWindow : undefined,
         modal: false,
         titleBarStyle: 'default',
         backgroundColor: getDialogBackgroundColor(),
@@ -248,7 +252,7 @@ function openProgressDialog(title: string) {
     progressDialog.once('ready-to-show', () => {
         if (!progressDialog || progressDialog.isDestroyed()) return;
         progressDialog.setMovable(true);
-        showDialogWithoutFocus(progressDialog);
+        showDialogAndFocus(progressDialog);
         if (isDev) {
             progressDialog.webContents.openDevTools({ mode: 'detach', activate: false });
         }

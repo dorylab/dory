@@ -2,6 +2,7 @@ import { BrowserWindow, screen, shell } from 'electron';
 import fs from 'node:fs';
 import Store from 'electron-store';
 import type { LogFn } from './logger.js';
+import { getThemeBackgroundColor } from './theme.js';
 
 let mainWindow: BrowserWindow | null = null;
 let pendingAuthCallback: string | null = null;
@@ -53,7 +54,7 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
         frame: true,
         alwaysOnTop: false,
         transparent: false,
-        backgroundColor: '#ffffff',
+        backgroundColor: getThemeBackgroundColor(),
         webPreferences: {
             preload: preloadPath,
             contextIsolation: true,

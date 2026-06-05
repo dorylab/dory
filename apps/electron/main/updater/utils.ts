@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { nativeTheme, type BrowserWindow } from 'electron';
+import { app, nativeTheme, type BrowserWindow } from 'electron';
 import { getMainWindow } from '../window.js';
 
 export const formatBytes = (bytes: number) => {
@@ -32,9 +32,15 @@ export function getCenteredPosition(width: number, height: number) {
     };
 }
 
-export function showDialogWithoutFocus(window: BrowserWindow) {
-    if (window.isVisible()) return;
-    window.showInactive();
+export function showDialogAndFocus(window: BrowserWindow) {
+    if (window.isMinimized()) {
+        window.restore();
+    }
+    window.show();
+    if (process.platform === 'darwin') {
+        app.focus({ steal: true });
+    }
+    window.focus();
 }
 
 export function compareVersions(a: string, b: string) {
