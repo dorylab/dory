@@ -67,6 +67,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
 function SignInShell({ runtime, resumeAnonymousSession }: { runtime: string; resumeAnonymousSession: boolean }) {
     return (
         <div
+            data-desktop-auth-shell="true"
             className={cn(
                 'bg-muted dark:bg-background relative flex flex-1 flex-col items-center justify-center gap-16 p-6 h-screen',
                 // fontSans.variable,
@@ -74,7 +75,7 @@ function SignInShell({ runtime, resumeAnonymousSession }: { runtime: string; res
                 // fontManrope.variable,
             )}
         >
-            <div className="absolute right-4 top-4 z-30 flex items-center gap-2">
+            <div data-desktop-auth-actions="true" className="absolute right-4 top-4 z-30 flex items-center gap-2">
                 <ModeToggle />
                 <RuntimeHint />
             </div>

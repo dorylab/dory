@@ -20,6 +20,7 @@ import { ElectronThemeSync } from '@/components/electron-theme-sync';
 import { siteConfig } from './config/site';
 import { JotaiProvider } from '@/lib/providers/jotai-provider';
 import { PublicEnvProvider, PublicEnvScript } from 'next-runtime-env';
+import { getRuntimeForServer } from '@dory/shared/runtime';
 
 const META_THEME_COLORS = {
     light: '#ffffff',
@@ -84,6 +85,8 @@ export default async function RootLayout({
     const cookieStore = await cookies();
     const activeThemeValue = cookieStore.get('active_theme')?.value ?? 'blue';
     const isScaled = activeThemeValue?.endsWith('-scaled');
+    const runtime = getRuntimeForServer() ?? 'web';
+    const isDesktopRuntime = runtime === 'desktop';
 
     const locale = await getLocale();
     const messages = await getMessages({ locale });
@@ -116,9 +119,11 @@ export default async function RootLayout({
                     'bg-background overscroll-none font-sans antialiased',
                     activeThemeValue ? `theme-${activeThemeValue}` : '',
                     isScaled ? 'theme-scaled' : '',
+                    isDesktopRuntime ? 'dory-desktop-runtime' : '',
                     fontVariables,
                 )}
             >
+                {isDesktopRuntime ? <div className="dory-desktop-titlebar-drag-region" /> : null}
                 <FontSizeProvider />
                 <PublicEnvProvider>
                     <NextIntlClientProvider locale={locale} messages={messages}>

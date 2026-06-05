@@ -35,6 +35,7 @@ export default async function SignUpPage() {
     // const theme = (await cookies()).get('theme')?.value;
     return (
         <div
+            data-desktop-auth-shell="true"
             className={cn(
                 'bg-muted dark:bg-background relative flex flex-1 flex-col items-center justify-center gap-16 p-6 h-screen',
                 // fontSans.variable,
@@ -42,7 +43,9 @@ export default async function SignUpPage() {
                 // fontManrope.variable,
             )}
         >
-            <RuntimeHint className="absolute right-4 top-4 z-20" />
+            <div data-desktop-auth-actions="true" className="absolute right-4 top-4 z-20">
+                <RuntimeHint />
+            </div>
             <div className="relative z-20 w-full max-w-2xl">
                 <SignUpForm />
             </div>

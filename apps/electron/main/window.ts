@@ -61,7 +61,14 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
             nodeIntegration: false,
         },
         fullscreenable: true,
-        titleBarStyle: 'default',
+        ...(process.platform === 'darwin'
+            ? {
+                  titleBarStyle: 'hiddenInset' as const,
+                  trafficLightPosition: { x: 16, y: 16 },
+              }
+            : {
+                  titleBarStyle: 'default' as const,
+              }),
         maximizable: true,
         resizable: true,
         movable: true,

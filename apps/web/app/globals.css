@@ -181,6 +181,41 @@ body {
     background-color: var(--background);
 }
 
+.dory-desktop-runtime {
+    --desktop-titlebar-height: 32px;
+}
+
+.dory-desktop-titlebar-drag-region {
+    position: fixed;
+    z-index: 2147483647;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: var(--desktop-titlebar-height);
+    background: transparent;
+    -webkit-app-region: drag;
+}
+
+.dory-desktop-runtime [data-slot='sidebar-wrapper'] {
+    padding-top: var(--desktop-titlebar-height);
+}
+
+.dory-desktop-runtime [data-slot='sidebar-container'] {
+    top: var(--desktop-titlebar-height);
+}
+
+.dory-desktop-runtime [data-slot='sidebar-inset'] {
+    height: calc(100% - var(--desktop-titlebar-height) - 1rem) !important;
+}
+
+.dory-desktop-runtime [data-desktop-auth-shell='true'] {
+    padding-top: calc(var(--desktop-titlebar-height) + var(--spacing) * 6);
+}
+
+.dory-desktop-runtime [data-desktop-auth-actions='true'] {
+    top: calc(var(--desktop-titlebar-height) + var(--spacing) * 4);
+}
+
 @layer base {
     * {
         @apply border-border outline-ring/50;
