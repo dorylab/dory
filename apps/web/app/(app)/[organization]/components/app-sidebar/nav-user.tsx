@@ -133,7 +133,7 @@ export function NavUser({ user, organizationId, enterpriseLicense }: { user: Use
             {canViewQueryAudit && canUseQueryAudit && organizationSlug ? (
                 <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={handleOpenQueryAudit}>
+                    <DropdownMenuItem onClick={handleOpenQueryAudit}>
                         <ClipboardList />
                         Query Audit
                     </DropdownMenuItem>
