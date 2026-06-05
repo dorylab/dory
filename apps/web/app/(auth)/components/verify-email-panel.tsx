@@ -10,6 +10,7 @@ import { authFetch } from '@/lib/client/auth-fetch';
 import { useTranslations } from 'next-intl';
 import { authClient } from '@/lib/auth-client';
 import { getEmailVerificationCallbackURL } from '@/lib/client/auth-runtime';
+import { refreshDesktopAuthSnapshot } from '@/lib/client/desktop-auth-snapshot';
 
 export function VerifyEmailPanel(props: {
     defaultEmail: string;
@@ -74,6 +75,7 @@ export function VerifyEmailPanel(props: {
                     throw new Error(data?.error ?? t('SignIn.AuthFailed', { error: 'consume_failed' }));
                 }
 
+                await refreshDesktopAuthSnapshot().catch(() => null);
                 setMsg(t('SignIn.SuccessRefreshing'));
                 window.location.assign(callbackURL);
             } catch {

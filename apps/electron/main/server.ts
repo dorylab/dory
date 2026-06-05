@@ -290,6 +290,7 @@ function createDesktopServerEnv(options: DesktopServerEnvOptions): NodeJS.Proces
         HOSTNAME: options.hostname,
         NODE_ENV: 'production',
         PGLITE_DB_PATH: options.databasePath,
+        DORY_DESKTOP_USER_DATA_PATH: options.userDataPath,
         DORY_DEMO_RESOURCE_CACHE_DIR: path.join(options.userDataPath, 'demo-resources'),
         BETTER_AUTH_SECRET: desktopSecrets.betterAuthSecret,
         DS_SECRET_KEY: desktopSecrets.dsSecretKey,

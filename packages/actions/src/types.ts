@@ -10,6 +10,7 @@ export type ActionId = `${ActionDomain}.${string}`;
 export type ActionScope = string;
 export type ActionProjection = 'canonical' | 'ui' | 'agent' | 'mcp' | 'automation';
 export type ActionEffect = string;
+export type ActionDesktopAuthMode = 'local-workspace' | 'cloud-required';
 
 export const DEFAULT_ACTION_PROJECTION_BY_ACTOR: Record<ActionActorType, ActionProjection> = {
     user: 'ui',
@@ -168,6 +169,7 @@ export type ActionDefinition<TInput = unknown, TOutput = unknown, TServices = un
     permission: ActionPermissionPolicy<TInput, TServices>;
     exposure: ActionExposurePolicy<TOutput, TServices>;
     audit: ActionAuditPolicy<TInput, TOutput, TServices>;
+    desktopAuth?: ActionDesktopAuthMode;
     handler: (ctx: ActionContext<TServices>, input: TInput) => Promise<TOutput> | TOutput;
 };
 

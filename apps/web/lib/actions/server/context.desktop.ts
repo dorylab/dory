@@ -10,11 +10,12 @@ import {
     createMcpActionContextFromAuth,
     createUserActionContext,
     parseActionRequestBody,
+    type ActionRequestBody,
     type ResolvedActionRequest,
 } from './context.shared';
+import { resolveDesktopLocalActionSnapshot } from './context.desktop-local';
 
-export async function resolveActionRequest(req: NextRequest): Promise<ResolvedActionRequest> {
-    const body = await parseActionRequestBody(req);
+async function resolveCloudActionRequest(req: NextRequest, body: ActionRequestBody): Promise<ResolvedActionRequest> {
     const session = await getSessionFromRequest(req);
     const userId = session?.user?.id ?? null;
 
@@ -42,6 +43,26 @@ export async function resolveActionRequest(req: NextRequest): Promise<ResolvedAc
             access,
         }),
     };
+}
+
+export async function resolveActionRequest(req: NextRequest): Promise<ResolvedActionRequest> {
+    const body = await parseActionRequestBody(req);
+    const local = resolveDesktopLocalActionSnapshot(body);
+
+    if (local) {
+        return {
+            body,
+            ctx: await createUserActionContext({
+                req,
+                body,
+                userId: local.userId,
+                organizationId: local.organizationId,
+                access: local.access,
+            }),
+        };
+    }
+
+    return resolveCloudActionRequest(req, body);
 }
 
 export async function createMcpActionContext(context: McpAuthContext): Promise<ActionContext<WebActionServices>> {

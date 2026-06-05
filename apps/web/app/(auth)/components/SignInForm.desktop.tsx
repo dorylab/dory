@@ -11,6 +11,7 @@ import { useTranslations } from 'next-intl';
 import { InputPassword } from '@/components/originui/input-password';
 import { authClient } from '@/lib/auth-client';
 import { authFetch } from '@/lib/client/auth-fetch';
+import { refreshDesktopAuthSnapshot } from '@/lib/client/desktop-auth-snapshot';
 import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
@@ -88,6 +89,7 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
                     throw new Error(data?.error ?? t('SignIn.AuthFailed', { error: 'consume_failed' }));
                 }
 
+                await refreshDesktopAuthSnapshot().catch(() => null);
                 setMsg(t('SignIn.SuccessRefreshing'));
                 window.location.assign(callbackURL);
             } catch {
@@ -138,6 +140,7 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
 
             posthog.identify(email, { email });
             posthog.capture('user_signed_in', { method: 'email' });
+            await refreshDesktopAuthSnapshot().catch(() => null);
             router.refresh();
             router.push(callbackURL);
         } catch (error: unknown) {
