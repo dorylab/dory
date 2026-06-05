@@ -10,6 +10,7 @@ const desktopRuntimeAliases: Record<string, string> = isDesktopRuntime
     ? {
           '@/lib/auth/session': './lib/auth/session.desktop.ts',
           '@/lib/auth/auth-proxy': './lib/auth/auth-proxy.desktop.ts',
+          '@/lib/actions/server/context': './lib/actions/server/context.desktop.ts',
           '@/components/session-recovery-sync': './components/session-recovery-sync.desktop.tsx',
           '@/app/(auth)/components/SignInForm': './app/(auth)/components/SignInForm.desktop.tsx',
           '@/app/(app)/[organization]/connections/components/forms/tls/certificate-field':

@@ -1,4 +1,5 @@
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
+import { buildDesktopAuthSnapshotBootstrapState, readDesktopAuthSnapshot } from '@/lib/auth/desktop-auth-snapshot';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { getFirstOrganizationForUserState, getOrganizationBySlugOrIdState } from '@/lib/server/organization';
 
@@ -17,6 +18,17 @@ export type AppBootstrapState = {
 };
 
 export async function getAppBootstrapState(options?: { organizationSlugOrId?: string | null }): Promise<AppBootstrapState> {
+    const snapshot = readDesktopAuthSnapshot();
+    if (snapshot?.user.id) {
+        const snapshotState = buildDesktopAuthSnapshotBootstrapState(snapshot, options);
+
+        return {
+            session: snapshotState.session as unknown as SessionLike,
+            activeOrganizationId: snapshotState.activeOrganizationId,
+            organization: snapshotState.organization,
+        };
+    }
+
     const session = await getSessionFromRequest();
     const activeOrganizationId = resolveCurrentOrganizationId(session);
 

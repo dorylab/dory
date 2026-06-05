@@ -1,5 +1,6 @@
 import 'server-only';
 import { isDesktopRuntime } from '@dory/shared/runtime';
+import { clearDesktopAuthSnapshot } from '@/lib/auth/desktop-auth-snapshot';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 
 export function shouldProxyAuthRequest(): boolean {
@@ -176,6 +177,10 @@ export async function proxyAuthRequest(req: Request): Promise<Response> {
 
     if (!isSecureRequest && hasSessionCookieFromUpstream) {
         responseHeaders.append('set-cookie', '__Secure-better-auth.session_token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax');
+    }
+
+    if (upstream.ok && incomingUrl.pathname === '/api/auth/sign-out') {
+        clearDesktopAuthSnapshot();
     }
 
     return new Response(upstream.body, {

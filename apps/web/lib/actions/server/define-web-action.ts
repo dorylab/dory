@@ -1,5 +1,14 @@
 import { defineAction } from '@dory/actions';
-import type { ActionActorType, ActionAuditPolicy, ActionDefinition, ActionExposurePolicy, ActionMcpMetadata, ActionPermissionRequirement } from '@dory/actions';
+import type {
+    ActionActorType,
+    ActionAuditPolicy,
+    ActionDefinition,
+    ActionDesktopAuthMode,
+    ActionExposurePolicy,
+    ActionId,
+    ActionMcpMetadata,
+    ActionPermissionRequirement,
+} from '@dory/actions';
 import type { z } from 'zod';
 import { defaultActionAuditPolicy } from './policies';
 import type { WebActionServices } from './types';
@@ -17,10 +26,31 @@ export type WebActionRegistration<TInput, TOutput> = Omit<
     defaultProjection?: ActionExposurePolicy<TOutput, WebActionServices>['defaultProjection'];
     projections?: ActionExposurePolicy<TOutput, WebActionServices>['projections'];
     audit?: ActionAuditPolicy<TInput, TOutput, WebActionServices>;
+    desktopAuth?: ActionDesktopAuthMode;
 };
 
+const LOCAL_WORKSPACE_ACTION_IDS = new Set<ActionId>([
+    'chart.buildChartProfile',
+    'chart.buildResultContext',
+    'query.cancel',
+    'query.execute',
+    'query.readOnlyExecute',
+]);
+
+function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<any, any, WebActionServices>, 'id' | 'domain'>): ActionDesktopAuthMode {
+    if (LOCAL_WORKSPACE_ACTION_IDS.has(action.id)) {
+        return 'local-workspace';
+    }
+
+    if (['connection', 'tab', 'savedQuery', 'schema', 'table'].includes(action.domain)) {
+        return 'local-workspace';
+    }
+
+    return 'cloud-required';
+}
+
 export function defineWebAction<TInput, TOutput>(action: WebActionRegistration<TInput, TOutput>) {
-    const { outputSchema, permissions, scopes, actors, mcp, requiresConfirmation, defaultProjection, projections, audit, ...definition } = action;
+    const { outputSchema, permissions, scopes, actors, mcp, requiresConfirmation, defaultProjection, projections, audit, desktopAuth, ...definition } = action;
     if (definition.risk === 'write' && typeof requiresConfirmation !== 'boolean') {
         throw new Error(`Write action "${definition.id}" must explicitly declare requiresConfirmation.`);
     }
@@ -47,5 +77,6 @@ export function defineWebAction<TInput, TOutput>(action: WebActionRegistration<T
             projections,
         },
         audit: audit ?? defaultActionAuditPolicy(definition.domain),
+        desktopAuth: desktopAuth ?? getDefaultDesktopAuthMode(definition),
     });
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import * as React from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 import { authClient } from '@/lib/auth-client';
+import { refreshDesktopAuthSnapshot } from '@/lib/client/desktop-auth-snapshot';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 
 type McpDesktopGrantPayload = {
@@ -11,13 +12,26 @@ type McpDesktopGrantPayload = {
 };
 
 const MCP_RECOVERY_RETRY_DELAYS_MS = [0, 1000, 3000, 7000];
+const AUTH_SNAPSHOT_REFRESH_MIN_INTERVAL_MS = 30 * 1000;
 
 function wait(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function logMcpRecoveryError(error: unknown) {
-    window.logBridge?.log('warn', '[mcp] automatic recovery failed:', error instanceof Error ? error.message : String(error));
+    window.logBridge?.log(
+        'warn',
+        '[mcp] automatic recovery failed:',
+        error instanceof Error ? error.message : String(error),
+    );
+}
+
+function logAuthSnapshotRefreshError(error: unknown) {
+    window.logBridge?.log(
+        'warn',
+        '[auth] desktop snapshot refresh failed:',
+        error instanceof Error ? error.message : String(error),
+    );
 }
 
 async function issueMcpDesktopGrant(organizationSlugOrId?: string): Promise<string> {
@@ -36,12 +50,39 @@ async function issueMcpDesktopGrant(organizationSlugOrId?: string): Promise<stri
     return (json.data as McpDesktopGrantPayload).grant;
 }
 
-export function SessionRecoverySync({ initialUserId = null }: { initialUserId?: string | null }) {
+type SessionRecoverySyncProps = {
+    initialUserId?: string | null;
+    initialActiveOrganizationId?: string | null;
+    initialOrganizationId?: string | null;
+};
+
+function buildAuthSnapshotSignature(input: {
+    userId?: string | null;
+    activeOrganizationId?: string | null;
+    organizationId?: string | null;
+}) {
+    if (!input.userId) return null;
+    return `${input.userId}:${input.activeOrganizationId ?? ''}:${input.organizationId ?? ''}`;
+}
+
+export function SessionRecoverySync({
+    initialUserId = null,
+    initialActiveOrganizationId = null,
+    initialOrganizationId = null,
+}: SessionRecoverySyncProps) {
     const { data: session } = authClient.useSession();
+    const router = useRouter();
     const params = useParams<{ organization?: string }>();
     const organizationSlugOrId = params.organization;
     const mcpSyncRunIdRef = React.useRef(0);
     const previousUserIdRef = React.useRef<string | null | undefined>(undefined);
+    const authSnapshotSignatureRef = React.useRef<string | null>(
+        buildAuthSnapshotSignature({
+            userId: initialUserId,
+            activeOrganizationId: initialActiveOrganizationId,
+            organizationId: initialOrganizationId,
+        }),
+    );
 
     React.useEffect(() => {
         if (!isDesktopRuntime() || typeof window === 'undefined' || !window.mcpBridge) {
@@ -92,6 +133,69 @@ export function SessionRecoverySync({ initialUserId = null }: { initialUserId?: 
 
         void syncMcpProxy();
     }, [initialUserId, organizationSlugOrId, session?.user?.id]);
+
+    React.useEffect(() => {
+        if (!isDesktopRuntime() || typeof window === 'undefined') {
+            return;
+        }
+
+        let disposed = false;
+        let pending = false;
+        let lastRefreshAt = 0;
+
+        const refreshSnapshot = async (force = false) => {
+            const now = Date.now();
+            if (pending || (!force && now - lastRefreshAt < AUTH_SNAPSHOT_REFRESH_MIN_INTERVAL_MS)) {
+                return;
+            }
+
+            pending = true;
+            lastRefreshAt = now;
+
+            try {
+                const result = await refreshDesktopAuthSnapshot();
+                if (disposed || !result) return;
+
+                const signature = result.snapshotCleared
+                    ? 'cleared'
+                    : result.ok
+                      ? buildAuthSnapshotSignature({
+                            userId: result.user?.id,
+                            activeOrganizationId: result.activeOrganizationId,
+                            organizationId: result.organization?.id,
+                        })
+                      : null;
+
+                if (signature && signature !== authSnapshotSignatureRef.current) {
+                    authSnapshotSignatureRef.current = signature;
+                    router.refresh();
+                }
+            } catch (error) {
+                logAuthSnapshotRefreshError(error);
+            } finally {
+                pending = false;
+            }
+        };
+
+        const onFocus = () => {
+            void refreshSnapshot();
+        };
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                void refreshSnapshot();
+            }
+        };
+
+        void refreshSnapshot(true);
+        window.addEventListener('focus', onFocus);
+        document.addEventListener('visibilitychange', onVisibilityChange);
+
+        return () => {
+            disposed = true;
+            window.removeEventListener('focus', onFocus);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
+        };
+    }, [initialUserId, router]);
 
     return null;
 }
