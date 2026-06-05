@@ -126,7 +126,7 @@ export function resolveAiLanguageModelFromExecution<R extends ModelRole>(
         return createDoryCloudProxyLanguageModel({
             baseUrl: execution.cloudApiBaseUrl,
             headers: buildCloudForwardHeaders(options.req, execution.cloudApiBaseUrl),
-            model: execution.modelName,
+            model: execution.forwardedModel,
             role: options.role,
         }) as LanguageModel;
     }

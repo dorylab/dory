@@ -1102,6 +1102,7 @@
             "MissingConnectionContext": "Falta el contexto de la fuente de datos",
             "Rename": "Renombrar",
             "GenerateAiTitle": "Generar título con IA",
+            "GenerateAiTitleFailed": "No se pudo generar el título con IA",
             "Close": "Cerrar",
             "CloseOthers": "Cerrar las demás",
             "NoActiveTab": "No hay pestaña activa",

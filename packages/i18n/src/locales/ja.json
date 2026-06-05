@@ -1102,6 +1102,7 @@
             "MissingConnectionContext": "データソースコンテキストがありません",
             "Rename": "名前を変更",
             "GenerateAiTitle": "AI タイトルを生成",
+            "GenerateAiTitleFailed": "AI タイトルを生成できませんでした",
             "Close": "閉じる",
             "CloseOthers": "他を閉じる",
             "NoActiveTab": "アクティブなタブがありません",
