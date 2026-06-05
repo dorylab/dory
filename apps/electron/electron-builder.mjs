@@ -60,7 +60,7 @@ const config = {
     asarUnpack: ['**/*.node'],
     dmg: {
         title: '${productName} ${version}${arch}',
-        backgroundColor: '#ffffff',
+        backgroundColor: '#eeeeee',
         icon: null,
         iconSize: 96,
         iconTextSize: 14,
@@ -70,13 +70,13 @@ const config = {
         },
         contents: [
             {
-                x: 145,
-                y: 205,
+                x: 160,
+                y: 220,
                 type: 'file',
             },
             {
-                x: 395,
-                y: 205,
+                x: 380,
+                y: 220,
                 type: 'link',
                 path: '/Applications',
             },
