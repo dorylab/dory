@@ -1,6 +1,7 @@
 import 'server-only';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { clearDesktopAuthSnapshot } from '@/lib/auth/desktop-auth-snapshot';
+import { appendClearSessionCookieHeaders } from '@/lib/auth/session-cookie-cleanup';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 
 export function shouldProxyAuthRequest(): boolean {
@@ -29,10 +30,7 @@ function rewriteSetCookie(value: string, isSecureRequest: boolean): string {
     const parts = value.split(';');
     const [nameValue, ...attrs] = parts;
     const normalizedAttrs = attrs.map(attr => attr.trim());
-    const isClearingCookie =
-        /=\s*$/.test(nameValue) ||
-        normalizedAttrs.some(attr => /^max-age=0$/i.test(attr)) ||
-        normalizedAttrs.some(attr => /^expires=/i.test(attr));
+    const isClearingCookie = /=\s*$/.test(nameValue) || normalizedAttrs.some(attr => /^max-age=0$/i.test(attr)) || normalizedAttrs.some(attr => /^expires=/i.test(attr));
 
     let rewrittenNameValue = nameValue;
     if (!isSecureRequest && /^__Secure-/i.test(nameValue)) {
@@ -181,6 +179,7 @@ export async function proxyAuthRequest(req: Request): Promise<Response> {
 
     if (upstream.ok && incomingUrl.pathname === '/api/auth/sign-out') {
         clearDesktopAuthSnapshot();
+        appendClearSessionCookieHeaders(responseHeaders, req.headers.get('cookie'));
     }
 
     return new Response(upstream.body, {

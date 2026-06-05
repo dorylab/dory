@@ -233,16 +233,14 @@ async function launch() {
 
   launchPromise = (async () => {
     try {
+      const targetUrl = await serverManager.getAppUrl();
+      log('[electron] launch targetUrl:', targetUrl);
       if (!hasMainWindow()) {
         createMainWindow({
           preloadPath: path.join(__dirname, 'preload.cjs'),
           log,
         });
       }
-      focusMainWindow();
-
-      const targetUrl = await serverManager.getAppUrl();
-      log('[electron] launch targetUrl:', targetUrl);
       loadMainWindowUrl(targetUrl, log);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

@@ -15,7 +15,7 @@ const assets = [
     dest: path.join(__dirname, '../dist-electron/main/update-progress-dialog.html'),
   },
   {
-    src: path.join(__dirname, '../../web/public/logo.png'),
+    src: path.join(__dirname, '../../../public/logo.png'),
     dest: path.join(__dirname, '../dist-electron/main/logo.png'),
   },
 ];
