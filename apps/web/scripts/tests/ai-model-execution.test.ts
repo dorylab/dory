@@ -308,6 +308,13 @@ test('unified AI execution resolver owns cloud runtime, language model, and rout
     }
 });
 
+test('cloud language model proxy forwards only explicit forwarded model', () => {
+    const source = readFileSync(new URL('../../lib/ai/execution/resolver.ts', import.meta.url), 'utf8');
+
+    assert.equal(source.includes('model: execution.forwardedModel'), true);
+    assert.equal(source.includes('model: execution.modelName'), false);
+});
+
 test('route dispatch remains a thin compatibility wrapper over unified resolver', () => {
     const source = readFileSync(new URL('../../lib/ai/execution/route-dispatch.ts', import.meta.url), 'utf8');
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { SQLTab, UITabPayload } from '@dory/shared/types/tabs';
+import { SQLTab } from '@dory/shared/types/tabs';
 import { shouldAutoNameTab } from '../utils';
 import { UpdateTab } from '../types';
 import { executeActionClient } from '@/lib/actions/client';
@@ -35,10 +35,7 @@ export function useSqlAiTabTitle(activeDatabase: string | null | undefined, upda
         [activeDatabase, updateTab, t],
     );
 
-    const manualRenameTab = useCallback(
-        (tab: SQLTab) => requestAITabTitle(tab, { force: true }),
-        [requestAITabTitle],
-    );
+    const manualRenameTab = useCallback((tab: SQLTab) => requestAITabTitle(tab, { force: true }), [requestAITabTitle]);
 
     return { requestAITabTitle, manualRenameTab };
 }
