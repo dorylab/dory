@@ -1,5 +1,6 @@
 import { generateText, runAiWithCache } from '@/lib/ai/gateway';
 
+import type { NextRequest } from 'next/server';
 import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import type { TablePropertiesRow } from '@dory/shared/types/table-info';
 import {
@@ -13,13 +14,14 @@ import {
     ColumnInput,
     TableSummaryResponse,
 } from '../../core/table-summary';
-import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
+import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { resolveModelName } from '@/lib/ai/model/presets';
 
 type GetTableSummaryOptions = {
     organizationId: string;
     userId?: string | null;
+    req?: NextRequest | null;
     connectionId: string;
     columns: ColumnInput[];
 
@@ -41,6 +43,7 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
     const {
         organizationId,
         userId,
+        req,
         connectionId,
         columns,
         properties,
@@ -68,16 +71,19 @@ export async function getTableSummaryWithCache(options: GetTableSummaryOptions) 
         };
     }
 
-    const providerModelName = model ?? resolveModelName('table_summary', { variant: colList.length > 50 ? 'fast' : 'default' });
+    const defaultModelName = resolveModelName('table_summary', { variant: colList.length > 50 ? 'fast' : 'default' });
     const {
         model: chatModel,
         preset,
         modelName: effectiveModelName,
         providerKey,
         gateway,
-    } = await getEffectiveModelBundleForOrganization('table_summary', {
+    } = await resolveAiLanguageModel({
+        role: 'table_summary',
         organizationId,
-        modelName: providerModelName,
+        requestedModel: model ?? null,
+        defaultModelName,
+        req,
     });
     const effectiveCatalog = catalog ?? 'default';
     const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';

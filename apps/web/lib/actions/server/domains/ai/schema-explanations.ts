@@ -17,6 +17,7 @@ async function runSchemaExplanationsAction(ctx: AiActionContext, input: SchemaCo
         return await provider.getColumnExplanationsWithCache({
             organizationId: ctx.organizationId,
             userId: ctx.userId,
+            req: ctx.services.req,
             connectionId,
             columns: input.columns,
             dbType: input.dbType ?? null,

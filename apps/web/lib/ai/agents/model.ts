@@ -3,18 +3,12 @@ import 'server-only';
 import type { LanguageModel } from 'ai';
 import type { NextRequest } from 'next/server';
 
-import { buildAiRouteForwardRequest, requireLocalAiRouteModel, type AiRouteExecution } from '@/lib/ai/execution/route-dispatch';
-import { createDoryCloudProxyLanguageModel } from './cloud-proxy-model';
+import { resolveAiLanguageModelFromExecution } from '@/lib/ai/execution/resolver';
+import type { AiRouteExecution } from '@/lib/ai/execution/route-dispatch';
 
 export function resolveDoryAgentModel(options: { execution: AiRouteExecution<'chat'>; req: NextRequest }): LanguageModel {
-    if (options.execution.transport === 'cloud') {
-        const forward = buildAiRouteForwardRequest(options.execution, options.req, '/');
-        return createDoryCloudProxyLanguageModel({
-            baseUrl: forward.url,
-            headers: forward.headers,
-            model: forward.forwardedModel,
-        });
-    }
-
-    return requireLocalAiRouteModel(options.execution);
+    return resolveAiLanguageModelFromExecution(options.execution, {
+        req: options.req,
+        role: 'chat',
+    });
 }

@@ -58,17 +58,21 @@ type ResultInsightItem = {
     level?: 'primary' | 'secondary' | 'info';
 };
 
+function hasRowCountSummary(value: unknown): value is { rowCount: number } {
+    return Boolean(value && typeof value === 'object' && typeof (value as { rowCount?: unknown }).rowCount === 'number');
+}
+
 function stringifyResultInsight(value: ResultInsightText) {
     if (typeof value === 'string') return value.trim();
     return (value?.summary ?? value?.insight ?? value?.description ?? value?.title ?? '').trim();
 }
 
-async function runResultInsightsAction(ctx: AiActionContext, payload: Record<string, any>) {
+async function runResultInsightsAction(ctx: AiActionContext, payload: Record<string, unknown>) {
     if (!Array.isArray(payload?.facts) || !Array.isArray(payload?.patterns)) return null;
     if (!payload.facts.length && !payload.patterns.length) return null;
 
     try {
-        const locale = ctx.locale ?? payload.locale ?? 'en';
+        const locale = ctx.locale ?? (typeof payload.locale === 'string' ? payload.locale : null) ?? 'en';
         const { runLLMJson } = await import('@/lib/copilot/action/server/llm-json');
         const result = await runLLMJson({
             prompt: buildResultInsightsPrompt({ payload, locale }),
@@ -79,6 +83,7 @@ async function runResultInsightsAction(ctx: AiActionContext, payload: Record<str
             context: {
                 organizationId: ctx.organizationId,
                 userId: ctx.userId,
+                req: ctx.services.req,
                 feature: 'result_insights',
             },
         });
@@ -114,7 +119,7 @@ async function runResultInsightsAction(ctx: AiActionContext, payload: Record<str
         return {
             quickSummary: result.quickSummary ?? {
                 title: primaryInsight ?? 'Analysis',
-                subtitle: typeof payload.summary?.rowCount === 'number' ? `${payload.summary.rowCount.toLocaleString()} rows` : undefined,
+                subtitle: hasRowCountSummary(payload.summary) ? `${payload.summary.rowCount.toLocaleString()} rows` : undefined,
             },
             analysisState: result.analysisState,
             primaryInsight,

@@ -1,9 +1,10 @@
 import 'server-only';
 
+import type { NextRequest } from 'next/server';
 import { z } from 'zod';
 import { generateText } from '@/lib/ai/gateway';
 import { isAiQuotaExceededError } from '@/lib/ai/usage-quota';
-import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
+import { resolveAiLanguageModel } from '@/lib/ai/execution/resolver';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { cleanJson } from '@/lib/ai/core/clean-json';
 export { isMissingAiEnvError } from '@/lib/ai/errors';
@@ -18,6 +19,7 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
     context?: {
         organizationId?: string | null;
         userId?: string | null;
+        req?: NextRequest | null;
         feature?: string;
     };
 }) {
@@ -33,9 +35,11 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
                 modelName: providerModelName,
                 providerKey,
                 gateway,
-            } = await getEffectiveModelBundleForOrganization('action', {
+            } = await resolveAiLanguageModel({
+                role: 'action',
                 organizationId: context?.organizationId ?? null,
-                modelName: requestedModel,
+                requestedModel,
+                req: context?.req,
             });
             const system = compileSystemPrompt(preset.system);
             const { text } = await generateText({

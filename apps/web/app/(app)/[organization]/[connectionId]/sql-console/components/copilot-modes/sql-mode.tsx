@@ -35,6 +35,7 @@ import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/s
 import type { SavedQueryItem } from '../saved-queries/saved-queries-sidebar';
 import { createCopilotSQLContextEnvelope } from '../../../chatbot/copilot/copilot-envelope';
 import { useSqlInlineAskAI } from '../../hooks/useSqlInlineAskAI';
+import { useRouteConnectionId } from '../../hooks/useRouteConnectionId';
 import { normalizeSqlDialect } from '@/lib/sql/sql-dialect';
 import { useTables } from '@/hooks/use-tables';
 import { hasSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
@@ -149,8 +150,10 @@ export function SqlMode({
     const canSave = activeTab?.tabType === 'sql';
     const defaultSaveTitle = useMemo(() => activeTab?.tabName ?? t('Tabs.NewQuery'), [activeTab?.tabName, t]);
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection?.id ?? null;
-    const limitDialect: SelectLimitDialect = currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
+    const routeConnectionId = useRouteConnectionId();
+    const connectionId = routeConnectionId ?? currentConnection?.connection?.id ?? null;
+    const currentRouteConnection = currentConnection?.connection?.id === connectionId ? currentConnection.connection : null;
+    const limitDialect: SelectLimitDialect = currentRouteConnection?.type === 'sqlserver' ? 'sqlserver' : currentRouteConnection?.type === 'oracle' ? 'oracle' : 'default';
     const generateSqlFromPrompt = useSqlInlineAskAI();
     const handleRunQuery = () => {
         if (!activeTab || isRunning) return;

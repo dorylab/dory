@@ -17,6 +17,7 @@ import { useTranslations } from 'next-intl';
 import { authClient } from '@/lib/auth-client';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { AuthLinkSheet } from '@/components/auth/auth-link-sheet';
+import { useRouteConnectionId } from '../../hooks/useRouteConnectionId';
 
 type SaveSqlDialogProps = {
     open: boolean;
@@ -32,7 +33,8 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const searchParams = useSearchParams();
     const currentConnection = useAtomValue(currentConnectionAtom);
     const { data: session } = authClient.useSession();
-    const connectionId = currentConnection?.connection?.id ?? null;
+    const routeConnectionId = useRouteConnectionId();
+    const connectionId = routeConnectionId ?? currentConnection?.connection?.id ?? null;
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [folderId, setFolderId] = useState('');
@@ -127,7 +129,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
             return;
         }
         if (!connectionId) {
-            const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+            const message = t('Tabs.MissingConnectionContext');
             setError(message);
             toast.error(message);
             return;

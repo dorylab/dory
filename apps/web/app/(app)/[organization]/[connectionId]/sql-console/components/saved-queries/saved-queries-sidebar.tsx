@@ -47,6 +47,7 @@ import posthog from 'posthog-js';
 import { AccountRequiredSheet } from '@/components/auth/account-required-sheet';
 import type { AuditItem } from '@dory/shared/types/audit';
 import { savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
+import { useRouteConnectionId } from '../../hooks/useRouteConnectionId';
 import { FolderItem, type FolderData } from './folder-item';
 import { CreateFolderDialog } from './create-folder-dialog';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog';
@@ -199,7 +200,8 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const locale = useLocale();
     const { data: session } = authClient.useSession();
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection?.id ?? null;
+    const routeConnectionId = useRouteConnectionId();
+    const connectionId = routeConnectionId ?? currentConnection?.connection?.id ?? null;
     const sessionUserId = session?.user?.id ?? null;
     const isAnonymous = isAnonymousUser(session?.user);
     const scrollRootRef = useRef<HTMLDivElement | null>(null);
@@ -298,7 +300,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                 return;
             }
             if (!connectionId) {
-                const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+                const message = t('Tabs.MissingConnectionContext');
                 setError(message);
                 setItems([]);
                 setHasMore(false);
@@ -344,7 +346,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
         if (!connectionId || !sessionUserId) {
             setHistoryItems([]);
-            setHistoryError(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            setHistoryError(t('Tabs.MissingConnectionContext'));
             return;
         }
 
@@ -485,7 +487,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     const commitPatch = useCallback(
         async (itemId: string, patch: Partial<SavedQueryItem>) => {
             if (!connectionId) {
-                const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+                const message = t('Tabs.MissingConnectionContext');
                 setError(message);
                 return;
             }
@@ -507,7 +509,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     const deleteSavedQuery = async (item: SavedQueryItem) => {
         if (!connectionId) {
-            const message = t('Api.SqlConsole.Tabs.MissingConnectionContext');
+            const message = t('Tabs.MissingConnectionContext');
             setError(message);
             return false;
         }
@@ -573,7 +575,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     // Folder actions
     const handleCreateFolder = async (name: string) => {
-        if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+        if (!connectionId) throw new Error(t('Tabs.MissingConnectionContext'));
         await executeActionClient('savedQuery.createFolder', { connectionId, name }, { currentConnectionId: connectionId });
         await fetchFolders();
     };
@@ -593,7 +595,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         }
         setRenameFolderSaving(true);
         try {
-            if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            if (!connectionId) throw new Error(t('Tabs.MissingConnectionContext'));
             await executeActionClient('savedQuery.updateFolder', { connectionId, id: renameFolderTarget.id, patch: { name: next } }, { currentConnectionId: connectionId });
             await fetchFolders();
             setRenameFolderOpen(false);
@@ -604,7 +606,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
     const deleteFolder = async (folder: FolderData) => {
         try {
-            if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            if (!connectionId) throw new Error(t('Tabs.MissingConnectionContext'));
             await executeActionClient('savedQuery.deleteFolder', { connectionId, id: folder.id }, { currentConnectionId: connectionId });
             await fetchFolders();
             // Refresh queries since folderId was reset to null
@@ -694,22 +696,22 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
 
             if (currentFolderId !== destinationFolderId) {
                 const nextPosition = destinationItems.reduce((max, item) => Math.max(max, item.position ?? 0), 0) + 1000;
-                if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+                if (!connectionId) throw new Error(t('Tabs.MissingConnectionContext'));
                 await executeActionClient(
                     'savedQuery.update',
                     {
                         connectionId,
                         id: activeQuery.id,
                         patch: {
-                        folderId: destinationFolderId,
-                        position: nextPosition,
+                            folderId: destinationFolderId,
+                            position: nextPosition,
                         },
                     },
                     { currentConnectionId: connectionId },
                 );
             }
 
-            if (!connectionId) throw new Error(t('Api.SqlConsole.Tabs.MissingConnectionContext'));
+            if (!connectionId) throw new Error(t('Tabs.MissingConnectionContext'));
             await executeActionClient('savedQuery.reorder', { connectionId, folderId: destinationFolderId, orderedIds }, { currentConnectionId: connectionId });
         },
         [connectionId, getScopeItems, t],

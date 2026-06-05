@@ -1099,6 +1099,7 @@
             "NewQuery": "New Query",
             "UntitledQuery": "Untitled Query",
             "ChatQuery": "Chat Query",
+            "MissingConnectionContext": "Missing data source context",
             "Rename": "Rename",
             "GenerateAiTitle": "Generate AI title",
             "Close": "Close",
