@@ -59,7 +59,28 @@ const config = {
     asar: true,
     asarUnpack: ['**/*.node'],
     dmg: {
-        title: '${productName}-${version}-${arch}',
+        title: '${productName} ${version}${arch}',
+        backgroundColor: '#ffffff',
+        icon: null,
+        iconSize: 96,
+        iconTextSize: 14,
+        window: {
+            width: 540,
+            height: 380,
+        },
+        contents: [
+            {
+                x: 145,
+                y: 205,
+                type: 'file',
+            },
+            {
+                x: 395,
+                y: 205,
+                type: 'link',
+                path: '/Applications',
+            },
+        ],
         writeUpdateInfo: false,
     },
     afterSign: './scripts/notarize.js',

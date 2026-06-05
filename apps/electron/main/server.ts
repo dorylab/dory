@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import http from 'node:http';
 import net, { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -425,22 +426,34 @@ async function resolveDesktopServerPort(options: {
     };
 }
 
-function isPortOpen(host: string, port: number): Promise<boolean> {
+function isHttpReady(host: string, port: number): Promise<boolean> {
     return new Promise(resolve => {
-        const socket = net.createConnection({ host, port });
-        socket.once('connect', () => {
-            socket.end();
-            resolve(true);
+        let settled = false;
+        const settle = (ready: boolean) => {
+            if (settled) return;
+            settled = true;
+            resolve(ready);
+        };
+
+        const req = http.request({ host, port, path: '/', method: 'GET', timeout: 1000 }, res => {
+            res.resume();
+            settle(true);
         });
-        socket.once('error', () => resolve(false));
+
+        req.once('timeout', () => {
+            req.destroy();
+            settle(false);
+        });
+        req.once('error', () => settle(false));
+        req.end();
     });
 }
 
 async function waitUntilReady(host: string, port: number, timeoutMs = 15000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-        if (await isPortOpen(host, port)) return;
+        if (await isHttpReady(host, port)) return;
         await new Promise(resolve => setTimeout(resolve, 150));
     }
-    throw new Error(`Next server startup timed out: ${host}:${port}`);
+    throw new Error(`Next server HTTP startup timed out: ${host}:${port}`);
 }
