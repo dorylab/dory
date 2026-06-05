@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useTranslations } from 'next-intl';
-import { useParams, usePathname, useSearchParams } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { IconDotsVertical, IconLogin2, IconLogout } from '@tabler/icons-react';
 import { ClipboardList } from 'lucide-react';
@@ -36,6 +35,7 @@ export function NavUser({ user, organizationId, enterpriseLicense }: { user: Use
     const { isMobile, state } = useSidebar();
     const params = useParams<{ organization?: string }>();
     const pathname = usePathname();
+    const router = useRouter();
     const searchParams = useSearchParams();
     const t = useTranslations('AppSidebar');
     const planT = useTranslations('OrganizationSettings.Billing.Plan');
@@ -76,6 +76,12 @@ export function NavUser({ user, organizationId, enterpriseLicense }: { user: Use
     function handleSignIn() {
         setMenuOpen(false);
         setAuthSheetOpen(true);
+    }
+
+    function handleOpenQueryAudit() {
+        if (!organizationSlug) return;
+        setMenuOpen(false);
+        router.push(`/${organizationSlug}/query-audit`);
     }
 
     async function handleSignOut() {
@@ -127,11 +133,9 @@ export function NavUser({ user, organizationId, enterpriseLicense }: { user: Use
             {canViewQueryAudit && canUseQueryAudit && organizationSlug ? (
                 <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild onSelect={() => setMenuOpen(false)}>
-                        <Link href={`/${organizationSlug}/query-audit`}>
-                            <ClipboardList />
-                            Query Audit
-                        </Link>
+                    <DropdownMenuItem onSelect={handleOpenQueryAudit}>
+                        <ClipboardList />
+                        Query Audit
                     </DropdownMenuItem>
                 </>
             ) : null}
