@@ -1,15 +1,17 @@
 import { generateText, runAiWithCache } from '@/lib/ai/gateway';
 
+import type { NextRequest } from 'next/server';
 import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import { cleanJson } from '../../core/clean-json';
 import { buildColumnTaggingPrompt, heuristicTagging, normalizeAIResult } from '../../core/column-tagging';
 import { ColumnInput, SchemaTag, SchemaTagResponse } from '@dory/shared';
-import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
+import { resolveAiActionModel } from '@/lib/ai/execution/action-model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnTagsWithCacheOptions = {
     organizationId: string;
     userId?: string | null;
+    req?: NextRequest | null;
     connectionId: string;
     columns: ColumnInput[];
 
@@ -26,7 +28,22 @@ type GetColumnTagsWithCacheOptions = {
 };
 
 export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOptions) {
-    const { organizationId, userId, connectionId, columns, dbType, catalog, database, table, locale, model, feature = 'column_tagging', promptVersion = 1, algoVersion } = options;
+    const {
+        organizationId,
+        userId,
+        req,
+        connectionId,
+        columns,
+        dbType,
+        catalog,
+        database,
+        table,
+        locale,
+        model,
+        feature = 'column_tagging',
+        promptVersion = 1,
+        algoVersion,
+    } = options;
 
     if (!columns.length) {
         return {
@@ -42,9 +59,10 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
         modelName: providerModelName,
         providerKey,
         gateway,
-    } = await getEffectiveModelBundleForOrganization('column_tagging', {
+    } = await resolveAiActionModel('column_tagging', {
         organizationId,
         modelName: model,
+        req,
     });
     const effectiveCatalog = catalog ?? 'default';
     const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';
@@ -109,7 +127,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
             let parsed: SchemaTagResponse | null = null;
             try {
                 parsed = JSON.parse(cleaned) as SchemaTagResponse;
-            } catch (error) {
+            } catch {
                 console.error('[getColumnTagsWithCache] parse failed, raw:', text);
             }
 

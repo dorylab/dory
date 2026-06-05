@@ -48,6 +48,7 @@ async function runTableSummaryAction(ctx: AiActionContext, input: TableSummaryIn
         const result = await provider.getTableSummaryWithCache({
             organizationId: ctx.organizationId,
             userId: ctx.userId,
+            req: ctx.services.req,
             connectionId,
             columns,
             properties: input.properties ?? null,

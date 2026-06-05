@@ -1,5 +1,6 @@
 import { generateText, runAiWithCache } from '@/lib/ai/gateway';
 
+import type { NextRequest } from 'next/server';
 import { computeSchemaHash } from '@dory/shared/utils/compute-schema-hash';
 import {
     buildSchemaExplanationPrompt,
@@ -9,12 +10,13 @@ import {
     ColumnInput,
     SchemaExplanationResponse,
 } from '../../core/schema-explanations';
-import { getEffectiveModelBundleForOrganization } from '@/lib/ai/model';
+import { resolveAiActionModel } from '@/lib/ai/execution/action-model';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 
 type GetColumnExplanationsOptions = {
     organizationId: string;
     userId?: string | null;
+    req?: NextRequest | null;
     connectionId: string;
 
     dbType?: string | null;
@@ -37,6 +39,7 @@ export async function getColumnExplanationsWithCache(
     const {
         organizationId,
         userId,
+        req,
         connectionId,
         dbType,
         catalog,
@@ -60,9 +63,10 @@ export async function getColumnExplanationsWithCache(
         modelName: providerModelName,
         providerKey,
         gateway,
-    } = await getEffectiveModelBundleForOrganization('schema_explanation', {
+    } = await resolveAiActionModel('schema_explanation', {
         organizationId,
         modelName: model,
+        req,
     });
     const effectiveCatalog = catalog ?? 'default';
     const systemPrompt = compileSystemPrompt(preset.system) ?? 'Output JSON only (no code fences or extra text).';

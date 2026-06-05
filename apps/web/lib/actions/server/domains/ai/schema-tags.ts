@@ -17,6 +17,7 @@ async function runSchemaTagsAction(ctx: AiActionContext, input: SchemaColumnsInp
         return await provider.getColumnTagsWithCache({
             organizationId: ctx.organizationId,
             userId: ctx.userId,
+            req: ctx.services.req,
             connectionId,
             columns: input.columns,
             dbType: input.dbType ?? null,
