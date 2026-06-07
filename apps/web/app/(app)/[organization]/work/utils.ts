@@ -44,8 +44,8 @@ export function eventTypeLabel(type: WorkRunEventType) {
     if (type === 'tool_call') return 'Tool call';
     if (type === 'tool_result') return 'Tool result';
     if (type === 'sql_executed') return 'SQL executed';
-    if (type === 'investigation_created') return 'Investigation created';
-    if (type === 'investigation_updated') return 'Investigation updated';
+    if (type === 'investigation_created') return 'Analysis created';
+    if (type === 'investigation_updated') return 'Analysis updated';
     if (type === 'conclusion_updated') return 'Conclusion updated';
     if (type === 'error') return 'Error';
     if (type === 'completed') return 'Completed';

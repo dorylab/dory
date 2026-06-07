@@ -39,8 +39,8 @@ const workCreateInvestigationAction = webActionRegistry.get('work.createInvestig
 assert.ok(workCreateInvestigationAction, 'Expected work.createInvestigation to be registered.');
 const workUpdateConclusionAction = webActionRegistry.get('work.updateConclusion');
 assert.ok(workUpdateConclusionAction, 'Expected work.updateConclusion to be registered.');
-const workUpdateInvestigationSummaryAction = webActionRegistry.get('work.updateInvestigationSummary');
-assert.ok(workUpdateInvestigationSummaryAction, 'Expected work.updateInvestigationSummary to be registered.');
+const workCreateInvestigationFindingAction = webActionRegistry.get('work.createInvestigationFinding');
+assert.ok(workCreateInvestigationFindingAction, 'Expected work.createInvestigationFinding to be registered.');
 
 const tabCreateInput = {
     connectionId: 'conn-1',
@@ -57,7 +57,7 @@ function createServices() {
     const savedWorks: unknown[] = [];
     const savedInvestigations: unknown[] = [];
     const savedConclusions: unknown[] = [];
-    const savedInvestigationSummaries: unknown[] = [];
+    const savedInvestigationFindings: unknown[] = [];
     const services = {
         db: {
             connections: {
@@ -109,7 +109,6 @@ function createServices() {
                         organizationId: payload.organizationId,
                         connectionId: payload.connectionId,
                         title: payload.title,
-                        summary: payload.summary ?? null,
                         status: 'draft',
                         linkedTabId: payload.linkedTabId ?? null,
                         lastQueryAt: null,
@@ -143,21 +142,36 @@ function createServices() {
                         organizationId: payload.organizationId,
                         connectionId: 'conn-1',
                         title: 'Error Rate Analysis',
-                        summary: payload.patch.summary ?? null,
                         status: payload.patch.status ?? 'completed',
                         linkedTabId: null,
                         lastQueryAt: null,
                         createdAt: new Date('2026-06-01T00:00:00.000Z'),
                         updatedAt: new Date('2026-06-01T00:00:00.000Z'),
                     };
-                    savedInvestigationSummaries.push(record);
+                    return record;
+                },
+                createInvestigationFinding: async (payload: any) => {
+                    const record = {
+                        id: payload.id ?? `finding-${savedInvestigationFindings.length + 1}`,
+                        workId: payload.workId,
+                        investigationId: payload.investigationId,
+                        organizationId: payload.organizationId,
+                        content: payload.content,
+                        sourceTabId: payload.sourceTabId ?? null,
+                        sourceRunEventId: payload.sourceRunEventId ?? null,
+                        createdBy: payload.createdBy,
+                        orderIndex: payload.orderIndex ?? 0,
+                        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+                        updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+                    };
+                    savedInvestigationFindings.push(record);
                     return record;
                 },
             },
         },
     } as unknown as WebActionServices;
 
-    return { services, savedTabs, savedWorks, savedInvestigations, savedConclusions, savedInvestigationSummaries };
+    return { services, savedTabs, savedWorks, savedInvestigations, savedConclusions, savedInvestigationFindings };
 }
 
 function createContext(actorType: ActionActorType, scopes: string[], services: WebActionServices, auditEvents: unknown[] = []): ActionContext<WebActionServices> {
@@ -256,14 +270,17 @@ function linkedWorkspaceSignature(savedTabs: unknown[]) {
     };
 }
 
-function savedInvestigationSummarySignature(savedInvestigations: unknown[]) {
-    assert.equal(savedInvestigations.length, 1);
-    const payload = savedInvestigations[0] as any;
+function savedInvestigationFindingSignature(savedFindings: unknown[]) {
+    assert.equal(savedFindings.length, 1);
+    const payload = savedFindings[0] as any;
     return {
         id: payload.id,
         workId: payload.workId,
-        summary: payload.summary,
-        status: payload.status,
+        investigationId: payload.investigationId,
+        content: payload.content,
+        sourceTabId: payload.sourceTabId,
+        sourceRunEventId: payload.sourceRunEventId,
+        createdBy: payload.createdBy,
     };
 }
 
@@ -495,55 +512,62 @@ test('work.updateConclusion accepts workId for Agent-facing tool calls', async (
     });
 });
 
-test('work.updateInvestigationSummary can be executed through UI, Agent, and Automation with shared action semantics', async () => {
+test('work.createInvestigationFinding can be executed through UI, Agent, and Automation with shared action semantics', async () => {
     const input = {
         workId: 'work-1',
-        id: 'investigation-1',
-        summary: 'Gateway timeout errors increased after deploy.',
-        status: 'completed' as const,
+        investigationId: 'investigation-1',
+        content: 'Gateway timeout errors increased after deploy.',
+        sourceTabId: 'tab-1',
+        sourceRunEventId: 'event-1',
     };
 
     const ui = createServices();
     const uiAudit: unknown[] = [];
-    const uiOutput = await executeUiAction(createContext('user', ['works:write'], ui.services, uiAudit), 'work.updateInvestigationSummary', input);
+    const uiOutput = await executeUiAction(createContext('user', ['works:write'], ui.services, uiAudit), 'work.createInvestigationFinding', input);
 
     const agent = createServices();
     const agentAudit: unknown[] = [];
-    const agentTool = actionToAgentTool(workUpdateInvestigationSummaryAction, () => createContext('agent', ['works:write'], agent.services, agentAudit));
+    const agentTool = actionToAgentTool(workCreateInvestigationFindingAction, () => createContext('agent', ['works:write'], agent.services, agentAudit));
     const agentOutput = await (agentTool.execute as any)(input);
 
     const automation = createServices();
     const automationAudit: unknown[] = [];
-    const automationOutput = await executeAction(createContext('automation', ['works:write'], automation.services, automationAudit), 'work.updateInvestigationSummary', input);
+    const automationOutput = await executeAction(createContext('automation', ['works:write'], automation.services, automationAudit), 'work.createInvestigationFinding', input);
 
-    assert.equal((uiOutput.data as any).summary, input.summary);
+    assert.equal((uiOutput.data as any).content, input.content);
     assert.equal(agentOutput.ok, true);
-    assert.equal(agentOutput.summary, input.summary);
-    assert.equal((automationOutput.data as any).summary, input.summary);
-    assert.deepEqual(savedInvestigationSummarySignature(agent.savedInvestigationSummaries), savedInvestigationSummarySignature(ui.savedInvestigationSummaries));
-    assert.deepEqual(savedInvestigationSummarySignature(automation.savedInvestigationSummaries), savedInvestigationSummarySignature(ui.savedInvestigationSummaries));
+    assert.equal(agentOutput.content, input.content);
+    assert.equal((automationOutput.data as any).content, input.content);
+    assert.deepEqual(savedInvestigationFindingSignature(agent.savedInvestigationFindings), {
+        ...savedInvestigationFindingSignature(ui.savedInvestigationFindings),
+        createdBy: 'agent',
+    });
+    assert.deepEqual(savedInvestigationFindingSignature(automation.savedInvestigationFindings), {
+        ...savedInvestigationFindingSignature(ui.savedInvestigationFindings),
+        createdBy: 'automation',
+    });
     assert.deepEqual(auditSignature(agentAudit), auditSignature(uiAudit));
     assert.deepEqual(auditSignature(automationAudit), auditSignature(uiAudit));
 });
 
-test('work.updateInvestigationSummary uses the same works:write gate through UI, Agent, and Automation', async () => {
+test('work.createInvestigationFinding uses the same works:write gate through UI, Agent, and Automation', async () => {
     const input = {
         workId: 'work-1',
-        id: 'investigation-1',
-        summary: 'Gateway timeout errors increased after deploy.',
+        investigationId: 'investigation-1',
+        content: 'Gateway timeout errors increased after deploy.',
     };
 
     const ui = createServices();
-    await assert.rejects(() => executeUiAction(createContext('user', [], ui.services), 'work.updateInvestigationSummary', input), /Missing action scope "works:write"/);
+    await assert.rejects(() => executeUiAction(createContext('user', [], ui.services), 'work.createInvestigationFinding', input), /Missing action scope "works:write"/);
 
     const agent = createServices();
-    const agentTool = actionToAgentTool(workUpdateInvestigationSummaryAction, () => createContext('agent', [], agent.services));
+    const agentTool = actionToAgentTool(workCreateInvestigationFindingAction, () => createContext('agent', [], agent.services));
     const agentOutput = await (agentTool.execute as any)(input);
     assert.equal(agentOutput.ok, false);
     assert.equal(agentOutput.error.code, 'ACTION_SCOPE_MISSING');
 
     const automation = createServices();
-    await assert.rejects(() => executeAction(createContext('automation', [], automation.services), 'work.updateInvestigationSummary', input), /Missing action scope "works:write"/);
+    await assert.rejects(() => executeAction(createContext('automation', [], automation.services), 'work.createInvestigationFinding', input), /Missing action scope "works:write"/);
 });
 
 test('MCP adapter omits non-object output schemas so SDK output validation does not crash', async () => {

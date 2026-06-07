@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const workStatusSchema = z.enum(['draft', 'running', 'completed']);
 export const workCreatorSchema = z.enum(['user', 'agent']);
+export const workFindingCreatorSchema = z.enum(['user', 'agent', 'automation']);
 export const workRunStatusSchema = z.enum(['running', 'completed', 'failed']);
 export const workRunEventTypeSchema = z.enum([
     'message',
@@ -36,12 +37,30 @@ export const workInvestigationOutputSchema = z.object({
     organizationId: z.string(),
     connectionId: z.string(),
     title: z.string(),
-    summary: z.string().nullable(),
     status: workStatusSchema,
     linkedTabId: z.string().nullable(),
     lastQueryAt: z.date().nullable(),
     createdAt: z.date(),
     updatedAt: z.date(),
+});
+
+export const workInvestigationFindingOutputSchema = z.object({
+    id: z.string(),
+    workId: z.string(),
+    investigationId: z.string(),
+    organizationId: z.string(),
+    content: z.string(),
+    sourceTabId: z.string().nullable(),
+    sourceRunEventId: z.string().nullable(),
+    createdBy: workFindingCreatorSchema,
+    orderIndex: z.number(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+});
+
+export const workInvestigationDetailOutputSchema = workInvestigationOutputSchema.extend({
+    findings: z.array(workInvestigationFindingOutputSchema),
+    sqlAssetCount: z.number(),
 });
 
 export const workRunOutputSchema = z.object({

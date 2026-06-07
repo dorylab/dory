@@ -1,9 +1,10 @@
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
 
 export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
+export type WorkFindingCreator = 'user' | 'agent' | 'automation';
 export type WorkRunStatus = 'running' | 'completed' | 'failed';
 export type WorkRunEventType =
     | 'message'
@@ -51,7 +52,6 @@ export const workInvestigations = pgTable(
         organizationId: text('organization_id').notNull(),
         connectionId: text('connection_id').notNull(),
         title: text('title').notNull(),
-        summary: text('summary'),
         status: text('status').$type<WorkStatus>().notNull().default('draft'),
         linkedTabId: text('linked_tab_id'),
         lastQueryAt: timestamp('last_query_at', { withTimezone: true }),
@@ -62,6 +62,31 @@ export const workInvestigations = pgTable(
         index('idx_work_investigations_work_id').on(t.workId),
         index('idx_work_investigations_organization_work').on(t.organizationId, t.workId),
         index('idx_work_investigations_connection_id').on(t.connectionId),
+    ],
+);
+
+export const workInvestigationFindings = pgTable(
+    'work_investigation_findings',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => newEntityId()),
+        workId: text('work_id').notNull(),
+        investigationId: text('investigation_id').notNull(),
+        organizationId: text('organization_id').notNull(),
+        content: text('content').notNull(),
+        sourceTabId: text('source_tab_id'),
+        sourceRunEventId: text('source_run_event_id'),
+        createdBy: text('created_by').$type<WorkFindingCreator>().notNull(),
+        orderIndex: integer('order_index').notNull().default(0),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    t => [
+        index('idx_work_investigation_findings_work').on(t.organizationId, t.workId),
+        index('idx_work_investigation_findings_investigation').on(t.organizationId, t.investigationId),
+        index('idx_work_investigation_findings_source_tab').on(t.sourceTabId),
+        index('idx_work_investigation_findings_source_event').on(t.sourceRunEventId),
     ],
 );
 
@@ -118,6 +143,8 @@ export type Work = typeof works.$inferSelect;
 export type NewWork = typeof works.$inferInsert;
 export type WorkInvestigation = typeof workInvestigations.$inferSelect;
 export type NewWorkInvestigation = typeof workInvestigations.$inferInsert;
+export type WorkInvestigationFinding = typeof workInvestigationFindings.$inferSelect;
+export type NewWorkInvestigationFinding = typeof workInvestigationFindings.$inferInsert;
 export type WorkRun = typeof workRuns.$inferSelect;
 export type NewWorkRun = typeof workRuns.$inferInsert;
 export type WorkRunEvent = typeof workRunEvents.$inferSelect;

@@ -76,41 +76,55 @@ function toWorkToolEventContent(toolName: string, input: unknown, output: unknow
         const conclusion = typeof input === 'object' && input ? (input as Record<string, unknown>).conclusion : null;
         return typeof conclusion === 'string' && conclusion.trim() ? conclusion.trim() : fallback;
     }
-    if (toolName === 'work_updateInvestigationSummary') {
-        const summary = typeof input === 'object' && input ? (input as Record<string, unknown>).summary : null;
-        return typeof summary === 'string' && summary.trim() ? summary.trim() : toMessageContent(output, fallback);
+    if (toolName === 'work_createInvestigationFinding') {
+        const content = typeof input === 'object' && input ? (input as Record<string, unknown>).content : null;
+        return typeof content === 'string' && content.trim() ? content.trim() : toMessageContent(output, fallback);
     }
     return toMessageContent(output, fallback);
 }
 
-function buildFallbackConclusionFromInvestigations(
+function buildFallbackConclusionFromFindings(
     investigations: Array<{
+        id: string;
         title: string;
-        summary?: string | null;
+    }>,
+    findings: Array<{
+        investigationId: string;
+        content: string;
     }>,
 ) {
-    const summaries = investigations
-        .map(investigation => ({
-            title: investigation.title?.trim() || 'Investigation',
-            summary: investigation.summary?.trim() || '',
-        }))
-        .filter(investigation => investigation.summary);
+    const findingsByInvestigationId = new Map<string, string[]>();
+    for (const finding of findings) {
+        const content = finding.content.trim();
+        if (!content) continue;
+        const existing = findingsByInvestigationId.get(finding.investigationId) ?? [];
+        existing.push(content);
+        findingsByInvestigationId.set(finding.investigationId, existing);
+    }
 
-    if (summaries.length === 0) return null;
+    const sections = investigations
+        .map(investigation => ({
+            id: investigation.id,
+            title: investigation.title?.trim() || 'Investigation',
+            findings: findingsByInvestigationId.get(investigation.id) ?? [],
+        }))
+        .filter(investigation => investigation.findings.length > 0);
+
+    if (sections.length === 0) return null;
 
     return [
-        'Based on the completed investigations:',
+        'Based on the completed analysis findings:',
         '',
-        ...summaries.map(investigation => `- ${investigation.title}: ${investigation.summary}`),
+        ...sections.flatMap(investigation => [`- ${investigation.title}`, ...investigation.findings.map(finding => `  - ${finding}`)]),
     ].join('\n');
 }
 
 function classifyWorkToolResult(toolName: string): { type: WorkRunEventType; content: string } {
     if (toolName === 'work_createInvestigation') {
-        return { type: 'investigation_created', content: 'Investigation created' };
+        return { type: 'investigation_created', content: 'Analysis created' };
     }
-    if (toolName === 'work_updateInvestigation' || toolName === 'work_updateInvestigationSummary') {
-        return { type: 'investigation_updated', content: 'Investigation updated' };
+    if (toolName === 'work_updateInvestigation' || toolName === 'work_createInvestigationFinding' || toolName === 'work_updateInvestigationFinding') {
+        return { type: 'investigation_updated', content: 'Analysis updated' };
     }
     if (toolName === 'work_updateConclusion') {
         return { type: 'conclusion_updated', content: 'Conclusion updated' };
@@ -130,20 +144,42 @@ function workRunTools(tools: Record<string, any>) {
         'work_updateGoal',
         'work_updateStatus',
         'work_updateInvestigation',
+        'work_updateInvestigationFinding',
+        'work_deleteInvestigationFinding',
         'work_getRunEventResult',
     ]);
     return Object.fromEntries(Object.entries(tools).filter(([toolName]) => !blocked.has(toolName)));
 }
 
-function withWorkSqlContext(input: unknown, params: { toolName: string; workId: string; runId: string; currentInvestigationId: string | null }) {
+function withWorkSqlContext(input: unknown, params: { toolName: string; workId: string; runId: string }) {
     if (params.toolName !== 'work_runInvestigationSql') return input;
     const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
     return {
         ...record,
         workId: typeof record.workId === 'string' && record.workId ? record.workId : params.workId,
-        investigationId:
-            typeof record.investigationId === 'string' && record.investigationId ? record.investigationId : params.currentInvestigationId ?? undefined,
+        investigationId: typeof record.investigationId === 'string' && record.investigationId ? record.investigationId : undefined,
         runId: params.runId,
+    };
+}
+
+function withWorkFindingContext(
+    input: unknown,
+    params: {
+        toolName: string;
+        workId: string;
+        pendingFinding: ReturnType<typeof createWorkAgentProtocolState>['pendingFinding'];
+    },
+) {
+    if (params.toolName !== 'work_createInvestigationFinding') return input;
+    const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+    return {
+        ...record,
+        workId: typeof record.workId === 'string' && record.workId ? record.workId : params.workId,
+        investigationId:
+            typeof record.investigationId === 'string' && record.investigationId ? record.investigationId : params.pendingFinding?.investigationId,
+        sourceTabId: typeof record.sourceTabId === 'string' && record.sourceTabId ? record.sourceTabId : params.pendingFinding?.sourceTabId ?? undefined,
+        sourceRunEventId:
+            typeof record.sourceRunEventId === 'string' && record.sourceRunEventId ? record.sourceRunEventId : params.pendingFinding?.sourceRunEventId ?? undefined,
     };
 }
 
@@ -178,11 +214,15 @@ function wrapToolsWithRunEvents(params: {
                             await waitForInvestigation();
                         }
 
-                        const executionInput = withWorkSqlContext(input, {
+                        const sqlInput = withWorkSqlContext(input, {
                             toolName,
                             workId: params.workId,
                             runId: params.runId,
-                            currentInvestigationId: params.protocol.currentInvestigationId,
+                        });
+                        const executionInput = withWorkFindingContext(sqlInput, {
+                            toolName,
+                            workId: params.workId,
+                            pendingFinding: params.protocol.pendingFinding,
                         });
                         const protocolDecision = checkWorkAgentProtocol(params.protocol, toolName, executionInput);
                         if (!protocolDecision.allowed) {
@@ -265,14 +305,18 @@ function buildWorkRunInstruction(workId: string) {
     return [
         'Work Run Context',
         `You are running a Dory Work. The current workId is ${workId}.`,
-        'Follow this protocol exactly: create an investigation, run SQL for that investigation, update that investigation summary, then continue or update the conclusion.',
+        'Follow this protocol exactly: first create 3-5 distinct analyses with work.createInvestigation, then run SQL for each analysis with work.runInvestigationSql, then create concrete Findings with work.createInvestigationFinding, then write the final conclusion with work.updateConclusion.',
         'Call exactly one protocol tool at a time. Do not call work.runInvestigationSql in the same step as work.createInvestigation.',
-        'You must create at least one investigation before running SQL.',
-        'After every SQL run, you must update the current investigation summary before running another SQL query.',
-        'The conclusion must be based on completed investigation summaries.',
+        'Create all analyses before running any SQL. Use focused titles such as revenue trend analysis, order status analysis, order amount anomaly analysis, and time-based anomaly analysis.',
+        'After every SQL run, create at least one Finding for the same Analysis before running another SQL query, switching Analysis, or writing the conclusion.',
+        'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created.',
+        'A Finding is a concise fact or observation backed by the SQL result. Prefer bullet-like short statements, not a long summary paragraph.',
+        'Every Analysis must have at least one Finding before the conclusion.',
+        'The conclusion must synthesize the Findings and should not simply repeat every Finding.',
         'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
-        'Use work.updateInvestigationSummary after SQL results, and use work.updateConclusion only after at least one investigation summary is complete.',
+        'Use work.createInvestigationFinding after SQL results, and use work.updateConclusion only after every Analysis has at least one Finding.',
         'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
+        'Use your own exploration notes in those step messages. Do not use generic server progress templates.',
         'Always call work.updateConclusion before finishing the run.',
         'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
     ].join('\n');
@@ -439,7 +483,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             tools: wrappedTools,
             instructions: agentInstructions,
             temperature: preset.temperature,
-            maxSteps: 12,
+            maxSteps: 18,
             headers,
             context: {
                 organizationId: options.organizationId,
@@ -523,12 +567,20 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                     });
                 }
 
-                if (protocol.completedSummaries > 0 && !protocol.pendingSummary && !protocol.conclusionUpdated) {
+                const readyForFallbackConclusion =
+                    protocol.createdInvestigationIds.length >= 3 &&
+                    !protocol.pendingFinding &&
+                    protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0);
+                if (readyForFallbackConclusion && !protocol.conclusionUpdated) {
                     const investigations = await options.db.works.listInvestigations({
                         organizationId: options.organizationId,
                         workId: work.id,
                     });
-                    const fallbackConclusion = buildFallbackConclusionFromInvestigations(investigations);
+                    const findings = await options.db.works.listFindingsForWork({
+                        organizationId: options.organizationId,
+                        workId: work.id,
+                    });
+                    const fallbackConclusion = buildFallbackConclusionFromFindings(investigations, findings);
                     if (!fallbackConclusion) {
                         const completionMessage = 'Update the Work conclusion before completing the Work run.';
                         await appendEvent({

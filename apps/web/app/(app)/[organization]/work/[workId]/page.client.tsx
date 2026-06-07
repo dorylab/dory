@@ -110,7 +110,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             setInvestigationTitle('');
             invalidateWork();
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Failed to create investigation'),
+        onError: error => toast.error(error instanceof Error ? error.message : 'Failed to create Analysis'),
     });
 
     const runWorkMutation = useMutation({
@@ -220,7 +220,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             router.push(`/${organization}/${work.connectionId}/sql-console`);
         } catch (error) {
             console.error(error);
-            toast.error(error instanceof Error ? error.message : 'Failed to open investigation');
+            toast.error(error instanceof Error ? error.message : 'Failed to open Analysis');
         } finally {
             setOpeningInvestigationId(null);
         }
@@ -364,14 +364,14 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                     <section className="rounded-lg border bg-card p-6 text-card-foreground">
                         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div>
-                                <h2 className="text-base font-semibold">Investigations</h2>
+                                <h2 className="text-base font-semibold">Analyses</h2>
                                 <p className="mt-1 text-sm text-muted-foreground">Build findings from SQL workspaces and Agent analysis.</p>
                             </div>
                             <div className="flex w-full gap-2 sm:w-auto">
                                 <Input
                                     value={investigationTitle}
                                     onChange={event => setInvestigationTitle(event.target.value)}
-                                    placeholder="Investigation title"
+                                    placeholder="Analysis title"
                                     className="sm:w-64"
                                 />
                                 <Button
@@ -403,11 +403,24 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         </div>
                                         <div className="mt-5 min-w-0 flex-1">
                                             <div className="mb-2 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Findings</div>
-                                            <p className={investigation.summary ? 'whitespace-pre-wrap text-sm leading-6' : 'text-sm text-muted-foreground'}>
-                                                {investigation.summary || 'Waiting for Agent findings.'}
-                                            </p>
+                                            {investigation.findings.length ? (
+                                                <ul className="space-y-2 text-sm leading-6">
+                                                    {investigation.findings.map(finding => (
+                                                        <li key={finding.id} className="flex gap-2">
+                                                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
+                                                            <span className="min-w-0 whitespace-pre-wrap">{finding.content}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground">Waiting for findings.</p>
+                                            )}
                                         </div>
-                                        <div className="mt-5 border-t pt-4">
+                                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                                            <div className="text-xs text-muted-foreground">
+                                                <span className="font-medium text-foreground">Assets</span>
+                                                <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
+                                            </div>
                                             <Button size="sm" variant="secondary" onClick={() => openInvestigation(investigation)} disabled={openingInvestigationId === investigation.id}>
                                                 {openingInvestigationId === investigation.id ? <Loader2 className="animate-spin" /> : <ArrowUpRight />}
                                                 Open Workspace
@@ -418,8 +431,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                             </div>
                         ) : (
                             <div className="rounded-lg border border-dashed p-8 text-center">
-                                <h3 className="text-sm font-semibold">No investigations yet</h3>
-                                <p className="mt-2 text-sm text-muted-foreground">Run the Agent or create an investigation to start producing findings.</p>
+                                <h3 className="text-sm font-semibold">No analyses yet</h3>
+                                <p className="mt-2 text-sm text-muted-foreground">Run the Agent or create an Analysis to start producing findings.</p>
                             </div>
                         )}
                     </section>

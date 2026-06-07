@@ -300,5 +300,18 @@
     "bps": true,
     "folderMillis": 1780763009172,
     "hash": "04069cc4f86c19bd395b77ad6b35f5e0e36a31f8b66e33e2c762f5063a2770b0"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"work_investigations\" DROP COLUMN \"summary\";\n",
+      "\nCREATE TABLE \"work_investigation_findings\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"investigation_id\" text NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"content\" text NOT NULL,\n    \"source_tab_id\" text,\n    \"source_run_event_id\" text,\n    \"created_by\" text NOT NULL,\n    \"order_index\" integer DEFAULT 0 NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_work_investigation_findings_work\" ON \"work_investigation_findings\" USING btree (\"organization_id\",\"work_id\");\n",
+      "\nCREATE INDEX \"idx_work_investigation_findings_investigation\" ON \"work_investigation_findings\" USING btree (\"organization_id\",\"investigation_id\");\n",
+      "\nCREATE INDEX \"idx_work_investigation_findings_source_tab\" ON \"work_investigation_findings\" USING btree (\"source_tab_id\");\n",
+      "\nCREATE INDEX \"idx_work_investigation_findings_source_event\" ON \"work_investigation_findings\" USING btree (\"source_run_event_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1780765000000,
+    "hash": "8db6adfbee7f6bb2f0006a91ebf428695fda31848527f767a50c42e5d7276851"
   }
 ]

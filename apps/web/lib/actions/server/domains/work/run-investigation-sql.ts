@@ -16,6 +16,7 @@ const inputSchema = z.object({
 
 const outputSchema = z.object({
     tabId: z.string(),
+    investigationId: z.string(),
     sessionId: z.string(),
     query: queryExecutionOutputSchema,
     resultMeta: z.record(z.string(), z.unknown()),
@@ -171,6 +172,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
 
         return {
             tabId,
+            investigationId: investigation.id,
             sessionId,
             query,
             resultMeta: resultMeta as Record<string, unknown>,

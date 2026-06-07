@@ -21,10 +21,25 @@ export type WorkInvestigation = {
     organizationId: string;
     connectionId: string;
     title: string;
-    summary: string | null;
     status: WorkStatus;
     linkedTabId: string | null;
     lastQueryAt: string | null;
+    findings: WorkInvestigationFinding[];
+    sqlAssetCount: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type WorkInvestigationFinding = {
+    id: string;
+    workId: string;
+    investigationId: string;
+    organizationId: string;
+    content: string;
+    sourceTabId: string | null;
+    sourceRunEventId: string | null;
+    createdBy: 'user' | 'agent' | 'automation';
+    orderIndex: number;
     createdAt: string;
     updatedAt: string;
 };

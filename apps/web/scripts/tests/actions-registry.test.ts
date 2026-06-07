@@ -536,10 +536,12 @@ test('agent default scopes include Work read and write actions', async () => {
         investigationId: 'investigation-1',
         sql: 'select 1',
     });
-    await assertAllowed('work.updateInvestigationSummary', roleContext('member', 'agent', AGENT_SCOPES), {
+    await assertAllowed('work.createInvestigationFinding', roleContext('member', 'agent', AGENT_SCOPES), {
         workId: 'work-1',
-        id: 'investigation-1',
-        summary: 'Gateway timeout errors increased.',
+        investigationId: 'investigation-1',
+        content: 'Gateway timeout errors increased.',
+        sourceTabId: 'tab-1',
+        sourceRunEventId: 'event-1',
     });
     await assertAllowed('work.updateConclusion', roleContext('member', 'agent', AGENT_SCOPES), { id: 'work-1', conclusion: 'Gateway timeouts increased.' });
     await assertAllowed('work.updateConclusion', roleContext('member', 'agent', AGENT_SCOPES), { workId: 'work-1', conclusion: 'Gateway timeouts increased.' });
@@ -568,12 +570,14 @@ test('web action manifest exposes tab.create as a single action contract across 
     assert.deepEqual(workCreate.requiredScopes, ['works:write']);
     assert.deepEqual(workCreate.allowedActors, ['user', 'agent', 'automation']);
 
-    const workSummary = manifest.actions.find(action => action.id === 'work.updateInvestigationSummary');
-    assert.ok(workSummary);
-    assert.equal(workSummary.domain, 'work');
-    assert.equal(workSummary.kind, 'command');
-    assert.deepEqual(workSummary.requiredScopes, ['works:write']);
-    assert.deepEqual(workSummary.allowedActors, ['user', 'agent', 'automation']);
+    assert.equal(manifest.actions.some(action => action.id === 'work.updateInvestigationSummary'), false);
+
+    const workFinding = manifest.actions.find(action => action.id === 'work.createInvestigationFinding');
+    assert.ok(workFinding);
+    assert.equal(workFinding.domain, 'work');
+    assert.equal(workFinding.kind, 'command');
+    assert.deepEqual(workFinding.requiredScopes, ['works:write']);
+    assert.deepEqual(workFinding.allowedActors, ['user', 'agent', 'automation']);
 
     const workSql = manifest.actions.find(action => action.id === 'work.runInvestigationSql');
     assert.ok(workSql);
