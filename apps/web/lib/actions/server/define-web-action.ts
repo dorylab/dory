@@ -42,7 +42,7 @@ function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<any, any, WebAc
         return 'local-workspace';
     }
 
-    if (['connection', 'tab', 'savedQuery', 'schema', 'table'].includes(action.domain)) {
+    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'work'].includes(action.domain)) {
         return 'local-workspace';
     }
 

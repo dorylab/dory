@@ -1,8 +1,7 @@
-import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
-import { resolveConnectionId } from '../../operation-context';
 import { writeWorkspace } from '../../policies';
+import { createWorkspaceTab } from '../../workspace-tabs';
 
 const tabTypeSchema = z.enum(['sql', 'table']);
 
@@ -75,55 +74,5 @@ export const tabCreateAction = defineWebAction({
             connectionId: output.connectionId,
         }),
     },
-    handler: async (ctx, input) => {
-        const connectionId = resolveConnectionId(ctx, input);
-        const tabId = input.tabId?.trim() || randomUUID();
-        const createdAt = input.createdAt ?? new Date().toISOString();
-        const tabType = input.tabType;
-        const tabName = input.tabName ?? (tabType === 'table' ? (input.tableName ?? 'Table') : 'New Query');
-        const state =
-            tabType === 'table'
-                ? {
-                      content: '',
-                      databaseName: input.databaseName ?? null,
-                      tableName: input.tableName ?? null,
-                      activeSubTab: input.activeSubTab ?? 'data',
-                      tabType,
-                      tabName,
-                      orderIndex: input.orderIndex ?? null,
-                      createdAt,
-                  }
-                : {
-                      content: input.content ?? '',
-                      databaseName: input.databaseName ?? null,
-                      tableName: null,
-                      activeSubTab: null,
-                      tabType,
-                      tabName,
-                      orderIndex: input.orderIndex ?? null,
-                      createdAt,
-                  };
-
-        await ctx.services.db.tabState.saveTabState({
-            tabId,
-            userId: ctx.userId,
-            connectionId,
-            state,
-            resultMeta: input.resultMeta ?? null,
-        });
-
-        return {
-            tabId,
-            tabType,
-            tabName,
-            ...(tabType === 'sql' ? { content: input.content ?? '', status: 'idle' } : {}),
-            userId: ctx.userId,
-            connectionId,
-            databaseName: input.databaseName ?? null,
-            tableName: tabType === 'table' ? (input.tableName ?? null) : null,
-            activeSubTab: tabType === 'table' ? (input.activeSubTab ?? 'data') : null,
-            orderIndex: input.orderIndex ?? null,
-            createdAt,
-        };
-    },
+    handler: (ctx, input) => createWorkspaceTab(ctx, input),
 });

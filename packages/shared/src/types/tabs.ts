@@ -58,6 +58,11 @@ export type TabResultMetaPayload = {
     rows?: number;
     columns?: number;
     durationMs?: number;
+    sessionId?: string;
+    workId?: string;
+    workRunId?: string;
+    workRunEventId?: string;
+    source?: 'work-run' | string;
 };
 
 export interface TabRuntimeInfo {

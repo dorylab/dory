@@ -1,11 +1,25 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
 import { ActionError, ActionRegistry, assertActionAllowed, buildActionManifest, defineAction, executeAction, listMcpActions } from '@dory/actions';
 import type { ActionActorType, ActionAuditRecord, ActionContext, ActionId } from '@dory/actions';
-import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
-import { webActionRegistry } from '@/lib/actions/server/registry';
 import { z } from 'zod';
+
+const require = createRequire(import.meta.url);
+const serverOnlyPath = require.resolve('server-only');
+require.cache[serverOnlyPath] = {
+    id: serverOnlyPath,
+    filename: serverOnlyPath,
+    loaded: true,
+    exports: {},
+} as NodeJS.Module;
+
+const [{ getOrganizationPermissionMap }, { webActionRegistry }, { AGENT_SCOPES }] = await Promise.all([
+    import('@/lib/auth/organization-ac'),
+    import('@/lib/actions/server/registry'),
+    import('@/lib/actions/server/context.shared'),
+]);
 
 const permissions = {
     organization: { read: true, update: false, delete: false },
@@ -34,7 +48,19 @@ function context(scopes: string[] = ['connections:read']): ActionContext {
 function roleContext(
     role: 'viewer' | 'member' | 'admin' | 'owner',
     actorType: ActionActorType = 'user',
-    scopes: string[] = ['connections:read', 'schema:read', 'query:read', 'query:write', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run'],
+    scopes: string[] = [
+        'connections:read',
+        'schema:read',
+        'query:read',
+        'query:write',
+        'tabs:read',
+        'tabs:write',
+        'saved_queries:read',
+        'saved_queries:write',
+        'works:read',
+        'works:write',
+        'analysis:run',
+    ],
 ): ActionContext {
     return {
         organizationId: 'org',
@@ -495,6 +521,29 @@ test('web registry enforces role and actor permission matrix', async () => {
     await assertAllowed('tab.create', roleContext('member', 'user', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });
     await assertAllowed('tab.create', roleContext('member', 'agent', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });
     await assertAllowed('tab.create', roleContext('member', 'mcp', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });
+    await assertAllowed('tab.save', roleContext('member', 'agent', ['tabs:write']), { connectionId: 'conn', tabId: 'tab-1', state: { tabType: 'sql', content: 'select 1' } });
+    await assertDenied('work.create', roleContext('viewer', 'user', ['works:write']), /Missing permission workspace:write/, { connectionId: 'conn', goal: 'Analyze health' });
+    await assertAllowed('work.create', roleContext('member', 'user', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
+    await assertAllowed('work.create', roleContext('member', 'agent', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
+    await assertAllowed('work.create', roleContext('member', 'automation', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
+});
+
+test('agent default scopes include Work read and write actions', async () => {
+    await assertAllowed('work.get', roleContext('member', 'agent', AGENT_SCOPES), { id: 'work-1' });
+    await assertAllowed('work.createInvestigation', roleContext('member', 'agent', AGENT_SCOPES), { workId: 'work-1', title: 'Error rate analysis' });
+    await assertAllowed('work.runInvestigationSql', roleContext('member', 'agent', AGENT_SCOPES), {
+        workId: 'work-1',
+        investigationId: 'investigation-1',
+        sql: 'select 1',
+    });
+    await assertAllowed('work.updateInvestigationSummary', roleContext('member', 'agent', AGENT_SCOPES), {
+        workId: 'work-1',
+        id: 'investigation-1',
+        summary: 'Gateway timeout errors increased.',
+    });
+    await assertAllowed('work.updateConclusion', roleContext('member', 'agent', AGENT_SCOPES), { id: 'work-1', conclusion: 'Gateway timeouts increased.' });
+    await assertAllowed('work.updateConclusion', roleContext('member', 'agent', AGENT_SCOPES), { workId: 'work-1', conclusion: 'Gateway timeouts increased.' });
+    await assertAllowed('work.getRunEventResult', roleContext('member', 'agent', AGENT_SCOPES), { workId: 'work-1', eventId: 'event-1' });
 });
 
 test('web action manifest exposes tab.create as a single action contract across adapters', () => {
@@ -509,6 +558,29 @@ test('web action manifest exposes tab.create as a single action contract across 
     assert.deepEqual(tabCreate.requiredScopes, ['tabs:write']);
     assert.deepEqual(tabCreate.allowedActors, ['user', 'agent', 'mcp', 'automation']);
     assert.equal(tabCreate.mcp?.name, 'dory_create_tab');
+
+    const workCreate = manifest.actions.find(action => action.id === 'work.create');
+    assert.ok(workCreate);
+    assert.equal(workCreate.version, 1);
+    assert.equal(workCreate.domain, 'work');
+    assert.equal(workCreate.kind, 'command');
+    assert.equal(workCreate.requiresConfirmation, false);
+    assert.deepEqual(workCreate.requiredScopes, ['works:write']);
+    assert.deepEqual(workCreate.allowedActors, ['user', 'agent', 'automation']);
+
+    const workSummary = manifest.actions.find(action => action.id === 'work.updateInvestigationSummary');
+    assert.ok(workSummary);
+    assert.equal(workSummary.domain, 'work');
+    assert.equal(workSummary.kind, 'command');
+    assert.deepEqual(workSummary.requiredScopes, ['works:write']);
+    assert.deepEqual(workSummary.allowedActors, ['user', 'agent', 'automation']);
+
+    const workSql = manifest.actions.find(action => action.id === 'work.runInvestigationSql');
+    assert.ok(workSql);
+    assert.equal(workSql.domain, 'work');
+    assert.equal(workSql.kind, 'command');
+    assert.deepEqual(workSql.requiredScopes, ['works:write', 'tabs:write', 'query:read']);
+    assert.deepEqual(workSql.allowedActors, ['agent', 'automation']);
 });
 
 test('web registry projects connection.list for MCP without leaking canonical connection shape', async () => {

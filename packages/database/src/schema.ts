@@ -24,5 +24,9 @@ export const datasets = activeSchemas?.datasets;
 export const datasetRelations = activeSchemas?.datasetRelations;
 export const datasetRelationColumns = activeSchemas?.datasetRelationColumns;
 export const organizationAiProviders = activeSchemas?.organizationAiProviders;
+export const works = activeSchemas?.works;
+export const workInvestigations = activeSchemas?.workInvestigations;
+export const workRuns = activeSchemas?.workRuns;
+export const workRunEvents = activeSchemas?.workRunEvents;
 
 export type ActiveDBSchema = typeof activeSchemas.schema;

@@ -8,6 +8,7 @@ import { getDBService } from '@dory/database';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import { actionToAgentTool, toAgentToolName } from '@/lib/actions/server/adapters/agent';
+import { AGENT_SCOPES } from '@/lib/actions/server/context.shared';
 
 type CreateDoryChatToolsOptions = {
     userId: string;
@@ -15,8 +16,6 @@ type CreateDoryChatToolsOptions = {
     currentConnectionId?: string | null;
     locale?: Locale;
 };
-
-const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:write', 'saved_queries:read', 'analysis:run', 'monitoring:read'];
 
 async function createActionContext(options: CreateDoryChatToolsOptions): Promise<ActionContext<WebActionServices>> {
     const access = await resolveOrganizationAccess(options.organizationId, options.userId);

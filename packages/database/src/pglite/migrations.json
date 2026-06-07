@@ -260,5 +260,45 @@
     "bps": true,
     "folderMillis": 1780476000000,
     "hash": "1ffeaa419ab449b7ff9abc52f792beeb3c38a942ab8283862f87e2d2a85c6bb3"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"work_investigations\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"title\" text NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"linked_tab_id\" text,\n\t\"last_query_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"works\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"title\" text DEFAULT 'Untitled Work' NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"goal\" text NOT NULL,\n\t\"conclusion\" text,\n\t\"connection_id\" text NOT NULL,\n\t\"created_by\" text NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_work_investigations_work_id\" ON \"work_investigations\" USING btree (\"work_id\");",
+      "\nCREATE INDEX \"idx_work_investigations_organization_work\" ON \"work_investigations\" USING btree (\"organization_id\",\"work_id\");",
+      "\nCREATE INDEX \"idx_work_investigations_connection_id\" ON \"work_investigations\" USING btree (\"connection_id\");",
+      "\nCREATE INDEX \"idx_works_organization_updated_at\" ON \"works\" USING btree (\"organization_id\",\"updated_at\");",
+      "\nCREATE INDEX \"idx_works_connection_id\" ON \"works\" USING btree (\"connection_id\");",
+      "\nCREATE INDEX \"idx_works_created_by_user_id\" ON \"works\" USING btree (\"created_by_user_id\");"
+    ],
+    "bps": true,
+    "folderMillis": 1780741423878,
+    "hash": "dd714498fd919bd0ae678a77294d948fd60730338e0e82487d61617a2afd71dd"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"work_run_events\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"run_id\" text NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"type\" text NOT NULL,\n\t\"role\" text NOT NULL,\n\t\"content\" text,\n\t\"payload\" jsonb,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"work_runs\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"status\" text DEFAULT 'running' NOT NULL,\n\t\"previous_work_status\" text NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"started_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"completed_at\" timestamp with time zone,\n\t\"error\" text\n);\n",
+      "\nCREATE INDEX \"idx_work_run_events_run_created_at\" ON \"work_run_events\" USING btree (\"run_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_work_run_events_work_created_at\" ON \"work_run_events\" USING btree (\"work_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_work_run_events_organization_work\" ON \"work_run_events\" USING btree (\"organization_id\",\"work_id\");",
+      "\nCREATE INDEX \"idx_work_run_events_type\" ON \"work_run_events\" USING btree (\"type\");",
+      "\nCREATE INDEX \"idx_work_runs_work_started_at\" ON \"work_runs\" USING btree (\"work_id\",\"started_at\");",
+      "\nCREATE INDEX \"idx_work_runs_organization_work\" ON \"work_runs\" USING btree (\"organization_id\",\"work_id\");",
+      "\nCREATE INDEX \"idx_work_runs_status\" ON \"work_runs\" USING btree (\"status\");",
+      "\nCREATE UNIQUE INDEX \"uidx_work_runs_one_running_per_work\" ON \"work_runs\" USING btree (\"work_id\") WHERE \"work_runs\".\"status\" = 'running';"
+    ],
+    "bps": true,
+    "folderMillis": 1780761178945,
+    "hash": "3bf4c0008872dbb83fc8144805e184e0101705600619718350ed0f5c2153d895"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"work_investigations\" ADD COLUMN \"summary\" text;"
+    ],
+    "bps": true,
+    "folderMillis": 1780763009172,
+    "hash": "04069cc4f86c19bd395b77ad6b35f5e0e36a31f8b66e33e2c762f5063a2770b0"
   }
 ]

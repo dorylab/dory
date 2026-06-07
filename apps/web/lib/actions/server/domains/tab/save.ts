@@ -13,7 +13,7 @@ export const tabSaveAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['tabs:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'automation'],
     handler: async (ctx, input) => {
         const isTable = input.state.tabType === 'table';
         await ctx.services.db.tabState.saveTabState({

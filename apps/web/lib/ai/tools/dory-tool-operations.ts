@@ -524,7 +524,16 @@ export async function previewTableOperation(
 
 export async function runReadonlySqlOperation(
     context: DoryToolOperationContext,
-    input: { connectionId?: string | null; database?: string | null; sql: string; limit?: number | null; identityId?: string | null; source?: string | null },
+    input: {
+        connectionId?: string | null;
+        database?: string | null;
+        sql: string;
+        limit?: number | null;
+        identityId?: string | null;
+        source?: string | null;
+        tabId?: string | null;
+        sessionId?: string | null;
+    },
 ) {
     const connectionId = resolveConnectionId(context, input.connectionId);
     const { entry } = await getConnectionEntry(context, connectionId, input.identityId);
@@ -557,7 +566,7 @@ export async function runReadonlySqlOperation(
         throw error;
     }
     const maxRows = clampResultLimit(input.limit);
-    const sessionId = randomUUID();
+    const sessionId = input.sessionId?.trim() || randomUUID();
     const queryResultSets: unknown[] = [];
     const results: Array<Array<Record<string, unknown>>> = [];
 
@@ -614,6 +623,7 @@ export async function runReadonlySqlOperation(
         session: {
             sessionId,
             userId: context.userId,
+            tabId: input.tabId ?? null,
             connectionId,
             database: input.database ?? null,
             sqlText: input.sql,

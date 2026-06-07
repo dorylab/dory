@@ -50,11 +50,12 @@ export class PostgresTabStateRepository {
         const orderIndex = hasOrderIndex ? state.orderIndex! : await this.getNextOrderIndex(userId, connectionId);
         const createdAt = state.createdAt ? new Date(state.createdAt) : undefined;
         const activeSubTab = isTable ? state.activeSubTab ?? 'data' : 'data';
+        const serializedResultMeta = this.serializeResultMeta(resultMeta ?? null);
         const updateSet: Record<string, any> = {
             content: isTable ? '' : (state.content ?? ''),
             databaseName: isTable ? state.databaseName : null,
             tableName: isTable ? state.tableName : null,
-            resultMeta: resultMeta ?? null,
+            resultMeta: serializedResultMeta,
             connectionId,
             updatedAt: now,
             activeSubTab,
@@ -82,7 +83,7 @@ export class PostgresTabStateRepository {
 
                 orderIndex,
                 createdAt,
-                resultMeta: resultMeta ?? null,
+                resultMeta: serializedResultMeta,
 
                 updatedAt: now,
             }) as unknown as any)
@@ -122,7 +123,7 @@ export class PostgresTabStateRepository {
             .select()
             .from(tabs)
             .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
-        return (result[0]) ?? null;
+        return result[0] ? this.deserializeTabRow(result[0]) : null;
     }
 
     async loadAllTab(userId: string, connectionId: string) {
@@ -131,7 +132,7 @@ export class PostgresTabStateRepository {
             .from(tabs)
             .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)))
             .orderBy(tabs.orderIndex, tabs.createdAt, tabs.tabId);
-        return (result) ?? [];
+        return result.map(row => this.deserializeTabRow(row));
     }
 
     async deleteTabState(tabId: string, userId: string, connectionId: string): Promise<void> {
@@ -156,5 +157,28 @@ export class PostgresTabStateRepository {
 
         const maxOrder = row?.maxOrder ?? -1;
         return maxOrder + 1;
+    }
+
+    private serializeResultMeta(resultMeta: TabResultMetaPayload | null) {
+        if (!resultMeta) return null;
+        return JSON.stringify(resultMeta);
+    }
+
+    private deserializeResultMeta(resultMeta: unknown): TabResultMetaPayload | null {
+        if (!resultMeta) return null;
+        if (typeof resultMeta === 'object') return resultMeta as TabResultMetaPayload;
+        if (typeof resultMeta !== 'string') return null;
+        try {
+            return JSON.parse(resultMeta) as TabResultMetaPayload;
+        } catch {
+            return null;
+        }
+    }
+
+    private deserializeTabRow<T extends { resultMeta?: unknown }>(row: T): Omit<T, 'resultMeta'> & { resultMeta: TabResultMetaPayload | null } {
+        return {
+            ...row,
+            resultMeta: this.deserializeResultMeta(row.resultMeta),
+        };
     }
 }

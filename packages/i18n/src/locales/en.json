@@ -3242,6 +3242,8 @@
         "Unknown": "Unknown error"
     },
     "AppSidebar": {
+        "DataSources": "Data Sources",
+        "Work": "Work",
         "SQLConsole": "SQL Console",
         "Explorer": "Explorer",
         "Schema": "Schema",

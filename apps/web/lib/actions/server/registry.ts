@@ -8,7 +8,18 @@ import { savedQueryActions } from './domains/saved-query';
 import { schemaActions } from './domains/schema';
 import { tabActions } from './domains/tab';
 import { tableActions } from './domains/table';
+import { workActions } from './domains/work';
 
 export const webActionRegistry = new ActionRegistry<WebActionServices>();
 
-webActionRegistry.registerMany([...connectionActions, ...queryActions, ...schemaActions, ...tableActions, ...tabActions, ...savedQueryActions, ...chartActions, ...aiActions]);
+webActionRegistry.registerMany([
+    ...connectionActions,
+    ...queryActions,
+    ...schemaActions,
+    ...tableActions,
+    ...tabActions,
+    ...savedQueryActions,
+    ...chartActions,
+    ...aiActions,
+    ...workActions,
+]);

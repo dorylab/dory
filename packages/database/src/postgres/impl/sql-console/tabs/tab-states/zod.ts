@@ -31,6 +31,11 @@ export const resultMetaSchema = z
         rows: z.number().optional(),
         columns: z.number().optional(),
         durationMs: z.number().optional(),
+        sessionId: z.string().optional(),
+        workId: z.string().optional(),
+        workRunId: z.string().optional(),
+        workRunEventId: z.string().optional(),
+        source: z.string().optional(),
     })
     .optional();
 

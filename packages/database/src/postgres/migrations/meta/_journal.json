@@ -113,6 +113,27 @@
       "when": 1780476000000,
       "tag": "0015_connection_tls",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1780741423777,
+      "tag": "0016_chunky_vapor",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1780761169879,
+      "tag": "0017_good_red_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1780763003972,
+      "tag": "0018_futuristic_prowler",
+      "breakpoints": true
     }
   ]
 }

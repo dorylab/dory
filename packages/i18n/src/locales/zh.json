@@ -3246,6 +3246,8 @@
         "Unknown": "未知错误"
     },
     "AppSidebar": {
+        "DataSources": "数据源",
+        "Work": "工作",
         "SQLConsole": "SQL 控制台",
         "Explorer": "资源浏览",
         "Schema": "模式",
