@@ -75,6 +75,7 @@ export type WorkRunEventCreateInput = {
     role: WorkRunEventRole;
     content?: string | null;
     payload?: Record<string, unknown> | null;
+    createdAt?: string | Date | null;
 };
 
 export class PostgresWorksRepository {
@@ -309,7 +310,7 @@ export class PostgresWorksRepository {
                 role: input.role,
                 content: input.content ?? null,
                 payload: input.payload ?? null,
-                createdAt: new Date(),
+                createdAt: input.createdAt ? new Date(input.createdAt) : new Date(),
             })
             .returning();
 

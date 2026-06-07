@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createAgentUIStreamResponse, createIdGenerator, type ToolSet, type UIMessage } from 'ai';
+import { randomUUID } from 'node:crypto';
 
 import { createChartBuilderTool } from '@/app/api/chat/tools/chart-builder';
 import { createDoryChatTools } from '@/app/api/chat/tools/dory-tools';
@@ -13,6 +14,13 @@ import { resolveAiRouteExecution, isLocalMissingAiEnvError } from '@/lib/ai/exec
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
 import { compileSystemPrompt } from '@/lib/ai/model/compile-system';
 import { assertAiQuotaAllowed, buildCloudflareAiGatewayHeaders, isAiQuotaExceededError, resolveAiEntitlements, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
+import { AGENT_SCOPES } from '@/lib/actions/server/context.shared';
+import { createWebActionAuditSink } from '@/lib/actions/server/action-audit';
+import { executeAction } from '@/lib/actions/server/execute';
+import type { WebActionServices } from '@/lib/actions/server/types';
+import { resolveOrganizationAccess } from '@/lib/server/authz';
+import { getRuntimeForServer } from '@dory/shared/runtime';
+import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
 import type { WorkRunEventRole, WorkRunEventType } from '@dory/database/postgres/schemas';
 import { applyWorkAgentProtocolResult, checkWorkAgentProtocol, checkWorkAgentProtocolComplete, createWorkAgentProtocolState, workAgentProtocolError } from './protocol';
@@ -75,6 +83,28 @@ function toWorkToolEventContent(toolName: string, input: unknown, output: unknow
     return toMessageContent(output, fallback);
 }
 
+function buildFallbackConclusionFromInvestigations(
+    investigations: Array<{
+        title: string;
+        summary?: string | null;
+    }>,
+) {
+    const summaries = investigations
+        .map(investigation => ({
+            title: investigation.title?.trim() || 'Investigation',
+            summary: investigation.summary?.trim() || '',
+        }))
+        .filter(investigation => investigation.summary);
+
+    if (summaries.length === 0) return null;
+
+    return [
+        'Based on the completed investigations:',
+        '',
+        ...summaries.map(investigation => `- ${investigation.title}: ${investigation.summary}`),
+    ].join('\n');
+}
+
 function classifyWorkToolResult(toolName: string): { type: WorkRunEventType; content: string } {
     if (toolName === 'work_createInvestigation') {
         return { type: 'investigation_created', content: 'Investigation created' };
@@ -122,7 +152,8 @@ function wrapToolsWithRunEvents(params: {
     workId: string;
     runId: string;
     protocol: ReturnType<typeof createWorkAgentProtocolState>;
-    appendEvent: (event: { type: WorkRunEventType; role: WorkRunEventRole; content?: string | null; payload?: Record<string, unknown> | null }) => Promise<void>;
+    onToolCallStart: (input: { toolName: string; toolCallId?: string | null; startedAt: Date }) => void;
+    appendEvent: (event: { type: WorkRunEventType; role: WorkRunEventRole; content?: string | null; payload?: Record<string, unknown> | null; createdAt?: string | Date | null }) => Promise<void>;
 }): ToolSet {
     const waitForInvestigation = async () => {
         if (params.protocol.currentInvestigationId) return;
@@ -165,6 +196,10 @@ function wrapToolsWithRunEvents(params: {
                             return output;
                         }
 
+                        const toolOptions = options && typeof options === 'object' ? (options as Record<string, unknown>) : {};
+                        const toolCallId = typeof toolOptions.toolCallId === 'string' ? toolOptions.toolCallId : null;
+                        params.onToolCallStart({ toolName, toolCallId, startedAt: new Date() });
+
                         await params.appendEvent({
                             type: 'tool_call',
                             role: 'tool',
@@ -199,6 +234,33 @@ function wrapToolsWithRunEvents(params: {
     ) as ToolSet;
 }
 
+async function createWorkAgentActionContext(options: RunWorkAgentOptions & { requestId: string; currentConnectionId: string | null }): Promise<ActionContext<WebActionServices>> {
+    const access = await resolveOrganizationAccess(options.organizationId, options.userId);
+    if (!access?.isMember) {
+        throw new Error('User does not have access to this organization.');
+    }
+
+    return {
+        organizationId: options.organizationId,
+        userId: options.userId,
+        currentConnectionId: options.currentConnectionId,
+        locale: await getApiLocale(),
+        runtime: getRuntimeForServer(),
+        access,
+        actor: {
+            type: 'agent',
+            scopes: AGENT_SCOPES,
+            id: options.userId,
+        },
+        requestId: `${options.requestId}:${randomUUID()}`,
+        audit: createWebActionAuditSink(options.db),
+        services: {
+            db: options.db,
+            req: options.req as any,
+        },
+    };
+}
+
 function buildWorkRunInstruction(workId: string) {
     return [
         'Work Run Context',
@@ -210,7 +272,9 @@ function buildWorkRunInstruction(workId: string) {
         'The conclusion must be based on completed investigation summaries.',
         'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
         'Use work.updateInvestigationSummary after SQL results, and use work.updateConclusion only after at least one investigation summary is complete.',
-        'Keep the final answer concise and focused on what was found, what changed, and what to do next.',
+        'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
+        'Always call work.updateConclusion before finishing the run.',
+        'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
     ].join('\n');
 }
 
@@ -258,7 +322,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         );
     }
 
-    const appendEvent = async (event: { type: WorkRunEventType; role: WorkRunEventRole; content?: string | null; payload?: Record<string, unknown> | null }) => {
+    const appendEvent = async (event: { type: WorkRunEventType; role: WorkRunEventRole; content?: string | null; payload?: Record<string, unknown> | null; createdAt?: string | Date | null }) => {
         await options.db.works.appendRunEvent({
             runId: run.id,
             workId: work.id,
@@ -267,6 +331,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             role: event.role,
             content: event.content ?? null,
             payload: event.payload ?? null,
+            createdAt: event.createdAt ?? null,
         });
     };
 
@@ -317,11 +382,16 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         });
 
         const protocol = createWorkAgentProtocolState();
+        const toolCallStarts: Array<{ toolName: string; toolCallId: string | null; startedAt: Date; consumed: boolean }> = [];
+        let modelStepMessageCount = 0;
         const wrappedTools = wrapToolsWithRunEvents({
             tools,
             workId: work.id,
             runId: run.id,
             protocol,
+            onToolCallStart: event => {
+                toolCallStarts.push({ ...event, toolCallId: event.toolCallId ?? null, consumed: false });
+            },
             appendEvent,
         });
         const agentContext = await buildDoryAgentContext({
@@ -400,6 +470,30 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             headers: {
                 'x-work-run-id': run.id,
             },
+            onStepFinish: async step => {
+                const text = step.text?.trim();
+                if (!text || step.toolCalls.length === 0) return;
+
+                const toolCallIds = new Set(step.toolCalls.map(toolCall => toolCall.toolCallId).filter(Boolean));
+                const toolNames = new Set(step.toolCalls.map(toolCall => toolCall.toolName).filter(Boolean));
+                const match = toolCallStarts.find(start => !start.consumed && ((start.toolCallId && toolCallIds.has(start.toolCallId)) || toolNames.has(start.toolName)));
+                if (match) match.consumed = true;
+
+                modelStepMessageCount += 1;
+                await appendEvent({
+                    type: 'message',
+                    role: 'agent',
+                    content: text,
+                    payload: sanitizePayload({
+                        stepNumber: step.stepNumber,
+                        toolCalls: step.toolCalls.map(toolCall => ({
+                            toolCallId: toolCall.toolCallId,
+                            toolName: toolCall.toolName,
+                        })),
+                    }),
+                    createdAt: match ? new Date(match.startedAt.getTime() - 1) : null,
+                });
+            },
             onFinish: async event => {
                 if (event.isAborted) {
                     await appendEvent({
@@ -418,13 +512,61 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                 }
 
                 const text = extractResponseText((event as any).responseMessage) ?? ((event as any).text ? String((event as any).text) : null);
-                if (text) {
+                if (text && modelStepMessageCount === 0) {
                     await appendEvent({
                         type: 'message',
                         role: 'agent',
                         content: String(text),
                         payload: sanitizePayload({
                             finishReason: event.finishReason ?? null,
+                        }),
+                    });
+                }
+
+                if (protocol.completedSummaries > 0 && !protocol.pendingSummary && !protocol.conclusionUpdated) {
+                    const investigations = await options.db.works.listInvestigations({
+                        organizationId: options.organizationId,
+                        workId: work.id,
+                    });
+                    const fallbackConclusion = buildFallbackConclusionFromInvestigations(investigations);
+                    if (!fallbackConclusion) {
+                        const completionMessage = 'Update the Work conclusion before completing the Work run.';
+                        await appendEvent({
+                            type: 'error',
+                            role: 'system',
+                            content: completionMessage,
+                            payload: sanitizePayload({
+                                finishReason: event.finishReason ?? null,
+                                protocol,
+                            }),
+                        });
+                        await options.db.works.failRun({
+                            organizationId: options.organizationId,
+                            workId: work.id,
+                            id: run.id,
+                            error: completionMessage,
+                        });
+                        return;
+                    }
+
+                    const ctx = await createWorkAgentActionContext({
+                        ...options,
+                        requestId,
+                        currentConnectionId: work.connectionId,
+                    });
+                    const conclusionEnvelope = await executeAction(ctx, 'work.updateConclusion', {
+                        workId: work.id,
+                        conclusion: fallbackConclusion,
+                    });
+                    applyWorkAgentProtocolResult(protocol, 'work_updateConclusion', conclusionEnvelope.data);
+                    await appendEvent({
+                        type: 'conclusion_updated',
+                        role: 'agent',
+                        content: fallbackConclusion,
+                        payload: sanitizePayload({
+                            toolName: 'work_updateConclusion',
+                            output: conclusionEnvelope.data,
+                            fallback: true,
                         }),
                     });
                 }
