@@ -313,5 +313,17 @@
     "bps": true,
     "folderMillis": 1780765000000,
     "hash": "8db6adfbee7f6bb2f0006a91ebf428695fda31848527f767a50c42e5d7276851"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"work_investigation_findings\" ALTER COLUMN \"order_index\" SET DEFAULT 0;",
+      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_type\" text DEFAULT 'connection' NOT NULL;",
+      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_work_id\" text;",
+      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_investigation_id\" text;",
+      "\nCREATE INDEX \"idx_tabs_workspace_scope\" ON \"tabs\" USING btree (\"user_id\",\"connection_id\",\"workspace_scope_type\",\"workspace_scope_work_id\",\"workspace_scope_investigation_id\");"
+    ],
+    "bps": true,
+    "folderMillis": 1780888948383,
+    "hash": "b3ca451820e119b5db16f5d6be8362c732dff4f0d6bce7bad70ad0e0e5fca892"
   }
 ]

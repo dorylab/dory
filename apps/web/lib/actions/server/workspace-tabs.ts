@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { ActionContext } from '@dory/actions';
+import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { resolveConnectionId } from './operation-context';
 import type { WebActionServices } from './types';
 
@@ -17,6 +18,7 @@ export type CreateWorkspaceTabInput = {
     orderIndex?: number | null;
     createdAt?: string | null;
     resultMeta?: unknown;
+    workspaceScope?: WorkspaceScope | null;
 };
 
 export async function createWorkspaceTab(ctx: ActionContext<WebActionServices>, input: CreateWorkspaceTabInput) {
@@ -52,6 +54,7 @@ export async function createWorkspaceTab(ctx: ActionContext<WebActionServices>, 
         tabId,
         userId: ctx.userId,
         connectionId,
+        workspaceScope: input.workspaceScope ?? null,
         state,
         resultMeta: input.resultMeta ?? null,
     });
@@ -63,6 +66,7 @@ export async function createWorkspaceTab(ctx: ActionContext<WebActionServices>, 
         ...(tabType === 'sql' ? { content: input.content ?? '', status: 'idle' } : {}),
         userId: ctx.userId,
         connectionId,
+        workspaceScope: input.workspaceScope ?? undefined,
         databaseName: input.databaseName ?? null,
         tableName: tabType === 'table' ? (input.tableName ?? null) : null,
         activeSubTab: tabType === 'table' ? (input.activeSubTab ?? 'data') : null,

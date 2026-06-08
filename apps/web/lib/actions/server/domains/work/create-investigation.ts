@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { newEntityId } from '@dory/shared/id';
 import { defineWebAction } from '../../define-web-action';
 import { writeWorkspace } from '../../policies';
 import { createWorkspaceTab } from '../../workspace-tabs';
@@ -11,7 +12,7 @@ function sqlCommentLines(value: string) {
         .join('\n');
 }
 
-function investigationWorkspaceContent(input: { workTitle: string; goal: string; investigationTitle: string }) {
+export function investigationWorkspaceContent(input: { workTitle: string; goal: string; investigationTitle: string }) {
     return [
         `-- Work: ${input.workTitle}`,
         '-- Goal:',
@@ -44,6 +45,7 @@ export const workCreateInvestigationAction = defineWebAction({
     handler: async (ctx, input) => {
         const work = await ctx.services.db.works.getById({ organizationId: ctx.organizationId, id: input.workId });
         if (!work) throw new Error('Work not found.');
+        const investigationId = newEntityId();
         const linkedTabId =
             input.linkedTabId ??
             (
@@ -56,10 +58,21 @@ export const workCreateInvestigationAction = defineWebAction({
                         goal: work.goal,
                         investigationTitle: input.title,
                     }),
+                    workspaceScope: {
+                        type: 'work_investigation',
+                        workId: work.id,
+                        investigationId,
+                    },
+                    resultMeta: {
+                        workId: work.id,
+                        investigationId,
+                        source: 'work-investigation',
+                    },
                 })
             ).tabId;
 
         return ctx.services.db.works.createInvestigation({
+            id: investigationId,
             workId: work.id,
             organizationId: ctx.organizationId,
             connectionId: work.connectionId,

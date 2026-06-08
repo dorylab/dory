@@ -1,9 +1,9 @@
 
 import { tabs } from '@dory/database/postgres/schemas';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
-import { TabPayload, TabResultMetaPayload, TableTabPayload } from '@dory/shared/types/tabs';
+import { normalizeWorkspaceScope, TabPayload, TabResultMetaPayload, TableTabPayload, WorkspaceScope } from '@dory/shared/types/tabs';
 import { getClient } from '@dory/database/postgres/client';
 import { translateDatabase } from '@dory/database/i18n';
 
@@ -26,12 +26,14 @@ export class PostgresTabStateRepository {
         tabId,
         userId,
         connectionId,
+        workspaceScope,
         state,        // TabPayload
         resultMeta,
     }: {
         tabId: string;
         userId: string;
         connectionId: string;
+        workspaceScope?: WorkspaceScope | null;
         state: {
             databaseName?: string | null;
             tableName?: string | null;
@@ -47,7 +49,9 @@ export class PostgresTabStateRepository {
         const isTable = state.tabType === 'table';
         const now = new Date();
         const hasOrderIndex = typeof state.orderIndex === 'number' && Number.isFinite(state.orderIndex);
-        const orderIndex = hasOrderIndex ? state.orderIndex! : await this.getNextOrderIndex(userId, connectionId);
+        const normalizedScope = normalizeWorkspaceScope(workspaceScope ?? (state as TabPayload).workspaceScope);
+        const scopeColumns = this.workspaceScopeColumns(normalizedScope);
+        const orderIndex = hasOrderIndex ? state.orderIndex! : await this.getNextOrderIndex(userId, connectionId, normalizedScope);
         const createdAt = state.createdAt ? new Date(state.createdAt) : undefined;
         const activeSubTab = isTable ? state.activeSubTab ?? 'data' : 'data';
         const serializedResultMeta = this.serializeResultMeta(resultMeta ?? null);
@@ -57,6 +61,7 @@ export class PostgresTabStateRepository {
             tableName: isTable ? state.tableName : null,
             resultMeta: serializedResultMeta,
             connectionId,
+            ...scopeColumns,
             updatedAt: now,
             activeSubTab,
             ...(hasOrderIndex ? { orderIndex: state.orderIndex! } : {}),
@@ -75,6 +80,7 @@ export class PostgresTabStateRepository {
                 tabType: state.tabType,         // sql | table
                 tabName: state.tabName,
                 content: isTable ? '' : (state.content ?? ''),      // SQL text or empty string
+                ...scopeColumns,
 
                 // Only valid for table type; otherwise write null
                 databaseName: isTable ? state.databaseName : null,
@@ -118,25 +124,25 @@ export class PostgresTabStateRepository {
     }
 
 
-    async loadTabState(tabId: string, userId: string, connectionId: string) {
+    async loadTabState(tabId: string, userId: string, connectionId: string, workspaceScope?: WorkspaceScope | null) {
         const result = await this.db
             .select()
             .from(tabs)
-            .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
+            .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), ...this.workspaceScopeConditions(workspaceScope)));
         return result[0] ? this.deserializeTabRow(result[0]) : null;
     }
 
-    async loadAllTab(userId: string, connectionId: string) {
+    async loadAllTab(userId: string, connectionId: string, workspaceScope?: WorkspaceScope | null) {
         const result = await this.db
             .select()
             .from(tabs)
-            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)))
+            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), ...this.workspaceScopeConditions(workspaceScope)))
             .orderBy(tabs.orderIndex, tabs.createdAt, tabs.tabId);
         return result.map(row => this.deserializeTabRow(row));
     }
 
-    async deleteTabState(tabId: string, userId: string, connectionId: string): Promise<void> {
-        await this.db.delete(tabs).where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
+    async deleteTabState(tabId: string, userId: string, connectionId: string, workspaceScope?: WorkspaceScope | null): Promise<void> {
+        await this.db.delete(tabs).where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), ...this.workspaceScopeConditions(workspaceScope)));
     }
 
     async clearSession(userId: string, connectionId?: string): Promise<void> {
@@ -147,16 +153,50 @@ export class PostgresTabStateRepository {
         await this.db.delete(tabs).where(eq(tabs.userId, userId));
     }
 
-    private async getNextOrderIndex(userId: string, connectionId: string) {
+    private async getNextOrderIndex(userId: string, connectionId: string, workspaceScope?: WorkspaceScope | null) {
         const [row] = await this.db
             .select({
                 maxOrder: sql<number>`coalesce(max(${tabs.orderIndex}), -1)`,
             })
             .from(tabs)
-            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
+            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), ...this.workspaceScopeConditions(workspaceScope)));
 
         const maxOrder = row?.maxOrder ?? -1;
         return maxOrder + 1;
+    }
+
+    private workspaceScopeColumns(workspaceScope?: WorkspaceScope | null) {
+        const normalizedScope = normalizeWorkspaceScope(workspaceScope);
+        if (normalizedScope.type === 'work_investigation') {
+            return {
+                workspaceScopeType: 'work_investigation',
+                workspaceScopeWorkId: normalizedScope.workId,
+                workspaceScopeInvestigationId: normalizedScope.investigationId,
+            };
+        }
+
+        return {
+            workspaceScopeType: 'connection',
+            workspaceScopeWorkId: null,
+            workspaceScopeInvestigationId: null,
+        };
+    }
+
+    private workspaceScopeConditions(workspaceScope?: WorkspaceScope | null) {
+        const normalizedScope = normalizeWorkspaceScope(workspaceScope);
+        if (normalizedScope.type === 'work_investigation') {
+            return [
+                eq(tabs.workspaceScopeType, 'work_investigation'),
+                eq(tabs.workspaceScopeWorkId, normalizedScope.workId),
+                eq(tabs.workspaceScopeInvestigationId, normalizedScope.investigationId),
+            ];
+        }
+
+        return [
+            eq(tabs.workspaceScopeType, 'connection'),
+            isNull(tabs.workspaceScopeWorkId),
+            isNull(tabs.workspaceScopeInvestigationId),
+        ];
     }
 
     private serializeResultMeta(resultMeta: TabResultMetaPayload | null) {
@@ -176,8 +216,18 @@ export class PostgresTabStateRepository {
     }
 
     private deserializeTabRow<T extends { resultMeta?: unknown }>(row: T): Omit<T, 'resultMeta'> & { resultMeta: TabResultMetaPayload | null } {
+        const scope = normalizeWorkspaceScope(
+            (row as T & { workspaceScopeType?: string | null; workspaceScopeWorkId?: string | null; workspaceScopeInvestigationId?: string | null }).workspaceScopeType === 'work_investigation'
+                ? {
+                      type: 'work_investigation',
+                      workId: (row as T & { workspaceScopeWorkId?: string | null }).workspaceScopeWorkId ?? '',
+                      investigationId: (row as T & { workspaceScopeInvestigationId?: string | null }).workspaceScopeInvestigationId ?? '',
+                  }
+                : { type: 'connection' },
+        );
         return {
             ...row,
+            workspaceScope: scope,
             resultMeta: this.deserializeResultMeta(row.resultMeta),
         };
     }

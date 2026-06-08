@@ -6,7 +6,7 @@ import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-re
 import { Sparkles } from 'lucide-react';
 
 import { cn } from '@dory/web-utils';
-import type { SQLTab } from '@dory/shared/types/tabs';
+import type { SQLTab, WorkspaceScope } from '@dory/shared/types/tabs';
 import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
@@ -78,7 +78,15 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
-export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizontal.default }: { defaultLayout: number[] | undefined }) {
+export default function SQLConsoleClient({
+    defaultLayout = INITIAL_LAYOUT.horizontal.default,
+    workspaceScope,
+    connectionId,
+}: {
+    defaultLayout: number[] | undefined;
+    workspaceScope?: WorkspaceScope | null;
+    connectionId?: string | null;
+}) {
     const {
         normalizedLayout,
         onLayout: onLayoutFromHook,
@@ -98,7 +106,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
-    } = useSqlConsoleClient(defaultLayout);
+    } = useSqlConsoleClient(defaultLayout, { workspaceScope, connectionId });
     const t = useTranslations('SqlConsole');
 
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);

@@ -3,23 +3,32 @@ import { defineWebAction } from '../../define-web-action';
 import { resolveConnectionId } from '../../operation-context';
 import { writeWorkspace } from '../../policies';
 import { unknownOutputSchema } from '../../schemas';
+import { normalizeWorkspaceScopeInput, workspaceScopeInputSchema } from '../../workspace-scope';
 
 export const tabSaveAction = defineWebAction({
     id: 'tab.save',
     domain: 'tab',
     kind: 'command',
     risk: 'low',
-    inputSchema: z.object({ connectionId: z.string().min(1).optional(), tabId: z.string().min(1), state: z.any(), resultMeta: z.any().optional().nullable() }),
+    inputSchema: z.object({
+        connectionId: z.string().min(1).optional(),
+        tabId: z.string().min(1),
+        state: z.any(),
+        resultMeta: z.any().optional().nullable(),
+        workspaceScope: workspaceScopeInputSchema,
+    }),
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['tabs:write'],
     actors: ['user', 'agent', 'automation'],
     handler: async (ctx, input) => {
         const isTable = input.state.tabType === 'table';
+        const workspaceScope = normalizeWorkspaceScopeInput(input.workspaceScope ?? input.state.workspaceScope);
         await ctx.services.db.tabState.saveTabState({
             tabId: input.tabId,
             userId: ctx.userId,
             connectionId: resolveConnectionId(ctx, input),
+            workspaceScope,
             state: {
                 content: isTable ? '' : input.state.content || null,
                 databaseName: isTable ? input.state.databaseName : (input.state.databaseName ?? null),

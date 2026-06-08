@@ -1,5 +1,37 @@
 import { QueryResult, SessionStatus } from './sql-console';
 
+export type WorkspaceScope =
+    | {
+          type: 'connection';
+      }
+    | {
+          type: 'work_investigation';
+          workId: string;
+          investigationId: string;
+      };
+
+export const DEFAULT_WORKSPACE_SCOPE: WorkspaceScope = { type: 'connection' };
+
+export function normalizeWorkspaceScope(scope?: WorkspaceScope | null): WorkspaceScope {
+    if (scope?.type === 'work_investigation' && scope.workId && scope.investigationId) {
+        return {
+            type: 'work_investigation',
+            workId: scope.workId,
+            investigationId: scope.investigationId,
+        };
+    }
+
+    return DEFAULT_WORKSPACE_SCOPE;
+}
+
+export function workspaceScopeKey(scope?: WorkspaceScope | null): string {
+    const normalized = normalizeWorkspaceScope(scope);
+    if (normalized.type === 'work_investigation') {
+        return `work_investigation:${normalized.workId}:${normalized.investigationId}`;
+    }
+
+    return 'connection';
+}
 
 export type TabType = 'sql' | 'table';
 
@@ -9,6 +41,8 @@ export interface BaseTabPayload {
     userId: string;
 
     connectionId: string;
+
+    workspaceScope?: WorkspaceScope;
 
     tabType: TabType;
 
@@ -60,6 +94,7 @@ export type TabResultMetaPayload = {
     durationMs?: number;
     sessionId?: string;
     workId?: string;
+    investigationId?: string;
     workRunId?: string;
     workRunEventId?: string;
     source?: 'work-run' | string;

@@ -526,11 +526,20 @@ test('web registry enforces role and actor permission matrix', async () => {
     await assertAllowed('work.create', roleContext('member', 'user', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
     await assertAllowed('work.create', roleContext('member', 'agent', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
     await assertAllowed('work.create', roleContext('member', 'automation', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
+    await assertDenied('work.ensureInvestigationWorkspace', roleContext('member', 'user', ['works:write']), /Missing action scope "tabs:write"/, {
+        workId: 'work-1',
+        investigationId: 'investigation-1',
+    });
+    await assertAllowed('work.ensureInvestigationWorkspace', roleContext('member', 'user', ['works:write', 'tabs:write']), {
+        workId: 'work-1',
+        investigationId: 'investigation-1',
+    });
 });
 
 test('agent default scopes include Work read and write actions', async () => {
     await assertAllowed('work.get', roleContext('member', 'agent', AGENT_SCOPES), { id: 'work-1' });
     await assertAllowed('work.createInvestigation', roleContext('member', 'agent', AGENT_SCOPES), { workId: 'work-1', title: 'Error rate analysis' });
+    await assertAllowed('work.ensureInvestigationWorkspace', roleContext('member', 'agent', AGENT_SCOPES), { workId: 'work-1', investigationId: 'investigation-1' });
     await assertAllowed('work.runInvestigationSql', roleContext('member', 'agent', AGENT_SCOPES), {
         workId: 'work-1',
         investigationId: 'investigation-1',
@@ -578,6 +587,13 @@ test('web action manifest exposes tab.create as a single action contract across 
     assert.equal(workFinding.kind, 'command');
     assert.deepEqual(workFinding.requiredScopes, ['works:write']);
     assert.deepEqual(workFinding.allowedActors, ['user', 'agent', 'automation']);
+
+    const workEnsureWorkspace = manifest.actions.find(action => action.id === 'work.ensureInvestigationWorkspace');
+    assert.ok(workEnsureWorkspace);
+    assert.equal(workEnsureWorkspace.domain, 'work');
+    assert.equal(workEnsureWorkspace.kind, 'command');
+    assert.deepEqual(workEnsureWorkspace.requiredScopes, ['works:write', 'tabs:write']);
+    assert.deepEqual(workEnsureWorkspace.allowedActors, ['user', 'agent', 'automation']);
 
     const workSql = manifest.actions.find(action => action.id === 'work.runInvestigationSql');
     assert.ok(workSql);

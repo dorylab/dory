@@ -75,7 +75,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const currentConnectionType = currentRouteConnection?.type ?? null;
     const supportsOperationalPages = currentConnectionType === 'clickhouse';
     const dataSourcesUrl = `/${organization}/connections`;
-    const workUrl = `/${organization}/work`;
+    const workUrl = `/${organization}/works`;
     const explorerUrl =
         connectionId && defaultDatabase
             ? buildExplorerDatabasePath({ organization, connectionId }, defaultDatabase)

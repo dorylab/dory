@@ -191,33 +191,14 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         if (!work) return;
         setOpeningInvestigationId(investigation.id);
         try {
-            let tabId = investigation.linkedTabId;
-            if (!tabId) {
-                const tab = await executeActionClient<{ tabId: string }>(
-                    'tab.create',
-                    {
-                        connectionId: work.connectionId,
-                        tabType: 'sql',
-                        tabName: investigation.title,
-                        content: `-- ${investigation.title}\n`,
-                    },
-                    { currentConnectionId: work.connectionId },
-                );
-                tabId = tab.tabId;
-                await executeActionClient<WorkInvestigation>('work.updateInvestigation', {
+            if (!investigation.linkedTabId) {
+                await executeActionClient<WorkInvestigation>('work.ensureInvestigationWorkspace', {
                     workId,
-                    id: investigation.id,
-                    linkedTabId: tabId,
+                    investigationId: investigation.id,
                 });
             }
 
-            try {
-                localStorage.setItem(`sqlconsole:activeTabId:${work.connectionId}`, tabId);
-            } catch {
-                // ignore
-            }
-
-            router.push(`/${organization}/${work.connectionId}/sql-console`);
+            router.push(`/${organization}/works/${workId}/investigations/${investigation.id}`);
         } catch (error) {
             console.error(error);
             toast.error(error instanceof Error ? error.message : 'Failed to open Analysis');
@@ -244,7 +225,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         return (
             <div className="bg-n8 h-screen overflow-auto">
                 <div className="container mx-auto mt-10 p-12 lg:p-12 xl:p-8 2xl:p-4">
-                    <Button variant="ghost" onClick={() => router.push(`/${organization}/work`)}>
+                    <Button variant="ghost" onClick={() => router.push(`/${organization}/works`)}>
                         <ArrowLeft />
                         Work
                     </Button>
@@ -259,7 +240,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     return (
         <div className="bg-n8 h-screen overflow-auto">
             <div className="container mx-auto mt-10 max-w-6xl p-12 lg:p-12 xl:p-8 2xl:p-4">
-                <Button variant="ghost" className="mb-5 w-fit" onClick={() => router.push(`/${organization}/work`)}>
+                <Button variant="ghost" className="mb-5 w-fit" onClick={() => router.push(`/${organization}/works`)}>
                     <ArrowLeft />
                     Work
                 </Button>

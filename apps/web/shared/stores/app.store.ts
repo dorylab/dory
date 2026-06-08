@@ -2,7 +2,7 @@ import { atom, Getter } from 'jotai';
 import { atomWithStorage, createJSONStorage } from 'jotai/utils';
 import { DEFAULT_ACTIVE_TAB } from '../data/app.data';
 import { ConnectionListItem } from '@dory/shared/types/connections';
-import { UITabPayload } from '@dory/shared/types/tabs';
+import { DEFAULT_WORKSPACE_SCOPE, UITabPayload, WorkspaceScope, workspaceScopeKey } from '@dory/shared/types/tabs';
 import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
 
 // DB State
@@ -11,6 +11,7 @@ export const clientDBReadyAtom = atomWithStorage('clientDBReady', 'false', sessi
 
 // App State
 export const currentConnectionAtom = atomWithStorage<ConnectionListItem | null>('currentConnection', null);
+export const currentWorkspaceScopeAtom = atom<WorkspaceScope>(DEFAULT_WORKSPACE_SCOPE);
 
 // export const databasesStorageAtom = atomWithStorage<any[]>('databases', []);
 export type DatabasesState = {
@@ -51,7 +52,10 @@ const DEFAULT_CONNECTION_KEY = '__default__';
 const tabsByConnectionAtom = atomWithStorage<Record<string, UITabPayload[]>>('tabsByConnection', {});
 const activeTabIdByConnectionAtom = atomWithStorage<Record<string, string>>('activeTabIdByConnection', {});
 
-const resolveConnectionKey = (get: Getter) => get(currentConnectionAtom)?.connection?.id ?? DEFAULT_CONNECTION_KEY;
+const resolveConnectionKey = (get: Getter) => {
+    const connectionId = get(currentConnectionAtom)?.connection?.id ?? DEFAULT_CONNECTION_KEY;
+    return `${connectionId}::${workspaceScopeKey(get(currentWorkspaceScopeAtom))}`;
+};
 
 export const activeDatabaseAtom = atom(
     get => {

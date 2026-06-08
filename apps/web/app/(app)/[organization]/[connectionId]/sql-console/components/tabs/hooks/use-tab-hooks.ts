@@ -1,24 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
 
-import { activeTabIdAtom, currentConnectionAtom, tabsAtom } from '@/shared/stores/app.store';
+import { activeTabIdAtom, currentConnectionAtom, currentWorkspaceScopeAtom, tabsAtom } from '@/shared/stores/app.store';
 import { currentTabResultAtom, sessionIdByTabAtom } from '../../../sql-console.store';
 import { executeActionClient } from '@/lib/actions/client';
-import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
+import { normalizeWorkspaceScope, TabPayload, UITabPayload, WorkspaceScope, workspaceScopeKey } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
 import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
 
-const ACTIVE_KEY = (connectionId?: string | null) => `sqlconsole:activeTabId:${connectionId ?? 'default'}`;
+const ACTIVE_KEY = (connectionId?: string | null, workspaceScope?: WorkspaceScope | null) => `sqlconsole:activeTabId:${connectionId ?? 'default'}:${workspaceScopeKey(workspaceScope)}`;
 const SID = (tabId: string) => `sqlconsole:sessionId:${tabId}`;
 
-export function useSQLTabs() {
+export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null }) {
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection?.id ?? null;
-    const routeConnectionId = useRouteConnectionId();
+    const routeConnectionIdFromRoute = useRouteConnectionId();
+    const routeConnectionId = options?.connectionId ?? routeConnectionIdFromRoute;
+    const inputWorkspaceScopeKey = workspaceScopeKey(options?.workspaceScope);
+    const normalizedWorkspaceScope = useMemo(() => normalizeWorkspaceScope(options?.workspaceScope), [inputWorkspaceScopeKey]);
+    const normalizedWorkspaceScopeKey = workspaceScopeKey(normalizedWorkspaceScope);
+    const setCurrentWorkspaceScope = useSetAtom(currentWorkspaceScopeAtom);
 
     const [tabs, setTabs] = useAtom(tabsAtom);
     const [activeTabId, internalSetActiveTabId] = useAtom(activeTabIdAtom);
@@ -29,6 +34,11 @@ export function useSQLTabs() {
 
     const [isLoading, setIsLoading] = useState(true);
     const t = useTranslations('SqlConsole');
+
+    useEffect(() => {
+        setCurrentWorkspaceScope(normalizedWorkspaceScope);
+    }, [normalizedWorkspaceScopeKey, setCurrentWorkspaceScope]);
+
     const persistOrder = useCallback(
         async (orderedTabs: UITabPayload[]) => {
             console.log('Persisting tab order to server...', connectionId);
@@ -46,6 +56,7 @@ export function useSQLTabs() {
                                     createdAt: tab.createdAt,
                                     userId: tab.userId ?? '',
                                     connectionId: tab.connectionId ?? connectionId,
+                                    workspaceScope: normalizedWorkspaceScope,
                                     content: tab.content ?? '',
                                     status: tab.status,
                                 }
@@ -57,6 +68,7 @@ export function useSQLTabs() {
                                     createdAt: tab.createdAt,
                                     userId: tab.userId ?? '',
                                     connectionId: tab.connectionId ?? connectionId,
+                                    workspaceScope: normalizedWorkspaceScope,
                                     databaseName: tab.databaseName,
                                     tableName: tab.tableName,
                                     activeSubTab: tab.activeSubTab,
@@ -72,7 +84,7 @@ export function useSQLTabs() {
                 console.error('[useSQLTabs] persist order failed', err);
             }
         },
-        [connectionId],
+        [connectionId, normalizedWorkspaceScope],
     );
 
     // ---------------------------------------------------
@@ -81,7 +93,7 @@ export function useSQLTabs() {
     async function saveTabToServer(tabId: string, tab: TabPayload) {
         if (!connectionId) return;
 
-        await executeActionClient('tab.save', { connectionId, tabId, state: tab }, { currentConnectionId: connectionId });
+        await executeActionClient('tab.save', { connectionId, tabId, state: tab, workspaceScope: normalizedWorkspaceScope }, { currentConnectionId: connectionId });
     }
 
     async function createTabOnServer(tab: UITabPayload) {
@@ -101,6 +113,7 @@ export function useSQLTabs() {
                 orderIndex: tab.orderIndex,
                 createdAt: typeof tab.createdAt === 'undefined' ? undefined : String(tab.createdAt),
                 resultMeta: tab.tabType === 'sql' ? (tab.resultMeta ?? null) : null,
+                workspaceScope: normalizedWorkspaceScope,
             },
             { currentConnectionId: connectionId },
         );
@@ -145,7 +158,7 @@ export function useSQLTabs() {
 
         if (connectionId) {
             try {
-                localStorage.setItem(ACTIVE_KEY(connectionId), id);
+            localStorage.setItem(ACTIVE_KEY(connectionId, normalizedWorkspaceScope), id);
             } catch {
                 // ignore
             }
@@ -198,7 +211,7 @@ export function useSQLTabs() {
             setSessionIdMap({});
             internalSetActiveTabId('');
             try {
-                localStorage.removeItem(ACTIVE_KEY(null));
+                localStorage.removeItem(ACTIVE_KEY(null, normalizedWorkspaceScope));
             } catch {
                 // ignore
             }
@@ -209,7 +222,7 @@ export function useSQLTabs() {
 
         (async () => {
             try {
-                const res = await executeActionClient<UITabPayload[]>('tab.list', { connectionId }, { currentConnectionId: connectionId });
+                const res = await executeActionClient<UITabPayload[]>('tab.list', { connectionId, workspaceScope: normalizedWorkspaceScope }, { currentConnectionId: connectionId });
 
                 if (Array.isArray(res)) {
                     const serverTabs = [...res].sort((a, b) => {
@@ -227,7 +240,7 @@ export function useSQLTabs() {
 
                     let nextActive = serverTabs[0]?.tabId ?? '';
                     try {
-                        const saved = localStorage.getItem(ACTIVE_KEY(connectionId));
+                        const saved = localStorage.getItem(ACTIVE_KEY(connectionId, normalizedWorkspaceScope));
                         if (saved && serverTabs.some(t => t.tabId === saved)) {
                             nextActive = saved;
                         }
@@ -241,7 +254,7 @@ export function useSQLTabs() {
                     setSessionIdMap({});
                     internalSetActiveTabId('');
                     try {
-                        localStorage.removeItem(ACTIVE_KEY(connectionId));
+                        localStorage.removeItem(ACTIVE_KEY(connectionId, normalizedWorkspaceScope));
                     } catch {
                         // ignore
                     }
@@ -255,7 +268,7 @@ export function useSQLTabs() {
                 setIsLoading(false);
             }
         })();
-    }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId]);
+    }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, normalizedWorkspaceScope, normalizedWorkspaceScopeKey]);
 
     // ---------------------------------------------------
     
@@ -304,6 +317,7 @@ export function useSQLTabs() {
             status: 'idle',
             userId: '',
             connectionId: connectionId ?? '',
+            workspaceScope: normalizedWorkspaceScope,
             orderIndex: tabs.length,
             createdAt: new Date().toISOString(),
         };
@@ -347,6 +361,7 @@ export function useSQLTabs() {
             dataView: { limit: 1000, page: 1 },
             userId: '',
             connectionId: connectionId ?? '',
+            workspaceScope: normalizedWorkspaceScope,
             orderIndex: tabs.length,
             createdAt: new Date().toISOString(),
         };
@@ -393,7 +408,7 @@ export function useSQLTabs() {
                 internalSetActiveTabId('');
                 try {
                     if (connectionId) {
-                        localStorage.removeItem(ACTIVE_KEY(connectionId));
+                        localStorage.removeItem(ACTIVE_KEY(connectionId, normalizedWorkspaceScope));
                     }
                 } catch {
                     // ignore
@@ -403,7 +418,7 @@ export function useSQLTabs() {
         }
 
         if (connectionId) {
-            await executeActionClient('tab.delete', { connectionId, tabId }, { currentConnectionId: connectionId });
+            await executeActionClient('tab.delete', { connectionId, tabId, workspaceScope: normalizedWorkspaceScope }, { currentConnectionId: connectionId });
         }
     };
 
@@ -438,7 +453,7 @@ export function useSQLTabs() {
         setActiveTabId(tabId);
 
         if (connectionId) {
-            await Promise.all(toClose.map(tab => executeActionClient('tab.delete', { connectionId, tabId: tab.tabId }, { currentConnectionId: connectionId })));
+            await Promise.all(toClose.map(tab => executeActionClient('tab.delete', { connectionId, tabId: tab.tabId, workspaceScope: normalizedWorkspaceScope }, { currentConnectionId: connectionId })));
         }
     };
 

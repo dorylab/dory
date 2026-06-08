@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
 import { writeWorkspace } from '../../policies';
 import { createWorkspaceTab } from '../../workspace-tabs';
+import { workspaceScopeInputSchema } from '../../workspace-scope';
 
 const tabTypeSchema = z.enum(['sql', 'table']);
 
@@ -17,6 +18,7 @@ const tabCreateInputSchema = z.object({
     orderIndex: z.number().int().min(0).nullable().optional(),
     createdAt: z.string().nullable().optional(),
     resultMeta: z.any().optional().nullable(),
+    workspaceScope: workspaceScopeInputSchema,
 });
 
 const tabCreateOutputSchema = z.object({
@@ -32,6 +34,7 @@ const tabCreateOutputSchema = z.object({
     activeSubTab: z.string().nullable().optional(),
     orderIndex: z.number().nullable().optional(),
     createdAt: z.string(),
+    workspaceScope: z.any().optional(),
 });
 
 export const tabCreateAction = defineWebAction({
@@ -57,7 +60,7 @@ export const tabCreateAction = defineWebAction({
             mcp: 'mcp_analysis',
             automation: 'automation_schema_metadata',
         },
-        allowInputFields: ['connectionId', 'tabId', 'tabType', 'tabName', 'databaseName', 'tableName'],
+        allowInputFields: ['connectionId', 'tabId', 'tabType', 'tabName', 'databaseName', 'tableName', 'workspaceScope'],
         resource: (_ctx, input) => ({
             type: 'tab',
             id: input.tabId ?? null,
@@ -66,6 +69,7 @@ export const tabCreateAction = defineWebAction({
                 tabType: input.tabType,
                 databaseName: input.databaseName ?? null,
                 tableName: input.tableName ?? null,
+                workspaceScope: input.workspaceScope ?? null,
             },
         }),
         outputSummary: output => ({

@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import { WorkDetailPageClient } from '../../work/[workId]/page.client';
 
 export default async function WorkDetailPage({ params }: { params: Promise<{ organization: string; workId: string }> }) {
     const { organization, workId } = await params;
-    redirect(`/${organization}/works/${workId}`);
+    return <WorkDetailPageClient organization={organization} workId={workId} />;
 }

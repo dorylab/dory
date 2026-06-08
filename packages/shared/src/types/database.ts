@@ -1,7 +1,7 @@
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { Pool } from 'pg';
 import { ConnectionItem } from './connections';
-import { TabPayload } from './tabs';
+import { TabPayload, WorkspaceScope } from './tabs';
 import { ChatRepository } from './chat';
 import { IAuditService } from './audit';
 import { AiUsageRepository } from './ai-usage';
@@ -18,9 +18,9 @@ export interface ConnectionRepository {
 export interface TabStateRepository<State = unknown, ResultMeta = unknown> {
     init(): Promise<void>;
     saveTabState(tab: TabPayload): Promise<void>;
-    loadTabState(tabId: string, userId: string, connectionId: string): Promise<TabPayload | null>;
-    loadAllTab(userId: string, connectionId: string): Promise<TabPayload[]>;
-    deleteTabState(tabId: string, userId: string, connectionId: string): Promise<void>;
+    loadTabState(tabId: string, userId: string, connectionId: string, workspaceScope?: WorkspaceScope | null): Promise<TabPayload | null>;
+    loadAllTab(userId: string, connectionId: string, workspaceScope?: WorkspaceScope | null): Promise<TabPayload[]>;
+    deleteTabState(tabId: string, userId: string, connectionId: string, workspaceScope?: WorkspaceScope | null): Promise<void>;
     clearSession(userId: string, connectionId?: string): Promise<void>;
 }
 

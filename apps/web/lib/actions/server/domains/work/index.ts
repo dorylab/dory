@@ -1,6 +1,7 @@
 import { workCreateAction } from './create';
 import { workCreateInvestigationFindingAction } from './create-investigation-finding';
 import { workGetAction } from './get';
+import { workEnsureInvestigationWorkspaceAction } from './ensure-investigation-workspace';
 import { workListAction } from './list';
 import { workDeleteInvestigationFindingAction } from './delete-investigation-finding';
 import { workUpdateConclusionAction } from './update-conclusion';
@@ -20,6 +21,7 @@ export const workActions = [
     workUpdateConclusionAction,
     workUpdateStatusAction,
     workCreateInvestigationAction,
+    workEnsureInvestigationWorkspaceAction,
     workCreateInvestigationFindingAction,
     workUpdateInvestigationFindingAction,
     workDeleteInvestigationFindingAction,

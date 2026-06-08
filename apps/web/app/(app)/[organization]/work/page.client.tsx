@@ -49,7 +49,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
                         <p className="text-sm text-muted-foreground">Track goals, investigations, and conclusions for shared human and Agent work.</p>
                     </div>
                     <Button asChild className="w-fit cursor-pointer">
-                        <Link href={`/${organization}/work/new`}>
+                        <Link href={`/${organization}/works/new`}>
                             <BriefcaseBusiness />
                             New Work
                         </Link>
@@ -75,7 +75,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
                             return (
                                 <Link
                                     key={work.id}
-                                    href={`/${organization}/work/${work.id}`}
+                                    href={`/${organization}/works/${work.id}`}
                                     className="group rounded-lg border bg-card p-5 text-card-foreground transition-colors hover:bg-accent/40"
                                 >
                                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -102,7 +102,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
                         <h2 className="text-base font-semibold">No Work yet</h2>
                         <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">Create a Work item when you want a durable goal, investigations, and final conclusion around a data question.</p>
                         <Button asChild className="mt-5">
-                            <Link href={`/${organization}/work/new`}>New Work</Link>
+                            <Link href={`/${organization}/works/new`}>New Work</Link>
                         </Button>
                     </div>
                 )}

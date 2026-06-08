@@ -37,7 +37,7 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
                 connectionId,
                 goal: goal.trim(),
             });
-            router.push(`/${organization}/work/${work.id}`);
+            router.push(`/${organization}/works/${work.id}`);
         } catch (error) {
             console.error(error);
             toast.error(error instanceof Error ? error.message : 'Failed to create Work');
@@ -49,7 +49,7 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
     return (
         <div className="bg-n8 h-screen overflow-auto">
             <div className="container mx-auto mt-10 max-w-5xl p-12 lg:p-12 xl:p-8 2xl:p-4">
-                <Button variant="ghost" className="mb-5 w-fit" onClick={() => router.push(`/${organization}/work`)}>
+                <Button variant="ghost" className="mb-5 w-fit" onClick={() => router.push(`/${organization}/works`)}>
                     <ArrowLeft />
                     Work
                 </Button>

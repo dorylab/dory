@@ -24,21 +24,30 @@ const outputSchema = z.object({
 
 type QueryExecutionOutput = z.infer<typeof queryExecutionOutputSchema>;
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
 function resultMetaFromQuery(input: {
-    query: Record<string, any>;
+    query: unknown;
     workId: string;
     workRunId?: string | null;
     workRunEventId?: string | null;
+    investigationId: string;
     sessionId: string;
 }): TabResultMetaPayload {
-    const firstSet = Array.isArray(input.query.queryResultSets) ? (input.query.queryResultSets[0] as Record<string, any> | undefined) : undefined;
+    const query = asRecord(input.query);
+    const session = asRecord(query?.session);
+    const queryResultSets = Array.isArray(query?.queryResultSets) ? query.queryResultSets : [];
+    const firstSet = asRecord(queryResultSets[0]);
     const columns = Array.isArray(firstSet?.columns) ? firstSet.columns.length : undefined;
     return {
         rows: typeof firstSet?.rowCount === 'number' ? firstSet.rowCount : undefined,
         columns,
-        durationMs: typeof input.query.session?.durationMs === 'number' ? input.query.session.durationMs : typeof firstSet?.durationMs === 'number' ? firstSet.durationMs : undefined,
+        durationMs: typeof session?.durationMs === 'number' ? session.durationMs : typeof firstSet?.durationMs === 'number' ? firstSet.durationMs : undefined,
         sessionId: input.sessionId,
         workId: input.workId,
+        investigationId: input.investigationId,
         workRunId: input.workRunId ?? undefined,
         workRunEventId: input.workRunEventId ?? undefined,
         source: 'work-run',
@@ -70,7 +79,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
         outputSummary: output => ({
             tabId: output.tabId,
             sessionId: output.sessionId,
-            resultSetCount: (output.query as any).session?.resultSetCount ?? null,
+            resultSetCount: asRecord(asRecord(output.query)?.session)?.resultSetCount ?? null,
         }),
     },
     handler: async (ctx, input) => {
@@ -89,6 +98,11 @@ export const workRunInvestigationSqlAction = defineWebAction({
         const sessionId = randomUUID();
         const tabName = input.title || investigation.title;
         const database = input.database ?? null;
+        const workspaceScope = {
+            type: 'work_investigation' as const,
+            workId: work.id,
+            investigationId: investigation.id,
+        };
 
         const queryEnvelope = await executeAction<QueryExecutionOutput>(ctx, 'query.readOnlyExecute', {
             connectionId: work.connectionId,
@@ -104,6 +118,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
         const initialResultMeta = resultMetaFromQuery({
             query,
             workId: work.id,
+            investigationId: investigation.id,
             workRunId: input.runId ?? null,
             workRunEventId: null,
             sessionId,
@@ -117,6 +132,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
             content: input.sql,
             databaseName: database,
             resultMeta: initialResultMeta,
+            workspaceScope,
         });
 
         const event = input.runId
@@ -143,6 +159,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
         const resultMeta = resultMetaFromQuery({
             query,
             workId: work.id,
+            investigationId: investigation.id,
             workRunId: input.runId ?? null,
             workRunEventId: event?.id ?? null,
             sessionId,
@@ -161,6 +178,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
                 resultMeta,
             },
             resultMeta,
+            workspaceScope,
         });
 
         await executeAction(ctx, 'work.updateInvestigation', {

@@ -40,7 +40,7 @@ export const workGetAction = defineWebAction({
         const investigationDetails = investigations.map(investigation => ({
             ...investigation,
             findings: findingsByInvestigationId.get(investigation.id) ?? [],
-            sqlAssetCount: sqlAssetCountByInvestigationId.get(investigation.id) ?? 0,
+            sqlAssetCount: Math.max(sqlAssetCountByInvestigationId.get(investigation.id) ?? 0, investigation.linkedTabId ? 1 : 0),
         }));
         const runs = await ctx.services.db.works.listRuns({ organizationId: ctx.organizationId, workId: input.id, limit: 1 });
         const latestRun = runs[0] ?? null;

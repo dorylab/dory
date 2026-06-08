@@ -37,6 +37,8 @@ const workCreateAction = webActionRegistry.get('work.create');
 assert.ok(workCreateAction, 'Expected work.create to be registered.');
 const workCreateInvestigationAction = webActionRegistry.get('work.createInvestigation');
 assert.ok(workCreateInvestigationAction, 'Expected work.createInvestigation to be registered.');
+const workEnsureInvestigationWorkspaceAction = webActionRegistry.get('work.ensureInvestigationWorkspace');
+assert.ok(workEnsureInvestigationWorkspaceAction, 'Expected work.ensureInvestigationWorkspace to be registered.');
 const workUpdateConclusionAction = webActionRegistry.get('work.updateConclusion');
 assert.ok(workUpdateConclusionAction, 'Expected work.updateConclusion to be registered.');
 const workCreateInvestigationFindingAction = webActionRegistry.get('work.createInvestigationFinding');
@@ -118,6 +120,21 @@ function createServices() {
                     savedInvestigations.push(record);
                     return record;
                 },
+                getInvestigationById: async (payload: any) =>
+                    payload.organizationId === 'org-1' && payload.workId === 'work-1'
+                        ? {
+                              id: payload.id,
+                              workId: payload.workId,
+                              organizationId: payload.organizationId,
+                              connectionId: 'conn-1',
+                              title: 'Error Rate Analysis',
+                              status: 'draft',
+                              linkedTabId: null,
+                              lastQueryAt: null,
+                              createdAt: new Date('2026-06-01T00:00:00.000Z'),
+                              updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+                          }
+                        : null,
                 updateConclusion: async (payload: any) => {
                     const record = {
                         id: payload.id,
@@ -143,7 +160,7 @@ function createServices() {
                         connectionId: 'conn-1',
                         title: 'Error Rate Analysis',
                         status: payload.patch.status ?? 'completed',
-                        linkedTabId: null,
+                        linkedTabId: payload.patch.linkedTabId ?? null,
                         lastQueryAt: null,
                         createdAt: new Date('2026-06-01T00:00:00.000Z'),
                         updatedAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -206,6 +223,7 @@ function savedTabSignature(savedTabs: unknown[]) {
         tabId: payload.tabId,
         userId: payload.userId,
         connectionId: payload.connectionId,
+        workspaceScope: payload.workspaceScope ?? { type: 'connection' },
         state: payload.state,
         resultMeta: payload.resultMeta,
     };
@@ -261,12 +279,18 @@ function savedConclusionSignature(savedConclusions: unknown[]) {
 function linkedWorkspaceSignature(savedTabs: unknown[]) {
     assert.equal(savedTabs.length, 1);
     const payload = savedTabs[0] as any;
+    const workspaceScope = payload.workspaceScope;
     return {
         connectionId: payload.connectionId,
+        workspaceScopeType: workspaceScope?.type ?? 'connection',
+        workspaceScopeWorkId: workspaceScope?.workId ?? null,
+        hasWorkspaceInvestigationId: typeof workspaceScope?.investigationId === 'string' && workspaceScope.investigationId.length > 0,
         tabType: payload.state.tabType,
         tabName: payload.state.tabName,
         content: payload.state.content,
-        resultMeta: payload.resultMeta,
+        resultMetaWorkId: payload.resultMeta?.workId ?? null,
+        hasResultMetaInvestigationId: typeof payload.resultMeta?.investigationId === 'string' && payload.resultMeta.investigationId.length > 0,
+        resultMetaSource: payload.resultMeta?.source ?? null,
     };
 }
 
@@ -350,6 +374,7 @@ test('tab.save can be executed by Agent with the same tab persistence side effec
         tabId: 'tab-1',
         userId: 'user-1',
         connectionId: 'conn-1',
+        workspaceScope: { type: 'connection' },
         state: {
             content: 'select 42',
             databaseName: 'main',
@@ -373,6 +398,31 @@ test('tab.save can be executed by Agent with the same tab persistence side effec
         effects: undefined,
         resourceType: undefined,
     });
+});
+
+test('tab.save persists work investigation workspace scope', async () => {
+    const input = {
+        connectionId: 'conn-1',
+        tabId: 'tab-1',
+        workspaceScope: {
+            type: 'work_investigation' as const,
+            workId: 'work-1',
+            investigationId: 'investigation-1',
+        },
+        state: {
+            tabType: 'sql',
+            content: 'select 42',
+            databaseName: 'main',
+        },
+    };
+
+    const agent = createServices();
+    const agentTool = actionToAgentTool(tabSaveAction, () => createContext('agent', ['tabs:write'], agent.services));
+    const agentOutput = await (agentTool.execute as any)(input);
+
+    assert.equal(agentOutput.ok, true);
+    assert.equal((savedTabSignature(agent.savedTabs).workspaceScope as any).type, 'work_investigation');
+    assert.deepEqual(savedTabSignature(agent.savedTabs).workspaceScope, input.workspaceScope);
 });
 
 test('work.create can be executed through UI, Agent, and Automation with shared action semantics', async () => {
@@ -463,6 +513,35 @@ test('work.createInvestigation creates and links a SQL workspace through UI, Age
     assert.deepEqual(linkedWorkspaceSignature(automation.savedTabs), linkedWorkspaceSignature(ui.savedTabs));
     assert.deepEqual(auditSignature(agentAudit), auditSignature(uiAudit));
     assert.deepEqual(auditSignature(automationAudit), auditSignature(uiAudit));
+});
+
+test('work.ensureInvestigationWorkspace creates a scoped SQL workspace when missing', async () => {
+    const input = {
+        workId: 'work-1',
+        investigationId: 'investigation-1',
+    };
+
+    const ui = createServices();
+    const output = await executeUiAction(createContext('user', ['works:write', 'tabs:write'], ui.services), 'work.ensureInvestigationWorkspace', input);
+
+    assert.equal((output.data as any).linkedTabId, savedTabSignature(ui.savedTabs).tabId);
+    assert.deepEqual(savedTabSignature(ui.savedTabs).workspaceScope, {
+        type: 'work_investigation',
+        workId: 'work-1',
+        investigationId: 'investigation-1',
+    });
+    assert.deepEqual(linkedWorkspaceSignature(ui.savedTabs), {
+        connectionId: 'conn-1',
+        workspaceScopeType: 'work_investigation',
+        workspaceScopeWorkId: 'work-1',
+        hasWorkspaceInvestigationId: true,
+        tabType: 'sql',
+        tabName: 'Error Rate Analysis',
+        content: '-- Work: Untitled Work\n-- Goal:\n-- Find why query failures increased this week.\n-- Investigation: Error Rate Analysis\n\n',
+        resultMetaWorkId: 'work-1',
+        hasResultMetaInvestigationId: true,
+        resultMetaSource: 'work-investigation',
+    });
 });
 
 test('work.createInvestigation reuses an existing linked workspace when linkedTabId is provided', async () => {

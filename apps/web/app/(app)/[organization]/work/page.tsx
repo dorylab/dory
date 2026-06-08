@@ -1,6 +1,6 @@
-import { WorkPageClient } from './page.client';
+import { redirect } from 'next/navigation';
 
 export default async function WorkPage({ params }: { params: Promise<{ organization: string }> }) {
     const { organization } = await params;
-    return <WorkPageClient organization={organization} />;
+    redirect(`/${organization}/works`);
 }

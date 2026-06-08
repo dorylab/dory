@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useAtom } from 'jotai';
 import { authClient } from '@/lib/auth-client';
 import { activeDatabaseAtom } from '@/shared/stores/app.store';
+import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { useSQLTabs } from '../components/tabs/hooks/use-tab-hooks';
 import { useDataPreviewManager } from '../../../components/table-browser/components/data-preview/use-data-preview';
 import { useSqlLayout } from './useSqlLayout';
@@ -12,12 +13,15 @@ import { useSqlQueryRunner } from './useSqlQueryRunner';
 import { useSqlChatHandoff } from './useSqlChatHandoff';
 import { useWorkRunResultHydration } from './useWorkRunResultHydration';
 
-export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
+export function useSqlConsoleClient(defaultLayout: number[] | undefined, options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null }) {
     const { normalizedLayout, onLayout } = useSqlLayout(defaultLayout);
     const { data: session } = authClient.useSession();
     const userId = session?.user?.id;
 
-    const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs } = useSQLTabs();
+    const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs } = useSQLTabs({
+        workspaceScope: options?.workspaceScope,
+        connectionId: options?.connectionId,
+    });
     const activeTab = useMemo(() => tabs.find(t => t.tabId === activeTabId), [tabs, activeTabId]);
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
 
