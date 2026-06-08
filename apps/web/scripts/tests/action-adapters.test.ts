@@ -28,6 +28,8 @@ const [{ actionToAgentTool }, { actionToMcpTool, structuredMcpActionResult }, { 
         import('@/lib/actions/server/registry'),
         import('@/lib/auth/organization-ac'),
     ]);
+const { investigationWorkspaceContent } = await import('@/lib/actions/server/domains/work/create-investigation');
+const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab } = await import('@/lib/actions/server/domains/work/run-investigation-sql');
 
 const tabCreateAction = webActionRegistry.get('tab.create');
 assert.ok(tabCreateAction, 'Expected tab.create to be registered.');
@@ -542,6 +544,106 @@ test('work.ensureInvestigationWorkspace creates a scoped SQL workspace when miss
         hasResultMetaInvestigationId: true,
         resultMetaSource: 'work-investigation',
     });
+});
+
+test('investigation workspace content keeps the SQL and comments in one tab body', () => {
+    assert.equal(
+        investigationSqlAssetBlockContent({
+            workTitle: 'Untitled Work',
+            goal: 'Analyze orders.',
+            investigationTitle: 'Order Status Distribution',
+            groupTitle: 'Status Count',
+            sql: 'select status, count(*) as orders\nfrom orders\ngroup by status',
+        }),
+        '-- Work: Untitled Work\n-- Goal:\n-- Analyze orders.\n-- Investigation: Order Status Distribution\n\n-- Group: Status Count\n\nselect status, count(*) as orders\nfrom orders\ngroup by status',
+    );
+});
+
+test('work SQL target selection reuses the same group tab', () => {
+    const target = resolveInvestigationSqlTargetTab({
+        linkedTabId: 'seed-tab',
+        seedContent: 'seed',
+        groupKey: 'status-distribution',
+        tabs: [
+            {
+                tabId: 'seed-tab',
+                userId: 'user-1',
+                connectionId: 'conn-1',
+                tabType: 'sql',
+                tabName: 'Seed',
+                content: 'seed',
+                resultMeta: { source: 'work-investigation' },
+            },
+            {
+                tabId: 'group-tab',
+                userId: 'user-1',
+                connectionId: 'conn-1',
+                tabType: 'sql',
+                tabName: 'Status Distribution',
+                content: 'select 1',
+                resultMeta: {
+                    source: 'work-run',
+                    sqlAssetGroupKey: 'status-distribution',
+                },
+            },
+        ],
+    });
+
+    assert.equal(target.tabId, 'group-tab');
+    assert.equal(target.shouldAppend, true);
+});
+
+test('work SQL target selection reuses only an empty seed tab for a new group', () => {
+    const seedContent = investigationWorkspaceContent({
+        workTitle: 'Untitled Work',
+        goal: 'Analyze orders.',
+        investigationTitle: 'Order Status Distribution',
+    });
+    const target = resolveInvestigationSqlTargetTab({
+        linkedTabId: 'seed-tab',
+        seedContent,
+        groupKey: 'status-distribution',
+        tabs: [
+            {
+                tabId: 'seed-tab',
+                userId: 'user-1',
+                connectionId: 'conn-1',
+                tabType: 'sql',
+                tabName: 'Seed',
+                content: seedContent,
+                resultMeta: { source: 'work-investigation' },
+            },
+        ],
+    });
+
+    assert.equal(target.tabId, 'seed-tab');
+    assert.equal(target.shouldAppend, false);
+});
+
+test('work SQL target selection creates a new tab for a different group when seed has results', () => {
+    const target = resolveInvestigationSqlTargetTab({
+        linkedTabId: 'latest-tab',
+        seedContent: 'seed',
+        groupKey: 'quarterly-revenue',
+        tabs: [
+            {
+                tabId: 'latest-tab',
+                userId: 'user-1',
+                connectionId: 'conn-1',
+                tabType: 'sql',
+                tabName: 'Monthly Revenue',
+                content: 'select 1',
+                resultMeta: {
+                    source: 'work-run',
+                    sessionId: 'session-1',
+                    sqlAssetGroupKey: 'monthly-revenue',
+                },
+            },
+        ],
+    });
+
+    assert.notEqual(target.tabId, 'latest-tab');
+    assert.equal(target.shouldAppend, false);
 });
 
 test('work.createInvestigation reuses an existing linked workspace when linkedTabId is provided', async () => {

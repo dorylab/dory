@@ -97,6 +97,7 @@ export type TabResultMetaPayload = {
     investigationId?: string;
     workRunId?: string;
     workRunEventId?: string;
+    sqlAssetGroupKey?: string;
     source?: 'work-run' | string;
 };
 

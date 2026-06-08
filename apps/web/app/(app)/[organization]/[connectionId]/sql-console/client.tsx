@@ -82,10 +82,12 @@ export default function SQLConsoleClient({
     defaultLayout = INITIAL_LAYOUT.horizontal.default,
     workspaceScope,
     connectionId,
+    preferredActiveTabId,
 }: {
     defaultLayout: number[] | undefined;
     workspaceScope?: WorkspaceScope | null;
     connectionId?: string | null;
+    preferredActiveTabId?: string | null;
 }) {
     const {
         normalizedLayout,
@@ -106,7 +108,7 @@ export default function SQLConsoleClient({
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
-    } = useSqlConsoleClient(defaultLayout, { workspaceScope, connectionId });
+    } = useSqlConsoleClient(defaultLayout, { workspaceScope, connectionId, preferredActiveTabId });
     const t = useTranslations('SqlConsole');
 
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);

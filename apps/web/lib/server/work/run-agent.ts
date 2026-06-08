@@ -309,7 +309,7 @@ function buildWorkRunInstruction(workId: string) {
         'Call exactly one protocol tool at a time. Do not call work.runInvestigationSql in the same step as work.createInvestigation.',
         'Create all analyses before running any SQL. Use focused titles such as revenue trend analysis, order status analysis, order amount anomaly analysis, and time-based anomaly analysis.',
         'After every SQL run, create at least one Finding for the same Analysis before running another SQL query, switching Analysis, or writing the conclusion.',
-        'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created.',
+        'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created and a stable groupKey for the human-readable SQL asset group. Reuse a groupKey only when the new SQL belongs in the same workspace tab as prior SQL for that Analysis.',
         'A Finding is a concise fact or observation backed by the SQL result. Prefer bullet-like short statements, not a long summary paragraph.',
         'Every Analysis must have at least one Finding before the conclusion.',
         'The conclusion must synthesize the Findings and should not simply repeat every Finding.',

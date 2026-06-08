@@ -15,11 +15,12 @@ import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
 const ACTIVE_KEY = (connectionId?: string | null, workspaceScope?: WorkspaceScope | null) => `sqlconsole:activeTabId:${connectionId ?? 'default'}:${workspaceScopeKey(workspaceScope)}`;
 const SID = (tabId: string) => `sqlconsole:sessionId:${tabId}`;
 
-export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null }) {
+export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null; preferredActiveTabId?: string | null }) {
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection?.id ?? null;
     const routeConnectionIdFromRoute = useRouteConnectionId();
     const routeConnectionId = options?.connectionId ?? routeConnectionIdFromRoute;
+    const preferredActiveTabId = options?.preferredActiveTabId ?? null;
     const inputWorkspaceScopeKey = workspaceScopeKey(options?.workspaceScope);
     const normalizedWorkspaceScope = useMemo(() => normalizeWorkspaceScope(options?.workspaceScope), [inputWorkspaceScopeKey]);
     const normalizedWorkspaceScopeKey = workspaceScopeKey(normalizedWorkspaceScope);
@@ -59,6 +60,7 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                                     workspaceScope: normalizedWorkspaceScope,
                                     content: tab.content ?? '',
                                     status: tab.status,
+                                    resultMeta: tab.resultMeta,
                                 }
                                 : {
                                     tabId: tab.tabId,
@@ -239,9 +241,13 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                     setTabs(serverTabs);
 
                     let nextActive = serverTabs[0]?.tabId ?? '';
+                    const hasPreferredActiveTab = Boolean(preferredActiveTabId && serverTabs.some(t => t.tabId === preferredActiveTabId));
+                    if (hasPreferredActiveTab) {
+                        nextActive = preferredActiveTabId ?? nextActive;
+                    }
                     try {
                         const saved = localStorage.getItem(ACTIVE_KEY(connectionId, normalizedWorkspaceScope));
-                        if (saved && serverTabs.some(t => t.tabId === saved)) {
+                        if (!hasPreferredActiveTab && saved && serverTabs.some(t => t.tabId === saved)) {
                             nextActive = saved;
                         }
                     } catch {
@@ -268,7 +274,7 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                 setIsLoading(false);
             }
         })();
-    }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, normalizedWorkspaceScope, normalizedWorkspaceScopeKey]);
+    }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, normalizedWorkspaceScope, normalizedWorkspaceScopeKey, preferredActiveTabId]);
 
     // ---------------------------------------------------
     

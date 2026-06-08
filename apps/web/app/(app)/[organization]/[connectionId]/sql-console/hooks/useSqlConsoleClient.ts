@@ -13,7 +13,7 @@ import { useSqlQueryRunner } from './useSqlQueryRunner';
 import { useSqlChatHandoff } from './useSqlChatHandoff';
 import { useWorkRunResultHydration } from './useWorkRunResultHydration';
 
-export function useSqlConsoleClient(defaultLayout: number[] | undefined, options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null }) {
+export function useSqlConsoleClient(defaultLayout: number[] | undefined, options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null; preferredActiveTabId?: string | null }) {
     const { normalizedLayout, onLayout } = useSqlLayout(defaultLayout);
     const { data: session } = authClient.useSession();
     const userId = session?.user?.id;
@@ -21,6 +21,7 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, options
     const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs } = useSQLTabs({
         workspaceScope: options?.workspaceScope,
         connectionId: options?.connectionId,
+        preferredActiveTabId: options?.preferredActiveTabId,
     });
     const activeTab = useMemo(() => tabs.find(t => t.tabId === activeTabId), [tabs, activeTabId]);
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);

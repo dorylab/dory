@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import type { TabResultMetaPayload } from '@dory/shared/types/tabs';
+import type { TabResultMetaPayload, TabPayload } from '@dory/shared/types/tabs';
 import { defineWebAction } from '../../define-web-action';
 import { queryExecutionOutputSchema } from '../../schemas';
 import { writeWorkspace } from '../../policies';
+import { investigationWorkspaceContent } from './create-investigation';
 
 const inputSchema = z.object({
     workId: z.string().min(1),
@@ -11,6 +12,8 @@ const inputSchema = z.object({
     sql: z.string().trim().min(1),
     database: z.string().trim().nullable().optional(),
     title: z.string().trim().nullable().optional(),
+    groupKey: z.string().trim().min(1).optional(),
+    groupTitle: z.string().trim().nullable().optional(),
     runId: z.string().min(1).optional(),
 });
 
@@ -35,6 +38,7 @@ function resultMetaFromQuery(input: {
     workRunEventId?: string | null;
     investigationId: string;
     sessionId: string;
+    sqlAssetGroupKey: string;
 }): TabResultMetaPayload {
     const query = asRecord(input.query);
     const session = asRecord(query?.session);
@@ -50,7 +54,67 @@ function resultMetaFromQuery(input: {
         investigationId: input.investigationId,
         workRunId: input.workRunId ?? undefined,
         workRunEventId: input.workRunEventId ?? undefined,
+        sqlAssetGroupKey: input.sqlAssetGroupKey,
         source: 'work-run',
+    };
+}
+
+export function investigationSqlAssetBlockContent(input: {
+    workTitle: string;
+    goal: string;
+    investigationTitle: string;
+    groupTitle: string;
+    sql: string;
+}) {
+    return investigationWorkspaceContent({
+        workTitle: input.workTitle,
+        goal: input.goal,
+        investigationTitle: input.investigationTitle,
+        sql: [`-- Group: ${input.groupTitle}`, '', input.sql.trim()].join('\n'),
+    });
+}
+
+function appendSqlAssetBlock(existingContent: string | null | undefined, block: string) {
+    const existing = existingContent?.trimEnd() ?? '';
+    if (!existing) return block;
+    return `${existing}\n\n${block}`;
+}
+
+function isReusableSeedTab(tab: TabPayload, input: { seedContent: string; linkedTabId: string | null }) {
+    if (!input.linkedTabId || tab.tabId !== input.linkedTabId || tab.tabType !== 'sql') return false;
+    if (tab.resultMeta?.source !== 'work-investigation') return false;
+    if (tab.resultMeta.sessionId || tab.resultMeta.workRunEventId || tab.resultMeta.sqlAssetGroupKey) return false;
+    return (tab.content ?? '').trim() === input.seedContent.trim();
+}
+
+export function resolveInvestigationSqlTargetTab(input: {
+    tabs: TabPayload[];
+    linkedTabId: string | null;
+    seedContent: string;
+    groupKey: string;
+}) {
+    const existingGroupTab = input.tabs.find(tab => tab.tabType === 'sql' && tab.resultMeta?.sqlAssetGroupKey === input.groupKey);
+    if (existingGroupTab) {
+        return {
+            tabId: existingGroupTab.tabId,
+            existingTab: existingGroupTab,
+            shouldAppend: true,
+        };
+    }
+
+    const reusableSeedTab = input.tabs.find(tab => isReusableSeedTab(tab, { seedContent: input.seedContent, linkedTabId: input.linkedTabId }));
+    if (reusableSeedTab) {
+        return {
+            tabId: reusableSeedTab.tabId,
+            existingTab: reusableSeedTab,
+            shouldAppend: false,
+        };
+    }
+
+    return {
+        tabId: randomUUID(),
+        existingTab: null,
+        shouldAppend: false,
     };
 }
 
@@ -59,7 +123,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
     domain: 'work',
     kind: 'command',
     risk: 'low',
-    effects: ['work:investigation:sql', 'tab:create', 'query:execute'],
+    effects: ['work:investigation:sql', 'tab:save', 'query:execute'],
     inputSchema,
     outputSchema,
     permissions: writeWorkspace,
@@ -72,6 +136,8 @@ export const workRunInvestigationSqlAction = defineWebAction({
             investigationId: input.investigationId,
             database: input.database ?? null,
             title: input.title ?? null,
+            groupKey: input.groupKey ?? null,
+            groupTitle: input.groupTitle ?? null,
             runId: input.runId ?? null,
             sqlLength: input.sql.length,
         }),
@@ -94,15 +160,38 @@ export const workRunInvestigationSqlAction = defineWebAction({
         if (!investigation) throw new Error('Work investigation not found.');
 
         const { executeAction } = await import('../../execute');
-        const tabId = randomUUID();
         const sessionId = randomUUID();
-        const tabName = input.title || investigation.title;
         const database = input.database ?? null;
+        const sqlAssetGroupKey = input.groupKey ?? randomUUID();
+        const groupTitle = input.groupTitle || input.title || investigation.title;
+        const tabName = groupTitle;
+        const seedContent = investigationWorkspaceContent({
+            workTitle: work.title,
+            goal: work.goal,
+            investigationTitle: investigation.title,
+        });
+        const block = investigationSqlAssetBlockContent({
+            workTitle: work.title,
+            goal: work.goal,
+            investigationTitle: investigation.title,
+            groupTitle,
+            sql: input.sql,
+        });
         const workspaceScope = {
             type: 'work_investigation' as const,
             workId: work.id,
             investigationId: investigation.id,
         };
+        const scopedTabs = (await ctx.services.db.tabState.loadAllTab(ctx.userId, work.connectionId, workspaceScope)) as unknown as TabPayload[];
+        const targetTab = resolveInvestigationSqlTargetTab({
+            tabs: scopedTabs,
+            linkedTabId: investigation.linkedTabId,
+            seedContent,
+            groupKey: sqlAssetGroupKey,
+        });
+        const tabId = targetTab.tabId;
+        const existingContent = targetTab.existingTab?.tabType === 'sql' ? targetTab.existingTab.content : null;
+        const content = targetTab.shouldAppend ? appendSqlAssetBlock(existingContent, block) : block;
 
         const queryEnvelope = await executeAction<QueryExecutionOutput>(ctx, 'query.readOnlyExecute', {
             connectionId: work.connectionId,
@@ -114,26 +203,6 @@ export const workRunInvestigationSqlAction = defineWebAction({
             source: 'work-run',
         });
         const query = queryEnvelope.data;
-
-        const initialResultMeta = resultMetaFromQuery({
-            query,
-            workId: work.id,
-            investigationId: investigation.id,
-            workRunId: input.runId ?? null,
-            workRunEventId: null,
-            sessionId,
-        });
-
-        await executeAction(ctx, 'tab.create', {
-            connectionId: work.connectionId,
-            tabId,
-            tabType: 'sql',
-            tabName,
-            content: input.sql,
-            databaseName: database,
-            resultMeta: initialResultMeta,
-            workspaceScope,
-        });
 
         const event = input.runId
             ? await ctx.services.db.works.appendRunEvent({
@@ -150,6 +219,8 @@ export const workRunInvestigationSqlAction = defineWebAction({
                       tabId,
                       sessionId,
                       sql: input.sql,
+                      groupKey: sqlAssetGroupKey,
+                      groupTitle,
                       database,
                       query,
                   },
@@ -163,6 +234,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
             workRunId: input.runId ?? null,
             workRunEventId: event?.id ?? null,
             sessionId,
+            sqlAssetGroupKey,
         });
 
         await executeAction(ctx, 'tab.save', {
@@ -172,9 +244,10 @@ export const workRunInvestigationSqlAction = defineWebAction({
                 tabId,
                 tabType: 'sql',
                 tabName,
-                content: input.sql,
+                content,
                 databaseName: database,
-                orderIndex: null,
+                orderIndex: targetTab.existingTab?.orderIndex ?? null,
+                createdAt: targetTab.existingTab?.createdAt,
                 resultMeta,
             },
             resultMeta,

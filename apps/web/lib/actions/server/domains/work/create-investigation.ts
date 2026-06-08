@@ -12,14 +12,14 @@ function sqlCommentLines(value: string) {
         .join('\n');
 }
 
-export function investigationWorkspaceContent(input: { workTitle: string; goal: string; investigationTitle: string }) {
+export function investigationWorkspaceContent(input: { workTitle: string; goal: string; investigationTitle: string; sql?: string | null }) {
     return [
         `-- Work: ${input.workTitle}`,
         '-- Goal:',
         sqlCommentLines(input.goal),
         `-- Investigation: ${input.investigationTitle}`,
         '',
-        '',
+        input.sql?.trim() ?? '',
     ].join('\n');
 }
 

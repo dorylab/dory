@@ -13,7 +13,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useConnectionDetail } from '../../../../connections/hooks/use-connections';
 import SQLConsoleClient from '../../../../[connectionId]/sql-console/client';
-import type { WorkDetail } from '../../../../work/types';
+import type { WorkDetail, WorkInvestigation } from '../../../../work/types';
 
 type WorkInvestigationWorkspacePageClientProps = {
     organization: string;
@@ -52,7 +52,7 @@ export function WorkInvestigationWorkspacePageClient({
     const ensureWorkspaceQuery = useQuery({
         queryKey: ['work', workId, 'investigation', investigationId, 'workspace'],
         queryFn: () =>
-            executeActionClient(
+            executeActionClient<WorkInvestigation>(
                 'work.ensureInvestigationWorkspace',
                 {
                     workId,
@@ -72,6 +72,7 @@ export function WorkInvestigationWorkspacePageClient({
 
     const isLoading = workQuery.isLoading || connectionQuery.isLoading || ensureWorkspaceQuery.isLoading;
     const canRenderConsole = Boolean(work && investigation && connectionQuery.data && ensureWorkspaceQuery.isSuccess);
+    const linkedTabId = ensureWorkspaceQuery.data?.linkedTabId ?? investigation?.linkedTabId ?? null;
 
     return (
         <div className="bg-background fixed inset-0 z-40 flex flex-col">
@@ -115,6 +116,7 @@ export function WorkInvestigationWorkspacePageClient({
                             workId,
                             investigationId,
                         }}
+                        preferredActiveTabId={linkedTabId}
                     />
                 ) : (
                     <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

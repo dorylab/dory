@@ -33,8 +33,10 @@ export const resultMetaSchema = z
         durationMs: z.number().optional(),
         sessionId: z.string().optional(),
         workId: z.string().optional(),
+        investigationId: z.string().optional(),
         workRunId: z.string().optional(),
         workRunEventId: z.string().optional(),
+        sqlAssetGroupKey: z.string().optional(),
         source: z.string().optional(),
     })
     .optional();
