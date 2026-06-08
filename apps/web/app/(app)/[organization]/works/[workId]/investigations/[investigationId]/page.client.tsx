@@ -7,13 +7,14 @@ import { useSetAtom } from 'jotai';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { WarpDialog, WarpDialogContent } from '@/components/molecule-ui/warp-dialog';
 import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useConnectionDetail } from '../../../../connections/hooks/use-connections';
 import SQLConsoleClient from '../../../../[connectionId]/sql-console/client';
-import type { WorkDetail, WorkInvestigation } from '../../../../work/types';
+import type { WorkDetail, WorkInvestigation } from '../../../types';
 
 type WorkInvestigationWorkspacePageClientProps = {
     organization: string;
@@ -22,13 +23,18 @@ type WorkInvestigationWorkspacePageClientProps = {
     defaultLayout?: number[];
 };
 
-export function WorkInvestigationWorkspacePageClient({
-    organization,
+const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
+
+type WorkInvestigationWorkspaceContentProps = WorkInvestigationWorkspacePageClientProps & {
+    onClose: () => void;
+};
+
+export function WorkInvestigationWorkspaceContent({
     workId,
     investigationId,
     defaultLayout,
-}: WorkInvestigationWorkspacePageClientProps) {
-    const router = useRouter();
+    onClose,
+}: WorkInvestigationWorkspaceContentProps) {
     const setCurrentConnection = useSetAtom(currentConnectionAtom);
 
     const workQuery = useQuery({
@@ -62,6 +68,7 @@ export function WorkInvestigationWorkspacePageClient({
             ),
         enabled: Boolean(work?.connectionId && investigation),
         retry: false,
+        staleTime: WORKSPACE_PREFETCH_STALE_TIME_MS,
     });
 
     useEffect(() => {
@@ -75,10 +82,10 @@ export function WorkInvestigationWorkspacePageClient({
     const linkedTabId = ensureWorkspaceQuery.data?.linkedTabId ?? investigation?.linkedTabId ?? null;
 
     return (
-        <div className="bg-background fixed inset-0 z-40 flex flex-col">
+        <div className="bg-background flex h-full min-h-0 flex-col">
             <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 text-card-foreground">
                 <div className="flex min-w-0 items-center gap-3">
-                    <Button variant="ghost" size="sm" onClick={() => router.push(`/${organization}/works/${workId}`)}>
+                    <Button variant="ghost" size="sm" onClick={onClose}>
                         <ArrowLeft />
                         Work
                     </Button>
@@ -117,6 +124,7 @@ export function WorkInvestigationWorkspacePageClient({
                             investigationId,
                         }}
                         preferredActiveTabId={linkedTabId}
+                        expectExistingTabs={Boolean(linkedTabId)}
                     />
                 ) : (
                     <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -126,5 +134,39 @@ export function WorkInvestigationWorkspacePageClient({
                 )}
             </main>
         </div>
+    );
+}
+
+export function WorkInvestigationWorkspacePageClient(props: WorkInvestigationWorkspacePageClientProps) {
+    const router = useRouter();
+
+    return (
+        <div className="bg-background fixed inset-0 z-40 flex flex-col">
+            <WorkInvestigationWorkspaceContent {...props} onClose={() => router.push(`/${props.organization}/works/${props.workId}`)} />
+        </div>
+    );
+}
+
+export function WorkInvestigationWorkspaceDialogClient(props: WorkInvestigationWorkspacePageClientProps) {
+    const router = useRouter();
+
+    return (
+        <WarpDialog open onOpenChange={open => {
+            if (!open) router.back();
+        }}>
+            <WarpDialogContent
+                aria-labelledby="work-investigation-workspace-title"
+                aria-describedby="work-investigation-workspace-description"
+                className="h-dvh w-dvw overflow-hidden bg-background shadow-2xl"
+            >
+                <h2 id="work-investigation-workspace-title" className="sr-only">
+                    Work Investigation Workspace
+                </h2>
+                <p id="work-investigation-workspace-description" className="sr-only">
+                    Full screen SQL workspace for the selected Work Investigation.
+                </p>
+                <WorkInvestigationWorkspaceContent {...props} onClose={() => router.back()} />
+            </WarpDialogContent>
+        </WarpDialog>
     );
 }

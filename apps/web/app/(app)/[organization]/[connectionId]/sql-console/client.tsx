@@ -83,11 +83,13 @@ export default function SQLConsoleClient({
     workspaceScope,
     connectionId,
     preferredActiveTabId,
+    expectExistingTabs,
 }: {
     defaultLayout: number[] | undefined;
     workspaceScope?: WorkspaceScope | null;
     connectionId?: string | null;
     preferredActiveTabId?: string | null;
+    expectExistingTabs?: boolean;
 }) {
     const {
         normalizedLayout,
@@ -111,6 +113,7 @@ export default function SQLConsoleClient({
     } = useSqlConsoleClient(defaultLayout, { workspaceScope, connectionId, preferredActiveTabId });
     const t = useTranslations('SqlConsole');
 
+    const editorRefsByTab = useMemo(() => ({} as Record<string, React.MutableRefObject<SQLEditorHandle | null>>), []);
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);
     const [showChatbot, setShowChatbot] = useAtom(copilotPanelOpenAtom);
     const [chatWidth, setChatWidth] = useAtom(copilotPanelWidthAtom);
@@ -125,22 +128,16 @@ export default function SQLConsoleClient({
     const [tabHeaderHeight, setTabHeaderHeight] = useState<number>(INITIAL_LAYOUT.tabs.defaultHeaderHeight); // measured from SQLTabs
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
+    const shouldSuppressEmptyState = Boolean(expectExistingTabs && isLoading);
+    const shouldShowEmptyState = !shouldSuppressEmptyState && (isLoading || tabs.length === 0);
 
-    const sqlTabIds = useMemo(() => tabs.filter(tab => tab.tabType === 'sql').map(tab => tab.tabId), [tabs]);
-    const sqlTabIdKey = sqlTabIds.join('\0');
-    const editorRefsByTab = useMemo(
-        () => Object.fromEntries(sqlTabIds.map(tabId => [tabId, React.createRef<SQLEditorHandle>()])),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [sqlTabIdKey],
-    );
-
-    const ensureEditorRef = useCallback(
-        (tabId: string | undefined | null) => {
-            if (!tabId) return null;
-            return editorRefsByTab[tabId] ?? null;
-        },
-        [editorRefsByTab],
-    );
+    const ensureEditorRef = useCallback((tabId: string | undefined | null) => {
+        if (!tabId) return null;
+        if (!editorRefsByTab[tabId]) {
+            editorRefsByTab[tabId] = { current: null };
+        }
+        return editorRefsByTab[tabId];
+    }, [editorRefsByTab]);
 
     useEffect(() => {
         if (!activeTabId) return;
@@ -431,7 +428,9 @@ export default function SQLConsoleClient({
                 {/* Middle */}
                 <Panel id="middle-panel" minSize={`${INITIAL_LAYOUT.horizontal.middlePanel.min}%`}>
                     <div className="flex h-full flex-col">
-                        {isLoading || tabs.length === 0 ? (
+                        {shouldSuppressEmptyState ? (
+                            <div className="flex-1" />
+                        ) : shouldShowEmptyState ? (
                             <SQLTabEmpty addTab={addTab} disabled={isLoading} />
                         ) : (
                             <>

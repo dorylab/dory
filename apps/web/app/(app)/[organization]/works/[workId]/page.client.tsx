@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowUpRight, Bot, ChevronDown, Clock, Database, Loader2, Play, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '@/lib/sql-console/tab-queries';
 import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
 import type { SqlResultManualExecutionMode, SqlResultPart } from '@/components/@dory/ui/ai/sql-result/type';
 import { MessageResponse } from '@/components/ai-elements/message';
@@ -18,6 +19,7 @@ import { Label } from '@/registry/new-york-v4/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { useConnections } from '../../connections/hooks/use-connections';
 import type { Work, WorkDetail, WorkInvestigation, WorkRunEvent, WorkStatus } from '../types';
 import { eventTypeLabel, formatRelativeTime, runStatusClassName, runStatusLabel, statusClassName, statusLabel } from '../utils';
@@ -28,6 +30,7 @@ type WorkDetailPageClientProps = {
 };
 
 const statusOptions: WorkStatus[] = ['draft', 'running', 'completed'];
+const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
 
 export function WorkDetailPageClient({ organization, workId }: WorkDetailPageClientProps) {
     const router = useRouter();
@@ -120,7 +123,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                 await invalidateWork();
             }
 
-            const response = await fetch(`/api/work/${encodeURIComponent(workId)}/run`, {
+            const response = await fetch(`/api/works/${encodeURIComponent(workId)}/run`, {
                 method: 'POST',
             });
 
@@ -187,18 +190,76 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         }
     };
 
+    const investigationWorkspaceHref = useCallback(
+        (investigationId: string) => `/${organization}/works/${workId}/investigations/${investigationId}`,
+        [organization, workId],
+    );
+
+    const investigationWorkspaceScope = useCallback(
+        (investigationId: string): WorkspaceScope => ({
+            type: 'work_investigation',
+            workId,
+            investigationId,
+        }),
+        [workId],
+    );
+
+    const ensureInvestigationWorkspaceQueryKey = useCallback(
+        (investigationId: string) => ['work', workId, 'investigation', investigationId, 'workspace'] as const,
+        [workId],
+    );
+
+    const prepareInvestigationWorkspace = useCallback(
+        async (investigation: WorkInvestigation, options?: { awaitTabs?: boolean }) => {
+            if (!work) return null;
+
+            const href = investigationWorkspaceHref(investigation.id);
+            const workspaceScope = investigationWorkspaceScope(investigation.id);
+            router.prefetch(href);
+
+            const ensuredInvestigation = await queryClient.fetchQuery({
+                queryKey: ensureInvestigationWorkspaceQueryKey(investigation.id),
+                queryFn: () =>
+                    executeActionClient<WorkInvestigation>(
+                        'work.ensureInvestigationWorkspace',
+                        {
+                            workId,
+                            investigationId: investigation.id,
+                        },
+                        {
+                            currentConnectionId: work.connectionId,
+                        },
+                    ),
+                staleTime: WORKSPACE_PREFETCH_STALE_TIME_MS,
+            });
+
+            const tabsPrefetch = queryClient.prefetchQuery({
+                queryKey: sqlTabsQueryKey(work.connectionId, workspaceScope),
+                queryFn: () => fetchSqlTabs(work.connectionId, workspaceScope),
+                staleTime: SQL_TABS_PREFETCH_STALE_TIME_MS,
+            });
+
+            if (options?.awaitTabs) {
+                await tabsPrefetch;
+            }
+
+            return ensuredInvestigation;
+        },
+        [ensureInvestigationWorkspaceQueryKey, investigationWorkspaceHref, investigationWorkspaceScope, queryClient, router, work, workId],
+    );
+
+    const prefetchInvestigationWorkspace = (investigation: WorkInvestigation) => {
+        void prepareInvestigationWorkspace(investigation, { awaitTabs: true }).catch(error => {
+            console.debug('[WorkDetailPageClient] workspace prefetch failed', error);
+        });
+    };
+
     const openInvestigation = async (investigation: WorkInvestigation) => {
         if (!work) return;
         setOpeningInvestigationId(investigation.id);
         try {
-            if (!investigation.linkedTabId) {
-                await executeActionClient<WorkInvestigation>('work.ensureInvestigationWorkspace', {
-                    workId,
-                    investigationId: investigation.id,
-                });
-            }
-
-            router.push(`/${organization}/works/${workId}/investigations/${investigation.id}`);
+            await prepareInvestigationWorkspace(investigation);
+            router.push(investigationWorkspaceHref(investigation.id));
         } catch (error) {
             console.error(error);
             toast.error(error instanceof Error ? error.message : 'Failed to open Analysis');
@@ -402,7 +463,14 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                                 <span className="font-medium text-foreground">Assets</span>
                                                 <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
                                             </div>
-                                            <Button size="sm" variant="secondary" onClick={() => openInvestigation(investigation)} disabled={openingInvestigationId === investigation.id}>
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onPointerEnter={() => prefetchInvestigationWorkspace(investigation)}
+                                                onFocus={() => prefetchInvestigationWorkspace(investigation)}
+                                                onClick={() => openInvestigation(investigation)}
+                                                disabled={openingInvestigationId === investigation.id}
+                                            >
                                                 {openingInvestigationId === investigation.id ? <Loader2 className="animate-spin" /> : <ArrowUpRight />}
                                                 Open Workspace
                                             </Button>
@@ -546,6 +614,27 @@ function getSqlInputFromEvent(event: WorkRunEvent) {
     return typeof sql === 'string' && sql.trim() ? sql : null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function parseSqlResultColumns(value: unknown) {
+    if (!Array.isArray(value)) return [];
+
+    return value.map(column => {
+        const record = isRecord(column) ? column : {};
+        return {
+            name: String(record.name ?? ''),
+            type: record.type != null ? String(record.type) : null,
+        };
+    });
+}
+
+function parseSqlResultRows(value: unknown) {
+    if (!Array.isArray(value)) return [];
+    return value.filter(isRecord);
+}
+
 function getSqlResultFromEvent(event: WorkRunEvent): SqlResultPart | null {
     const payload = event.payload;
     if (!payload || typeof payload !== 'object') return null;
@@ -556,35 +645,32 @@ function getSqlResultFromEvent(event: WorkRunEvent): SqlResultPart | null {
 
     const output = payload.output;
     if (!output || typeof output !== 'object') return null;
-    const candidate = output as Record<string, any>;
+    const candidate = output as Record<string, unknown>;
     if (candidate.type !== 'sql-result') return null;
+    const manualExecution = isRecord(candidate.manualExecution) ? candidate.manualExecution : null;
+    const error = isRecord(candidate.error) ? candidate.error : null;
 
     return {
         type: 'sql-result',
         ok: Boolean(candidate.ok),
         sql: String(candidate.sql ?? ''),
-        database: candidate.database ?? null,
+        database: typeof candidate.database === 'string' ? candidate.database : null,
         manualExecution:
-            candidate.ok === false && candidate.manualExecution?.required
+            candidate.ok === false && manualExecution?.required
                 ? {
                       required: true,
                       reason: 'non-readonly-query',
                   }
                 : undefined,
-        previewRows: Array.isArray(candidate.previewRows) ? candidate.previewRows : [],
-        columns: Array.isArray(candidate.columns)
-            ? candidate.columns.map((column: any) => ({
-                  name: String(column?.name ?? ''),
-                  type: column?.type != null ? String(column.type) : null,
-              }))
-            : [],
+        previewRows: parseSqlResultRows(candidate.previewRows),
+        columns: parseSqlResultColumns(candidate.columns),
         rowCount: typeof candidate.rowCount === 'number' ? candidate.rowCount : undefined,
         truncated: Boolean(candidate.truncated),
         durationMs: typeof candidate.durationMs === 'number' ? candidate.durationMs : undefined,
         error:
-            candidate.ok === false && candidate.error
+            candidate.ok === false && error
                 ? {
-                      message: String(candidate.error?.message ?? 'SQL execution failed'),
+                      message: String(error.message ?? 'SQL execution failed'),
                   }
                 : undefined,
         timestamp: typeof candidate.timestamp === 'string' ? candidate.timestamp : undefined,
@@ -593,11 +679,12 @@ function getSqlResultFromEvent(event: WorkRunEvent): SqlResultPart | null {
 
 function getSqlResultFromQueryPayload(query: unknown): SqlResultPart | null {
     if (!query || typeof query !== 'object') return null;
-    const record = query as Record<string, any>;
-    const firstSet = Array.isArray(record.queryResultSets) ? (record.queryResultSets[0] as Record<string, any> | undefined) : undefined;
+    const record = query as Record<string, unknown>;
+    const firstSet = Array.isArray(record.queryResultSets) && isRecord(record.queryResultSets[0]) ? record.queryResultSets[0] : undefined;
     if (!firstSet) return null;
-    const rows = Array.isArray(record.results?.[0]) ? record.results[0] : [];
-    const session = record.session && typeof record.session === 'object' ? record.session : {};
+    const results = Array.isArray(record.results) ? record.results : [];
+    const rows = parseSqlResultRows(results[0]);
+    const session = isRecord(record.session) ? record.session : {};
 
     return {
         type: 'sql-result',
@@ -605,12 +692,7 @@ function getSqlResultFromQueryPayload(query: unknown): SqlResultPart | null {
         sql: String(firstSet.sqlText ?? session.sqlText ?? ''),
         database: typeof session.database === 'string' ? session.database : null,
         previewRows: rows,
-        columns: Array.isArray(firstSet.columns)
-            ? firstSet.columns.map((column: any) => ({
-                  name: String(column?.name ?? ''),
-                  type: column?.type != null ? String(column.type) : null,
-              }))
-            : [],
+        columns: parseSqlResultColumns(firstSet.columns),
         rowCount: typeof firstSet.rowCount === 'number' ? firstSet.rowCount : undefined,
         truncated: Boolean(firstSet.limited),
         durationMs: typeof firstSet.durationMs === 'number' ? firstSet.durationMs : typeof session.durationMs === 'number' ? session.durationMs : undefined,

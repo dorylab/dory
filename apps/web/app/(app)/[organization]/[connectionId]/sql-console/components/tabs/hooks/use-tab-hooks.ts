@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
@@ -8,6 +9,7 @@ import { useTranslations } from 'next-intl';
 import { activeTabIdAtom, currentConnectionAtom, currentWorkspaceScopeAtom, tabsAtom } from '@/shared/stores/app.store';
 import { currentTabResultAtom, sessionIdByTabAtom } from '../../../sql-console.store';
 import { executeActionClient } from '@/lib/actions/client';
+import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '@/lib/sql-console/tab-queries';
 import { normalizeWorkspaceScope, TabPayload, UITabPayload, WorkspaceScope, workspaceScopeKey } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
 import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
@@ -16,6 +18,7 @@ const ACTIVE_KEY = (connectionId?: string | null, workspaceScope?: WorkspaceScop
 const SID = (tabId: string) => `sqlconsole:sessionId:${tabId}`;
 
 export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null; preferredActiveTabId?: string | null }) {
+    const queryClient = useQueryClient();
     const currentConnection = useAtomValue(currentConnectionAtom);
     const connectionId = currentConnection?.connection?.id ?? null;
     const routeConnectionIdFromRoute = useRouteConnectionId();
@@ -35,6 +38,10 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
 
     const [isLoading, setIsLoading] = useState(true);
     const t = useTranslations('SqlConsole');
+    const currentTabsQueryKey = useMemo(
+        () => (connectionId ? sqlTabsQueryKey(connectionId, normalizedWorkspaceScope) : null),
+        [connectionId, normalizedWorkspaceScope, normalizedWorkspaceScopeKey],
+    );
 
     useEffect(() => {
         setCurrentWorkspaceScope(normalizedWorkspaceScope);
@@ -220,41 +227,59 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
             return;
         }
 
-        setIsLoading(true);
+        const applyServerTabs = (res: UITabPayload[]) => {
+            const serverTabs = [...res].sort((a, b) => {
+                const orderDelta = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+                if (orderDelta !== 0) return orderDelta;
+                const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                if (aCreated !== bCreated) return aCreated - bCreated;
+                return a.tabId.localeCompare(b.tabId);
+            });
+
+            console.log('Loaded tabs from server:', serverTabs);
+
+            setTabs(serverTabs);
+
+            let nextActive = serverTabs[0]?.tabId ?? '';
+            const hasPreferredActiveTab = Boolean(preferredActiveTabId && serverTabs.some(t => t.tabId === preferredActiveTabId));
+            if (hasPreferredActiveTab) {
+                nextActive = preferredActiveTabId ?? nextActive;
+            }
+            try {
+                const saved = localStorage.getItem(ACTIVE_KEY(connectionId, normalizedWorkspaceScope));
+                if (!hasPreferredActiveTab && saved && serverTabs.some(t => t.tabId === saved)) {
+                    nextActive = saved;
+                }
+            } catch {
+                // ignore
+            }
+
+            if (nextActive) setActiveTabId(nextActive);
+        };
+
+        const tabsQueryKey = sqlTabsQueryKey(connectionId, normalizedWorkspaceScope);
+        const cachedTabs = queryClient.getQueryData<UITabPayload[]>(tabsQueryKey);
+        if (cachedTabs) {
+            applyServerTabs(cachedTabs);
+            setIsLoading(false);
+        } else {
+            setIsLoading(true);
+        }
+
+        let cancelled = false;
 
         (async () => {
             try {
-                const res = await executeActionClient<UITabPayload[]>('tab.list', { connectionId, workspaceScope: normalizedWorkspaceScope }, { currentConnectionId: connectionId });
+                const res = await queryClient.fetchQuery({
+                    queryKey: tabsQueryKey,
+                    queryFn: () => fetchSqlTabs(connectionId, normalizedWorkspaceScope),
+                    staleTime: SQL_TABS_PREFETCH_STALE_TIME_MS,
+                });
 
+                if (cancelled) return;
                 if (Array.isArray(res)) {
-                    const serverTabs = [...res].sort((a, b) => {
-                        const orderDelta = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
-                        if (orderDelta !== 0) return orderDelta;
-                        const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                        const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                        if (aCreated !== bCreated) return aCreated - bCreated;
-                        return a.tabId.localeCompare(b.tabId);
-                    });
-
-                    console.log('Loaded tabs from server:', serverTabs);
-
-                    setTabs(serverTabs);
-
-                    let nextActive = serverTabs[0]?.tabId ?? '';
-                    const hasPreferredActiveTab = Boolean(preferredActiveTabId && serverTabs.some(t => t.tabId === preferredActiveTabId));
-                    if (hasPreferredActiveTab) {
-                        nextActive = preferredActiveTabId ?? nextActive;
-                    }
-                    try {
-                        const saved = localStorage.getItem(ACTIVE_KEY(connectionId, normalizedWorkspaceScope));
-                        if (!hasPreferredActiveTab && saved && serverTabs.some(t => t.tabId === saved)) {
-                            nextActive = saved;
-                        }
-                    } catch {
-                        // ignore
-                    }
-
-                    if (nextActive) setActiveTabId(nextActive);
+                    applyServerTabs(res);
                 } else {
                     setTabs([]);
                     setSessionIdMap({});
@@ -266,15 +291,27 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                     }
                 }
             } catch (e) {
+                if (cancelled) return;
                 console.error('load tabs error', e);
                 setTabs([]);
                 setSessionIdMap({});
                 internalSetActiveTabId('');
             } finally {
-                setIsLoading(false);
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
             }
         })();
-    }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, normalizedWorkspaceScope, normalizedWorkspaceScopeKey, preferredActiveTabId]);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, normalizedWorkspaceScope, normalizedWorkspaceScopeKey, preferredActiveTabId, queryClient]);
+
+    useEffect(() => {
+        if (!currentTabsQueryKey || isLoading) return;
+        queryClient.setQueryData(currentTabsQueryKey, tabs);
+    }, [currentTabsQueryKey, isLoading, queryClient, tabs]);
 
     // ---------------------------------------------------
     

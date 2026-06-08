@@ -1,6 +1,0 @@
-import { redirect } from 'next/navigation';
-
-export default async function WorkDetailPage({ params }: { params: Promise<{ organization: string; workId: string }> }) {
-    const { organization, workId } = await params;
-    redirect(`/${organization}/works/${workId}`);
-}
