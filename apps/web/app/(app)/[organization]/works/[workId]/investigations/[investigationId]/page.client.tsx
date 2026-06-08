@@ -7,10 +7,10 @@ import { useSetAtom } from 'jotai';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { WarpDialog, WarpDialogContent } from '@/components/molecule-ui/warp-dialog';
 import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/registry/new-york-v4/ui/drawer';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useConnectionDetail } from '../../../../connections/hooks/use-connections';
 import SQLConsoleClient from '../../../../[connectionId]/sql-console/client';
@@ -151,22 +151,18 @@ export function WorkInvestigationWorkspaceDialogClient(props: WorkInvestigationW
     const router = useRouter();
 
     return (
-        <WarpDialog open onOpenChange={open => {
+        <Drawer direction="bottom" open onOpenChange={open => {
             if (!open) router.back();
         }}>
-            <WarpDialogContent
-                aria-labelledby="work-investigation-workspace-title"
-                aria-describedby="work-investigation-workspace-description"
-                className="h-dvh w-dvw overflow-hidden bg-background shadow-2xl"
-            >
-                <h2 id="work-investigation-workspace-title" className="sr-only">
+            <DrawerContent className="!mt-0 !h-dvh !max-h-none !rounded-none !border-0 !p-0 data-[vaul-drawer-direction=bottom]:!mt-0 data-[vaul-drawer-direction=bottom]:!h-dvh data-[vaul-drawer-direction=bottom]:!max-h-none data-[vaul-drawer-direction=bottom]:!rounded-none data-[vaul-drawer-direction=bottom]:!border-0 [&>div:first-child]:hidden">
+                <DrawerTitle className="sr-only">
                     Work Investigation Workspace
-                </h2>
-                <p id="work-investigation-workspace-description" className="sr-only">
+                </DrawerTitle>
+                <DrawerDescription className="sr-only">
                     Full screen SQL workspace for the selected Work Investigation.
-                </p>
+                </DrawerDescription>
                 <WorkInvestigationWorkspaceContent {...props} onClose={() => router.back()} />
-            </WarpDialogContent>
-        </WarpDialog>
+            </DrawerContent>
+        </Drawer>
     );
 }
