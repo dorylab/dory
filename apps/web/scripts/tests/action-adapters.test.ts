@@ -18,16 +18,23 @@ require.cache[serverOnlyPath] = {
     exports: {},
 } as NodeJS.Module;
 
-const [{ actionToAgentTool }, { actionToMcpTool, structuredMcpActionResult }, { executeUiAction }, { executeAction }, { defineWebAction }, { webActionRegistry }, { getOrganizationPermissionMap }] =
-    await Promise.all([
-        import('@/lib/actions/server/adapters/agent'),
-        import('@/lib/actions/server/adapters/mcp'),
-        import('@/lib/actions/server/adapters/ui'),
-        import('@/lib/actions/server/execute'),
-        import('@/lib/actions/server/define-web-action'),
-        import('@/lib/actions/server/registry'),
-        import('@/lib/auth/organization-ac'),
-    ]);
+const [
+    { actionToAgentTool },
+    { actionToMcpTool, structuredMcpActionResult },
+    { executeUiAction },
+    { executeAction },
+    { defineWebAction },
+    { webActionRegistry },
+    { getOrganizationPermissionMap },
+] = await Promise.all([
+    import('@/lib/actions/server/adapters/agent'),
+    import('@/lib/actions/server/adapters/mcp'),
+    import('@/lib/actions/server/adapters/ui'),
+    import('@/lib/actions/server/execute'),
+    import('@/lib/actions/server/define-web-action'),
+    import('@/lib/actions/server/registry'),
+    import('@/lib/auth/organization-ac'),
+]);
 const { investigationWorkspaceContent } = await import('@/lib/actions/server/domains/work/create-investigation');
 const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab } = await import('@/lib/actions/server/domains/work/run-investigation-sql');
 
@@ -81,6 +88,9 @@ function createServices() {
                               title: 'Untitled Work',
                               status: 'draft',
                               goal: 'Find why query failures increased this week.',
+                              workType: 'investigation',
+                              scope: null,
+                              initialContext: null,
                               conclusion: null,
                               connectionId: 'conn-1',
                               createdBy: 'user',
@@ -96,6 +106,9 @@ function createServices() {
                         title: payload.title ?? 'Untitled Work',
                         status: 'draft',
                         goal: payload.goal,
+                        workType: payload.workType ?? 'investigation',
+                        scope: payload.scope ?? null,
+                        initialContext: payload.initialContext ?? null,
                         conclusion: payload.conclusion ?? null,
                         connectionId: payload.connectionId,
                         createdBy: payload.createdBy,
@@ -144,6 +157,9 @@ function createServices() {
                         title: 'Untitled Work',
                         status: 'completed',
                         goal: 'Find why query failures increased this week.',
+                        workType: 'investigation',
+                        scope: null,
+                        initialContext: null,
                         conclusion: payload.conclusion,
                         connectionId: 'conn-1',
                         createdBy: 'user',
@@ -251,6 +267,9 @@ function savedWorkSignature(savedWorks: unknown[]) {
         title: payload.title,
         status: payload.status,
         goal: payload.goal,
+        workType: payload.workType,
+        scope: payload.scope,
+        initialContext: payload.initialContext,
         conclusion: payload.conclusion,
         connectionId: payload.connectionId,
         createdBy: payload.createdBy,
@@ -431,6 +450,15 @@ test('work.create can be executed through UI, Agent, and Automation with shared 
     const input = {
         connectionId: 'conn-1',
         goal: 'Analyze AI feature health for the last 24 hours.',
+        workType: 'analysis',
+        scope: {
+            timeRange: 'Last 24 hours',
+            tablesMode: 'auto',
+            selectedTables: [],
+            metrics: ['usage'],
+            constraints: ['Prefer SQL evidence'],
+        },
+        initialContext: 'Focus on production users.',
     };
 
     const ui = createServices();
@@ -455,6 +483,9 @@ test('work.create can be executed through UI, Agent, and Automation with shared 
         title: 'Untitled Work',
         status: 'draft',
         goal: input.goal,
+        workType: input.workType,
+        scope: input.scope,
+        initialContext: input.initialContext,
         conclusion: null,
         connectionId: 'conn-1',
         createdBy: 'user',

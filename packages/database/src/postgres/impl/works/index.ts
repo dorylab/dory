@@ -2,6 +2,7 @@ import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
 import {
+    tabs,
     workInvestigationFindings,
     workInvestigations,
     workRunEvents,
@@ -16,7 +17,9 @@ import {
     type WorkRunEvent,
     type WorkRunEventRole,
     type WorkRunEventType,
+    type WorkScope,
     type WorkStatus,
+    type WorkType,
 } from '@dory/database/postgres/schemas';
 import { translateDatabase } from '@dory/database/i18n';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -28,6 +31,9 @@ export type WorkCreateInput = {
     organizationId: string;
     title?: string | null;
     goal: string;
+    workType?: WorkType | null;
+    scope?: WorkScope | null;
+    initialContext?: string | null;
     conclusion?: string | null;
     connectionId: string;
     createdBy: WorkCreator;
@@ -37,7 +43,11 @@ export type WorkCreateInput = {
 export type WorkUpdateInput = {
     title?: string | null;
     goal?: string;
+    workType?: WorkType;
+    scope?: WorkScope | null;
+    initialContext?: string | null;
     conclusion?: string | null;
+    connectionId?: string;
     status?: WorkStatus;
 };
 
@@ -129,6 +139,9 @@ export class PostgresWorksRepository {
                 title: input.title?.trim() || 'Untitled Work',
                 status: 'draft',
                 goal: input.goal,
+                workType: input.workType ?? 'investigation',
+                scope: input.scope ?? null,
+                initialContext: input.initialContext?.trim() || null,
                 conclusion: input.conclusion ?? null,
                 connectionId: input.connectionId,
                 createdBy: input.createdBy,
@@ -187,8 +200,24 @@ export class PostgresWorksRepository {
             updatePayload.goal = params.patch.goal;
             hasChanges = true;
         }
+        if (params.patch.workType !== undefined) {
+            updatePayload.workType = params.patch.workType;
+            hasChanges = true;
+        }
+        if (params.patch.scope !== undefined) {
+            updatePayload.scope = params.patch.scope;
+            hasChanges = true;
+        }
+        if (params.patch.initialContext !== undefined) {
+            updatePayload.initialContext = params.patch.initialContext?.trim() || null;
+            hasChanges = true;
+        }
         if (params.patch.conclusion !== undefined) {
             updatePayload.conclusion = params.patch.conclusion;
+            hasChanges = true;
+        }
+        if (params.patch.connectionId !== undefined) {
+            updatePayload.connectionId = params.patch.connectionId;
             hasChanges = true;
         }
         if (params.patch.status !== undefined) {
@@ -212,12 +241,32 @@ export class PostgresWorksRepository {
         return this.update({ organizationId: params.organizationId, id: params.id, patch: { goal: params.goal } });
     }
 
+    async updateTitle(params: { organizationId: string; id: string; title: string }): Promise<Work> {
+        return this.update({ organizationId: params.organizationId, id: params.id, patch: { title: params.title } });
+    }
+
     async updateConclusion(params: { organizationId: string; id: string; conclusion: string | null }): Promise<Work> {
         return this.update({ organizationId: params.organizationId, id: params.id, patch: { conclusion: params.conclusion } });
     }
 
     async updateStatus(params: { organizationId: string; id: string; status: WorkStatus }): Promise<Work> {
         return this.update({ organizationId: params.organizationId, id: params.id, patch: { status: params.status } });
+    }
+
+    async delete(params: { organizationId: string; id: string }): Promise<void> {
+        this.assertInited();
+
+        const work = await this.getById(params);
+        if (!work) throw new DatabaseError('Work not found.', 404);
+
+        await this.db
+            .delete(workInvestigationFindings)
+            .where(and(eq(workInvestigationFindings.organizationId, params.organizationId), eq(workInvestigationFindings.workId, params.id)));
+        await this.db.delete(workRunEvents).where(and(eq(workRunEvents.organizationId, params.organizationId), eq(workRunEvents.workId, params.id)));
+        await this.db.delete(workRuns).where(and(eq(workRuns.organizationId, params.organizationId), eq(workRuns.workId, params.id)));
+        await this.db.delete(tabs).where(eq(tabs.workspaceScopeWorkId, params.id));
+        await this.db.delete(workInvestigations).where(and(eq(workInvestigations.organizationId, params.organizationId), eq(workInvestigations.workId, params.id)));
+        await this.db.delete(works).where(and(eq(works.organizationId, params.organizationId), eq(works.id, params.id)));
     }
 
     async createRun(input: WorkRunCreateInput): Promise<{ run: WorkRun; existingRunningRun: WorkRun | null }> {
@@ -344,7 +393,11 @@ export class PostgresWorksRepository {
         const conds = [eq(workRunEvents.organizationId, params.organizationId), eq(workRunEvents.workId, params.workId)];
         if (params.runId) conds.push(eq(workRunEvents.runId, params.runId));
 
-        let query = this.db.select().from(workRunEvents).where(and(...conds)).orderBy(asc(workRunEvents.createdAt));
+        let query = this.db
+            .select()
+            .from(workRunEvents)
+            .where(and(...conds))
+            .orderBy(asc(workRunEvents.createdAt));
 
         if (params.limit && params.limit > 0) {
             query = (query as any).limit(params.limit);
@@ -469,12 +522,7 @@ export class PostgresWorksRepository {
         return (row as WorkInvestigation | undefined) ?? null;
     }
 
-    async updateInvestigation(params: {
-        organizationId: string;
-        workId: string;
-        id: string;
-        patch: WorkInvestigationUpdateInput;
-    }): Promise<WorkInvestigation> {
+    async updateInvestigation(params: { organizationId: string; workId: string; id: string; patch: WorkInvestigationUpdateInput }): Promise<WorkInvestigation> {
         this.assertInited();
 
         const updatePayload: Record<string, unknown> = {};
@@ -501,13 +549,7 @@ export class PostgresWorksRepository {
             await this.db
                 .update(workInvestigations)
                 .set({ ...updatePayload, updatedAt: new Date() } as any)
-                .where(
-                    and(
-                        eq(workInvestigations.organizationId, params.organizationId),
-                        eq(workInvestigations.workId, params.workId),
-                        eq(workInvestigations.id, params.id),
-                    ),
-                );
+                .where(and(eq(workInvestigations.organizationId, params.organizationId), eq(workInvestigations.workId, params.workId), eq(workInvestigations.id, params.id)));
         }
 
         const row = await this.getInvestigationById({
@@ -560,13 +602,7 @@ export class PostgresWorksRepository {
         await this.db
             .update(workInvestigations)
             .set({ updatedAt: new Date() })
-            .where(
-                and(
-                    eq(workInvestigations.organizationId, input.organizationId),
-                    eq(workInvestigations.workId, input.workId),
-                    eq(workInvestigations.id, input.investigationId),
-                ),
-            );
+            .where(and(eq(workInvestigations.organizationId, input.organizationId), eq(workInvestigations.workId, input.workId), eq(workInvestigations.id, input.investigationId)));
         return row as WorkInvestigationFinding;
     }
 
@@ -606,7 +642,13 @@ export class PostgresWorksRepository {
         const [row] = await this.db
             .select()
             .from(workInvestigationFindings)
-            .where(and(eq(workInvestigationFindings.organizationId, params.organizationId), eq(workInvestigationFindings.workId, params.workId), eq(workInvestigationFindings.id, params.id)))
+            .where(
+                and(
+                    eq(workInvestigationFindings.organizationId, params.organizationId),
+                    eq(workInvestigationFindings.workId, params.workId),
+                    eq(workInvestigationFindings.id, params.id),
+                ),
+            )
             .limit(1);
 
         return (row as WorkInvestigationFinding | undefined) ?? null;
@@ -643,7 +685,13 @@ export class PostgresWorksRepository {
             await this.db
                 .update(workInvestigationFindings)
                 .set({ ...updatePayload, updatedAt: new Date() } as any)
-                .where(and(eq(workInvestigationFindings.organizationId, params.organizationId), eq(workInvestigationFindings.workId, params.workId), eq(workInvestigationFindings.id, params.id)));
+                .where(
+                    and(
+                        eq(workInvestigationFindings.organizationId, params.organizationId),
+                        eq(workInvestigationFindings.workId, params.workId),
+                        eq(workInvestigationFindings.id, params.id),
+                    ),
+                );
         }
 
         const row = await this.getInvestigationFindingById({
@@ -660,6 +708,12 @@ export class PostgresWorksRepository {
 
         await this.db
             .delete(workInvestigationFindings)
-            .where(and(eq(workInvestigationFindings.organizationId, params.organizationId), eq(workInvestigationFindings.workId, params.workId), eq(workInvestigationFindings.id, params.id)));
+            .where(
+                and(
+                    eq(workInvestigationFindings.organizationId, params.organizationId),
+                    eq(workInvestigationFindings.workId, params.workId),
+                    eq(workInvestigationFindings.id, params.id),
+                ),
+            );
     }
 }

@@ -190,10 +190,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         }
     };
 
-    const investigationWorkspaceHref = useCallback(
-        (investigationId: string) => `/${organization}/works/${workId}/investigations/${investigationId}`,
-        [organization, workId],
-    );
+    const investigationWorkspaceHref = useCallback((investigationId: string) => `/${organization}/works/${workId}/investigations/${investigationId}`, [organization, workId]);
 
     const investigationWorkspaceScope = useCallback(
         (investigationId: string): WorkspaceScope => ({
@@ -204,10 +201,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         [workId],
     );
 
-    const ensureInvestigationWorkspaceQueryKey = useCallback(
-        (investigationId: string) => ['work', workId, 'investigation', investigationId, 'workspace'] as const,
-        [workId],
-    );
+    const ensureInvestigationWorkspaceQueryKey = useCallback((investigationId: string) => ['work', workId, 'investigation', investigationId, 'workspace'] as const, [workId]);
 
     const prepareInvestigationWorkspace = useCallback(
         async (investigation: WorkInvestigation, options?: { awaitTabs?: boolean }) => {
@@ -271,7 +265,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     if (workQuery.isLoading) {
         return (
             <div className="bg-n8 h-screen overflow-auto">
-                <div className="container mx-auto mt-10 p-12 lg:p-12 xl:p-8 2xl:p-4">
+                <div className="container mx-auto mt-6 max-w-6xl px-4 py-6 sm:mt-8 sm:px-6 lg:px-8 2xl:px-4">
                     <Skeleton className="h-32 w-full" />
                     <div className="mt-6 grid gap-4">
                         <Skeleton className="h-28 w-full" />
@@ -285,7 +279,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     if (!work) {
         return (
             <div className="bg-n8 h-screen overflow-auto">
-                <div className="container mx-auto mt-10 p-12 lg:p-12 xl:p-8 2xl:p-4">
+                <div className="container mx-auto mt-6 max-w-6xl px-4 py-6 sm:mt-8 sm:px-6 lg:px-8 2xl:px-4">
                     <Button variant="ghost" onClick={() => router.push(`/${organization}/works`)}>
                         <ArrowLeft />
                         Work
@@ -300,7 +294,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
-            <div className="container mx-auto mt-10 max-w-6xl p-12 lg:p-12 xl:p-8 2xl:p-4">
+            <div className="container mx-auto mt-6 max-w-6xl px-4 py-6 sm:mt-8 sm:px-6 lg:px-8 2xl:px-4">
                 <Button variant="ghost" className="mb-5 w-fit" onClick={() => router.push(`/${organization}/works`)}>
                     <ArrowLeft />
                     Work
@@ -332,7 +326,11 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                             </Button>
                             <div>
                                 <Label className="mb-2 block text-xs text-muted-foreground">Status</Label>
-                                <Select value={work.status} onValueChange={value => updateStatusMutation.mutate(value as WorkStatus)} disabled={isRunRunning || updateStatusMutation.isPending}>
+                                <Select
+                                    value={work.status}
+                                    onValueChange={value => updateStatusMutation.mutate(value as WorkStatus)}
+                                    disabled={isRunRunning || updateStatusMutation.isPending}
+                                >
                                     <SelectTrigger className="w-full">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -391,9 +389,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         {latestRun && runDetailsOpen ? (
                             <div className="mt-5 grid gap-3">
                                 {latestRunEvents.length ? (
-                                    latestRunEvents.map(event => (
-                                        <WorkRunEventRow key={event.id} event={event} onCopySql={copySql} onManualExecute={openSqlInConsole} />
-                                    ))
+                                    latestRunEvents.map(event => <WorkRunEventRow key={event.id} event={event} onCopySql={copySql} onManualExecute={openSqlInConsole} />)
                                 ) : (
                                     <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                                         {latestRun.status === 'running' ? 'Waiting for the first Agent event...' : 'No events recorded for this run.'}
@@ -410,12 +406,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                 <p className="mt-1 text-sm text-muted-foreground">Build findings from SQL workspaces and Agent analysis.</p>
                             </div>
                             <div className="flex w-full gap-2 sm:w-auto">
-                                <Input
-                                    value={investigationTitle}
-                                    onChange={event => setInvestigationTitle(event.target.value)}
-                                    placeholder="Analysis title"
-                                    className="sm:w-64"
-                                />
+                                <Input value={investigationTitle} onChange={event => setInvestigationTitle(event.target.value)} placeholder="Analysis title" className="sm:w-64" />
                                 <Button
                                     onClick={() => createInvestigationMutation.mutate(investigationTitle.trim())}
                                     disabled={!investigationTitle.trim() || createInvestigationMutation.isPending}
@@ -502,12 +493,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     >
                                         Cancel
                                     </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="secondary"
-                                        onClick={() => updateConclusionMutation.mutate(conclusion)}
-                                        disabled={updateConclusionMutation.isPending}
-                                    >
+                                    <Button size="sm" variant="secondary" onClick={() => updateConclusionMutation.mutate(conclusion)} disabled={updateConclusionMutation.isPending}>
                                         {updateConclusionMutation.isPending && <Loader2 className="animate-spin" />}
                                         Save
                                     </Button>
@@ -556,7 +542,13 @@ function WorkRunEventRow({
     const hasDetails = Boolean(sqlInput || sqlResult || event.payload);
 
     return (
-        <div className={isError ? 'rounded-lg border border-red-200 bg-red-50/70 p-4 text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200' : 'rounded-lg border bg-background p-4'}>
+        <div
+            className={
+                isError
+                    ? 'rounded-lg border border-red-200 bg-red-50/70 p-4 text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200'
+                    : 'rounded-lg border bg-background p-4'
+            }
+        >
             <Collapsible open={open} onOpenChange={setOpen}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">

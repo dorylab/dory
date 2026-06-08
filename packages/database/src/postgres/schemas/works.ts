@@ -4,6 +4,14 @@ import { newEntityId } from '@dory/shared/id';
 
 export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
+export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
+export type WorkScope = {
+    timeRange?: string | null;
+    tablesMode?: 'auto' | 'selected' | null;
+    selectedTables?: string[];
+    metrics?: string[];
+    constraints?: string[];
+};
 export type WorkFindingCreator = 'user' | 'agent' | 'automation';
 export type WorkRunStatus = 'running' | 'completed' | 'failed';
 export type WorkRunEventType =
@@ -28,6 +36,9 @@ export const works = pgTable(
         title: text('title').notNull().default('Untitled Work'),
         status: text('status').$type<WorkStatus>().notNull().default('draft'),
         goal: text('goal').notNull(),
+        workType: text('work_type').$type<WorkType>().notNull().default('investigation'),
+        scope: jsonb('scope').$type<WorkScope | null>(),
+        initialContext: text('initial_context'),
         conclusion: text('conclusion'),
         connectionId: text('connection_id').notNull(),
         createdBy: text('created_by').$type<WorkCreator>().notNull(),

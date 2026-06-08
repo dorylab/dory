@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
 import { writeWorkspace } from '../../policies';
-import { workOutputSchema } from './schemas';
+import { workOutputSchema, workScopeSchema, workTypeSchema } from './schemas';
 
 export const workCreateAction = defineWebAction({
     id: 'work.create',
@@ -12,6 +12,9 @@ export const workCreateAction = defineWebAction({
     inputSchema: z.object({
         connectionId: z.string().min(1),
         goal: z.string().trim().min(1),
+        workType: workTypeSchema.default('investigation'),
+        scope: workScopeSchema.optional(),
+        initialContext: z.string().trim().optional(),
         title: z.string().trim().min(1).optional(),
     }),
     outputSchema: workOutputSchema,
@@ -24,11 +27,13 @@ export const workCreateAction = defineWebAction({
             agent: 'ai_work',
             automation: 'automation_work',
         },
-        allowInputFields: ['connectionId', 'title'],
+        allowInputFields: ['connectionId', 'title', 'workType'],
         inputSummary: input => ({
             connectionId: input.connectionId,
             title: input.title ?? null,
+            workType: input.workType,
             goalLength: input.goal.length,
+            initialContextLength: input.initialContext?.length ?? 0,
         }),
         resource: (_ctx, input) => ({
             type: 'work',
@@ -51,6 +56,9 @@ export const workCreateAction = defineWebAction({
             organizationId: ctx.organizationId,
             title: input.title ?? 'Untitled Work',
             goal: input.goal,
+            workType: input.workType,
+            scope: input.scope ?? null,
+            initialContext: input.initialContext ?? null,
             connectionId: input.connectionId,
             createdBy: ctx.actor.type === 'user' ? 'user' : 'agent',
             createdByUserId: ctx.userId,

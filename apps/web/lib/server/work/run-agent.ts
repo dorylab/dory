@@ -141,7 +141,9 @@ function workRunTools(tools: Record<string, any>) {
         'work_create',
         'work_get',
         'work_list',
+        'work_update',
         'work_updateGoal',
+        'work_updateTitle',
         'work_updateStatus',
         'work_updateInvestigation',
         'work_updateInvestigationFinding',
@@ -175,11 +177,9 @@ function withWorkFindingContext(
     return {
         ...record,
         workId: typeof record.workId === 'string' && record.workId ? record.workId : params.workId,
-        investigationId:
-            typeof record.investigationId === 'string' && record.investigationId ? record.investigationId : params.pendingFinding?.investigationId,
-        sourceTabId: typeof record.sourceTabId === 'string' && record.sourceTabId ? record.sourceTabId : params.pendingFinding?.sourceTabId ?? undefined,
-        sourceRunEventId:
-            typeof record.sourceRunEventId === 'string' && record.sourceRunEventId ? record.sourceRunEventId : params.pendingFinding?.sourceRunEventId ?? undefined,
+        investigationId: typeof record.investigationId === 'string' && record.investigationId ? record.investigationId : params.pendingFinding?.investigationId,
+        sourceTabId: typeof record.sourceTabId === 'string' && record.sourceTabId ? record.sourceTabId : (params.pendingFinding?.sourceTabId ?? undefined),
+        sourceRunEventId: typeof record.sourceRunEventId === 'string' && record.sourceRunEventId ? record.sourceRunEventId : (params.pendingFinding?.sourceRunEventId ?? undefined),
     };
 }
 
@@ -189,7 +189,13 @@ function wrapToolsWithRunEvents(params: {
     runId: string;
     protocol: ReturnType<typeof createWorkAgentProtocolState>;
     onToolCallStart: (input: { toolName: string; toolCallId?: string | null; startedAt: Date }) => void;
-    appendEvent: (event: { type: WorkRunEventType; role: WorkRunEventRole; content?: string | null; payload?: Record<string, unknown> | null; createdAt?: string | Date | null }) => Promise<void>;
+    appendEvent: (event: {
+        type: WorkRunEventType;
+        role: WorkRunEventRole;
+        content?: string | null;
+        payload?: Record<string, unknown> | null;
+        createdAt?: string | Date | null;
+    }) => Promise<void>;
 }): ToolSet {
     const waitForInvestigation = async () => {
         if (params.protocol.currentInvestigationId) return;
@@ -301,13 +307,54 @@ async function createWorkAgentActionContext(options: RunWorkAgentOptions & { req
     };
 }
 
-function buildWorkRunInstruction(workId: string) {
+function formatWorkSetupSection(work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null }) {
+    const workTypeLabels: Record<string, string> = {
+        investigation: 'Investigation: find the cause, build an evidence chain, and write a clear conclusion.',
+        analysis: 'Analysis: compare metrics, trends, and segments, then explain the important movement.',
+        monitoring: 'Monitoring: inspect the current state, define what to watch, and identify sustained changes.',
+        data_qa: 'Data QA: check data quality, anomalies, missingness, duplicates, and reliability risks.',
+        sql_workspace: 'SQL Workspace: start from SQL exploration while still preserving findings and a final conclusion.',
+    };
+    const normalizedWorkType = work.workType ?? 'investigation';
+    const scope = work.scope && typeof work.scope === 'object' && !Array.isArray(work.scope) ? (work.scope as Record<string, unknown>) : null;
+    const lines = ['Work Setup', `Work type: ${workTypeLabels[normalizedWorkType] ?? workTypeLabels.investigation}`];
+
+    if (scope) {
+        const timeRange = typeof scope.timeRange === 'string' && scope.timeRange.trim() ? scope.timeRange.trim() : null;
+        const tablesMode = typeof scope.tablesMode === 'string' && scope.tablesMode.trim() ? scope.tablesMode.trim() : null;
+        const selectedTables = Array.isArray(scope.selectedTables) ? scope.selectedTables.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+        const metrics = Array.isArray(scope.metrics) ? scope.metrics.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+        const constraints = Array.isArray(scope.constraints) ? scope.constraints.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+
+        if (timeRange) lines.push(`Time range: ${timeRange}`);
+        if (tablesMode) lines.push(`Tables: ${tablesMode === 'selected' && selectedTables.length ? selectedTables.join(', ') : tablesMode}`);
+        if (metrics.length) lines.push(`Metrics: ${metrics.join(', ')}`);
+        if (constraints.length) {
+            lines.push('Constraints:');
+            for (const constraint of constraints) {
+                lines.push(`- ${constraint}`);
+            }
+        }
+    }
+
+    if (work.initialContext?.trim()) {
+        lines.push('Additional context:');
+        lines.push(work.initialContext.trim());
+    }
+
+    return lines.join('\n');
+}
+
+function buildWorkRunInstruction(work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null }) {
     return [
         'Work Run Context',
-        `You are running a Dory Work. The current workId is ${workId}.`,
+        `You are running a Dory Work. The current workId is ${work.id}.`,
+        formatWorkSetupSection(work),
         'Follow this protocol exactly: first create 3-5 distinct analyses with work.createInvestigation, then run SQL for each analysis with work.runInvestigationSql, then create concrete Findings with work.createInvestigationFinding, then write the final conclusion with work.updateConclusion.',
         'Call exactly one protocol tool at a time. Do not call work.runInvestigationSql in the same step as work.createInvestigation.',
         'Create all analyses before running any SQL. Use focused titles such as revenue trend analysis, order status analysis, order amount anomaly analysis, and time-based anomaly analysis.',
+        'Let the Work type and Scope guide the analysis titles, SQL exploration order, and conclusion structure.',
+        'Respect user constraints. If a requested step conflicts with a constraint, explain the conflict and choose the safer read-only path.',
         'After every SQL run, create at least one Finding for the same Analysis before running another SQL query, switching Analysis, or writing the conclusion.',
         'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created and a stable groupKey for the human-readable SQL asset group. Reuse a groupKey only when the new SQL belongs in the same workspace tab as prior SQL for that Analysis.',
         'A Finding is a concise fact or observation backed by the SQL result. Prefer bullet-like short statements, not a long summary paragraph.',
@@ -366,7 +413,13 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         );
     }
 
-    const appendEvent = async (event: { type: WorkRunEventType; role: WorkRunEventRole; content?: string | null; payload?: Record<string, unknown> | null; createdAt?: string | Date | null }) => {
+    const appendEvent = async (event: {
+        type: WorkRunEventType;
+        role: WorkRunEventRole;
+        content?: string | null;
+        payload?: Record<string, unknown> | null;
+        createdAt?: string | Date | null;
+    }) => {
         await options.db.works.appendRunEvent({
             runId: run.id,
             workId: work.id,
@@ -386,6 +439,9 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         payload: {
             workId: work.id,
             connectionId: work.connectionId,
+            workType: work.workType,
+            scope: work.scope,
+            initialContext: work.initialContext,
         },
     });
     await appendEvent({
@@ -454,7 +510,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             copilotEnvelope: null,
             locale,
         });
-        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work.id)].filter(Boolean).join('\n\n');
+        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work)].filter(Boolean).join('\n\n');
         const model = resolveDoryAgentModel({
             execution,
             req: options.req as any,

@@ -1,5 +1,14 @@
 export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
+export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
+
+export type WorkScope = {
+    timeRange?: string | null;
+    tablesMode?: 'auto' | 'selected' | null;
+    selectedTables?: string[];
+    metrics?: string[];
+    constraints?: string[];
+};
 
 export type Work = {
     id: string;
@@ -7,6 +16,9 @@ export type Work = {
     title: string;
     status: WorkStatus;
     goal: string;
+    workType: WorkType;
+    scope: WorkScope | null;
+    initialContext: string | null;
     conclusion: string | null;
     connectionId: string;
     createdBy: WorkCreator;

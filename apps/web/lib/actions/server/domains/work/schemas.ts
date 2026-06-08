@@ -2,6 +2,16 @@ import { z } from 'zod';
 
 export const workStatusSchema = z.enum(['draft', 'running', 'completed']);
 export const workCreatorSchema = z.enum(['user', 'agent']);
+export const workTypeSchema = z.enum(['investigation', 'analysis', 'monitoring', 'data_qa', 'sql_workspace']);
+export const workScopeSchema = z
+    .object({
+        timeRange: z.string().nullable().optional(),
+        tablesMode: z.enum(['auto', 'selected']).nullable().optional(),
+        selectedTables: z.array(z.string()).optional(),
+        metrics: z.array(z.string()).optional(),
+        constraints: z.array(z.string()).optional(),
+    })
+    .nullable();
 export const workFindingCreatorSchema = z.enum(['user', 'agent', 'automation']);
 export const workRunStatusSchema = z.enum(['running', 'completed', 'failed']);
 export const workRunEventTypeSchema = z.enum([
@@ -23,6 +33,9 @@ export const workOutputSchema = z.object({
     title: z.string(),
     status: workStatusSchema,
     goal: z.string(),
+    workType: workTypeSchema,
+    scope: workScopeSchema,
+    initialContext: z.string().nullable(),
     conclusion: z.string().nullable(),
     connectionId: z.string(),
     createdBy: workCreatorSchema,

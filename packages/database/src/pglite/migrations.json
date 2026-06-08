@@ -325,5 +325,15 @@
     "bps": true,
     "folderMillis": 1780888948383,
     "hash": "b3ca451820e119b5db16f5d6be8362c732dff4f0d6bce7bad70ad0e0e5fca892"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"works\" ADD COLUMN \"work_type\" text DEFAULT 'investigation' NOT NULL;",
+      "\nALTER TABLE \"works\" ADD COLUMN \"scope\" jsonb;",
+      "\nALTER TABLE \"works\" ADD COLUMN \"initial_context\" text;"
+    ],
+    "bps": true,
+    "folderMillis": 1780922041547,
+    "hash": "9305937612a837a6c6b3df632234782b9599db234026c7d167f18c9ec12eeece"
   }
 ]

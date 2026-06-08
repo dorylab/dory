@@ -526,6 +526,16 @@ test('web registry enforces role and actor permission matrix', async () => {
     await assertAllowed('work.create', roleContext('member', 'user', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
     await assertAllowed('work.create', roleContext('member', 'agent', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
     await assertAllowed('work.create', roleContext('member', 'automation', ['works:write']), { connectionId: 'conn', goal: 'Analyze health' });
+    await assertDenied('work.update', roleContext('viewer', 'user', ['works:write']), /Missing permission workspace:write/, { id: 'work-1', goal: 'Analyze health' });
+    await assertAllowed('work.update', roleContext('member', 'user', ['works:write']), {
+        id: 'work-1',
+        connectionId: 'conn',
+        goal: 'Analyze health',
+        workType: 'analysis',
+    });
+    await assertAllowed('work.updateTitle', roleContext('member', 'user', ['works:write']), { id: 'work-1', title: 'Updated Work' });
+    await assertDenied('work.delete', roleContext('viewer', 'user', ['works:write']), /Missing permission workspace:write/, { id: 'work-1' });
+    await assertAllowed('work.delete', roleContext('member', 'user', ['works:write']), { id: 'work-1' });
     await assertDenied('work.ensureInvestigationWorkspace', roleContext('member', 'user', ['works:write']), /Missing action scope "tabs:write"/, {
         workId: 'work-1',
         investigationId: 'investigation-1',
@@ -579,7 +589,10 @@ test('web action manifest exposes tab.create as a single action contract across 
     assert.deepEqual(workCreate.requiredScopes, ['works:write']);
     assert.deepEqual(workCreate.allowedActors, ['user', 'agent', 'automation']);
 
-    assert.equal(manifest.actions.some(action => action.id === 'work.updateInvestigationSummary'), false);
+    assert.equal(
+        manifest.actions.some(action => action.id === 'work.updateInvestigationSummary'),
+        false,
+    );
 
     const workFinding = manifest.actions.find(action => action.id === 'work.createInvestigationFinding');
     assert.ok(workFinding);
