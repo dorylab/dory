@@ -107,7 +107,7 @@
             "SignUp": "Registrarse",
             "Guest": {
                 "Prompt": "¿Solo quieres probar?",
-                "Link": "Entrar al espacio de invitado",
+                "Link": "Probar Dory sin una cuenta",
                 "Action": "Continuar como invitado",
                 "ResumeAction": "Abrir espacio de invitado existente",
                 "Tooltip": "Ideal para quienes visitan por primera vez. Si más tarde inicias sesión, mantendremos tu espacio de trabajo de invitado actual en tu cuenta.",
@@ -3436,7 +3436,6 @@
             "Refreshing": "Actualizando...",
             "RefreshComplete": "Estado de facturación actualizado",
             "DesktopCloudUnavailable": "Conéctate a Dory Cloud antes de suscribirte desde la app de escritorio.",
-            "ReadOnlyHint": "Solo los propietarios de la organización pueden mejorar, cancelar o gestionar la facturación. Tu rol actual es de solo lectura aquí.",
             "NoSubscription": "Sin suscripción",
             "NotAvailable": "N/D",
             "CancellationScheduled": "La cancelación está programada para {date}.",

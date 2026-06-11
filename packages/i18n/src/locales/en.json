@@ -3437,7 +3437,6 @@
             "Refreshing": "Refreshing...",
             "RefreshComplete": "Billing status refreshed",
             "DesktopCloudUnavailable": "Connect to Dory Cloud before subscribing from the desktop app.",
-            "ReadOnlyHint": "Only organization owners can upgrade, cancel, or manage billing. Your current role is read-only here.",
             "NoSubscription": "No subscription",
             "NotAvailable": "N/A",
             "CancellationScheduled": "Cancellation is scheduled for {date}.",

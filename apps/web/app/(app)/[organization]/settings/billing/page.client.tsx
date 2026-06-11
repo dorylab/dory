@@ -136,7 +136,6 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
     const currentPeriodEnd = isProPlan ? formatWithFallback(billingStatus?.periodEnd ?? null) : null;
     const currentPlanTitle = billingStatus?.plan === 'pro' ? t('Plan.Pro') : t('Hobby.Title');
     const currentPlanPrice = billingStatus?.plan === 'pro' ? t('Pro.Price') : t('Hobby.Price');
-    const readOnly = !billingManagementAvailable ? t('DesktopCloudUnavailable') : t('ReadOnlyHint');
     const hobbyFeatures = [
         t('Hobby.Features.ConnectPopularDatabases'),
         t('Hobby.Features.SqlEditorAndQueryResults'),
@@ -281,9 +280,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
                                 <Button className="w-full" onClick={() => upgradeMutation.mutate()} disabled={upgradeMutation.isPending || isLoading || !organization}>
                                     {upgradeMutation.isPending ? t('Redirecting') : t('UpgradeToPro')}
                                 </Button>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">{readOnly}</p>
-                            )}
+                            ) : null}
                         </div>
                     </div>
                 ) : null}
@@ -304,7 +301,6 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
                 ) : null}
             </div>
 
-            {!canManageBilling && !showProPlan ? <p className="text-sm text-muted-foreground">{readOnly}</p> : null}
         </div>
     );
 }

@@ -111,7 +111,7 @@
             "SignUp": "注册",
             "Guest": {
                 "Prompt": "只是想试用？",
-                "Link": "进入访客工作区",
+                "Link": "无需账号试用 Dory",
                 "Action": "以访客身份继续",
                 "ResumeAction": "进入已有访客工作区",
                 "Tooltip": "更适合首次体验的用户。如果你之后登录，我们会将当前访客工作区保留到你的账号下。",
@@ -3441,7 +3441,6 @@
             "Refreshing": "正在刷新...",
             "RefreshComplete": "账单状态已刷新",
             "DesktopCloudUnavailable": "请在连接云端后订阅。",
-            "ReadOnlyHint": "只有组织所有者可以升级、取消或管理账单。你当前在这里是只读权限。",
             "NoSubscription": "无订阅",
             "NotAvailable": "暂无",
             "CancellationScheduled": "已计划在 {date} 取消订阅。",

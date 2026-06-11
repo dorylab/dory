@@ -107,7 +107,7 @@
             "SignUp": "新規登録",
             "Guest": {
                 "Prompt": "試してみるだけですか？",
-                "Link": "ゲストワークスペースに入る",
+                "Link": "アカウントなしで Dory を試す",
                 "Action": "ゲストとして続行",
                 "ResumeAction": "既存のゲストワークスペースを開く",
                 "Tooltip": "初めて利用する方に最適です。後でサインインしても、現在のゲストワークスペースはあなたのアカウントに引き継がれます。",
@@ -3436,7 +3436,6 @@
             "Refreshing": "更新中...",
             "RefreshComplete": "請求状況を更新しました",
             "DesktopCloudUnavailable": "デスクトップアプリからサブスクライブする前に Dory Cloud に接続してください。",
-            "ReadOnlyHint": "アップグレード、キャンセル、請求管理を行えるのは組織オーナーのみです。現在のロールではここは読み取り専用です。",
             "NoSubscription": "サブスクリプションなし",
             "NotAvailable": "該当なし",
             "CancellationScheduled": "{date} にキャンセルが予定されています。",
