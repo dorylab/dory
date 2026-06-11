@@ -1,7 +1,6 @@
 import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
-import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { OracleDatasource } from '../datasource';
 import { parseOracleTableReference, quoteOracleIdentifier, quoteOracleQualifiedName } from '../runtime';
 
@@ -23,6 +22,10 @@ type DdlRow = {
     ddl?: string | null;
 };
 
+type CountRow = {
+    totalRows?: number | string | null;
+};
+
 type IndexRow = {
     name?: string | null;
     method?: string | null;
@@ -36,13 +39,6 @@ function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizePreviewLimit(limit?: number): number {
-    if (!Number.isFinite(limit) || !limit || limit <= 0) {
-        return DEFAULT_TABLE_PREVIEW_LIMIT;
-    }
-    return Math.floor(limit);
 }
 
 async function getCurrentSchema(datasource: OracleDatasource, database?: string) {
@@ -177,20 +173,24 @@ async function getTableStats(datasource: OracleDatasource, database: string, tab
 
 async function getTablePreview(datasource: OracleDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const { target } = await getTableIdentity(datasource, database, table);
-    const limit = normalizePreviewLimit(options?.limit);
-    const offset = Math.max(0, Math.floor(options?.offset ?? 0));
+    const limit = normalizeTablePreviewLimit(options?.limit);
+    const offset = normalizeTablePreviewOffset(options?.offset);
     const qualifiedName = quoteOracleQualifiedName(target.schema, target.table);
     const preview = buildTablePreviewClauses({
         ...options,
         dialect: 'oracle',
         quoteIdentifier: quoteOracleIdentifier,
     });
+    const countResult = await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}${preview.whereSql}`, {
+        database,
+        params: preview.params,
+    });
     const sql =
         offset > 0
             ? `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`
             : `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} FETCH FIRST :limit ROWS ONLY`;
 
-    return datasource.queryWithContext<Record<string, unknown>>(sql, {
+    const result = await datasource.queryWithContext<Record<string, unknown>>(sql, {
         database,
         params: {
             ...(preview.params as Record<string, unknown>),
@@ -198,6 +198,13 @@ async function getTablePreview(datasource: OracleDatasource, database: string, t
             offset,
         },
     });
+
+    return {
+        ...result,
+        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        limited: true,
+        limit,
+    };
 }
 
 async function getTableIndexes(datasource: OracleDatasource, database: string, table: string): Promise<TableIndexInfo[]> {

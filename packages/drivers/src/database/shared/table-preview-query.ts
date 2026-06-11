@@ -1,4 +1,5 @@
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TablePreviewFilter, TablePreviewOptions } from '@dory/drivers/types';
 
 type PreviewDialect = 'postgres' | 'mysql' | 'sqlite' | 'duckdb' | 'sqlserver' | 'oracle' | 'clickhouse';
@@ -15,6 +16,20 @@ export type PreviewQueryClauses = {
     params: DriverQueryParams;
     nextParameterIndex: number;
 };
+
+export function normalizeTablePreviewLimit(limit?: number): number {
+    if (!Number.isFinite(limit) || !limit || limit <= 0) {
+        return DEFAULT_TABLE_PREVIEW_LIMIT;
+    }
+    return Math.floor(limit);
+}
+
+export function normalizeTablePreviewOffset(offset?: number): number {
+    if (!Number.isFinite(offset) || !offset || offset < 0) {
+        return 0;
+    }
+    return Math.floor(offset);
+}
 
 function normalizeIdentifier(value?: string | null) {
     const normalized = value?.trim();
@@ -70,13 +85,7 @@ function normalizeSearchValue(value?: string | null) {
     return normalized ? normalized : null;
 }
 
-function addParam(
-    dialect: PreviewDialect,
-    params: Record<string, unknown> | unknown[],
-    value: unknown,
-    index: number,
-    clickhouseType: 'String' | 'Float64' = 'String',
-) {
+function addParam(dialect: PreviewDialect, params: Record<string, unknown> | unknown[], value: unknown, index: number, clickhouseType: 'String' | 'Float64' = 'String') {
     const name = `previewParam${index}`;
     if (Array.isArray(params)) {
         params.push(value);
@@ -86,12 +95,7 @@ function addParam(
     return placeholder(dialect, name, index, clickhouseType);
 }
 
-function buildStringPredicate(
-    dialect: PreviewDialect,
-    columnSql: string,
-    filter: TablePreviewFilter,
-    add: (value: unknown, type?: 'String' | 'Float64') => string,
-) {
+function buildStringPredicate(dialect: PreviewDialect, columnSql: string, filter: TablePreviewFilter, add: (value: unknown, type?: 'String' | 'Float64') => string) {
     const rawValue = filter.value ?? '';
     const textSql = textExpression(dialect, columnSql);
     const comparableSql = filter.caseSensitive ? textSql : lowerExpression(dialect, columnSql);
@@ -176,7 +180,9 @@ export function buildTablePreviewClauses(options: PreviewQueryOptions): PreviewQ
     const searchColumns = Array.from(new Set((options.searchColumns ?? []).map(normalizeIdentifier).filter((column): column is string => Boolean(column))));
     if (search && searchColumns.length > 0) {
         const searchValue = `%${search.toLowerCase()}%`;
-        const searchPredicates = searchColumns.map(column => `${lowerExpression(options.dialect, options.quoteIdentifier(column))} ${likeOperator(options.dialect, false)} ${add(searchValue)}`);
+        const searchPredicates = searchColumns.map(
+            column => `${lowerExpression(options.dialect, options.quoteIdentifier(column))} ${likeOperator(options.dialect, false)} ${add(searchValue)}`,
+        );
         predicates.push(`(${searchPredicates.join(' OR ')})`);
     }
 

@@ -1,7 +1,6 @@
 import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
-import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { MySqlDatasource } from '../datasource';
 import { parseMysqlTableReference, quoteMysqlQualifiedTable } from '../runtime';
 
@@ -28,17 +27,14 @@ type PartitionRow = {
 
 type CreateStatementRow = Record<string, unknown>;
 
+type CountRow = {
+    totalRows?: number | string | null;
+};
+
 function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizePreviewLimit(limit?: number): number {
-    if (!Number.isFinite(limit) || !limit || limit <= 0) {
-        return DEFAULT_TABLE_PREVIEW_LIMIT;
-    }
-    return Math.floor(limit);
 }
 
 function resolveTableInput(database: string, table: string) {
@@ -216,21 +212,28 @@ async function getTableStats(datasource: MySqlDatasource, database: string, tabl
 
 async function getTablePreview(datasource: MySqlDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const target = resolveTableInput(database, table);
-    const limit = normalizePreviewLimit(options?.limit);
-    const offset = options?.offset ?? 0;
+    const limit = normalizeTablePreviewLimit(options?.limit);
+    const offset = normalizeTablePreviewOffset(options?.offset);
     const preview = buildTablePreviewClauses({
         ...options,
         dialect: 'mysql',
         quoteIdentifier: value => `\`${value.replace(/`/g, '``')}\``,
     });
-    const params = [...(preview.params as unknown[]), limit, offset];
-    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${quoteMysqlQualifiedTable(target.database, target.table)}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`, {
+    const previewParams = preview.params as unknown[];
+    const qualifiedName = quoteMysqlQualifiedTable(target.database, target.table);
+    const countResult = await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, {
+        database: target.database,
+        params: previewParams,
+    });
+    const params = [...previewParams, limit, offset];
+    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`, {
         database: target.database,
         params,
     });
 
     return {
         ...result,
+        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

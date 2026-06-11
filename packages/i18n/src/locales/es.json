@@ -449,13 +449,14 @@
         "Pagination": {
             "Previous": "Anterior",
             "Next": "Siguiente",
-            "PageOf": "Página {current} de ~{total}",
+            "PageOf": "Página {current} de {total}",
             "PageOfExact": "Página {current} de {total}",
             "PageUnknown": "Página {current}",
             "RowsPerPage": "Filas por página",
-            "ShowingRange": "{start}–{end} de ~{total}",
+            "ShowingRange": "{start}–{end} de {total}",
             "ShowingRangeExact": "{start}–{end} de {total}",
-            "ShowingCount": "{count} filas"
+            "ShowingCount": "{count} filas",
+            "TotalRows": "Total de filas: {total}"
         },
         "Column name": "Nombre",
         "Column type": "Tipo",

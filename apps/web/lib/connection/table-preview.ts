@@ -42,7 +42,22 @@ function buildPreviewSqlText(database: string, table: string, options: { sort?: 
     return parts.join(' ');
 }
 
-export async function buildTablePreviewPayload({ connection, connectionId, database, table, limit, offset, sort, filters, search, searchColumns, sessionId, tabId, userId, source }: BuildTablePreviewPayloadParams) {
+export async function buildTablePreviewPayload({
+    connection,
+    connectionId,
+    database,
+    table,
+    limit,
+    offset,
+    sort,
+    filters,
+    search,
+    searchColumns,
+    sessionId,
+    tabId,
+    userId,
+    source,
+}: BuildTablePreviewPayloadParams) {
     const normalizedLimit = normalizePreviewLimit(limit);
     const normalizedOffset = normalizePreviewOffset(offset);
     const sqlText = buildPreviewSqlText(database, table, { sort, filters, search });
@@ -87,6 +102,7 @@ export async function buildTablePreviewPayload({ connection, connectionId, datab
                 title: `Preview: ${table}`,
                 columns: result.columns ?? null,
                 rowCount: result.rowCount ?? rows.length,
+                totalRows: result.totalRows ?? null,
                 limited: result.limited ?? true,
                 limit: result.limit ?? normalizedLimit,
                 offset: normalizedOffset,

@@ -4,7 +4,16 @@ import { getDBService } from '@dory/database';
 import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
 import { buildResultContext } from '@dory/analysis/result-context';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
-import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, QueryType, TableColumnInfo, TablePreviewFilter, TablePreviewSort, TimeRange } from '@dory/drivers/types';
+import type {
+    DatabaseObjectRow,
+    DatabaseSummaryEngine,
+    QueryInsightsFilters,
+    QueryType,
+    TableColumnInfo,
+    TablePreviewFilter,
+    TablePreviewSort,
+    TimeRange,
+} from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
@@ -15,6 +24,7 @@ import { getSqlAuditConnectionSnapshot, logDeniedSqlAudit, runWithSqlAudit } fro
 import type { QuerySource } from '@dory/shared/types/audit';
 
 export const MAX_DORY_TOOL_RESULT_ROWS = 100;
+export const MAX_TABLE_PREVIEW_ROWS = 1000;
 export const MAX_DORY_SCHEMA_SEARCH_DATABASES = 20;
 export const DEFAULT_DORY_SCHEMA_SEARCH_LIMIT = 25;
 export const MAX_DORY_SCHEMA_SEARCH_LIMIT = 100;
@@ -60,6 +70,11 @@ export function clampDoryToolLimit(limit: number | null | undefined, defaultValu
 function clampResultLimit(limit?: number | null) {
     if (!Number.isFinite(limit ?? NaN)) return DEFAULT_TABLE_PREVIEW_LIMIT;
     return Math.max(1, Math.min(MAX_DORY_TOOL_RESULT_ROWS, Math.floor(limit!)));
+}
+
+function clampTablePreviewLimit(limit?: number | null) {
+    if (!Number.isFinite(limit ?? NaN)) return DEFAULT_TABLE_PREVIEW_LIMIT;
+    return Math.max(1, Math.min(MAX_TABLE_PREVIEW_ROWS, Math.floor(limit!)));
 }
 
 function isTimeRange(value: unknown): value is TimeRange {
@@ -495,7 +510,7 @@ export async function previewTableOperation(
             connectionId,
             database: input.database,
             table: input.table,
-            limit: clampResultLimit(input.limit),
+            limit: clampTablePreviewLimit(input.limit),
             offset: input.offset ?? 0,
             sort: input.sort ?? null,
             filters: input.filters ?? [],

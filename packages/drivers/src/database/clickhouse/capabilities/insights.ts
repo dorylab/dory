@@ -22,6 +22,7 @@ const CLASSIFIED_KINDS = ['select', 'insert', ...DDL_KINDS];
 const SLOW_QUERY_THRESHOLD_MS = 100;
 const QUERY_LOG_TABLE = 'system.query_log';
 const DEFAULT_ROW_LIMIT = 200;
+const MAX_ROW_LIMIT = 200;
 const DEFAULT_RECENT_LIMIT = 8;
 const MAX_RECENT_LIMIT = 50;
 const EXECUTED_QUERY_TYPES_CONDITION = `type IN ('QueryFinish', 'ExceptionWhileProcessing')`;
@@ -66,6 +67,19 @@ type WhereClauseResult = {
 
 function ensurePreset(range: TimeRange): TimeRangePreset {
     return TIME_RANGE_PRESETS[range] ?? DEFAULT_PRESET;
+}
+
+function normalizePagination(pagination?: Pagination): { pageSize: number; pageIndex: number; offset: number } {
+    const rawPageSize = Number(pagination?.pageSize);
+    const pageSize = Number.isFinite(rawPageSize) && rawPageSize > 0 ? Math.min(Math.floor(rawPageSize), MAX_ROW_LIMIT) : DEFAULT_ROW_LIMIT;
+    const rawPageIndex = Number(pagination?.pageIndex);
+    const pageIndex = Number.isFinite(rawPageIndex) && rawPageIndex > 0 ? Math.floor(rawPageIndex) : 0;
+
+    return {
+        pageSize,
+        pageIndex,
+        offset: pageIndex * pageSize,
+    };
 }
 
 function buildQueryTypeCondition(queryType: QueryType): string | null {
@@ -211,9 +225,7 @@ async function fetchQueryRows(datasource: ClickhouseDatasource, sql: string, par
 async function fetchQueryLogs(datasource: ClickhouseDatasource, filters: QueryInsightsFilters, pagination?: Pagination): Promise<{ rows: QueryInsightsRow[]; total: number }> {
     const preset = ensurePreset(filters.timeRange);
     const { clause, params } = buildWhereClause(filters, preset);
-    const pageSize = pagination?.pageSize && pagination.pageSize > 0 ? pagination.pageSize : DEFAULT_ROW_LIMIT;
-    const pageIndex = pagination?.pageIndex && pagination.pageIndex > 0 ? pagination.pageIndex : 0;
-    const offset = pageIndex * pageSize;
+    const { pageSize, offset } = normalizePagination(pagination);
 
     const countResult = await datasource.query<{ total: number }>(`SELECT count() AS total FROM ${QUERY_LOG_TABLE} WHERE ${clause} AND type != 'QueryStart'`, params);
     const total = Number(countResult.rows[0]?.total ?? 0);
@@ -294,9 +306,7 @@ async function fetchSlowQueries(datasource: ClickhouseDatasource, filters: Query
 
     const enforcedFilters = ensureSlowQueryFilters(effectiveFilters);
     const { clause, params } = buildWhereClause(enforcedFilters, preset);
-    const pageSize = pagination?.pageSize && pagination.pageSize > 0 ? pagination.pageSize : DEFAULT_ROW_LIMIT;
-    const pageIndex = pagination?.pageIndex && pagination.pageIndex > 0 ? pagination.pageIndex : 0;
-    const offset = pageIndex * pageSize;
+    const { pageSize, offset } = normalizePagination(pagination);
 
     const countResult = await datasource.query<{ total: number }>(`SELECT count() AS total FROM ${QUERY_LOG_TABLE} WHERE ${clause} AND ${EXECUTED_QUERY_TYPES_CONDITION}`, params);
     const total = Number(countResult.rows[0]?.total ?? 0);
@@ -332,9 +342,7 @@ async function fetchSlowQueries(datasource: ClickhouseDatasource, filters: Query
 async function fetchErrorQueries(datasource: ClickhouseDatasource, filters: QueryInsightsFilters, pagination?: Pagination): Promise<{ rows: QueryInsightsRow[]; total: number }> {
     const preset = ensurePreset(filters.timeRange);
     const { clause, params } = buildWhereClause(filters, preset);
-    const pageSize = pagination?.pageSize && pagination.pageSize > 0 ? pagination.pageSize : DEFAULT_ROW_LIMIT;
-    const pageIndex = pagination?.pageIndex && pagination.pageIndex > 0 ? pagination.pageIndex : 0;
-    const offset = pageIndex * pageSize;
+    const { pageSize, offset } = normalizePagination(pagination);
 
     const countResult = await datasource.query<{ total: number }>(
         `SELECT count() AS total FROM ${QUERY_LOG_TABLE} WHERE ${clause} AND ${EXECUTED_QUERY_TYPES_CONDITION} AND ${ERROR_CONDITION}`,

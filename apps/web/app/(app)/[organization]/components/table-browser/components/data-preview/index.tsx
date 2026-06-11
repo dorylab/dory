@@ -12,7 +12,6 @@ import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
-import { Progress } from '@/registry/new-york-v4/ui/progress';
 import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { ResultRow } from '@dory/shared/types/sql-console';
 import { SQLTab } from '@dory/shared/types/tabs';
@@ -24,7 +23,7 @@ import { VTableFilters } from '../../../../[connectionId]/sql-console/components
 import type { ColumnFilter } from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
-import { useTablePropertiesQuery, useTableStructureColumnsQuery } from '../table-queries';
+import { useTablePropertiesQuery, useTableStatsQuery, useTableStructureColumnsQuery } from '../table-queries';
 import { DataPreviewPaginationBar } from './DataPreviewPaginationBar';
 
 type PreviewColumn = {
@@ -33,6 +32,7 @@ type PreviewColumn = {
 
 type PreviewResultSet = {
     columns?: Array<Record<string, unknown>> | null;
+    totalRows?: number | string | null;
 };
 
 type PreviewStats = {
@@ -43,6 +43,7 @@ type PreviewStats = {
 type PreviewCacheEntry = {
     columns: PreviewColumn[];
     rows: ResultRow[];
+    totalRows: number | null;
     stats: PreviewStats;
 };
 
@@ -86,6 +87,12 @@ function normalizeParam(value?: string | string[]) {
 
 function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
+}
+
+function toNumberOrNull(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
 }
 
 function buildPreviewQueryKey({
@@ -244,6 +251,14 @@ function buildCurrentPreviewSql({
     return `${clauses.join('\n')};`;
 }
 
+function DataPreviewLoadingBar({ ariaLabel }: { ariaLabel: string }) {
+    return (
+        <div className="h-0.5 w-full overflow-hidden bg-primary/10" role="progressbar" aria-label={ariaLabel}>
+            <div className="h-full w-1/3 origin-left bg-primary animate-data-preview-progress" />
+        </div>
+    );
+}
+
 function DataPreview(props: DataPreviewProps) {
     const { connectionId, databaseName, tableName, source = 'table-browser-data-preview' } = props;
     const resetKey = [source, connectionId, databaseName, tableName].join('::');
@@ -269,8 +284,9 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const [hasUserRequestedPreviewUpdate, setHasUserRequestedPreviewUpdate] = useState(false);
 
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
+    const { data: tableStats } = useTableStatsQuery({ connectionId, databaseName, tableName });
     const { data: tableColumns } = useTableStructureColumnsQuery({ connectionId, databaseName, tableName });
-    const totalRowEstimate = tableProperties?.totalRows ?? null;
+    const metadataTotalRowEstimate = tableProperties?.totalRows ?? tableStats?.rowCount ?? null;
     const searchColumns = useMemo(() => tableColumns?.columns.map(column => column.name) ?? EMPTY_SEARCH_COLUMNS, [tableColumns?.columns]);
     const effectiveSearchColumns = query.trim() ? searchColumns : EMPTY_SEARCH_COLUMNS;
 
@@ -343,13 +359,15 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             const nextStorageKey = storageKey ?? `preview:${connectionId}:${databaseName}:${tableName}`;
             const mappedRows = mapPreviewRows(rawRows, nextStorageKey);
             const columns = buildColumns(rawRows, firstSet);
+            const totalRows = toNumberOrNull(firstSet?.totalRows);
 
             return {
                 columns,
                 rows: mappedRows,
+                totalRows,
                 stats: {
                     filteredCount: mappedRows.length,
-                    totalCount: mappedRows.length,
+                    totalCount: totalRows ?? mappedRows.length,
                 },
             } satisfies PreviewCacheEntry;
         },
@@ -357,6 +375,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     const previewData = previewQuery.data;
     const rows = useMemo(() => previewData?.rows ?? EMPTY_ROWS, [previewData]);
+    const totalRowEstimate = previewData?.totalRows ?? metadataTotalRowEstimate;
     const loading = previewQuery.isLoading;
     const refreshing = previewQuery.isFetching;
     const error = previewData ? null : previewQuery.error ? getErrorMessage(previewQuery.error, t('Failed to load data preview')) : null;
@@ -374,12 +393,12 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         if (vtableStats) {
             return {
                 filteredCount: vtableStats.filteredCount,
-                totalCount: rows.length,
+                totalCount: previewData?.totalRows ?? previewData?.stats.totalCount ?? rows.length,
             };
         }
 
         return previewData?.stats ?? { filteredCount: rows.length, totalCount: rows.length };
-    }, [previewData?.stats, rows.length, vtableStats]);
+    }, [previewData?.stats, previewData?.totalRows, rows.length, vtableStats]);
 
     const onStatsChange = useCallback((nextStats: { filteredCount: number }) => {
         setVtableStats({
@@ -485,11 +504,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         </div>
     );
 
-    const previewProgress = (
-        <div className="h-0.5 flex-none">
-            {refreshing ? <Progress value={66} className="h-0.5 rounded-none bg-primary/10" /> : null}
-        </div>
-    );
+    const previewProgress = <div className="h-0.5 flex-none">{refreshing ? <DataPreviewLoadingBar ariaLabel={t('Loading preview')} /> : null}</div>;
 
     if (!connectionId || !databaseName || !tableName) {
         return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{emptyMessage ?? t('No table preview')}</div>;
@@ -512,9 +527,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             <div className="h-full min-h-0 flex flex-col">
                 {previewControls}
                 {previewProgress}
-                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
-                    {hasUserRequestedPreviewUpdate ? null : t('Loading preview')}
-                </div>
+                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">{hasUserRequestedPreviewUpdate ? null : t('Loading preview')}</div>
             </div>
         );
     }
@@ -531,9 +544,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     onRemoveFilter={handleRemoveFilter}
                     onClearAllFilters={handleClearAllFilters}
                 />
-                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
-                    {t('No data')}
-                </div>
+                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">{t('No data')}</div>
                 <DataPreviewPaginationBar
                     pageIndex={pageIndex}
                     pageSize={pageSize}

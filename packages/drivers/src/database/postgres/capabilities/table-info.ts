@@ -1,7 +1,6 @@
 import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
-import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { PostgresDatasource } from '../datasource';
 
 type TableIdentityRow = {
@@ -61,6 +60,10 @@ type VacuumStatRow = {
     modsSinceAnalyze?: number | string | null;
 };
 
+type CountRow = {
+    totalRows?: number | string | null;
+};
+
 function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
@@ -78,13 +81,6 @@ function parseTableName(table: string): { schema: string | null; name: string } 
 
 function quoteIdentifier(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
-}
-
-function normalizePreviewLimit(limit?: number): number {
-    if (!Number.isFinite(limit) || !limit || limit <= 0) {
-        return DEFAULT_TABLE_PREVIEW_LIMIT;
-    }
-    return Math.floor(limit);
 }
 
 async function getTableIdentity(datasource: PostgresDatasource, database: string, table: string) {
@@ -333,8 +329,8 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
     const parsed = parseTableName(table);
     const schemaName = parsed.schema?.trim() || 'public';
     const tableName = parsed.name.trim();
-    const limit = normalizePreviewLimit(options?.limit);
-    const offset = options?.offset ?? 0;
+    const limit = normalizeTablePreviewLimit(options?.limit);
+    const offset = normalizeTablePreviewOffset(options?.offset);
     const qualifiedName = `${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}`;
     const preview = buildTablePreviewClauses({
         ...options,
@@ -342,7 +338,12 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
         quoteIdentifier,
         parameterStart: 1,
     });
-    const params = [...(preview.params as unknown[]), limit, offset];
+    const previewParams = preview.params as unknown[];
+    const countResult = await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}${preview.whereSql}`, {
+        database,
+        params: previewParams,
+    });
+    const params = [...previewParams, limit, offset];
     const result = await datasource.queryWithContext<Record<string, unknown>>(
         `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT $${preview.nextParameterIndex} OFFSET $${preview.nextParameterIndex + 1}`,
         {
@@ -353,6 +354,7 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
 
     return {
         ...result,
+        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

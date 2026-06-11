@@ -15,7 +15,7 @@ export function createDuckDbTableInfoCapability(datasource: DuckDbDatasource): G
             return null;
         },
         async preview(database, table, options) {
-            return previewDuckDbTable(datasource.getHandle(), database, table, options?.limit ?? 100, options?.offset ?? 0, options);
+            return previewDuckDbTable(datasource.getHandle(), database, table, options?.limit, options?.offset, options);
         },
         async indexes() {
             return getDuckDbTableIndexes();

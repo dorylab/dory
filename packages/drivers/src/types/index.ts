@@ -43,6 +43,7 @@ export type ConnectionQueryContext = DriverQueryContext;
 export interface DriverQueryResult<Row = any> {
     rows: Row[];
     rowCount?: number;
+    totalRows?: number | null;
     limited?: boolean;
     limit?: number;
     columns?: ColumnMeta[];
