@@ -150,8 +150,19 @@ export function WorkInvestigationWorkspacePageClient(props: WorkInvestigationWor
 export function WorkInvestigationWorkspaceDialogClient(props: WorkInvestigationWorkspacePageClientProps) {
     const router = useRouter();
 
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                router.back();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [router]);
+
     return (
-        <Drawer direction="bottom" open onOpenChange={open => {
+        <Drawer direction="bottom" dismissible={false} handleOnly shouldScaleBackground={false} open onOpenChange={open => {
             if (!open) router.back();
         }}>
             <DrawerContent className="!mt-0 !h-dvh !max-h-none !rounded-none !border-0 !p-0 data-[vaul-drawer-direction=bottom]:!mt-0 data-[vaul-drawer-direction=bottom]:!h-dvh data-[vaul-drawer-direction=bottom]:!max-h-none data-[vaul-drawer-direction=bottom]:!rounded-none data-[vaul-drawer-direction=bottom]:!border-0 [&>div:first-child]:hidden">
