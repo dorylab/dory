@@ -213,8 +213,9 @@ export default function VTable({
         return set;
     }, [columnsRaw]);
 
-    const [sortBy, setSortBy] = useState<string | null>(initialSort?.column ?? null);
-    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>(initialSort?.direction ?? 'asc');
+    const [sortState, setSortState] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(initialSort ?? null);
+    const sortBy = sortState?.column ?? null;
+    const sortDirection = sortState?.direction ?? 'asc';
     const lastEmittedSortRef = useRef<{ column: string; direction: 'asc' | 'desc' } | null>(initialSort ?? null);
     const sortedResults = useMemo(() => {
         if (!sortBy) return filteredResults;
@@ -320,32 +321,30 @@ export default function VTable({
         }
 
         if (!initialSort) {
-            if (sortBy !== null) {
-                setSortBy(null);
-                setSortDirection('asc');
-            }
+            setSortState(null);
             lastEmittedSortRef.current = null;
             return;
         }
 
-        if (sortBy !== initialSort.column) {
-            setSortBy(initialSort.column);
-        }
-        if (sortDirection !== initialSort.direction) {
-            setSortDirection(initialSort.direction);
-        }
+        setSortState(initialSort);
         lastEmittedSortRef.current = initialSort;
-    }, [initialSort, sortBy, sortDirection]);
+    }, [initialSort]);
 
     const handleSort = useCallback(
         (col: string) => {
-            if (sortBy === col) setSortDirection(p => (p === 'asc' ? 'desc' : 'asc'));
-            else {
-                setSortBy(col);
-                setSortDirection('asc');
-            }
+            setSortState(current => {
+                if (current?.column !== col) {
+                    return { column: col, direction: 'asc' };
+                }
+
+                if (current.direction === 'asc') {
+                    return { column: col, direction: 'desc' };
+                }
+
+                return null;
+            });
         },
-        [sortBy],
+        [],
     );
 
     const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(() => new Set(selectedRowIndexes ?? []));
@@ -380,13 +379,12 @@ export default function VTable({
     }, [selectedRowIndexes]);
 
     useEffect(() => {
-        const nextSort = sortBy ? { column: sortBy, direction: sortDirection } : null;
-        if (areSortStatesEqual(lastEmittedSortRef.current, nextSort)) {
+        if (areSortStatesEqual(lastEmittedSortRef.current, sortState)) {
             return;
         }
-        lastEmittedSortRef.current = nextSort;
-        onSortChange?.(nextSort);
-    }, [onSortChange, sortBy, sortDirection]);
+        lastEmittedSortRef.current = sortState;
+        onSortChange?.(sortState);
+    }, [onSortChange, sortState]);
 
     useEffect(() => {
         const nextRows = [...selectedRowIds].sort((left, right) => left - right);
