@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bot, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -43,11 +43,43 @@ export function WorkInvestigationWorkspaceContent({
     });
 
     const work = workQuery.data?.work ?? null;
+    const latestRun = workQuery.data?.latestRun ?? null;
     const investigation = useMemo(
         () => workQuery.data?.investigations.find(item => item.id === investigationId) ?? null,
         [investigationId, workQuery.data?.investigations],
     );
     const connectionQuery = useConnectionDetail(work?.connectionId);
+    const isAgentRunning = latestRun?.status === 'running' || work?.status === 'running';
+
+    const continueAgentMutation = useMutation({
+        mutationFn: async () => {
+            const response = await fetch(`/api/works/${encodeURIComponent(workId)}/run`, {
+                method: 'POST',
+            });
+
+            if (!response.ok) {
+                const text = await response.text().catch(() => '');
+                let message = text;
+                try {
+                    const parsed = JSON.parse(text) as { error?: string };
+                    message = parsed.error ?? text;
+                } catch {
+                    // keep text response
+                }
+                throw new Error(message || 'Failed to continue agent');
+            }
+
+            await workQuery.refetch();
+            void response.text().finally(() => {
+                void workQuery.refetch();
+            });
+        },
+        onSuccess: () => toast.success('Agent run started'),
+        onError: error => {
+            void workQuery.refetch();
+            toast.error(error instanceof Error ? error.message : 'Failed to continue agent');
+        },
+    });
 
     useEffect(() => {
         if (connectionQuery.data) {
@@ -77,29 +109,29 @@ export function WorkInvestigationWorkspaceContent({
         }
     }, [ensureWorkspaceQuery.error]);
 
-    const isLoading = workQuery.isLoading || connectionQuery.isLoading || ensureWorkspaceQuery.isLoading;
     const canRenderConsole = Boolean(work && investigation && connectionQuery.data && ensureWorkspaceQuery.isSuccess);
     const linkedTabId = ensureWorkspaceQuery.data?.linkedTabId ?? investigation?.linkedTabId ?? null;
 
     return (
         <div className="bg-background flex h-full min-h-0 flex-col">
             <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 text-card-foreground">
-                <div className="flex min-w-0 items-center gap-3">
-                    <Button variant="ghost" size="sm" onClick={onClose}>
+                <div className="min-w-0 flex-1 pr-3">
+                    <Button className="min-w-0 max-w-full justify-start px-2" variant="ghost" size="sm" onClick={onClose}>
                         <ArrowLeft />
-                        Work
+                        <span className="shrink-0">Work</span>
+                        <span className="shrink-0 text-muted-foreground"> / </span>
+                        <span className="truncate font-medium">{investigation?.title ?? 'Workspace'}</span>
                     </Button>
-                    <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{investigation?.title ?? 'Workspace'}</div>
-                        <div className="truncate text-xs text-muted-foreground">{work?.title ?? 'Work Investigation'}</div>
-                    </div>
                 </div>
-                {isLoading ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Loader2 className="size-3 animate-spin" />
-                        Opening workspace
-                    </div>
-                ) : null}
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!work || isAgentRunning || continueAgentMutation.isPending}
+                    onClick={() => continueAgentMutation.mutate()}
+                >
+                    {isAgentRunning || continueAgentMutation.isPending ? <Loader2 className="animate-spin" /> : <Bot />}
+                    Continue Agent
+                </Button>
             </header>
 
             <main className="min-h-0 flex-1">
