@@ -405,7 +405,7 @@
     "TableBrowser": {
         "Tabs": {
             "overview": "Resumen",
-            "data": "Vista previa de datos",
+            "data": "Datos",
             "structure": "Estructura",
             "stats": "Estadísticas"
         },
@@ -444,6 +444,7 @@
         "Loading preview": "Cargando vista previa...",
         "No data": "No hay datos",
         "Refresh": "Actualizar",
+        "Current SQL": "SQL actual",
         "Failed to load data preview": "No se pudo cargar la vista previa de los datos",
         "Pagination": {
             "Previous": "Anterior",

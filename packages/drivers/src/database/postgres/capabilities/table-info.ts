@@ -1,6 +1,7 @@
-import type { GetTableInfoAPI } from '@dory/drivers/types';
+import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses } from '../../shared/table-preview-query';
 import type { PostgresDatasource } from '../datasource';
 
 type TableIdentityRow = {
@@ -328,17 +329,27 @@ async function getTableStats(datasource: PostgresDatasource, database: string, t
     };
 }
 
-async function getTablePreview(datasource: PostgresDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
+async function getTablePreview(datasource: PostgresDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const parsed = parseTableName(table);
     const schemaName = parsed.schema?.trim() || 'public';
     const tableName = parsed.name.trim();
     const limit = normalizePreviewLimit(options?.limit);
     const offset = options?.offset ?? 0;
     const qualifiedName = `${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}`;
-    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${qualifiedName} LIMIT $1 OFFSET $2`, {
-        database,
-        params: [limit, offset],
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'postgres',
+        quoteIdentifier,
+        parameterStart: 1,
     });
+    const params = [...(preview.params as unknown[]), limit, offset];
+    const result = await datasource.queryWithContext<Record<string, unknown>>(
+        `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT $${preview.nextParameterIndex} OFFSET $${preview.nextParameterIndex + 1}`,
+        {
+            database,
+            params,
+        },
+    );
 
     return {
         ...result,

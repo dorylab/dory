@@ -1,6 +1,7 @@
-import type { GetTableInfoAPI } from '@dory/drivers/types';
+import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses } from '../../shared/table-preview-query';
 import type { MySqlDatasource } from '../datasource';
 import { parseMysqlTableReference, quoteMysqlQualifiedTable } from '../runtime';
 
@@ -213,13 +214,19 @@ async function getTableStats(datasource: MySqlDatasource, database: string, tabl
     };
 }
 
-async function getTablePreview(datasource: MySqlDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
+async function getTablePreview(datasource: MySqlDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const target = resolveTableInput(database, table);
     const limit = normalizePreviewLimit(options?.limit);
     const offset = options?.offset ?? 0;
-    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${quoteMysqlQualifiedTable(target.database, target.table)} LIMIT ? OFFSET ?`, {
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'mysql',
+        quoteIdentifier: value => `\`${value.replace(/`/g, '``')}\``,
+    });
+    const params = [...(preview.params as unknown[]), limit, offset];
+    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${quoteMysqlQualifiedTable(target.database, target.table)}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`, {
         database: target.database,
-        params: [limit, offset],
+        params,
     });
 
     return {

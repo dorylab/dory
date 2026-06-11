@@ -6,8 +6,9 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { enforceSelectLimit } from '@dory/drivers/core';
-import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo } from '@dory/drivers/types';
+import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
+import { buildTablePreviewClauses } from '../shared/table-preview-query';
 
 import { DuckDbDialect } from './dialect';
 
@@ -265,11 +266,18 @@ export async function previewDuckDbTable(
     table: string,
     limit: number,
     offset = 0,
+    options?: TablePreviewOptions,
 ): Promise<QueryResult<Record<string, unknown>>> {
     const { schema, tableName } = parseDuckDbTableReference(table);
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'duckdb',
+        quoteIdentifier,
+    });
     return executeDuckDbQuery<Record<string, unknown>>(
         handle,
-        `SELECT * FROM ${buildQualifiedTable(database, tableName, schema)} LIMIT ${Number(limit) || 100} OFFSET ${Number(offset) || 0}`,
+        `SELECT * FROM ${buildQualifiedTable(database, tableName, schema)}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`,
+        [...(preview.params as unknown[]), Number(limit) || 100, Number(offset) || 0],
     );
 }
 

@@ -4,8 +4,9 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo } from '@dory/drivers/types';
+import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
+import { buildTablePreviewClauses } from '../shared/table-preview-query';
 import { SqliteDialect } from './dialect';
 
 type SqliteDatabase = InstanceType<typeof Database>;
@@ -207,9 +208,21 @@ export function getSqliteTableProperties(db: SqliteDatabase, database: string, t
     };
 }
 
-export function previewSqliteTable(db: SqliteDatabase, database: string, table: string, limit: number, offset: number = 0): QueryResult<Record<string, unknown>> {
-    const sql = `SELECT * FROM ${buildQualifiedName(database, table)} LIMIT ? OFFSET ?`;
-    return executeSqliteQuery<Record<string, unknown>>(db, sql, [limit, offset]);
+export function previewSqliteTable(
+    db: SqliteDatabase,
+    database: string,
+    table: string,
+    limit: number,
+    offset: number = 0,
+    options?: TablePreviewOptions,
+): QueryResult<Record<string, unknown>> {
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'sqlite',
+        quoteIdentifier,
+    });
+    const sql = `SELECT * FROM ${buildQualifiedName(database, table)}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`;
+    return executeSqliteQuery<Record<string, unknown>>(db, sql, [...(preview.params as unknown[]), limit, offset]);
 }
 
 export function getSqliteTableIndexes(db: SqliteDatabase, database: string, table: string): TableIndexInfo[] {

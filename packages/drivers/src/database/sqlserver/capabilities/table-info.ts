@@ -1,8 +1,9 @@
-import type { GetTableInfoAPI } from '@dory/drivers/types';
+import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses } from '../../shared/table-preview-query';
 import type { SqlServerDatasource } from '../datasource';
-import { parseSqlServerTableReference, quoteSqlServerQualifiedName } from '../runtime';
+import { parseSqlServerTableReference, quoteSqlServerIdentifier, quoteSqlServerQualifiedName } from '../runtime';
 
 type TableIdentityRow = {
     objectId?: number;
@@ -208,16 +209,29 @@ async function getTableStats(datasource: SqlServerDatasource, database: string, 
     };
 }
 
-async function getTablePreview(datasource: SqlServerDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
+async function getTablePreview(datasource: SqlServerDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const target = resolveTableInput(table);
     const limit = normalizePreviewLimit(options?.limit);
     const offset = options?.offset ?? 0;
     const qualifiedName = quoteSqlServerQualifiedName(target.schema, target.table);
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'sqlserver',
+        quoteIdentifier: quoteSqlServerIdentifier,
+    });
+    const params = {
+        ...(preview.params as Record<string, unknown>),
+        limit,
+        offset,
+    };
+    const orderBySql = preview.orderBySql || (offset > 0 ? ' ORDER BY (SELECT NULL)' : '');
     const sql =
-        offset > 0 ? `SELECT * FROM ${qualifiedName} ORDER BY (SELECT NULL) OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY` : `SELECT TOP (@limit) * FROM ${qualifiedName}`;
+        offset > 0
+            ? `SELECT * FROM ${qualifiedName}${preview.whereSql}${orderBySql} OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
+            : `SELECT TOP (@limit) * FROM ${qualifiedName}${preview.whereSql}${orderBySql}`;
     const result = await datasource.queryWithContext<Record<string, unknown>>(sql, {
         database,
-        params: { limit, offset },
+        params,
     });
 
     return {

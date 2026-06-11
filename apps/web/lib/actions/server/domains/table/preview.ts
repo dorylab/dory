@@ -5,6 +5,24 @@ import { actionOperationContext, actorAuditSource } from '../../operation-contex
 import { readConnection } from '../../policies';
 import { unknownOutputSchema } from '../../schemas';
 
+const tablePreviewSortSchema = z
+    .object({
+        column: z.string().min(1),
+        direction: z.enum(['asc', 'desc']),
+    })
+    .nullable()
+    .optional();
+
+const tablePreviewFilterSchema = z.object({
+    col: z.string().min(1),
+    kind: z.enum(['string', 'number', 'range']),
+    op: z.enum(['contains', 'equals', 'startsWith', 'endsWith', 'empty', 'notEmpty', 'regex', 'eq', 'ne', 'gt', 'ge', 'lt', 'le', 'range']),
+    value: z.string().optional(),
+    valueTo: z.string().optional(),
+    rangeValueType: z.enum(['number', 'date']).optional(),
+    caseSensitive: z.boolean().optional(),
+});
+
 export const tablePreviewAction = defineWebAction({
     id: 'table.preview',
     domain: 'table',
@@ -16,6 +34,10 @@ export const tablePreviewAction = defineWebAction({
         table: z.string().min(1),
         limit: z.number().int().positive().max(1000).optional(),
         offset: z.number().int().min(0).optional(),
+        sort: tablePreviewSortSchema,
+        filters: z.array(tablePreviewFilterSchema).max(20).optional(),
+        search: z.string().max(200).nullable().optional(),
+        searchColumns: z.array(z.string().min(1)).max(200).optional(),
         identityId: z.string().min(1).optional(),
     }),
     outputSchema: unknownOutputSchema,

@@ -405,7 +405,7 @@
     "TableBrowser": {
         "Tabs": {
             "overview": "概要",
-            "data": "データプレビュー",
+            "data": "データ",
             "structure": "構造",
             "stats": "統計"
         },
@@ -444,6 +444,7 @@
         "Loading preview": "プレビューを読み込み中...",
         "No data": "データがありません",
         "Refresh": "更新",
+        "Current SQL": "現在の SQL",
         "Failed to load data preview": "データプレビューの読み込みに失敗しました",
         "Pagination": {
             "Previous": "前へ",

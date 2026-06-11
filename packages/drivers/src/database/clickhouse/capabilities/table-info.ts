@@ -1,6 +1,7 @@
-import { type GetTableInfoAPI } from '@dory/drivers/types';
+import { type GetTableInfoAPI, type TablePreviewOptions } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import { TableMutationInfo, TablePartitionStat, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses } from '../../shared/table-preview-query';
 import type { ClickhouseDatasource } from '../datasource';
 
 type SizeRow = {
@@ -185,12 +186,22 @@ async function getTableStats(datasource: ClickhouseDatasource, database: string,
     };
 }
 
-async function getTablePreview(datasource: ClickhouseDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
+function quoteClickhouseIdentifier(value: string) {
+    return `\`${value.replace(/`/g, '``')}\``;
+}
+
+async function getTablePreview(datasource: ClickhouseDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const limit = normalizePreviewLimit(options?.limit);
     const offset = options?.offset ?? 0;
-    const result = await datasource.queryWithContext<Record<string, unknown>>('SELECT * FROM {db:Identifier}.{tbl:Identifier} LIMIT {limit:UInt64} OFFSET {offset:UInt64}', {
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'clickhouse',
+        quoteIdentifier: quoteClickhouseIdentifier,
+    });
+    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM {db:Identifier}.{tbl:Identifier}${preview.whereSql}${preview.orderBySql} LIMIT {limit:UInt64} OFFSET {offset:UInt64}`, {
         database,
         params: {
+            ...(preview.params as Record<string, unknown>),
             db: database,
             tbl: table,
             limit,

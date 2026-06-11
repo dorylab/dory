@@ -4,7 +4,7 @@ import { getDBService } from '@dory/database';
 import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
 import { buildResultContext } from '@dory/analysis/result-context';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
-import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, QueryType, TableColumnInfo, TimeRange } from '@dory/drivers/types';
+import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, QueryType, TableColumnInfo, TablePreviewFilter, TablePreviewSort, TimeRange } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
@@ -473,7 +473,19 @@ export async function getMonitoringSummaryOperation(
 
 export async function previewTableOperation(
     context: DoryToolOperationContext,
-    input: { connectionId?: string | null; database: string; table: string; limit?: number | null; offset?: number | null; identityId?: string | null; source?: string | null },
+    input: {
+        connectionId?: string | null;
+        database: string;
+        table: string;
+        limit?: number | null;
+        offset?: number | null;
+        sort?: TablePreviewSort | null;
+        filters?: TablePreviewFilter[] | null;
+        search?: string | null;
+        searchColumns?: string[] | null;
+        identityId?: string | null;
+        source?: string | null;
+    },
 ) {
     const connectionId = resolveConnectionId(context, input.connectionId);
     const { entry } = await getConnectionEntry(context, connectionId, input.identityId);
@@ -485,6 +497,10 @@ export async function previewTableOperation(
             table: input.table,
             limit: clampResultLimit(input.limit),
             offset: input.offset ?? 0,
+            sort: input.sort ?? null,
+            filters: input.filters ?? [],
+            search: input.search ?? null,
+            searchColumns: input.searchColumns ?? [],
             userId: context.userId,
             source: input.source ?? 'tool-table-preview',
         }),

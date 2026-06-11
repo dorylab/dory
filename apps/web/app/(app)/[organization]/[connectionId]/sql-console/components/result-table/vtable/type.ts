@@ -17,6 +17,7 @@ export interface VTableProps {
     onUpsertFilter?: (filter: ColumnFilter) => void;
     onRemoveFilter?: (col: string) => void;
     onClearAllFilters?: () => void;
+    serverSideOperations?: boolean;
     showFiltersBar?: boolean;
     initialSort?: { column: string; direction: 'asc' | 'desc' } | null;
     selectedRowIndexes?: number[];

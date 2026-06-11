@@ -1,8 +1,9 @@
-import type { GetTableInfoAPI } from '@dory/drivers/types';
+import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses } from '../../shared/table-preview-query';
 import type { OracleDatasource } from '../datasource';
-import { parseOracleTableReference, quoteOracleQualifiedName } from '../runtime';
+import { parseOracleTableReference, quoteOracleIdentifier, quoteOracleQualifiedName } from '../runtime';
 
 type TableIdentityRow = {
     schemaName?: string | null;
@@ -174,14 +175,29 @@ async function getTableStats(datasource: OracleDatasource, database: string, tab
     };
 }
 
-async function getTablePreview(datasource: OracleDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
+async function getTablePreview(datasource: OracleDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const { target } = await getTableIdentity(datasource, database, table);
     const limit = normalizePreviewLimit(options?.limit);
     const offset = Math.max(0, Math.floor(options?.offset ?? 0));
     const qualifiedName = quoteOracleQualifiedName(target.schema, target.table);
-    const sql = offset > 0 ? `SELECT * FROM ${qualifiedName} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY` : `SELECT * FROM ${qualifiedName} FETCH FIRST ${limit} ROWS ONLY`;
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'oracle',
+        quoteIdentifier: quoteOracleIdentifier,
+    });
+    const sql =
+        offset > 0
+            ? `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`
+            : `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} FETCH FIRST :limit ROWS ONLY`;
 
-    return datasource.queryWithContext<Record<string, unknown>>(sql, { database });
+    return datasource.queryWithContext<Record<string, unknown>>(sql, {
+        database,
+        params: {
+            ...(preview.params as Record<string, unknown>),
+            limit,
+            offset,
+        },
+    });
 }
 
 async function getTableIndexes(datasource: OracleDatasource, database: string, table: string): Promise<TableIndexInfo[]> {

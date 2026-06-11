@@ -409,7 +409,7 @@
     "TableBrowser": {
         "Tabs": {
             "overview": "概览",
-            "data": "数据预览",
+            "data": "数据",
             "structure": "结构",
             "stats": "统计"
         },
@@ -448,6 +448,7 @@
         "Loading preview": "加载预览中...",
         "No data": "没有数据",
         "Refresh": "刷新",
+        "Current SQL": "当前 SQL",
         "Failed to load data preview": "加载数据预览失败",
         "Pagination": {
             "Previous": "上一页",

@@ -11,14 +11,18 @@ import { fetchTablePreview } from '../../lib/fetch-table-preview';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
+import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { ResultRow } from '@dory/shared/types/sql-console';
 import { SQLTab } from '@dory/shared/types/tabs';
 import { VTableSearchBar } from '../../../../[connectionId]/sql-console/components/result-table/components/TableSearchBar';
 import { currentSessionMetaAtom } from '../../../../[connectionId]/sql-console/components/result-table/stores/result-table.atoms';
 import VTable from '../../../../[connectionId]/sql-console/components/result-table/vtable';
 import { InspectorPanel } from '../../../../[connectionId]/sql-console/components/result-table/vtable/InspectorPanel';
+import type { ColumnFilter } from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
+import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
-import { useTablePropertiesQuery } from '../table-queries';
+import { useTablePropertiesQuery, useTableStructureColumnsQuery } from '../table-queries';
 import { DataPreviewPaginationBar } from './DataPreviewPaginationBar';
 
 type PreviewColumn = {
@@ -71,6 +75,7 @@ type TableDataPreviewProps = {
 const PREVIEW_STALE_TIME = 1000 * 60 * 5;
 const PREVIEW_GC_TIME = PREVIEW_STALE_TIME * 2;
 const EMPTY_ROWS: ResultRow[] = [];
+const EMPTY_SEARCH_COLUMNS: string[] = [];
 
 function normalizeParam(value?: string | string[]) {
     if (!value) return undefined;
@@ -81,16 +86,6 @@ function getErrorMessage(error: unknown, fallback: string) {
     return error instanceof Error ? error.message : fallback;
 }
 
-function getColumnName(column: unknown) {
-    if (!column || typeof column !== 'object' || !('name' in column)) return null;
-    const name = column.name;
-    return typeof name === 'string' && name.trim() ? name : null;
-}
-
-function isString(value: string | null): value is string {
-    return value !== null;
-}
-
 function buildPreviewQueryKey({
     connectionId,
     databaseName,
@@ -99,6 +94,10 @@ function buildPreviewQueryKey({
     source,
     pageIndex,
     pageSize,
+    search,
+    filters,
+    sort,
+    searchColumns,
 }: {
     connectionId?: string;
     databaseName?: string;
@@ -107,8 +106,12 @@ function buildPreviewQueryKey({
     source: string;
     pageIndex: number;
     pageSize: number;
+    search: string;
+    filters: ColumnFilter[];
+    sort: TablePreviewSort | null;
+    searchColumns: string[];
 }) {
-    return ['table-preview', source, connectionId, databaseName, tableName, storageKey, pageIndex, pageSize] as const;
+    return ['table-preview', source, connectionId, databaseName, tableName, storageKey, pageIndex, pageSize, search, filters, sort, searchColumns] as const;
 }
 
 function mapPreviewRows(rows: Record<string, unknown>[], rowKeyPrefix: string): ResultRow[] {
@@ -134,6 +137,111 @@ function buildColumns(rows: Record<string, unknown>[], resultSet?: PreviewResult
     return Object.keys(rows[0] ?? {}).map(name => ({ name }));
 }
 
+function quoteSqlIdentifier(identifier: string) {
+    return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function formatSqlLiteral(value: string) {
+    return `'${value.replaceAll("'", "''")}'`;
+}
+
+function formatSqlLikeLiteral(value: string) {
+    return formatSqlLiteral(`%${value}%`);
+}
+
+function buildFilterSql(filter: ColumnFilter) {
+    const column = quoteSqlIdentifier(filter.col);
+    const value = filter.value ?? '';
+
+    if (filter.kind === 'number') {
+        const operatorMap = {
+            eq: '=',
+            ne: '<>',
+            gt: '>',
+            ge: '>=',
+            lt: '<',
+            le: '<=',
+        } as const;
+
+        const operator = operatorMap[filter.op as keyof typeof operatorMap];
+        return operator ? `${column} ${operator} ${formatSqlLiteral(value)}` : null;
+    }
+
+    if (filter.kind === 'range') {
+        const start = filter.value ? `${column} >= ${formatSqlLiteral(filter.value)}` : null;
+        const end = filter.valueTo ? `${column} <= ${formatSqlLiteral(filter.valueTo)}` : null;
+        return [start, end].filter(Boolean).join(' AND ') || null;
+    }
+
+    switch (filter.op) {
+        case 'contains':
+            return `${column} ILIKE ${formatSqlLikeLiteral(value)}`;
+        case 'equals':
+            return `${column} = ${formatSqlLiteral(value)}`;
+        case 'startsWith':
+            return `${column} ILIKE ${formatSqlLiteral(`${value}%`)}`;
+        case 'endsWith':
+            return `${column} ILIKE ${formatSqlLiteral(`%${value}`)}`;
+        case 'empty':
+            return `(${column} IS NULL OR ${column} = '')`;
+        case 'notEmpty':
+            return `(${column} IS NOT NULL AND ${column} <> '')`;
+        case 'regex':
+            return `${column} ~ ${formatSqlLiteral(value)}`;
+        default:
+            return null;
+    }
+}
+
+function buildCurrentPreviewSql({
+    databaseName,
+    tableName,
+    pageIndex,
+    pageSize,
+    search,
+    filters,
+    sort,
+    searchColumns,
+}: {
+    databaseName: string;
+    tableName: string;
+    pageIndex: number;
+    pageSize: number;
+    search: string;
+    filters: ColumnFilter[];
+    sort: TablePreviewSort | null;
+    searchColumns: string[];
+}) {
+    const from = `${quoteSqlIdentifier(databaseName)}.${quoteSqlIdentifier(tableName)}`;
+    const clauses: string[] = [`SELECT *`, `FROM ${from}`];
+    const whereClauses: string[] = [];
+    const trimmedSearch = search.trim();
+
+    if (trimmedSearch && searchColumns.length > 0) {
+        whereClauses.push(`(${searchColumns.map(column => `${quoteSqlIdentifier(column)} ILIKE ${formatSqlLikeLiteral(trimmedSearch)}`).join(' OR ')})`);
+    }
+
+    for (const filter of filters) {
+        const filterSql = buildFilterSql(filter);
+        if (filterSql) {
+            whereClauses.push(filterSql);
+        }
+    }
+
+    if (whereClauses.length > 0) {
+        clauses.push(`WHERE ${whereClauses.join('\n  AND ')}`);
+    }
+
+    if (sort) {
+        clauses.push(`ORDER BY ${quoteSqlIdentifier(sort.column)} ${sort.direction.toUpperCase()}`);
+    }
+
+    clauses.push(`LIMIT ${pageSize}`);
+    clauses.push(`OFFSET ${pageIndex * pageSize}`);
+
+    return `${clauses.join('\n')};`;
+}
+
 function DataPreview(props: DataPreviewProps) {
     const { connectionId, databaseName, tableName, source = 'table-browser-data-preview' } = props;
     const resetKey = [source, connectionId, databaseName, tableName].join('::');
@@ -143,7 +251,6 @@ function DataPreview(props: DataPreviewProps) {
 
 function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, source = 'table-browser-data-preview', emptyMessage }: DataPreviewProps) {
     const t = useTranslations('TableBrowser');
-    const sessionMeta = useAtomValue(currentSessionMetaAtom);
     const setSessionMeta = useSetAtom(currentSessionMetaAtom);
 
     const [query, setQuery] = useState('');
@@ -155,9 +262,14 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const [inspectorWidth, setInspectorWidth] = useState(360);
     const [pageIndex, setPageIndex] = useState(0);
     const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PREVIEW_LIMIT);
+    const [activeFilters, setActiveFilters] = useState<ColumnFilter[]>([]);
+    const [sortState, setSortState] = useState<TablePreviewSort | null>(null);
 
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
+    const { data: tableColumns } = useTableStructureColumnsQuery({ connectionId, databaseName, tableName });
     const totalRowEstimate = tableProperties?.totalRows ?? null;
+    const searchColumns = useMemo(() => tableColumns?.columns.map(column => column.name) ?? EMPTY_SEARCH_COLUMNS, [tableColumns?.columns]);
+    const effectiveSearchColumns = query.trim() ? searchColumns : EMPTY_SEARCH_COLUMNS;
 
     const previewQueryKey = useMemo(
         () =>
@@ -169,9 +281,28 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 source,
                 pageIndex,
                 pageSize,
+                search: query,
+                filters: activeFilters,
+                sort: sortState,
+                searchColumns: effectiveSearchColumns,
             }),
-        [connectionId, databaseName, pageIndex, pageSize, source, storageKey, tableName],
+        [activeFilters, connectionId, databaseName, effectiveSearchColumns, pageIndex, pageSize, query, sortState, source, storageKey, tableName],
     );
+
+    const currentPreviewSql = useMemo(() => {
+        if (!databaseName || !tableName) return '';
+
+        return buildCurrentPreviewSql({
+            databaseName,
+            tableName,
+            pageIndex,
+            pageSize,
+            search: query,
+            filters: activeFilters,
+            sort: sortState,
+            searchColumns: effectiveSearchColumns,
+        });
+    }, [activeFilters, databaseName, effectiveSearchColumns, pageIndex, pageSize, query, sortState, tableName]);
 
     const previewQuery = useQuery({
         queryKey: previewQueryKey,
@@ -191,6 +322,10 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 tableName,
                 limit: pageSize,
                 offset: pageIndex * pageSize,
+                sort: sortState,
+                filters: activeFilters as TablePreviewFilter[],
+                search: query,
+                searchColumns: effectiveSearchColumns,
                 source,
                 signal,
             });
@@ -203,9 +338,10 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             const rawRows = Array.isArray(res?.data?.results?.[0]) ? (res.data.results[0] as Record<string, unknown>[]) : [];
             const nextStorageKey = storageKey ?? `preview:${connectionId}:${databaseName}:${tableName}`;
             const mappedRows = mapPreviewRows(rawRows, nextStorageKey);
+            const columns = buildColumns(rawRows, firstSet);
 
             return {
-                columns: buildColumns(rawRows, firstSet),
+                columns,
                 rows: mappedRows,
                 stats: {
                     filteredCount: mappedRows.length,
@@ -230,46 +366,16 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         setSessionMeta({ columns: previewData.columns });
     }, [previewData, setSessionMeta]);
 
-    const filteredResults = useMemo(() => {
-        const keyword = query.trim().toLowerCase();
-        if (!keyword) return rows;
-
-        const metaColumns = Array.isArray(sessionMeta?.columns) ? (sessionMeta.columns as unknown[]) : [];
-        const columns = metaColumns.map(getColumnName).filter(isString);
-
-        if (columns.length === 0) return rows;
-
-        return rows.filter(row => {
-            for (const column of columns) {
-                const value = row.rowData?.[column];
-                const normalized = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
-
-                if (normalized.toLowerCase().includes(keyword)) {
-                    return true;
-                }
-            }
-
-            return false;
-        });
-    }, [query, rows, sessionMeta]);
-
     const stats = useMemo<PreviewStats>(() => {
-        if (query.trim() && filteredResults.length === 0) {
+        if (vtableStats) {
             return {
-                filteredCount: 0,
+                filteredCount: vtableStats.filteredCount,
                 totalCount: rows.length,
             };
         }
 
-        if (vtableStats) {
-            return {
-                filteredCount: vtableStats.filteredCount,
-                totalCount: filteredResults.length,
-            };
-        }
-
         return previewData?.stats ?? { filteredCount: rows.length, totalCount: rows.length };
-    }, [filteredResults.length, previewData?.stats, query, rows.length, vtableStats]);
+    }, [previewData?.stats, rows.length, vtableStats]);
 
     const onStatsChange = useCallback((nextStats: { filteredCount: number }) => {
         setVtableStats({
@@ -280,11 +386,40 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const handleQueryChange = useCallback((nextQuery: string) => {
         setQuery(nextQuery);
         setVtableStats(null);
+        setPageIndex(0);
     }, []);
 
     const handleClearQuery = useCallback(() => {
         setQuery('');
         setVtableStats(null);
+        setPageIndex(0);
+    }, []);
+
+    const handleUpsertFilter = useCallback((filter: ColumnFilter) => {
+        setActiveFilters(prev => {
+            const others = prev.filter(item => item.col !== filter.col);
+            return [...others, filter];
+        });
+        setVtableStats(null);
+        setPageIndex(0);
+    }, []);
+
+    const handleRemoveFilter = useCallback((column: string) => {
+        setActiveFilters(prev => prev.filter(filter => filter.col !== column));
+        setVtableStats(null);
+        setPageIndex(0);
+    }, []);
+
+    const handleClearAllFilters = useCallback(() => {
+        setActiveFilters([]);
+        setVtableStats(null);
+        setPageIndex(0);
+    }, []);
+
+    const handleSortChange = useCallback((nextSort: TablePreviewSort | null) => {
+        setSortState(nextSort);
+        setVtableStats(null);
+        setPageIndex(0);
     }, []);
 
     const handlePageChange = useCallback((newPageIndex: number) => {
@@ -346,18 +481,42 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     filteredCount={query.trim() ? stats.filteredCount : undefined}
                     totalCount={query.trim() ? stats.totalCount : undefined}
                 />
-                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
-                    <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                    {t('Refresh')}
-                </Button>
+                <div className="flex min-w-0 items-center gap-2">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                                {t('Current SQL')}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-[420px] p-0">
+                            <div className="space-y-4 p-4">
+                                <div className="space-y-1">
+                                    <div className="text-lg font-semibold text-foreground">{t('Current SQL')}</div>
+                                </div>
+                                <SmartCodeBlock value={currentPreviewSql || ' '} type="sql" maxHeightClassName="max-h-64" />
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                    <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
+                        <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        {t('Refresh')}
+                    </Button>
+                </div>
             </div>
 
             <div className="flex-1 min-h-0">
                 <VTable
-                    results={filteredResults}
+                    results={rows}
                     storageKey={storageKey}
                     onStatsChange={onStatsChange}
                     showSearchBar={true}
+                    activeFilters={activeFilters}
+                    onUpsertFilter={handleUpsertFilter}
+                    onRemoveFilter={handleRemoveFilter}
+                    onClearAllFilters={handleClearAllFilters}
+                    serverSideOperations={true}
+                    initialSort={sortState}
+                    onSortChange={handleSortChange}
                     setInspectorOpen={setInspectorOpen}
                     setInspectorMode={setInspectorMode}
                     setInspectorPayload={setInspectorPayload}
