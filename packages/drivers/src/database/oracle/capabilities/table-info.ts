@@ -185,6 +185,13 @@ async function getTablePreview(datasource: OracleDatasource, database: string, t
         database,
         params: preview.params,
     });
+    const unfilteredCountResult =
+        preview.whereSql.length > 0
+            ? await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}`, {
+                  database,
+                  params: {},
+              })
+            : countResult;
     const sql =
         offset > 0
             ? `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`
@@ -202,6 +209,7 @@ async function getTablePreview(datasource: OracleDatasource, database: string, t
     return {
         ...result,
         totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

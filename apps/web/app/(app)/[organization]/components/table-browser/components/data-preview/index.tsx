@@ -33,6 +33,7 @@ type PreviewColumn = {
 type PreviewResultSet = {
     columns?: Array<Record<string, unknown>> | null;
     totalRows?: number | string | null;
+    unfilteredTotalRows?: number | string | null;
 };
 
 type PreviewStats = {
@@ -44,6 +45,7 @@ type PreviewCacheEntry = {
     columns: PreviewColumn[];
     rows: ResultRow[];
     totalRows: number | null;
+    unfilteredTotalRows: number | null;
     stats: PreviewStats;
 };
 
@@ -271,7 +273,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const setSessionMeta = useSetAtom(currentSessionMetaAtom);
 
     const [query, setQuery] = useState('');
-    const [vtableStats, setVtableStats] = useState<{ filteredCount: number } | null>(null);
+    const [searchInput, setSearchInput] = useState('');
     const [inspectorOpen, setInspectorOpen] = useState(false);
     const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
     const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
@@ -360,11 +362,13 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             const mappedRows = mapPreviewRows(rawRows, nextStorageKey);
             const columns = buildColumns(rawRows, firstSet);
             const totalRows = toNumberOrNull(firstSet?.totalRows);
+            const unfilteredTotalRows = toNumberOrNull(firstSet?.unfilteredTotalRows) ?? totalRows;
 
             return {
                 columns,
                 rows: mappedRows,
                 totalRows,
+                unfilteredTotalRows,
                 stats: {
                     filteredCount: mappedRows.length,
                     totalCount: totalRows ?? mappedRows.length,
@@ -389,34 +393,27 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         setSessionMeta({ columns: previewData.columns });
     }, [previewData, setSessionMeta]);
 
-    const stats = useMemo<PreviewStats>(() => {
-        if (vtableStats) {
-            return {
-                filteredCount: vtableStats.filteredCount,
-                totalCount: previewData?.totalRows ?? previewData?.stats.totalCount ?? rows.length,
-            };
-        }
+    const handleVTableStatsChange = useCallback(() => {}, []);
 
-        return previewData?.stats ?? { filteredCount: rows.length, totalCount: rows.length };
-    }, [previewData?.stats, previewData?.totalRows, rows.length, vtableStats]);
-
-    const onStatsChange = useCallback((nextStats: { filteredCount: number }) => {
-        setVtableStats({
-            filteredCount: nextStats.filteredCount,
-        });
+    const handleQueryInputChange = useCallback((nextQuery: string) => {
+        setSearchInput(nextQuery);
     }, []);
 
-    const handleQueryChange = useCallback((nextQuery: string) => {
+    const handleSearchSubmit = useCallback(() => {
         setHasUserRequestedPreviewUpdate(true);
+        const nextQuery = searchInput.trim();
+        if (nextQuery === query) {
+            void previewQuery.refetch();
+            return;
+        }
         setQuery(nextQuery);
-        setVtableStats(null);
         setPageIndex(0);
-    }, []);
+    }, [previewQuery, query, searchInput]);
 
     const handleClearQuery = useCallback(() => {
         setHasUserRequestedPreviewUpdate(true);
+        setSearchInput('');
         setQuery('');
-        setVtableStats(null);
         setPageIndex(0);
     }, []);
 
@@ -426,40 +423,34 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             const others = prev.filter(item => item.col !== filter.col);
             return [...others, filter];
         });
-        setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handleRemoveFilter = useCallback((column: string) => {
         setHasUserRequestedPreviewUpdate(true);
         setActiveFilters(prev => prev.filter(filter => filter.col !== column));
-        setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handleClearAllFilters = useCallback(() => {
         setHasUserRequestedPreviewUpdate(true);
         setActiveFilters([]);
-        setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handleSortChange = useCallback((nextSort: TablePreviewSort | null) => {
         setHasUserRequestedPreviewUpdate(true);
         setSortState(nextSort);
-        setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handlePageChange = useCallback((newPageIndex: number) => {
         setHasUserRequestedPreviewUpdate(true);
-        setVtableStats(null);
         setPageIndex(newPageIndex);
     }, []);
 
     const handlePageSizeChange = useCallback((newPageSize: number) => {
         setHasUserRequestedPreviewUpdate(true);
-        setVtableStats(null);
         setPageSize(newPageSize);
         setPageIndex(0);
     }, []);
@@ -470,16 +461,28 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         void previewQuery.refetch();
     }, [previewQuery, refreshing]);
 
+    const rowsSummaryValue = previewData?.totalRows ?? metadataTotalRowEstimate;
+    const rowsSummaryTotal = previewData?.unfilteredTotalRows ?? metadataTotalRowEstimate ?? rowsSummaryValue;
+    const rowsSummaryLabel =
+        rowsSummaryValue != null && rowsSummaryTotal != null
+            ? t('Pagination.FilteredRows', {
+                  filtered: rowsSummaryValue.toLocaleString(),
+                  total: rowsSummaryTotal.toLocaleString(),
+              })
+            : null;
+
     const previewControls = (
         <div className="flex items-center justify-between w-full gap-3 flex-none">
-            <VTableSearchBar
-                query={query}
-                className="w-96 pl-0"
-                onQueryChange={handleQueryChange}
-                onClearQuery={handleClearQuery}
-                filteredCount={query.trim() ? stats.filteredCount : undefined}
-                totalCount={query.trim() ? stats.totalCount : undefined}
-            />
+            <div className="flex min-w-0 items-center gap-2">
+                <VTableSearchBar
+                    query={searchInput}
+                    className="w-72 pl-0"
+                    onQueryChange={handleQueryInputChange}
+                    onClearQuery={handleClearQuery}
+                    onSearchSubmit={handleSearchSubmit}
+                />
+                {rowsSummaryLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{rowsSummaryLabel}</div>}
+            </div>
             <div className="flex min-w-0 items-center gap-2">
                 <Popover>
                     <PopoverTrigger asChild>
@@ -504,7 +507,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         </div>
     );
 
-    const previewProgress = <div className="h-0.5 flex-none">{refreshing ? <DataPreviewLoadingBar ariaLabel={t('Loading preview')} /> : null}</div>;
+    const previewProgress = <div className="h-0.5 flex-none">{refreshing ? <DataPreviewLoadingBar ariaLabel={t('Loading Data')} /> : null}</div>;
 
     if (!connectionId || !databaseName || !tableName) {
         return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{emptyMessage ?? t('No table preview')}</div>;
@@ -527,7 +530,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             <div className="h-full min-h-0 flex flex-col">
                 {previewControls}
                 {previewProgress}
-                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">{hasUserRequestedPreviewUpdate ? null : t('Loading preview')}</div>
+                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">{hasUserRequestedPreviewUpdate ? null : t('Loading Data')}</div>
             </div>
         );
     }
@@ -567,7 +570,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 <VTable
                     results={rows}
                     storageKey={storageKey}
-                    onStatsChange={onStatsChange}
+                    onStatsChange={handleVTableStatsChange}
                     showSearchBar={true}
                     activeFilters={activeFilters}
                     onUpsertFilter={handleUpsertFilter}

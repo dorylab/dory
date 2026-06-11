@@ -44,6 +44,7 @@ export interface DriverQueryResult<Row = any> {
     rows: Row[];
     rowCount?: number;
     totalRows?: number | null;
+    unfilteredTotalRows?: number | null;
     limited?: boolean;
     limit?: number;
     columns?: ColumnMeta[];

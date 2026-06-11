@@ -224,6 +224,13 @@ async function getTablePreview(datasource: SqlServerDatasource, database: string
         database,
         params: preview.params,
     });
+    const unfilteredCountResult =
+        preview.whereSql.length > 0
+            ? await datasource.queryWithContext<CountRow>(`SELECT COUNT_BIG(*) AS totalRows FROM ${qualifiedName}`, {
+                  database,
+                  params: {},
+              })
+            : countResult;
     const orderBySql = preview.orderBySql || (offset > 0 ? ' ORDER BY (SELECT NULL)' : '');
     const sql =
         offset > 0
@@ -237,6 +244,7 @@ async function getTablePreview(datasource: SqlServerDatasource, database: string
     return {
         ...result,
         totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

@@ -103,6 +103,7 @@ export async function buildTablePreviewPayload({
                 columns: result.columns ?? null,
                 rowCount: result.rowCount ?? rows.length,
                 totalRows: result.totalRows ?? null,
+                unfilteredTotalRows: result.unfilteredTotalRows ?? result.totalRows ?? null,
                 limited: result.limited ?? true,
                 limit: result.limit ?? normalizedLimit,
                 offset: normalizedOffset,

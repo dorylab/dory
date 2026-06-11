@@ -343,6 +343,13 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
         database,
         params: previewParams,
     });
+    const unfilteredCountResult =
+        preview.whereSql.length > 0
+            ? await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}`, {
+                  database,
+                  params: [],
+              })
+            : countResult;
     const params = [...previewParams, limit, offset];
     const result = await datasource.queryWithContext<Record<string, unknown>>(
         `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT $${preview.nextParameterIndex} OFFSET $${preview.nextParameterIndex + 1}`,
@@ -355,6 +362,7 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
     return {
         ...result,
         totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

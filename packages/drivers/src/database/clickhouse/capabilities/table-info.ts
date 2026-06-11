@@ -229,6 +229,16 @@ async function getTablePreview(datasource: ClickhouseDatasource, database: strin
             tbl: table,
         },
     });
+    const unfilteredCountResult =
+        preview.whereSql.length > 0
+            ? await datasource.queryWithContext<CountRow>(`SELECT count() AS totalRows FROM {db:Identifier}.{tbl:Identifier}`, {
+                  database,
+                  params: {
+                      db: database,
+                      tbl: table,
+                  },
+              })
+            : countResult;
     const result = await datasource.queryWithContext<Record<string, unknown>>(
         `SELECT * FROM {db:Identifier}.{tbl:Identifier}${preview.whereSql}${preview.orderBySql} LIMIT {limit:UInt64} OFFSET {offset:UInt64}`,
         {
@@ -246,6 +256,7 @@ async function getTablePreview(datasource: ClickhouseDatasource, database: strin
     return {
         ...result,
         totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

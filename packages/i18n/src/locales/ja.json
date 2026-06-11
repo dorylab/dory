@@ -441,7 +441,7 @@
         "Partitions": "パーティション",
         "Compression ratio": "圧縮率",
         "No table preview": "テーブルプレビューはありません",
-        "Loading preview": "プレビューを読み込み中...",
+        "Loading Data": "データを読み込み中...",
         "No data": "データがありません",
         "Refresh": "更新",
         "Current SQL": "現在の SQL",
@@ -456,7 +456,8 @@
             "ShowingRange": "{start}–{end} / {total}",
             "ShowingRangeExact": "{start}–{end} / {total}",
             "ShowingCount": "{count} 行",
-            "TotalRows": "合計行数: {total}"
+            "TotalRows": "rows: {total}",
+            "FilteredRows": "rows: {filtered}/{total}"
         },
         "Column name": "名前",
         "Column type": "型",

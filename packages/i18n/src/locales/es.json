@@ -441,7 +441,7 @@
         "Partitions": "Particiones",
         "Compression ratio": "Ratio de compresión",
         "No table preview": "No hay vista previa de la tabla",
-        "Loading preview": "Cargando vista previa...",
+        "Loading Data": "Cargando datos...",
         "No data": "No hay datos",
         "Refresh": "Actualizar",
         "Current SQL": "SQL actual",
@@ -456,7 +456,8 @@
             "ShowingRange": "{start}–{end} de {total}",
             "ShowingRangeExact": "{start}–{end} de {total}",
             "ShowingCount": "{count} filas",
-            "TotalRows": "Total de filas: {total}"
+            "TotalRows": "rows: {total}",
+            "FilteredRows": "rows: {filtered}/{total}"
         },
         "Column name": "Nombre",
         "Column type": "Tipo",

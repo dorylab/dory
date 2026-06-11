@@ -445,7 +445,7 @@
         "Partitions": "分区",
         "Compression ratio": "压缩比",
         "No table preview": "暂无表预览",
-        "Loading preview": "加载预览中...",
+        "Loading Data": "正在加载数据...",
         "No data": "没有数据",
         "Refresh": "刷新",
         "Current SQL": "当前 SQL",
@@ -460,7 +460,8 @@
             "ShowingRange": "{start}–{end} / {total}",
             "ShowingRangeExact": "{start}–{end} / {total}",
             "ShowingCount": "{count} 行",
-            "TotalRows": "总行数：{total}"
+            "TotalRows": "rows: {total}",
+            "FilteredRows": "rows: {filtered}/{total}"
         },
         "Column name": "名称",
         "Column type": "类型",

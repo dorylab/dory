@@ -282,6 +282,7 @@ export async function previewDuckDbTable(
     const normalizedOffset = normalizeTablePreviewOffset(offset);
     const qualifiedName = buildQualifiedTable(database, tableName, schema);
     const countResult = await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params);
+    const unfilteredCountResult = preview.whereSql.length > 0 ? await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
     const result = await executeDuckDbQuery<Record<string, unknown>>(handle, `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`, [
         ...(preview.params as unknown[]),
         normalizedLimit,
@@ -291,6 +292,7 @@ export async function previewDuckDbTable(
     return {
         ...result,
         totalRows: Number(countResult.rows[0]?.totalRows ?? 0),
+        unfilteredTotalRows: Number(unfilteredCountResult.rows[0]?.totalRows ?? 0),
         limited: true,
         limit: normalizedLimit,
     };
