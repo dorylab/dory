@@ -12,6 +12,7 @@ import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
+import { Progress } from '@/registry/new-york-v4/ui/progress';
 import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { ResultRow } from '@dory/shared/types/sql-console';
 import { SQLTab } from '@dory/shared/types/tabs';
@@ -19,6 +20,7 @@ import { VTableSearchBar } from '../../../../[connectionId]/sql-console/componen
 import { currentSessionMetaAtom } from '../../../../[connectionId]/sql-console/components/result-table/stores/result-table.atoms';
 import VTable from '../../../../[connectionId]/sql-console/components/result-table/vtable';
 import { InspectorPanel } from '../../../../[connectionId]/sql-console/components/result-table/vtable/InspectorPanel';
+import { VTableFilters } from '../../../../[connectionId]/sql-console/components/result-table/vtable/VTableFilters';
 import type { ColumnFilter } from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
@@ -264,6 +266,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PREVIEW_LIMIT);
     const [activeFilters, setActiveFilters] = useState<ColumnFilter[]>([]);
     const [sortState, setSortState] = useState<TablePreviewSort | null>(null);
+    const [hasUserRequestedPreviewUpdate, setHasUserRequestedPreviewUpdate] = useState(false);
 
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
     const { data: tableColumns } = useTableStructureColumnsQuery({ connectionId, databaseName, tableName });
@@ -304,11 +307,12 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         });
     }, [activeFilters, databaseName, effectiveSearchColumns, pageIndex, pageSize, query, sortState, tableName]);
 
-    const previewQuery = useQuery({
+    const previewQuery = useQuery<PreviewCacheEntry>({
         queryKey: previewQueryKey,
         enabled: Boolean(connectionId && databaseName && tableName),
         staleTime: PREVIEW_STALE_TIME,
         gcTime: PREVIEW_GC_TIME,
+        placeholderData: previousData => previousData,
         refetchOnMount: false,
         refetchOnWindowFocus: false,
         queryFn: async ({ signal }) => {
@@ -384,18 +388,21 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     }, []);
 
     const handleQueryChange = useCallback((nextQuery: string) => {
+        setHasUserRequestedPreviewUpdate(true);
         setQuery(nextQuery);
         setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handleClearQuery = useCallback(() => {
+        setHasUserRequestedPreviewUpdate(true);
         setQuery('');
         setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handleUpsertFilter = useCallback((filter: ColumnFilter) => {
+        setHasUserRequestedPreviewUpdate(true);
         setActiveFilters(prev => {
             const others = prev.filter(item => item.col !== filter.col);
             return [...others, filter];
@@ -405,29 +412,34 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     }, []);
 
     const handleRemoveFilter = useCallback((column: string) => {
+        setHasUserRequestedPreviewUpdate(true);
         setActiveFilters(prev => prev.filter(filter => filter.col !== column));
         setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handleClearAllFilters = useCallback(() => {
+        setHasUserRequestedPreviewUpdate(true);
         setActiveFilters([]);
         setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handleSortChange = useCallback((nextSort: TablePreviewSort | null) => {
+        setHasUserRequestedPreviewUpdate(true);
         setSortState(nextSort);
         setVtableStats(null);
         setPageIndex(0);
     }, []);
 
     const handlePageChange = useCallback((newPageIndex: number) => {
+        setHasUserRequestedPreviewUpdate(true);
         setVtableStats(null);
         setPageIndex(newPageIndex);
     }, []);
 
     const handlePageSizeChange = useCallback((newPageSize: number) => {
+        setHasUserRequestedPreviewUpdate(true);
         setVtableStats(null);
         setPageSize(newPageSize);
         setPageIndex(0);
@@ -435,8 +447,49 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     const handleRefresh = useCallback(() => {
         if (refreshing) return;
+        setHasUserRequestedPreviewUpdate(true);
         void previewQuery.refetch();
     }, [previewQuery, refreshing]);
+
+    const previewControls = (
+        <div className="flex items-center justify-between w-full gap-3 flex-none">
+            <VTableSearchBar
+                query={query}
+                className="w-96 pl-0"
+                onQueryChange={handleQueryChange}
+                onClearQuery={handleClearQuery}
+                filteredCount={query.trim() ? stats.filteredCount : undefined}
+                totalCount={query.trim() ? stats.totalCount : undefined}
+            />
+            <div className="flex min-w-0 items-center gap-2">
+                <Popover>
+                    <PopoverTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                            {t('Current SQL')}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-[420px] p-0">
+                        <div className="space-y-4 p-4">
+                            <div className="space-y-1">
+                                <div className="text-lg font-semibold text-foreground">{t('Current SQL')}</div>
+                            </div>
+                            <SmartCodeBlock value={currentPreviewSql || ' '} type="sql" maxHeightClassName="max-h-64" />
+                        </div>
+                    </PopoverContent>
+                </Popover>
+                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
+                    <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    {t('Refresh')}
+                </Button>
+            </div>
+        </div>
+    );
+
+    const previewProgress = (
+        <div className="h-0.5 flex-none">
+            {refreshing ? <Progress value={66} className="h-0.5 rounded-none bg-primary/10" /> : null}
+        </div>
+    );
 
     if (!connectionId || !databaseName || !tableName) {
         return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{emptyMessage ?? t('No table preview')}</div>;
@@ -455,54 +508,49 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     }
 
     if (loading && rows.length === 0) {
-        return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{t('Loading preview')}</div>;
+        return (
+            <div className="h-full min-h-0 flex flex-col">
+                {previewControls}
+                {previewProgress}
+                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
+                    {hasUserRequestedPreviewUpdate ? null : t('Loading preview')}
+                </div>
+            </div>
+        );
     }
 
     if (rows.length === 0 && !loading) {
         return (
-            <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-                <div>{t('No data')}</div>
-                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-                    <RotateCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                    {t('Refresh')}
-                </Button>
+            <div className="h-full min-h-0 flex flex-col">
+                {previewControls}
+                {previewProgress}
+                <VTableFilters
+                    activeFilters={activeFilters}
+                    columnsRaw={previewData?.columns ?? []}
+                    onUpsertFilter={handleUpsertFilter}
+                    onRemoveFilter={handleRemoveFilter}
+                    onClearAllFilters={handleClearAllFilters}
+                />
+                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
+                    {t('No data')}
+                </div>
+                <DataPreviewPaginationBar
+                    pageIndex={pageIndex}
+                    pageSize={pageSize}
+                    totalRowEstimate={totalRowEstimate}
+                    currentPageRowCount={rows.length}
+                    loading={refreshing}
+                    onPageChange={handlePageChange}
+                    onPageSizeChange={handlePageSizeChange}
+                />
             </div>
         );
     }
 
     return (
         <div className="h-full min-h-0 flex flex-col">
-            <div className="flex items-center justify-between w-full gap-3 flex-none">
-                <VTableSearchBar
-                    query={query}
-                    className="w-96 pl-0"
-                    onQueryChange={handleQueryChange}
-                    onClearQuery={handleClearQuery}
-                    filteredCount={query.trim() ? stats.filteredCount : undefined}
-                    totalCount={query.trim() ? stats.totalCount : undefined}
-                />
-                <div className="flex min-w-0 items-center gap-2">
-                    <Popover>
-                        <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                                {t('Current SQL')}
-                            </Button>
-                        </PopoverTrigger>
-                        <PopoverContent align="end" className="w-[420px] p-0">
-                            <div className="space-y-4 p-4">
-                                <div className="space-y-1">
-                                    <div className="text-lg font-semibold text-foreground">{t('Current SQL')}</div>
-                                </div>
-                                <SmartCodeBlock value={currentPreviewSql || ' '} type="sql" maxHeightClassName="max-h-64" />
-                            </div>
-                        </PopoverContent>
-                    </Popover>
-                    <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
-                        <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                        {t('Refresh')}
-                    </Button>
-                </div>
-            </div>
+            {previewControls}
+            {previewProgress}
 
             <div className="flex-1 min-h-0">
                 <VTable
