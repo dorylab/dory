@@ -6,7 +6,7 @@ import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-re
 import { Sparkles } from 'lucide-react';
 
 import { cn } from '@dory/web-utils';
-import type { SQLTab, WorkspaceScope } from '@dory/shared/types/tabs';
+import type { SQLTab } from '@dory/shared/types/tabs';
 import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
@@ -30,6 +30,7 @@ import { SQLTabs } from './components/tabs';
 import { SqlMode } from './components/copilot-modes/sql-mode';
 import { TableMode } from './components/copilot-modes/table-mode';
 import { useSqlConsoleClient } from './hooks/useSqlConsoleClient';
+import { useSqlChatHandoff } from './hooks/useSqlChatHandoff';
 import type { SQLEditorHandle } from './components/sql-editor';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
@@ -78,19 +79,25 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
-export default function SQLConsoleClient({
-    defaultLayout = INITIAL_LAYOUT.horizontal.default,
-    workspaceScope,
-    connectionId,
-    preferredActiveTabId,
-    expectExistingTabs,
-}: {
-    defaultLayout: number[] | undefined;
-    workspaceScope?: WorkspaceScope | null;
-    connectionId?: string | null;
-    preferredActiveTabId?: string | null;
-    expectExistingTabs?: boolean;
-}) {
+export type SQLConsoleRuntime = ReturnType<typeof useSqlConsoleClient>;
+
+export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizontal.default }: { defaultLayout?: number[] }) {
+    const runtime = useSqlConsoleClient(defaultLayout);
+
+    useSqlChatHandoff({
+        tabs: runtime.tabs,
+        activeTabId: runtime.activeTabId,
+        updateTab: runtime.updateTab,
+        addTab: runtime.addTab,
+        setActiveTabId: runtime.setActiveTabId,
+        setActiveDatabase: runtime.setActiveDatabase,
+        isLoading: runtime.isLoading,
+    });
+
+    return <SQLConsoleView runtime={runtime} />;
+}
+
+export function SQLConsoleView({ runtime, expectExistingTabs }: { runtime: SQLConsoleRuntime; expectExistingTabs?: boolean }) {
     const {
         normalizedLayout,
         onLayout: onLayoutFromHook,
@@ -110,10 +117,9 @@ export default function SQLConsoleClient({
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
-    } = useSqlConsoleClient(defaultLayout, { workspaceScope, connectionId, preferredActiveTabId });
+    } = runtime;
     const t = useTranslations('SqlConsole');
 
-    const editorRefsByTab = useMemo(() => ({} as Record<string, React.MutableRefObject<SQLEditorHandle | null>>), []);
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);
     const [showChatbot, setShowChatbot] = useAtom(copilotPanelOpenAtom);
     const [chatWidth, setChatWidth] = useAtom(copilotPanelWidthAtom);
@@ -130,13 +136,19 @@ export default function SQLConsoleClient({
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
     const shouldSuppressEmptyState = Boolean(expectExistingTabs && isLoading);
     const shouldShowEmptyState = !shouldSuppressEmptyState && (isLoading || tabs.length === 0);
+    const sqlTabIdsKey = useMemo(() => tabs.filter(tab => tab.tabType === 'sql').map(tab => tab.tabId).join('\u0000'), [tabs]);
+    const editorRefsByTab = useMemo<Record<string, React.MutableRefObject<SQLEditorHandle | null>>>(() => {
+        const refs: Record<string, React.MutableRefObject<SQLEditorHandle | null>> = {};
+        if (!sqlTabIdsKey) return refs;
+        for (const tabId of sqlTabIdsKey.split('\u0000')) {
+            refs[tabId] = { current: null };
+        }
+        return refs;
+    }, [sqlTabIdsKey]);
 
     const ensureEditorRef = useCallback((tabId: string | undefined | null) => {
         if (!tabId) return null;
-        if (!editorRefsByTab[tabId]) {
-            editorRefsByTab[tabId] = { current: null };
-        }
-        return editorRefsByTab[tabId];
+        return editorRefsByTab[tabId] ?? null;
     }, [editorRefsByTab]);
 
     useEffect(() => {

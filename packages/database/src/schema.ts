@@ -29,5 +29,6 @@ export const workInvestigations = activeSchemas?.workInvestigations;
 export const workInvestigationFindings = activeSchemas?.workInvestigationFindings;
 export const workRuns = activeSchemas?.workRuns;
 export const workRunEvents = activeSchemas?.workRunEvents;
+export const workWorkspaceSnapshots = activeSchemas?.workWorkspaceSnapshots;
 
 export type ActiveDBSchema = typeof activeSchemas.schema;

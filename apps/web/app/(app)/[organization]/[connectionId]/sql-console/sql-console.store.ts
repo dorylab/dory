@@ -36,6 +36,8 @@ export const currentTabResultAtom = atom<TabResult[]>([]);
 
 export const sessionIdByTabAtom = atom<Record<string, string>>({});
 
+export const selectedResultRowIndexesByKeyAtom = atom<Record<string, number[]>>({});
+
 export type EditorSelectionRange = { start: number; end: number };
 
 export const editorSelectionByTabAtom = atom<Record<string, EditorSelectionRange | null>>({});

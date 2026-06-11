@@ -116,3 +116,52 @@ test('Work Agent protocol rejects completion before conclusion update', () => {
     assert.equal(decision.allowed, false);
     assert.match(decision.allowed ? '' : decision.message, /conclusion/);
 });
+
+test('Work Agent protocol allows snapshot continuation without three new analyses', () => {
+    const state = createWorkAgentProtocolState({
+        mode: 'investigation_continue',
+        investigationId: 'analysis-1',
+        sourceTabId: 'tab-analysis-1',
+        hasSnapshotResult: false,
+    });
+
+    const decision = checkWorkAgentProtocol(state, 'work_runInvestigationSql', { investigationId: 'analysis-1' });
+    assert.equal(decision.allowed, true);
+});
+
+test('Work Agent protocol keeps snapshot continuation scoped to current analysis', () => {
+    const state = createWorkAgentProtocolState({
+        mode: 'investigation_continue',
+        investigationId: 'analysis-1',
+        sourceTabId: 'tab-analysis-1',
+        hasSnapshotResult: false,
+    });
+
+    const createDecision = checkWorkAgentProtocol(state, 'work_createInvestigation');
+    assert.equal(createDecision.allowed, false);
+    assert.match(createDecision.allowed ? '' : createDecision.message, /current Analysis/);
+
+    const sqlDecision = checkWorkAgentProtocol(state, 'work_runInvestigationSql', { investigationId: 'analysis-2' });
+    assert.equal(sqlDecision.allowed, false);
+    assert.match(sqlDecision.allowed ? '' : sqlDecision.message, /workspace snapshot/);
+});
+
+test('Work Agent protocol allows finding from snapshot result before conclusion', () => {
+    const state = createWorkAgentProtocolState({
+        mode: 'investigation_continue',
+        investigationId: 'analysis-1',
+        sourceTabId: 'tab-analysis-1',
+        hasSnapshotResult: true,
+    });
+
+    assert.equal(checkWorkAgentProtocol(state, 'work_createInvestigationFinding', { investigationId: 'analysis-1' }).allowed, true);
+    applyWorkAgentProtocolResult(state, 'work_createInvestigationFinding', {
+        ok: true,
+        id: 'finding-analysis-1',
+        investigationId: 'analysis-1',
+    });
+
+    assert.equal(checkWorkAgentProtocol(state, 'work_updateConclusion').allowed, true);
+    applyWorkAgentProtocolResult(state, 'work_updateConclusion', { ok: true });
+    assert.equal(checkWorkAgentProtocolComplete(state).allowed, true);
+});

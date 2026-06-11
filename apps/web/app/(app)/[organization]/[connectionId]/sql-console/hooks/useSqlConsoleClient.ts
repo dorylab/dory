@@ -10,8 +10,6 @@ import { useDataPreviewManager } from '../../../components/table-browser/compone
 import { useSqlLayout } from './useSqlLayout';
 import { useSqlAiTabTitle } from './useSqlAiTabTitle';
 import { useSqlQueryRunner } from './useSqlQueryRunner';
-import { useSqlChatHandoff } from './useSqlChatHandoff';
-import { useWorkRunResultHydration } from './useWorkRunResultHydration';
 
 export function useSqlConsoleClient(defaultLayout: number[] | undefined, options?: { workspaceScope?: WorkspaceScope | null; connectionId?: string | null; preferredActiveTabId?: string | null }) {
     const { normalizedLayout, onLayout } = useSqlLayout(defaultLayout);
@@ -54,20 +52,6 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, options
         closeOtherTabs,
     });
 
-    useSqlChatHandoff({
-        tabs,
-        activeTabId,
-        updateTab,
-        addTab,
-        setActiveTabId,
-        setActiveDatabase,
-        isLoading,
-    });
-    useWorkRunResultHydration({
-        activeTab,
-        isLoading,
-    });
-
     return {
         normalizedLayout,
         onLayout,
@@ -76,6 +60,8 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, options
         activeTab,
         activeTabId,
         setActiveTabId,
+        activeDatabase,
+        setActiveDatabase,
         isLoading,
         updateTab,
         addTab,

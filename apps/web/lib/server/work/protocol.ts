@@ -6,6 +6,8 @@ export type WorkAgentProtocolTool =
     | string;
 
 export type WorkAgentProtocolState = {
+    mode: 'full_work' | 'investigation_continue';
+    continuationInvestigationId: string | null;
     createdInvestigationIds: string[];
     currentInvestigationId: string | null;
     sqlStarted: boolean;
@@ -27,19 +29,41 @@ export type WorkAgentProtocolDecision =
           message: string;
       };
 
-export function createWorkAgentProtocolState(): WorkAgentProtocolState {
+export function createWorkAgentProtocolState(options?: {
+    mode?: 'full_work' | 'investigation_continue';
+    investigationId?: string | null;
+    sourceTabId?: string | null;
+    hasSnapshotResult?: boolean;
+}): WorkAgentProtocolState {
+    const mode = options?.mode ?? 'full_work';
+    const continuationInvestigationId = mode === 'investigation_continue' ? (options?.investigationId ?? null) : null;
     return {
-        createdInvestigationIds: [],
-        currentInvestigationId: null,
-        sqlStarted: false,
-        pendingFinding: null,
-        findingsByInvestigationId: {},
+        mode,
+        continuationInvestigationId,
+        createdInvestigationIds: continuationInvestigationId ? [continuationInvestigationId] : [],
+        currentInvestigationId: continuationInvestigationId,
+        sqlStarted: Boolean(options?.hasSnapshotResult),
+        pendingFinding:
+            continuationInvestigationId && options?.hasSnapshotResult
+                ? {
+                      investigationId: continuationInvestigationId,
+                      sourceTabId: options.sourceTabId ?? null,
+                      sourceRunEventId: null,
+                  }
+                : null,
+        findingsByInvestigationId: continuationInvestigationId ? { [continuationInvestigationId]: 0 } : {},
         conclusionUpdated: false,
     };
 }
 
 export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: WorkAgentProtocolTool, input?: unknown): WorkAgentProtocolDecision {
     if (toolName === 'work_createInvestigation') {
+        if (state.mode === 'investigation_continue') {
+            return {
+                allowed: false,
+                message: 'Continue the current Analysis instead of creating a new one.',
+            };
+        }
         if (state.sqlStarted) {
             return {
                 allowed: false,
@@ -55,7 +79,7 @@ export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: 
     }
 
     if (toolName === 'work_runInvestigationSql') {
-        if (state.createdInvestigationIds.length < 3) {
+        if (state.mode !== 'investigation_continue' && state.createdInvestigationIds.length < 3) {
             return {
                 allowed: false,
                 message: 'Create at least three analyses before running SQL.',
@@ -73,6 +97,12 @@ export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: 
             return {
                 allowed: false,
                 message: 'Choose an Analysis before running SQL.',
+            };
+        }
+        if (state.mode === 'investigation_continue' && investigationId !== state.continuationInvestigationId) {
+            return {
+                allowed: false,
+                message: 'Run SQL only for the Analysis the human continued from the workspace snapshot.',
             };
         }
         if (!state.createdInvestigationIds.includes(investigationId)) {
@@ -173,6 +203,29 @@ export function workAgentProtocolError(message: string) {
 }
 
 function checkAnalysesReadyForConclusion(state: WorkAgentProtocolState): WorkAgentProtocolDecision {
+    if (state.mode === 'investigation_continue') {
+        const investigationId = state.continuationInvestigationId;
+        if (!investigationId) {
+            return {
+                allowed: false,
+                message: 'Choose an Analysis before updating the conclusion.',
+            };
+        }
+        if (state.pendingFinding) {
+            return {
+                allowed: false,
+                message: 'Create a Finding for the current SQL result before updating the conclusion.',
+            };
+        }
+        if ((state.findingsByInvestigationId[investigationId] ?? 0) < 1) {
+            return {
+                allowed: false,
+                message: 'Create at least one Finding for the continued Analysis before updating the conclusion.',
+            };
+        }
+        return { allowed: true };
+    }
+
     if (state.createdInvestigationIds.length < 3) {
         return {
             allowed: false,

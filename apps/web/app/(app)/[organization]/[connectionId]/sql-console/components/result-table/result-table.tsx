@@ -6,7 +6,7 @@ import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
 import VTable from './vtable';
 import { InspectorPanel } from './vtable/InspectorPanel';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
-import { activeSessionIdAtom, localDataLoadingAtom, runningTabsAtom } from '../../sql-console.store';
+import { activeSessionIdAtom, localDataLoadingAtom, runningTabsAtom, selectedResultRowIndexesByKeyAtom } from '../../sql-console.store';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCsvDownload } from './hooks/use-csv-download';
 import { useDB } from '@/lib/client/use-pglite';
@@ -188,6 +188,7 @@ export function ResultTable() {
     const [query, setQuery] = useState('');
     const [sortState, setSortState] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
     const [selectedRowIndexes, setSelectedRowIndexes] = useState<number[]>([]);
+    const setSelectedRowIndexesByKey = useSetAtom(selectedResultRowIndexesByKeyAtom);
     const hydratedViewStateKeyRef = useRef<string | null>(null);
     const persistedViewStateRef = useRef<string | null>(null);
     const [chartStatesByKey, setChartStatesByKey] = useAtom(chartStatesByKeyAtom);
@@ -329,6 +330,14 @@ export function ResultTable() {
             setQuery('');
             setSortState(null);
             setSelectedRowIndexes([]);
+            if (storageKey !== 'unknown') {
+                setSelectedRowIndexesByKey(prev => {
+                    if (!prev[storageKey]) return prev;
+                    const next = { ...prev };
+                    delete next[storageKey];
+                    return next;
+                });
+            }
             replaceFilters([]);
             return;
         }
@@ -353,7 +362,7 @@ export function ResultTable() {
         setSortState(viewState?.sorts?.[0] ?? null);
         setSelectedRowIndexes(viewState?.selectedRowIndexes ?? []);
         replaceFilters(deserializeViewFilters(viewState?.filters));
-    }, [activeSet, replaceFilters, sessionId, sessionMetas.viewState]);
+    }, [activeSet, replaceFilters, sessionId, sessionMetas.viewState, setSelectedRowIndexesByKey, storageKey]);
 
     useEffect(() => {
         if (activeSet < 0) {
@@ -407,6 +416,14 @@ export function ResultTable() {
         [columnFilteredResults.length, results.length],
     );
 
+    useEffect(() => {
+        if (storageKey === 'unknown') return;
+        setSelectedRowIndexesByKey(prev => ({
+            ...prev,
+            [storageKey]: selectedRowIndexes,
+        }));
+    }, [selectedRowIndexes, setSelectedRowIndexesByKey, storageKey]);
+
     const onStatsChange = useCallback(() => {}, []);
     const handleSelectedRowIndexesChange = useCallback((next: number[]) => {
         setSelectedRowIndexes(prev => {
@@ -415,7 +432,13 @@ export function ResultTable() {
             }
             return next;
         });
-    }, []);
+        if (storageKey !== 'unknown') {
+            setSelectedRowIndexesByKey(prev => ({
+                ...prev,
+                [storageKey]: next,
+            }));
+        }
+    }, [setSelectedRowIndexesByKey, storageKey]);
 
     /* ---------- Reset on Tab switch ---------- */
     useEffect(() => {

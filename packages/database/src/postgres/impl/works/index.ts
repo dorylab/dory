@@ -7,6 +7,7 @@ import {
     workInvestigations,
     workRunEvents,
     workRuns,
+    workWorkspaceSnapshots,
     works,
     type Work,
     type WorkCreator,
@@ -17,6 +18,9 @@ import {
     type WorkRunEvent,
     type WorkRunEventRole,
     type WorkRunEventType,
+    type WorkWorkspaceSnapshot,
+    type WorkWorkspaceSnapshotHumanEdits,
+    type WorkWorkspaceSnapshotIntent,
     type WorkScope,
     type WorkStatus,
     type WorkType,
@@ -106,6 +110,18 @@ export type WorkRunEventCreateInput = {
     content?: string | null;
     payload?: Record<string, unknown> | null;
     createdAt?: string | Date | null;
+};
+
+export type WorkWorkspaceSnapshotCreateInput = {
+    id?: string;
+    organizationId: string;
+    workId: string;
+    investigationId: string;
+    workspaceId: string;
+    previousAgentStepId?: string | null;
+    intent: WorkWorkspaceSnapshotIntent;
+    humanEdits: WorkWorkspaceSnapshotHumanEdits;
+    createdByUserId: string;
 };
 
 export class PostgresWorksRepository {
@@ -262,6 +278,7 @@ export class PostgresWorksRepository {
         await this.db
             .delete(workInvestigationFindings)
             .where(and(eq(workInvestigationFindings.organizationId, params.organizationId), eq(workInvestigationFindings.workId, params.id)));
+        await this.db.delete(workWorkspaceSnapshots).where(and(eq(workWorkspaceSnapshots.organizationId, params.organizationId), eq(workWorkspaceSnapshots.workId, params.id)));
         await this.db.delete(workRunEvents).where(and(eq(workRunEvents.organizationId, params.organizationId), eq(workRunEvents.workId, params.id)));
         await this.db.delete(workRuns).where(and(eq(workRuns.organizationId, params.organizationId), eq(workRuns.workId, params.id)));
         await this.db.delete(tabs).where(eq(tabs.workspaceScopeWorkId, params.id));
@@ -416,6 +433,67 @@ export class PostgresWorksRepository {
             .limit(1);
 
         return (row as WorkRunEvent | undefined) ?? null;
+    }
+
+    async createWorkspaceSnapshot(input: WorkWorkspaceSnapshotCreateInput): Promise<WorkWorkspaceSnapshot> {
+        this.assertInited();
+
+        const investigation = await this.getInvestigationById({
+            organizationId: input.organizationId,
+            workId: input.workId,
+            id: input.investigationId,
+        });
+        if (!investigation) throw new DatabaseError('Work investigation not found.', 404);
+
+        const [row] = await this.db
+            .insert(workWorkspaceSnapshots)
+            .values({
+                id: input.id ?? newEntityId(),
+                organizationId: input.organizationId,
+                workId: input.workId,
+                investigationId: input.investigationId,
+                workspaceId: input.workspaceId,
+                previousAgentStepId: input.previousAgentStepId ?? null,
+                intent: input.intent,
+                humanEdits: input.humanEdits,
+                createdByUserId: input.createdByUserId,
+                createdAt: new Date(),
+            })
+            .returning();
+
+        if (!row) throw new DatabaseError('Failed to create workspace snapshot.', 500);
+        return row as WorkWorkspaceSnapshot;
+    }
+
+    async getWorkspaceSnapshotById(params: { organizationId: string; workId: string; id: string }): Promise<WorkWorkspaceSnapshot | null> {
+        this.assertInited();
+
+        const [row] = await this.db
+            .select()
+            .from(workWorkspaceSnapshots)
+            .where(and(eq(workWorkspaceSnapshots.organizationId, params.organizationId), eq(workWorkspaceSnapshots.workId, params.workId), eq(workWorkspaceSnapshots.id, params.id)))
+            .limit(1);
+
+        return (row as WorkWorkspaceSnapshot | undefined) ?? null;
+    }
+
+    async listWorkspaceSnapshots(params: { organizationId: string; workId: string; investigationId?: string | null; limit?: number }): Promise<WorkWorkspaceSnapshot[]> {
+        this.assertInited();
+
+        const conds = [eq(workWorkspaceSnapshots.organizationId, params.organizationId), eq(workWorkspaceSnapshots.workId, params.workId)];
+        if (params.investigationId) conds.push(eq(workWorkspaceSnapshots.investigationId, params.investigationId));
+
+        let query = this.db
+            .select()
+            .from(workWorkspaceSnapshots)
+            .where(and(...conds))
+            .orderBy(desc(workWorkspaceSnapshots.createdAt));
+
+        if (params.limit && params.limit > 0) {
+            query = (query as any).limit(params.limit);
+        }
+
+        return (await query) as WorkWorkspaceSnapshot[];
     }
 
     async completeRun(params: { organizationId: string; workId: string; id: string }): Promise<WorkRun> {

@@ -1,19 +1,24 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useSetAtom } from 'jotai';
-import { ArrowLeft, Bot, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bot, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/registry/new-york-v4/ui/drawer';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/registry/new-york-v4/ui/drawer';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
+import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { useConnectionDetail } from '../../../../connections/hooks/use-connections';
-import SQLConsoleClient from '../../../../[connectionId]/sql-console/client';
+import WorkInvestigationSQLConsoleClient, {
+    type WorkInvestigationWorkspaceDirtyState,
+    type WorkInvestigationWorkspaceSnapshotController,
+    type WorkInvestigationWorkspaceSnapshotInput,
+} from '../../../../[connectionId]/sql-console/work-investigation-client';
 import type { WorkDetail, WorkInvestigation } from '../../../types';
 
 type WorkInvestigationWorkspacePageClientProps = {
@@ -24,6 +29,16 @@ type WorkInvestigationWorkspacePageClientProps = {
 };
 
 const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
+
+const CLEAN_DIRTY_STATE: WorkInvestigationWorkspaceDirtyState = {
+    isDirty: false,
+    changeSummary: {
+        sqlEdited: false,
+        resultRefreshed: false,
+        chartConfigChanged: false,
+        selectedRowsChanged: false,
+    },
+};
 
 type WorkInvestigationWorkspaceContentProps = WorkInvestigationWorkspacePageClientProps & {
     onClose: () => void;
@@ -36,6 +51,10 @@ export function WorkInvestigationWorkspaceContent({
     onClose,
 }: WorkInvestigationWorkspaceContentProps) {
     const setCurrentConnection = useSetAtom(currentConnectionAtom);
+    const snapshotControllerRef = useRef<WorkInvestigationWorkspaceSnapshotController | null>(null);
+    const [dirtyState, setDirtyState] = useState<WorkInvestigationWorkspaceDirtyState>(CLEAN_DIRTY_STATE);
+    const [continueDrawerOpen, setContinueDrawerOpen] = useState(false);
+    const [userNote, setUserNote] = useState('');
 
     const workQuery = useQuery({
         queryKey: ['work', workId],
@@ -50,11 +69,30 @@ export function WorkInvestigationWorkspaceContent({
     );
     const connectionQuery = useConnectionDetail(work?.connectionId);
     const isAgentRunning = latestRun?.status === 'running' || work?.status === 'running';
+    const latestAgentStepId = useMemo(() => {
+        const events = workQuery.data?.latestRunEvents ?? [];
+        for (let index = events.length - 1; index >= 0; index -= 1) {
+            const event = events[index];
+            if (event.role === 'agent' || event.role === 'tool' || event.type === 'sql_executed') {
+                return event.id;
+            }
+        }
+        return events[events.length - 1]?.id ?? null;
+    }, [workQuery.data?.latestRunEvents]);
 
     const continueAgentMutation = useMutation({
-        mutationFn: async () => {
+        mutationFn: async (input?: { snapshot?: WorkInvestigationWorkspaceSnapshotInput | null }) => {
             const response = await fetch(`/api/works/${encodeURIComponent(workId)}/run`, {
                 method: 'POST',
+                headers: input?.snapshot ? { 'Content-Type': 'application/json' } : undefined,
+                body: input?.snapshot
+                    ? JSON.stringify({
+                          workspaceSnapshot: {
+                              ...input.snapshot,
+                              previousAgentStepId: latestAgentStepId,
+                          },
+                      })
+                    : undefined,
             });
 
             if (!response.ok) {
@@ -74,12 +112,43 @@ export function WorkInvestigationWorkspaceContent({
                 void workQuery.refetch();
             });
         },
-        onSuccess: () => toast.success('Agent run started'),
+        onSuccess: (_data, variables) => {
+            if (variables?.snapshot) {
+                snapshotControllerRef.current?.markSent();
+                setDirtyState(CLEAN_DIRTY_STATE);
+                setContinueDrawerOpen(false);
+                setUserNote('');
+            }
+            toast.success('Agent run started');
+        },
         onError: error => {
             void workQuery.refetch();
             toast.error(error instanceof Error ? error.message : 'Failed to continue agent');
         },
     });
+
+    const handleContinueAgent = async () => {
+        if (dirtyState.isDirty && snapshotControllerRef.current) {
+            setContinueDrawerOpen(true);
+            return;
+        }
+        continueAgentMutation.mutate({ snapshot: null });
+    };
+
+    const handleConfirmContinue = async () => {
+        const controller = snapshotControllerRef.current;
+        if (!controller) {
+            continueAgentMutation.mutate({ snapshot: null });
+            return;
+        }
+
+        try {
+            const snapshot = await controller.collect(userNote);
+            continueAgentMutation.mutate({ snapshot });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to collect workspace snapshot');
+        }
+    };
 
     useEffect(() => {
         if (connectionQuery.data) {
@@ -123,11 +192,21 @@ export function WorkInvestigationWorkspaceContent({
                         <span className="truncate font-medium">{investigation?.title ?? 'Workspace'}</span>
                     </Button>
                 </div>
+                {continueAgentMutation.isPending && dirtyState.isDirty ? (
+                    <div className="mr-3 flex max-w-[11rem] shrink-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        <span className="truncate">Sending workspace to Agent...</span>
+                    </div>
+                ) : dirtyState.isDirty ? (
+                    <div className="mr-3 max-w-[11rem] shrink-0 truncate text-xs font-medium text-amber-600 dark:text-amber-400">
+                        Human edited · Not sent to Agent
+                    </div>
+                ) : null}
                 <Button
                     variant="secondary"
                     size="sm"
                     disabled={!work || isAgentRunning || continueAgentMutation.isPending}
-                    onClick={() => continueAgentMutation.mutate()}
+                    onClick={handleContinueAgent}
                 >
                     {isAgentRunning || continueAgentMutation.isPending ? <Loader2 className="animate-spin" /> : <Bot />}
                     Continue Agent
@@ -147,16 +226,17 @@ export function WorkInvestigationWorkspaceContent({
                         </div>
                     </div>
                 ) : canRenderConsole ? (
-                    <SQLConsoleClient
+                    <WorkInvestigationSQLConsoleClient
                         defaultLayout={defaultLayout}
                         connectionId={work.connectionId}
-                        workspaceScope={{
-                            type: 'work_investigation',
-                            workId,
-                            investigationId,
-                        }}
+                        workId={workId}
+                        investigationId={investigationId}
                         preferredActiveTabId={linkedTabId}
                         expectExistingTabs={Boolean(linkedTabId)}
+                        onWorkspaceDirtyStateChange={setDirtyState}
+                        onWorkspaceSnapshotControllerChange={controller => {
+                            snapshotControllerRef.current = controller;
+                        }}
                     />
                 ) : (
                     <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -165,6 +245,63 @@ export function WorkInvestigationWorkspaceContent({
                     </div>
                 )}
             </main>
+            <Drawer direction="right" open={continueDrawerOpen} onOpenChange={setContinueDrawerOpen}>
+                <DrawerContent className="w-full sm:max-w-md">
+                    <DrawerHeader className="border-b">
+                        <DrawerTitle>Continue with Agent</DrawerTitle>
+                        <DrawerDescription>Your workspace changes will be sent to the Agent as context for this Investigation.</DrawerDescription>
+                    </DrawerHeader>
+                    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-4">
+                        <div>
+                            <p className="mb-2 text-sm font-medium">Your changes:</p>
+                            <div className="space-y-2 text-sm text-muted-foreground">
+                                {dirtyState.changeSummary.sqlEdited ? (
+                                    <div className="flex items-center gap-2">
+                                        <Check className="size-4 text-foreground" />
+                                        SQL was edited
+                                    </div>
+                                ) : null}
+                                {dirtyState.changeSummary.resultRefreshed ? (
+                                    <div className="flex items-center gap-2">
+                                        <Check className="size-4 text-foreground" />
+                                        Result was refreshed
+                                    </div>
+                                ) : null}
+                                {dirtyState.changeSummary.chartConfigChanged ? (
+                                    <div className="flex items-center gap-2">
+                                        <Check className="size-4 text-foreground" />
+                                        Chart config changed
+                                    </div>
+                                ) : null}
+                                {dirtyState.changeSummary.selectedRowsChanged ? (
+                                    <div className="flex items-center gap-2">
+                                        <Check className="size-4 text-foreground" />
+                                        Rows were selected
+                                    </div>
+                                ) : null}
+                            </div>
+                        </div>
+                        <label className="space-y-2">
+                            <span className="text-sm font-medium">Optional note to Agent:</span>
+                            <Textarea
+                                value={userNote}
+                                onChange={event => setUserNote(event.target.value)}
+                                placeholder="I added order count and total amount. Continue judging which status contributes most and whether there are anomalies."
+                                className="min-h-28 resize-none"
+                            />
+                        </label>
+                    </div>
+                    <DrawerFooter className="border-t sm:flex-row sm:justify-end">
+                        <Button variant="outline" onClick={() => setContinueDrawerOpen(false)} disabled={continueAgentMutation.isPending}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleConfirmContinue} disabled={continueAgentMutation.isPending}>
+                            {continueAgentMutation.isPending ? <Loader2 className="animate-spin" /> : <Bot />}
+                            Continue
+                        </Button>
+                    </DrawerFooter>
+                </DrawerContent>
+            </Drawer>
         </div>
     );
 }

@@ -22,8 +22,9 @@ import { resolveOrganizationAccess } from '@/lib/server/authz';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
-import type { WorkRunEventRole, WorkRunEventType } from '@dory/database/postgres/schemas';
+import type { WorkRunEventRole, WorkRunEventType, WorkWorkspaceSnapshot } from '@dory/database/postgres/schemas';
 import { applyWorkAgentProtocolResult, checkWorkAgentProtocol, checkWorkAgentProtocolComplete, createWorkAgentProtocolState, workAgentProtocolError } from './protocol';
+import { formatWorkspaceSnapshotForAgent } from './workspace-snapshot';
 
 type RunWorkAgentOptions = {
     req: Request;
@@ -31,6 +32,7 @@ type RunWorkAgentOptions = {
     organizationId: string;
     userId: string;
     workId: string;
+    workspaceSnapshotId?: string | null;
 };
 
 function mergeHeaders(headers: Record<string, string | undefined> | undefined, extraHeaders: Record<string, string> | null): Record<string, string | undefined> | undefined {
@@ -153,13 +155,13 @@ function workRunTools(tools: Record<string, any>) {
     return Object.fromEntries(Object.entries(tools).filter(([toolName]) => !blocked.has(toolName)));
 }
 
-function withWorkSqlContext(input: unknown, params: { toolName: string; workId: string; runId: string }) {
+function withWorkSqlContext(input: unknown, params: { toolName: string; workId: string; runId: string; investigationId?: string | null }) {
     if (params.toolName !== 'work_runInvestigationSql') return input;
     const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
     return {
         ...record,
         workId: typeof record.workId === 'string' && record.workId ? record.workId : params.workId,
-        investigationId: typeof record.investigationId === 'string' && record.investigationId ? record.investigationId : undefined,
+        investigationId: typeof record.investigationId === 'string' && record.investigationId ? record.investigationId : (params.investigationId ?? undefined),
         runId: params.runId,
     };
 }
@@ -224,6 +226,7 @@ function wrapToolsWithRunEvents(params: {
                             toolName,
                             workId: params.workId,
                             runId: params.runId,
+                            investigationId: params.protocol.currentInvestigationId,
                         });
                         const executionInput = withWorkFindingContext(sqlInput, {
                             toolName,
@@ -345,7 +348,25 @@ function formatWorkSetupSection(work: { id: string; workType?: string | null; sc
     return lines.join('\n');
 }
 
-function buildWorkRunInstruction(work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null }) {
+function buildWorkRunInstruction(
+    work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null },
+    workspaceSnapshot: WorkWorkspaceSnapshot | null,
+) {
+    if (workspaceSnapshot) {
+        return [
+            'Work Run Context',
+            `You are continuing a Dory Work. The current workId is ${work.id}.`,
+            `Continue only the current Investigation. The current investigationId is ${workspaceSnapshot.investigationId}.`,
+            formatWorkSetupSection(work),
+            'The human has already reviewed and modified the SQL workspace. Treat the Workspace Snapshot in the user message as the source of truth for the next step.',
+            'Do not create new analyses for this continuation unless the human explicitly asks for a broader Work restart.',
+            'You may create a Finding from the provided snapshot result, run follow-up SQL through work.runInvestigationSql for this same investigationId, and update the Work conclusion through work.updateConclusion.',
+            'When calling work.runInvestigationSql, use the investigationId from this continuation and preserve the human-edited SQL intent unless you explain the change.',
+            'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
+            'Keep the final answer concise and focused on what changed after the human handoff.',
+        ].join('\n');
+    }
+
     return [
         'Work Run Context',
         `You are running a Dory Work. The current workId is ${work.id}.`,
@@ -391,6 +412,20 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         return Response.json({ error: 'Work not found.' }, { status: 404 });
     }
 
+    const workspaceSnapshot = options.workspaceSnapshotId
+        ? await options.db.works.getWorkspaceSnapshotById({
+              organizationId: options.organizationId,
+              workId: work.id,
+              id: options.workspaceSnapshotId,
+          })
+        : null;
+
+    if (options.workspaceSnapshotId && !workspaceSnapshot) {
+        return Response.json({ error: 'Workspace snapshot not found.' }, { status: 404 });
+    }
+
+    const workspaceSnapshotContext = formatWorkspaceSnapshotForAgent(workspaceSnapshot);
+
     const { run, existingRunningRun } = await options.db.works.createRun({
         workId: work.id,
         organizationId: options.organizationId,
@@ -435,13 +470,15 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
     await appendEvent({
         type: 'message',
         role: 'user',
-        content: work.goal,
+        content: workspaceSnapshotContext ?? work.goal,
         payload: {
             workId: work.id,
             connectionId: work.connectionId,
             workType: work.workType,
             scope: work.scope,
             initialContext: work.initialContext,
+            workspaceSnapshotId: workspaceSnapshot?.id ?? null,
+            investigationId: workspaceSnapshot?.investigationId ?? null,
         },
     });
     await appendEvent({
@@ -481,7 +518,16 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             }),
         });
 
-        const protocol = createWorkAgentProtocolState();
+        const protocol = createWorkAgentProtocolState(
+            workspaceSnapshot
+                ? {
+                      mode: 'investigation_continue',
+                      investigationId: workspaceSnapshot.investigationId,
+                      sourceTabId: workspaceSnapshot.workspaceId,
+                      hasSnapshotResult: Boolean(workspaceSnapshot.humanEdits?.resultPreview),
+                  }
+                : undefined,
+        );
         const toolCallStarts: Array<{ toolName: string; toolCallId: string | null; startedAt: Date; consumed: boolean }> = [];
         let modelStepMessageCount = 0;
         const wrappedTools = wrapToolsWithRunEvents({
@@ -510,7 +556,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             copilotEnvelope: null,
             locale,
         });
-        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work)].filter(Boolean).join('\n\n');
+        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work, workspaceSnapshot)].filter(Boolean).join('\n\n');
         const model = resolveDoryAgentModel({
             execution,
             req: options.req as any,
@@ -530,7 +576,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             {
                 id: `work-run-${run.id}`,
                 role: 'user',
-                parts: [{ type: 'text', text: work.goal }],
+                parts: [{ type: 'text', text: workspaceSnapshotContext ? `${work.goal}\n\n${workspaceSnapshotContext}` : work.goal }],
             } as UIMessage,
         ];
 
@@ -624,9 +670,11 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                 }
 
                 const readyForFallbackConclusion =
-                    protocol.createdInvestigationIds.length >= 3 &&
-                    !protocol.pendingFinding &&
-                    protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0);
+                    protocol.mode === 'investigation_continue'
+                        ? !protocol.pendingFinding && protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0)
+                        : protocol.createdInvestigationIds.length >= 3 &&
+                          !protocol.pendingFinding &&
+                          protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0);
                 if (readyForFallbackConclusion && !protocol.conclusionUpdated) {
                     const investigations = await options.db.works.listInvestigations({
                         organizationId: options.organizationId,

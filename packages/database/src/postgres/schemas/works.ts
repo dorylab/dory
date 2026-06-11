@@ -14,6 +14,21 @@ export type WorkScope = {
 };
 export type WorkFindingCreator = 'user' | 'agent' | 'automation';
 export type WorkRunStatus = 'running' | 'completed' | 'failed';
+export type WorkWorkspaceSnapshotIntent = 'continue_analysis';
+export type WorkWorkspaceSnapshotChangeSummary = {
+    sqlEdited?: boolean;
+    resultRefreshed?: boolean;
+    chartConfigChanged?: boolean;
+    selectedRowsChanged?: boolean;
+};
+export type WorkWorkspaceSnapshotHumanEdits = {
+    sql?: string | null;
+    resultPreview?: Record<string, unknown> | null;
+    chartConfig?: Record<string, unknown> | null;
+    selectedRows?: Record<string, unknown> | null;
+    userNote?: string | null;
+    changeSummary?: WorkWorkspaceSnapshotChangeSummary | null;
+};
 export type WorkRunEventType =
     | 'message'
     | 'tool_call'
@@ -150,6 +165,29 @@ export const workRunEvents = pgTable(
     ],
 );
 
+export const workWorkspaceSnapshots = pgTable(
+    'work_workspace_snapshots',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => newEntityId()),
+        organizationId: text('organization_id').notNull(),
+        workId: text('work_id').notNull(),
+        investigationId: text('investigation_id').notNull(),
+        workspaceId: text('workspace_id').notNull(),
+        previousAgentStepId: text('previous_agent_step_id'),
+        intent: text('intent').$type<WorkWorkspaceSnapshotIntent>().notNull(),
+        humanEdits: jsonb('human_edits').$type<WorkWorkspaceSnapshotHumanEdits>().notNull(),
+        createdByUserId: text('created_by_user_id').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    t => [
+        index('idx_work_workspace_snapshots_work_created').on(t.organizationId, t.workId, t.createdAt),
+        index('idx_work_workspace_snapshots_investigation_created').on(t.organizationId, t.investigationId, t.createdAt),
+        index('idx_work_workspace_snapshots_workspace_created').on(t.organizationId, t.workspaceId, t.createdAt),
+    ],
+);
+
 export type Work = typeof works.$inferSelect;
 export type NewWork = typeof works.$inferInsert;
 export type WorkInvestigation = typeof workInvestigations.$inferSelect;
@@ -160,3 +198,5 @@ export type WorkRun = typeof workRuns.$inferSelect;
 export type NewWorkRun = typeof workRuns.$inferInsert;
 export type WorkRunEvent = typeof workRunEvents.$inferSelect;
 export type NewWorkRunEvent = typeof workRunEvents.$inferInsert;
+export type WorkWorkspaceSnapshot = typeof workWorkspaceSnapshots.$inferSelect;
+export type NewWorkWorkspaceSnapshot = typeof workWorkspaceSnapshots.$inferInsert;

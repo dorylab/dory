@@ -335,5 +335,16 @@
     "bps": true,
     "folderMillis": 1780922041547,
     "hash": "9305937612a837a6c6b3df632234782b9599db234026c7d167f18c9ec12eeece"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"work_workspace_snapshots\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"investigation_id\" text NOT NULL,\n    \"workspace_id\" text NOT NULL,\n    \"previous_agent_step_id\" text,\n    \"intent\" text NOT NULL,\n    \"human_edits\" jsonb NOT NULL,\n    \"created_by_user_id\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_work_workspace_snapshots_work_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"work_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_work_workspace_snapshots_investigation_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"investigation_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_work_workspace_snapshots_workspace_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"workspace_id\",\"created_at\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1780926000000,
+    "hash": "5e779b92440bd28e07eeeb9fa8cdcc0bb7c867148099641565598ffd1f624cf6"
   }
 ]
