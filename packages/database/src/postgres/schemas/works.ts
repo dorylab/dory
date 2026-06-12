@@ -5,6 +5,7 @@ import { newEntityId } from '@dory/shared/id';
 export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
+export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 export type WorkScope = {
     timeRange?: string | null;
     tablesMode?: 'auto' | 'selected' | null;
@@ -79,8 +80,13 @@ export const workInvestigations = pgTable(
         connectionId: text('connection_id').notNull(),
         title: text('title').notNull(),
         status: text('status').$type<WorkStatus>().notNull().default('draft'),
+        auditStatus: text('audit_status').$type<WorkAnalysisAuditStatus>().notNull().default('draft'),
         linkedTabId: text('linked_tab_id'),
         lastQueryAt: timestamp('last_query_at', { withTimezone: true }),
+        reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+        acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+        rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+        auditStatusUpdatedAt: timestamp('audit_status_updated_at', { withTimezone: true }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },

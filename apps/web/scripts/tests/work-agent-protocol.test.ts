@@ -26,6 +26,19 @@ function runSql(state: ReturnType<typeof createWorkAgentProtocolState>, investig
     });
 }
 
+function updateAuditStatus(
+    state: ReturnType<typeof createWorkAgentProtocolState>,
+    investigationId: string,
+    auditStatus: 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected',
+) {
+    assert.equal(checkWorkAgentProtocol(state, 'work_updateInvestigation', { id: investigationId, auditStatus }).allowed, true);
+    applyWorkAgentProtocolResult(state, 'work_updateInvestigation', {
+        ok: true,
+        id: investigationId,
+        auditStatus,
+    });
+}
+
 function createFinding(state: ReturnType<typeof createWorkAgentProtocolState>, investigationId: string) {
     assert.equal(checkWorkAgentProtocol(state, 'work_createInvestigationFinding', { investigationId }).allowed, true);
     applyWorkAgentProtocolResult(state, 'work_createInvestigationFinding', {
@@ -117,6 +130,44 @@ test('Work Agent protocol rejects conclusion until every analysis has a Finding'
     assert.match(decision.allowed ? '' : decision.message, /every Analysis/);
 });
 
+test('Work Agent protocol marks SQL results as needing review', () => {
+    const state = createWorkAgentProtocolState();
+    createThreeAnalyses(state);
+    runSql(state, 'analysis-1');
+
+    assert.equal(state.auditStatusByInvestigationId['analysis-1'], 'needs_review');
+});
+
+test('Work Agent protocol rejects conclusion until at least one analysis is accepted', () => {
+    const state = createWorkAgentProtocolState();
+    createThreeAnalyses(state);
+    for (const id of ['analysis-1', 'analysis-2', 'analysis-3']) {
+        runSql(state, id);
+        createFinding(state, id);
+    }
+
+    const decision = checkWorkAgentProtocol(state, 'work_updateConclusion');
+    assert.equal(decision.allowed, false);
+    assert.match(decision.allowed ? '' : decision.message, /Accept at least one Analysis/);
+});
+
+test('Work Agent protocol does not use rejected analyses for conclusion readiness', () => {
+    const state = createWorkAgentProtocolState();
+    createThreeAnalyses(state);
+    runSql(state, 'analysis-1');
+    createFinding(state, 'analysis-1');
+    updateAuditStatus(state, 'analysis-1', 'rejected');
+
+    for (const id of ['analysis-2', 'analysis-3']) {
+        runSql(state, id);
+        createFinding(state, id);
+    }
+
+    const decision = checkWorkAgentProtocol(state, 'work_updateConclusion');
+    assert.equal(decision.allowed, false);
+    assert.match(decision.allowed ? '' : decision.message, /Accept at least one Analysis/);
+});
+
 test('Work Agent protocol allows analyses, SQL, Findings, conclusion sequence', () => {
     const state = createWorkAgentProtocolState();
     createThreeAnalyses(state);
@@ -125,6 +176,7 @@ test('Work Agent protocol allows analyses, SQL, Findings, conclusion sequence', 
         runSql(state, id);
         createFinding(state, id);
     }
+    updateAuditStatus(state, 'analysis-1', 'accepted');
 
     assert.equal(checkWorkAgentProtocol(state, 'work_updateConclusion').allowed, true);
     applyWorkAgentProtocolResult(state, 'work_updateConclusion', { ok: true });
@@ -139,6 +191,7 @@ test('Work Agent protocol rejects completion before conclusion update', () => {
         runSql(state, id);
         createFinding(state, id);
     }
+    updateAuditStatus(state, 'analysis-1', 'accepted');
 
     const decision = checkWorkAgentProtocolComplete(state);
     assert.equal(decision.allowed, false);
@@ -180,6 +233,9 @@ test('Work Agent protocol allows finding from snapshot result before conclusion'
         investigationId: 'analysis-1',
         sourceTabId: 'tab-analysis-1',
         hasSnapshotResult: true,
+        existingAuditStatusByInvestigationId: {
+            'analysis-1': 'accepted',
+        },
     });
 
     assert.equal(checkWorkAgentProtocol(state, 'work_createInvestigationFinding', { investigationId: 'analysis-1' }).allowed, true);

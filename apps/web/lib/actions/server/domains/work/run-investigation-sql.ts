@@ -59,10 +59,7 @@ function resultMetaFromQuery(input: {
     };
 }
 
-export function investigationSqlAssetBlockContent(input: {
-    groupTitle: string;
-    sql: string;
-}) {
+export function investigationSqlAssetBlockContent(input: { groupTitle: string; sql: string }) {
     return [`-- Purpose: ${input.groupTitle}`, '', ensureSqlStatementTerminated(input.sql)].join('\n');
 }
 
@@ -92,12 +89,7 @@ function isReusableSeedTab(tab: TabPayload, input: { seedContent: string; linked
     return (tab.content ?? '').trim() === input.seedContent.trim();
 }
 
-export function resolveInvestigationSqlTargetTab(input: {
-    tabs: TabPayload[];
-    linkedTabId: string | null;
-    seedContent: string;
-    groupKey: string;
-}) {
+export function resolveInvestigationSqlTargetTab(input: { tabs: TabPayload[]; linkedTabId: string | null; seedContent: string; groupKey: string }) {
     const existingGroupTab = input.tabs.find(tab => tab.tabType === 'sql' && tab.resultMeta?.sqlAssetGroupKey === input.groupKey);
     if (existingGroupTab) {
         return {
@@ -264,6 +256,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
         await executeAction(ctx, 'work.updateInvestigation', {
             workId: work.id,
             id: investigation.id,
+            auditStatus: 'needs_review',
             linkedTabId: tabId,
             lastQueryAt: new Date().toISOString(),
         });

@@ -121,12 +121,14 @@ export async function createValidatedWorkspaceSnapshot(input: {
         createdByUserId: input.userId,
     });
 
-    if (input.snapshot.humanEdits.resultPreview) {
+    const hasHumanChanges = Object.values(input.snapshot.humanEdits.changeSummary ?? {}).some(Boolean);
+    if (input.snapshot.humanEdits.resultPreview || hasHumanChanges) {
         await input.db.works.updateInvestigation({
             organizationId: input.organizationId,
             workId: work.id,
             id: investigation.id,
             patch: {
+                auditStatus: hasHumanChanges ? 'revised' : undefined,
                 lastQueryAt: snapshot.createdAt,
             },
         });

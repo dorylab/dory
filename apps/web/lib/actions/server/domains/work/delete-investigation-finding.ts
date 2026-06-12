@@ -23,11 +23,27 @@ export const workDeleteInvestigationFindingAction = defineWebAction({
         resource: (_ctx, input) => ({ type: 'work_investigation_finding', id: input.id, metadata: { workId: input.workId } }),
     },
     handler: async (ctx, input) => {
+        const finding = await ctx.services.db.works.getInvestigationFindingById({
+            organizationId: ctx.organizationId,
+            workId: input.workId,
+            id: input.id,
+        });
+
         await ctx.services.db.works.deleteInvestigationFinding({
             organizationId: ctx.organizationId,
             workId: input.workId,
             id: input.id,
         });
+
+        if (ctx.actor.type === 'user' && finding) {
+            await ctx.services.db.works.updateInvestigation({
+                organizationId: ctx.organizationId,
+                workId: input.workId,
+                id: finding.investigationId,
+                patch: { auditStatus: 'revised' },
+            });
+        }
+
         return { ok: true };
     },
 });

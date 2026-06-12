@@ -39,6 +39,7 @@ type RunWorkAgentOptions = {
 type ExistingRunAnalysis = {
     id: string;
     title: string;
+    auditStatus: WorkInvestigation['auditStatus'];
     findingsCount: number;
     sqlAssetCount: number;
     lastQueryAt: Date | null;
@@ -101,10 +102,12 @@ function selectExistingRunAnalyses(input: { investigations: WorkInvestigation[];
     const findingCounts = countFindingsByInvestigation(input.findings);
     const sqlAssetCounts = countSqlAssetsByInvestigation(input.runEvents);
     return input.investigations
+        .filter(investigation => investigation.auditStatus !== 'rejected')
         .map(
             (investigation): ExistingRunAnalysis => ({
                 id: investigation.id,
                 title: investigation.title,
+                auditStatus: investigation.auditStatus,
                 findingsCount: findingCounts.get(investigation.id) ?? 0,
                 sqlAssetCount: Math.max(sqlAssetCounts.get(investigation.id) ?? 0, investigation.linkedTabId ? 1 : 0),
                 lastQueryAt: investigation.lastQueryAt,
@@ -124,12 +127,15 @@ function existingAnalysesForPrompt(analyses: ExistingRunAnalysis[]) {
     if (analyses.length === 0) return '';
     return [
         'Existing Analyses',
-        ...analyses.map(analysis => `- investigationId: ${analysis.id}; title: ${analysis.title}; findings: ${analysis.findingsCount}; sql assets: ${analysis.sqlAssetCount}`),
+        ...analyses.map(
+            analysis =>
+                `- investigationId: ${analysis.id}; title: ${analysis.title}; audit status: ${analysis.auditStatus}; findings: ${analysis.findingsCount}; sql assets: ${analysis.sqlAssetCount}`,
+        ),
     ].join('\n');
 }
 
 function focusedAnalysisForPrompt(analysis: WorkInvestigation) {
-    return ['Focused Analysis', `- investigationId: ${analysis.id}; title: ${analysis.title}`].join('\n');
+    return ['Focused Analysis', `- investigationId: ${analysis.id}; title: ${analysis.title}; audit status: ${analysis.auditStatus}`].join('\n');
 }
 
 function toMessageContent(value: unknown, fallback: string) {
@@ -159,6 +165,7 @@ function buildFallbackConclusionFromFindings(
     investigations: Array<{
         id: string;
         title: string;
+        auditStatus?: WorkInvestigation['auditStatus'];
     }>,
     findings: Array<{
         investigationId: string;
@@ -175,6 +182,7 @@ function buildFallbackConclusionFromFindings(
     }
 
     const sections = investigations
+        .filter(investigation => investigation.auditStatus === 'accepted')
         .map(investigation => ({
             id: investigation.id,
             title: investigation.title?.trim() || 'Investigation',
@@ -282,7 +290,9 @@ async function createFallbackFindingsForMissingAnalyses(params: {
     if (params.protocol.mode !== 'full_work') return [];
     if (params.protocol.existingInvestigationIds.length === 0 && params.protocol.createdInvestigationIds.length < 3) return [];
 
-    const missingInvestigationIds = params.protocol.createdInvestigationIds.filter(id => (params.protocol.findingsByInvestigationId[id] ?? 0) < 1);
+    const missingInvestigationIds = params.protocol.createdInvestigationIds.filter(
+        id => params.protocol.auditStatusByInvestigationId[id] !== 'rejected' && (params.protocol.findingsByInvestigationId[id] ?? 0) < 1,
+    );
     if (missingInvestigationIds.length === 0) return [];
 
     const [investigations, runEvents] = await Promise.all([
@@ -607,7 +617,8 @@ function buildWorkRunInstruction(
             formatWorkSetupSection(work),
             'The human has already reviewed and modified the SQL workspace. Treat the Workspace Snapshot in the user message as the source of truth for the next step.',
             'Do not create new analyses for this continuation unless the human explicitly asks for a broader Work restart.',
-            'You may create a Finding from the provided snapshot result, run follow-up SQL through work.runInvestigationSql for this same investigationId, and update the Work conclusion through work.updateConclusion.',
+            'You may create a Finding from the provided snapshot result and run follow-up SQL through work.runInvestigationSql for this same investigationId.',
+            'Only call work.updateConclusion after the focused Analysis has audit status accepted. Otherwise stop after producing SQL-backed Findings for human review.',
             'When calling work.runInvestigationSql, use the investigationId from this continuation and preserve the human-edited SQL intent unless you explain the change.',
             'Use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
             'Write SQL as a complete statement ending with a semicolon.',
@@ -629,10 +640,9 @@ function buildWorkRunInstruction(
             'After every SQL run, create at least one Finding for this same Analysis before running another SQL query or writing the conclusion.',
             'When calling work.runInvestigationSql, use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
             'Write SQL as a complete statement ending with a semicolon.',
-            'The conclusion should incorporate the new Finding into the Work conclusion.',
+            'Only call work.updateConclusion after the focused Analysis has audit status accepted. Otherwise stop after producing SQL-backed Findings for human review.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
-            'Always call work.updateConclusion before finishing the run.',
             'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
         ].join('\n');
     }
@@ -649,12 +659,11 @@ function buildWorkRunInstruction(
             'After every SQL run, create at least one Finding for the same Analysis before running another SQL query, switching Analysis, or writing the conclusion.',
             'When calling work.runInvestigationSql, use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
             'Write SQL as a complete statement ending with a semicolon.',
-            'Every active Analysis must have at least one Finding before the conclusion.',
-            'The conclusion must synthesize the Findings and should not simply repeat every Finding.',
+            'Every active non-rejected Analysis must have at least one Finding before the conclusion.',
+            'Only call work.updateConclusion after at least one active Analysis has audit status accepted. The conclusion must synthesize accepted Findings and should not simply repeat every Finding.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
-            'Use work.createInvestigationFinding after SQL results, and use work.updateConclusion only after every active Analysis has at least one Finding.',
+            'Use work.createInvestigationFinding after SQL results. If no Analysis is accepted yet, finish after recording Findings for human review.',
             'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
-            'Always call work.updateConclusion before finishing the run.',
             'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
         ].join('\n');
     }
@@ -663,7 +672,7 @@ function buildWorkRunInstruction(
         'Work Run Context',
         `You are running a Dory Work. The current workId is ${work.id}.`,
         formatWorkSetupSection(work),
-        'Follow this protocol exactly: first create 3-5 distinct analyses with work.createInvestigation, then run SQL for each analysis with work.runInvestigationSql, then create concrete Findings with work.createInvestigationFinding, then write the final conclusion with work.updateConclusion.',
+        'Follow this protocol exactly: first create 3-5 distinct analyses with work.createInvestigation, then run SQL for each analysis with work.runInvestigationSql, then create concrete Findings with work.createInvestigationFinding, then stop for human review.',
         'Call exactly one protocol tool at a time. Do not call work.runInvestigationSql in the same step as work.createInvestigation.',
         'Create all analyses before running any SQL. Use focused titles such as revenue trend analysis, order status analysis, order amount anomaly analysis, and time-based anomaly analysis.',
         'Let the Work type and Scope guide the analysis titles, SQL exploration order, and conclusion structure.',
@@ -672,13 +681,12 @@ function buildWorkRunInstruction(
         'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created and a stable groupKey for the human-readable SQL asset group. Use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the new SQL belongs in the same workspace tab as prior SQL for that Analysis.',
         'Write SQL as a complete statement ending with a semicolon.',
         'A Finding is a concise fact or observation backed by the SQL result. Prefer bullet-like short statements, not a long summary paragraph.',
-        'Every Analysis must have at least one Finding before the conclusion.',
-        'The conclusion must synthesize the Findings and should not simply repeat every Finding.',
+        'Every non-rejected Analysis must have at least one Finding before it can be accepted for a conclusion.',
+        'Only call work.updateConclusion after at least one Analysis has audit status accepted.',
         'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
-        'Use work.createInvestigationFinding after SQL results, and use work.updateConclusion only after every Analysis has at least one Finding.',
+        'Use work.createInvestigationFinding after SQL results. If no Analysis is accepted yet, finish after recording Findings for human review.',
         'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
         'Use your own exploration notes in those step messages. Do not use generic server progress templates.',
-        'Always call work.updateConclusion before finishing the run.',
         'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
     ].join('\n');
 }
@@ -848,6 +856,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                       investigationId: workspaceSnapshot.investigationId,
                       sourceTabId: workspaceSnapshot.workspaceId,
                       hasSnapshotResult: Boolean(workspaceSnapshot.humanEdits?.resultPreview),
+                      existingAuditStatusByInvestigationId: workspaceSnapshot ? { [workspaceSnapshot.investigationId]: 'revised' } : undefined,
                   }
                 : focusedAnalysis
                   ? {
@@ -855,10 +864,12 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                         investigationId: focusedAnalysis.id,
                         sourceTabId: focusedAnalysis.linkedTabId,
                         hasSnapshotResult: false,
+                        existingAuditStatusByInvestigationId: { [focusedAnalysis.id]: focusedAnalysis.auditStatus },
                     }
                   : {
                         existingInvestigationIds: existingRunAnalyses.map(analysis => analysis.id),
                         existingFindingsByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.findingsCount])),
+                        existingAuditStatusByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.auditStatus])),
                     },
         );
         const toolCallStarts: Array<{ toolName: string; toolCallId: string | null; startedAt: Date; consumed: boolean }> = [];
@@ -1026,10 +1037,17 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
 
                 const readyForFallbackConclusion =
                     protocol.mode === 'investigation_continue'
-                        ? !protocol.pendingFinding && protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0)
+                        ? !protocol.pendingFinding &&
+                          protocol.createdInvestigationIds.some(id => protocol.auditStatusByInvestigationId[id] === 'accepted') &&
+                          protocol.createdInvestigationIds.every(
+                              id => protocol.auditStatusByInvestigationId[id] === 'rejected' || (protocol.findingsByInvestigationId[id] ?? 0) > 0,
+                          )
                         : (protocol.existingInvestigationIds.length > 0 || protocol.createdInvestigationIds.length >= 3) &&
                           !protocol.pendingFinding &&
-                          protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0);
+                          protocol.createdInvestigationIds.some(id => protocol.auditStatusByInvestigationId[id] === 'accepted') &&
+                          protocol.createdInvestigationIds.every(
+                              id => protocol.auditStatusByInvestigationId[id] === 'rejected' || (protocol.findingsByInvestigationId[id] ?? 0) > 0,
+                          );
                 if (readyForFallbackConclusion && !protocol.conclusionUpdated) {
                     const investigations = await options.db.works.listInvestigations({
                         organizationId: options.organizationId,

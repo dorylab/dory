@@ -346,5 +346,17 @@
     "bps": true,
     "folderMillis": 1780926000000,
     "hash": "5e779b92440bd28e07eeeb9fa8cdcc0bb7c867148099641565598ffd1f624cf6"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"work_investigations\" ADD COLUMN \"audit_status\" text DEFAULT 'draft' NOT NULL;",
+      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"reviewed_at\" timestamp with time zone;",
+      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"accepted_at\" timestamp with time zone;",
+      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"rejected_at\" timestamp with time zone;",
+      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"audit_status_updated_at\" timestamp with time zone;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1781246546313,
+    "hash": "e4e426209f24fa57543f0bdf136534bbdd0f7b8701533efeb2d400cac057b63c"
   }
 ]

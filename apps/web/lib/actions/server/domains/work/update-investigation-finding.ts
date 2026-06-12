@@ -35,8 +35,8 @@ export const workUpdateInvestigationFindingAction = defineWebAction({
         }),
         resource: (_ctx, input) => ({ type: 'work_investigation_finding', id: input.id, metadata: { workId: input.workId } }),
     },
-    handler: (ctx, input) =>
-        ctx.services.db.works.updateInvestigationFinding({
+    handler: async (ctx, input) => {
+        const finding = await ctx.services.db.works.updateInvestigationFinding({
             organizationId: ctx.organizationId,
             workId: input.workId,
             id: input.id,
@@ -46,5 +46,17 @@ export const workUpdateInvestigationFindingAction = defineWebAction({
                 sourceRunEventId: input.sourceRunEventId,
                 orderIndex: input.orderIndex,
             },
-        }),
+        });
+
+        if (ctx.actor.type === 'user') {
+            await ctx.services.db.works.updateInvestigation({
+                organizationId: ctx.organizationId,
+                workId: input.workId,
+                id: finding.investigationId,
+                patch: { auditStatus: 'revised' },
+            });
+        }
+
+        return finding;
+    },
 });

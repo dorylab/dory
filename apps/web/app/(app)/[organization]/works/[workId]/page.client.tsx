@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, Bot, Check, ChevronDown, Clock, Database, Loader2, MoreVertical, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bot, Check, ChevronDown, Clock, Database, Loader2, MoreVertical, Pencil, Play, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -33,7 +33,7 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { useConnections } from '../../connections/hooks/use-connections';
-import type { Work, WorkDetail, WorkInvestigation, WorkRun, WorkRunEvent, WorkStatus } from '../types';
+import type { Work, WorkAnalysisAuditStatus, WorkDetail, WorkInvestigation, WorkRun, WorkRunEvent, WorkStatus } from '../types';
 import { eventTypeLabel, formatRelativeTime, runStatusClassName, runStatusLabel, statusClassName, statusLabel } from '../utils';
 
 type WorkDetailPageClientProps = {
@@ -43,6 +43,64 @@ type WorkDetailPageClientProps = {
 
 const statusOptions: WorkStatus[] = ['draft', 'running', 'completed'];
 const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
+
+function analysisAuditStatusLabel(status: WorkAnalysisAuditStatus) {
+    switch (status) {
+        case 'needs_review':
+            return 'Needs review';
+        case 'reviewed':
+            return 'Reviewed';
+        case 'revised':
+            return 'Revised';
+        case 'accepted':
+            return 'Accepted';
+        case 'rejected':
+            return 'Rejected';
+        case 'draft':
+        default:
+            return 'Draft';
+    }
+}
+
+function analysisAuditStatusClassName(status: WorkAnalysisAuditStatus) {
+    switch (status) {
+        case 'needs_review':
+            return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
+        case 'reviewed':
+            return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300';
+        case 'revised':
+            return 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300';
+        case 'accepted':
+            return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+        case 'rejected':
+            return 'border-red-300 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
+        case 'draft':
+        default:
+            return 'border-muted bg-muted/50 text-muted-foreground';
+    }
+}
+
+function analysisAuditDescription(status: WorkAnalysisAuditStatus) {
+    switch (status) {
+        case 'needs_review':
+            return 'SQL result is ready for human review.';
+        case 'reviewed':
+            return 'Result was confirmed. Accept it to use it in the conclusion.';
+        case 'revised':
+            return 'Human changes need another review before acceptance.';
+        case 'accepted':
+            return 'This Analysis can support the Conclusion.';
+        case 'rejected':
+            return 'This Analysis is excluded from the Conclusion.';
+        case 'draft':
+        default:
+            return 'Waiting for Agent SQL or human edits.';
+    }
+}
+
+function hasSqlBackedFinding(investigation: WorkInvestigation) {
+    return investigation.findings.some(finding => Boolean(finding.sourceRunEventId || finding.sourceTabId));
+}
 
 export function WorkDetailPageClient({ organization, workId }: WorkDetailPageClientProps) {
     const router = useRouter();
@@ -75,6 +133,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const connection = work ? connectionById.get(work.connectionId) : null;
     const isRunRunning = latestRun?.status === 'running' || work?.status === 'running';
     const latestEvent = latestRunEvents[latestRunEvents.length - 1] ?? null;
+    const hasAcceptedAnalysis = investigations.some(investigation => investigation.auditStatus === 'accepted');
 
     useEffect(() => {
         if (!work) return;
@@ -146,6 +205,20 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         mutationFn: (status: WorkStatus) => executeActionClient<Work>('work.updateStatus', { id: workId, status }),
         onSuccess: () => invalidateWork(),
         onError: error => toast.error(error instanceof Error ? error.message : 'Failed to update status'),
+    });
+
+    const updateAnalysisAuditStatusMutation = useMutation({
+        mutationFn: (input: { investigation: WorkInvestigation; auditStatus: WorkAnalysisAuditStatus }) =>
+            executeActionClient<WorkInvestigation>('work.updateInvestigation', {
+                workId,
+                id: input.investigation.id,
+                auditStatus: input.auditStatus,
+            }),
+        onSuccess: (_updatedInvestigation, input) => {
+            toast.success(`Analysis marked ${analysisAuditStatusLabel(input.auditStatus).toLowerCase()}`);
+            invalidateWork();
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : 'Failed to update Analysis review status'),
     });
 
     const runWorkMutation = useMutation({
@@ -585,6 +658,13 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         onOpen={openInvestigation}
                                         onPrefetch={prefetchInvestigationWorkspace}
                                         onDelete={setDeletingInvestigation}
+                                        onUpdateAuditStatus={(investigation, auditStatus) => updateAnalysisAuditStatusMutation.mutate({ investigation, auditStatus })}
+                                        auditStatusUpdatingId={
+                                            updateAnalysisAuditStatusMutation.isPending ? (updateAnalysisAuditStatusMutation.variables?.investigation.id ?? null) : null
+                                        }
+                                        auditStatusUpdatingTo={
+                                            updateAnalysisAuditStatusMutation.isPending ? (updateAnalysisAuditStatusMutation.variables?.auditStatus ?? null) : null
+                                        }
                                     />
                                 ))}
                             </div>
@@ -612,7 +692,13 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     >
                                         Cancel
                                     </Button>
-                                    <Button size="sm" variant="secondary" onClick={() => updateConclusionMutation.mutate(conclusion)} disabled={updateConclusionMutation.isPending}>
+                                    <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => updateConclusionMutation.mutate(conclusion)}
+                                        disabled={updateConclusionMutation.isPending || (Boolean(conclusion.trim()) && !hasAcceptedAnalysis)}
+                                        title={!hasAcceptedAnalysis && conclusion.trim() ? 'Accept at least one Analysis before saving a conclusion' : undefined}
+                                    >
                                         {updateConclusionMutation.isPending && <Loader2 className="animate-spin" />}
                                         Save
                                     </Button>
@@ -624,12 +710,17 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                             )}
                         </div>
                         {isEditingConclusion ? (
-                            <Textarea
-                                value={conclusion}
-                                onChange={event => setConclusion(event.target.value)}
-                                placeholder="Summarize the final reasoning and recommended next steps."
-                                className="min-h-36 resize-none text-sm"
-                            />
+                            <>
+                                {!hasAcceptedAnalysis ? (
+                                    <p className="mb-3 text-sm text-amber-600 dark:text-amber-400">Accept at least one Analysis before saving a Conclusion.</p>
+                                ) : null}
+                                <Textarea
+                                    value={conclusion}
+                                    onChange={event => setConclusion(event.target.value)}
+                                    placeholder="Summarize the final reasoning and recommended next steps."
+                                    className="min-h-36 resize-none text-sm"
+                                />
+                            </>
                         ) : work.conclusion ? (
                             <div className="min-h-36 rounded-lg border bg-background p-4 text-sm">
                                 <MessageResponse>{work.conclusion}</MessageResponse>
@@ -668,17 +759,23 @@ function AnalysisCard({
     latestRun,
     latestRunEvents,
     openingInvestigationId,
+    auditStatusUpdatingId,
+    auditStatusUpdatingTo,
     onOpen,
     onPrefetch,
     onDelete,
+    onUpdateAuditStatus,
 }: {
     investigation: WorkInvestigation;
     latestRun: WorkRun | null;
     latestRunEvents: WorkRunEvent[];
     openingInvestigationId: string | null;
+    auditStatusUpdatingId: string | null;
+    auditStatusUpdatingTo: WorkAnalysisAuditStatus | null;
     onOpen: (investigation: WorkInvestigation) => void;
     onPrefetch: (investigation: WorkInvestigation) => void;
     onDelete: (investigation: WorkInvestigation) => void;
+    onUpdateAuditStatus: (investigation: WorkInvestigation, auditStatus: WorkAnalysisAuditStatus) => void;
 }) {
     const effectiveStatus = effectiveInvestigationStatus({
         investigation,
@@ -690,6 +787,19 @@ function AnalysisCard({
         latestRunEvents,
     });
     const isRunning = effectiveStatus === 'running';
+    const isAuditStatusUpdating = auditStatusUpdatingId === investigation.id;
+    const sqlBackedFinding = hasSqlBackedFinding(investigation);
+    const sourceLabel =
+        investigation.auditStatus === 'accepted' || investigation.auditStatus === 'reviewed'
+            ? 'Human confirmed'
+            : investigation.auditStatus === 'revised'
+              ? 'Human revised'
+              : investigation.findings.some(finding => finding.createdBy === 'user')
+                ? 'Human edited'
+                : 'Agent output';
+    const canMarkReviewed = investigation.auditStatus === 'needs_review' || investigation.auditStatus === 'revised';
+    const canAccept = investigation.auditStatus === 'reviewed';
+    const canReject = investigation.auditStatus !== 'rejected' && investigation.auditStatus !== 'accepted';
 
     return (
         <div className="flex min-h-56 flex-col rounded-lg border bg-background p-4">
@@ -714,15 +824,74 @@ function AnalysisCard({
                     </DropdownMenu>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Badge variant="outline" className={statusClassName(effectiveStatus)}>
-                        {isRunning ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-                        {statusLabel(effectiveStatus)}
+                    <Badge variant="outline" className={analysisAuditStatusClassName(investigation.auditStatus)}>
+                        {investigation.auditStatus === 'accepted' ? <ShieldCheck className="mr-1 size-3" /> : null}
+                        {analysisAuditStatusLabel(investigation.auditStatus)}
                     </Badge>
+                    <Badge variant="secondary">{sourceLabel}</Badge>
+                    {isRunning ? (
+                        <Badge variant="outline" className={statusClassName(effectiveStatus)}>
+                            <Loader2 className="mr-1 size-3 animate-spin" />
+                            {statusLabel(effectiveStatus)}
+                        </Badge>
+                    ) : null}
                     {isRunning ? <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Agent is working</span> : null}
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                         <Clock className="size-3" />
                         {activity.label} {formatRelativeTime(activity.value)}
                     </span>
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">{analysisAuditDescription(investigation.auditStatus)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                    {canMarkReviewed ? (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 text-xs"
+                            disabled={isAuditStatusUpdating || !sqlBackedFinding}
+                            title={!sqlBackedFinding ? 'A SQL-backed Finding is required before review' : undefined}
+                            onClick={() => onUpdateAuditStatus(investigation, 'reviewed')}
+                        >
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'reviewed' ? <Loader2 className="animate-spin" /> : <Check />}
+                            Mark reviewed
+                        </Button>
+                    ) : null}
+                    {canAccept ? (
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            className="h-8 text-xs"
+                            disabled={isAuditStatusUpdating || !sqlBackedFinding}
+                            onClick={() => onUpdateAuditStatus(investigation, 'accepted')}
+                        >
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                            Accept
+                        </Button>
+                    ) : null}
+                    {canReject ? (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 text-xs text-muted-foreground"
+                            disabled={isAuditStatusUpdating}
+                            onClick={() => onUpdateAuditStatus(investigation, 'rejected')}
+                        >
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
+                            Reject
+                        </Button>
+                    ) : null}
+                    {investigation.auditStatus === 'accepted' ? (
+                        <Button size="sm" variant="outline" className="h-8 text-xs" disabled={isAuditStatusUpdating} onClick={() => onUpdateAuditStatus(investigation, 'reviewed')}>
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'reviewed' ? <Loader2 className="animate-spin" /> : <Check />}
+                            Reopen review
+                        </Button>
+                    ) : null}
+                    {investigation.auditStatus === 'rejected' ? (
+                        <Button size="sm" variant="outline" className="h-8 text-xs" disabled={isAuditStatusUpdating} onClick={() => onUpdateAuditStatus(investigation, 'reviewed')}>
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'reviewed' ? <Loader2 className="animate-spin" /> : <Check />}
+                            Restore review
+                        </Button>
+                    ) : null}
                 </div>
             </div>
             <div className="mt-5 min-w-0 flex-1">

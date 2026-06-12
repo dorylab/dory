@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const workStatusSchema = z.enum(['draft', 'running', 'completed']);
 export const workCreatorSchema = z.enum(['user', 'agent']);
 export const workTypeSchema = z.enum(['investigation', 'analysis', 'monitoring', 'data_qa', 'sql_workspace']);
+export const workAnalysisAuditStatusSchema = z.enum(['draft', 'needs_review', 'reviewed', 'revised', 'accepted', 'rejected']);
 export const workScopeSchema = z
     .object({
         timeRange: z.string().nullable().optional(),
@@ -51,8 +52,13 @@ export const workInvestigationOutputSchema = z.object({
     connectionId: z.string(),
     title: z.string(),
     status: workStatusSchema,
+    auditStatus: workAnalysisAuditStatusSchema,
     linkedTabId: z.string().nullable(),
     lastQueryAt: z.date().nullable(),
+    reviewedAt: z.date().nullable(),
+    acceptedAt: z.date().nullable(),
+    rejectedAt: z.date().nullable(),
+    auditStatusUpdatedAt: z.date().nullable(),
     createdAt: z.date(),
     updatedAt: z.date(),
 });

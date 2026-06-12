@@ -10,6 +10,7 @@ import {
     workWorkspaceSnapshots,
     works,
     type Work,
+    type WorkAnalysisAuditStatus,
     type WorkCreator,
     type WorkFindingCreator,
     type WorkInvestigation,
@@ -62,6 +63,7 @@ export type WorkInvestigationCreateInput = {
     connectionId: string;
     title: string;
     status?: WorkStatus;
+    auditStatus?: WorkAnalysisAuditStatus;
     linkedTabId?: string | null;
     lastQueryAt?: string | Date | null;
 };
@@ -69,6 +71,7 @@ export type WorkInvestigationCreateInput = {
 export type WorkInvestigationUpdateInput = {
     title?: string;
     status?: WorkStatus;
+    auditStatus?: WorkAnalysisAuditStatus;
     linkedTabId?: string | null;
     lastQueryAt?: string | Date | null;
 };
@@ -567,6 +570,7 @@ export class PostgresWorksRepository {
                 connectionId: input.connectionId,
                 title: input.title,
                 status: input.status ?? 'draft',
+                auditStatus: input.auditStatus ?? 'draft',
                 linkedTabId: input.linkedTabId ?? null,
                 lastQueryAt: input.lastQueryAt ? new Date(input.lastQueryAt) : null,
                 createdAt: now,
@@ -614,6 +618,21 @@ export class PostgresWorksRepository {
         }
         if (params.patch.status !== undefined) {
             updatePayload.status = params.patch.status;
+            hasChanges = true;
+        }
+        if (params.patch.auditStatus !== undefined) {
+            const auditStatus = params.patch.auditStatus;
+            updatePayload.auditStatus = auditStatus;
+            updatePayload.auditStatusUpdatedAt = new Date();
+            if (auditStatus === 'reviewed') {
+                updatePayload.reviewedAt = new Date();
+            }
+            if (auditStatus === 'accepted') {
+                updatePayload.acceptedAt = new Date();
+            }
+            if (auditStatus === 'rejected') {
+                updatePayload.rejectedAt = new Date();
+            }
             hasChanges = true;
         }
         if (params.patch.linkedTabId !== undefined) {

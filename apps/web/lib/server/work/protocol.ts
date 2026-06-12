@@ -2,8 +2,11 @@ export type WorkAgentProtocolTool =
     | 'work_createInvestigation'
     | 'work_runInvestigationSql'
     | 'work_createInvestigationFinding'
+    | 'work_updateInvestigation'
     | 'work_updateConclusion'
     | string;
+
+export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 
 export type WorkAgentProtocolState = {
     mode: 'full_work' | 'investigation_continue';
@@ -18,6 +21,7 @@ export type WorkAgentProtocolState = {
         sourceRunEventId: string | null;
     } | null;
     findingsByInvestigationId: Record<string, number>;
+    auditStatusByInvestigationId: Record<string, WorkAnalysisAuditStatus>;
     conclusionUpdated: boolean;
 };
 
@@ -37,11 +41,11 @@ export function createWorkAgentProtocolState(options?: {
     hasSnapshotResult?: boolean;
     existingInvestigationIds?: string[];
     existingFindingsByInvestigationId?: Record<string, number>;
+    existingAuditStatusByInvestigationId?: Record<string, WorkAnalysisAuditStatus>;
 }): WorkAgentProtocolState {
     const mode = options?.mode ?? 'full_work';
     const continuationInvestigationId = mode === 'investigation_continue' ? (options?.investigationId ?? null) : null;
-    const existingInvestigationIds =
-        mode === 'full_work' ? Array.from(new Set((options?.existingInvestigationIds ?? []).filter(Boolean))) : [];
+    const existingInvestigationIds = mode === 'full_work' ? Array.from(new Set((options?.existingInvestigationIds ?? []).filter(Boolean))) : [];
     const createdInvestigationIds = continuationInvestigationId ? [continuationInvestigationId] : [...existingInvestigationIds];
     return {
         mode,
@@ -61,6 +65,9 @@ export function createWorkAgentProtocolState(options?: {
         findingsByInvestigationId: continuationInvestigationId
             ? { [continuationInvestigationId]: 0 }
             : Object.fromEntries(existingInvestigationIds.map(id => [id, options?.existingFindingsByInvestigationId?.[id] ?? 0])),
+        auditStatusByInvestigationId: continuationInvestigationId
+            ? { [continuationInvestigationId]: options?.existingAuditStatusByInvestigationId?.[continuationInvestigationId] ?? 'draft' }
+            : Object.fromEntries(existingInvestigationIds.map(id => [id, options?.existingAuditStatusByInvestigationId?.[id] ?? 'draft'])),
         conclusionUpdated: false,
     };
 }
@@ -126,6 +133,12 @@ export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: 
                 message: 'Run SQL only for an active Analysis in this Work run.',
             };
         }
+        if (state.auditStatusByInvestigationId[investigationId] === 'rejected') {
+            return {
+                allowed: false,
+                message: 'Rejected Analyses are excluded from Agent SQL runs.',
+            };
+        }
     }
 
     if (toolName === 'work_createInvestigationFinding') {
@@ -161,6 +174,7 @@ export function applyWorkAgentProtocolResult(state: WorkAgentProtocolState, tool
         if (id && !state.createdInvestigationIds.includes(id)) {
             state.createdInvestigationIds.push(id);
             state.findingsByInvestigationId[id] = state.findingsByInvestigationId[id] ?? 0;
+            state.auditStatusByInvestigationId[id] = extractAuditStatus(output) ?? 'draft';
             state.currentInvestigationId = id;
         }
         return;
@@ -171,6 +185,7 @@ export function applyWorkAgentProtocolResult(state: WorkAgentProtocolState, tool
         if (investigationId) {
             state.currentInvestigationId = investigationId;
             state.sqlStarted = true;
+            state.auditStatusByInvestigationId[investigationId] = 'needs_review';
             state.pendingFinding = {
                 investigationId,
                 sourceTabId: extractString(output, 'tabId'),
@@ -190,15 +205,24 @@ export function applyWorkAgentProtocolResult(state: WorkAgentProtocolState, tool
         return;
     }
 
+    if (toolName === 'work_updateInvestigation') {
+        const investigationId = extractInvestigationId(output);
+        const auditStatus = extractAuditStatus(output);
+        if (investigationId && auditStatus) {
+            state.auditStatusByInvestigationId[investigationId] = auditStatus;
+        }
+        return;
+    }
+
     if (toolName === 'work_updateConclusion') {
         state.conclusionUpdated = true;
     }
 }
 
 export function checkWorkAgentProtocolComplete(state: WorkAgentProtocolState): WorkAgentProtocolDecision {
-    const readiness = checkAnalysesReadyForConclusion(state);
+    const readiness = checkAnalysesReadyToStop(state);
     if (!readiness.allowed) return readiness;
-    if (!state.conclusionUpdated) {
+    if (hasAcceptedAnalysis(state) && !state.conclusionUpdated) {
         return {
             allowed: false,
             message: 'Update the Work conclusion before completing the Work run.',
@@ -217,7 +241,7 @@ export function workAgentProtocolError(message: string) {
     };
 }
 
-function checkAnalysesReadyForConclusion(state: WorkAgentProtocolState): WorkAgentProtocolDecision {
+function checkAnalysesReadyToStop(state: WorkAgentProtocolState): WorkAgentProtocolDecision {
     if (state.mode === 'investigation_continue') {
         const investigationId = state.continuationInvestigationId;
         if (!investigationId) {
@@ -253,7 +277,7 @@ function checkAnalysesReadyForConclusion(state: WorkAgentProtocolState): WorkAge
             message: 'Create a Finding for the current SQL result before updating the conclusion.',
         };
     }
-    const missingFinding = state.createdInvestigationIds.find(id => (state.findingsByInvestigationId[id] ?? 0) < 1);
+    const missingFinding = activeInvestigationIds(state).find(id => (state.findingsByInvestigationId[id] ?? 0) < 1);
     if (missingFinding) {
         return {
             allowed: false,
@@ -261,6 +285,39 @@ function checkAnalysesReadyForConclusion(state: WorkAgentProtocolState): WorkAge
         };
     }
     return { allowed: true };
+}
+
+function checkAnalysesReadyForConclusion(state: WorkAgentProtocolState): WorkAgentProtocolDecision {
+    const readiness = checkAnalysesReadyToStop(state);
+    if (!readiness.allowed) return readiness;
+
+    if (state.mode === 'investigation_continue') {
+        const investigationId = state.continuationInvestigationId;
+        if (!investigationId || state.auditStatusByInvestigationId[investigationId] !== 'accepted') {
+            return {
+                allowed: false,
+                message: 'Accept the continued Analysis before updating the conclusion.',
+            };
+        }
+        return { allowed: true };
+    }
+
+    if (!hasAcceptedAnalysis(state)) {
+        return {
+            allowed: false,
+            message: 'Accept at least one Analysis before updating the conclusion.',
+        };
+    }
+
+    return { allowed: true };
+}
+
+function hasAcceptedAnalysis(state: WorkAgentProtocolState) {
+    return activeInvestigationIds(state).some(id => state.auditStatusByInvestigationId[id] === 'accepted');
+}
+
+function activeInvestigationIds(state: WorkAgentProtocolState) {
+    return state.createdInvestigationIds.filter(id => state.auditStatusByInvestigationId[id] !== 'rejected');
 }
 
 function extractId(output: unknown) {
@@ -280,6 +337,14 @@ function extractString(input: unknown, key: string) {
     if (!input || typeof input !== 'object') return null;
     const value = (input as Record<string, unknown>)[key];
     return typeof value === 'string' && value ? value : null;
+}
+
+function extractAuditStatus(input: unknown): WorkAnalysisAuditStatus | null {
+    const status = extractString(input, 'auditStatus');
+    if (status === 'draft' || status === 'needs_review' || status === 'reviewed' || status === 'revised' || status === 'accepted' || status === 'rejected') {
+        return status;
+    }
+    return null;
 }
 
 function extractWorkRunEventId(output: unknown) {

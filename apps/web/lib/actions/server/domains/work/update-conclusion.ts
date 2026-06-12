@@ -25,9 +25,20 @@ export const workUpdateConclusionAction = defineWebAction({
         inputSummary: input => ({ id: input.id ?? input.workId, conclusionLength: input.conclusion?.length ?? 0 }),
         resource: (_ctx, input) => ({ type: 'work', id: input.id ?? input.workId ?? null }),
     },
-    handler: (ctx, input) => {
+    handler: async (ctx, input) => {
         const id = input.id ?? input.workId;
         if (!id) throw new Error('Missing work id.');
+
+        if (input.conclusion?.trim()) {
+            const investigations = await ctx.services.db.works.listInvestigations({
+                organizationId: ctx.organizationId,
+                workId: id,
+            });
+            if (!investigations.some(investigation => investigation.auditStatus === 'accepted')) {
+                throw new Error('Accept at least one Analysis before updating the Work conclusion.');
+            }
+        }
+
         return ctx.services.db.works.updateConclusion({ organizationId: ctx.organizationId, id, conclusion: input.conclusion });
     },
 });

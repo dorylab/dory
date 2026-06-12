@@ -1,6 +1,7 @@
 export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
+export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 
 export type WorkScope = {
     timeRange?: string | null;
@@ -34,8 +35,13 @@ export type WorkInvestigation = {
     connectionId: string;
     title: string;
     status: WorkStatus;
+    auditStatus: WorkAnalysisAuditStatus;
     linkedTabId: string | null;
     lastQueryAt: string | null;
+    reviewedAt: string | null;
+    acceptedAt: string | null;
+    rejectedAt: string | null;
+    auditStatusUpdatedAt: string | null;
     findings: WorkInvestigationFinding[];
     sqlAssetCount: number;
     createdAt: string;
