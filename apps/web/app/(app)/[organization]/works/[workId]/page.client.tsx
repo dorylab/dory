@@ -11,7 +11,6 @@ import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '
 import { effectiveInvestigationStatus, investigationActivityDisplay } from '@/lib/work/investigation-card-state';
 import {
     analysisProvenanceLabel,
-    buildIncludedAnalysisConclusion,
     formatWorkEvidenceSummary,
     formatUnconfirmedAnalysisSummary,
     getConclusionSourceBoundary,
@@ -33,6 +32,7 @@ import {
 } from '@/registry/new-york-v4/ui/alert-dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
+import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
@@ -102,11 +102,24 @@ function analysisAuditStatusToastLabel(status: WorkAnalysisAuditStatus) {
     return 'included';
 }
 
+function buildIncludedAnalysesMarkdown(analyses: WorkInvestigation[]) {
+    const includedAnalyses = analyses.filter(investigation => investigation.auditStatus !== 'rejected');
+    if (!includedAnalyses.length) return null;
+
+    return includedAnalyses
+        .flatMap(analysis => {
+            const findings = analysis.findings.map(finding => finding.content.trim()).filter(Boolean);
+            return [`### ${analysis.title}`, '', ...(findings.length ? findings : ['_No findings recorded._'])];
+        })
+        .join('\n\n');
+}
+
 export function WorkDetailPageClient({ organization, workId }: WorkDetailPageClientProps) {
     const router = useRouter();
     const queryClient = useQueryClient();
     const connectionsQuery = useConnections();
     const [goal, setGoal] = useState('');
+    const [isEditingGoal, setIsEditingGoal] = useState(false);
     const [titleDraft, setTitleDraft] = useState('');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [conclusion, setConclusion] = useState('');
@@ -136,7 +149,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const evidenceSummary = useMemo(() => formatWorkEvidenceSummary(investigations), [investigations]);
     const unconfirmedAnalysisSummary = useMemo(() => formatUnconfirmedAnalysisSummary(investigations), [investigations]);
     const conclusionSourceBoundary = useMemo(() => getConclusionSourceBoundary(investigations), [investigations]);
-    const includedAnalysisConclusion = useMemo(() => buildIncludedAnalysisConclusion(investigations), [investigations]);
+    const includedAnalysisConclusion = useMemo(() => buildIncludedAnalysesMarkdown(investigations), [investigations]);
+    const displayConclusionMarkdown = work?.conclusion?.trim() || includedAnalysisConclusion;
     const workLifecycleStatus = work ? getWorkLifecycleDisplayStatus({ workStatus: work.status, latestRun }) : 'draft';
     const includedAnalysisCount = conclusionSourceBoundary.includedAnalyses.length;
     const hasIncludedAnalysis = includedAnalysisCount > 0;
@@ -155,11 +169,13 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         if (!isEditingTitle) {
             setTitleDraft(work.title);
         }
-        setGoal(work.goal);
+        if (!isEditingGoal) {
+            setGoal(work.goal);
+        }
         if (!isEditingConclusion) {
             setConclusion(work.conclusion ?? '');
         }
-    }, [work, isEditingTitle, isEditingConclusion]);
+    }, [work, isEditingGoal, isEditingTitle, isEditingConclusion]);
 
     const invalidateWork = () => queryClient.invalidateQueries({ queryKey: ['work', workId] });
 
@@ -194,8 +210,10 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
 
     const updateGoalMutation = useMutation({
         mutationFn: (nextGoal: string) => executeActionClient<Work>('work.updateGoal', { id: workId, goal: nextGoal }),
-        onSuccess: () => {
+        onSuccess: updatedWork => {
             toast.success('Goal updated');
+            setGoal(updatedWork.goal);
+            setIsEditingGoal(false);
             invalidateWork();
         },
         onError: error => toast.error(error instanceof Error ? error.message : 'Failed to update goal'),
@@ -277,6 +295,11 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             return;
         }
         updateConclusionMutation.mutate(includedAnalysisConclusion);
+    };
+
+    const startEditingConclusion = () => {
+        setConclusion(work?.conclusion?.trim() ? work.conclusion : (includedAnalysisConclusion ?? ''));
+        setIsEditingConclusion(true);
     };
 
     const createInvestigationMutation = useMutation({
@@ -443,6 +466,33 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         setIsEditingTitle(false);
     };
 
+    const startEditingGoal = () => {
+        if (!work) return;
+        setGoal(work.goal);
+        setIsEditingGoal(true);
+    };
+
+    const cancelEditingGoal = () => {
+        if (!work) return;
+        setGoal(work.goal);
+        setIsEditingGoal(false);
+    };
+
+    const submitGoal = () => {
+        if (!work) return;
+        const nextGoal = goal.trim();
+        if (!nextGoal) {
+            toast.error('Goal is required');
+            return;
+        }
+        if (nextGoal === work.goal) {
+            setGoal(work.goal);
+            setIsEditingGoal(false);
+            return;
+        }
+        updateGoalMutation.mutate(nextGoal);
+    };
+
     const submitTitle = () => {
         if (!work) return;
         const nextTitle = titleDraft.trim();
@@ -496,102 +546,128 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                     Work
                 </Button>
 
-                <header className="rounded-lg border bg-card p-6 text-card-foreground">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="min-w-0">
-                            <div className="mb-3 flex flex-wrap items-center gap-2">
-                                {isEditingTitle ? (
-                                    <form
-                                        className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-xl"
-                                        onSubmit={event => {
-                                            event.preventDefault();
-                                            submitTitle();
+                <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                            {isEditingTitle ? (
+                                <form
+                                    className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-xl"
+                                    onSubmit={event => {
+                                        event.preventDefault();
+                                        submitTitle();
+                                    }}
+                                >
+                                    <Input
+                                        value={titleDraft}
+                                        onChange={event => setTitleDraft(event.target.value)}
+                                        onKeyDown={event => {
+                                            if (event.key === 'Escape') {
+                                                event.preventDefault();
+                                                cancelEditingTitle();
+                                            }
                                         }}
+                                        className="h-9 min-w-0 text-lg font-semibold"
+                                        autoFocus
+                                        disabled={updateTitleMutation.isPending}
+                                    />
+                                    <Button
+                                        type="submit"
+                                        size="icon-sm"
+                                        variant="secondary"
+                                        disabled={updateTitleMutation.isPending || !titleDraft.trim()}
+                                        aria-label="Save title"
+                                        title="Save title"
                                     >
-                                        <Input
-                                            value={titleDraft}
-                                            onChange={event => setTitleDraft(event.target.value)}
-                                            onKeyDown={event => {
-                                                if (event.key === 'Escape') {
-                                                    event.preventDefault();
-                                                    cancelEditingTitle();
-                                                }
-                                            }}
-                                            className="h-9 min-w-0 text-lg font-semibold"
-                                            autoFocus
-                                            disabled={updateTitleMutation.isPending}
-                                        />
-                                        <Button
-                                            type="submit"
-                                            size="icon-sm"
-                                            variant="secondary"
-                                            disabled={updateTitleMutation.isPending || !titleDraft.trim()}
-                                            aria-label="Save title"
-                                            title="Save title"
-                                        >
-                                            {updateTitleMutation.isPending ? <Loader2 className="animate-spin" /> : <Check />}
-                                        </Button>
-                                        <Button
-                                            type="button"
-                                            size="icon-sm"
-                                            variant="ghost"
-                                            onClick={cancelEditingTitle}
-                                            disabled={updateTitleMutation.isPending}
-                                            aria-label="Cancel title edit"
-                                            title="Cancel title edit"
-                                        >
-                                            <X />
-                                        </Button>
-                                    </form>
-                                ) : (
-                                    <div className="flex min-w-0 items-center gap-2">
-                                        <h1 className="truncate text-2xl font-semibold tracking-tight">{work.title}</h1>
-                                        <Button type="button" variant="ghost" size="icon-sm" onClick={startEditingTitle} aria-label="Edit title" title="Edit title">
-                                            <Pencil />
-                                        </Button>
-                                    </div>
-                                )}
-                                <Badge variant="outline" className={workLifecycleDisplayStatusClassName(workLifecycleStatus)}>
-                                    {workLifecycleDisplayStatusLabel(workLifecycleStatus)}
-                                </Badge>
-                                <Badge variant="secondary">{work.createdBy === 'agent' ? 'Created by AI' : 'Created by You'}</Badge>
-                            </div>
-                            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                                <span className="inline-flex items-center gap-1.5">
-                                    <Database className="size-4" />
-                                    Data Source: {connection?.name ?? work.connectionId}
-                                </span>
-                                <span>Created {formatRelativeTime(work.createdAt)}</span>
-                                <span>Last updated {formatRelativeTime(work.updatedAt)}</span>
-                            </div>
+                                        {updateTitleMutation.isPending ? <Loader2 className="animate-spin" /> : <Check />}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="icon-sm"
+                                        variant="ghost"
+                                        onClick={cancelEditingTitle}
+                                        disabled={updateTitleMutation.isPending}
+                                        aria-label="Cancel title edit"
+                                        title="Cancel title edit"
+                                    >
+                                        <X />
+                                    </Button>
+                                </form>
+                            ) : (
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <h1 className="truncate text-2xl font-semibold tracking-tight">{work.title}</h1>
+                                    <Button type="button" variant="ghost" size="icon-sm" onClick={startEditingTitle} aria-label="Edit title" title="Edit title">
+                                        <Pencil />
+                                    </Button>
+                                </div>
+                            )}
+                            <Badge variant="outline" className={workLifecycleDisplayStatusClassName(workLifecycleStatus)}>
+                                {workLifecycleDisplayStatusLabel(workLifecycleStatus)}
+                            </Badge>
+                            <Badge variant="secondary">{work.createdBy === 'agent' ? 'Created by AI' : 'Created by You'}</Badge>
                         </div>
-                        <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-44">
-                            <Button onClick={() => runWorkMutation.mutate({})} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
-                                {isRunRunning || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Play />}
-                                {isRunRunning ? 'Running' : latestRun ? 'Run again' : 'Run'}
-                            </Button>
-                            <div className="rounded-lg border bg-background px-3 py-2 text-xs text-muted-foreground">
-                                <div className="font-medium text-foreground">Evidence</div>
-                                <div className="mt-1">{evidenceSummary}</div>
-                                <div className="mt-1">{conclusionEvidenceLine}</div>
-                            </div>
+                        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                            <span className="inline-flex items-center gap-1.5">
+                                <Database className="size-4" />
+                                Data Source: {connection?.name ?? work.connectionId}
+                            </span>
+                            <span>Created {formatRelativeTime(work.createdAt)}</span>
+                            <span>Last updated {formatRelativeTime(work.updatedAt)}</span>
+                        </div>
+                    </div>
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-44">
+                        <Button onClick={() => runWorkMutation.mutate({})} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
+                            {isRunRunning || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Play />}
+                            {isRunRunning ? 'Running' : latestRun ? 'Run again' : 'Run'}
+                        </Button>
+                        <div className="text-xs text-muted-foreground">
+                            <div className="font-medium text-foreground">Evidence</div>
+                            <div className="mt-1">{evidenceSummary}</div>
+                            <div className="mt-1">{conclusionEvidenceLine}</div>
                         </div>
                     </div>
                 </header>
 
                 <main className="mt-6 grid gap-6">
-                    <section className="rounded-lg border bg-card p-6 text-card-foreground">
-                        <div className="mb-4 flex items-center justify-between">
+                    <section className="space-y-3">
+                        <div className="flex items-center justify-between">
                             <h2 className="text-base font-semibold">Goal</h2>
-                            <Button size="sm" variant="secondary" onClick={() => updateGoalMutation.mutate(goal.trim())} disabled={!goal.trim() || updateGoalMutation.isPending}>
-                                {updateGoalMutation.isPending && <Loader2 className="animate-spin" />}
-                                Save
-                            </Button>
+                            {isEditingGoal ? (
+                                <div className="flex items-center gap-2">
+                                    <Button size="sm" variant="ghost" onClick={cancelEditingGoal} disabled={updateGoalMutation.isPending}>
+                                        Cancel
+                                    </Button>
+                                    <Button size="sm" variant="secondary" onClick={submitGoal} disabled={!goal.trim() || updateGoalMutation.isPending}>
+                                        {updateGoalMutation.isPending && <Loader2 className="animate-spin" />}
+                                        Save
+                                    </Button>
+                                </div>
+                            ) : (
+                                <Button size="sm" variant="secondary" onClick={startEditingGoal}>
+                                    <Pencil />
+                                    Edit
+                                </Button>
+                            )}
                         </div>
-                        <Textarea value={goal} onChange={event => setGoal(event.target.value)} className="min-h-28 resize-none text-sm" />
+                        {isEditingGoal ? (
+                            <Textarea
+                                value={goal}
+                                onChange={event => setGoal(event.target.value)}
+                                onKeyDown={event => {
+                                    if (event.key === 'Escape') {
+                                        event.preventDefault();
+                                        cancelEditingGoal();
+                                    }
+                                }}
+                                placeholder="Describe what Dory should investigate."
+                                className="min-h-28 resize-none text-sm"
+                                autoFocus
+                            />
+                        ) : (
+                            <p className="whitespace-pre-wrap text-lg font-medium leading-7 text-foreground">{goal || 'Describe what Dory should investigate.'}</p>
+                        )}
                     </section>
 
-                    <section className="rounded-lg border bg-card p-6 text-card-foreground">
+                    <section className="space-y-3">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -619,20 +695,26 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         </div>
 
                         {latestRun && runDetailsOpen ? (
-                            <div className="mt-5 grid gap-3">
-                                {latestRunEvents.length ? (
-                                    latestRunEvents.map(event => <WorkRunEventRow key={event.id} event={event} onCopySql={copySql} onManualExecute={openSqlInConsole} />)
-                                ) : (
-                                    <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-                                        {latestRun.status === 'running' ? 'Waiting for the first Agent event...' : 'No events recorded for this run.'}
-                                    </div>
-                                )}
-                            </div>
+                            <Card className="overflow-hidden rounded-lg py-0">
+                                <CardContent className="p-0">
+                                    {latestRunEvents.length ? (
+                                        <div className="divide-y">
+                                            {latestRunEvents.map(event => (
+                                                <WorkRunEventRow key={event.id} event={event} onCopySql={copySql} onManualExecute={openSqlInConsole} />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="p-6 text-center text-sm text-muted-foreground">
+                                            {latestRun.status === 'running' ? 'Waiting for the first Agent event...' : 'No events recorded for this run.'}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         ) : null}
                     </section>
 
-                    <section className="rounded-lg border bg-card p-6 text-card-foreground">
-                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <section className="space-y-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div>
                                 <h2 className="text-base font-semibold">Analyses</h2>
                                 <p className="mt-1 text-sm text-muted-foreground">{evidenceSummary}</p>
@@ -674,15 +756,17 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                 ))}
                             </div>
                         ) : (
-                            <div className="rounded-lg border border-dashed p-8 text-center">
-                                <h3 className="text-sm font-semibold">No analyses yet</h3>
-                                <p className="mt-2 text-sm text-muted-foreground">Run the Agent or create an Analysis to start producing findings.</p>
-                            </div>
+                            <Card className="rounded-lg border-dashed py-0">
+                                <CardContent className="p-8 text-center">
+                                    <h3 className="text-sm font-semibold">No analyses yet</h3>
+                                    <p className="mt-2 text-sm text-muted-foreground">Run the Agent or create an Analysis to start producing findings.</p>
+                                </CardContent>
+                            </Card>
                         )}
                     </section>
 
-                    <section className="rounded-lg border bg-card p-6 text-card-foreground">
-                        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <section className="space-y-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <h2 className="text-base font-semibold">Conclusion</h2>
                             {isEditingConclusion ? (
                                 <div className="flex items-center gap-2">
@@ -720,66 +804,37 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         {updateConclusionMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
                                         Regenerate from Included
                                     </Button>
-                                    <Button size="sm" variant="secondary" onClick={() => setIsEditingConclusion(true)}>
+                                    <Button size="sm" variant="secondary" onClick={startEditingConclusion}>
                                         Edit
                                     </Button>
                                 </div>
                             )}
                         </div>
-                        <div className="mb-4 rounded-lg border bg-background p-4 text-sm">
-                            {hasIncludedAnalysis ? (
-                                <>
-                                    <div className="font-medium">
-                                        Based on {conclusionSourceBoundary.includedAnalyses.length} included {pluralizeAnalysis(conclusionSourceBoundary.includedAnalyses.length)}:
+                        <Card className="rounded-lg py-0">
+                            <CardContent className="p-4">
+                                {isEditingConclusion ? (
+                                    <>
+                                        {!hasIncludedAnalysis ? (
+                                            <p className="mb-3 text-sm text-amber-600 dark:text-amber-400">Include at least one Analysis before saving a Conclusion.</p>
+                                        ) : null}
+                                        <Textarea
+                                            value={conclusion}
+                                            onChange={event => setConclusion(event.target.value)}
+                                            placeholder="Write the conclusion in Markdown."
+                                            className="min-h-36 resize-none font-mono text-sm"
+                                        />
+                                    </>
+                                ) : displayConclusionMarkdown ? (
+                                    <div className="min-h-36 p-2 text-sm">
+                                        <MessageResponse>{displayConclusionMarkdown}</MessageResponse>
                                     </div>
-                                    <ul className="mt-2 space-y-1 text-muted-foreground">
-                                        {conclusionSourceBoundary.includedAnalyses.map(analysis => (
-                                            <li key={analysis.id}>
-                                                - {analysis.title} · {analysis.provenanceLabel}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    {conclusionSourceBoundary.excludedAnalyses.length ? (
-                                        <>
-                                            <div className="mt-4 font-medium">Excluded:</div>
-                                            <ul className="mt-2 space-y-1 text-muted-foreground">
-                                                {conclusionSourceBoundary.excludedAnalyses.map(analysis => (
-                                                    <li key={analysis.id}>
-                                                        - {analysis.title} · {analysis.provenanceLabel}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </>
-                                    ) : null}
-                                </>
-                            ) : (
-                                <>
-                                    <div className="font-medium">No included analysis yet.</div>
-                                    <p className="mt-2 text-muted-foreground">Include at least one Analysis to generate a Conclusion.</p>
-                                </>
-                            )}
-                        </div>
-                        {isEditingConclusion ? (
-                            <>
-                                {!hasIncludedAnalysis ? (
-                                    <p className="mb-3 text-sm text-amber-600 dark:text-amber-400">Include at least one Analysis before saving a Conclusion.</p>
-                                ) : null}
-                                <Textarea
-                                    value={conclusion}
-                                    onChange={event => setConclusion(event.target.value)}
-                                    placeholder="Summarize the final reasoning and recommended next steps."
-                                    className="min-h-36 resize-none text-sm"
-                                />
-                            </>
-                        ) : hasIncludedAnalysis && includedAnalysisConclusion ? (
-                            <div className="min-h-36 rounded-lg border bg-background p-4 text-sm">
-                                <MessageResponse>{includedAnalysisConclusion}</MessageResponse>
-                            </div>
-                        ) : (
-                            <div className="min-h-36 rounded-lg border border-dashed bg-background p-6 text-sm text-muted-foreground">
-                                {hasIncludedAnalysis ? 'No included findings yet.' : 'No included analysis yet.'}
-                            </div>
-                        )}
+                                ) : (
+                                    <div className="min-h-36 p-2 text-sm text-muted-foreground">
+                                        {hasIncludedAnalysis ? 'No included findings yet.' : 'No included analysis yet.'}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
                     </section>
                 </main>
             </div>
@@ -990,55 +1045,53 @@ function WorkRunEventRow({
     const hasDetails = Boolean(sqlInput || sqlResult || event.payload);
 
     return (
-        <div
-            className={
-                isError
-                    ? 'min-w-0 rounded-lg border border-red-200 bg-red-50/70 p-4 text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200'
-                    : 'min-w-0 rounded-lg border bg-background p-4'
-            }
-        >
+        <div className={isError ? 'min-w-0 bg-red-50/70 text-red-900 dark:bg-red-950/20 dark:text-red-200' : 'min-w-0'}>
             <Collapsible open={open} onOpenChange={setOpen}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant={isError ? 'destructive' : 'secondary'}>{eventTypeLabel(event.type)}</Badge>
-                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                <Bot className="size-3" />
-                                {event.role}
-                            </span>
-                            {hasDetails ? (
-                                <CollapsibleTrigger asChild>
-                                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground">
-                                        <ChevronDown className={open ? 'size-3 rotate-180 transition-transform' : 'size-3 transition-transform'} />
-                                        {open ? 'Hide details' : 'View details'}
-                                    </Button>
-                                </CollapsibleTrigger>
+                <div className="relative p-4 pl-9">
+                    <span className={isError ? 'absolute left-4 top-5 size-2 rounded-full bg-red-500' : 'absolute left-4 top-5 size-2 rounded-full bg-muted-foreground/50'} />
+                    <div className="absolute bottom-0 left-[19px] top-8 w-px bg-border" />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant={isError ? 'destructive' : 'secondary'}>{eventTypeLabel(event.type)}</Badge>
+                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                    <Bot className="size-3" />
+                                    {event.role}
+                                </span>
+                                {hasDetails ? (
+                                    <CollapsibleTrigger asChild>
+                                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground">
+                                            <ChevronDown className={open ? 'size-3 rotate-180 transition-transform' : 'size-3 transition-transform'} />
+                                            {open ? 'Hide details' : 'View details'}
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                ) : null}
+                            </div>
+                            {event.content ? (
+                                <p
+                                    className={
+                                        isAgentMessage
+                                            ? 'mt-3 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]'
+                                            : 'mt-3 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]'
+                                    }
+                                >
+                                    {event.content}
+                                </p>
                             ) : null}
                         </div>
-                        {event.content ? (
-                            <p
-                                className={
-                                    isAgentMessage
-                                        ? 'mt-3 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]'
-                                        : 'mt-3 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]'
-                                }
-                            >
-                                {event.content}
-                            </p>
-                        ) : null}
+                        <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(event.createdAt)}</span>
                     </div>
-                    <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(event.createdAt)}</span>
-                </div>
 
-                {hasDetails ? (
-                    <CollapsibleContent>
-                        <div className="mt-4 space-y-3 rounded-lg border bg-card/40 p-3">
-                            {sqlInput ? <SqlStatementBlock sql={sqlInput} onCopy={onCopySql} /> : null}
-                            {sqlResult ? <SqlResultBody result={sqlResult} onManualExecute={onManualExecute} mode="global" embedded /> : null}
-                            {!sqlInput && !sqlResult && event.payload ? <EventPayloadPreview payload={event.payload} /> : null}
-                        </div>
-                    </CollapsibleContent>
-                ) : null}
+                    {hasDetails ? (
+                        <CollapsibleContent>
+                            <div className="mt-4 space-y-3 rounded-lg border bg-background/70 p-3">
+                                {sqlInput ? <SqlStatementBlock sql={sqlInput} onCopy={onCopySql} /> : null}
+                                {sqlResult ? <SqlResultBody result={sqlResult} onManualExecute={onManualExecute} mode="global" embedded /> : null}
+                                {!sqlInput && !sqlResult && event.payload ? <EventPayloadPreview payload={event.payload} /> : null}
+                            </div>
+                        </CollapsibleContent>
+                    ) : null}
+                </div>
             </Collapsible>
         </div>
     );
