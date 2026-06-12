@@ -100,9 +100,47 @@ export type WorkRunEvent = {
     createdAt: string;
 };
 
+export type WorkWorkspaceSnapshotChangeSummary = {
+    sqlEdited?: boolean;
+    resultRefreshed?: boolean;
+    chartConfigChanged?: boolean;
+    selectedRowsChanged?: boolean;
+};
+
+export type WorkWorkspaceSnapshotHumanEdits = {
+    sql?: string | null;
+    resultPreview?: Record<string, unknown> | null;
+    chartConfig?: Record<string, unknown> | null;
+    selectedRows?: Record<string, unknown> | null;
+    userNote?: string | null;
+    changeSummary?: WorkWorkspaceSnapshotChangeSummary | null;
+};
+
+export type WorkWorkspaceSnapshot = {
+    id: string;
+    organizationId: string;
+    workId: string;
+    investigationId: string;
+    workspaceId: string;
+    previousAgentStepId: string | null;
+    intent: 'continue_analysis';
+    humanEdits: WorkWorkspaceSnapshotHumanEdits;
+    createdByUserId: string;
+    createdAt: string;
+};
+
+export type WorkTimelineEvent = {
+    id: string;
+    kind: 'run_event' | 'workspace_snapshot';
+    runEvent: WorkRunEvent | null;
+    snapshot: WorkWorkspaceSnapshot | null;
+    createdAt: string;
+};
+
 export type WorkDetail = {
     work: Work;
     investigations: WorkInvestigation[];
     latestRun: WorkRun | null;
     latestRunEvents: WorkRunEvent[];
+    timelineEvents: WorkTimelineEvent[];
 };

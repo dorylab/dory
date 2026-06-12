@@ -28,6 +28,22 @@ export const workRunEventTypeSchema = z.enum([
 ]);
 export const workRunEventRoleSchema = z.enum(['user', 'agent', 'tool', 'system']);
 
+export const workWorkspaceSnapshotChangeSummaryOutputSchema = z.object({
+    sqlEdited: z.boolean().optional(),
+    resultRefreshed: z.boolean().optional(),
+    chartConfigChanged: z.boolean().optional(),
+    selectedRowsChanged: z.boolean().optional(),
+});
+
+export const workWorkspaceSnapshotHumanEditsOutputSchema = z.object({
+    sql: z.string().nullable().optional(),
+    resultPreview: z.record(z.string(), z.unknown()).nullable().optional(),
+    chartConfig: z.record(z.string(), z.unknown()).nullable().optional(),
+    selectedRows: z.record(z.string(), z.unknown()).nullable().optional(),
+    userNote: z.string().nullable().optional(),
+    changeSummary: workWorkspaceSnapshotChangeSummaryOutputSchema.nullable().optional(),
+});
+
 export const workOutputSchema = z.object({
     id: z.string(),
     organizationId: z.string(),
@@ -104,5 +120,26 @@ export const workRunEventOutputSchema = z.object({
     role: workRunEventRoleSchema,
     content: z.string().nullable(),
     payload: z.record(z.string(), z.unknown()).nullable(),
+    createdAt: z.date(),
+});
+
+export const workWorkspaceSnapshotOutputSchema = z.object({
+    id: z.string(),
+    organizationId: z.string(),
+    workId: z.string(),
+    investigationId: z.string(),
+    workspaceId: z.string(),
+    previousAgentStepId: z.string().nullable(),
+    intent: z.literal('continue_analysis'),
+    humanEdits: workWorkspaceSnapshotHumanEditsOutputSchema,
+    createdByUserId: z.string(),
+    createdAt: z.date(),
+});
+
+export const workTimelineEventOutputSchema = z.object({
+    id: z.string(),
+    kind: z.enum(['run_event', 'workspace_snapshot']),
+    runEvent: workRunEventOutputSchema.nullable(),
+    snapshot: workWorkspaceSnapshotOutputSchema.nullable(),
     createdAt: z.date(),
 });

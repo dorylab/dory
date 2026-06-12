@@ -3,7 +3,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, Bot, Check, ChevronDown, Clock, Database, Loader2, MoreVertical, Pencil, Play, Plus, RefreshCw, ShieldCheck, Trash2, X } from 'lucide-react';
+import {
+    ArrowLeft,
+    ArrowUpRight,
+    Bot,
+    Check,
+    ChevronDown,
+    Clock,
+    Database,
+    Loader2,
+    MoreVertical,
+    Pencil,
+    Play,
+    Plus,
+    RefreshCw,
+    ShieldCheck,
+    Trash2,
+    User,
+    Wrench,
+    X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -40,7 +59,7 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { useConnections } from '../../connections/hooks/use-connections';
-import type { Work, WorkAnalysisAuditStatus, WorkDetail, WorkInvestigation, WorkRun, WorkRunEvent } from '../types';
+import type { Work, WorkAnalysisAuditStatus, WorkDetail, WorkInvestigation, WorkRun, WorkRunEvent, WorkTimelineEvent, WorkWorkspaceSnapshot } from '../types';
 import { eventTypeLabel, formatRelativeTime, runStatusClassName, runStatusLabel, statusClassName, statusLabel } from '../utils';
 
 type WorkDetailPageClientProps = {
@@ -143,6 +162,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const investigations = useMemo(() => workQuery.data?.investigations ?? [], [workQuery.data?.investigations]);
     const latestRun = workQuery.data?.latestRun ?? null;
     const latestRunEvents = useMemo(() => workQuery.data?.latestRunEvents ?? [], [workQuery.data?.latestRunEvents]);
+    const timelineEvents = useMemo(() => workQuery.data?.timelineEvents ?? [], [workQuery.data?.timelineEvents]);
     const connection = work ? connectionById.get(work.connectionId) : null;
     const isRunRunning = latestRun?.status === 'running' || work?.status === 'running';
     const latestEvent = latestRunEvents[latestRunEvents.length - 1] ?? null;
@@ -671,7 +691,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                             <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <h2 className="text-base font-semibold">Latest Agent Run</h2>
+                                    <h2 className="text-base font-semibold">Latest Run</h2>
                                     {latestRun ? (
                                         <Badge variant="outline" className={runStatusClassName(latestRun.status)}>
                                             {runStatusLabel(latestRun.status)}
@@ -697,10 +717,10 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         {latestRun && runDetailsOpen ? (
                             <Card className="overflow-hidden rounded-lg py-0">
                                 <CardContent className="p-0">
-                                    {latestRunEvents.length ? (
-                                        <div className="divide-y">
-                                            {latestRunEvents.map(event => (
-                                                <WorkRunEventRow key={event.id} event={event} onCopySql={copySql} onManualExecute={openSqlInConsole} />
+                                    {timelineEvents.length ? (
+                                        <div className="max-h-[520px] overflow-y-auto">
+                                            {timelineEvents.map(event => (
+                                                <WorkTimelineEventRow key={event.id} timelineEvent={event} onCopySql={copySql} onManualExecute={openSqlInConsole} />
                                             ))}
                                         </div>
                                     ) : (
@@ -1028,35 +1048,43 @@ function AnalysisCard({
     );
 }
 
-function WorkRunEventRow({
-    event,
+function WorkTimelineEventRow({
+    timelineEvent,
     onCopySql,
     onManualExecute,
 }: {
-    event: WorkRunEvent;
+    timelineEvent: WorkTimelineEvent;
     onCopySql: (sql: string) => void | Promise<void>;
     onManualExecute: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
 }) {
     const [open, setOpen] = useState(false);
-    const isError = event.type === 'error';
-    const isAgentMessage = event.type === 'message' && event.role === 'agent';
-    const sqlInput = getSqlInputFromEvent(event);
-    const sqlResult = getSqlResultFromEvent(event);
-    const hasDetails = Boolean(sqlInput || sqlResult || event.payload);
+    const event = timelineEvent.runEvent;
+    const snapshot = timelineEvent.snapshot;
+    const isError = event?.type === 'error';
+    const isAgentMessage = event?.type === 'message' && event.role === 'agent';
+    const sqlInput = (event ? getSqlInputFromEvent(event) : null) ?? getSqlInputFromSnapshot(snapshot);
+    const sqlResult = event ? getSqlResultFromEvent(event) : null;
+    const hasDetails = Boolean(sqlInput || sqlResult || snapshot || event?.payload);
+    const content = timelineEventContent(timelineEvent);
+    const label = timelineEventLabel(timelineEvent);
 
     return (
         <div className={isError ? 'min-w-0 bg-red-50/70 text-red-900 dark:bg-red-950/20 dark:text-red-200' : 'min-w-0'}>
             <Collapsible open={open} onOpenChange={setOpen}>
-                <div className="relative p-4 pl-9">
-                    <span className={isError ? 'absolute left-4 top-5 size-2 rounded-full bg-red-500' : 'absolute left-4 top-5 size-2 rounded-full bg-muted-foreground/50'} />
-                    <div className="absolute bottom-0 left-[19px] top-8 w-px bg-border" />
+                <div className="relative border-b p-4 pl-12 last:border-b-0">
+                    <span className={timelineEventDotClassName(timelineEvent)}>
+                        <TimelineEventIcon timelineEvent={timelineEvent} className="size-3" />
+                    </span>
+                    <div className="absolute bottom-0 left-[27px] top-10 w-px bg-border" />
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                                <Badge variant={isError ? 'destructive' : 'secondary'}>{eventTypeLabel(event.type)}</Badge>
+                                <Badge variant={isError ? 'destructive' : 'secondary'} className={timelineEventBadgeClassName(timelineEvent)}>
+                                    {label}
+                                </Badge>
                                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                    <Bot className="size-3" />
-                                    {event.role}
+                                    <TimelineEventIcon timelineEvent={timelineEvent} className="size-3" />
+                                    {timelineEventActorLabel(timelineEvent)}
                                 </span>
                                 {hasDetails ? (
                                     <CollapsibleTrigger asChild>
@@ -1067,7 +1095,7 @@ function WorkRunEventRow({
                                     </CollapsibleTrigger>
                                 ) : null}
                             </div>
-                            {event.content ? (
+                            {content ? (
                                 <p
                                     className={
                                         isAgentMessage
@@ -1075,11 +1103,13 @@ function WorkRunEventRow({
                                             : 'mt-3 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]'
                                     }
                                 >
-                                    {event.content}
+                                    {content}
                                 </p>
                             ) : null}
                         </div>
-                        <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(event.createdAt)}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground" title={formatAbsoluteTime(timelineEvent.createdAt)}>
+                            {formatRelativeTime(timelineEvent.createdAt)}
+                        </span>
                     </div>
 
                     {hasDetails ? (
@@ -1087,12 +1117,122 @@ function WorkRunEventRow({
                             <div className="mt-4 space-y-3 rounded-lg border bg-background/70 p-3">
                                 {sqlInput ? <SqlStatementBlock sql={sqlInput} onCopy={onCopySql} /> : null}
                                 {sqlResult ? <SqlResultBody result={sqlResult} onManualExecute={onManualExecute} mode="global" embedded /> : null}
-                                {!sqlInput && !sqlResult && event.payload ? <EventPayloadPreview payload={event.payload} /> : null}
+                                {snapshot ? <WorkspaceSnapshotDetails snapshot={snapshot} /> : null}
+                                {event?.payload ? <EventPayloadPreview payload={event.payload} /> : null}
                             </div>
                         </CollapsibleContent>
                     ) : null}
                 </div>
             </Collapsible>
+        </div>
+    );
+}
+
+function formatAbsoluteTime(value?: string | Date | null) {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return date.toLocaleString();
+}
+
+function timelineEventLabel(timelineEvent: WorkTimelineEvent) {
+    if (timelineEvent.snapshot) return 'Human handoff';
+    if (timelineEvent.runEvent) return eventTypeLabel(timelineEvent.runEvent.type);
+    return 'Timeline event';
+}
+
+function timelineEventActorLabel(timelineEvent: WorkTimelineEvent) {
+    if (timelineEvent.snapshot) return 'user';
+    return timelineEvent.runEvent?.role ?? 'system';
+}
+
+function TimelineEventIcon({ timelineEvent, className }: { timelineEvent: WorkTimelineEvent; className?: string }) {
+    if (timelineEvent.snapshot) return <User className={className} />;
+    if (timelineEvent.runEvent?.type === 'sql_executed') return <Database className={className} />;
+    if (timelineEvent.runEvent?.role === 'tool') return <Wrench className={className} />;
+    if (timelineEvent.runEvent?.role === 'agent') return <Bot className={className} />;
+    if (timelineEvent.runEvent?.role === 'user') return <User className={className} />;
+    return <Clock className={className} />;
+}
+
+function timelineEventDotClassName(timelineEvent: WorkTimelineEvent) {
+    const base = 'absolute left-4 top-4 z-10 flex size-6 items-center justify-center rounded-full border bg-background';
+    if (timelineEvent.runEvent?.type === 'error') return `${base} border-red-300 text-red-600 dark:border-red-900/70 dark:text-red-300`;
+    if (timelineEvent.snapshot) return `${base} border-sky-300 text-sky-700 dark:border-sky-900/70 dark:text-sky-300`;
+    if (timelineEvent.runEvent?.type === 'sql_executed') return `${base} border-emerald-300 text-emerald-700 dark:border-emerald-900/70 dark:text-emerald-300`;
+    if (timelineEvent.runEvent?.role === 'agent') return `${base} border-violet-300 text-violet-700 dark:border-violet-900/70 dark:text-violet-300`;
+    if (timelineEvent.runEvent?.role === 'tool') return `${base} border-amber-300 text-amber-700 dark:border-amber-900/70 dark:text-amber-300`;
+    return `${base} border-border text-muted-foreground`;
+}
+
+function timelineEventBadgeClassName(timelineEvent: WorkTimelineEvent) {
+    if (timelineEvent.runEvent?.type === 'error') return '';
+    if (timelineEvent.snapshot) return 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300';
+    if (timelineEvent.runEvent?.type === 'sql_executed')
+        return 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+    if (timelineEvent.runEvent?.role === 'agent') return 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300';
+    return '';
+}
+
+function timelineEventContent(timelineEvent: WorkTimelineEvent) {
+    const snapshot = timelineEvent.snapshot;
+    if (snapshot) {
+        const note = snapshot.humanEdits.userNote?.trim();
+        return note ? `Human continued Analysis after workspace changes: ${note}` : 'Human continued Analysis after reviewing or modifying the SQL workspace.';
+    }
+
+    const event = timelineEvent.runEvent;
+    if (!event) return null;
+    return event.content || eventTypeLabel(event.type);
+}
+
+function getSqlInputFromSnapshot(snapshot: WorkWorkspaceSnapshot | null) {
+    const sql = snapshot?.humanEdits.sql;
+    return typeof sql === 'string' && sql.trim() ? sql : null;
+}
+
+function WorkspaceSnapshotDetails({ snapshot }: { snapshot: WorkWorkspaceSnapshot }) {
+    const summary = snapshot.humanEdits.changeSummary;
+    const changedItems = [
+        summary?.sqlEdited ? 'SQL edited' : null,
+        summary?.resultRefreshed ? 'Result refreshed' : null,
+        summary?.chartConfigChanged ? 'Chart changed' : null,
+        summary?.selectedRowsChanged ? 'Rows selected' : null,
+    ].filter((item): item is string => Boolean(item));
+
+    return (
+        <div className="space-y-3 rounded-md border bg-muted/20 p-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">Analysis {snapshot.investigationId}</Badge>
+                <Badge variant="outline">Workspace {snapshot.workspaceId}</Badge>
+                {changedItems.length ? (
+                    changedItems.map(item => (
+                        <Badge key={item} variant="secondary">
+                            {item}
+                        </Badge>
+                    ))
+                ) : (
+                    <span className="text-muted-foreground">No explicit workspace changes recorded.</span>
+                )}
+            </div>
+            {snapshot.humanEdits.resultPreview ? (
+                <div>
+                    <p className="mb-2 font-medium text-foreground">Result preview</p>
+                    <EventPayloadPreview payload={snapshot.humanEdits.resultPreview} />
+                </div>
+            ) : null}
+            {snapshot.humanEdits.chartConfig ? (
+                <div>
+                    <p className="mb-2 font-medium text-foreground">Chart config</p>
+                    <EventPayloadPreview payload={snapshot.humanEdits.chartConfig} />
+                </div>
+            ) : null}
+            {snapshot.humanEdits.selectedRows ? (
+                <div>
+                    <p className="mb-2 font-medium text-foreground">Selected rows</p>
+                    <EventPayloadPreview payload={snapshot.humanEdits.selectedRows} />
+                </div>
+            ) : null}
         </div>
     );
 }

@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { buildWorkTimelineEvents } from '@/lib/work/timeline';
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace } from '../../policies';
-import { workInvestigationDetailOutputSchema, workOutputSchema, workRunEventOutputSchema, workRunOutputSchema } from './schemas';
+import { workInvestigationDetailOutputSchema, workOutputSchema, workRunEventOutputSchema, workRunOutputSchema, workTimelineEventOutputSchema } from './schemas';
 
 type InvestigationDetail = z.infer<typeof workInvestigationDetailOutputSchema>;
 
@@ -33,6 +34,7 @@ export const workGetAction = defineWebAction({
         investigations: z.array(workInvestigationDetailOutputSchema),
         latestRun: workRunOutputSchema.nullable(),
         latestRunEvents: z.array(workRunEventOutputSchema),
+        timelineEvents: z.array(workTimelineEventOutputSchema),
     }),
     permissions: readWorkspace,
     scopes: ['works:read'],
@@ -43,6 +45,7 @@ export const workGetAction = defineWebAction({
         const investigations = await ctx.services.db.works.listInvestigations({ organizationId: ctx.organizationId, workId: input.id });
         const findings = await ctx.services.db.works.listFindingsForWork({ organizationId: ctx.organizationId, workId: input.id });
         const allRunEvents = await ctx.services.db.works.listRunEvents({ organizationId: ctx.organizationId, workId: input.id });
+        const workspaceSnapshots = await ctx.services.db.works.listWorkspaceSnapshots({ organizationId: ctx.organizationId, workId: input.id });
         const findingsByInvestigationId = new Map<string, typeof findings>();
         for (const finding of findings) {
             const existing = findingsByInvestigationId.get(finding.investigationId) ?? [];
@@ -70,6 +73,11 @@ export const workGetAction = defineWebAction({
                   runId: latestRun.id,
               })
             : [];
-        return { work, investigations: selectVisibleInvestigationDetails(investigationDetails), latestRun, latestRunEvents };
+        const timelineEvents = buildWorkTimelineEvents({
+            runEvents: allRunEvents,
+            workspaceSnapshots,
+        });
+
+        return { work, investigations: selectVisibleInvestigationDetails(investigationDetails), latestRun, latestRunEvents, timelineEvents };
     },
 });
