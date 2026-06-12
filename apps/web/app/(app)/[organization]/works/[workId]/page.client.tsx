@@ -652,7 +652,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         </div>
 
                         {investigations.length ? (
-                            <div className="grid gap-3 md:grid-cols-2">
+                            <div className="grid min-w-0 gap-3 md:grid-cols-2">
                                 {investigations.map(investigation => (
                                     <AnalysisCard
                                         key={investigation.id}
@@ -850,7 +850,7 @@ function AnalysisCard({
     const canInclude = showReviewControls && isExcluded;
 
     return (
-        <div className="flex min-h-56 flex-col rounded-lg border bg-background p-4">
+        <div className="flex min-h-56 min-w-0 flex-col rounded-lg border bg-background p-4">
             <div className="min-w-0">
                 <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
@@ -871,7 +871,7 @@ function AnalysisCard({
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                     {showReviewControls ? (
                         <Badge variant="outline" className={analysisInclusionClassName(investigation.auditStatus)}>
                             {!isExcluded ? <ShieldCheck className="mr-1 size-3" /> : null}
@@ -889,8 +889,10 @@ function AnalysisCard({
                             {statusLabel(effectiveStatus)}
                         </Badge>
                     ) : null}
-                    {isRunning ? <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Agent is working</span> : null}
-                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    {isRunning ? (
+                        <span className="min-w-0 break-words text-xs font-medium text-amber-600 [overflow-wrap:anywhere] dark:text-amber-400">Agent is working</span>
+                    ) : null}
+                    <span className="inline-flex min-w-0 items-center gap-1 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">
                         <Clock className="size-3" />
                         {activity.label} {formatRelativeTime(activity.value)}
                     </span>
@@ -940,9 +942,9 @@ function AnalysisCard({
                 {investigation.findings.length ? (
                     <ul className="space-y-2 text-sm leading-6">
                         {investigation.findings.map(finding => (
-                            <li key={finding.id} className="flex gap-2">
+                            <li key={finding.id} className="flex min-w-0 gap-2">
                                 <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
-                                <span className="min-w-0 whitespace-pre-wrap">{finding.content}</span>
+                                <span className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{finding.content}</span>
                             </li>
                         ))}
                     </ul>
@@ -991,8 +993,8 @@ function WorkRunEventRow({
         <div
             className={
                 isError
-                    ? 'rounded-lg border border-red-200 bg-red-50/70 p-4 text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200'
-                    : 'rounded-lg border bg-background p-4'
+                    ? 'min-w-0 rounded-lg border border-red-200 bg-red-50/70 p-4 text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200'
+                    : 'min-w-0 rounded-lg border bg-background p-4'
             }
         >
             <Collapsible open={open} onOpenChange={setOpen}>
@@ -1014,7 +1016,15 @@ function WorkRunEventRow({
                             ) : null}
                         </div>
                         {event.content ? (
-                            <p className={isAgentMessage ? 'mt-3 whitespace-pre-wrap text-sm leading-6' : 'mt-3 break-words text-sm text-muted-foreground'}>{event.content}</p>
+                            <p
+                                className={
+                                    isAgentMessage
+                                        ? 'mt-3 whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]'
+                                        : 'mt-3 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]'
+                                }
+                            >
+                                {event.content}
+                            </p>
                         ) : null}
                     </div>
                     <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(event.createdAt)}</span>

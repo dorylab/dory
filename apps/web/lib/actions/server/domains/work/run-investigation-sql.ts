@@ -59,8 +59,16 @@ function resultMetaFromQuery(input: {
     };
 }
 
-export function investigationSqlAssetBlockContent(input: { groupTitle: string; sql: string }) {
-    return [`-- Purpose: ${input.groupTitle}`, '', ensureSqlStatementTerminated(input.sql)].join('\n');
+export function investigationSqlAssetBlockContent(input: { purposeTitle: string; sql: string }) {
+    return [`-- Purpose: ${input.purposeTitle}`, ensureSqlStatementTerminated(input.sql)].join('\n');
+}
+
+export function resolveInvestigationSqlTitles(input: { title?: string | null; groupTitle?: string | null; investigationTitle: string }) {
+    const groupTitle = input.groupTitle || input.title || input.investigationTitle;
+    return {
+        groupTitle,
+        purposeTitle: input.title || groupTitle,
+    };
 }
 
 function ensureSqlStatementTerminated(sql: string) {
@@ -160,7 +168,11 @@ export const workRunInvestigationSqlAction = defineWebAction({
         const sessionId = randomUUID();
         const database = input.database ?? null;
         const sqlAssetGroupKey = input.groupKey ?? randomUUID();
-        const groupTitle = input.groupTitle || input.title || investigation.title;
+        const { groupTitle, purposeTitle } = resolveInvestigationSqlTitles({
+            title: input.title,
+            groupTitle: input.groupTitle,
+            investigationTitle: investigation.title,
+        });
         const tabName = groupTitle;
         const seedContent = investigationWorkspaceContent({
             workTitle: work.title,
@@ -168,7 +180,7 @@ export const workRunInvestigationSqlAction = defineWebAction({
             investigationTitle: investigation.title,
         });
         const block = investigationSqlAssetBlockContent({
-            groupTitle,
+            purposeTitle,
             sql: input.sql,
         });
         const workspaceScope = {

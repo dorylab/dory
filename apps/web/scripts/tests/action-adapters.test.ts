@@ -36,7 +36,7 @@ const [
     import('@/lib/auth/organization-ac'),
 ]);
 const { investigationWorkspaceContent } = await import('@/lib/actions/server/domains/work/create-investigation');
-const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab, sqlWorkspaceContentWithBlock } =
+const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab, resolveInvestigationSqlTitles, sqlWorkspaceContentWithBlock } =
     await import('@/lib/actions/server/domains/work/run-investigation-sql');
 
 const tabCreateAction = webActionRegistry.get('tab.create');
@@ -595,31 +595,31 @@ test('work.ensureInvestigationWorkspace creates a scoped SQL workspace when miss
         hasWorkspaceInvestigationId: true,
         tabType: 'sql',
         tabName: 'Error Rate Analysis',
-        content: '-- Work: Untitled Work\n-- Goal:\n-- Find why query failures increased this week.\n-- Investigation: Error Rate Analysis\n\n',
+        content: '',
         resultMetaWorkId: 'work-1',
         hasResultMetaInvestigationId: true,
         resultMetaSource: 'work-investigation',
     });
 });
 
-test('investigation workspace content keeps the SQL and comments in one tab body', () => {
+test('investigation workspace SQL block keeps Purpose next to the SQL', () => {
     assert.equal(
         investigationSqlAssetBlockContent({
-            groupTitle: 'Status Count',
+            purposeTitle: 'Status Count',
             sql: 'select status, count(*) as orders\nfrom orders\ngroup by status',
         }),
-        '-- Purpose: Status Count\n\nselect status, count(*) as orders\nfrom orders\ngroup by status;',
+        '-- Purpose: Status Count\nselect status, count(*) as orders\nfrom orders\ngroup by status;',
     );
 });
 
-test('work SQL workspace content keeps Work and Goal only at the top when appending SQL', () => {
+test('work SQL workspace content appends SQL blocks without seed comments', () => {
     const seedContent = investigationWorkspaceContent({
         workTitle: 'Untitled Work',
         goal: 'Analyze orders.',
         investigationTitle: 'Order Status Distribution',
     });
     const firstBlock = investigationSqlAssetBlockContent({
-        groupTitle: 'Status Count',
+        purposeTitle: 'Status Count',
         sql: 'select status, count(*) as orders\nfrom orders\ngroup by status',
     });
     const firstContent = sqlWorkspaceContentWithBlock({
@@ -628,7 +628,7 @@ test('work SQL workspace content keeps Work and Goal only at the top when append
         shouldAppend: false,
     });
     const secondBlock = investigationSqlAssetBlockContent({
-        groupTitle: 'Status Amount',
+        purposeTitle: 'Status Amount',
         sql: 'select status, sum(amount) as total_amount\nfrom orders\ngroup by status;',
     });
 
@@ -640,23 +640,30 @@ test('work SQL workspace content keeps Work and Goal only at the top when append
             shouldAppend: true,
         }),
         [
-            '-- Work: Untitled Work',
-            '-- Goal:',
-            '-- Analyze orders.',
-            '-- Investigation: Order Status Distribution',
-            '',
             '-- Purpose: Status Count',
-            '',
             'select status, count(*) as orders',
             'from orders',
             'group by status;',
             '',
             '-- Purpose: Status Amount',
-            '',
             'select status, sum(amount) as total_amount',
             'from orders',
             'group by status;',
         ].join('\n'),
+    );
+});
+
+test('work SQL Purpose prefers the per-query title over the shared group title', () => {
+    assert.deepEqual(
+        resolveInvestigationSqlTitles({
+            title: 'Daily price update count',
+            groupTitle: 'Price update trend analysis',
+            investigationTitle: 'Pricing analysis',
+        }),
+        {
+            groupTitle: 'Price update trend analysis',
+            purposeTitle: 'Daily price update count',
+        },
     );
 });
 

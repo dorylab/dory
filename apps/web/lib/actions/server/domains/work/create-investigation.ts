@@ -5,22 +5,8 @@ import { writeWorkspace } from '../../policies';
 import { createWorkspaceTab } from '../../workspace-tabs';
 import { workInvestigationOutputSchema } from './schemas';
 
-function sqlCommentLines(value: string) {
-    return value
-        .split(/\r?\n/)
-        .map(line => `-- ${line}`)
-        .join('\n');
-}
-
 export function investigationWorkspaceContent(input: { workTitle: string; goal: string; investigationTitle: string; sql?: string | null }) {
-    return [
-        `-- Work: ${input.workTitle}`,
-        '-- Goal:',
-        sqlCommentLines(input.goal),
-        `-- Investigation: ${input.investigationTitle}`,
-        '',
-        input.sql?.trim() ?? '',
-    ].join('\n');
+    return input.sql?.trim() ?? '';
 }
 
 export const workCreateInvestigationAction = defineWebAction({
