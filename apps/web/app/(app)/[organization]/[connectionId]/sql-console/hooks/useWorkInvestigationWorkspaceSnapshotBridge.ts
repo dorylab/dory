@@ -82,6 +82,17 @@ function dirtyStateFromSignatures(current: WorkspaceSnapshotSignature, baseline:
     };
 }
 
+function dirtyStateKey(state: WorkInvestigationWorkspaceDirtyState) {
+    const summary = state.changeSummary;
+    return [
+        state.isDirty ? '1' : '0',
+        summary.sqlEdited ? '1' : '0',
+        summary.resultRefreshed ? '1' : '0',
+        summary.chartConfigChanged ? '1' : '0',
+        summary.selectedRowsChanged ? '1' : '0',
+    ].join(':');
+}
+
 export function useWorkInvestigationWorkspaceSnapshotBridge({
     runtime,
     workId,
@@ -116,6 +127,7 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
     const baselineSignatureRef = useRef<WorkspaceSnapshotSignature | null>(null);
     const latestSignatureRef = useRef<WorkspaceSnapshotSignature | null>(null);
     const lastCollectedSignatureRef = useRef<WorkspaceSnapshotSignature | null>(null);
+    const lastEmittedDirtyStateKeyRef = useRef<string | null>(null);
     const workspaceIdentity = `${workId}:${investigationId}:${linkedTabId ?? ''}`;
 
     const currentSignature = useMemo<WorkspaceSnapshotSignature | null>(() => {
@@ -129,12 +141,23 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
         };
     }, [activeChartState, activeSelectedRowIndexes, activeSessionId, activeSetNumber, activeTab, activeTabId]);
 
+    const emitDirtyState = useCallback(
+        (state: WorkInvestigationWorkspaceDirtyState) => {
+            const nextKey = dirtyStateKey(state);
+            if (lastEmittedDirtyStateKeyRef.current === nextKey) return;
+            lastEmittedDirtyStateKeyRef.current = nextKey;
+            onWorkspaceDirtyStateChange?.(state);
+        },
+        [onWorkspaceDirtyStateChange],
+    );
+
     useEffect(() => {
         baselineSignatureRef.current = null;
         latestSignatureRef.current = null;
         lastCollectedSignatureRef.current = null;
-        onWorkspaceDirtyStateChange?.(CLEAN_WORK_INVESTIGATION_WORKSPACE_DIRTY_STATE);
-    }, [onWorkspaceDirtyStateChange, workspaceIdentity]);
+        lastEmittedDirtyStateKeyRef.current = null;
+        emitDirtyState(CLEAN_WORK_INVESTIGATION_WORKSPACE_DIRTY_STATE);
+    }, [emitDirtyState, workspaceIdentity]);
 
     const markSent = useCallback(() => {
         const sentSignature = lastCollectedSignatureRef.current ?? latestSignatureRef.current;
@@ -142,8 +165,8 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
         baselineSignatureRef.current = sentSignature;
         latestSignatureRef.current = sentSignature;
         lastCollectedSignatureRef.current = null;
-        onWorkspaceDirtyStateChange?.(CLEAN_WORK_INVESTIGATION_WORKSPACE_DIRTY_STATE);
-    }, [onWorkspaceDirtyStateChange]);
+        emitDirtyState(CLEAN_WORK_INVESTIGATION_WORKSPACE_DIRTY_STATE);
+    }, [emitDirtyState]);
 
     const collect = useCallback(
         async (userNote?: string | null): Promise<WorkInvestigationWorkspaceSnapshotInput> => {
@@ -241,7 +264,7 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
             baselineSignatureRef.current = null;
             latestSignatureRef.current = null;
             lastCollectedSignatureRef.current = null;
-            onWorkspaceDirtyStateChange?.(CLEAN_WORK_INVESTIGATION_WORKSPACE_DIRTY_STATE);
+            emitDirtyState(CLEAN_WORK_INVESTIGATION_WORKSPACE_DIRTY_STATE);
             onWorkspaceSnapshotControllerChange?.(null);
             return;
         }
@@ -254,8 +277,8 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
         }
 
         const dirtyState = dirtyStateFromSignatures(currentSignature, baselineSignatureRef.current);
-        onWorkspaceDirtyStateChange?.(dirtyState);
-    }, [activeSessionId, activeTab, currentSignature, onWorkspaceDirtyStateChange, onWorkspaceSnapshotControllerChange, runtime.isLoading]);
+        emitDirtyState(dirtyState);
+    }, [activeSessionId, activeTab, currentSignature, emitDirtyState, onWorkspaceSnapshotControllerChange, runtime.isLoading]);
 
     useEffect(() => {
         const controller: WorkInvestigationWorkspaceSnapshotController = {

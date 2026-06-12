@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useSetAtom } from 'jotai';
+import { useAtom } from 'jotai';
 import { ArrowLeft, Bot, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,6 +40,16 @@ const CLEAN_DIRTY_STATE: WorkInvestigationWorkspaceDirtyState = {
     },
 };
 
+function isSameDirtyState(left: WorkInvestigationWorkspaceDirtyState, right: WorkInvestigationWorkspaceDirtyState) {
+    return (
+        left.isDirty === right.isDirty &&
+        left.changeSummary.sqlEdited === right.changeSummary.sqlEdited &&
+        left.changeSummary.resultRefreshed === right.changeSummary.resultRefreshed &&
+        left.changeSummary.chartConfigChanged === right.changeSummary.chartConfigChanged &&
+        left.changeSummary.selectedRowsChanged === right.changeSummary.selectedRowsChanged
+    );
+}
+
 type WorkInvestigationWorkspaceContentProps = WorkInvestigationWorkspacePageClientProps & {
     onClose: () => void;
 };
@@ -50,7 +60,7 @@ export function WorkInvestigationWorkspaceContent({
     defaultLayout,
     onClose,
 }: WorkInvestigationWorkspaceContentProps) {
-    const setCurrentConnection = useSetAtom(currentConnectionAtom);
+    const [currentConnection, setCurrentConnection] = useAtom(currentConnectionAtom);
     const snapshotControllerRef = useRef<WorkInvestigationWorkspaceSnapshotController | null>(null);
     const [dirtyState, setDirtyState] = useState<WorkInvestigationWorkspaceDirtyState>(CLEAN_DIRTY_STATE);
     const [continueDrawerOpen, setContinueDrawerOpen] = useState(false);
@@ -150,11 +160,15 @@ export function WorkInvestigationWorkspaceContent({
         }
     };
 
+    const handleWorkspaceDirtyStateChange = useCallback((nextState: WorkInvestigationWorkspaceDirtyState) => {
+        setDirtyState(prevState => (isSameDirtyState(prevState, nextState) ? prevState : nextState));
+    }, []);
+
     useEffect(() => {
-        if (connectionQuery.data) {
+        if (connectionQuery.data && currentConnection?.connection?.id !== connectionQuery.data.connection.id) {
             setCurrentConnection(connectionQuery.data);
         }
-    }, [connectionQuery.data, setCurrentConnection]);
+    }, [connectionQuery.data, currentConnection?.connection?.id, setCurrentConnection]);
 
     const ensureWorkspaceQuery = useQuery({
         queryKey: ['work', workId, 'investigation', investigationId, 'workspace'],
@@ -233,7 +247,7 @@ export function WorkInvestigationWorkspaceContent({
                         investigationId={investigationId}
                         preferredActiveTabId={linkedTabId}
                         expectExistingTabs={Boolean(linkedTabId)}
-                        onWorkspaceDirtyStateChange={setDirtyState}
+                        onWorkspaceDirtyStateChange={handleWorkspaceDirtyStateChange}
                         onWorkspaceSnapshotControllerChange={controller => {
                             snapshotControllerRef.current = controller;
                         }}

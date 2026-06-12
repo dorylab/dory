@@ -27,6 +27,8 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
     const inputWorkspaceScopeKey = workspaceScopeKey(options?.workspaceScope);
     const normalizedWorkspaceScope = useMemo(() => normalizeWorkspaceScope(options?.workspaceScope), [inputWorkspaceScopeKey]);
     const normalizedWorkspaceScopeKey = workspaceScopeKey(normalizedWorkspaceScope);
+    const currentWorkspaceScope = useAtomValue(currentWorkspaceScopeAtom);
+    const currentWorkspaceScopeKey = workspaceScopeKey(currentWorkspaceScope);
     const setCurrentWorkspaceScope = useSetAtom(currentWorkspaceScopeAtom);
 
     const [tabs, setTabs] = useAtom(tabsAtom);
@@ -44,8 +46,9 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
     );
 
     useEffect(() => {
+        if (currentWorkspaceScopeKey === normalizedWorkspaceScopeKey) return;
         setCurrentWorkspaceScope(normalizedWorkspaceScope);
-    }, [normalizedWorkspaceScopeKey, setCurrentWorkspaceScope]);
+    }, [currentWorkspaceScopeKey, normalizedWorkspaceScope, normalizedWorkspaceScopeKey, setCurrentWorkspaceScope]);
 
     const persistOrder = useCallback(
         async (orderedTabs: UITabPayload[]) => {

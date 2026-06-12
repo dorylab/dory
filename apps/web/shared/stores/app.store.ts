@@ -66,6 +66,7 @@ export const activeDatabaseAtom = atom(
     (get, set, value: string) => {
         const key = resolveConnectionKey(get);
         const prev = get(activeDatabaseByConnectionAtom);
+        if (prev[key] === value) return;
         set(activeDatabaseByConnectionAtom, {
             ...prev,
             [key]: value,
@@ -82,6 +83,7 @@ export const activeSchemaAtom = atom(
     (get, set, value: string) => {
         const key = resolveConnectionKey(get);
         const prev = get(activeSchemaByConnectionAtom);
+        if (prev[key] === value) return;
         set(activeSchemaByConnectionAtom, {
             ...prev,
             [key]: value,
