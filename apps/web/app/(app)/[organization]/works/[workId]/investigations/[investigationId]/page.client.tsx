@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Bot, Check, Loader2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Bot, Check, Loader2, Play } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -65,6 +65,7 @@ export function WorkInvestigationWorkspaceContent({ workId, investigationId, def
     const [dirtyState, setDirtyState] = useState<WorkInvestigationWorkspaceDirtyState>(CLEAN_DIRTY_STATE);
     const [pendingContinueSnapshot, setPendingContinueSnapshot] = useState<WorkInvestigationWorkspaceSnapshotInput | null>(null);
     const [isCollectingSnapshot, setIsCollectingSnapshot] = useState(false);
+    const [isRunningSqlFirst, setIsRunningSqlFirst] = useState(false);
     const [continueDrawerOpen, setContinueDrawerOpen] = useState(false);
     const [userNote, setUserNote] = useState('');
 
@@ -180,11 +181,28 @@ export function WorkInvestigationWorkspaceContent({ workId, investigationId, def
         }
     };
 
+    const handleRunSqlFirst = async () => {
+        const controller = snapshotControllerRef.current;
+        if (!controller) return;
+
+        try {
+            setIsRunningSqlFirst(true);
+            setContinueDrawerOpen(false);
+            setPendingContinueSnapshot(null);
+            await controller.runActiveSql();
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to run SQL');
+        } finally {
+            setIsRunningSqlFirst(false);
+        }
+    };
+
     const handleWorkspaceDirtyStateChange = useCallback((nextState: WorkInvestigationWorkspaceDirtyState) => {
         setDirtyState(prevState => (isSameDirtyState(prevState, nextState) ? prevState : nextState));
     }, []);
 
     const drawerChangeSummary = pendingContinueSnapshot?.humanEdits.changeSummary ?? dirtyState.changeSummary;
+    const isLatestResultFromPreviousSql = drawerChangeSummary.sqlEdited && !drawerChangeSummary.resultRefreshed;
 
     useEffect(() => {
         if (connectionQuery.data && currentConnection?.connection?.id !== connectionQuery.data.connection.id) {
@@ -236,8 +254,13 @@ export function WorkInvestigationWorkspaceContent({ workId, investigationId, def
                 ) : dirtyState.isDirty ? (
                     <div className="mr-3 max-w-[11rem] shrink-0 truncate text-xs font-medium text-amber-600 dark:text-amber-400">Human edited · Not sent to Agent</div>
                 ) : null}
-                <Button variant="secondary" size="sm" disabled={!work || isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot} onClick={handleContinueAgent}>
-                    {isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot ? <Loader2 className="animate-spin" /> : <Bot />}
+                <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={!work || isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst}
+                    onClick={handleContinueAgent}
+                >
+                    {isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst ? <Loader2 className="animate-spin" /> : <Bot />}
                     Continue Agent
                 </Button>
             </header>
@@ -278,22 +301,27 @@ export function WorkInvestigationWorkspaceContent({ workId, investigationId, def
                 <DrawerContent className="w-full sm:max-w-md">
                     <DrawerHeader className="border-b">
                         <DrawerTitle>Continue with Agent</DrawerTitle>
-                        <DrawerDescription>Your workspace changes will be sent to the Agent as context for this Investigation.</DrawerDescription>
+                        <DrawerDescription>Your workspace changes will be sent to the Agent as context for this Analysis.</DrawerDescription>
                     </DrawerHeader>
                     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-4">
                         <div>
-                            <p className="mb-2 text-sm font-medium">Your changes:</p>
+                            <p className="mb-2 text-sm font-medium">Changes to include:</p>
                             <div className="space-y-2 text-sm text-muted-foreground">
                                 {drawerChangeSummary.sqlEdited ? (
                                     <div className="flex items-center gap-2">
                                         <Check className="size-4 text-foreground" />
-                                        SQL was edited
+                                        SQL edited
                                     </div>
                                 ) : null}
-                                {drawerChangeSummary.resultRefreshed ? (
+                                {isLatestResultFromPreviousSql ? (
+                                    <div className="flex items-center gap-2">
+                                        <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+                                        Latest result is from the previous SQL
+                                    </div>
+                                ) : drawerChangeSummary.resultRefreshed ? (
                                     <div className="flex items-center gap-2">
                                         <Check className="size-4 text-foreground" />
-                                        Result was refreshed
+                                        Latest result included
                                     </div>
                                 ) : null}
                                 {drawerChangeSummary.chartConfigChanged ? (
@@ -305,29 +333,49 @@ export function WorkInvestigationWorkspaceContent({ workId, investigationId, def
                                 {drawerChangeSummary.selectedRowsChanged ? (
                                     <div className="flex items-center gap-2">
                                         <Check className="size-4 text-foreground" />
-                                        Rows were selected
+                                        Selected rows included
                                     </div>
                                 ) : null}
                             </div>
                         </div>
                         <label className="space-y-2">
-                            <span className="text-sm font-medium">Optional note to Agent:</span>
+                            <span className="text-sm font-medium">Instruction for Agent</span>
                             <Textarea
                                 value={userNote}
                                 onChange={event => setUserNote(event.target.value)}
-                                placeholder="I added order count and total amount. Continue judging which status contributes most and whether there are anomalies."
+                                placeholder="Tell the Agent what to do next with these changes..."
                                 className="min-h-28 resize-none"
                             />
                         </label>
+                        <p className="text-sm text-muted-foreground">The Agent will continue this Analysis and may update the findings or suggest next steps.</p>
                     </div>
                     <DrawerFooter className="border-t sm:flex-row sm:justify-end">
-                        <Button variant="outline" onClick={() => setContinueDrawerOpen(false)} disabled={continueAgentMutation.isPending || isCollectingSnapshot}>
-                            Cancel
-                        </Button>
-                        <Button onClick={handleConfirmContinue} disabled={continueAgentMutation.isPending || isCollectingSnapshot}>
-                            {continueAgentMutation.isPending || isCollectingSnapshot ? <Loader2 className="animate-spin" /> : <Bot />}
-                            Continue
-                        </Button>
+                        {isLatestResultFromPreviousSql ? (
+                            <>
+                                <Button variant="outline" onClick={handleRunSqlFirst} disabled={continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst}>
+                                    {isRunningSqlFirst ? <Loader2 className="animate-spin" /> : <Play />}
+                                    Run SQL first
+                                </Button>
+                                <Button onClick={handleConfirmContinue} disabled={continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst}>
+                                    {continueAgentMutation.isPending || isCollectingSnapshot ? <Loader2 className="animate-spin" /> : <Bot />}
+                                    Continue anyway
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setContinueDrawerOpen(false)}
+                                    disabled={continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button onClick={handleConfirmContinue} disabled={continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst}>
+                                    {continueAgentMutation.isPending || isCollectingSnapshot ? <Loader2 className="animate-spin" /> : <Bot />}
+                                    Continue Analysis
+                                </Button>
+                            </>
+                        )}
                     </DrawerFooter>
                 </DrawerContent>
             </Drawer>

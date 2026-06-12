@@ -36,6 +36,7 @@ export type WorkInvestigationWorkspaceSnapshotInput = {
 export type WorkInvestigationWorkspaceSnapshotController = {
     collect: (userNote?: string | null) => Promise<WorkInvestigationWorkspaceSnapshotInput>;
     markSent: () => void;
+    runActiveSql: () => Promise<void>;
 };
 
 type WorkspaceSnapshotSignature = {
@@ -115,7 +116,7 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
 
     const activeTab = runtime.activeTab;
     const activeTabId = runtime.activeTabId;
-    const activeSessionId = activeTabId ? (sessionIdByTab[activeTabId] || null) : null;
+    const activeSessionId = activeTabId ? sessionIdByTab[activeTabId] || null : null;
     const readActiveSetAtom = useMemo(() => makeActiveSetAtom(activeTabId, activeSessionId), [activeTabId, activeSessionId]);
     const activeSet = useAtomValue(readActiveSetAtom);
     const activeSetNumber = typeof activeSet === 'number' ? activeSet : -1;
@@ -168,19 +169,28 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
         emitDirtyState(CLEAN_WORK_INVESTIGATION_WORKSPACE_DIRTY_STATE);
     }, [emitDirtyState]);
 
+    const runActiveSql = useCallback(async () => {
+        if (!activeTab || activeTab.tabType !== 'sql') throw new Error('No SQL workspace tab is active.');
+
+        runtime.editorRef.current?.flushSave?.();
+        await runtime.runQuery(activeTab);
+    }, [activeTab, runtime]);
+
     const collect = useCallback(
         async (userNote?: string | null): Promise<WorkInvestigationWorkspaceSnapshotInput> => {
             if (!activeTabId || activeTab?.tabType !== 'sql') throw new Error('No SQL workspace tab is active.');
 
             runtime.editorRef.current?.flushSave?.();
             const sqlText = runtime.editorRef.current?.getValue?.() ?? activeTab.content ?? '';
-            const sessionId = activeSessionId || (() => {
-                try {
-                    return localStorage.getItem(`sqlconsole:sessionId:${activeTabId}`) || null;
-                } catch {
-                    return null;
-                }
-            })();
+            const sessionId =
+                activeSessionId ||
+                (() => {
+                    try {
+                        return localStorage.getItem(`sqlconsole:sessionId:${activeTabId}`) || null;
+                    } catch {
+                        return null;
+                    }
+                })();
             const selectedRowIndexes = activeSelectedRowIndexes.slice(0, 200);
             let resultPreview: Record<string, unknown> | null = null;
             let selectedRows: Record<string, unknown> | null = selectedRowIndexes.length
@@ -284,8 +294,9 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
         const controller: WorkInvestigationWorkspaceSnapshotController = {
             collect,
             markSent,
+            runActiveSql,
         };
         onWorkspaceSnapshotControllerChange?.(controller);
         return () => onWorkspaceSnapshotControllerChange?.(null);
-    }, [collect, markSent, onWorkspaceSnapshotControllerChange]);
+    }, [collect, markSent, onWorkspaceSnapshotControllerChange, runActiveSql]);
 }
