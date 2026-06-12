@@ -19,6 +19,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
     }
 
     let workspaceSnapshotId: string | null = null;
+    let focusInvestigationId: string | null = null;
     const text = await req.text();
     if (text.trim()) {
         let body: unknown;
@@ -34,6 +35,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         }
 
         const workspaceSnapshot = parsed.data?.workspaceSnapshot;
+        focusInvestigationId = parsed.data?.focusInvestigationId ?? null;
         if (workspaceSnapshot) {
             const existingRunningRun = await db.works.getRunningRun({ organizationId, workId });
             if (existingRunningRun) {
@@ -76,5 +78,6 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         userId,
         workId,
         workspaceSnapshotId,
+        focusInvestigationId,
     });
 });

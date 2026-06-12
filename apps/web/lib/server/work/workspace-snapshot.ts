@@ -31,6 +31,7 @@ export const workspaceSnapshotInputSchema = z.object({
 export const workRunRequestBodySchema = z
     .object({
         workspaceSnapshot: workspaceSnapshotInputSchema.optional(),
+        focusInvestigationId: z.string().min(1).optional(),
     })
     .optional();
 

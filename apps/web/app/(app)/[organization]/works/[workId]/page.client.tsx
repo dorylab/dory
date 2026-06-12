@@ -135,17 +135,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         onError: error => toast.error(error instanceof Error ? error.message : 'Failed to update status'),
     });
 
-    const createInvestigationMutation = useMutation({
-        mutationFn: (title: string) => executeActionClient<WorkInvestigation>('work.createInvestigation', { workId, title }),
-        onSuccess: () => {
-            setInvestigationTitle('');
-            invalidateWork();
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Failed to create Analysis'),
-    });
-
     const runWorkMutation = useMutation({
-        mutationFn: async () => {
+        mutationFn: async (input?: { focusInvestigationId?: string | null }) => {
             if (work && goal.trim() && goal.trim() !== work.goal) {
                 await executeActionClient<Work>('work.updateGoal', { id: workId, goal: goal.trim() });
                 await invalidateWork();
@@ -153,6 +144,12 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
 
             const response = await fetch(`/api/works/${encodeURIComponent(workId)}/run`, {
                 method: 'POST',
+                headers: input?.focusInvestigationId ? { 'Content-Type': 'application/json' } : undefined,
+                body: input?.focusInvestigationId
+                    ? JSON.stringify({
+                          focusInvestigationId: input.focusInvestigationId,
+                      })
+                    : undefined,
             });
 
             if (!response.ok) {
@@ -177,6 +174,17 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             void invalidateWork();
             toast.error(error instanceof Error ? error.message : 'Failed to start Work run');
         },
+    });
+
+    const createInvestigationMutation = useMutation({
+        mutationFn: (title: string) => executeActionClient<WorkInvestigation>('work.createInvestigation', { workId, title }),
+        onSuccess: investigation => {
+            setInvestigationTitle('');
+            invalidateWork();
+            toast.success('Analysis added. Agent run started');
+            runWorkMutation.mutate({ focusInvestigationId: investigation.id });
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : 'Failed to create Analysis'),
     });
 
     const copySql = async (sql: string) => {
@@ -425,7 +433,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                             </div>
                         </div>
                         <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-44">
-                            <Button onClick={() => runWorkMutation.mutate()} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
+                            <Button onClick={() => runWorkMutation.mutate({})} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
                                 {isRunRunning || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Play />}
                                 {isRunRunning ? 'Running' : latestRun ? 'Run again' : 'Run'}
                             </Button>
@@ -514,9 +522,9 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                 <Input value={investigationTitle} onChange={event => setInvestigationTitle(event.target.value)} placeholder="Analysis title" className="sm:w-64" />
                                 <Button
                                     onClick={() => createInvestigationMutation.mutate(investigationTitle.trim())}
-                                    disabled={!investigationTitle.trim() || createInvestigationMutation.isPending}
+                                    disabled={!investigationTitle.trim() || createInvestigationMutation.isPending || runWorkMutation.isPending || isRunRunning}
                                 >
-                                    {createInvestigationMutation.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
+                                    {createInvestigationMutation.isPending || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
                                     New
                                 </Button>
                             </div>

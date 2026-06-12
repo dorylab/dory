@@ -33,6 +33,7 @@ type RunWorkAgentOptions = {
     userId: string;
     workId: string;
     workspaceSnapshotId?: string | null;
+    focusInvestigationId?: string | null;
 };
 
 type ExistingRunAnalysis = {
@@ -132,6 +133,10 @@ function existingAnalysesForPrompt(analyses: ExistingRunAnalysis[]) {
                 `- investigationId: ${analysis.id}; title: ${analysis.title}; findings: ${analysis.findingsCount}; sql assets: ${analysis.sqlAssetCount}`,
         ),
     ].join('\n');
+}
+
+function focusedAnalysisForPrompt(analysis: WorkInvestigation) {
+    return ['Focused Analysis', `- investigationId: ${analysis.id}; title: ${analysis.title}`].join('\n');
 }
 
 function toMessageContent(value: unknown, fallback: string) {
@@ -599,6 +604,7 @@ function buildWorkRunInstruction(
     work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null },
     workspaceSnapshot: WorkWorkspaceSnapshot | null,
     existingAnalyses: ExistingRunAnalysis[],
+    focusedAnalysis: WorkInvestigation | null,
 ) {
     if (workspaceSnapshot) {
         return [
@@ -614,6 +620,27 @@ function buildWorkRunInstruction(
             'Write SQL as a complete statement ending with a semicolon.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Keep the final answer concise and focused on what changed after the human handoff.',
+        ].join('\n');
+    }
+
+    if (focusedAnalysis) {
+        return [
+            'Work Run Context',
+            `You are running a Dory Work. The current workId is ${work.id}.`,
+            formatWorkSetupSection(work),
+            focusedAnalysisForPrompt(focusedAnalysis),
+            'The user just added this Analysis. Start running it now.',
+            'This is a task-style focused continuation. Do not call work.createInvestigation.',
+            'Only update the focused Analysis listed above. Reuse its exact investigationId when running SQL and creating Findings.',
+            'Run follow-up SQL through work.runInvestigationSql for the focused investigationId. Do not invent or infer IDs from titles.',
+            'After every SQL run, create at least one Finding for this same Analysis before running another SQL query or writing the conclusion.',
+            'When calling work.runInvestigationSql, use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
+            'Write SQL as a complete statement ending with a semicolon.',
+            'The conclusion should incorporate the new Finding into the Work conclusion.',
+            'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
+            'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
+            'Always call work.updateConclusion before finishing the run.',
+            'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
         ].join('\n');
     }
 
@@ -697,8 +724,21 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         return Response.json({ error: 'Workspace snapshot not found.' }, { status: 404 });
     }
 
+    const focusedAnalysis =
+        !workspaceSnapshot && options.focusInvestigationId
+            ? await options.db.works.getInvestigationById({
+                  organizationId: options.organizationId,
+                  workId: work.id,
+                  id: options.focusInvestigationId,
+              })
+            : null;
+
+    if (options.focusInvestigationId && !focusedAnalysis) {
+        return Response.json({ error: 'Focused Analysis not found.' }, { status: 404 });
+    }
+
     const workspaceSnapshotContext = formatWorkspaceSnapshotForAgent(workspaceSnapshot);
-    const existingRunAnalyses = workspaceSnapshot
+    const existingRunAnalyses = workspaceSnapshot || focusedAnalysis
         ? []
         : selectExistingRunAnalyses({
               investigations: await options.db.works.listInvestigations({
@@ -815,6 +855,13 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                       sourceTabId: workspaceSnapshot.workspaceId,
                       hasSnapshotResult: Boolean(workspaceSnapshot.humanEdits?.resultPreview),
                   }
+                : focusedAnalysis
+                  ? {
+                        mode: 'investigation_continue',
+                        investigationId: focusedAnalysis.id,
+                        sourceTabId: focusedAnalysis.linkedTabId,
+                        hasSnapshotResult: false,
+                    }
                 : {
                       existingInvestigationIds: existingRunAnalyses.map(analysis => analysis.id),
                       existingFindingsByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.findingsCount])),
@@ -850,7 +897,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             copilotEnvelope: null,
             locale,
         });
-        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work, workspaceSnapshot, existingRunAnalyses)].filter(Boolean).join('\n\n');
+        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work, workspaceSnapshot, existingRunAnalyses, focusedAnalysis)].filter(Boolean).join('\n\n');
         const model = resolveDoryAgentModel({
             execution,
             req: options.req as any,
