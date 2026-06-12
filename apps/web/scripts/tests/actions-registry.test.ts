@@ -536,6 +536,14 @@ test('web registry enforces role and actor permission matrix', async () => {
     await assertAllowed('work.updateTitle', roleContext('member', 'user', ['works:write']), { id: 'work-1', title: 'Updated Work' });
     await assertDenied('work.delete', roleContext('viewer', 'user', ['works:write']), /Missing permission workspace:write/, { id: 'work-1' });
     await assertAllowed('work.delete', roleContext('member', 'user', ['works:write']), { id: 'work-1' });
+    await assertDenied('work.deleteInvestigation', roleContext('viewer', 'user', ['works:write']), /Missing permission workspace:write/, {
+        workId: 'work-1',
+        id: 'investigation-1',
+    });
+    await assertAllowed('work.deleteInvestigation', roleContext('member', 'user', ['works:write']), {
+        workId: 'work-1',
+        id: 'investigation-1',
+    });
     await assertDenied('work.ensureInvestigationWorkspace', roleContext('member', 'user', ['works:write']), /Missing action scope "tabs:write"/, {
         workId: 'work-1',
         investigationId: 'investigation-1',
@@ -607,6 +615,13 @@ test('web action manifest exposes tab.create as a single action contract across 
     assert.equal(workEnsureWorkspace.kind, 'command');
     assert.deepEqual(workEnsureWorkspace.requiredScopes, ['works:write', 'tabs:write']);
     assert.deepEqual(workEnsureWorkspace.allowedActors, ['user', 'agent', 'automation']);
+
+    const workDeleteInvestigation = manifest.actions.find(action => action.id === 'work.deleteInvestigation');
+    assert.ok(workDeleteInvestigation);
+    assert.equal(workDeleteInvestigation.domain, 'work');
+    assert.equal(workDeleteInvestigation.kind, 'command');
+    assert.deepEqual(workDeleteInvestigation.requiredScopes, ['works:write']);
+    assert.deepEqual(workDeleteInvestigation.allowedActors, ['user', 'automation']);
 
     const workSql = manifest.actions.find(action => action.id === 'work.runInvestigationSql');
     assert.ok(workSql);

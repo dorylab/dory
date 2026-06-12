@@ -3,17 +3,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, Bot, Check, ChevronDown, Clock, Database, Loader2, Pencil, Play, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bot, Check, ChevronDown, Clock, Database, Loader2, MoreVertical, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
 import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '@/lib/sql-console/tab-queries';
+import { effectiveInvestigationStatus, investigationActivityDisplay } from '@/lib/work/investigation-card-state';
 import { SqlResultBody, SqlStatementBlock } from '@/components/@dory/ui/ai/sql-result';
 import type { SqlResultManualExecutionMode, SqlResultPart } from '@/components/@dory/ui/ai/sql-result/type';
 import { MessageResponse } from '@/components/ai-elements/message';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
@@ -21,7 +33,7 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { useConnections } from '../../connections/hooks/use-connections';
-import type { Work, WorkDetail, WorkInvestigation, WorkRunEvent, WorkStatus } from '../types';
+import type { Work, WorkDetail, WorkInvestigation, WorkRun, WorkRunEvent, WorkStatus } from '../types';
 import { eventTypeLabel, formatRelativeTime, runStatusClassName, runStatusLabel, statusClassName, statusLabel } from '../utils';
 
 type WorkDetailPageClientProps = {
@@ -43,6 +55,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const [isEditingConclusion, setIsEditingConclusion] = useState(false);
     const [investigationTitle, setInvestigationTitle] = useState('');
     const [openingInvestigationId, setOpeningInvestigationId] = useState<string | null>(null);
+    const [deletingInvestigation, setDeletingInvestigation] = useState<WorkInvestigation | null>(null);
     const [runDetailsOpen, setRunDetailsOpen] = useState(false);
 
     const workQuery = useQuery({
@@ -185,6 +198,36 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             runWorkMutation.mutate({ focusInvestigationId: investigation.id });
         },
         onError: error => toast.error(error instanceof Error ? error.message : 'Failed to create Analysis'),
+    });
+
+    const deleteInvestigationMutation = useMutation({
+        mutationFn: (investigation: WorkInvestigation) => executeActionClient<{ ok: boolean }>('work.deleteInvestigation', { workId, id: investigation.id }),
+        onMutate: async investigation => {
+            await queryClient.cancelQueries({ queryKey: ['work', workId] });
+            const previousWorkDetail = queryClient.getQueryData<WorkDetail>(['work', workId]);
+            setDeletingInvestigation(null);
+            queryClient.setQueryData<WorkDetail>(['work', workId], current =>
+                current
+                    ? {
+                          ...current,
+                          investigations: current.investigations.filter(item => item.id !== investigation.id),
+                      }
+                    : current,
+            );
+            return { previousWorkDetail };
+        },
+        onSuccess: () => {
+            toast.success('Analysis deleted');
+        },
+        onError: (error, _investigation, context) => {
+            if (context?.previousWorkDetail) {
+                queryClient.setQueryData(['work', workId], context.previousWorkDetail);
+            }
+            toast.error(error instanceof Error ? error.message : 'Failed to delete Analysis');
+        },
+        onSettled: () => {
+            void invalidateWork();
+        },
     });
 
     const copySql = async (sql: string) => {
@@ -533,53 +576,16 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         {investigations.length ? (
                             <div className="grid gap-3 md:grid-cols-2">
                                 {investigations.map(investigation => (
-                                    <div key={investigation.id} className="flex min-h-56 flex-col rounded-lg border bg-background p-4">
-                                        <div className="min-w-0">
-                                            <div className="mb-1 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Title</div>
-                                            <h3 className="truncate text-sm font-semibold">{investigation.title}</h3>
-                                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                                                <Badge variant="outline" className={statusClassName(investigation.status)}>
-                                                    {statusLabel(investigation.status)}
-                                                </Badge>
-                                                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                                                    <Clock className="size-3" />
-                                                    Last query {formatRelativeTime(investigation.lastQueryAt)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="mt-5 min-w-0 flex-1">
-                                            <div className="mb-2 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Findings</div>
-                                            {investigation.findings.length ? (
-                                                <ul className="space-y-2 text-sm leading-6">
-                                                    {investigation.findings.map(finding => (
-                                                        <li key={finding.id} className="flex gap-2">
-                                                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
-                                                            <span className="min-w-0 whitespace-pre-wrap">{finding.content}</span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <p className="text-sm text-muted-foreground">Waiting for findings.</p>
-                                            )}
-                                        </div>
-                                        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                                            <div className="text-xs text-muted-foreground">
-                                                <span className="font-medium text-foreground">Assets</span>
-                                                <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
-                                            </div>
-                                            <Button
-                                                size="sm"
-                                                variant="secondary"
-                                                onPointerEnter={() => prefetchInvestigationWorkspace(investigation)}
-                                                onFocus={() => prefetchInvestigationWorkspace(investigation)}
-                                                onClick={() => openInvestigation(investigation)}
-                                                disabled={openingInvestigationId === investigation.id}
-                                            >
-                                                {openingInvestigationId === investigation.id ? <Loader2 className="animate-spin" /> : <ArrowUpRight />}
-                                                Open Workspace
-                                            </Button>
-                                        </div>
-                                    </div>
+                                    <AnalysisCard
+                                        key={investigation.id}
+                                        investigation={investigation}
+                                        latestRun={latestRun}
+                                        latestRunEvents={latestRunEvents}
+                                        openingInvestigationId={openingInvestigationId}
+                                        onOpen={openInvestigation}
+                                        onPrefetch={prefetchInvestigationWorkspace}
+                                        onDelete={setDeletingInvestigation}
+                                    />
                                 ))}
                             </div>
                         ) : (
@@ -633,6 +639,123 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         )}
                     </section>
                 </main>
+            </div>
+            <AlertDialog open={Boolean(deletingInvestigation)} onOpenChange={open => !open && setDeletingInvestigation(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Analysis?</AlertDialogTitle>
+                        <AlertDialogDescription>This will delete the Analysis, its findings, workspace snapshots, and linked Work SQL tabs.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteInvestigationMutation.isPending}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={deleteInvestigationMutation.isPending}
+                            onClick={() => deletingInvestigation && deleteInvestigationMutation.mutate(deletingInvestigation)}
+                        >
+                            {deleteInvestigationMutation.isPending && <Loader2 className="animate-spin" />}
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
+    );
+}
+
+function AnalysisCard({
+    investigation,
+    latestRun,
+    latestRunEvents,
+    openingInvestigationId,
+    onOpen,
+    onPrefetch,
+    onDelete,
+}: {
+    investigation: WorkInvestigation;
+    latestRun: WorkRun | null;
+    latestRunEvents: WorkRunEvent[];
+    openingInvestigationId: string | null;
+    onOpen: (investigation: WorkInvestigation) => void;
+    onPrefetch: (investigation: WorkInvestigation) => void;
+    onDelete: (investigation: WorkInvestigation) => void;
+}) {
+    const effectiveStatus = effectiveInvestigationStatus({
+        investigation,
+        latestRun,
+        latestRunEvents,
+    });
+    const activity = investigationActivityDisplay({
+        investigation,
+        latestRunEvents,
+    });
+    const isRunning = effectiveStatus === 'running';
+
+    return (
+        <div className="flex min-h-56 flex-col rounded-lg border bg-background p-4">
+            <div className="min-w-0">
+                <div className="flex items-start gap-2">
+                    <div className="min-w-0 flex-1">
+                        <div className="mb-1 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Title</div>
+                        <h3 className="truncate text-sm font-semibold">{investigation.title}</h3>
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${investigation.title}`} title="More actions">
+                                <MoreVertical />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(investigation)}>
+                                <Trash2 />
+                                Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={statusClassName(effectiveStatus)}>
+                        {isRunning ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                        {statusLabel(effectiveStatus)}
+                    </Badge>
+                    {isRunning ? <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Agent is working</span> : null}
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="size-3" />
+                        {activity.label} {formatRelativeTime(activity.value)}
+                    </span>
+                </div>
+            </div>
+            <div className="mt-5 min-w-0 flex-1">
+                <div className="mb-2 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Findings</div>
+                {investigation.findings.length ? (
+                    <ul className="space-y-2 text-sm leading-6">
+                        {investigation.findings.map(finding => (
+                            <li key={finding.id} className="flex gap-2">
+                                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
+                                <span className="min-w-0 whitespace-pre-wrap">{finding.content}</span>
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p className="text-sm text-muted-foreground">Waiting for findings.</p>
+                )}
+            </div>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <div className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Assets</span>
+                    <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
+                </div>
+                <Button
+                    size="sm"
+                    variant="secondary"
+                    onPointerEnter={() => onPrefetch(investigation)}
+                    onFocus={() => onPrefetch(investigation)}
+                    onClick={() => onOpen(investigation)}
+                    disabled={openingInvestigationId === investigation.id}
+                >
+                    {openingInvestigationId === investigation.id ? <Loader2 className="animate-spin" /> : <ArrowUpRight />}
+                    Open Workspace
+                </Button>
             </div>
         </div>
     );

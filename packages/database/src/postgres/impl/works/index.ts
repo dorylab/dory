@@ -471,7 +471,9 @@ export class PostgresWorksRepository {
         const [row] = await this.db
             .select()
             .from(workWorkspaceSnapshots)
-            .where(and(eq(workWorkspaceSnapshots.organizationId, params.organizationId), eq(workWorkspaceSnapshots.workId, params.workId), eq(workWorkspaceSnapshots.id, params.id)))
+            .where(
+                and(eq(workWorkspaceSnapshots.organizationId, params.organizationId), eq(workWorkspaceSnapshots.workId, params.workId), eq(workWorkspaceSnapshots.id, params.id)),
+            )
             .limit(1);
 
         return (row as WorkWorkspaceSnapshot | undefined) ?? null;
@@ -793,5 +795,35 @@ export class PostgresWorksRepository {
                     eq(workInvestigationFindings.id, params.id),
                 ),
             );
+    }
+
+    async deleteInvestigation(params: { organizationId: string; workId: string; id: string }): Promise<void> {
+        this.assertInited();
+
+        const investigation = await this.getInvestigationById(params);
+        if (!investigation) throw new DatabaseError('Work investigation not found.', 404);
+
+        await this.db
+            .delete(workInvestigationFindings)
+            .where(
+                and(
+                    eq(workInvestigationFindings.organizationId, params.organizationId),
+                    eq(workInvestigationFindings.workId, params.workId),
+                    eq(workInvestigationFindings.investigationId, params.id),
+                ),
+            );
+        await this.db
+            .delete(workWorkspaceSnapshots)
+            .where(
+                and(
+                    eq(workWorkspaceSnapshots.organizationId, params.organizationId),
+                    eq(workWorkspaceSnapshots.workId, params.workId),
+                    eq(workWorkspaceSnapshots.investigationId, params.id),
+                ),
+            );
+        await this.db.delete(tabs).where(and(eq(tabs.workspaceScopeWorkId, params.workId), eq(tabs.workspaceScopeInvestigationId, params.id)));
+        await this.db
+            .delete(workInvestigations)
+            .where(and(eq(workInvestigations.organizationId, params.organizationId), eq(workInvestigations.workId, params.workId), eq(workInvestigations.id, params.id)));
     }
 }

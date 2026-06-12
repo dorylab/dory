@@ -4,6 +4,7 @@ import { workDeleteAction } from './delete';
 import { workGetAction } from './get';
 import { workEnsureInvestigationWorkspaceAction } from './ensure-investigation-workspace';
 import { workListAction } from './list';
+import { workDeleteInvestigationAction } from './delete-investigation';
 import { workDeleteInvestigationFindingAction } from './delete-investigation-finding';
 import { workUpdateConclusionAction } from './update-conclusion';
 import { workUpdateGoalAction } from './update-goal';
@@ -28,6 +29,7 @@ export const workActions = [
     workDeleteAction,
     workCreateInvestigationAction,
     workEnsureInvestigationWorkspaceAction,
+    workDeleteInvestigationAction,
     workCreateInvestigationFindingAction,
     workUpdateInvestigationFindingAction,
     workDeleteInvestigationFindingAction,

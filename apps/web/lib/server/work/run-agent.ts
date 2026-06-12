@@ -97,11 +97,7 @@ function existingRunAnalysisScore(analysis: ExistingRunAnalysis) {
     return analysis.findingsCount * 100 + analysis.sqlAssetCount * 10 + (analysis.lastQueryAt ? 1 : 0);
 }
 
-function selectExistingRunAnalyses(input: {
-    investigations: WorkInvestigation[];
-    findings: WorkInvestigationFinding[];
-    runEvents: WorkRunEvent[];
-}) {
+function selectExistingRunAnalyses(input: { investigations: WorkInvestigation[]; findings: WorkInvestigationFinding[]; runEvents: WorkRunEvent[] }) {
     const findingCounts = countFindingsByInvestigation(input.findings);
     const sqlAssetCounts = countSqlAssetsByInvestigation(input.runEvents);
     return input.investigations
@@ -128,10 +124,7 @@ function existingAnalysesForPrompt(analyses: ExistingRunAnalysis[]) {
     if (analyses.length === 0) return '';
     return [
         'Existing Analyses',
-        ...analyses.map(
-            analysis =>
-                `- investigationId: ${analysis.id}; title: ${analysis.title}; findings: ${analysis.findingsCount}; sql assets: ${analysis.sqlAssetCount}`,
-        ),
+        ...analyses.map(analysis => `- investigationId: ${analysis.id}; title: ${analysis.title}; findings: ${analysis.findingsCount}; sql assets: ${analysis.sqlAssetCount}`),
     ].join('\n');
 }
 
@@ -738,22 +731,23 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
     }
 
     const workspaceSnapshotContext = formatWorkspaceSnapshotForAgent(workspaceSnapshot);
-    const existingRunAnalyses = workspaceSnapshot || focusedAnalysis
-        ? []
-        : selectExistingRunAnalyses({
-              investigations: await options.db.works.listInvestigations({
-                  organizationId: options.organizationId,
-                  workId: work.id,
-              }),
-              findings: await options.db.works.listFindingsForWork({
-                  organizationId: options.organizationId,
-                  workId: work.id,
-              }),
-              runEvents: await options.db.works.listRunEvents({
-                  organizationId: options.organizationId,
-                  workId: work.id,
-              }),
-          });
+    const existingRunAnalyses =
+        workspaceSnapshot || focusedAnalysis
+            ? []
+            : selectExistingRunAnalyses({
+                  investigations: await options.db.works.listInvestigations({
+                      organizationId: options.organizationId,
+                      workId: work.id,
+                  }),
+                  findings: await options.db.works.listFindingsForWork({
+                      organizationId: options.organizationId,
+                      workId: work.id,
+                  }),
+                  runEvents: await options.db.works.listRunEvents({
+                      organizationId: options.organizationId,
+                      workId: work.id,
+                  }),
+              });
 
     const { run, existingRunningRun } = await options.db.works.createRun({
         workId: work.id,
@@ -807,7 +801,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             scope: work.scope,
             initialContext: work.initialContext,
             workspaceSnapshotId: workspaceSnapshot?.id ?? null,
-            investigationId: workspaceSnapshot?.investigationId ?? null,
+            investigationId: workspaceSnapshot?.investigationId ?? focusedAnalysis?.id ?? null,
         },
     });
     await appendEvent({
@@ -862,10 +856,10 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                         sourceTabId: focusedAnalysis.linkedTabId,
                         hasSnapshotResult: false,
                     }
-                : {
-                      existingInvestigationIds: existingRunAnalyses.map(analysis => analysis.id),
-                      existingFindingsByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.findingsCount])),
-                  },
+                  : {
+                        existingInvestigationIds: existingRunAnalyses.map(analysis => analysis.id),
+                        existingFindingsByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.findingsCount])),
+                    },
         );
         const toolCallStarts: Array<{ toolName: string; toolCallId: string | null; startedAt: Date; consumed: boolean }> = [];
         let modelStepMessageCount = 0;

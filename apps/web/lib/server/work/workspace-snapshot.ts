@@ -110,7 +110,7 @@ export async function createValidatedWorkspaceSnapshot(input: {
         if (!previousEvent) throw new WorkspaceSnapshotRequestError('Previous Agent step not found.', 400);
     }
 
-    return input.db.works.createWorkspaceSnapshot({
+    const snapshot = await input.db.works.createWorkspaceSnapshot({
         organizationId: input.organizationId,
         workId: work.id,
         investigationId: investigation.id,
@@ -120,6 +120,19 @@ export async function createValidatedWorkspaceSnapshot(input: {
         humanEdits: sanitizeHumanEdits(input.snapshot.humanEdits),
         createdByUserId: input.userId,
     });
+
+    if (input.snapshot.humanEdits.resultPreview) {
+        await input.db.works.updateInvestigation({
+            organizationId: input.organizationId,
+            workId: work.id,
+            id: investigation.id,
+            patch: {
+                lastQueryAt: snapshot.createdAt,
+            },
+        });
+    }
+
+    return snapshot;
 }
 
 export function formatWorkspaceSnapshotForAgent(snapshot: WorkWorkspaceSnapshot | null) {

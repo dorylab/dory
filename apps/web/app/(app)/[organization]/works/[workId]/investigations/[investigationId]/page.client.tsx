@@ -8,6 +8,7 @@ import { ArrowLeft, Bot, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
+import { buildContinueAgentRunFetchInit } from '@/lib/work/continue-agent-request';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/registry/new-york-v4/ui/drawer';
@@ -50,19 +51,20 @@ function isSameDirtyState(left: WorkInvestigationWorkspaceDirtyState, right: Wor
     );
 }
 
+function hasWorkspaceSnapshotChanges(snapshot: WorkInvestigationWorkspaceSnapshotInput) {
+    return Object.values(snapshot.humanEdits.changeSummary).some(Boolean);
+}
+
 type WorkInvestigationWorkspaceContentProps = WorkInvestigationWorkspacePageClientProps & {
     onClose: () => void;
 };
 
-export function WorkInvestigationWorkspaceContent({
-    workId,
-    investigationId,
-    defaultLayout,
-    onClose,
-}: WorkInvestigationWorkspaceContentProps) {
+export function WorkInvestigationWorkspaceContent({ workId, investigationId, defaultLayout, onClose }: WorkInvestigationWorkspaceContentProps) {
     const [currentConnection, setCurrentConnection] = useAtom(currentConnectionAtom);
     const snapshotControllerRef = useRef<WorkInvestigationWorkspaceSnapshotController | null>(null);
     const [dirtyState, setDirtyState] = useState<WorkInvestigationWorkspaceDirtyState>(CLEAN_DIRTY_STATE);
+    const [pendingContinueSnapshot, setPendingContinueSnapshot] = useState<WorkInvestigationWorkspaceSnapshotInput | null>(null);
+    const [isCollectingSnapshot, setIsCollectingSnapshot] = useState(false);
     const [continueDrawerOpen, setContinueDrawerOpen] = useState(false);
     const [userNote, setUserNote] = useState('');
 
@@ -73,10 +75,7 @@ export function WorkInvestigationWorkspaceContent({
 
     const work = workQuery.data?.work ?? null;
     const latestRun = workQuery.data?.latestRun ?? null;
-    const investigation = useMemo(
-        () => workQuery.data?.investigations.find(item => item.id === investigationId) ?? null,
-        [investigationId, workQuery.data?.investigations],
-    );
+    const investigation = useMemo(() => workQuery.data?.investigations.find(item => item.id === investigationId) ?? null, [investigationId, workQuery.data?.investigations]);
     const connectionQuery = useConnectionDetail(work?.connectionId);
     const isAgentRunning = latestRun?.status === 'running' || work?.status === 'running';
     const latestAgentStepId = useMemo(() => {
@@ -91,19 +90,15 @@ export function WorkInvestigationWorkspaceContent({
     }, [workQuery.data?.latestRunEvents]);
 
     const continueAgentMutation = useMutation({
-        mutationFn: async (input?: { snapshot?: WorkInvestigationWorkspaceSnapshotInput | null }) => {
-            const response = await fetch(`/api/works/${encodeURIComponent(workId)}/run`, {
-                method: 'POST',
-                headers: input?.snapshot ? { 'Content-Type': 'application/json' } : undefined,
-                body: input?.snapshot
-                    ? JSON.stringify({
-                          workspaceSnapshot: {
-                              ...input.snapshot,
-                              previousAgentStepId: latestAgentStepId,
-                          },
-                      })
-                    : undefined,
-            });
+        mutationFn: async (input?: { snapshot?: WorkInvestigationWorkspaceSnapshotInput | null; focusInvestigationId?: string | null }) => {
+            const response = await fetch(
+                `/api/works/${encodeURIComponent(workId)}/run`,
+                buildContinueAgentRunFetchInit({
+                    snapshot: input?.snapshot,
+                    focusInvestigationId: input?.focusInvestigationId,
+                    previousAgentStepId: latestAgentStepId,
+                }),
+            );
 
             if (!response.ok) {
                 const text = await response.text().catch(() => '');
@@ -126,10 +121,12 @@ export function WorkInvestigationWorkspaceContent({
             if (variables?.snapshot) {
                 snapshotControllerRef.current?.markSent();
                 setDirtyState(CLEAN_DIRTY_STATE);
+                setPendingContinueSnapshot(null);
                 setContinueDrawerOpen(false);
                 setUserNote('');
             }
             toast.success('Agent run started');
+            onClose();
         },
         onError: error => {
             void workQuery.refetch();
@@ -138,31 +135,56 @@ export function WorkInvestigationWorkspaceContent({
     });
 
     const handleContinueAgent = async () => {
-        if (dirtyState.isDirty && snapshotControllerRef.current) {
-            setContinueDrawerOpen(true);
+        const controller = snapshotControllerRef.current;
+        if (!controller) {
+            continueAgentMutation.mutate({ focusInvestigationId: investigationId });
             return;
         }
-        continueAgentMutation.mutate({ snapshot: null });
+
+        try {
+            setIsCollectingSnapshot(true);
+            const snapshot = await controller.collect();
+            if (hasWorkspaceSnapshotChanges(snapshot)) {
+                setPendingContinueSnapshot(snapshot);
+                setDirtyState({
+                    isDirty: true,
+                    changeSummary: snapshot.humanEdits.changeSummary,
+                });
+                setContinueDrawerOpen(true);
+                return;
+            }
+
+            continueAgentMutation.mutate({ snapshot });
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : 'Failed to collect workspace snapshot');
+        } finally {
+            setIsCollectingSnapshot(false);
+        }
     };
 
     const handleConfirmContinue = async () => {
         const controller = snapshotControllerRef.current;
         if (!controller) {
-            continueAgentMutation.mutate({ snapshot: null });
+            continueAgentMutation.mutate({ focusInvestigationId: investigationId });
             return;
         }
 
         try {
+            setIsCollectingSnapshot(true);
             const snapshot = await controller.collect(userNote);
             continueAgentMutation.mutate({ snapshot });
         } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Failed to collect workspace snapshot');
+        } finally {
+            setIsCollectingSnapshot(false);
         }
     };
 
     const handleWorkspaceDirtyStateChange = useCallback((nextState: WorkInvestigationWorkspaceDirtyState) => {
         setDirtyState(prevState => (isSameDirtyState(prevState, nextState) ? prevState : nextState));
     }, []);
+
+    const drawerChangeSummary = pendingContinueSnapshot?.humanEdits.changeSummary ?? dirtyState.changeSummary;
 
     useEffect(() => {
         if (connectionQuery.data && currentConnection?.connection?.id !== connectionQuery.data.connection.id) {
@@ -206,23 +228,16 @@ export function WorkInvestigationWorkspaceContent({
                         <span className="truncate font-medium">{investigation?.title ?? 'Workspace'}</span>
                     </Button>
                 </div>
-                {continueAgentMutation.isPending && dirtyState.isDirty ? (
+                {continueAgentMutation.isPending && (dirtyState.isDirty || continueAgentMutation.variables?.snapshot) ? (
                     <div className="mr-3 flex max-w-[11rem] shrink-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
                         <Loader2 className="size-3.5 animate-spin" />
                         <span className="truncate">Sending workspace to Agent...</span>
                     </div>
                 ) : dirtyState.isDirty ? (
-                    <div className="mr-3 max-w-[11rem] shrink-0 truncate text-xs font-medium text-amber-600 dark:text-amber-400">
-                        Human edited · Not sent to Agent
-                    </div>
+                    <div className="mr-3 max-w-[11rem] shrink-0 truncate text-xs font-medium text-amber-600 dark:text-amber-400">Human edited · Not sent to Agent</div>
                 ) : null}
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!work || isAgentRunning || continueAgentMutation.isPending}
-                    onClick={handleContinueAgent}
-                >
-                    {isAgentRunning || continueAgentMutation.isPending ? <Loader2 className="animate-spin" /> : <Bot />}
+                <Button variant="secondary" size="sm" disabled={!work || isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot} onClick={handleContinueAgent}>
+                    {isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot ? <Loader2 className="animate-spin" /> : <Bot />}
                     Continue Agent
                 </Button>
             </header>
@@ -269,25 +284,25 @@ export function WorkInvestigationWorkspaceContent({
                         <div>
                             <p className="mb-2 text-sm font-medium">Your changes:</p>
                             <div className="space-y-2 text-sm text-muted-foreground">
-                                {dirtyState.changeSummary.sqlEdited ? (
+                                {drawerChangeSummary.sqlEdited ? (
                                     <div className="flex items-center gap-2">
                                         <Check className="size-4 text-foreground" />
                                         SQL was edited
                                     </div>
                                 ) : null}
-                                {dirtyState.changeSummary.resultRefreshed ? (
+                                {drawerChangeSummary.resultRefreshed ? (
                                     <div className="flex items-center gap-2">
                                         <Check className="size-4 text-foreground" />
                                         Result was refreshed
                                     </div>
                                 ) : null}
-                                {dirtyState.changeSummary.chartConfigChanged ? (
+                                {drawerChangeSummary.chartConfigChanged ? (
                                     <div className="flex items-center gap-2">
                                         <Check className="size-4 text-foreground" />
                                         Chart config changed
                                     </div>
                                 ) : null}
-                                {dirtyState.changeSummary.selectedRowsChanged ? (
+                                {drawerChangeSummary.selectedRowsChanged ? (
                                     <div className="flex items-center gap-2">
                                         <Check className="size-4 text-foreground" />
                                         Rows were selected
@@ -306,11 +321,11 @@ export function WorkInvestigationWorkspaceContent({
                         </label>
                     </div>
                     <DrawerFooter className="border-t sm:flex-row sm:justify-end">
-                        <Button variant="outline" onClick={() => setContinueDrawerOpen(false)} disabled={continueAgentMutation.isPending}>
+                        <Button variant="outline" onClick={() => setContinueDrawerOpen(false)} disabled={continueAgentMutation.isPending || isCollectingSnapshot}>
                             Cancel
                         </Button>
-                        <Button onClick={handleConfirmContinue} disabled={continueAgentMutation.isPending}>
-                            {continueAgentMutation.isPending ? <Loader2 className="animate-spin" /> : <Bot />}
+                        <Button onClick={handleConfirmContinue} disabled={continueAgentMutation.isPending || isCollectingSnapshot}>
+                            {continueAgentMutation.isPending || isCollectingSnapshot ? <Loader2 className="animate-spin" /> : <Bot />}
                             Continue
                         </Button>
                     </DrawerFooter>
@@ -345,16 +360,19 @@ export function WorkInvestigationWorkspaceDialogClient(props: WorkInvestigationW
     }, [router]);
 
     return (
-        <Drawer direction="bottom" dismissible={false} handleOnly shouldScaleBackground={false} open onOpenChange={open => {
-            if (!open) router.back();
-        }}>
+        <Drawer
+            direction="bottom"
+            dismissible={false}
+            handleOnly
+            shouldScaleBackground={false}
+            open
+            onOpenChange={open => {
+                if (!open) router.back();
+            }}
+        >
             <DrawerContent className="!mt-0 !h-dvh !max-h-none !rounded-none !border-0 !p-0 data-[vaul-drawer-direction=bottom]:!mt-0 data-[vaul-drawer-direction=bottom]:!h-dvh data-[vaul-drawer-direction=bottom]:!max-h-none data-[vaul-drawer-direction=bottom]:!rounded-none data-[vaul-drawer-direction=bottom]:!border-0 [&>div:first-child]:hidden">
-                <DrawerTitle className="sr-only">
-                    Work Investigation Workspace
-                </DrawerTitle>
-                <DrawerDescription className="sr-only">
-                    Full screen SQL workspace for the selected Work Investigation.
-                </DrawerDescription>
+                <DrawerTitle className="sr-only">Work Investigation Workspace</DrawerTitle>
+                <DrawerDescription className="sr-only">Full screen SQL workspace for the selected Work Investigation.</DrawerDescription>
                 <WorkInvestigationWorkspaceContent {...props} onClose={() => router.back()} />
             </DrawerContent>
         </Drawer>
