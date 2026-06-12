@@ -66,7 +66,7 @@ test('source boundary lists included and excluded analyses separately', () => {
                 id: 'analysis-accepted',
                 title: '价格更新趋势分析',
                 auditStatus: 'accepted',
-                provenanceLabel: 'Confirmed',
+                provenanceLabel: 'Human confirmed',
             },
             {
                 id: 'analysis-draft',
@@ -78,7 +78,7 @@ test('source boundary lists included and excluded analyses separately', () => {
                 id: 'analysis-needs-review',
                 title: '价格风险分析',
                 auditStatus: 'needs_review',
-                provenanceLabel: 'Agent output',
+                provenanceLabel: 'Needs review',
             },
             {
                 id: 'analysis-revised',
@@ -129,7 +129,7 @@ test('all excluded analyses return no included-analysis conclusion', () => {
 
 test('work evidence counts are formatted for Evidence and Analyses summaries', () => {
     assert.equal(formatWorkEvidenceSummary(mixedAnalyses), '4 included · 1 excluded');
-    assert.equal(formatUnconfirmedAnalysisSummary(mixedAnalyses), '2 are Agent-generated and not confirmed.');
+    assert.equal(formatUnconfirmedAnalysisSummary(mixedAnalyses), '1 is Agent-generated and not confirmed.');
 });
 
 test('completed Work lifecycle stays completed when evidence includes unconfirmed analysis', () => {

@@ -52,6 +52,7 @@ export function getWorkEvidenceCounts(analyses: WorkReviewAnalysis[]) {
     let excluded = 0;
     let agentGenerated = 0;
     let humanConfirmed = 0;
+    let needsReview = 0;
 
     for (const analysis of analyses) {
         if (analysis.auditStatus === 'rejected') {
@@ -62,12 +63,14 @@ export function getWorkEvidenceCounts(analyses: WorkReviewAnalysis[]) {
         included += 1;
         if (analysis.auditStatus === 'accepted' || analysis.auditStatus === 'reviewed') {
             humanConfirmed += 1;
-        } else if (analysis.auditStatus === 'draft' || analysis.auditStatus === 'needs_review') {
+        } else if (analysis.auditStatus === 'needs_review') {
+            needsReview += 1;
+        } else if (analysis.auditStatus === 'draft') {
             agentGenerated += 1;
         }
     }
 
-    return { included, excluded, agentGenerated, humanConfirmed };
+    return { included, excluded, agentGenerated, humanConfirmed, needsReview };
 }
 
 export function formatWorkEvidenceSummary(analyses: WorkReviewAnalysis[]) {
@@ -101,8 +104,9 @@ export function getExcludedAnalyses<T extends Pick<WorkReviewAnalysis, 'auditSta
 }
 
 export function analysisProvenanceLabel(analysis: Pick<WorkReviewAnalysis, 'auditStatus'> & { findings?: WorkReviewFinding[] }) {
-    if (analysis.auditStatus === 'accepted' || analysis.auditStatus === 'reviewed') return 'Confirmed';
+    if (analysis.auditStatus === 'accepted' || analysis.auditStatus === 'reviewed') return 'Human confirmed';
     if (analysis.auditStatus === 'revised') return 'Human edited';
+    if (analysis.auditStatus === 'needs_review') return 'Needs review';
     if (analysis.findings?.some(finding => finding.createdBy === 'user')) return 'Human edited';
     return 'Agent output';
 }

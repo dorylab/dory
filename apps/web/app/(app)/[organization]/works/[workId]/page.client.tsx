@@ -10,6 +10,7 @@ import { executeActionClient } from '@/lib/actions/client';
 import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '@/lib/sql-console/tab-queries';
 import { effectiveInvestigationStatus, investigationActivityDisplay } from '@/lib/work/investigation-card-state';
 import {
+    analysisProvenanceLabel,
     buildIncludedAnalysisConclusion,
     formatWorkEvidenceSummary,
     formatUnconfirmedAnalysisSummary,
@@ -48,6 +49,30 @@ type WorkDetailPageClientProps = {
 };
 
 const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
+
+function analysisInclusionLabel(status: WorkAnalysisAuditStatus) {
+    return status === 'rejected' ? 'Excluded' : 'Included';
+}
+
+function analysisInclusionClassName(status: WorkAnalysisAuditStatus) {
+    if (status === 'rejected') return 'border-red-300 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
+    return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+}
+
+function analysisProvenanceClassName(status: WorkAnalysisAuditStatus) {
+    switch (status) {
+        case 'needs_review':
+            return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
+        case 'accepted':
+        case 'reviewed':
+            return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300';
+        case 'revised':
+            return 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300';
+        case 'draft':
+        default:
+            return 'border-muted bg-muted/50 text-muted-foreground';
+    }
+}
 
 function hasSqlBackedFinding(investigation: WorkInvestigation) {
     return investigation.findings.some(finding => Boolean(finding.sourceRunEventId || finding.sourceTabId));
@@ -818,6 +843,7 @@ function AnalysisCard({
     const isAuditStatusUpdating = auditStatusUpdatingId === investigation.id;
     const sqlBackedFinding = hasSqlBackedFinding(investigation);
     const isExcluded = investigation.auditStatus === 'rejected';
+    const provenanceLabel = analysisProvenanceLabel(investigation);
     const includeAuditStatus: WorkAnalysisAuditStatus = investigation.findings.some(finding => finding.createdBy === 'user') ? 'revised' : 'draft';
     const canConfirm = showReviewControls && !isExcluded && investigation.auditStatus !== 'accepted' && investigation.auditStatus !== 'reviewed';
     const canExclude = showReviewControls && !isExcluded;
@@ -846,6 +872,17 @@ function AnalysisCard({
                     </DropdownMenu>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {showReviewControls ? (
+                        <Badge variant="outline" className={analysisInclusionClassName(investigation.auditStatus)}>
+                            {!isExcluded ? <ShieldCheck className="mr-1 size-3" /> : null}
+                            {analysisInclusionLabel(investigation.auditStatus)}
+                        </Badge>
+                    ) : null}
+                    {showReviewControls ? (
+                        <Badge variant="outline" className={analysisProvenanceClassName(investigation.auditStatus)}>
+                            {provenanceLabel}
+                        </Badge>
+                    ) : null}
                     {isRunning ? (
                         <Badge variant="outline" className={statusClassName(effectiveStatus)}>
                             <Loader2 className="mr-1 size-3 animate-spin" />
