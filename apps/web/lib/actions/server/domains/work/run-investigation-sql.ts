@@ -256,7 +256,6 @@ export const workRunInvestigationSqlAction = defineWebAction({
         await executeAction(ctx, 'work.updateInvestigation', {
             workId: work.id,
             id: investigation.id,
-            auditStatus: 'needs_review',
             linkedTabId: tabId,
             lastQueryAt: new Date().toISOString(),
         });

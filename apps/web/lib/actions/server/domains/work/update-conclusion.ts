@@ -34,8 +34,16 @@ export const workUpdateConclusionAction = defineWebAction({
                 organizationId: ctx.organizationId,
                 workId: id,
             });
-            if (!investigations.some(investigation => investigation.auditStatus === 'accepted')) {
-                throw new Error('Accept at least one Analysis before updating the Work conclusion.');
+            const includedInvestigationIds = new Set(investigations.filter(investigation => investigation.auditStatus !== 'rejected').map(investigation => investigation.id));
+            if (includedInvestigationIds.size === 0) {
+                throw new Error('Include at least one Analysis before updating the Work conclusion.');
+            }
+            const findings = await ctx.services.db.works.listFindingsForWork({
+                organizationId: ctx.organizationId,
+                workId: id,
+            });
+            if (!findings.some(finding => includedInvestigationIds.has(finding.investigationId))) {
+                throw new Error('Add at least one Finding to an included Analysis before updating the Work conclusion.');
             }
         }
 

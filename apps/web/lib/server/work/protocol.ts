@@ -185,7 +185,6 @@ export function applyWorkAgentProtocolResult(state: WorkAgentProtocolState, tool
         if (investigationId) {
             state.currentInvestigationId = investigationId;
             state.sqlStarted = true;
-            state.auditStatusByInvestigationId[investigationId] = 'needs_review';
             state.pendingFinding = {
                 investigationId,
                 sourceTabId: extractString(output, 'tabId'),
@@ -222,7 +221,7 @@ export function applyWorkAgentProtocolResult(state: WorkAgentProtocolState, tool
 export function checkWorkAgentProtocolComplete(state: WorkAgentProtocolState): WorkAgentProtocolDecision {
     const readiness = checkAnalysesReadyToStop(state);
     if (!readiness.allowed) return readiness;
-    if (hasAcceptedAnalysis(state) && !state.conclusionUpdated) {
+    if (hasIncludedAnalysis(state) && !state.conclusionUpdated) {
         return {
             allowed: false,
             message: 'Update the Work conclusion before completing the Work run.',
@@ -293,27 +292,27 @@ function checkAnalysesReadyForConclusion(state: WorkAgentProtocolState): WorkAge
 
     if (state.mode === 'investigation_continue') {
         const investigationId = state.continuationInvestigationId;
-        if (!investigationId || state.auditStatusByInvestigationId[investigationId] !== 'accepted') {
+        if (!investigationId || state.auditStatusByInvestigationId[investigationId] === 'rejected') {
             return {
                 allowed: false,
-                message: 'Accept the continued Analysis before updating the conclusion.',
+                message: 'Include the continued Analysis before updating the conclusion.',
             };
         }
         return { allowed: true };
     }
 
-    if (!hasAcceptedAnalysis(state)) {
+    if (!hasIncludedAnalysis(state)) {
         return {
             allowed: false,
-            message: 'Accept at least one Analysis before updating the conclusion.',
+            message: 'Include at least one Analysis before updating the conclusion.',
         };
     }
 
     return { allowed: true };
 }
 
-function hasAcceptedAnalysis(state: WorkAgentProtocolState) {
-    return activeInvestigationIds(state).some(id => state.auditStatusByInvestigationId[id] === 'accepted');
+function hasIncludedAnalysis(state: WorkAgentProtocolState) {
+    return activeInvestigationIds(state).length > 0;
 }
 
 function activeInvestigationIds(state: WorkAgentProtocolState) {

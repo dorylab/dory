@@ -36,7 +36,8 @@ const [
     import('@/lib/auth/organization-ac'),
 ]);
 const { investigationWorkspaceContent } = await import('@/lib/actions/server/domains/work/create-investigation');
-const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab, sqlWorkspaceContentWithBlock } = await import('@/lib/actions/server/domains/work/run-investigation-sql');
+const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab, sqlWorkspaceContentWithBlock } =
+    await import('@/lib/actions/server/domains/work/run-investigation-sql');
 
 const tabCreateAction = webActionRegistry.get('tab.create');
 assert.ok(tabCreateAction, 'Expected tab.create to be registered.');
@@ -50,6 +51,8 @@ const workEnsureInvestigationWorkspaceAction = webActionRegistry.get('work.ensur
 assert.ok(workEnsureInvestigationWorkspaceAction, 'Expected work.ensureInvestigationWorkspace to be registered.');
 const workUpdateConclusionAction = webActionRegistry.get('work.updateConclusion');
 assert.ok(workUpdateConclusionAction, 'Expected work.updateConclusion to be registered.');
+const workUpdateInvestigationAction = webActionRegistry.get('work.updateInvestigation');
+assert.ok(workUpdateInvestigationAction, 'Expected work.updateInvestigation to be registered.');
 const workCreateInvestigationFindingAction = webActionRegistry.get('work.createInvestigationFinding');
 assert.ok(workCreateInvestigationFindingAction, 'Expected work.createInvestigationFinding to be registered.');
 
@@ -127,18 +130,20 @@ function createServices() {
                         connectionId: payload.connectionId,
                         title: payload.title,
                         status: 'draft',
+                        auditStatus: payload.auditStatus ?? 'draft',
                         linkedTabId: payload.linkedTabId ?? null,
                         lastQueryAt: null,
+                        reviewedAt: null,
+                        acceptedAt: null,
+                        rejectedAt: null,
+                        auditStatusUpdatedAt: null,
                         createdAt: new Date('2026-06-01T00:00:00.000Z'),
                         updatedAt: new Date('2026-06-01T00:00:00.000Z'),
                     };
                     savedInvestigations.push(record);
                     return record;
                 },
-                listInvestigations: async (payload: any) =>
-                    payload.organizationId === 'org-1' && payload.workId === 'work-1'
-                        ? savedInvestigations
-                        : [],
+                listInvestigations: async (payload: any) => (payload.organizationId === 'org-1' && payload.workId === 'work-1' ? savedInvestigations : []),
                 getInvestigationById: async (payload: any) =>
                     payload.organizationId === 'org-1' && payload.workId === 'work-1'
                         ? {
@@ -148,8 +153,13 @@ function createServices() {
                               connectionId: 'conn-1',
                               title: 'Error Rate Analysis',
                               status: 'draft',
+                              auditStatus: 'draft',
                               linkedTabId: null,
                               lastQueryAt: null,
+                              reviewedAt: null,
+                              acceptedAt: null,
+                              rejectedAt: null,
+                              auditStatusUpdatedAt: null,
                               createdAt: new Date('2026-06-01T00:00:00.000Z'),
                               updatedAt: new Date('2026-06-01T00:00:00.000Z'),
                           }
@@ -182,13 +192,24 @@ function createServices() {
                         connectionId: 'conn-1',
                         title: 'Error Rate Analysis',
                         status: payload.patch.status ?? 'completed',
+                        auditStatus: payload.patch.auditStatus ?? 'draft',
                         linkedTabId: payload.patch.linkedTabId ?? null,
                         lastQueryAt: null,
+                        reviewedAt: null,
+                        acceptedAt: payload.patch.auditStatus === 'accepted' ? new Date('2026-06-01T00:00:00.000Z') : null,
+                        rejectedAt: payload.patch.auditStatus === 'rejected' ? new Date('2026-06-01T00:00:00.000Z') : null,
+                        auditStatusUpdatedAt: payload.patch.auditStatus ? new Date('2026-06-01T00:00:00.000Z') : null,
                         createdAt: new Date('2026-06-01T00:00:00.000Z'),
                         updatedAt: new Date('2026-06-01T00:00:00.000Z'),
                     };
                     return record;
                 },
+                listFindingsForWork: async (payload: { organizationId: string; workId: string }) =>
+                    payload.organizationId === 'org-1' && payload.workId === 'work-1' ? savedInvestigationFindings : [],
+                listInvestigationFindings: async (payload: { organizationId: string; workId: string; investigationId: string }) =>
+                    payload.organizationId === 'org-1' && payload.workId === 'work-1'
+                        ? savedInvestigationFindings.filter(finding => (finding as { investigationId?: string }).investigationId === payload.investigationId)
+                        : [],
                 createInvestigationFinding: async (payload: any) => {
                     const record = {
                         id: payload.id ?? `finding-${savedInvestigationFindings.length + 1}`,
@@ -753,6 +774,36 @@ test('work.updateConclusion accepts workId for Agent-facing tool calls', async (
     };
 
     const agent = createServices();
+    agent.savedInvestigations.push({
+        id: 'investigation-1',
+        workId: 'work-1',
+        organizationId: 'org-1',
+        connectionId: 'conn-1',
+        title: 'Error Rate Analysis',
+        status: 'completed',
+        auditStatus: 'draft',
+        linkedTabId: 'tab-1',
+        lastQueryAt: new Date('2026-06-01T00:00:00.000Z'),
+        reviewedAt: null,
+        acceptedAt: null,
+        rejectedAt: null,
+        auditStatusUpdatedAt: null,
+        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+    });
+    agent.savedInvestigationFindings.push({
+        id: 'finding-1',
+        workId: 'work-1',
+        investigationId: 'investigation-1',
+        organizationId: 'org-1',
+        content: 'Gateway timeout errors increased after deploy.',
+        sourceTabId: 'tab-1',
+        sourceRunEventId: null,
+        createdBy: 'agent',
+        orderIndex: 0,
+        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+    });
     const agentAudit: unknown[] = [];
     const agentTool = actionToAgentTool(workUpdateConclusionAction, () => createContext('agent', ['works:write'], agent.services, agentAudit));
     const agentOutput = await (agentTool.execute as any)(input);
@@ -771,6 +822,55 @@ test('work.updateConclusion accepts workId for Agent-facing tool calls', async (
         effects: ['work:update'],
         resourceType: 'work',
     });
+});
+
+test('work.updateInvestigation keeps confirm and exclude human-only while allowing user confirmation with SQL-backed finding', async () => {
+    const input = {
+        workId: 'work-1',
+        id: 'investigation-1',
+        auditStatus: 'accepted',
+    };
+
+    const ui = createServices();
+    ui.savedInvestigationFindings.push({
+        id: 'finding-1',
+        workId: 'work-1',
+        investigationId: 'investigation-1',
+        organizationId: 'org-1',
+        content: 'Gateway timeout errors increased after deploy.',
+        sourceTabId: 'tab-1',
+        sourceRunEventId: null,
+        createdBy: 'agent',
+        orderIndex: 0,
+        createdAt: new Date('2026-06-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-06-01T00:00:00.000Z'),
+    });
+    const uiOutput = await executeUiAction(createContext('user', ['works:write'], ui.services), 'work.updateInvestigation', input);
+    assert.equal((uiOutput.data as { auditStatus?: unknown }).auditStatus, 'accepted');
+
+    const agent = createServices();
+    const agentTool = actionToAgentTool(workUpdateInvestigationAction, () => createContext('agent', ['works:write'], agent.services));
+    const agentOutput = (await (agentTool.execute as (input: unknown) => Promise<{ ok: boolean; error: { message: string } }>)({
+        workId: 'work-1',
+        id: 'investigation-1',
+        auditStatus: 'rejected',
+    })) as { ok: boolean; error: { message: string } };
+    assert.equal(agentOutput.ok, false);
+    assert.match(agentOutput.error.message, /Only a human can confirm or exclude/);
+});
+
+test('work.updateInvestigation requires SQL-backed finding before user confirmation', async () => {
+    const ui = createServices();
+
+    await assert.rejects(
+        () =>
+            executeUiAction(createContext('user', ['works:write'], ui.services), 'work.updateInvestigation', {
+                workId: 'work-1',
+                id: 'investigation-1',
+                auditStatus: 'accepted',
+            }),
+        /SQL-backed Finding/,
+    );
 });
 
 test('work.createInvestigationFinding can be executed through UI, Agent, and Automation with shared action semantics', async () => {

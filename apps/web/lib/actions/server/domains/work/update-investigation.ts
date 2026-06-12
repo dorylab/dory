@@ -30,7 +30,7 @@ export const workUpdateInvestigationAction = defineWebAction({
     },
     handler: async (ctx, input) => {
         if (input.auditStatus && humanOnlyAuditStatuses.has(input.auditStatus) && ctx.actor.type !== 'user') {
-            throw new Error('Only a human can review, accept, or reject an Analysis.');
+            throw new Error('Only a human can confirm or exclude an Analysis.');
         }
 
         if (input.auditStatus === 'reviewed' || input.auditStatus === 'accepted') {
@@ -41,7 +41,7 @@ export const workUpdateInvestigationAction = defineWebAction({
             });
             const hasSqlBackedFinding = findings.some(finding => Boolean(finding.sourceRunEventId || finding.sourceTabId));
             if (!hasSqlBackedFinding) {
-                throw new Error('Reviewing or accepting an Analysis requires at least one SQL-backed Finding.');
+                throw new Error('Confirming an Analysis requires at least one SQL-backed Finding.');
             }
         }
 
