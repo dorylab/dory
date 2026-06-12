@@ -14,7 +14,7 @@ export function createSqliteTableInfoCapability(datasource: SqliteDatasource): G
             return null;
         },
         async preview(database, table, options) {
-            return previewSqliteTable(datasource.getDatabase(), database, table, options?.limit ?? 100, options?.offset ?? 0);
+            return previewSqliteTable(datasource.getDatabase(), database, table, options?.limit, options?.offset, options);
         },
         async indexes(database, table) {
             return getSqliteTableIndexes(datasource.getDatabase(), database, table);

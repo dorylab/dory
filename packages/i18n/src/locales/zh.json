@@ -111,7 +111,7 @@
             "SignUp": "注册",
             "Guest": {
                 "Prompt": "只是想试用？",
-                "Link": "进入访客工作区",
+                "Link": "无需账号试用 Dory",
                 "Action": "以访客身份继续",
                 "ResumeAction": "进入已有访客工作区",
                 "Tooltip": "更适合首次体验的用户。如果你之后登录，我们会将当前访客工作区保留到你的账号下。",
@@ -409,7 +409,7 @@
     "TableBrowser": {
         "Tabs": {
             "overview": "概览",
-            "data": "数据预览",
+            "data": "数据",
             "structure": "结构",
             "stats": "统计"
         },
@@ -445,20 +445,23 @@
         "Partitions": "分区",
         "Compression ratio": "压缩比",
         "No table preview": "暂无表预览",
-        "Loading preview": "加载预览中...",
+        "Loading Data": "正在加载数据...",
         "No data": "没有数据",
         "Refresh": "刷新",
+        "Current SQL": "当前 SQL",
         "Failed to load data preview": "加载数据预览失败",
         "Pagination": {
             "Previous": "上一页",
             "Next": "下一页",
-            "PageOf": "第 {current} 页，共 ~{total} 页",
+            "PageOf": "第 {current} 页，共 {total} 页",
             "PageOfExact": "第 {current} 页，共 {total} 页",
             "PageUnknown": "第 {current} 页",
             "RowsPerPage": "每页行数",
-            "ShowingRange": "{start}–{end} / ~{total}",
+            "ShowingRange": "{start}–{end} / {total}",
             "ShowingRangeExact": "{start}–{end} / {total}",
-            "ShowingCount": "{count} 行"
+            "ShowingCount": "{count} 行",
+            "TotalRows": "rows: {total}",
+            "FilteredRows": "rows: {filtered}/{total}"
         },
         "Column name": "名称",
         "Column type": "类型",
@@ -3440,7 +3443,6 @@
             "Refreshing": "正在刷新...",
             "RefreshComplete": "账单状态已刷新",
             "DesktopCloudUnavailable": "请在连接云端后订阅。",
-            "ReadOnlyHint": "只有组织所有者可以升级、取消或管理账单。你当前在这里是只读权限。",
             "NoSubscription": "无订阅",
             "NotAvailable": "暂无",
             "CancellationScheduled": "已计划在 {date} 取消订阅。",

@@ -6,8 +6,9 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { enforceSelectLimit } from '@dory/drivers/core';
-import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo } from '@dory/drivers/types';
+import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 
 import { DuckDbDialect } from './dialect';
 
@@ -18,6 +19,10 @@ type DuckDbConnectionHandle = {
     connection: DuckDBConnection;
     mode: DuckDbMode;
     databasePath: string;
+};
+
+type CountRow = {
+    totalRows?: number | string | bigint | null;
 };
 
 function parseOptions(config: BaseConfig): Record<string, unknown> {
@@ -263,14 +268,34 @@ export async function previewDuckDbTable(
     handle: DuckDbConnectionHandle,
     database: string,
     table: string,
-    limit: number,
+    limit?: number,
     offset = 0,
+    options?: TablePreviewOptions,
 ): Promise<QueryResult<Record<string, unknown>>> {
     const { schema, tableName } = parseDuckDbTableReference(table);
-    return executeDuckDbQuery<Record<string, unknown>>(
-        handle,
-        `SELECT * FROM ${buildQualifiedTable(database, tableName, schema)} LIMIT ${Number(limit) || 100} OFFSET ${Number(offset) || 0}`,
-    );
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'duckdb',
+        quoteIdentifier,
+    });
+    const normalizedLimit = normalizeTablePreviewLimit(limit);
+    const normalizedOffset = normalizeTablePreviewOffset(offset);
+    const qualifiedName = buildQualifiedTable(database, tableName, schema);
+    const countResult = await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params);
+    const unfilteredCountResult = preview.whereSql.length > 0 ? await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
+    const result = await executeDuckDbQuery<Record<string, unknown>>(handle, `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`, [
+        ...(preview.params as unknown[]),
+        normalizedLimit,
+        normalizedOffset,
+    ]);
+
+    return {
+        ...result,
+        totalRows: Number(countResult.rows[0]?.totalRows ?? 0),
+        unfilteredTotalRows: Number(unfilteredCountResult.rows[0]?.totalRows ?? 0),
+        limited: true,
+        limit: normalizedLimit,
+    };
 }
 
 export async function getDuckDbTableIndexes(): Promise<TableIndexInfo[]> {

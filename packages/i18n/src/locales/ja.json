@@ -107,7 +107,7 @@
             "SignUp": "新規登録",
             "Guest": {
                 "Prompt": "試してみるだけですか？",
-                "Link": "ゲストワークスペースに入る",
+                "Link": "アカウントなしで Dory を試す",
                 "Action": "ゲストとして続行",
                 "ResumeAction": "既存のゲストワークスペースを開く",
                 "Tooltip": "初めて利用する方に最適です。後でサインインしても、現在のゲストワークスペースはあなたのアカウントに引き継がれます。",
@@ -405,7 +405,7 @@
     "TableBrowser": {
         "Tabs": {
             "overview": "概要",
-            "data": "データプレビュー",
+            "data": "データ",
             "structure": "構造",
             "stats": "統計"
         },
@@ -441,20 +441,23 @@
         "Partitions": "パーティション",
         "Compression ratio": "圧縮率",
         "No table preview": "テーブルプレビューはありません",
-        "Loading preview": "プレビューを読み込み中...",
+        "Loading Data": "データを読み込み中...",
         "No data": "データがありません",
         "Refresh": "更新",
+        "Current SQL": "現在の SQL",
         "Failed to load data preview": "データプレビューの読み込みに失敗しました",
         "Pagination": {
             "Previous": "前へ",
             "Next": "次へ",
-            "PageOf": "ページ {current} / ~{total}",
+            "PageOf": "ページ {current} / {total}",
             "PageOfExact": "ページ {current} / {total}",
             "PageUnknown": "ページ {current}",
             "RowsPerPage": "表示件数",
-            "ShowingRange": "{start}–{end} / ~{total}",
+            "ShowingRange": "{start}–{end} / {total}",
             "ShowingRangeExact": "{start}–{end} / {total}",
-            "ShowingCount": "{count} 行"
+            "ShowingCount": "{count} 行",
+            "TotalRows": "rows: {total}",
+            "FilteredRows": "rows: {filtered}/{total}"
         },
         "Column name": "名前",
         "Column type": "型",
@@ -3435,7 +3438,6 @@
             "Refreshing": "更新中...",
             "RefreshComplete": "請求状況を更新しました",
             "DesktopCloudUnavailable": "デスクトップアプリからサブスクライブする前に Dory Cloud に接続してください。",
-            "ReadOnlyHint": "アップグレード、キャンセル、請求管理を行えるのは組織オーナーのみです。現在のロールではここは読み取り専用です。",
             "NoSubscription": "サブスクリプションなし",
             "NotAvailable": "該当なし",
             "CancellationScheduled": "{date} にキャンセルが予定されています。",

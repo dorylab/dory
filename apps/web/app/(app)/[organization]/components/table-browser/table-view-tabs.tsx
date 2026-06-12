@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { useTranslations } from 'next-intl';
 import TableStructure from './components/structure';
@@ -23,33 +23,31 @@ type TableViewTabsProps = {
 export function TableViewTabs({ connectionId, databaseName, tableName, driver, activeSubTab, initialSubTab = 'overview', onSubTabChange }: TableViewTabsProps) {
     const t = useTranslations('TableBrowser');
     const subTabs = useMemo<TableSubTab[]>(() => (supportsTableStats(driver) ? ['overview', 'data', 'structure', 'stats'] : ['overview', 'data', 'structure']), [driver]);
-    const [currentTab, setCurrentTab] = useState<TableSubTab>(activeSubTab ?? initialSubTab);
-
-    useEffect(() => {
-        if (activeSubTab) {
-            setCurrentTab(activeSubTab);
-        }
-    }, [activeSubTab]);
+    const contentKey = useMemo(() => `${databaseName ?? ''}:${tableName ?? ''}`, [databaseName, tableName]);
+    const [localTabState, setLocalTabState] = useState<{ key: string; tab: TableSubTab }>(() => ({
+        key: contentKey,
+        tab: initialSubTab,
+    }));
+    const localTab = localTabState.key === contentKey ? localTabState.tab : initialSubTab;
+    const currentTab = activeSubTab ?? localTab;
 
     const handleTabChange = (value: string) => {
         const next = (subTabs.find(tab => tab === value) ?? 'data') as TableSubTab;
-        setCurrentTab(next);
+        setLocalTabState({ key: contentKey, tab: next });
         onSubTabChange?.(next);
     };
 
-    const contentKey = useMemo(() => `${databaseName ?? ''}:${tableName ?? ''}`, [databaseName, tableName]);
-
     return (
-        <Tabs value={currentTab} onValueChange={handleTabChange} className="flex flex-col h-full" key={contentKey}>
-            <TabsList className="justify-start">
+        <Tabs value={currentTab} onValueChange={handleTabChange} className="flex flex-col h-full gap-1" key={contentKey}>
+            <TabsList className="h-9 justify-start">
                 {subTabs.map(tab => (
-                    <TabsTrigger key={tab} value={tab} className="cursor-pointer">
+                    <TabsTrigger key={tab} value={tab} className="h-8 cursor-pointer px-3">
                         {t(`Tabs.${tab}`)}
                     </TabsTrigger>
                 ))}
             </TabsList>
 
-            <div className="mt-1 flex-1 min-h-0">
+            <div className="flex-1 min-h-0">
                 <TabsContent value="overview" className="h-full">
                     <TableOverview databaseName={databaseName} tableName={tableName} />
                 </TabsContent>

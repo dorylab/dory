@@ -17,34 +17,25 @@ type DataPreviewPaginationBarProps = {
     onPageSizeChange: (pageSize: number) => void;
 };
 
-export function DataPreviewPaginationBar({
-    pageIndex,
-    pageSize,
-    totalRowEstimate,
-    currentPageRowCount,
-    loading,
-    onPageChange,
-    onPageSizeChange,
-}: DataPreviewPaginationBarProps) {
+export function DataPreviewPaginationBar({ pageIndex, pageSize, totalRowEstimate, currentPageRowCount, loading, onPageChange, onPageSizeChange }: DataPreviewPaginationBarProps) {
     const t = useTranslations('TableBrowser');
 
     const hasPrevious = pageIndex > 0;
-    const hasNext = currentPageRowCount >= pageSize;
-
-    const totalPages = totalRowEstimate != null && totalRowEstimate > 0
-        ? Math.ceil(totalRowEstimate / pageSize)
-        : null;
+    const totalPages = totalRowEstimate != null && totalRowEstimate > 0 ? Math.ceil(totalRowEstimate / pageSize) : null;
+    const hasNext = totalPages != null ? pageIndex + 1 < totalPages : currentPageRowCount >= pageSize;
 
     const start = pageIndex * pageSize + 1;
     const end = pageIndex * pageSize + currentPageRowCount;
 
-    const pageLabel = totalPages != null
-        ? t('Pagination.PageOf', { current: pageIndex + 1, total: totalPages })
-        : t('Pagination.PageUnknown', { current: pageIndex + 1 });
+    const pageLabel = totalPages != null ? t('Pagination.PageOf', { current: pageIndex + 1, total: totalPages }) : t('Pagination.PageUnknown', { current: pageIndex + 1 });
 
-    const rowsLabel = totalRowEstimate != null
-        ? t('Pagination.ShowingRange', { start: start.toLocaleString(), end: end.toLocaleString(), total: totalRowEstimate.toLocaleString() })
-        : t('Pagination.ShowingCount', { count: currentPageRowCount.toLocaleString() });
+    const rowsLabel =
+        currentPageRowCount > 0
+            ? totalRowEstimate != null
+                ? `${start.toLocaleString()}–${end.toLocaleString()}`
+                : t('Pagination.ShowingCount', { count: currentPageRowCount.toLocaleString() })
+            : null;
+    const totalRowsLabel = totalRowEstimate != null ? t('Pagination.TotalRows', { total: totalRowEstimate.toLocaleString() }) : null;
 
     return (
         <div className="flex-none flex items-center justify-between border-t bg-card px-3 py-1 text-xs text-muted-foreground">
@@ -75,15 +66,12 @@ export function DataPreviewPaginationBar({
 
                 <div className="flex items-center gap-1.5">
                     <span>{t('Pagination.RowsPerPage')}</span>
-                    <Select
-                        value={String(pageSize)}
-                        onValueChange={(value) => onPageSizeChange(Number(value))}
-                    >
+                    <Select value={String(pageSize)} onValueChange={value => onPageSizeChange(Number(value))}>
                         <SelectTrigger className="h-6 min-w-22 shrink-0 text-xs">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            {PAGE_SIZE_OPTIONS.map((size) => (
+                            {PAGE_SIZE_OPTIONS.map(size => (
                                 <SelectItem key={size} value={String(size)} className="text-xs">
                                     {size}
                                 </SelectItem>
@@ -93,8 +81,12 @@ export function DataPreviewPaginationBar({
                 </div>
             </div>
 
-            {currentPageRowCount > 0 && (
-                <span className="tabular-nums">{rowsLabel}</span>
+            {(rowsLabel || totalRowsLabel) && (
+                <div className="flex min-w-0 items-center gap-2 tabular-nums">
+                    {rowsLabel && <span>{rowsLabel}</span>}
+                    {rowsLabel && totalRowsLabel && <span className="text-border">|</span>}
+                    {totalRowsLabel && <span>{totalRowsLabel}</span>}
+                </div>
             )}
         </div>
     );

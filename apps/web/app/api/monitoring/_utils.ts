@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import z from 'zod';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
-import type { QueryInsightsFilters } from '@dory/shared/types/monitoring';
+import type { PaginationState, QueryInsightsFilters } from '@dory/shared/types/monitoring';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
+
+const DEFAULT_MONITORING_PAGE_SIZE = 10;
+const MAX_MONITORING_PAGE_SIZE = 200;
 
 export const QueryInsightsFiltersSchema: z.ZodType<QueryInsightsFilters> = z.object({
     search: z.string().default(''),
@@ -14,17 +17,22 @@ export const QueryInsightsFiltersSchema: z.ZodType<QueryInsightsFilters> = z.obj
     timeRange: z.union([z.literal('1h'), z.literal('6h'), z.literal('24h'), z.literal('7d')]).default('1h'),
 });
 
+export function parsePaginationFromPayload(payload: unknown): PaginationState {
+    const source = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
+    const rawPageIndex = Number(source.pageIndex);
+    const rawPageSize = Number(source.pageSize);
+    const pageIndex = Number.isFinite(rawPageIndex) && rawPageIndex > 0 ? Math.floor(rawPageIndex) : 0;
+    const pageSize = Number.isFinite(rawPageSize) && rawPageSize > 0 ? Math.min(Math.floor(rawPageSize), MAX_MONITORING_PAGE_SIZE) : DEFAULT_MONITORING_PAGE_SIZE;
 
-export async function parseFiltersFromPayload(
-    payload: unknown,
-):
-    Promise<{ filters: QueryInsightsFilters; } |
-    { response: NextResponse; }> {
+    return {
+        pageIndex,
+        pageSize,
+    };
+}
+
+export async function parseFiltersFromPayload(payload: unknown): Promise<{ filters: QueryInsightsFilters } | { response: NextResponse }> {
     const locale = await getApiLocale();
-    const filtersInput =
-        (typeof payload === 'object' && payload !== null && 'filters' in payload
-            ? (payload as Record<string, unknown>).filters
-            : payload) ?? {};
+    const filtersInput = (typeof payload === 'object' && payload !== null && 'filters' in payload ? (payload as Record<string, unknown>).filters : payload) ?? {};
     const parsed = await QueryInsightsFiltersSchema.safeParseAsync(filtersInput);
 
     if (!parsed.success) {

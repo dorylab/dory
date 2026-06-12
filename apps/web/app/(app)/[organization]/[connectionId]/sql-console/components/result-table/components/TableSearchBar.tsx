@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { cn } from '@/registry/new-york-v4/lib/utils';
 import { Input } from '@/registry/new-york-v4/ui/input';
@@ -10,11 +10,12 @@ export function VTableSearchBar(props: {
     query: string;
     onQueryChange: (s: string) => void;
     onClearQuery?: () => void;
+    onSearchSubmit?: () => void;
     filteredCount?: number;
     totalCount?: number;
     className?: string;
 }) {
-    const { query, onQueryChange, onClearQuery, filteredCount, totalCount } = props;
+    const { query, onQueryChange, onClearQuery, onSearchSubmit, filteredCount, totalCount } = props;
     const inputRef = useRef<HTMLInputElement | null>(null);
     const t = useTranslations('SqlConsole');
 
@@ -30,7 +31,6 @@ export function VTableSearchBar(props: {
         return () => window.removeEventListener('keydown', onKey);
     }, []);
 
-    
     const digits = typeof totalCount === 'number' ? String(Math.max(0, totalCount)).length : 3;
     const template = `${'9'.repeat(digits)} / ${'9'.repeat(digits)}`;
 
@@ -38,12 +38,10 @@ export function VTableSearchBar(props: {
         <div className={cn('flex items-center gap-2 p-2', props.className)}>
             {typeof filteredCount === 'number' && typeof totalCount === 'number' && (
                 <div className="relative flex-none">
-                    
                     <span aria-hidden className="invisible block px-1 font-mono tabular-nums text-xs">
                         {template}
                     </span>
 
-                    
                     <span
                         className="absolute inset-0 px-1 font-mono tabular-nums text-xs text-muted-foreground whitespace-nowrap flex items-center justify-end"
                         aria-label={t('VTable.Search.FilteredTotalAria')}
@@ -58,6 +56,11 @@ export function VTableSearchBar(props: {
                     ref={inputRef}
                     value={query}
                     onChange={e => onQueryChange(e.target.value)}
+                    onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                            onSearchSubmit?.();
+                        }
+                    }}
                     placeholder={t('VTable.Search.Placeholder')}
                     className={cn('h-6 text-xs placeholder:text-xs pr-6')}
                 />

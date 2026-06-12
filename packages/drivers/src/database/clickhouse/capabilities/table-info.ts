@@ -1,6 +1,6 @@
-import { type GetTableInfoAPI } from '@dory/drivers/types';
-import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
+import { type GetTableInfoAPI, type TablePreviewOptions } from '@dory/drivers/types';
 import { TableMutationInfo, TablePartitionStat, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { ClickhouseDatasource } from '../datasource';
 
 type SizeRow = {
@@ -8,6 +8,11 @@ type SizeRow = {
     compressedBytes?: number;
     uncompressedBytes?: number;
     compressionRatio?: number;
+};
+
+type TablePropertiesResultRow = TablePropertiesRow & {
+    totalRows?: number | string | null;
+    totalBytes?: number | string | null;
 };
 
 type PartitionRow = {
@@ -31,6 +36,10 @@ type MutationRow = {
     createTime?: string;
 };
 
+type CountRow = {
+    totalRows?: number | string | null;
+};
+
 const toNumberOrNull = (value: unknown): number | null => {
     const num = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(num) ? num : null;
@@ -42,32 +51,47 @@ const toStringOrNull = (value: unknown): string | null => {
     return str.length ? str : null;
 };
 
-function normalizePreviewLimit(limit?: number): number {
-    if (!Number.isFinite(limit) || !limit || limit <= 0) {
-        return DEFAULT_TABLE_PREVIEW_LIMIT;
-    }
-    return Math.floor(limit);
-}
-
 async function getTableProperties(datasource: ClickhouseDatasource, database: string, table: string): Promise<TablePropertiesRow | null> {
     const tablePropsQuery = `
         SELECT
-            engine,
-            comment,
-            primary_key   AS primaryKey,
-            sorting_key   AS sortingKey,
-            partition_key AS partitionKey,
-            sampling_key  AS samplingKey,
-            storage_policy AS storagePolicy
+            t.engine,
+            t.comment,
+            t.primary_key   AS primaryKey,
+            t.sorting_key   AS sortingKey,
+            t.partition_key AS partitionKey,
+            t.sampling_key  AS samplingKey,
+            t.storage_policy AS storagePolicy,
+            p.totalRows,
+            p.totalBytes
         FROM system.tables
-        WHERE database = {db:String}
-        AND name = {tbl:String}
+        AS t
+        LEFT JOIN (
+            SELECT
+                database,
+                table AS tableName,
+                sum(rows) AS totalRows,
+                sum(data_compressed_bytes) AS totalBytes
+            FROM system.parts
+            WHERE active
+            GROUP BY database, table
+        ) AS p
+            ON p.database = t.database
+           AND p.tableName = t.name
+        WHERE t.database = {db:String}
+        AND t.name = {tbl:String}
         LIMIT 1;
     `;
 
-    const result = await datasource.query<TablePropertiesRow>(tablePropsQuery, { db: database, tbl: table });
-    const rows = Array.isArray(result.rows) ? (result.rows as TablePropertiesRow[]) : [];
-    return rows[0] ?? null;
+    const result = await datasource.query<TablePropertiesResultRow>(tablePropsQuery, { db: database, tbl: table });
+    const rows = Array.isArray(result.rows) ? (result.rows as TablePropertiesResultRow[]) : [];
+    const row = rows[0] ?? null;
+    if (!row) return null;
+
+    return {
+        ...row,
+        totalRows: toNumberOrNull(row.totalRows),
+        totalBytes: toNumberOrNull(row.totalBytes),
+    };
 }
 
 async function getTableDDL(datasource: ClickhouseDatasource, database: string, table: string): Promise<string | null> {
@@ -185,21 +209,54 @@ async function getTableStats(datasource: ClickhouseDatasource, database: string,
     };
 }
 
-async function getTablePreview(datasource: ClickhouseDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
-    const limit = normalizePreviewLimit(options?.limit);
-    const offset = options?.offset ?? 0;
-    const result = await datasource.queryWithContext<Record<string, unknown>>('SELECT * FROM {db:Identifier}.{tbl:Identifier} LIMIT {limit:UInt64} OFFSET {offset:UInt64}', {
+function quoteClickhouseIdentifier(value: string) {
+    return `\`${value.replace(/`/g, '``')}\``;
+}
+
+async function getTablePreview(datasource: ClickhouseDatasource, database: string, table: string, options?: TablePreviewOptions) {
+    const limit = normalizeTablePreviewLimit(options?.limit);
+    const offset = normalizeTablePreviewOffset(options?.offset);
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'clickhouse',
+        quoteIdentifier: quoteClickhouseIdentifier,
+    });
+    const countResult = await datasource.queryWithContext<CountRow>(`SELECT count() AS totalRows FROM {db:Identifier}.{tbl:Identifier}${preview.whereSql}`, {
         database,
         params: {
+            ...(preview.params as Record<string, unknown>),
             db: database,
             tbl: table,
-            limit,
-            offset,
         },
     });
+    const unfilteredCountResult =
+        preview.whereSql.length > 0
+            ? await datasource.queryWithContext<CountRow>(`SELECT count() AS totalRows FROM {db:Identifier}.{tbl:Identifier}`, {
+                  database,
+                  params: {
+                      db: database,
+                      tbl: table,
+                  },
+              })
+            : countResult;
+    const result = await datasource.queryWithContext<Record<string, unknown>>(
+        `SELECT * FROM {db:Identifier}.{tbl:Identifier}${preview.whereSql}${preview.orderBySql} LIMIT {limit:UInt64} OFFSET {offset:UInt64}`,
+        {
+            database,
+            params: {
+                ...(preview.params as Record<string, unknown>),
+                db: database,
+                tbl: table,
+                limit,
+                offset,
+            },
+        },
+    );
 
     return {
         ...result,
+        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

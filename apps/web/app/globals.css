@@ -131,6 +131,44 @@
     animation: aurora 60s linear infinite;
 }
 
+@keyframes data-preview-progress {
+    0% {
+        opacity: 0.45;
+        transform: translateX(-120%) scaleX(0.6);
+    }
+
+    45% {
+        opacity: 1;
+        transform: translateX(70%) scaleX(1);
+    }
+
+    100% {
+        opacity: 0.45;
+        transform: translateX(300%) scaleX(0.6);
+    }
+}
+
+@keyframes data-preview-progress-reduced {
+    0%,
+    100% {
+        opacity: 0.35;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+.animate-data-preview-progress {
+    animation: data-preview-progress 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .animate-data-preview-progress {
+        animation: data-preview-progress-reduced 1.6s ease-in-out infinite;
+    }
+}
+
 .dark {
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);

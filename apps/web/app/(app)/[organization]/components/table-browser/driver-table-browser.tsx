@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import type { SQLTab } from '@dory/shared/types/tabs';
@@ -51,23 +51,23 @@ export function DriverTableBrowser({
     onSubTabChange,
 }: DriverTableBrowserProps) {
     const t = useTranslations('PostgresExplorer');
-    const [currentTab, setCurrentTab] = useState<TableSubTab>(() => normalizeTab(driver, activeSubTab ?? initialSubTab));
-
-    useEffect(() => {
-        setCurrentTab(normalizeTab(driver, activeSubTab ?? initialSubTab));
-    }, [activeSubTab, driver, initialSubTab, databaseName, tableName]);
-
     const resetKey = useMemo(() => `${driver ?? 'default'}:${databaseName ?? ''}:${tableName ?? ''}`, [databaseName, driver, tableName]);
+    const [localTabState, setLocalTabState] = useState<{ key: string; tab: TableSubTab }>(() => ({
+        key: resetKey,
+        tab: normalizeTab(driver, activeSubTab ?? initialSubTab),
+    }));
+    const localTab = localTabState.key === resetKey ? localTabState.tab : normalizeTab(driver, activeSubTab ?? initialSubTab);
+    const currentTab = normalizeTab(driver, activeSubTab ?? localTab);
 
     const handleTabChange = (value: string) => {
         const next = normalizeTab(driver, value as TableSubTab);
-        setCurrentTab(next);
+        setLocalTabState({ key: resetKey, tab: next });
         onSubTabChange?.(next);
     };
 
     if (!isPostgresFamilyConnectionType(driver)) {
         return (
-            <div className="p-6 h-full flex flex-col">
+            <div className="h-full flex flex-col px-6 pb-4 pt-3">
                 <TableViewTabs
                     connectionId={connectionId}
                     databaseName={databaseName}
@@ -82,17 +82,17 @@ export function DriverTableBrowser({
     }
 
     return (
-        <div className="p-6 h-full flex flex-col">
-            <Tabs value={currentTab} onValueChange={handleTabChange} className="flex h-full flex-col" key={resetKey}>
-                <TabsList className="justify-start">
+        <div className="h-full flex flex-col px-6 pb-4 pt-3">
+            <Tabs value={currentTab} onValueChange={handleTabChange} className="flex h-full flex-col gap-1" key={resetKey}>
+                <TabsList className="h-9 justify-start">
                     {POSTGRES_SUB_TABS.map(tab => (
-                        <TabsTrigger key={tab} value={tab} className="cursor-pointer">
+                        <TabsTrigger key={tab} value={tab} className="h-8 cursor-pointer px-3">
                             {t(`Tabs.${tab}`)}
                         </TabsTrigger>
                     ))}
                 </TabsList>
 
-                <div className="mt-1 flex-1 min-h-0">
+                <div className="flex-1 min-h-0">
                     <TabsContent value="overview" className="h-full mt-0 data-[state=inactive]:hidden" forceMount>
                         <TableOverview databaseName={databaseName} tableName={tableName} />
                     </TabsContent>

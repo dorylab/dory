@@ -1,6 +1,6 @@
-import type { GetTableInfoAPI } from '@dory/drivers/types';
-import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
+import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { PostgresDatasource } from '../datasource';
 
 type TableIdentityRow = {
@@ -60,6 +60,10 @@ type VacuumStatRow = {
     modsSinceAnalyze?: number | string | null;
 };
 
+type CountRow = {
+    totalRows?: number | string | null;
+};
+
 function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
@@ -77,13 +81,6 @@ function parseTableName(table: string): { schema: string | null; name: string } 
 
 function quoteIdentifier(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
-}
-
-function normalizePreviewLimit(limit?: number): number {
-    if (!Number.isFinite(limit) || !limit || limit <= 0) {
-        return DEFAULT_TABLE_PREVIEW_LIMIT;
-    }
-    return Math.floor(limit);
 }
 
 async function getTableIdentity(datasource: PostgresDatasource, database: string, table: string) {
@@ -328,20 +325,44 @@ async function getTableStats(datasource: PostgresDatasource, database: string, t
     };
 }
 
-async function getTablePreview(datasource: PostgresDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
+async function getTablePreview(datasource: PostgresDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const parsed = parseTableName(table);
     const schemaName = parsed.schema?.trim() || 'public';
     const tableName = parsed.name.trim();
-    const limit = normalizePreviewLimit(options?.limit);
-    const offset = options?.offset ?? 0;
+    const limit = normalizeTablePreviewLimit(options?.limit);
+    const offset = normalizeTablePreviewOffset(options?.offset);
     const qualifiedName = `${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)}`;
-    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${qualifiedName} LIMIT $1 OFFSET $2`, {
-        database,
-        params: [limit, offset],
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'postgres',
+        quoteIdentifier,
+        parameterStart: 1,
     });
+    const previewParams = preview.params as unknown[];
+    const countResult = await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}${preview.whereSql}`, {
+        database,
+        params: previewParams,
+    });
+    const unfilteredCountResult =
+        preview.whereSql.length > 0
+            ? await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}`, {
+                  database,
+                  params: [],
+              })
+            : countResult;
+    const params = [...previewParams, limit, offset];
+    const result = await datasource.queryWithContext<Record<string, unknown>>(
+        `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT $${preview.nextParameterIndex} OFFSET $${preview.nextParameterIndex + 1}`,
+        {
+            database,
+            params,
+        },
+    );
 
     return {
         ...result,
+        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };

@@ -405,7 +405,7 @@
     "TableBrowser": {
         "Tabs": {
             "overview": "Overview",
-            "data": "Data Preview",
+            "data": "Data",
             "structure": "Structure",
             "stats": "Stats"
         },
@@ -441,20 +441,23 @@
         "Partitions": "Partitions",
         "Compression ratio": "Compression ratio",
         "No table preview": "No table preview",
-        "Loading preview": "Loading preview...",
+        "Loading Data": "Loading Data...",
         "No data": "No data",
         "Refresh": "Refresh",
+        "Current SQL": "Current SQL",
         "Failed to load data preview": "Failed to load data preview",
         "Pagination": {
             "Previous": "Previous",
             "Next": "Next",
-            "PageOf": "Page {current} of ~{total}",
+            "PageOf": "Page {current} of {total}",
             "PageOfExact": "Page {current} of {total}",
             "PageUnknown": "Page {current}",
             "RowsPerPage": "Rows per page",
-            "ShowingRange": "{start}–{end} of ~{total}",
+            "ShowingRange": "{start}–{end} of {total}",
             "ShowingRangeExact": "{start}–{end} of {total}",
-            "ShowingCount": "{count} rows"
+            "ShowingCount": "{count} rows",
+            "TotalRows": "rows: {total}",
+            "FilteredRows": "rows: {filtered}/{total}"
         },
         "Column name": "Name",
         "Column type": "Type",
@@ -3436,7 +3439,6 @@
             "Refreshing": "Refreshing...",
             "RefreshComplete": "Billing status refreshed",
             "DesktopCloudUnavailable": "Connect to Dory Cloud before subscribing from the desktop app.",
-            "ReadOnlyHint": "Only organization owners can upgrade, cancel, or manage billing. Your current role is read-only here.",
             "NoSubscription": "No subscription",
             "NotAvailable": "N/A",
             "CancellationScheduled": "Cancellation is scheduled for {date}.",

@@ -71,6 +71,7 @@ export default function VTable({
     onUpsertFilter: onUpsertExternalFilter,
     onRemoveFilter: onRemoveExternalFilter,
     onClearAllFilters: onClearAllExternalFilters,
+    serverSideOperations = false,
     showFiltersBar = true,
     initialSort = null,
     selectedRowIndexes,
@@ -218,6 +219,7 @@ export default function VTable({
     const sortDirection = sortState?.direction ?? 'asc';
     const lastEmittedSortRef = useRef<{ column: string; direction: 'asc' | 'desc' } | null>(initialSort ?? null);
     const sortedResults = useMemo(() => {
+        if (serverSideOperations) return filteredResults;
         if (!sortBy) return filteredResults;
         const isNumericCol = numericColumns.has(sortBy);
         const sorted = [...filteredResults].sort((a, b) => {
@@ -239,7 +241,7 @@ export default function VTable({
             return sortDirection === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
         });
         return sorted;
-    }, [filteredResults, sortBy, sortDirection, numericColumns]);
+    }, [filteredResults, numericColumns, serverSideOperations, sortBy, sortDirection]);
 
     const getVisibleSampleRowIndices = useCallback(
         (range?: { start: number; stop: number }) => {

@@ -43,6 +43,8 @@ export type ConnectionQueryContext = DriverQueryContext;
 export interface DriverQueryResult<Row = any> {
     rows: Row[];
     rowCount?: number;
+    totalRows?: number | null;
+    unfilteredTotalRows?: number | null;
     limited?: boolean;
     limit?: number;
     columns?: ColumnMeta[];
@@ -232,9 +234,28 @@ export type Pagination = {
     pageSize: number;
 };
 
+export type TablePreviewSort = {
+    column: string;
+    direction: 'asc' | 'desc';
+};
+
+export type TablePreviewFilter = {
+    col: string;
+    kind: 'string' | 'number' | 'range';
+    op: 'contains' | 'equals' | 'startsWith' | 'endsWith' | 'empty' | 'notEmpty' | 'regex' | 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le' | 'range';
+    value?: string;
+    valueTo?: string;
+    rangeValueType?: 'number' | 'date';
+    caseSensitive?: boolean;
+};
+
 export type TablePreviewOptions = {
     limit?: number;
     offset?: number;
+    sort?: TablePreviewSort | null;
+    filters?: TablePreviewFilter[];
+    search?: string | null;
+    searchColumns?: string[];
 };
 
 export type QueryInsightsImpl = {

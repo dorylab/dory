@@ -1,4 +1,5 @@
 import type { ResponseObject } from '@dory/shared';
+import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { executeActionClient } from '@/lib/actions/client';
 
 type FetchTablePreviewParams = {
@@ -7,10 +8,19 @@ type FetchTablePreviewParams = {
     tableName: string;
     limit?: number;
     offset?: number;
+    sort?: TablePreviewSort | null;
+    filters?: TablePreviewFilter[];
+    search?: string | null;
+    searchColumns?: string[];
     sessionId?: string;
     tabId?: string;
     source?: string;
     signal?: AbortSignal;
+};
+
+type TablePreviewPayload = {
+    queryResultSets?: unknown[];
+    results?: unknown[];
 };
 
 export async function fetchTablePreview({
@@ -19,6 +29,10 @@ export async function fetchTablePreview({
     tableName,
     limit,
     offset,
+    sort,
+    filters,
+    search,
+    searchColumns,
     sessionId,
     tabId,
     source,
@@ -32,6 +46,10 @@ export async function fetchTablePreview({
             table: tableName,
             limit,
             offset,
+            sort,
+            filters,
+            search,
+            searchColumns,
             sessionId,
             tabId,
             source,
@@ -43,5 +61,5 @@ export async function fetchTablePreview({
         code: 0,
         message: 'success',
         data,
-    } as ResponseObject<any>;
+    } as ResponseObject<TablePreviewPayload>;
 }

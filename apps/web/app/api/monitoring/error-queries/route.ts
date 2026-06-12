@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
-import { parseFiltersFromPayload } from '../_utils';
+import { parseFiltersFromPayload, parsePaginationFromPayload } from '../_utils';
 import { ensureConnection } from '@/lib/server/ensure-connection';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
@@ -21,32 +21,27 @@ export const POST = withUserAndOrganizationHandler(async ({ req, organizationId 
         return filtersResult.response;
     }
 
-    const rawPageIndex = (payload as any).pageIndex;
-    const rawPageSize = (payload as any).pageSize;
-
-    const pageIndex = Number.isFinite(Number(rawPageIndex)) ? Number(rawPageIndex) : 0;
-    const pageSize = Number.isFinite(Number(rawPageSize)) ? Number(rawPageSize) : 10;
+    const pagination = parsePaginationFromPayload(payload);
 
     try {
         if (!insights) {
             throw new Error(t('Api.Monitoring.Errors.QueryFailed'));
         }
-        const { rows, total } = await insights.errorQueries(filtersResult.filters, {
-            pageIndex,
-            pageSize,
-        });
+        const { rows, total } = await insights.errorQueries(filtersResult.filters, pagination);
         return NextResponse.json(
             ResponseUtil.success({
                 rows,
                 total,
             }),
         );
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : t('Api.Monitoring.Errors.QueryFailed');
+        const cause = error instanceof Error ? error : undefined;
         return NextResponse.json(
             ResponseUtil.error({
                 code: ErrorCodes.DATABASE_ERROR,
-                message: error?.message ?? t('Api.Monitoring.Errors.QueryFailed'),
-                error,
+                message,
+                error: cause,
             }),
             { status: 500 },
         );

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { BaseConnection } from '@dory/drivers/core';
+import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 
 type BuildTablePreviewPayloadParams = {
@@ -9,6 +10,10 @@ type BuildTablePreviewPayloadParams = {
     table: string;
     limit?: number;
     offset?: number;
+    sort?: TablePreviewSort | null;
+    filters?: TablePreviewFilter[];
+    search?: string | null;
+    searchColumns?: string[];
     sessionId?: string | null;
     tabId?: string | null;
     userId?: string | null;
@@ -29,17 +34,43 @@ function normalizePreviewOffset(offset?: number): number {
     return Math.floor(offset);
 }
 
-function buildPreviewSqlText(database: string, table: string): string {
-    return `TABLE PREVIEW ${database}.${table}`;
+function buildPreviewSqlText(database: string, table: string, options: { sort?: TablePreviewSort | null; filters?: TablePreviewFilter[]; search?: string | null }): string {
+    const parts = [`TABLE PREVIEW ${database}.${table}`];
+    if (options.search?.trim()) parts.push('SEARCH');
+    if (options.filters?.length) parts.push(`FILTERS ${options.filters.length}`);
+    if (options.sort) parts.push(`ORDER BY ${options.sort.column} ${options.sort.direction.toUpperCase()}`);
+    return parts.join(' ');
 }
 
-export async function buildTablePreviewPayload({ connection, connectionId, database, table, limit, offset, sessionId, tabId, userId, source }: BuildTablePreviewPayloadParams) {
+export async function buildTablePreviewPayload({
+    connection,
+    connectionId,
+    database,
+    table,
+    limit,
+    offset,
+    sort,
+    filters,
+    search,
+    searchColumns,
+    sessionId,
+    tabId,
+    userId,
+    source,
+}: BuildTablePreviewPayloadParams) {
     const normalizedLimit = normalizePreviewLimit(limit);
     const normalizedOffset = normalizePreviewOffset(offset);
-    const sqlText = buildPreviewSqlText(database, table);
+    const sqlText = buildPreviewSqlText(database, table, { sort, filters, search });
     const startedAt = new Date();
     const perfStart = performance.now();
-    const result = await connection.previewTable(database, table, { limit: normalizedLimit, offset: normalizedOffset });
+    const result = await connection.previewTable(database, table, {
+        limit: normalizedLimit,
+        offset: normalizedOffset,
+        sort,
+        filters,
+        search,
+        searchColumns,
+    });
     const durationMs = Math.round(performance.now() - perfStart);
     const finishedAt = new Date();
     const rows = Array.isArray(result.rows) ? result.rows : [];
@@ -71,6 +102,8 @@ export async function buildTablePreviewPayload({ connection, connectionId, datab
                 title: `Preview: ${table}`,
                 columns: result.columns ?? null,
                 rowCount: result.rowCount ?? rows.length,
+                totalRows: result.totalRows ?? null,
+                unfilteredTotalRows: result.unfilteredTotalRows ?? result.totalRows ?? null,
                 limited: result.limited ?? true,
                 limit: result.limit ?? normalizedLimit,
                 offset: normalizedOffset,

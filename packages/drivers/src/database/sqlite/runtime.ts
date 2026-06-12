@@ -4,13 +4,18 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo } from '@dory/drivers/types';
+import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 import { SqliteDialect } from './dialect';
 
 type SqliteDatabase = InstanceType<typeof Database>;
 
 const SQLITE_PRIMARY_DATABASE = 'main';
+
+type CountRow = {
+    totalRows?: number | string | bigint | null;
+};
 
 function assertAbsolutePath(filePath?: string): string {
     const normalized = filePath?.trim();
@@ -207,9 +212,34 @@ export function getSqliteTableProperties(db: SqliteDatabase, database: string, t
     };
 }
 
-export function previewSqliteTable(db: SqliteDatabase, database: string, table: string, limit: number, offset: number = 0): QueryResult<Record<string, unknown>> {
-    const sql = `SELECT * FROM ${buildQualifiedName(database, table)} LIMIT ? OFFSET ?`;
-    return executeSqliteQuery<Record<string, unknown>>(db, sql, [limit, offset]);
+export function previewSqliteTable(
+    db: SqliteDatabase,
+    database: string,
+    table: string,
+    limit?: number,
+    offset: number = 0,
+    options?: TablePreviewOptions,
+): QueryResult<Record<string, unknown>> {
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'sqlite',
+        quoteIdentifier,
+    });
+    const normalizedLimit = normalizeTablePreviewLimit(limit);
+    const normalizedOffset = normalizeTablePreviewOffset(offset);
+    const qualifiedName = buildQualifiedName(database, table);
+    const countResult = executeSqliteQuery<CountRow>(db, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params);
+    const unfilteredCountResult = preview.whereSql.length > 0 ? executeSqliteQuery<CountRow>(db, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
+    const sql = `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`;
+    const result = executeSqliteQuery<Record<string, unknown>>(db, sql, [...(preview.params as unknown[]), normalizedLimit, normalizedOffset]);
+
+    return {
+        ...result,
+        totalRows: Number(countResult.rows[0]?.totalRows ?? 0),
+        unfilteredTotalRows: Number(unfilteredCountResult.rows[0]?.totalRows ?? 0),
+        limited: true,
+        limit: normalizedLimit,
+    };
 }
 
 export function getSqliteTableIndexes(db: SqliteDatabase, database: string, table: string): TableIndexInfo[] {

@@ -1,8 +1,8 @@
-import type { GetTableInfoAPI } from '@dory/drivers/types';
-import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
+import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
+import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { SqlServerDatasource } from '../datasource';
-import { parseSqlServerTableReference, quoteSqlServerQualifiedName } from '../runtime';
+import { parseSqlServerTableReference, quoteSqlServerIdentifier, quoteSqlServerQualifiedName } from '../runtime';
 
 type TableIdentityRow = {
     objectId?: number;
@@ -29,6 +29,10 @@ type DefinitionRow = {
     definition?: string | null;
 };
 
+type CountRow = {
+    totalRows?: number | string | null;
+};
+
 type IndexRow = {
     name?: string;
     method?: string | null;
@@ -42,13 +46,6 @@ function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizePreviewLimit(limit?: number): number {
-    if (!Number.isFinite(limit) || !limit || limit <= 0) {
-        return DEFAULT_TABLE_PREVIEW_LIMIT;
-    }
-    return Math.floor(limit);
 }
 
 function resolveTableInput(table: string) {
@@ -208,20 +205,46 @@ async function getTableStats(datasource: SqlServerDatasource, database: string, 
     };
 }
 
-async function getTablePreview(datasource: SqlServerDatasource, database: string, table: string, options?: { limit?: number; offset?: number }) {
+async function getTablePreview(datasource: SqlServerDatasource, database: string, table: string, options?: TablePreviewOptions) {
     const target = resolveTableInput(table);
-    const limit = normalizePreviewLimit(options?.limit);
-    const offset = options?.offset ?? 0;
+    const limit = normalizeTablePreviewLimit(options?.limit);
+    const offset = normalizeTablePreviewOffset(options?.offset);
     const qualifiedName = quoteSqlServerQualifiedName(target.schema, target.table);
+    const preview = buildTablePreviewClauses({
+        ...options,
+        dialect: 'sqlserver',
+        quoteIdentifier: quoteSqlServerIdentifier,
+    });
+    const params = {
+        ...(preview.params as Record<string, unknown>),
+        limit,
+        offset,
+    };
+    const countResult = await datasource.queryWithContext<CountRow>(`SELECT COUNT_BIG(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, {
+        database,
+        params: preview.params,
+    });
+    const unfilteredCountResult =
+        preview.whereSql.length > 0
+            ? await datasource.queryWithContext<CountRow>(`SELECT COUNT_BIG(*) AS totalRows FROM ${qualifiedName}`, {
+                  database,
+                  params: {},
+              })
+            : countResult;
+    const orderBySql = preview.orderBySql || (offset > 0 ? ' ORDER BY (SELECT NULL)' : '');
     const sql =
-        offset > 0 ? `SELECT * FROM ${qualifiedName} ORDER BY (SELECT NULL) OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY` : `SELECT TOP (@limit) * FROM ${qualifiedName}`;
+        offset > 0
+            ? `SELECT * FROM ${qualifiedName}${preview.whereSql}${orderBySql} OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
+            : `SELECT TOP (@limit) * FROM ${qualifiedName}${preview.whereSql}${orderBySql}`;
     const result = await datasource.queryWithContext<Record<string, unknown>>(sql, {
         database,
-        params: { limit, offset },
+        params,
     });
 
     return {
         ...result,
+        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
         limited: true,
         limit,
     };
