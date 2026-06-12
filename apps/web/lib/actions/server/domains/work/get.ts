@@ -3,6 +3,25 @@ import { defineWebAction } from '../../define-web-action';
 import { readWorkspace } from '../../policies';
 import { workInvestigationDetailOutputSchema, workOutputSchema, workRunEventOutputSchema, workRunOutputSchema } from './schemas';
 
+type InvestigationDetail = z.infer<typeof workInvestigationDetailOutputSchema>;
+
+function activeInvestigationScore(investigation: InvestigationDetail) {
+    return investigation.findings.length * 100 + investigation.sqlAssetCount * 10 + (investigation.lastQueryAt ? 1 : 0);
+}
+
+function selectVisibleInvestigationDetails(investigations: InvestigationDetail[]) {
+    if (investigations.length <= 5) return investigations;
+
+    return [...investigations]
+        .sort((a, b) => {
+            const scoreDiff = activeInvestigationScore(b) - activeInvestigationScore(a);
+            if (scoreDiff !== 0) return scoreDiff;
+            return b.updatedAt.getTime() - a.updatedAt.getTime() || b.createdAt.getTime() - a.createdAt.getTime();
+        })
+        .slice(0, 5)
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || b.createdAt.getTime() - a.createdAt.getTime());
+}
+
 export const workGetAction = defineWebAction({
     id: 'work.get',
     domain: 'work',
@@ -51,6 +70,6 @@ export const workGetAction = defineWebAction({
                   runId: latestRun.id,
               })
             : [];
-        return { work, investigations: investigationDetails, latestRun, latestRunEvents };
+        return { work, investigations: selectVisibleInvestigationDetails(investigationDetails), latestRun, latestRunEvents };
     },
 });

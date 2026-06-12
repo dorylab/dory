@@ -60,24 +60,29 @@ function resultMetaFromQuery(input: {
 }
 
 export function investigationSqlAssetBlockContent(input: {
-    workTitle: string;
-    goal: string;
-    investigationTitle: string;
     groupTitle: string;
     sql: string;
 }) {
-    return investigationWorkspaceContent({
-        workTitle: input.workTitle,
-        goal: input.goal,
-        investigationTitle: input.investigationTitle,
-        sql: [`-- Group: ${input.groupTitle}`, '', input.sql.trim()].join('\n'),
-    });
+    return [`-- Purpose: ${input.groupTitle}`, '', ensureSqlStatementTerminated(input.sql)].join('\n');
+}
+
+function ensureSqlStatementTerminated(sql: string) {
+    const trimmed = sql.trim();
+    if (!trimmed) return '';
+    return trimmed.endsWith(';') ? trimmed : `${trimmed};`;
 }
 
 function appendSqlAssetBlock(existingContent: string | null | undefined, block: string) {
     const existing = existingContent?.trimEnd() ?? '';
     if (!existing) return block;
     return `${existing}\n\n${block}`;
+}
+
+export function sqlWorkspaceContentWithBlock(input: { seedContent: string; existingContent?: string | null; block: string; shouldAppend: boolean }) {
+    if (input.shouldAppend) {
+        return appendSqlAssetBlock(input.existingContent, input.block);
+    }
+    return appendSqlAssetBlock(input.seedContent, input.block);
 }
 
 function isReusableSeedTab(tab: TabPayload, input: { seedContent: string; linkedTabId: string | null }) {
@@ -171,9 +176,6 @@ export const workRunInvestigationSqlAction = defineWebAction({
             investigationTitle: investigation.title,
         });
         const block = investigationSqlAssetBlockContent({
-            workTitle: work.title,
-            goal: work.goal,
-            investigationTitle: investigation.title,
             groupTitle,
             sql: input.sql,
         });
@@ -191,7 +193,12 @@ export const workRunInvestigationSqlAction = defineWebAction({
         });
         const tabId = targetTab.tabId;
         const existingContent = targetTab.existingTab?.tabType === 'sql' ? targetTab.existingTab.content : null;
-        const content = targetTab.shouldAppend ? appendSqlAssetBlock(existingContent, block) : block;
+        const content = sqlWorkspaceContentWithBlock({
+            seedContent,
+            existingContent,
+            block,
+            shouldAppend: targetTab.shouldAppend,
+        });
 
         const queryEnvelope = await executeAction<QueryExecutionOutput>(ctx, 'query.readOnlyExecute', {
             connectionId: work.connectionId,

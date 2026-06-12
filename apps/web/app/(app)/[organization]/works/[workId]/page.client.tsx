@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ArrowUpRight, Bot, ChevronDown, Clock, Database, Loader2, Play, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bot, Check, ChevronDown, Clock, Database, Loader2, Pencil, Play, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -37,6 +37,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const queryClient = useQueryClient();
     const connectionsQuery = useConnections();
     const [goal, setGoal] = useState('');
+    const [titleDraft, setTitleDraft] = useState('');
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [conclusion, setConclusion] = useState('');
     const [isEditingConclusion, setIsEditingConclusion] = useState(false);
     const [investigationTitle, setInvestigationTitle] = useState('');
@@ -63,11 +65,14 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
 
     useEffect(() => {
         if (!work) return;
+        if (!isEditingTitle) {
+            setTitleDraft(work.title);
+        }
         setGoal(work.goal);
         if (!isEditingConclusion) {
             setConclusion(work.conclusion ?? '');
         }
-    }, [work, isEditingConclusion]);
+    }, [work, isEditingTitle, isEditingConclusion]);
 
     const invalidateWork = () => queryClient.invalidateQueries({ queryKey: ['work', workId] });
 
@@ -76,6 +81,29 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             setRunDetailsOpen(true);
         }
     }, [latestRun?.status]);
+
+    const updateTitleMutation = useMutation({
+        mutationFn: (nextTitle: string) => executeActionClient<Work>('work.updateTitle', { id: workId, title: nextTitle }),
+        onSuccess: updatedWork => {
+            toast.success('Title updated');
+            setTitleDraft(updatedWork.title);
+            setIsEditingTitle(false);
+            queryClient.setQueryData<WorkDetail>(['work', workId], current =>
+                current
+                    ? {
+                          ...current,
+                          work: {
+                              ...current.work,
+                              title: updatedWork.title,
+                              updatedAt: updatedWork.updatedAt,
+                          },
+                      }
+                    : current,
+            );
+            invalidateWork();
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : 'Failed to update title'),
+    });
 
     const updateGoalMutation = useMutation({
         mutationFn: (nextGoal: string) => executeActionClient<Work>('work.updateGoal', { id: workId, goal: nextGoal }),
@@ -262,6 +290,33 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         }
     };
 
+    const startEditingTitle = () => {
+        if (!work) return;
+        setTitleDraft(work.title);
+        setIsEditingTitle(true);
+    };
+
+    const cancelEditingTitle = () => {
+        if (!work) return;
+        setTitleDraft(work.title);
+        setIsEditingTitle(false);
+    };
+
+    const submitTitle = () => {
+        if (!work) return;
+        const nextTitle = titleDraft.trim();
+        if (!nextTitle) {
+            toast.error('Title is required');
+            return;
+        }
+        if (nextTitle === work.title) {
+            setTitleDraft(work.title);
+            setIsEditingTitle(false);
+            return;
+        }
+        updateTitleMutation.mutate(nextTitle);
+    };
+
     if (workQuery.isLoading) {
         return (
             <div className="bg-n8 h-screen overflow-auto">
@@ -304,7 +359,57 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                             <div className="mb-3 flex flex-wrap items-center gap-2">
-                                <h1 className="truncate text-2xl font-semibold tracking-tight">{work.title}</h1>
+                                {isEditingTitle ? (
+                                    <form
+                                        className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-xl"
+                                        onSubmit={event => {
+                                            event.preventDefault();
+                                            submitTitle();
+                                        }}
+                                    >
+                                        <Input
+                                            value={titleDraft}
+                                            onChange={event => setTitleDraft(event.target.value)}
+                                            onKeyDown={event => {
+                                                if (event.key === 'Escape') {
+                                                    event.preventDefault();
+                                                    cancelEditingTitle();
+                                                }
+                                            }}
+                                            className="h-9 min-w-0 text-lg font-semibold"
+                                            autoFocus
+                                            disabled={updateTitleMutation.isPending}
+                                        />
+                                        <Button
+                                            type="submit"
+                                            size="icon-sm"
+                                            variant="secondary"
+                                            disabled={updateTitleMutation.isPending || !titleDraft.trim()}
+                                            aria-label="Save title"
+                                            title="Save title"
+                                        >
+                                            {updateTitleMutation.isPending ? <Loader2 className="animate-spin" /> : <Check />}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            size="icon-sm"
+                                            variant="ghost"
+                                            onClick={cancelEditingTitle}
+                                            disabled={updateTitleMutation.isPending}
+                                            aria-label="Cancel title edit"
+                                            title="Cancel title edit"
+                                        >
+                                            <X />
+                                        </Button>
+                                    </form>
+                                ) : (
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <h1 className="truncate text-2xl font-semibold tracking-tight">{work.title}</h1>
+                                        <Button type="button" variant="ghost" size="icon-sm" onClick={startEditingTitle} aria-label="Edit title" title="Edit title">
+                                            <Pencil />
+                                        </Button>
+                                    </div>
+                                )}
                                 <Badge variant="outline" className={statusClassName(work.status)}>
                                     {statusLabel(work.status)}
                                 </Badge>

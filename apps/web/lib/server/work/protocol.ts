@@ -8,6 +8,7 @@ export type WorkAgentProtocolTool =
 export type WorkAgentProtocolState = {
     mode: 'full_work' | 'investigation_continue';
     continuationInvestigationId: string | null;
+    existingInvestigationIds: string[];
     createdInvestigationIds: string[];
     currentInvestigationId: string | null;
     sqlStarted: boolean;
@@ -34,14 +35,20 @@ export function createWorkAgentProtocolState(options?: {
     investigationId?: string | null;
     sourceTabId?: string | null;
     hasSnapshotResult?: boolean;
+    existingInvestigationIds?: string[];
+    existingFindingsByInvestigationId?: Record<string, number>;
 }): WorkAgentProtocolState {
     const mode = options?.mode ?? 'full_work';
     const continuationInvestigationId = mode === 'investigation_continue' ? (options?.investigationId ?? null) : null;
+    const existingInvestigationIds =
+        mode === 'full_work' ? Array.from(new Set((options?.existingInvestigationIds ?? []).filter(Boolean))) : [];
+    const createdInvestigationIds = continuationInvestigationId ? [continuationInvestigationId] : [...existingInvestigationIds];
     return {
         mode,
         continuationInvestigationId,
-        createdInvestigationIds: continuationInvestigationId ? [continuationInvestigationId] : [],
-        currentInvestigationId: continuationInvestigationId,
+        existingInvestigationIds,
+        createdInvestigationIds,
+        currentInvestigationId: continuationInvestigationId ?? existingInvestigationIds[0] ?? null,
         sqlStarted: Boolean(options?.hasSnapshotResult),
         pendingFinding:
             continuationInvestigationId && options?.hasSnapshotResult
@@ -51,7 +58,9 @@ export function createWorkAgentProtocolState(options?: {
                       sourceRunEventId: null,
                   }
                 : null,
-        findingsByInvestigationId: continuationInvestigationId ? { [continuationInvestigationId]: 0 } : {},
+        findingsByInvestigationId: continuationInvestigationId
+            ? { [continuationInvestigationId]: 0 }
+            : Object.fromEntries(existingInvestigationIds.map(id => [id, options?.existingFindingsByInvestigationId?.[id] ?? 0])),
         conclusionUpdated: false,
     };
 }
@@ -62,6 +71,12 @@ export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: 
             return {
                 allowed: false,
                 message: 'Continue the current Analysis instead of creating a new one.',
+            };
+        }
+        if (state.existingInvestigationIds.length > 0) {
+            return {
+                allowed: false,
+                message: 'This Work already has Analyses. Reuse the existing Analysis IDs instead of creating new ones.',
             };
         }
         if (state.sqlStarted) {
@@ -79,7 +94,7 @@ export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: 
     }
 
     if (toolName === 'work_runInvestigationSql') {
-        if (state.mode !== 'investigation_continue' && state.createdInvestigationIds.length < 3) {
+        if (state.mode !== 'investigation_continue' && state.existingInvestigationIds.length === 0 && state.createdInvestigationIds.length < 3) {
             return {
                 allowed: false,
                 message: 'Create at least three analyses before running SQL.',
@@ -108,7 +123,7 @@ export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: 
         if (!state.createdInvestigationIds.includes(investigationId)) {
             return {
                 allowed: false,
-                message: 'Run SQL only for an Analysis created in this Work run.',
+                message: 'Run SQL only for an active Analysis in this Work run.',
             };
         }
     }
@@ -226,7 +241,7 @@ function checkAnalysesReadyForConclusion(state: WorkAgentProtocolState): WorkAge
         return { allowed: true };
     }
 
-    if (state.createdInvestigationIds.length < 3) {
+    if (state.existingInvestigationIds.length === 0 && state.createdInvestigationIds.length < 3) {
         return {
             allowed: false,
             message: 'Create at least three analyses before updating the conclusion.',

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
 import { writeWorkspace } from '../../policies';
 import { workOutputSchema, workScopeSchema, workTypeSchema } from './schemas';
+import { generateWorkTitle } from './title';
 
 export const workCreateAction = defineWebAction({
     id: 'work.create',
@@ -51,10 +52,18 @@ export const workCreateAction = defineWebAction({
     handler: async (ctx, input) => {
         const connection = await ctx.services.db.connections.getById(ctx.organizationId, input.connectionId);
         if (!connection) throw new Error('Connection not found.');
+        const title =
+            input.title?.trim() ||
+            (await generateWorkTitle(ctx, {
+                goal: input.goal,
+                workType: input.workType,
+                scope: input.scope ?? null,
+                initialContext: input.initialContext ?? null,
+            }));
 
         return ctx.services.db.works.create({
             organizationId: ctx.organizationId,
-            title: input.title ?? 'Untitled Work',
+            title,
             goal: input.goal,
             workType: input.workType,
             scope: input.scope ?? null,

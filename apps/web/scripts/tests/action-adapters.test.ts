@@ -36,7 +36,7 @@ const [
     import('@/lib/auth/organization-ac'),
 ]);
 const { investigationWorkspaceContent } = await import('@/lib/actions/server/domains/work/create-investigation');
-const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab } = await import('@/lib/actions/server/domains/work/run-investigation-sql');
+const { investigationSqlAssetBlockContent, resolveInvestigationSqlTargetTab, sqlWorkspaceContentWithBlock } = await import('@/lib/actions/server/domains/work/run-investigation-sql');
 
 const tabCreateAction = webActionRegistry.get('tab.create');
 assert.ok(tabCreateAction, 'Expected tab.create to be registered.');
@@ -135,6 +135,10 @@ function createServices() {
                     savedInvestigations.push(record);
                     return record;
                 },
+                listInvestigations: async (payload: any) =>
+                    payload.organizationId === 'org-1' && payload.workId === 'work-1'
+                        ? savedInvestigations
+                        : [],
                 getInvestigationById: async (payload: any) =>
                     payload.organizationId === 'org-1' && payload.workId === 'work-1'
                         ? {
@@ -480,7 +484,7 @@ test('work.create can be executed through UI, Agent, and Automation with shared 
     assert.equal((automationOutput.data as any).id, 'work-1');
 
     assert.deepEqual(savedWorkSignature(ui.savedWorks), {
-        title: 'Untitled Work',
+        title: 'AI Feature Health',
         status: 'draft',
         goal: input.goal,
         workType: input.workType,
@@ -580,13 +584,58 @@ test('work.ensureInvestigationWorkspace creates a scoped SQL workspace when miss
 test('investigation workspace content keeps the SQL and comments in one tab body', () => {
     assert.equal(
         investigationSqlAssetBlockContent({
-            workTitle: 'Untitled Work',
-            goal: 'Analyze orders.',
-            investigationTitle: 'Order Status Distribution',
             groupTitle: 'Status Count',
             sql: 'select status, count(*) as orders\nfrom orders\ngroup by status',
         }),
-        '-- Work: Untitled Work\n-- Goal:\n-- Analyze orders.\n-- Investigation: Order Status Distribution\n\n-- Group: Status Count\n\nselect status, count(*) as orders\nfrom orders\ngroup by status',
+        '-- Purpose: Status Count\n\nselect status, count(*) as orders\nfrom orders\ngroup by status;',
+    );
+});
+
+test('work SQL workspace content keeps Work and Goal only at the top when appending SQL', () => {
+    const seedContent = investigationWorkspaceContent({
+        workTitle: 'Untitled Work',
+        goal: 'Analyze orders.',
+        investigationTitle: 'Order Status Distribution',
+    });
+    const firstBlock = investigationSqlAssetBlockContent({
+        groupTitle: 'Status Count',
+        sql: 'select status, count(*) as orders\nfrom orders\ngroup by status',
+    });
+    const firstContent = sqlWorkspaceContentWithBlock({
+        seedContent,
+        block: firstBlock,
+        shouldAppend: false,
+    });
+    const secondBlock = investigationSqlAssetBlockContent({
+        groupTitle: 'Status Amount',
+        sql: 'select status, sum(amount) as total_amount\nfrom orders\ngroup by status;',
+    });
+
+    assert.equal(
+        sqlWorkspaceContentWithBlock({
+            seedContent,
+            existingContent: firstContent,
+            block: secondBlock,
+            shouldAppend: true,
+        }),
+        [
+            '-- Work: Untitled Work',
+            '-- Goal:',
+            '-- Analyze orders.',
+            '-- Investigation: Order Status Distribution',
+            '',
+            '-- Purpose: Status Count',
+            '',
+            'select status, count(*) as orders',
+            'from orders',
+            'group by status;',
+            '',
+            '-- Purpose: Status Amount',
+            '',
+            'select status, sum(amount) as total_amount',
+            'from orders',
+            'group by status;',
+        ].join('\n'),
     );
 });
 

@@ -22,7 +22,7 @@ import { resolveOrganizationAccess } from '@/lib/server/authz';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
-import type { WorkRunEventRole, WorkRunEventType, WorkWorkspaceSnapshot } from '@dory/database/postgres/schemas';
+import type { WorkInvestigation, WorkInvestigationFinding, WorkRunEvent, WorkRunEventRole, WorkRunEventType, WorkWorkspaceSnapshot } from '@dory/database/postgres/schemas';
 import { applyWorkAgentProtocolResult, checkWorkAgentProtocol, checkWorkAgentProtocolComplete, createWorkAgentProtocolState, workAgentProtocolError } from './protocol';
 import { formatWorkspaceSnapshotForAgent } from './workspace-snapshot';
 
@@ -33,6 +33,16 @@ type RunWorkAgentOptions = {
     userId: string;
     workId: string;
     workspaceSnapshotId?: string | null;
+};
+
+type ExistingRunAnalysis = {
+    id: string;
+    title: string;
+    findingsCount: number;
+    sqlAssetCount: number;
+    lastQueryAt: Date | null;
+    updatedAt: Date;
+    createdAt: Date;
 };
 
 function mergeHeaders(headers: Record<string, string | undefined> | undefined, extraHeaders: Record<string, string> | null): Record<string, string | undefined> | undefined {
@@ -60,6 +70,68 @@ function sanitizePayload(value: unknown): Record<string, unknown> | null {
     } catch {
         return { value: String(value) };
     }
+}
+
+function countSqlAssetsByInvestigation(events: WorkRunEvent[]) {
+    const counts = new Map<string, number>();
+    for (const event of events) {
+        if (event.type !== 'sql_executed') continue;
+        const payload = event.payload && typeof event.payload === 'object' ? event.payload : null;
+        const investigationId = payload?.investigationId;
+        if (typeof investigationId !== 'string' || !investigationId) continue;
+        counts.set(investigationId, (counts.get(investigationId) ?? 0) + 1);
+    }
+    return counts;
+}
+
+function countFindingsByInvestigation(findings: WorkInvestigationFinding[]) {
+    const counts = new Map<string, number>();
+    for (const finding of findings) {
+        counts.set(finding.investigationId, (counts.get(finding.investigationId) ?? 0) + 1);
+    }
+    return counts;
+}
+
+function existingRunAnalysisScore(analysis: ExistingRunAnalysis) {
+    return analysis.findingsCount * 100 + analysis.sqlAssetCount * 10 + (analysis.lastQueryAt ? 1 : 0);
+}
+
+function selectExistingRunAnalyses(input: {
+    investigations: WorkInvestigation[];
+    findings: WorkInvestigationFinding[];
+    runEvents: WorkRunEvent[];
+}) {
+    const findingCounts = countFindingsByInvestigation(input.findings);
+    const sqlAssetCounts = countSqlAssetsByInvestigation(input.runEvents);
+    return input.investigations
+        .map(
+            (investigation): ExistingRunAnalysis => ({
+                id: investigation.id,
+                title: investigation.title,
+                findingsCount: findingCounts.get(investigation.id) ?? 0,
+                sqlAssetCount: Math.max(sqlAssetCounts.get(investigation.id) ?? 0, investigation.linkedTabId ? 1 : 0),
+                lastQueryAt: investigation.lastQueryAt,
+                updatedAt: investigation.updatedAt,
+                createdAt: investigation.createdAt,
+            }),
+        )
+        .sort((a, b) => {
+            const scoreDiff = existingRunAnalysisScore(b) - existingRunAnalysisScore(a);
+            if (scoreDiff !== 0) return scoreDiff;
+            return b.updatedAt.getTime() - a.updatedAt.getTime() || b.createdAt.getTime() - a.createdAt.getTime();
+        })
+        .slice(0, 5);
+}
+
+function existingAnalysesForPrompt(analyses: ExistingRunAnalysis[]) {
+    if (analyses.length === 0) return '';
+    return [
+        'Existing Analyses',
+        ...analyses.map(
+            analysis =>
+                `- investigationId: ${analysis.id}; title: ${analysis.title}; findings: ${analysis.findingsCount}; sql assets: ${analysis.sqlAssetCount}`,
+        ),
+    ].join('\n');
 }
 
 function toMessageContent(value: unknown, fallback: string) {
@@ -119,6 +191,159 @@ function buildFallbackConclusionFromFindings(
         '',
         ...sections.flatMap(investigation => [`- ${investigation.title}`, ...investigation.findings.map(finding => `  - ${finding}`)]),
     ].join('\n');
+}
+
+function fallbackFindingContentFromSqlEvent(event: { payload?: Record<string, unknown> | null } | null) {
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : null;
+    const query = payload?.query && typeof payload.query === 'object' ? (payload.query as Record<string, unknown>) : null;
+    const sql = typeof payload?.sql === 'string' && payload.sql.trim() ? payload.sql.trim() : null;
+    const rowCount = typeof query?.rowCount === 'number' ? query.rowCount : typeof query?.totalRows === 'number' ? query.totalRows : null;
+    const durationMs = typeof query?.durationMs === 'number' ? query.durationMs : null;
+
+    const details: string[] = [];
+    if (rowCount !== null) details.push(`${rowCount} rows returned`);
+    if (durationMs !== null) details.push(`${durationMs}ms execution time`);
+
+    const suffix = details.length ? ` (${details.join(', ')}).` : '.';
+    const sqlSummary = sql ? ` SQL: ${sql.length > 240 ? `${sql.slice(0, 240)}...` : sql}` : '';
+    return `SQL result was reviewed and preserved for this Analysis${suffix}${sqlSummary}`.trim();
+}
+
+function extractSqlEventSource(event: WorkRunEvent | null) {
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : null;
+    return {
+        tabId: typeof payload?.tabId === 'string' && payload.tabId ? payload.tabId : null,
+        investigationId: typeof payload?.investigationId === 'string' && payload.investigationId ? payload.investigationId : null,
+    };
+}
+
+async function createFallbackFindingForPendingSql(params: {
+    db: DBService;
+    organizationId: string;
+    workId: string;
+    protocol: ReturnType<typeof createWorkAgentProtocolState>;
+    appendEvent: (event: {
+        type: WorkRunEventType;
+        role: WorkRunEventRole;
+        content?: string | null;
+        payload?: Record<string, unknown> | null;
+        createdAt?: string | Date | null;
+    }) => Promise<void>;
+}) {
+    const pending = params.protocol.pendingFinding;
+    if (!pending) return null;
+
+    const sourceEvent = pending.sourceRunEventId
+        ? await params.db.works.getRunEventById({
+              organizationId: params.organizationId,
+              workId: params.workId,
+              id: pending.sourceRunEventId,
+          })
+        : null;
+    const content = fallbackFindingContentFromSqlEvent(sourceEvent);
+    const finding = await params.db.works.createInvestigationFinding({
+        organizationId: params.organizationId,
+        workId: params.workId,
+        investigationId: pending.investigationId,
+        content,
+        sourceTabId: pending.sourceTabId,
+        sourceRunEventId: pending.sourceRunEventId,
+        createdBy: 'agent',
+    });
+
+    applyWorkAgentProtocolResult(params.protocol, 'work_createInvestigationFinding', finding);
+    await params.appendEvent({
+        type: 'investigation_updated',
+        role: 'agent',
+        content,
+        payload: sanitizePayload({
+            toolName: 'work_createInvestigationFinding',
+            output: finding,
+            fallback: true,
+            reason: 'Agent ended with a SQL result that still needed a Finding before conclusion.',
+        }),
+    });
+    return finding;
+}
+
+async function createFallbackFindingsForMissingAnalyses(params: {
+    db: DBService;
+    organizationId: string;
+    workId: string;
+    runId: string;
+    protocol: ReturnType<typeof createWorkAgentProtocolState>;
+    appendEvent: (event: {
+        type: WorkRunEventType;
+        role: WorkRunEventRole;
+        content?: string | null;
+        payload?: Record<string, unknown> | null;
+        createdAt?: string | Date | null;
+    }) => Promise<void>;
+    reason: string;
+}) {
+    if (params.protocol.mode !== 'full_work') return [];
+    if (params.protocol.existingInvestigationIds.length === 0 && params.protocol.createdInvestigationIds.length < 3) return [];
+
+    const missingInvestigationIds = params.protocol.createdInvestigationIds.filter(id => (params.protocol.findingsByInvestigationId[id] ?? 0) < 1);
+    if (missingInvestigationIds.length === 0) return [];
+
+    const [investigations, runEvents] = await Promise.all([
+        params.db.works.listInvestigations({
+            organizationId: params.organizationId,
+            workId: params.workId,
+        }),
+        params.db.works.listRunEvents({
+            organizationId: params.organizationId,
+            workId: params.workId,
+            runId: params.runId,
+        }),
+    ]);
+
+    const investigationsById = new Map<string, WorkInvestigation>(investigations.map(investigation => [investigation.id, investigation]));
+    const latestSqlEventByInvestigationId = new Map<string, WorkRunEvent>();
+    for (const event of runEvents) {
+        if (event.type !== 'sql_executed') continue;
+        const { investigationId } = extractSqlEventSource(event);
+        if (investigationId) {
+            latestSqlEventByInvestigationId.set(investigationId, event);
+        }
+    }
+
+    const findings = [];
+    for (const investigationId of missingInvestigationIds) {
+        const investigation = investigationsById.get(investigationId);
+        const sourceEvent = latestSqlEventByInvestigationId.get(investigationId) ?? null;
+        const source = extractSqlEventSource(sourceEvent);
+        const title = investigation?.title?.trim() || 'Analysis';
+        const content = sourceEvent
+            ? fallbackFindingContentFromSqlEvent(sourceEvent)
+            : `No SQL-backed Finding was produced for "${title}" before the Agent attempted the conclusion. Treat this Analysis as inconclusive and do not use it as supporting evidence.`;
+        const finding = await params.db.works.createInvestigationFinding({
+            organizationId: params.organizationId,
+            workId: params.workId,
+            investigationId,
+            content,
+            sourceTabId: source.tabId,
+            sourceRunEventId: sourceEvent?.id ?? null,
+            createdBy: 'agent',
+        });
+
+        applyWorkAgentProtocolResult(params.protocol, 'work_createInvestigationFinding', finding);
+        await params.appendEvent({
+            type: 'investigation_updated',
+            role: 'agent',
+            content,
+            payload: sanitizePayload({
+                toolName: 'work_createInvestigationFinding',
+                output: finding,
+                fallback: true,
+                reason: params.reason,
+            }),
+        });
+        findings.push(finding);
+    }
+
+    return findings;
 }
 
 function classifyWorkToolResult(toolName: string): { type: WorkRunEventType; content: string } {
@@ -187,6 +412,8 @@ function withWorkFindingContext(
 
 function wrapToolsWithRunEvents(params: {
     tools: Record<string, any>;
+    db: DBService;
+    organizationId: string;
     workId: string;
     runId: string;
     protocol: ReturnType<typeof createWorkAgentProtocolState>;
@@ -233,6 +460,26 @@ function wrapToolsWithRunEvents(params: {
                             workId: params.workId,
                             pendingFinding: params.protocol.pendingFinding,
                         });
+                        if (toolName === 'work_updateConclusion') {
+                            if (params.protocol.pendingFinding) {
+                                await createFallbackFindingForPendingSql({
+                                    db: params.db,
+                                    organizationId: params.organizationId,
+                                    workId: params.workId,
+                                    protocol: params.protocol,
+                                    appendEvent: params.appendEvent,
+                                });
+                            }
+                            await createFallbackFindingsForMissingAnalyses({
+                                db: params.db,
+                                organizationId: params.organizationId,
+                                workId: params.workId,
+                                runId: params.runId,
+                                protocol: params.protocol,
+                                appendEvent: params.appendEvent,
+                                reason: 'Agent attempted to update the conclusion before every Analysis had a Finding.',
+                            });
+                        }
                         const protocolDecision = checkWorkAgentProtocol(params.protocol, toolName, executionInput);
                         if (!protocolDecision.allowed) {
                             const output = workAgentProtocolError(protocolDecision.message);
@@ -351,6 +598,7 @@ function formatWorkSetupSection(work: { id: string; workType?: string | null; sc
 function buildWorkRunInstruction(
     work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null },
     workspaceSnapshot: WorkWorkspaceSnapshot | null,
+    existingAnalyses: ExistingRunAnalysis[],
 ) {
     if (workspaceSnapshot) {
         return [
@@ -362,8 +610,32 @@ function buildWorkRunInstruction(
             'Do not create new analyses for this continuation unless the human explicitly asks for a broader Work restart.',
             'You may create a Finding from the provided snapshot result, run follow-up SQL through work.runInvestigationSql for this same investigationId, and update the Work conclusion through work.updateConclusion.',
             'When calling work.runInvestigationSql, use the investigationId from this continuation and preserve the human-edited SQL intent unless you explain the change.',
+            'Use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
+            'Write SQL as a complete statement ending with a semicolon.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Keep the final answer concise and focused on what changed after the human handoff.',
+        ].join('\n');
+    }
+
+    if (existingAnalyses.length > 0) {
+        return [
+            'Work Run Context',
+            `You are running a Dory Work. The current workId is ${work.id}.`,
+            formatWorkSetupSection(work),
+            existingAnalysesForPrompt(existingAnalyses),
+            'This is a task-style continuation. The Work already has Analyses, so do not call work.createInvestigation.',
+            'Only update the existing Analyses listed above. Reuse their exact investigationId values when running SQL and creating Findings.',
+            'Run follow-up SQL through work.runInvestigationSql using one of the active investigationId values. Do not invent or infer IDs from titles.',
+            'After every SQL run, create at least one Finding for the same Analysis before running another SQL query, switching Analysis, or writing the conclusion.',
+            'When calling work.runInvestigationSql, use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
+            'Write SQL as a complete statement ending with a semicolon.',
+            'Every active Analysis must have at least one Finding before the conclusion.',
+            'The conclusion must synthesize the Findings and should not simply repeat every Finding.',
+            'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
+            'Use work.createInvestigationFinding after SQL results, and use work.updateConclusion only after every active Analysis has at least one Finding.',
+            'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
+            'Always call work.updateConclusion before finishing the run.',
+            'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
         ].join('\n');
     }
 
@@ -377,7 +649,8 @@ function buildWorkRunInstruction(
         'Let the Work type and Scope guide the analysis titles, SQL exploration order, and conclusion structure.',
         'Respect user constraints. If a requested step conflicts with a constraint, explain the conflict and choose the safer read-only path.',
         'After every SQL run, create at least one Finding for the same Analysis before running another SQL query, switching Analysis, or writing the conclusion.',
-        'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created and a stable groupKey for the human-readable SQL asset group. Reuse a groupKey only when the new SQL belongs in the same workspace tab as prior SQL for that Analysis.',
+        'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created and a stable groupKey for the human-readable SQL asset group. Use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the new SQL belongs in the same workspace tab as prior SQL for that Analysis.',
+        'Write SQL as a complete statement ending with a semicolon.',
         'A Finding is a concise fact or observation backed by the SQL result. Prefer bullet-like short statements, not a long summary paragraph.',
         'Every Analysis must have at least one Finding before the conclusion.',
         'The conclusion must synthesize the Findings and should not simply repeat every Finding.',
@@ -425,6 +698,22 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
     }
 
     const workspaceSnapshotContext = formatWorkspaceSnapshotForAgent(workspaceSnapshot);
+    const existingRunAnalyses = workspaceSnapshot
+        ? []
+        : selectExistingRunAnalyses({
+              investigations: await options.db.works.listInvestigations({
+                  organizationId: options.organizationId,
+                  workId: work.id,
+              }),
+              findings: await options.db.works.listFindingsForWork({
+                  organizationId: options.organizationId,
+                  workId: work.id,
+              }),
+              runEvents: await options.db.works.listRunEvents({
+                  organizationId: options.organizationId,
+                  workId: work.id,
+              }),
+          });
 
     const { run, existingRunningRun } = await options.db.works.createRun({
         workId: work.id,
@@ -526,12 +815,17 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                       sourceTabId: workspaceSnapshot.workspaceId,
                       hasSnapshotResult: Boolean(workspaceSnapshot.humanEdits?.resultPreview),
                   }
-                : undefined,
+                : {
+                      existingInvestigationIds: existingRunAnalyses.map(analysis => analysis.id),
+                      existingFindingsByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.findingsCount])),
+                  },
         );
         const toolCallStarts: Array<{ toolName: string; toolCallId: string | null; startedAt: Date; consumed: boolean }> = [];
         let modelStepMessageCount = 0;
         const wrappedTools = wrapToolsWithRunEvents({
             tools,
+            db: options.db,
+            organizationId: options.organizationId,
             workId: work.id,
             runId: run.id,
             protocol,
@@ -556,7 +850,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             copilotEnvelope: null,
             locale,
         });
-        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work, workspaceSnapshot)].filter(Boolean).join('\n\n');
+        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work, workspaceSnapshot, existingRunAnalyses)].filter(Boolean).join('\n\n');
         const model = resolveDoryAgentModel({
             execution,
             req: options.req as any,
@@ -669,10 +963,30 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                     });
                 }
 
+                if (protocol.pendingFinding) {
+                    await createFallbackFindingForPendingSql({
+                        db: options.db,
+                        organizationId: options.organizationId,
+                        workId: work.id,
+                        protocol,
+                        appendEvent,
+                    });
+                }
+
+                await createFallbackFindingsForMissingAnalyses({
+                    db: options.db,
+                    organizationId: options.organizationId,
+                    workId: work.id,
+                    runId: run.id,
+                    protocol,
+                    appendEvent,
+                    reason: 'Agent finished before every Analysis had a Finding.',
+                });
+
                 const readyForFallbackConclusion =
                     protocol.mode === 'investigation_continue'
                         ? !protocol.pendingFinding && protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0)
-                        : protocol.createdInvestigationIds.length >= 3 &&
+                        : (protocol.existingInvestigationIds.length > 0 || protocol.createdInvestigationIds.length >= 3) &&
                           !protocol.pendingFinding &&
                           protocol.createdInvestigationIds.every(id => (protocol.findingsByInvestigationId[id] ?? 0) > 0);
                 if (readyForFallbackConclusion && !protocol.conclusionUpdated) {

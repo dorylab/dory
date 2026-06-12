@@ -58,6 +58,34 @@ test('Work Agent protocol rejects more than five analyses', () => {
     assert.match(decision.allowed ? '' : decision.message, /no more than five analyses/i);
 });
 
+test('Work Agent protocol reuses existing analyses instead of creating title-based duplicates', () => {
+    const state = createWorkAgentProtocolState({
+        existingInvestigationIds: ['analysis-1', 'analysis-2', 'analysis-3'],
+        existingFindingsByInvestigationId: {
+            'analysis-1': 1,
+            'analysis-2': 1,
+            'analysis-3': 1,
+        },
+    });
+
+    const createDecision = checkWorkAgentProtocol(state, 'work_createInvestigation', { title: 'Different AI title' });
+    assert.equal(createDecision.allowed, false);
+    assert.match(createDecision.allowed ? '' : createDecision.message, /existing Analysis IDs/);
+
+    assert.equal(checkWorkAgentProtocol(state, 'work_runInvestigationSql', { investigationId: 'analysis-2' }).allowed, true);
+});
+
+test('Work Agent protocol treats any existing analysis as an update-only task continuation', () => {
+    const state = createWorkAgentProtocolState({
+        existingInvestigationIds: ['analysis-1'],
+    });
+
+    const createDecision = checkWorkAgentProtocol(state, 'work_createInvestigation');
+    assert.equal(createDecision.allowed, false);
+    assert.match(createDecision.allowed ? '' : createDecision.message, /Reuse the existing Analysis IDs/);
+    assert.equal(checkWorkAgentProtocol(state, 'work_runInvestigationSql', { investigationId: 'analysis-1' }).allowed, true);
+});
+
 test('Work Agent protocol rejects SQL after SQL until a Finding is created', () => {
     const state = createWorkAgentProtocolState();
     createThreeAnalyses(state);
