@@ -35,7 +35,11 @@ type RunWorkAgentOptions = {
     workId: string;
     workspaceSnapshotId?: string | null;
     focusInvestigationId?: string | null;
+    mode?: WorkRunMode | null;
+    userInstruction?: string | null;
 };
+
+type WorkRunMode = 'run' | 'continue_work' | 'revise_analysis' | 'update_conclusion' | 'rerun_from_scratch';
 
 type ExistingRunAnalysis = {
     id: string;
@@ -143,24 +147,34 @@ function scopedFindingsForConclusion(findings: WorkInvestigationFinding[], inves
     return findings.filter(finding => investigationIds.has(finding.investigationId));
 }
 
-async function resetWorkRunOutputs(params: { db: DBService; organizationId: string; workId: string; findings: WorkInvestigationFinding[]; investigationIds: string[] }) {
+async function resetWorkRunOutputs(params: {
+    db: DBService;
+    organizationId: string;
+    workId: string;
+    findings: WorkInvestigationFinding[];
+    investigationIds: string[];
+    resetConclusion: boolean;
+}) {
     const investigationIds = new Set(params.investigationIds);
     const findingsToDelete = params.findings.filter(finding => investigationIds.has(finding.investigationId));
 
-    await Promise.all([
-        ...findingsToDelete.map(finding =>
+    await Promise.all(
+        findingsToDelete.map(finding =>
             params.db.works.deleteInvestigationFinding({
                 organizationId: params.organizationId,
                 workId: params.workId,
                 id: finding.id,
             }),
         ),
-        params.db.works.updateConclusion({
+    );
+
+    if (params.resetConclusion) {
+        await params.db.works.updateConclusion({
             organizationId: params.organizationId,
             id: params.workId,
             conclusion: null,
-        }),
-    ]);
+        });
+    }
 }
 
 function existingAnalysesForPrompt(analyses: ExistingRunAnalysis[]) {
@@ -370,7 +384,7 @@ function classifyWorkToolResult(toolName: string): { type: WorkRunEventType; con
 }
 
 function workRunTools(tools: Record<string, any>) {
-    const allowed = new Set(['work_createInvestigation', 'work_runInvestigationSql', 'work_createInvestigationFinding', 'work_updateConclusion']);
+    const allowed = new Set(['work_createInvestigation', 'work_runInvestigationSql', 'work_createInvestigationFinding', 'work_updateInvestigation', 'work_updateConclusion']);
     return Object.fromEntries(Object.entries(tools).filter(([toolName]) => allowed.has(toolName)));
 }
 
@@ -594,7 +608,26 @@ function buildWorkRunInstruction(
     workspaceSnapshot: WorkWorkspaceSnapshot | null,
     existingAnalyses: ExistingRunAnalysis[],
     focusedAnalysis: WorkInvestigation | null,
+    mode: WorkRunMode,
+    userInstruction: string | null,
 ) {
+    const userInstructionSection = userInstruction?.trim() ? ['Human instruction', userInstruction.trim()].join('\n') : null;
+
+    if (mode === 'update_conclusion') {
+        return [
+            'Work Run Context',
+            `You are updating the conclusion for Dory Work ${work.id}.`,
+            formatWorkSetupSection(work),
+            existingAnalysesForPrompt(existingAnalyses),
+            'Only update the Work conclusion from the current included Analysis Findings.',
+            'Do not run SQL, create analyses, or change analysis review status.',
+            'Call work.updateConclusion with a concise synthesis of included Findings.',
+            userInstructionSection,
+        ]
+            .filter(Boolean)
+            .join('\n');
+    }
+
     if (workspaceSnapshot) {
         return [
             'Work Run Context',
@@ -604,13 +637,16 @@ function buildWorkRunInstruction(
             'The human has already reviewed and modified the SQL workspace. Treat the Workspace Snapshot in the user message as the source of truth for the next step.',
             'Do not create new analyses for this continuation unless the human explicitly asks for a broader Work restart.',
             'You may create a Finding from the provided snapshot result and run follow-up SQL through work.runInvestigationSql for this same investigationId.',
-            'Call work.updateConclusion after the focused included Analysis has SQL-backed Findings. Human confirmation is optional and should not block the conclusion.',
+            'Do not update the Work conclusion. The UI will mark it outdated and the human can update it explicitly.',
             'When calling work.runInvestigationSql, use the investigationId from this continuation and preserve the human-edited SQL intent unless you explain the change.',
             'Use a distinct groupKey for each distinct SQL purpose and pass a concise per-query title for the SQL Purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
             'Write SQL as a complete statement ending with a semicolon.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Keep the final answer concise and focused on what changed after the human handoff.',
-        ].join('\n');
+            userInstructionSection,
+        ]
+            .filter(Boolean)
+            .join('\n');
     }
 
     if (focusedAnalysis) {
@@ -622,15 +658,21 @@ function buildWorkRunInstruction(
             'The user just added this Analysis. Start running it now.',
             'This is a task-style focused continuation. Do not call work.createInvestigation.',
             'Only update the focused Analysis listed above. Reuse its exact investigationId when running SQL and creating Findings.',
+            'If the human instruction changes the analysis title, call work.updateInvestigation with the focused investigationId and the new title.',
             'Run follow-up SQL through work.runInvestigationSql for the focused investigationId. Do not invent or infer IDs from titles.',
             'After every SQL run, create at least one Finding for this same Analysis before running another SQL query or writing the conclusion.',
             'When calling work.runInvestigationSql, use a distinct groupKey for each distinct SQL purpose and pass a concise per-query title for the SQL Purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
             'Write SQL as a complete statement ending with a semicolon.',
-            'Call work.updateConclusion after the focused included Analysis has SQL-backed Findings. Human confirmation is optional and should not block the conclusion.',
+            mode === 'revise_analysis'
+                ? 'Do not update the Work conclusion. The UI will mark it outdated and the human can update it explicitly.'
+                : 'Call work.updateConclusion after the focused included Analysis has SQL-backed Findings. Human confirmation is optional and should not block the conclusion.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
             'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
-        ].join('\n');
+            userInstructionSection,
+        ]
+            .filter(Boolean)
+            .join('\n');
     }
 
     if (existingAnalyses.length > 0) {
@@ -641,17 +683,23 @@ function buildWorkRunInstruction(
             existingAnalysesForPrompt(existingAnalyses),
             'This is a task-style continuation. The Work already has Analyses, so do not call work.createInvestigation.',
             'Only update the existing Analyses listed above. Reuse their exact investigationId values when running SQL and creating Findings.',
+            mode === 'continue_work' ? 'Decide which listed Analyses are affected by the human instruction. Only run SQL and create Findings for affected Analyses.' : null,
             'Run follow-up SQL through work.runInvestigationSql using one of the active investigationId values. Do not invent or infer IDs from titles.',
             'After every SQL run, create at least one Finding for the same Analysis before running another SQL query, switching Analysis, or writing the conclusion.',
-            'When calling work.runInvestigationSql, use a distinct groupKey for each distinct SQL purpose and pass a concise per-query title for the SQL Purpose. Reuse a groupKey only when the SQL should be appended to the same workspace tab as the previous query.',
+            'When calling work.runInvestigationSql, use a distinct groupKey for each distinct SQL purpose and pass a concise per-query title for the SQL Purpose. Reuse a groupKey only when the new SQL belongs in the same workspace tab as prior SQL for that Analysis.',
             'Write SQL as a complete statement ending with a semicolon.',
             'Every included non-rejected Analysis must have at least one Finding before the conclusion.',
-            'Call work.updateConclusion after included Analyses have Findings. The conclusion must synthesize included Findings and should not simply repeat every Finding.',
+            mode === 'continue_work'
+                ? 'Do not update the Work conclusion. The UI will mark it outdated and the human can update it explicitly.'
+                : 'Call work.updateConclusion after included Analyses have Findings. The conclusion must synthesize included Findings and should not simply repeat every Finding.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Use work.createInvestigationFinding after SQL results. Users can later confirm or exclude individual Analyses.',
             'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
             'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
-        ].join('\n');
+            userInstructionSection,
+        ]
+            .filter(Boolean)
+            .join('\n');
     }
 
     return [
@@ -674,9 +722,11 @@ function buildWorkRunInstruction(
         'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
         'Use your own exploration notes in those step messages. Do not use generic server progress templates.',
         'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
-    ].join('\n');
+        userInstructionSection,
+    ]
+        .filter(Boolean)
+        .join('\n');
 }
-
 function extractResponseText(message: unknown): string | null {
     const parts = (message as any)?.parts;
     if (!Array.isArray(parts)) return null;
@@ -693,6 +743,8 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
     const startedAt = Date.now();
     const requestId = createAiRequestId();
     const locale = await getApiLocale();
+    const mode = options.mode ?? 'run';
+    const userInstruction = options.userInstruction?.trim() || null;
     const work = await options.db.works.getById({ organizationId: options.organizationId, id: options.workId });
 
     if (!work) {
@@ -737,6 +789,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         organizationId: options.organizationId,
         workId: work.id,
     });
+    const initialFindingCountsByInvestigationId = countFindingsByInvestigation(workFindings);
     const selectedExistingRunAnalyses =
         workspaceSnapshot || focusedAnalysis
             ? []
@@ -745,8 +798,14 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                   findings: workFindings,
                   runEvents: workRunEvents,
               });
-    const resetInvestigationIds = workspaceSnapshot ? [workspaceSnapshot.investigationId] : focusedAnalysis ? [focusedAnalysis.id] : activeInvestigationIds(workInvestigations);
-    const existingRunAnalyses = resetFindingCounts(selectedExistingRunAnalyses);
+    const resetInvestigationIds =
+        workspaceSnapshot || mode === 'revise_analysis'
+            ? [workspaceSnapshot?.investigationId ?? focusedAnalysis?.id].filter((id): id is string => Boolean(id))
+            : mode === 'run' || mode === 'rerun_from_scratch'
+              ? activeInvestigationIds(workInvestigations)
+              : [];
+    const requiresConclusion = mode !== 'continue_work' && mode !== 'revise_analysis' && !workspaceSnapshot;
+    const existingRunAnalyses = resetInvestigationIds.length > 0 && mode !== 'update_conclusion' ? resetFindingCounts(selectedExistingRunAnalyses) : selectedExistingRunAnalyses;
 
     const { run, existingRunningRun } = await options.db.works.createRun({
         workId: work.id,
@@ -792,13 +851,15 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
     await appendEvent({
         type: 'message',
         role: 'user',
-        content: workspaceSnapshotContext ?? work.goal,
+        content: [workspaceSnapshotContext ?? work.goal, userInstruction ? `Human instruction: ${userInstruction}` : null].filter(Boolean).join('\n\n'),
         payload: {
             workId: work.id,
             connectionId: work.connectionId,
             workType: work.workType,
             scope: work.scope,
             initialContext: work.initialContext,
+            mode,
+            userInstruction,
             workspaceSnapshotId: workspaceSnapshot?.id ?? null,
             investigationId: workspaceSnapshot?.investigationId ?? focusedAnalysis?.id ?? null,
         },
@@ -836,6 +897,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             workId: work.id,
             findings: workFindings,
             investigationIds: resetInvestigationIds,
+            resetConclusion: requiresConclusion && mode !== 'update_conclusion',
         });
 
         const tools: Record<string, any> = workRunTools({
@@ -856,6 +918,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                       sourceTabId: workspaceSnapshot.workspaceId,
                       hasSnapshotResult: Boolean(workspaceSnapshot.humanEdits?.resultPreview),
                       existingAuditStatusByInvestigationId: workspaceSnapshot ? { [workspaceSnapshot.investigationId]: 'revised' } : undefined,
+                      requireConclusion: requiresConclusion,
                   }
                 : focusedAnalysis
                   ? {
@@ -864,11 +927,13 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                         sourceTabId: focusedAnalysis.linkedTabId,
                         hasSnapshotResult: false,
                         existingAuditStatusByInvestigationId: { [focusedAnalysis.id]: focusedAnalysis.auditStatus },
+                        requireConclusion: requiresConclusion,
                     }
                   : {
                         existingInvestigationIds: existingRunAnalyses.map(analysis => analysis.id),
                         existingFindingsByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.findingsCount])),
                         existingAuditStatusByInvestigationId: Object.fromEntries(existingRunAnalyses.map(analysis => [analysis.id, analysis.auditStatus])),
+                        requireConclusion: requiresConclusion,
                     },
         );
         const toolCallStarts: Array<{ toolName: string; toolCallId: string | null; startedAt: Date; consumed: boolean }> = [];
@@ -901,7 +966,9 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             copilotEnvelope: null,
             locale,
         });
-        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work, workspaceSnapshot, existingRunAnalyses, focusedAnalysis)].filter(Boolean).join('\n\n');
+        const agentInstructions = [agentContext.instructions, buildWorkRunInstruction(work, workspaceSnapshot, existingRunAnalyses, focusedAnalysis, mode, userInstruction)]
+            .filter(Boolean)
+            .join('\n\n');
         const model = resolveDoryAgentModel({
             execution,
             req: options.req as any,
@@ -921,7 +988,14 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             {
                 id: `work-run-${run.id}`,
                 role: 'user',
-                parts: [{ type: 'text', text: workspaceSnapshotContext ? `${work.goal}\n\n${workspaceSnapshotContext}` : work.goal }],
+                parts: [
+                    {
+                        type: 'text',
+                        text: [workspaceSnapshotContext ? `${work.goal}\n\n${workspaceSnapshotContext}` : work.goal, userInstruction ? `Human instruction: ${userInstruction}` : null]
+                            .filter(Boolean)
+                            .join('\n\n'),
+                    },
+                ],
             } as UIMessage,
         ];
 
@@ -1035,7 +1109,8 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                 });
 
                 const readyForFallbackConclusion =
-                    protocol.mode === 'investigation_continue'
+                    protocol.requireConclusion &&
+                    (protocol.mode === 'investigation_continue'
                         ? !protocol.pendingFinding &&
                           protocol.createdInvestigationIds.some(id => protocol.auditStatusByInvestigationId[id] !== 'rejected') &&
                           protocol.createdInvestigationIds.every(
@@ -1046,7 +1121,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                           protocol.createdInvestigationIds.some(id => protocol.auditStatusByInvestigationId[id] !== 'rejected') &&
                           protocol.createdInvestigationIds.every(
                               id => protocol.auditStatusByInvestigationId[id] === 'rejected' || (protocol.findingsByInvestigationId[id] ?? 0) > 0,
-                          );
+                          ));
                 if (readyForFallbackConclusion && !protocol.conclusionUpdated) {
                     const investigations = await options.db.works.listInvestigations({
                         organizationId: options.organizationId,
@@ -1121,6 +1196,33 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                         error: completionDecision.message,
                     });
                     return;
+                }
+
+                if (!requiresConclusion) {
+                    const revisionInvestigationIds =
+                        workspaceSnapshot || focusedAnalysis
+                            ? [workspaceSnapshot?.investigationId ?? focusedAnalysis?.id].filter((id): id is string => Boolean(id))
+                            : protocol.createdInvestigationIds.filter(id => (protocol.findingsByInvestigationId[id] ?? 0) > (initialFindingCountsByInvestigationId.get(id) ?? 0));
+
+                    await Promise.all(
+                        revisionInvestigationIds.map(async investigationId => {
+                            await options.db.works.updateInvestigation({
+                                organizationId: options.organizationId,
+                                workId: work.id,
+                                id: investigationId,
+                                patch: { auditStatus: 'needs_review' },
+                            });
+                            await options.db.works.createInvestigationRevision({
+                                organizationId: options.organizationId,
+                                workId: work.id,
+                                investigationId,
+                                instruction: userInstruction ?? workspaceSnapshot?.humanEdits.userNote ?? null,
+                                runId: run.id,
+                                createdBy: 'agent',
+                                markConclusionOutdated: true,
+                            });
+                        }),
+                    );
                 }
 
                 await appendEvent({

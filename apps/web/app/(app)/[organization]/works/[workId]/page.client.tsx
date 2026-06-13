@@ -14,9 +14,9 @@ import {
     Loader2,
     MoreVertical,
     Pencil,
-    Play,
     Plus,
     RefreshCw,
+    Send,
     ShieldCheck,
     Trash2,
     User,
@@ -29,7 +29,6 @@ import { executeActionClient } from '@/lib/actions/client';
 import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '@/lib/sql-console/tab-queries';
 import { effectiveInvestigationStatus, investigationActivityDisplay } from '@/lib/work/investigation-card-state';
 import {
-    analysisProvenanceLabel,
     formatWorkEvidenceSummary,
     formatUnconfirmedAnalysisSummary,
     getConclusionSourceBoundary,
@@ -55,7 +54,6 @@ import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { WorkspaceScope } from '@dory/shared/types/tabs';
@@ -71,7 +69,7 @@ type WorkDetailPageClientProps = {
 const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
 
 function analysisInclusionLabel(status: WorkAnalysisAuditStatus) {
-    return status === 'rejected' ? 'Excluded' : 'Included';
+    return status === 'rejected' ? 'Excluded' : 'Used in conclusion';
 }
 
 function analysisInclusionClassName(status: WorkAnalysisAuditStatus) {
@@ -92,6 +90,17 @@ function analysisProvenanceClassName(status: WorkAnalysisAuditStatus) {
         default:
             return 'border-muted bg-muted/50 text-muted-foreground';
     }
+}
+
+function analysisReviewLabel(status: WorkAnalysisAuditStatus) {
+    if (status === 'accepted' || status === 'reviewed') return 'Accepted';
+    return 'Needs review';
+}
+
+function analysisSourceLabel(investigation: WorkInvestigation) {
+    if (investigation.currentRevision?.instruction?.trim()) return 'Mixed';
+    if (investigation.currentRevision?.createdBy === 'user' || investigation.findings.some(finding => finding.createdBy === 'user')) return 'User edited';
+    return 'Agent generated';
 }
 
 function hasSqlBackedFinding(investigation: WorkInvestigation) {
@@ -148,6 +157,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const [openingInvestigationId, setOpeningInvestigationId] = useState<string | null>(null);
     const [deletingInvestigation, setDeletingInvestigation] = useState<WorkInvestigation | null>(null);
     const [runDetailsOpen, setRunDetailsOpen] = useState(false);
+    const [continueOpen, setContinueOpen] = useState(false);
+    const [continueInstruction, setContinueInstruction] = useState('');
 
     const workQuery = useQuery({
         queryKey: ['work', workId],
@@ -269,21 +280,46 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         onError: error => toast.error(error instanceof Error ? error.message : 'Failed to update Analysis review status'),
     });
 
+    const reviseInvestigationMutation = useMutation({
+        mutationFn: async (input: { investigation: WorkInvestigation; instruction: string }) => {
+            await executeActionClient<WorkInvestigation>('work.reviseInvestigation', {
+                workId,
+                investigationId: input.investigation.id,
+                instruction: input.instruction,
+            });
+            await invalidateWork();
+            await runWorkMutation.mutateAsync({
+                mode: 'revise_analysis',
+                focusInvestigationId: input.investigation.id,
+                userInstruction: input.instruction,
+            });
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : 'Failed to revise Analysis'),
+    });
+
     const runWorkMutation = useMutation({
-        mutationFn: async (input?: { focusInvestigationId?: string | null }) => {
+        mutationFn: async (input?: {
+            mode?: 'run' | 'continue_work' | 'revise_analysis' | 'update_conclusion' | 'rerun_from_scratch';
+            focusInvestigationId?: string | null;
+            userInstruction?: string | null;
+        }) => {
             if (work && goal.trim() && goal.trim() !== work.goal) {
                 await executeActionClient<Work>('work.updateGoal', { id: workId, goal: goal.trim() });
                 await invalidateWork();
             }
 
+            const body =
+                input?.mode || input?.focusInvestigationId || input?.userInstruction
+                    ? {
+                          mode: input.mode,
+                          focusInvestigationId: input.focusInvestigationId ?? undefined,
+                          userInstruction: input.userInstruction?.trim() || undefined,
+                      }
+                    : null;
             const response = await fetch(`/api/works/${encodeURIComponent(workId)}/run`, {
                 method: 'POST',
-                headers: input?.focusInvestigationId ? { 'Content-Type': 'application/json' } : undefined,
-                body: input?.focusInvestigationId
-                    ? JSON.stringify({
-                          focusInvestigationId: input.focusInvestigationId,
-                      })
-                    : undefined,
+                headers: body ? { 'Content-Type': 'application/json' } : undefined,
+                body: body ? JSON.stringify(body) : undefined,
             });
 
             if (!response.ok) {
@@ -300,6 +336,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
 
             await invalidateWork();
             setRunDetailsOpen(true);
+            setContinueOpen(false);
+            setContinueInstruction('');
             void response.text().finally(() => {
                 void invalidateWork();
             });
@@ -310,12 +348,17 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         },
     });
 
-    const regenerateConclusionFromIncluded = () => {
-        if (!includedAnalysisConclusion) {
-            toast.error('Include at least one Analysis before regenerating a Conclusion');
+    const startContinueWork = () => {
+        if (!continueOpen) {
+            setContinueOpen(true);
             return;
         }
-        updateConclusionMutation.mutate(includedAnalysisConclusion);
+        const instruction = continueInstruction.trim();
+        if (!instruction) {
+            toast.error('Tell the Agent how to continue this Work');
+            return;
+        }
+        runWorkMutation.mutate({ mode: 'continue_work', userInstruction: instruction });
     };
 
     const startEditingConclusion = () => {
@@ -636,10 +679,29 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         </div>
                     </div>
                     <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-44">
-                        <Button onClick={() => runWorkMutation.mutate({})} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
-                            {isRunRunning || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Play />}
-                            {isRunRunning ? 'Running' : latestRun ? 'Run again' : 'Run'}
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button className="flex-1 sm:flex-none" onClick={startContinueWork} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
+                                {isRunRunning || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+                                {isRunRunning ? 'Running' : 'Continue Work'}
+                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button type="button" variant="secondary" size="icon" aria-label="Run options" title="Run options" disabled={isRunRunning || runWorkMutation.isPending}>
+                                        <MoreVertical />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => setRunDetailsOpen(true)} disabled={!latestRun}>
+                                        <ChevronDown />
+                                        View run details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => runWorkMutation.mutate({ mode: 'rerun_from_scratch' })}>
+                                        <RefreshCw />
+                                        Rerun from scratch
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                         <div className="text-xs text-muted-foreground">
                             <div className="font-medium text-foreground">Evidence</div>
                             <div className="mt-1">{evidenceSummary}</div>
@@ -686,6 +748,40 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         ) : (
                             <p className="whitespace-pre-wrap text-lg font-medium leading-7 text-foreground">{goal || 'Describe what Dory should investigate.'}</p>
                         )}
+                        {continueOpen ? (
+                            <div className="rounded-lg border bg-card p-3">
+                                <Textarea
+                                    value={continueInstruction}
+                                    onChange={event => setContinueInstruction(event.target.value)}
+                                    placeholder="Tell the agent how to continue this work..."
+                                    className="min-h-24 resize-none text-sm"
+                                    autoFocus
+                                />
+                                <div className="mt-3 flex justify-end gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setContinueOpen(false);
+                                            setContinueInstruction('');
+                                        }}
+                                        disabled={runWorkMutation.isPending}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={startContinueWork}
+                                        disabled={!continueInstruction.trim() || runWorkMutation.isPending || isRunRunning}
+                                    >
+                                        {runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Send />}
+                                        Send
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : null}
                     </section>
 
                     <section className="space-y-3">
@@ -767,11 +863,15 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         onPrefetch={prefetchInvestigationWorkspace}
                                         onDelete={setDeletingInvestigation}
                                         onUpdateAuditStatus={(investigation, auditStatus) => updateAnalysisAuditStatusMutation.mutate({ investigation, auditStatus })}
+                                        onRevise={(investigation, instruction) => reviseInvestigationMutation.mutate({ investigation, instruction })}
                                         auditStatusUpdatingId={
                                             updateAnalysisAuditStatusMutation.isPending ? (updateAnalysisAuditStatusMutation.variables?.investigation.id ?? null) : null
                                         }
                                         auditStatusUpdatingTo={
                                             updateAnalysisAuditStatusMutation.isPending ? (updateAnalysisAuditStatusMutation.variables?.auditStatus ?? null) : null
+                                        }
+                                        revisingInvestigationId={
+                                            reviseInvestigationMutation.isPending ? (reviseInvestigationMutation.variables?.investigation.id ?? null) : null
                                         }
                                     />
                                 ))}
@@ -788,7 +888,19 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
 
                     <section className="space-y-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <h2 className="text-base font-semibold">Conclusion</h2>
+                            <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h2 className="text-base font-semibold">Conclusion</h2>
+                                    {work.conclusionStatus === 'outdated' ? (
+                                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                                            Outdated
+                                        </Badge>
+                                    ) : null}
+                                </div>
+                                {work.conclusionStatus === 'outdated' ? (
+                                    <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">Conclusion may be outdated after Analysis changes.</p>
+                                ) : null}
+                            </div>
                             {isEditingConclusion ? (
                                 <div className="flex items-center gap-2">
                                     <Button
@@ -818,12 +930,17 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     <Button
                                         size="sm"
                                         variant="secondary"
-                                        onClick={regenerateConclusionFromIncluded}
-                                        disabled={!hasIncludedAnalysis || updateConclusionMutation.isPending}
-                                        title={!hasIncludedAnalysis ? 'Include at least one Analysis before regenerating a Conclusion' : excludedAnalysisTitle}
+                                        onClick={() =>
+                                            runWorkMutation.mutate({
+                                                mode: 'update_conclusion',
+                                                userInstruction: 'Update the conclusion from the current included analyses.',
+                                            })
+                                        }
+                                        disabled={!hasIncludedAnalysis || runWorkMutation.isPending || isRunRunning}
+                                        title={!hasIncludedAnalysis ? 'Include at least one Analysis before updating a Conclusion' : excludedAnalysisTitle}
                                     >
-                                        {updateConclusionMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                                        Regenerate from Included
+                                        {runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                                        Update Conclusion
                                     </Button>
                                     <Button size="sm" variant="secondary" onClick={startEditingConclusion}>
                                         Edit
@@ -893,6 +1010,8 @@ function AnalysisCard({
     onPrefetch,
     onDelete,
     onUpdateAuditStatus,
+    onRevise,
+    revisingInvestigationId,
 }: {
     investigation: WorkInvestigation;
     latestRun: WorkRun | null;
@@ -904,6 +1023,8 @@ function AnalysisCard({
     onPrefetch: (investigation: WorkInvestigation) => void;
     onDelete: (investigation: WorkInvestigation) => void;
     onUpdateAuditStatus: (investigation: WorkInvestigation, auditStatus: WorkAnalysisAuditStatus) => void;
+    onRevise: (investigation: WorkInvestigation, instruction: string) => void;
+    revisingInvestigationId: string | null;
 }) {
     const effectiveStatus = effectiveInvestigationStatus({
         investigation,
@@ -917,19 +1038,29 @@ function AnalysisCard({
     const isRunning = effectiveStatus === 'running';
     const showReviewControls = !isRunning;
     const isAuditStatusUpdating = auditStatusUpdatingId === investigation.id;
+    const isRevising = revisingInvestigationId === investigation.id;
     const sqlBackedFinding = hasSqlBackedFinding(investigation);
     const isExcluded = investigation.auditStatus === 'rejected';
-    const provenanceLabel = analysisProvenanceLabel(investigation);
+    const sourceLabel = analysisSourceLabel(investigation);
+    const revisionVersion = investigation.currentRevision?.version ?? 1;
+    const revisionInstruction = investigation.currentRevision?.instruction?.trim() || null;
     const includeAuditStatus: WorkAnalysisAuditStatus = investigation.findings.some(finding => finding.createdBy === 'user') ? 'revised' : 'draft';
     const canConfirm = showReviewControls && !isExcluded && investigation.auditStatus !== 'accepted' && investigation.auditStatus !== 'reviewed';
     const canExclude = showReviewControls && !isExcluded;
     const canInclude = showReviewControls && isExcluded;
-    const hasReviewActions = canConfirm || canExclude || canInclude;
-    const [reviewActionsOpen, setReviewActionsOpen] = useState(false);
+    const [reviseOpen, setReviseOpen] = useState(false);
+    const [reviseInstruction, setReviseInstruction] = useState('');
 
     const updateAuditStatus = (auditStatus: WorkAnalysisAuditStatus) => {
         onUpdateAuditStatus(investigation, auditStatus);
-        setReviewActionsOpen(false);
+    };
+
+    const submitRevision = () => {
+        const instruction = reviseInstruction.trim();
+        if (!instruction) return;
+        onRevise(investigation, instruction);
+        setReviseInstruction('');
+        setReviseOpen(false);
     };
 
     return (
@@ -940,63 +1071,9 @@ function AnalysisCard({
                         <h3 className="truncate text-sm font-semibold">{investigation.title}</h3>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
-                        {showReviewControls ? (
-                            <Popover open={reviewActionsOpen} onOpenChange={setReviewActionsOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label={`Review actions for ${investigation.title}`}
-                                        title="Review actions"
-                                        disabled={!hasReviewActions || isAuditStatusUpdating}
-                                    >
-                                        {isAuditStatusUpdating ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent align="end" className="w-56 p-2">
-                                    <div className="grid gap-1">
-                                        {canConfirm ? (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                className="h-9 justify-start gap-2 px-2 text-sm"
-                                                disabled={isAuditStatusUpdating || !sqlBackedFinding}
-                                                title={!sqlBackedFinding ? 'A SQL-backed Finding is required before confirmation' : undefined}
-                                                onClick={() => updateAuditStatus('accepted')}
-                                            >
-                                                {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                                                Confirm
-                                            </Button>
-                                        ) : null}
-                                        {canExclude ? (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                className="h-9 justify-start gap-2 px-2 text-sm text-muted-foreground"
-                                                disabled={isAuditStatusUpdating}
-                                                onClick={() => updateAuditStatus('rejected')}
-                                            >
-                                                {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
-                                                Exclude
-                                            </Button>
-                                        ) : null}
-                                        {canInclude ? (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                className="h-9 justify-start gap-2 px-2 text-sm"
-                                                disabled={isAuditStatusUpdating}
-                                                onClick={() => updateAuditStatus(includeAuditStatus)}
-                                            >
-                                                {isAuditStatusUpdating && auditStatusUpdatingTo === includeAuditStatus ? <Loader2 className="animate-spin" /> : <Check />}
-                                                Include
-                                            </Button>
-                                        ) : null}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        ) : null}
+                        <Badge variant="outline" className="border-muted bg-muted/40 text-muted-foreground">
+                            v{revisionVersion}
+                        </Badge>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                                 <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${investigation.title}`} title="More actions">
@@ -1021,7 +1098,12 @@ function AnalysisCard({
                     ) : null}
                     {showReviewControls ? (
                         <Badge variant="outline" className={analysisProvenanceClassName(investigation.auditStatus)}>
-                            {provenanceLabel}
+                            {analysisReviewLabel(investigation.auditStatus)}
+                        </Badge>
+                    ) : null}
+                    {showReviewControls ? (
+                        <Badge variant="outline" className="border-muted bg-muted/50 text-muted-foreground">
+                            {sourceLabel}
                         </Badge>
                     ) : null}
                     {isRunning ? (
@@ -1038,6 +1120,9 @@ function AnalysisCard({
                         {activity.label} {formatRelativeTime(activity.value)}
                     </span>
                 </div>
+                {revisionInstruction ? (
+                    <p className="mt-2 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">Changed by instruction: "{revisionInstruction}"</p>
+                ) : null}
             </div>
             <div className="mt-5 min-w-0 flex-1">
                 <div className="mb-2 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Findings</div>
@@ -1054,22 +1139,82 @@ function AnalysisCard({
                     <p className="text-sm text-muted-foreground">Waiting for findings.</p>
                 )}
             </div>
+            {reviseOpen ? (
+                <div className="mt-4 rounded-lg border bg-card p-3">
+                    <Textarea
+                        value={reviseInstruction}
+                        onChange={event => setReviseInstruction(event.target.value)}
+                        placeholder="How should the agent revise this analysis?"
+                        className="min-h-20 resize-none text-sm"
+                        autoFocus
+                    />
+                    <div className="mt-3 flex justify-end gap-2">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                                setReviseOpen(false);
+                                setReviseInstruction('');
+                            }}
+                            disabled={isRevising}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="button" size="sm" onClick={submitRevision} disabled={!reviseInstruction.trim() || isRevising}>
+                            {isRevising ? <Loader2 className="animate-spin" /> : <Send />}
+                            Send
+                        </Button>
+                    </div>
+                </div>
+            ) : null}
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
                 <div className="text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">Assets</span>
                     <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
                 </div>
-                <Button
-                    size="sm"
-                    variant="secondary"
-                    onPointerEnter={() => onPrefetch(investigation)}
-                    onFocus={() => onPrefetch(investigation)}
-                    onClick={() => onOpen(investigation)}
-                    disabled={openingInvestigationId === investigation.id}
-                >
-                    {openingInvestigationId === investigation.id ? <Loader2 className="animate-spin" /> : <ArrowUpRight />}
-                    Open Workspace
-                </Button>
+                <div className="flex flex-wrap justify-end gap-2">
+                    {canConfirm ? (
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            disabled={isAuditStatusUpdating || !sqlBackedFinding}
+                            title={!sqlBackedFinding ? 'A SQL-backed Finding is required before accepting' : undefined}
+                            onClick={() => updateAuditStatus('accepted')}
+                        >
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                            Accept
+                        </Button>
+                    ) : null}
+                    <Button type="button" size="sm" variant="secondary" disabled={!showReviewControls || isExcluded || isRevising} onClick={() => setReviseOpen(value => !value)}>
+                        {isRevising ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                        Revise
+                    </Button>
+                    {canExclude ? (
+                        <Button type="button" size="sm" variant="secondary" disabled={isAuditStatusUpdating} onClick={() => updateAuditStatus('rejected')}>
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
+                            Exclude
+                        </Button>
+                    ) : null}
+                    {canInclude ? (
+                        <Button type="button" size="sm" variant="secondary" disabled={isAuditStatusUpdating} onClick={() => updateAuditStatus(includeAuditStatus)}>
+                            {isAuditStatusUpdating && auditStatusUpdatingTo === includeAuditStatus ? <Loader2 className="animate-spin" /> : <Check />}
+                            Include
+                        </Button>
+                    ) : null}
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        onPointerEnter={() => onPrefetch(investigation)}
+                        onFocus={() => onPrefetch(investigation)}
+                        onClick={() => onOpen(investigation)}
+                        disabled={openingInvestigationId === investigation.id}
+                    >
+                        {openingInvestigationId === investigation.id ? <Loader2 className="animate-spin" /> : <ArrowUpRight />}
+                        Open Workspace
+                    </Button>
+                </div>
             </div>
         </div>
     );

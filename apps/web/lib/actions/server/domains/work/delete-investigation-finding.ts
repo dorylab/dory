@@ -42,6 +42,15 @@ export const workDeleteInvestigationFindingAction = defineWebAction({
                 id: finding.investigationId,
                 patch: { auditStatus: 'revised' },
             });
+            if (typeof ctx.services.db.works.createInvestigationRevision === 'function') {
+                await ctx.services.db.works.createInvestigationRevision({
+                    organizationId: ctx.organizationId,
+                    workId: input.workId,
+                    investigationId: finding.investigationId,
+                    createdBy: 'user',
+                    markConclusionOutdated: true,
+                });
+            }
         }
 
         return { ok: true };

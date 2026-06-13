@@ -358,5 +358,20 @@
     "bps": true,
     "folderMillis": 1781246546313,
     "hash": "e4e426209f24fa57543f0bdf136534bbdd0f7b8701533efeb2d400cac057b63c"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"works\" ADD COLUMN \"conclusion_status\" text DEFAULT 'missing' NOT NULL;",
+      "\nALTER TABLE \"works\" ADD COLUMN \"conclusion_updated_at\" timestamp with time zone;",
+      "\nUPDATE \"works\"\nSET\n    \"conclusion_status\" = CASE WHEN \"conclusion\" IS NULL OR btrim(\"conclusion\") = '' THEN 'missing' ELSE 'fresh' END,\n    \"conclusion_updated_at\" = CASE WHEN \"conclusion\" IS NULL OR btrim(\"conclusion\") = '' THEN NULL ELSE \"updated_at\" END;",
+      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"current_revision_id\" text;",
+      "\nCREATE TABLE \"work_investigation_revisions\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"investigation_id\" text NOT NULL,\n    \"version\" integer NOT NULL,\n    \"instruction\" text,\n    \"title\" text NOT NULL,\n    \"findings_snapshot\" jsonb NOT NULL,\n    \"asset_summary\" jsonb NOT NULL,\n    \"run_id\" text,\n    \"created_by\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);",
+      "\nCREATE INDEX \"idx_work_investigation_revisions_work\" ON \"work_investigation_revisions\" USING btree (\"organization_id\",\"work_id\");",
+      "\nCREATE INDEX \"idx_work_investigation_revisions_investigation\" ON \"work_investigation_revisions\" USING btree (\"organization_id\",\"investigation_id\");",
+      "\nCREATE UNIQUE INDEX \"uidx_work_investigation_revisions_version\" ON \"work_investigation_revisions\" USING btree (\"investigation_id\",\"version\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1781300000000,
+    "hash": "0e638fc5cdf2dc06ee3389bc8fb7bf4c5fd9374eead1145b4b5c67bf376a9bee"
   }
 ]

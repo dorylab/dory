@@ -2,6 +2,7 @@ export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
 export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
+export type WorkConclusionStatus = 'fresh' | 'outdated' | 'missing';
 
 export type WorkScope = {
     timeRange?: string | null;
@@ -21,6 +22,8 @@ export type Work = {
     scope: WorkScope | null;
     initialContext: string | null;
     conclusion: string | null;
+    conclusionStatus: WorkConclusionStatus;
+    conclusionUpdatedAt: string | null;
     connectionId: string;
     createdBy: WorkCreator;
     createdByUserId: string;
@@ -36,6 +39,7 @@ export type WorkInvestigation = {
     title: string;
     status: WorkStatus;
     auditStatus: WorkAnalysisAuditStatus;
+    currentRevisionId: string | null;
     linkedTabId: string | null;
     lastQueryAt: string | null;
     reviewedAt: string | null;
@@ -44,8 +48,41 @@ export type WorkInvestigation = {
     auditStatusUpdatedAt: string | null;
     findings: WorkInvestigationFinding[];
     sqlAssetCount: number;
+    currentRevision: WorkInvestigationRevision | null;
     createdAt: string;
     updatedAt: string;
+};
+
+export type WorkInvestigationRevisionFindingSnapshot = {
+    id: string;
+    content: string;
+    sourceTabId: string | null;
+    sourceRunEventId: string | null;
+    createdBy: 'user' | 'agent' | 'automation';
+    orderIndex: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type WorkInvestigationRevisionAssetSummary = {
+    sqlAssetCount: number;
+    linkedTabId: string | null;
+    lastQueryAt: string | null;
+};
+
+export type WorkInvestigationRevision = {
+    id: string;
+    organizationId: string;
+    workId: string;
+    investigationId: string;
+    version: number;
+    instruction: string | null;
+    title: string;
+    findingsSnapshot: WorkInvestigationRevisionFindingSnapshot[];
+    assetSummary: WorkInvestigationRevisionAssetSummary;
+    runId: string | null;
+    createdBy: 'user' | 'agent' | 'automation';
+    createdAt: string;
 };
 
 export type WorkInvestigationFinding = {

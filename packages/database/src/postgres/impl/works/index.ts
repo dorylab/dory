@@ -4,6 +4,7 @@ import { getClient } from '@dory/database/postgres/client';
 import {
     tabs,
     workInvestigationFindings,
+    workInvestigationRevisions,
     workInvestigations,
     workRunEvents,
     workRuns,
@@ -15,6 +16,9 @@ import {
     type WorkFindingCreator,
     type WorkInvestigation,
     type WorkInvestigationFinding,
+    type WorkInvestigationRevision,
+    type WorkInvestigationRevisionAssetSummary,
+    type WorkInvestigationRevisionFindingSnapshot,
     type WorkRun,
     type WorkRunEvent,
     type WorkRunEventRole,
@@ -22,6 +26,7 @@ import {
     type WorkWorkspaceSnapshot,
     type WorkWorkspaceSnapshotHumanEdits,
     type WorkWorkspaceSnapshotIntent,
+    type WorkRevisionCreator,
     type WorkScope,
     type WorkStatus,
     type WorkType,
@@ -64,6 +69,7 @@ export type WorkInvestigationCreateInput = {
     title: string;
     status?: WorkStatus;
     auditStatus?: WorkAnalysisAuditStatus;
+    createdBy?: WorkRevisionCreator;
     linkedTabId?: string | null;
     lastQueryAt?: string | Date | null;
 };
@@ -72,8 +78,22 @@ export type WorkInvestigationUpdateInput = {
     title?: string;
     status?: WorkStatus;
     auditStatus?: WorkAnalysisAuditStatus;
+    currentRevisionId?: string | null;
     linkedTabId?: string | null;
     lastQueryAt?: string | Date | null;
+};
+
+export type WorkInvestigationRevisionCreateInput = {
+    id?: string;
+    organizationId: string;
+    workId: string;
+    investigationId: string;
+    instruction?: string | null;
+    title?: string | null;
+    runId?: string | null;
+    createdBy: WorkRevisionCreator;
+    version?: number | null;
+    markConclusionOutdated?: boolean;
 };
 
 export type WorkInvestigationFindingCreateInput = {
@@ -265,7 +285,43 @@ export class PostgresWorksRepository {
     }
 
     async updateConclusion(params: { organizationId: string; id: string; conclusion: string | null }): Promise<Work> {
-        return this.update({ organizationId: params.organizationId, id: params.id, patch: { conclusion: params.conclusion } });
+        this.assertInited();
+
+        const now = new Date();
+        const [row] = await this.db
+            .update(works)
+            .set({
+                conclusion: params.conclusion,
+                conclusionStatus: params.conclusion?.trim() ? 'fresh' : 'missing',
+                conclusionUpdatedAt: params.conclusion?.trim() ? now : null,
+                updatedAt: now,
+            } as any)
+            .where(and(eq(works.organizationId, params.organizationId), eq(works.id, params.id)))
+            .returning();
+
+        if (!row) throw new DatabaseError('Work not found.', 404);
+        return row as Work;
+    }
+
+    async markConclusionOutdated(params: { organizationId: string; id: string }): Promise<Work> {
+        this.assertInited();
+
+        const work = await this.getById({ organizationId: params.organizationId, id: params.id });
+        if (!work) throw new DatabaseError('Work not found.', 404);
+        const nextStatus = work.conclusion?.trim() ? 'outdated' : 'missing';
+        if (work.conclusionStatus === nextStatus) return work;
+
+        const [row] = await this.db
+            .update(works)
+            .set({
+                conclusionStatus: nextStatus,
+                updatedAt: new Date(),
+            } as any)
+            .where(and(eq(works.organizationId, params.organizationId), eq(works.id, params.id)))
+            .returning();
+
+        if (!row) throw new DatabaseError('Work not found.', 404);
+        return row as Work;
     }
 
     async updateStatus(params: { organizationId: string; id: string; status: WorkStatus }): Promise<Work> {
@@ -285,6 +341,7 @@ export class PostgresWorksRepository {
         await this.db.delete(workRunEvents).where(and(eq(workRunEvents.organizationId, params.organizationId), eq(workRunEvents.workId, params.id)));
         await this.db.delete(workRuns).where(and(eq(workRuns.organizationId, params.organizationId), eq(workRuns.workId, params.id)));
         await this.db.delete(tabs).where(eq(tabs.workspaceScopeWorkId, params.id));
+        await this.db.delete(workInvestigationRevisions).where(and(eq(workInvestigationRevisions.organizationId, params.organizationId), eq(workInvestigationRevisions.workId, params.id)));
         await this.db.delete(workInvestigations).where(and(eq(workInvestigations.organizationId, params.organizationId), eq(workInvestigations.workId, params.id)));
         await this.db.delete(works).where(and(eq(works.organizationId, params.organizationId), eq(works.id, params.id)));
     }
@@ -579,7 +636,20 @@ export class PostgresWorksRepository {
             .returning();
 
         if (!row) throw new DatabaseError('Failed to create work investigation.', 500);
-        return row as WorkInvestigation;
+        const revision = await this.createInvestigationRevision({
+            organizationId: input.organizationId,
+            workId: input.workId,
+            investigationId: row.id,
+            title: row.title,
+            createdBy: input.createdBy ?? (input.auditStatus === 'revised' ? 'user' : 'agent'),
+            version: 1,
+            markConclusionOutdated: false,
+        });
+
+        return {
+            ...row,
+            currentRevisionId: revision.id,
+        } as WorkInvestigation;
     }
 
     async listInvestigations(params: { organizationId: string; workId: string }): Promise<WorkInvestigation[]> {
@@ -635,6 +705,10 @@ export class PostgresWorksRepository {
             }
             hasChanges = true;
         }
+        if (params.patch.currentRevisionId !== undefined) {
+            updatePayload.currentRevisionId = params.patch.currentRevisionId;
+            hasChanges = true;
+        }
         if (params.patch.linkedTabId !== undefined) {
             updatePayload.linkedTabId = params.patch.linkedTabId;
             hasChanges = true;
@@ -658,6 +732,173 @@ export class PostgresWorksRepository {
         });
         if (!row) throw new DatabaseError('Work investigation not found.', 404);
         return row;
+    }
+
+    private toRevisionFindingSnapshot(findings: WorkInvestigationFinding[]): WorkInvestigationRevisionFindingSnapshot[] {
+        return findings.map(finding => ({
+            id: finding.id,
+            content: finding.content,
+            sourceTabId: finding.sourceTabId,
+            sourceRunEventId: finding.sourceRunEventId,
+            createdBy: finding.createdBy,
+            orderIndex: finding.orderIndex,
+            createdAt: finding.createdAt.toISOString(),
+            updatedAt: finding.updatedAt.toISOString(),
+        }));
+    }
+
+    private async buildRevisionAssetSummary(params: {
+        organizationId: string;
+        workId: string;
+        investigation: WorkInvestigation;
+    }): Promise<WorkInvestigationRevisionAssetSummary> {
+        const runEvents = await this.listRunEvents({
+            organizationId: params.organizationId,
+            workId: params.workId,
+        });
+        const sqlAssetCount = runEvents.reduce((count, event) => {
+            if (event.type !== 'sql_executed') return count;
+            const investigationId = event.payload?.investigationId;
+            return investigationId === params.investigation.id ? count + 1 : count;
+        }, 0);
+
+        return {
+            sqlAssetCount: Math.max(sqlAssetCount, params.investigation.linkedTabId ? 1 : 0),
+            linkedTabId: params.investigation.linkedTabId,
+            lastQueryAt: params.investigation.lastQueryAt?.toISOString() ?? null,
+        };
+    }
+
+    async createInvestigationRevision(input: WorkInvestigationRevisionCreateInput): Promise<WorkInvestigationRevision> {
+        this.assertInited();
+
+        const investigation = await this.getInvestigationById({
+            organizationId: input.organizationId,
+            workId: input.workId,
+            id: input.investigationId,
+        });
+        if (!investigation) throw new DatabaseError('Work investigation not found.', 404);
+
+        const latestRevision = await this.getLatestInvestigationRevision({
+            organizationId: input.organizationId,
+            workId: input.workId,
+            investigationId: input.investigationId,
+        });
+        const version =
+            typeof input.version === 'number' && Number.isFinite(input.version)
+                ? input.version
+                : latestRevision
+                  ? latestRevision.version + 1
+                  : input.instruction?.trim()
+                    ? 2
+                    : 1;
+        const findings = await this.listInvestigationFindings({
+            organizationId: input.organizationId,
+            workId: input.workId,
+            investigationId: input.investigationId,
+        });
+        const assetSummary = await this.buildRevisionAssetSummary({
+            organizationId: input.organizationId,
+            workId: input.workId,
+            investigation,
+        });
+        const now = new Date();
+        const [row] = await this.db
+            .insert(workInvestigationRevisions)
+            .values({
+                id: input.id ?? newEntityId(),
+                organizationId: input.organizationId,
+                workId: input.workId,
+                investigationId: input.investigationId,
+                version,
+                instruction: input.instruction?.trim() || null,
+                title: input.title?.trim() || investigation.title,
+                findingsSnapshot: this.toRevisionFindingSnapshot(findings),
+                assetSummary,
+                runId: input.runId ?? null,
+                createdBy: input.createdBy,
+                createdAt: now,
+            })
+            .returning();
+
+        if (!row) throw new DatabaseError('Failed to create work investigation revision.', 500);
+
+        await this.db
+            .update(workInvestigations)
+            .set({
+                currentRevisionId: row.id,
+                updatedAt: now,
+            } as any)
+            .where(and(eq(workInvestigations.organizationId, input.organizationId), eq(workInvestigations.workId, input.workId), eq(workInvestigations.id, input.investigationId)));
+
+        if (input.markConclusionOutdated && investigation.auditStatus !== 'rejected') {
+            await this.markConclusionOutdated({ organizationId: input.organizationId, id: input.workId });
+        }
+
+        return row as WorkInvestigationRevision;
+    }
+
+    async getInvestigationRevisionById(params: {
+        organizationId: string;
+        workId: string;
+        id: string;
+    }): Promise<WorkInvestigationRevision | null> {
+        this.assertInited();
+
+        const [row] = await this.db
+            .select()
+            .from(workInvestigationRevisions)
+            .where(and(eq(workInvestigationRevisions.organizationId, params.organizationId), eq(workInvestigationRevisions.workId, params.workId), eq(workInvestigationRevisions.id, params.id)))
+            .limit(1);
+
+        return (row as WorkInvestigationRevision | undefined) ?? null;
+    }
+
+    async getLatestInvestigationRevision(params: {
+        organizationId: string;
+        workId: string;
+        investigationId: string;
+    }): Promise<WorkInvestigationRevision | null> {
+        this.assertInited();
+
+        const [row] = await this.db
+            .select()
+            .from(workInvestigationRevisions)
+            .where(
+                and(
+                    eq(workInvestigationRevisions.organizationId, params.organizationId),
+                    eq(workInvestigationRevisions.workId, params.workId),
+                    eq(workInvestigationRevisions.investigationId, params.investigationId),
+                ),
+            )
+            .orderBy(desc(workInvestigationRevisions.version), desc(workInvestigationRevisions.createdAt))
+            .limit(1);
+
+        return (row as WorkInvestigationRevision | undefined) ?? null;
+    }
+
+    async listInvestigationRevisions(params: {
+        organizationId: string;
+        workId: string;
+        investigationId?: string | null;
+        limit?: number;
+    }): Promise<WorkInvestigationRevision[]> {
+        this.assertInited();
+
+        const conds = [eq(workInvestigationRevisions.organizationId, params.organizationId), eq(workInvestigationRevisions.workId, params.workId)];
+        if (params.investigationId) conds.push(eq(workInvestigationRevisions.investigationId, params.investigationId));
+
+        let query = this.db
+            .select()
+            .from(workInvestigationRevisions)
+            .where(and(...conds))
+            .orderBy(desc(workInvestigationRevisions.createdAt), desc(workInvestigationRevisions.version));
+
+        if (params.limit && params.limit > 0) {
+            query = (query as any).limit(params.limit);
+        }
+
+        return (await query) as WorkInvestigationRevision[];
     }
 
     async createInvestigationFinding(input: WorkInvestigationFindingCreateInput): Promise<WorkInvestigationFinding> {
@@ -840,9 +1081,19 @@ export class PostgresWorksRepository {
                     eq(workWorkspaceSnapshots.investigationId, params.id),
                 ),
             );
+        await this.db
+            .delete(workInvestigationRevisions)
+            .where(
+                and(
+                    eq(workInvestigationRevisions.organizationId, params.organizationId),
+                    eq(workInvestigationRevisions.workId, params.workId),
+                    eq(workInvestigationRevisions.investigationId, params.id),
+                ),
+            );
         await this.db.delete(tabs).where(and(eq(tabs.workspaceScopeWorkId, params.workId), eq(tabs.workspaceScopeInvestigationId, params.id)));
         await this.db
             .delete(workInvestigations)
             .where(and(eq(workInvestigations.organizationId, params.organizationId), eq(workInvestigations.workId, params.workId), eq(workInvestigations.id, params.id)));
+        await this.markConclusionOutdated({ organizationId: params.organizationId, id: params.workId });
     }
 }

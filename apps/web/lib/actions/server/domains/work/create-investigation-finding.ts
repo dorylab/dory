@@ -59,6 +59,15 @@ export const workCreateInvestigationFindingAction = defineWebAction({
                 id: input.investigationId,
                 patch: { auditStatus: 'revised' },
             });
+            if (typeof ctx.services.db.works.createInvestigationRevision === 'function') {
+                await ctx.services.db.works.createInvestigationRevision({
+                    organizationId: ctx.organizationId,
+                    workId: input.workId,
+                    investigationId: input.investigationId,
+                    createdBy: 'user',
+                    markConclusionOutdated: true,
+                });
+            }
         }
 
         return finding;

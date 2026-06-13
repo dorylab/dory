@@ -20,6 +20,8 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
 
     let workspaceSnapshotId: string | null = null;
     let focusInvestigationId: string | null = null;
+    let mode: 'run' | 'continue_work' | 'revise_analysis' | 'update_conclusion' | 'rerun_from_scratch' = 'run';
+    let userInstruction: string | null = null;
     const text = await req.text();
     if (text.trim()) {
         let body: unknown;
@@ -35,6 +37,8 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         }
 
         const workspaceSnapshot = parsed.data?.workspaceSnapshot;
+        mode = parsed.data?.mode ?? 'run';
+        userInstruction = parsed.data?.userInstruction ?? null;
         focusInvestigationId = parsed.data?.focusInvestigationId ?? null;
         if (workspaceSnapshot) {
             const existingRunningRun = await db.works.getRunningRun({ organizationId, workId });
@@ -79,5 +83,7 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         workId,
         workspaceSnapshotId,
         focusInvestigationId,
+        mode,
+        userInstruction,
     });
 });

@@ -44,6 +44,7 @@ export const workGetAction = defineWebAction({
         if (!work) throw new Error('Work not found.');
         const investigations = await ctx.services.db.works.listInvestigations({ organizationId: ctx.organizationId, workId: input.id });
         const findings = await ctx.services.db.works.listFindingsForWork({ organizationId: ctx.organizationId, workId: input.id });
+        const revisions = await ctx.services.db.works.listInvestigationRevisions({ organizationId: ctx.organizationId, workId: input.id });
         const allRunEvents = await ctx.services.db.works.listRunEvents({ organizationId: ctx.organizationId, workId: input.id });
         const workspaceSnapshots = await ctx.services.db.works.listWorkspaceSnapshots({ organizationId: ctx.organizationId, workId: input.id });
         const findingsByInvestigationId = new Map<string, typeof findings>();
@@ -52,6 +53,7 @@ export const workGetAction = defineWebAction({
             existing.push(finding);
             findingsByInvestigationId.set(finding.investigationId, existing);
         }
+        const currentRevisionById = new Map(revisions.map(revision => [revision.id, revision]));
         const sqlAssetCountByInvestigationId = new Map<string, number>();
         for (const event of allRunEvents) {
             if (event.type !== 'sql_executed') continue;
@@ -63,6 +65,7 @@ export const workGetAction = defineWebAction({
             ...investigation,
             findings: findingsByInvestigationId.get(investigation.id) ?? [],
             sqlAssetCount: Math.max(sqlAssetCountByInvestigationId.get(investigation.id) ?? 0, investigation.linkedTabId ? 1 : 0),
+            currentRevision: investigation.currentRevisionId ? (currentRevisionById.get(investigation.currentRevisionId) ?? null) : null,
         }));
         const runs = await ctx.services.db.works.listRuns({ organizationId: ctx.organizationId, workId: input.id, limit: 1 });
         const latestRun = runs[0] ?? null;

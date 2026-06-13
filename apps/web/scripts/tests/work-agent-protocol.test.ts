@@ -192,6 +192,40 @@ test('Work Agent protocol rejects completion before conclusion update', () => {
     assert.match(decision.allowed ? '' : decision.message, /conclusion/);
 });
 
+test('Work Agent protocol allows continuation completion without conclusion update when configured', () => {
+    const state = createWorkAgentProtocolState({
+        mode: 'investigation_continue',
+        investigationId: 'analysis-1',
+        sourceTabId: 'tab-analysis-1',
+        hasSnapshotResult: false,
+        requireConclusion: false,
+    });
+
+    runSql(state, 'analysis-1');
+    createFinding(state, 'analysis-1');
+
+    const conclusionDecision = checkWorkAgentProtocol(state, 'work_updateConclusion');
+    assert.equal(conclusionDecision.allowed, false);
+    assert.match(conclusionDecision.allowed ? '' : conclusionDecision.message, /human can update/i);
+    assert.equal(checkWorkAgentProtocolComplete(state).allowed, true);
+});
+
+test('Work Agent protocol allows existing-analysis Work continue without conclusion update when configured', () => {
+    const state = createWorkAgentProtocolState({
+        existingInvestigationIds: ['analysis-1', 'analysis-2'],
+        existingFindingsByInvestigationId: {
+            'analysis-1': 1,
+            'analysis-2': 1,
+        },
+        requireConclusion: false,
+    });
+
+    const conclusionDecision = checkWorkAgentProtocol(state, 'work_updateConclusion');
+    assert.equal(conclusionDecision.allowed, false);
+    assert.match(conclusionDecision.allowed ? '' : conclusionDecision.message, /human can update/i);
+    assert.equal(checkWorkAgentProtocolComplete(state).allowed, true);
+});
+
 test('Work Agent protocol allows snapshot continuation without three new analyses', () => {
     const state = createWorkAgentProtocolState({
         mode: 'investigation_continue',

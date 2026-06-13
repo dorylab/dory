@@ -64,6 +64,7 @@ export const workCreateInvestigationAction = defineWebAction({
             connectionId: work.connectionId,
             title: input.title,
             linkedTabId,
+            createdBy: ctx.actor.type === 'automation' ? 'automation' : ctx.actor.type === 'agent' ? 'agent' : 'user',
         });
     },
 });

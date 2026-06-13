@@ -30,6 +30,8 @@ export const workspaceSnapshotInputSchema = z.object({
 
 export const workRunRequestBodySchema = z
     .object({
+        mode: z.enum(['run', 'continue_work', 'revise_analysis', 'update_conclusion', 'rerun_from_scratch']).optional(),
+        userInstruction: z.string().trim().min(1).max(5000).optional(),
         workspaceSnapshot: workspaceSnapshotInputSchema.optional(),
         focusInvestigationId: z.string().min(1).optional(),
     })
@@ -131,6 +133,14 @@ export async function createValidatedWorkspaceSnapshot(input: {
                 auditStatus: hasHumanChanges ? 'revised' : undefined,
                 lastQueryAt: snapshot.createdAt,
             },
+        });
+        await input.db.works.createInvestigationRevision({
+            organizationId: input.organizationId,
+            workId: work.id,
+            investigationId: investigation.id,
+            instruction: input.snapshot.humanEdits.userNote ?? null,
+            createdBy: 'user',
+            markConclusionOutdated: true,
         });
     }
 

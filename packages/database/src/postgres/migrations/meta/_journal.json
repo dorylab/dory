@@ -169,6 +169,13 @@
       "when": 1781246541135,
       "tag": "0023_dashing_vapor",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1781300000000,
+      "tag": "0024_work_investigation_revisions",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
 export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
+export type WorkConclusionStatus = 'fresh' | 'outdated' | 'missing';
 export type WorkScope = {
     timeRange?: string | null;
     tablesMode?: 'auto' | 'selected' | null;
@@ -14,6 +15,22 @@ export type WorkScope = {
     constraints?: string[];
 };
 export type WorkFindingCreator = 'user' | 'agent' | 'automation';
+export type WorkRevisionCreator = 'user' | 'agent' | 'automation';
+export type WorkInvestigationRevisionFindingSnapshot = {
+    id: string;
+    content: string;
+    sourceTabId: string | null;
+    sourceRunEventId: string | null;
+    createdBy: WorkFindingCreator;
+    orderIndex: number;
+    createdAt: string;
+    updatedAt: string;
+};
+export type WorkInvestigationRevisionAssetSummary = {
+    sqlAssetCount: number;
+    linkedTabId: string | null;
+    lastQueryAt: string | null;
+};
 export type WorkRunStatus = 'running' | 'completed' | 'failed';
 export type WorkWorkspaceSnapshotIntent = 'continue_analysis';
 export type WorkWorkspaceSnapshotChangeSummary = {
@@ -56,6 +73,8 @@ export const works = pgTable(
         scope: jsonb('scope').$type<WorkScope | null>(),
         initialContext: text('initial_context'),
         conclusion: text('conclusion'),
+        conclusionStatus: text('conclusion_status').$type<WorkConclusionStatus>().notNull().default('missing'),
+        conclusionUpdatedAt: timestamp('conclusion_updated_at', { withTimezone: true }),
         connectionId: text('connection_id').notNull(),
         createdBy: text('created_by').$type<WorkCreator>().notNull(),
         createdByUserId: text('created_by_user_id').notNull(),
@@ -81,6 +100,7 @@ export const workInvestigations = pgTable(
         title: text('title').notNull(),
         status: text('status').$type<WorkStatus>().notNull().default('draft'),
         auditStatus: text('audit_status').$type<WorkAnalysisAuditStatus>().notNull().default('draft'),
+        currentRevisionId: text('current_revision_id'),
         linkedTabId: text('linked_tab_id'),
         lastQueryAt: timestamp('last_query_at', { withTimezone: true }),
         reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
@@ -94,6 +114,31 @@ export const workInvestigations = pgTable(
         index('idx_work_investigations_work_id').on(t.workId),
         index('idx_work_investigations_organization_work').on(t.organizationId, t.workId),
         index('idx_work_investigations_connection_id').on(t.connectionId),
+    ],
+);
+
+export const workInvestigationRevisions = pgTable(
+    'work_investigation_revisions',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => newEntityId()),
+        organizationId: text('organization_id').notNull(),
+        workId: text('work_id').notNull(),
+        investigationId: text('investigation_id').notNull(),
+        version: integer('version').notNull(),
+        instruction: text('instruction'),
+        title: text('title').notNull(),
+        findingsSnapshot: jsonb('findings_snapshot').$type<WorkInvestigationRevisionFindingSnapshot[]>().notNull(),
+        assetSummary: jsonb('asset_summary').$type<WorkInvestigationRevisionAssetSummary>().notNull(),
+        runId: text('run_id'),
+        createdBy: text('created_by').$type<WorkRevisionCreator>().notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    t => [
+        index('idx_work_investigation_revisions_work').on(t.organizationId, t.workId),
+        index('idx_work_investigation_revisions_investigation').on(t.organizationId, t.investigationId),
+        uniqueIndex('uidx_work_investigation_revisions_version').on(t.investigationId, t.version),
     ],
 );
 
@@ -198,6 +243,8 @@ export type Work = typeof works.$inferSelect;
 export type NewWork = typeof works.$inferInsert;
 export type WorkInvestigation = typeof workInvestigations.$inferSelect;
 export type NewWorkInvestigation = typeof workInvestigations.$inferInsert;
+export type WorkInvestigationRevision = typeof workInvestigationRevisions.$inferSelect;
+export type NewWorkInvestigationRevision = typeof workInvestigationRevisions.$inferInsert;
 export type WorkInvestigationFinding = typeof workInvestigationFindings.$inferSelect;
 export type NewWorkInvestigationFinding = typeof workInvestigationFindings.$inferInsert;
 export type WorkRun = typeof workRuns.$inferSelect;

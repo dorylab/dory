@@ -45,7 +45,15 @@ export const workUpdateInvestigationAction = defineWebAction({
             }
         }
 
-        return ctx.services.db.works.updateInvestigation({
+        const current = input.auditStatus
+            ? await ctx.services.db.works.getInvestigationById({
+                  organizationId: ctx.organizationId,
+                  workId: input.workId,
+                  id: input.id,
+              })
+            : null;
+
+        const investigation = await ctx.services.db.works.updateInvestigation({
             organizationId: ctx.organizationId,
             workId: input.workId,
             id: input.id,
@@ -57,5 +65,15 @@ export const workUpdateInvestigationAction = defineWebAction({
                 lastQueryAt: input.lastQueryAt,
             },
         });
+
+        const inclusionChanged = Boolean(input.auditStatus && current && (current.auditStatus === 'rejected') !== (input.auditStatus === 'rejected'));
+        if (ctx.actor.type === 'user' && inclusionChanged && typeof ctx.services.db.works.markConclusionOutdated === 'function') {
+            await ctx.services.db.works.markConclusionOutdated({
+                organizationId: ctx.organizationId,
+                id: input.workId,
+            });
+        }
+
+        return investigation;
     },
 });

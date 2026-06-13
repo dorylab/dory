@@ -26,6 +26,7 @@ export const datasetRelationColumns = activeSchemas?.datasetRelationColumns;
 export const organizationAiProviders = activeSchemas?.organizationAiProviders;
 export const works = activeSchemas?.works;
 export const workInvestigations = activeSchemas?.workInvestigations;
+export const workInvestigationRevisions = activeSchemas?.workInvestigationRevisions;
 export const workInvestigationFindings = activeSchemas?.workInvestigationFindings;
 export const workRuns = activeSchemas?.workRuns;
 export const workRunEvents = activeSchemas?.workRunEvents;

@@ -23,6 +23,7 @@ export type WorkAgentProtocolState = {
     findingsByInvestigationId: Record<string, number>;
     auditStatusByInvestigationId: Record<string, WorkAnalysisAuditStatus>;
     conclusionUpdated: boolean;
+    requireConclusion: boolean;
 };
 
 export type WorkAgentProtocolDecision =
@@ -42,6 +43,7 @@ export function createWorkAgentProtocolState(options?: {
     existingInvestigationIds?: string[];
     existingFindingsByInvestigationId?: Record<string, number>;
     existingAuditStatusByInvestigationId?: Record<string, WorkAnalysisAuditStatus>;
+    requireConclusion?: boolean;
 }): WorkAgentProtocolState {
     const mode = options?.mode ?? 'full_work';
     const continuationInvestigationId = mode === 'investigation_continue' ? (options?.investigationId ?? null) : null;
@@ -69,6 +71,7 @@ export function createWorkAgentProtocolState(options?: {
             ? { [continuationInvestigationId]: options?.existingAuditStatusByInvestigationId?.[continuationInvestigationId] ?? 'draft' }
             : Object.fromEntries(existingInvestigationIds.map(id => [id, options?.existingAuditStatusByInvestigationId?.[id] ?? 'draft'])),
         conclusionUpdated: false,
+        requireConclusion: options?.requireConclusion ?? true,
     };
 }
 
@@ -159,6 +162,12 @@ export function checkWorkAgentProtocol(state: WorkAgentProtocolState, toolName: 
     }
 
     if (toolName === 'work_updateConclusion') {
+        if (!state.requireConclusion) {
+            return {
+                allowed: false,
+                message: 'Do not update the Work conclusion for this continuation. The human can update it explicitly.',
+            };
+        }
         const readiness = checkAnalysesReadyForConclusion(state);
         if (!readiness.allowed) return readiness;
     }
@@ -221,7 +230,7 @@ export function applyWorkAgentProtocolResult(state: WorkAgentProtocolState, tool
 export function checkWorkAgentProtocolComplete(state: WorkAgentProtocolState): WorkAgentProtocolDecision {
     const readiness = checkAnalysesReadyToStop(state);
     if (!readiness.allowed) return readiness;
-    if (hasIncludedAnalysis(state) && !state.conclusionUpdated) {
+    if (state.requireConclusion && hasIncludedAnalysis(state) && !state.conclusionUpdated) {
         return {
             allowed: false,
             message: 'Update the Work conclusion before completing the Work run.',
