@@ -14,6 +14,7 @@ import { workUpdateAction } from './update';
 import { workCreateInvestigationAction } from './create-investigation';
 import { workGetRunEventResultAction } from './get-run-event-result';
 import { workRunInvestigationSqlAction } from './run-investigation-sql';
+import { workSuggestGoalsAction } from './suggest-goals';
 import { workUpdateInvestigationFindingAction } from './update-investigation-finding';
 import { workUpdateInvestigationAction } from './update-investigation';
 
@@ -29,6 +30,7 @@ export const workActions = [
     workDeleteAction,
     workCreateInvestigationAction,
     workEnsureInvestigationWorkspaceAction,
+    workSuggestGoalsAction,
     workDeleteInvestigationAction,
     workCreateInvestigationFindingAction,
     workUpdateInvestigationFindingAction,

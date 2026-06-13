@@ -17,10 +17,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { useConnections } from '../../connections/hooks/use-connections';
 import type { Work, WorkType } from '../types';
+import { WorkSchemaSelector } from '../work-schema-selector';
 import {
     buildScope as buildWorkScope,
-    buildSuggestedGoals,
     fetchSchemaPreview,
+    fetchWorkGoalSuggestions,
     safetyConstraintOptions,
     timeRangeOptions,
     workTypeOptions,
@@ -42,7 +43,7 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
     const [advancedOpen, setAdvancedOpen] = useState(false);
     const [timeRange, setTimeRange] = useState('Last 7 days');
     const [tablesMode, setTablesMode] = useState<'auto' | 'selected'>('auto');
-    const [selectedTablesText, setSelectedTablesText] = useState('');
+    const [selectedTables, setSelectedTables] = useState<string[]>([]);
     const [metricsText, setMetricsText] = useState('');
     const [constraints, setConstraints] = useState<string[]>(safetyConstraintOptions);
     const [initialContext, setInitialContext] = useState('');
@@ -56,7 +57,13 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
         staleTime: 60_000,
     });
 
-    const suggestedGoals = useMemo(() => buildSuggestedGoals(schemaPreviewQuery.data?.tableNames ?? []), [schemaPreviewQuery.data?.tableNames]);
+    const goalSuggestionsQuery = useQuery({
+        queryKey: ['work-goal-suggestions', connectionId, workType],
+        queryFn: () => fetchWorkGoalSuggestions({ connectionId, workType }),
+        enabled: Boolean(connectionId),
+        staleTime: 60_000,
+    });
+
     const selectedWorkType = workTypeOptions.find(item => item.value === workType) ?? workTypeOptions[0];
     const isCreating = createMode !== null;
     const canCreate = Boolean(connectionId && goal.trim() && !isCreating);
@@ -76,7 +83,7 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
                 scope: buildWorkScope({
                     timeRange,
                     tablesMode,
-                    selectedTablesText,
+                    selectedTables,
                     metricsText,
                     constraints,
                 }),
@@ -130,7 +137,14 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
                         <div className="space-y-6">
                             <div className="space-y-2">
                                 <Label>Data Source</Label>
-                                <Select value={connectionId} onValueChange={setConnectionId} disabled={connectionsQuery.isLoading || isCreating}>
+                                <Select
+                                    value={connectionId}
+                                    onValueChange={value => {
+                                        setConnectionId(value);
+                                        setSelectedTables([]);
+                                    }}
+                                    disabled={connectionsQuery.isLoading || isCreating}
+                                >
                                     <SelectTrigger className="w-full">
                                         <SelectValue placeholder={connectionsQuery.isLoading ? 'Loading data sources...' : 'Select a data source'} />
                                     </SelectTrigger>
@@ -177,22 +191,33 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
                             </div>
 
                             <div className="space-y-2">
-                                <div className="text-xs font-medium uppercase text-muted-foreground">Suggested goals based on this data source</div>
-                                <div className="flex flex-wrap gap-2">
-                                    {suggestedGoals.map(item => (
-                                        <Button
-                                            key={item}
-                                            type="button"
-                                            variant="secondary"
-                                            size="sm"
-                                            className="h-auto max-w-full justify-start whitespace-normal text-left"
-                                            onClick={() => setGoal(item)}
-                                            disabled={isCreating}
-                                        >
-                                            {item}
-                                        </Button>
-                                    ))}
-                                </div>
+                                <div className="text-xs font-medium uppercase text-muted-foreground">AI suggested goals from this schema</div>
+                                {goalSuggestionsQuery.isLoading ? (
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <Loader2 className="size-4 animate-spin" />
+                                        Generating suggestions...
+                                    </div>
+                                ) : goalSuggestionsQuery.data?.suggestions.length ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {goalSuggestionsQuery.data.suggestions.map(item => (
+                                            <Button
+                                                key={item}
+                                                type="button"
+                                                variant="secondary"
+                                                size="sm"
+                                                className="h-auto max-w-full justify-start whitespace-normal text-left"
+                                                onClick={() => setGoal(item)}
+                                                disabled={isCreating}
+                                            >
+                                                {item}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-sm text-muted-foreground">
+                                        {connectionId ? 'AI suggestions are unavailable for this data source.' : 'Select a data source to generate suggestions.'}
+                                    </div>
+                                )}
                             </div>
 
                             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen} className="rounded-lg border bg-background">
@@ -235,16 +260,13 @@ export function NewWorkPageClient({ organization }: NewWorkPageClientProps) {
                                         </div>
 
                                         {tablesMode === 'selected' ? (
-                                            <div className="space-y-2">
-                                                <Label htmlFor="selected-tables">Selected tables</Label>
-                                                <Input
-                                                    id="selected-tables"
-                                                    value={selectedTablesText}
-                                                    onChange={event => setSelectedTablesText(event.target.value)}
-                                                    placeholder="orders, users, payments"
-                                                    disabled={isCreating}
-                                                />
-                                            </div>
+                                            <WorkSchemaSelector
+                                                connectionId={connectionId}
+                                                connectionType={selectedConnection?.connection.type}
+                                                selectedTables={selectedTables}
+                                                onSelectedTablesChange={setSelectedTables}
+                                                disabled={isCreating}
+                                            />
                                         ) : null}
 
                                         <div className="space-y-2">

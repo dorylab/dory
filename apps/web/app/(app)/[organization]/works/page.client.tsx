@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, BriefcaseBusiness, ChevronDown, Loader2, Pencil, Search, Trash2 } from 'lucide-react';
+import { BriefcaseBusiness, ChevronDown, Loader2, Pencil, Search, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
@@ -30,7 +30,8 @@ import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { useConnections } from '../connections/hooks/use-connections';
 import type { Work, WorkType } from './types';
 import { formatRelativeTime, statusClassName, statusLabel } from './utils';
-import { buildScope as buildWorkScope, buildSuggestedGoals, fetchSchemaPreview, safetyConstraintOptions, serializeList, timeRangeOptions, workTypeOptions } from './work-form';
+import { WorkSchemaSelector } from './work-schema-selector';
+import { buildScope as buildWorkScope, fetchWorkGoalSuggestions, safetyConstraintOptions, serializeList, timeRangeOptions, workTypeOptions } from './work-form';
 
 type WorkPageClientProps = {
     organization: string;
@@ -47,7 +48,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
     const [editAdvancedOpen, setEditAdvancedOpen] = useState(false);
     const [editTimeRange, setEditTimeRange] = useState('Last 7 days');
     const [editTablesMode, setEditTablesMode] = useState<'auto' | 'selected'>('auto');
-    const [editSelectedTablesText, setEditSelectedTablesText] = useState('');
+    const [editSelectedTables, setEditSelectedTables] = useState<string[]>([]);
     const [editMetricsText, setEditMetricsText] = useState('');
     const [editConstraints, setEditConstraints] = useState<string[]>(safetyConstraintOptions);
     const [editInitialContext, setEditInitialContext] = useState('');
@@ -62,9 +63,9 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
     });
     const invalidateWorks = () => queryClient.invalidateQueries({ queryKey: ['works'] });
 
-    const editSchemaPreviewQuery = useQuery({
-        queryKey: ['work-edit-schema-preview', editConnectionId],
-        queryFn: () => fetchSchemaPreview(editConnectionId),
+    const editGoalSuggestionsQuery = useQuery({
+        queryKey: ['work-goal-suggestions', editConnectionId, editWorkType],
+        queryFn: () => fetchWorkGoalSuggestions({ connectionId: editConnectionId, workType: editWorkType }),
         enabled: Boolean(editingWork && editConnectionId),
         staleTime: 60_000,
     });
@@ -101,6 +102,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
     });
 
     const connectionById = useMemo(() => new Map((connectionsQuery.data ?? []).map(item => [item.connection.id, item.connection])), [connectionsQuery.data]);
+    const editConnection = editConnectionId ? connectionById.get(editConnectionId) : null;
     const filteredWorks = useMemo(() => {
         const query = search.trim().toLowerCase();
         const works = worksQuery.data ?? [];
@@ -119,7 +121,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
         setEditGoal(work.goal);
         setEditTimeRange(work.scope?.timeRange || 'Last 7 days');
         setEditTablesMode(work.scope?.tablesMode === 'selected' ? 'selected' : 'auto');
-        setEditSelectedTablesText(serializeList(work.scope?.selectedTables));
+        setEditSelectedTables(work.scope?.selectedTables ?? []);
         setEditMetricsText(serializeList(work.scope?.metrics));
         setEditConstraints(work.scope?.constraints ?? safetyConstraintOptions);
         setEditInitialContext(work.initialContext ?? '');
@@ -135,7 +137,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
         setEditAdvancedOpen(false);
         setEditTimeRange('Last 7 days');
         setEditTablesMode('auto');
-        setEditSelectedTablesText('');
+        setEditSelectedTables([]);
         setEditMetricsText('');
         setEditConstraints(safetyConstraintOptions);
         setEditInitialContext('');
@@ -145,7 +147,6 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
         setEditConstraints(current => (checked ? Array.from(new Set([...current, constraint])) : current.filter(item => item !== constraint)));
     };
 
-    const editSuggestedGoals = useMemo(() => buildSuggestedGoals(editSchemaPreviewQuery.data?.tableNames ?? []), [editSchemaPreviewQuery.data?.tableNames]);
     const selectedEditWorkType = workTypeOptions.find(item => item.value === editWorkType) ?? workTypeOptions[0];
     const canSaveEdit = Boolean(editingWork && editTitle.trim() && editConnectionId && editGoal.trim() && !updateWorkMutation.isPending);
 
@@ -160,7 +161,7 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
             scope: buildWorkScope({
                 timeRange: editTimeRange,
                 tablesMode: editTablesMode,
-                selectedTablesText: editSelectedTablesText,
+                selectedTables: editSelectedTables,
                 metricsText: editMetricsText,
                 constraints: editConstraints,
             }),
@@ -236,13 +237,6 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
                                             >
                                                 <Trash2 className="size-4" />
                                             </Button>
-                                            <Link
-                                                href={`/${organization}/works/${work.id}`}
-                                                className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                                            >
-                                                <ArrowRight className="size-4" />
-                                                <span className="sr-only">Open {work.title}</span>
-                                            </Link>
                                         </div>
                                     </div>
                                 </div>
@@ -276,7 +270,14 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
 
                         <div className="space-y-2">
                             <Label>Data Source</Label>
-                            <Select value={editConnectionId} onValueChange={setEditConnectionId} disabled={connectionsQuery.isLoading || updateWorkMutation.isPending}>
+                            <Select
+                                value={editConnectionId}
+                                onValueChange={value => {
+                                    setEditConnectionId(value);
+                                    setEditSelectedTables([]);
+                                }}
+                                disabled={connectionsQuery.isLoading || updateWorkMutation.isPending}
+                            >
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder={connectionsQuery.isLoading ? 'Loading data sources...' : 'Select a data source'} />
                                 </SelectTrigger>
@@ -320,22 +321,33 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
                         </div>
 
                         <div className="space-y-2">
-                            <div className="text-xs font-medium uppercase text-muted-foreground">Suggested goals based on this data source</div>
-                            <div className="flex flex-wrap gap-2">
-                                {editSuggestedGoals.map(item => (
-                                    <Button
-                                        key={item}
-                                        type="button"
-                                        variant="secondary"
-                                        size="sm"
-                                        className="h-auto max-w-full justify-start whitespace-normal text-left"
-                                        onClick={() => setEditGoal(item)}
-                                        disabled={updateWorkMutation.isPending}
-                                    >
-                                        {item}
-                                    </Button>
-                                ))}
-                            </div>
+                            <div className="text-xs font-medium uppercase text-muted-foreground">AI suggested goals from this schema</div>
+                            {editGoalSuggestionsQuery.isLoading ? (
+                                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <Loader2 className="size-4 animate-spin" />
+                                    Generating suggestions...
+                                </div>
+                            ) : editGoalSuggestionsQuery.data?.suggestions.length ? (
+                                <div className="flex flex-wrap gap-2">
+                                    {editGoalSuggestionsQuery.data.suggestions.map(item => (
+                                        <Button
+                                            key={item}
+                                            type="button"
+                                            variant="secondary"
+                                            size="sm"
+                                            className="h-auto max-w-full justify-start whitespace-normal text-left"
+                                            onClick={() => setEditGoal(item)}
+                                            disabled={updateWorkMutation.isPending}
+                                        >
+                                            {item}
+                                        </Button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-sm text-muted-foreground">
+                                    {editConnectionId ? 'AI suggestions are unavailable for this data source.' : 'Select a data source to generate suggestions.'}
+                                </div>
+                            )}
                         </div>
 
                         <Collapsible open={editAdvancedOpen} onOpenChange={setEditAdvancedOpen} className="rounded-lg border bg-background">
@@ -382,16 +394,13 @@ export function WorkPageClient({ organization }: WorkPageClientProps) {
                                     </div>
 
                                     {editTablesMode === 'selected' ? (
-                                        <div className="space-y-2">
-                                            <Label htmlFor="edit-selected-tables">Selected tables</Label>
-                                            <Input
-                                                id="edit-selected-tables"
-                                                value={editSelectedTablesText}
-                                                onChange={event => setEditSelectedTablesText(event.target.value)}
-                                                placeholder="orders, users, payments"
-                                                disabled={updateWorkMutation.isPending}
-                                            />
-                                        </div>
+                                        <WorkSchemaSelector
+                                            connectionId={editConnectionId}
+                                            connectionType={editConnection?.type}
+                                            selectedTables={editSelectedTables}
+                                            onSelectedTablesChange={setEditSelectedTables}
+                                            disabled={updateWorkMutation.isPending}
+                                        />
                                     ) : null}
 
                                     <div className="space-y-2">

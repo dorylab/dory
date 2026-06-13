@@ -370,24 +370,8 @@ function classifyWorkToolResult(toolName: string): { type: WorkRunEventType; con
 }
 
 function workRunTools(tools: Record<string, any>) {
-    const blocked = new Set([
-        'query_readOnlyExecute',
-        'tab_create',
-        'tab_save',
-        'tab_list',
-        'work_create',
-        'work_get',
-        'work_list',
-        'work_update',
-        'work_updateGoal',
-        'work_updateTitle',
-        'work_updateStatus',
-        'work_updateInvestigation',
-        'work_updateInvestigationFinding',
-        'work_deleteInvestigationFinding',
-        'work_getRunEventResult',
-    ]);
-    return Object.fromEntries(Object.entries(tools).filter(([toolName]) => !blocked.has(toolName)));
+    const allowed = new Set(['work_createInvestigation', 'work_runInvestigationSql', 'work_createInvestigationFinding', 'work_updateConclusion']);
+    return Object.fromEntries(Object.entries(tools).filter(([toolName]) => allowed.has(toolName)));
 }
 
 function withWorkSqlContext(input: unknown, params: { toolName: string; workId: string; runId: string; investigationId?: string | null }) {
@@ -1122,9 +1106,9 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                 const completionDecision = checkWorkAgentProtocolComplete(protocol);
                 if (!completionDecision.allowed) {
                     await appendEvent({
-                        type: 'error',
+                        type: 'message',
                         role: 'system',
-                        content: completionDecision.message,
+                        content: `Agent stopped before completing the Work protocol: ${completionDecision.message}`,
                         payload: sanitizePayload({
                             finishReason: event.finishReason ?? null,
                             protocol,

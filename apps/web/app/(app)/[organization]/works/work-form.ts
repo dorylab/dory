@@ -20,12 +20,6 @@ export type SchemaPreview = {
     scannedDatabaseNames: string[];
 };
 
-export const fallbackSuggestions = [
-    'Analyze AI feature health for the last 24 hours.',
-    'Find why query failures increased this week.',
-    'Compare usage trend between new and returning users.',
-];
-
 export const workTypeOptions: Array<{ value: WorkType; label: string; description: string }> = [
     { value: 'investigation', label: 'Investigation', description: 'Find the cause and build an evidence chain.' },
     { value: 'analysis', label: 'Analysis', description: 'Analyze trends and compare metrics.' },
@@ -52,30 +46,14 @@ export function serializeList(value: string[] | undefined) {
     return (value ?? []).join(', ');
 }
 
-export function buildScope(input: { timeRange: string; tablesMode: 'auto' | 'selected'; selectedTablesText: string; metricsText: string; constraints: string[] }): WorkScope {
+export function buildScope(input: { timeRange: string; tablesMode: 'auto' | 'selected'; selectedTablesText?: string; selectedTables?: string[]; metricsText: string; constraints: string[] }): WorkScope {
     return {
         timeRange: input.timeRange,
         tablesMode: input.tablesMode,
-        selectedTables: input.tablesMode === 'selected' ? parseList(input.selectedTablesText) : [],
+        selectedTables: input.tablesMode === 'selected' ? (input.selectedTables ?? parseList(input.selectedTablesText ?? '')) : [],
         metrics: parseList(input.metricsText),
         constraints: input.constraints,
     };
-}
-
-export function buildSuggestedGoals(tableNames: string[]) {
-    const normalized = tableNames.map(item => item.toLowerCase());
-    const hasCommerceTables = normalized.some(item => ['orders', 'users', 'payments', 'products', 'customers'].some(keyword => item.includes(keyword)));
-    const hasObservabilityTables = normalized.some(item => ['query_history', 'query', 'error', 'latency', 'log', 'event'].some(keyword => item.includes(keyword)));
-
-    if (hasObservabilityTables) {
-        return ['Find why query failures increased this week.', 'Analyze slow queries by database and user.', 'Compare p95 latency before and after the release.'];
-    }
-
-    if (hasCommerceTables) {
-        return ['Find which products drive the most revenue this month.', 'Analyze why order volume dropped recently.', 'Compare repeat purchase behavior by customer segment.'];
-    }
-
-    return fallbackSuggestions;
 }
 
 export async function fetchSchemaPreview(connectionId: string): Promise<SchemaPreview> {
@@ -104,4 +82,8 @@ export async function fetchSchemaPreview(connectionId: string): Promise<SchemaPr
         tableNames,
         scannedDatabaseNames,
     };
+}
+
+export async function fetchWorkGoalSuggestions(input: { connectionId: string; workType: WorkType }): Promise<{ suggestions: string[] }> {
+    return executeActionClient<{ suggestions: string[] }>('work.suggestGoals', input, { currentConnectionId: input.connectionId });
 }
