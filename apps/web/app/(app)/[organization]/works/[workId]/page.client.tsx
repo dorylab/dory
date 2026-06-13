@@ -603,15 +603,15 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     }
 
     return (
-        <div className="bg-n8 h-screen overflow-auto">
-            <div className="container mx-auto mt-6 max-w-6xl px-4 py-6 sm:mt-8 sm:px-6 lg:px-8 2xl:px-4">
+        <div className="bg-n8 h-screen overflow-x-hidden overflow-y-auto">
+            <div className="container mx-auto mt-6 min-w-0 max-w-6xl px-4 py-6 sm:mt-8 sm:px-6 lg:px-8 2xl:px-4">
                 <Button variant="ghost" className="mb-5 w-fit" onClick={() => router.push(`/${organization}/works`)}>
                     <ArrowLeft />
                     Work
                 </Button>
 
-                <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
+                <header className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
                         <div className="mb-3 flex flex-wrap items-center gap-2">
                             {isEditingTitle ? (
                                 <form
@@ -678,7 +678,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                             <span>Last updated {formatRelativeTime(work.updatedAt)}</span>
                         </div>
                     </div>
-                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:min-w-44">
+                    <div className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:min-w-44">
                         <div className="flex gap-2">
                             <Button className="flex-1 sm:flex-none" onClick={startContinueWork} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
                                 {isRunRunning || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Send />}
@@ -686,7 +686,14 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                             </Button>
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button type="button" variant="secondary" size="icon" aria-label="Run options" title="Run options" disabled={isRunRunning || runWorkMutation.isPending}>
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="icon"
+                                        aria-label="Run options"
+                                        title="Run options"
+                                        disabled={isRunRunning || runWorkMutation.isPending}
+                                    >
                                         <MoreVertical />
                                     </Button>
                                 </DropdownMenuTrigger>
@@ -710,8 +717,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                     </div>
                 </header>
 
-                <main className="mt-6 grid gap-6">
-                    <section className="space-y-3">
+                <main className="mt-6 grid min-w-0 max-w-full gap-6">
+                    <section className="min-w-0 space-y-3">
                         <div className="flex items-center justify-between">
                             <h2 className="text-base font-semibold">Goal</h2>
                             {isEditingGoal ? (
@@ -746,7 +753,9 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                 autoFocus
                             />
                         ) : (
-                            <p className="whitespace-pre-wrap text-lg font-medium leading-7 text-foreground">{goal || 'Describe what Dory should investigate.'}</p>
+                            <p className="whitespace-pre-wrap break-words text-lg font-medium leading-7 text-foreground [overflow-wrap:anywhere]">
+                                {goal || 'Describe what Dory should investigate.'}
+                            </p>
                         )}
                         {continueOpen ? (
                             <div className="rounded-lg border bg-card p-3">
@@ -770,12 +779,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     >
                                         Cancel
                                     </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        onClick={startContinueWork}
-                                        disabled={!continueInstruction.trim() || runWorkMutation.isPending || isRunRunning}
-                                    >
+                                    <Button type="button" size="sm" onClick={startContinueWork} disabled={!continueInstruction.trim() || runWorkMutation.isPending || isRunRunning}>
                                         {runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Send />}
                                         Send
                                     </Button>
@@ -784,9 +788,9 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         ) : null}
                     </section>
 
-                    <section className="space-y-3">
+                    <section className="min-w-0 space-y-3">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <h2 className="text-base font-semibold">Latest Run</h2>
                                     {latestRun ? (
@@ -796,10 +800,14 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     ) : null}
                                 </div>
                                 {latestRun ? (
-                                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                    <div className="mt-2 flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                         <span>Started {formatRelativeTime(latestRun.startedAt)}</span>
                                         <span>Completed {formatRelativeTime(latestRun.completedAt)}</span>
-                                        {latestEvent ? <span className="truncate">Latest: {latestEvent.content || eventTypeLabel(latestEvent.type)}</span> : null}
+                                        {latestEvent ? (
+                                            <span className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
+                                                Latest: {latestEvent.content || eventTypeLabel(latestEvent.type)}
+                                            </span>
+                                        ) : null}
                                     </div>
                                 ) : (
                                     <p className="mt-2 text-sm text-muted-foreground">Run the Work to let Dory investigate the goal and record its steps here.</p>
@@ -830,16 +838,21 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         ) : null}
                     </section>
 
-                    <section className="space-y-3">
+                    <section className="min-w-0 space-y-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                            <div>
+                            <div className="min-w-0">
                                 <h2 className="text-base font-semibold">Analyses</h2>
                                 <p className="mt-1 text-sm text-muted-foreground">{evidenceSummary}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">Conclusion uses included analyses.</p>
                                 {unconfirmedAnalysisSummary ? <p className="mt-1 text-sm text-muted-foreground">{unconfirmedAnalysisSummary}</p> : null}
                             </div>
-                            <div className="flex w-full gap-2 sm:w-auto">
-                                <Input value={investigationTitle} onChange={event => setInvestigationTitle(event.target.value)} placeholder="Analysis title" className="sm:w-64" />
+                            <div className="flex w-full min-w-0 gap-2 sm:w-auto">
+                                <Input
+                                    value={investigationTitle}
+                                    onChange={event => setInvestigationTitle(event.target.value)}
+                                    placeholder="Analysis title"
+                                    className="min-w-0 sm:w-64"
+                                />
                                 <Button
                                     onClick={() => createInvestigationMutation.mutate(investigationTitle.trim())}
                                     disabled={!investigationTitle.trim() || createInvestigationMutation.isPending || runWorkMutation.isPending || isRunRunning}
@@ -851,7 +864,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         </div>
 
                         {investigations.length ? (
-                            <div className="grid min-w-0 gap-3 md:grid-cols-2">
+                            <div className="grid min-w-0 max-w-full gap-3 md:grid-cols-[repeat(2,minmax(0,1fr))]">
                                 {investigations.map(investigation => (
                                     <AnalysisCard
                                         key={investigation.id}
@@ -870,9 +883,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         auditStatusUpdatingTo={
                                             updateAnalysisAuditStatusMutation.isPending ? (updateAnalysisAuditStatusMutation.variables?.auditStatus ?? null) : null
                                         }
-                                        revisingInvestigationId={
-                                            reviseInvestigationMutation.isPending ? (reviseInvestigationMutation.variables?.investigation.id ?? null) : null
-                                        }
+                                        revisingInvestigationId={reviseInvestigationMutation.isPending ? (reviseInvestigationMutation.variables?.investigation.id ?? null) : null}
                                     />
                                 ))}
                             </div>
@@ -886,13 +897,16 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         )}
                     </section>
 
-                    <section className="space-y-3">
+                    <section className="min-w-0 space-y-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div>
+                            <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <h2 className="text-base font-semibold">Conclusion</h2>
                                     {work.conclusionStatus === 'outdated' ? (
-                                        <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                                        <Badge
+                                            variant="outline"
+                                            className="border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+                                        >
                                             Outdated
                                         </Badge>
                                     ) : null}
@@ -948,8 +962,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                 </div>
                             )}
                         </div>
-                        <Card className="rounded-lg py-0">
-                            <CardContent className="p-4">
+                        <Card className="min-w-0 overflow-hidden rounded-lg py-0">
+                            <CardContent className="min-w-0 p-4">
                                 {isEditingConclusion ? (
                                     <>
                                         {!hasIncludedAnalysis ? (
@@ -963,8 +977,10 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         />
                                     </>
                                 ) : displayConclusionMarkdown ? (
-                                    <div className="min-h-36 p-2 text-sm">
-                                        <MessageResponse>{displayConclusionMarkdown}</MessageResponse>
+                                    <div className="min-h-36 min-w-0 p-2 text-sm">
+                                        <MessageResponse className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] [&_*]:max-w-full [&_code]:break-words [&_pre]:overflow-x-auto">
+                                            {displayConclusionMarkdown}
+                                        </MessageResponse>
                                     </div>
                                 ) : (
                                     <div className="min-h-36 p-2 text-sm text-muted-foreground">
@@ -1064,9 +1080,9 @@ function AnalysisCard({
     };
 
     return (
-        <div className="flex min-h-56 min-w-0 flex-col rounded-lg border bg-background p-4">
+        <div className="flex min-h-56 min-w-0 max-w-full flex-col overflow-hidden rounded-lg border bg-background p-4">
             <div className="min-w-0">
-                <div className="flex items-start gap-2">
+                <div className="flex min-w-0 items-start gap-2">
                     <div className="min-w-0 flex-1">
                         <h3 className="truncate text-sm font-semibold">{investigation.title}</h3>
                     </div>
@@ -1089,7 +1105,7 @@ function AnalysisCard({
                         </DropdownMenu>
                     </div>
                 </div>
-                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+                <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-center gap-2">
                     {showReviewControls ? (
                         <Badge variant="outline" className={analysisInclusionClassName(investigation.auditStatus)}>
                             {!isExcluded ? <ShieldCheck className="mr-1 size-3" /> : null}
@@ -1121,7 +1137,7 @@ function AnalysisCard({
                     </span>
                 </div>
                 {revisionInstruction ? (
-                    <p className="mt-2 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">Changed by instruction: "{revisionInstruction}"</p>
+                    <p className="mt-2 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">Changed by instruction: &quot;{revisionInstruction}&quot;</p>
                 ) : null}
             </div>
             <div className="mt-5 min-w-0 flex-1">
@@ -1168,12 +1184,12 @@ function AnalysisCard({
                     </div>
                 </div>
             ) : null}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                <div className="text-xs text-muted-foreground">
+            <div className="mt-5 flex min-w-0 flex-wrap items-center justify-between gap-3 border-t pt-4">
+                <div className="min-w-0 text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">Assets</span>
                     <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
                 </div>
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex min-w-0 flex-wrap justify-end gap-2">
                     {canConfirm ? (
                         <Button
                             type="button"
@@ -1248,8 +1264,8 @@ function WorkTimelineEventRow({
                         <TimelineEventIcon timelineEvent={timelineEvent} className="size-3" />
                     </span>
                     <div className="absolute bottom-0 left-[27px] top-10 w-px bg-border" />
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                                 <Badge variant={isError ? 'destructive' : 'secondary'} className={timelineEventBadgeClassName(timelineEvent)}>
                                     {label}
@@ -1286,7 +1302,7 @@ function WorkTimelineEventRow({
 
                     {hasDetails ? (
                         <CollapsibleContent>
-                            <div className="mt-4 space-y-3 rounded-lg border bg-background/70 p-3">
+                            <div className="mt-4 min-w-0 max-w-full space-y-3 overflow-hidden rounded-lg border bg-background/70 p-3">
                                 {sqlInput ? <SqlStatementBlock sql={sqlInput} onCopy={onCopySql} /> : null}
                                 {sqlResult ? <SqlResultBody result={sqlResult} onManualExecute={onManualExecute} mode="global" embedded /> : null}
                                 {snapshot ? <WorkspaceSnapshotDetails snapshot={snapshot} /> : null}
@@ -1373,10 +1389,14 @@ function WorkspaceSnapshotDetails({ snapshot }: { snapshot: WorkWorkspaceSnapsho
     ].filter((item): item is string => Boolean(item));
 
     return (
-        <div className="space-y-3 rounded-md border bg-muted/20 p-3 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">Analysis {snapshot.investigationId}</Badge>
-                <Badge variant="outline">Workspace {snapshot.workspaceId}</Badge>
+        <div className="min-w-0 max-w-full space-y-3 overflow-hidden rounded-md border bg-muted/20 p-3 text-xs">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <Badge variant="outline" className="max-w-full truncate">
+                    Analysis {snapshot.investigationId}
+                </Badge>
+                <Badge variant="outline" className="max-w-full truncate">
+                    Workspace {snapshot.workspaceId}
+                </Badge>
                 {changedItems.length ? (
                     changedItems.map(item => (
                         <Badge key={item} variant="secondary">
@@ -1410,7 +1430,11 @@ function WorkspaceSnapshotDetails({ snapshot }: { snapshot: WorkWorkspaceSnapsho
 }
 
 function EventPayloadPreview({ payload }: { payload: Record<string, unknown> }) {
-    return <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">{JSON.stringify(payload, null, 2)}</pre>;
+    return (
+        <pre className="max-h-72 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3 text-xs text-muted-foreground [overflow-wrap:anywhere]">
+            {JSON.stringify(payload, null, 2)}
+        </pre>
+    );
 }
 
 function getSqlInputFromEvent(event: WorkRunEvent) {
