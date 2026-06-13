@@ -55,6 +55,7 @@ import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { WorkspaceScope } from '@dory/shared/types/tabs';
@@ -923,28 +924,93 @@ function AnalysisCard({
     const canConfirm = showReviewControls && !isExcluded && investigation.auditStatus !== 'accepted' && investigation.auditStatus !== 'reviewed';
     const canExclude = showReviewControls && !isExcluded;
     const canInclude = showReviewControls && isExcluded;
+    const hasReviewActions = canConfirm || canExclude || canInclude;
+    const [reviewActionsOpen, setReviewActionsOpen] = useState(false);
+
+    const updateAuditStatus = (auditStatus: WorkAnalysisAuditStatus) => {
+        onUpdateAuditStatus(investigation, auditStatus);
+        setReviewActionsOpen(false);
+    };
 
     return (
         <div className="flex min-h-56 min-w-0 flex-col rounded-lg border bg-background p-4">
             <div className="min-w-0">
                 <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                        <div className="mb-1 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Title</div>
                         <h3 className="truncate text-sm font-semibold">{investigation.title}</h3>
                     </div>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${investigation.title}`} title="More actions">
-                                <MoreVertical />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(investigation)}>
-                                <Trash2 />
-                                Delete
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex shrink-0 items-center gap-1">
+                        {showReviewControls ? (
+                            <Popover open={reviewActionsOpen} onOpenChange={setReviewActionsOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        aria-label={`Review actions for ${investigation.title}`}
+                                        title="Review actions"
+                                        disabled={!hasReviewActions || isAuditStatusUpdating}
+                                    >
+                                        {isAuditStatusUpdating ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent align="end" className="w-56 p-2">
+                                    <div className="grid gap-1">
+                                        {canConfirm ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="h-9 justify-start gap-2 px-2 text-sm"
+                                                disabled={isAuditStatusUpdating || !sqlBackedFinding}
+                                                title={!sqlBackedFinding ? 'A SQL-backed Finding is required before confirmation' : undefined}
+                                                onClick={() => updateAuditStatus('accepted')}
+                                            >
+                                                {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                                                Confirm
+                                            </Button>
+                                        ) : null}
+                                        {canExclude ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="h-9 justify-start gap-2 px-2 text-sm text-muted-foreground"
+                                                disabled={isAuditStatusUpdating}
+                                                onClick={() => updateAuditStatus('rejected')}
+                                            >
+                                                {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
+                                                Exclude
+                                            </Button>
+                                        ) : null}
+                                        {canInclude ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                className="h-9 justify-start gap-2 px-2 text-sm"
+                                                disabled={isAuditStatusUpdating}
+                                                onClick={() => updateAuditStatus(includeAuditStatus)}
+                                            >
+                                                {isAuditStatusUpdating && auditStatusUpdatingTo === includeAuditStatus ? <Loader2 className="animate-spin" /> : <Check />}
+                                                Include
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        ) : null}
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${investigation.title}`} title="More actions">
+                                    <MoreVertical />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(investigation)}>
+                                    <Trash2 />
+                                    Delete
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
                 <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
                     {showReviewControls ? (
@@ -971,45 +1037,6 @@ function AnalysisCard({
                         <Clock className="size-3" />
                         {activity.label} {formatRelativeTime(activity.value)}
                     </span>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                    {canConfirm ? (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            disabled={isAuditStatusUpdating || !sqlBackedFinding}
-                            title={!sqlBackedFinding ? 'A SQL-backed Finding is required before confirmation' : undefined}
-                            onClick={() => onUpdateAuditStatus(investigation, 'accepted')}
-                        >
-                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                            Confirm
-                        </Button>
-                    ) : null}
-                    {canExclude ? (
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 text-xs text-muted-foreground"
-                            disabled={isAuditStatusUpdating}
-                            onClick={() => onUpdateAuditStatus(investigation, 'rejected')}
-                        >
-                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
-                            Exclude
-                        </Button>
-                    ) : null}
-                    {canInclude ? (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 text-xs"
-                            disabled={isAuditStatusUpdating}
-                            onClick={() => onUpdateAuditStatus(investigation, includeAuditStatus)}
-                        >
-                            {isAuditStatusUpdating && auditStatusUpdatingTo === includeAuditStatus ? <Loader2 className="animate-spin" /> : <Check />}
-                            Include
-                        </Button>
-                    ) : null}
                 </div>
             </div>
             <div className="mt-5 min-w-0 flex-1">
