@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ComponentProps, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,6 +13,7 @@ import {
     Clock,
     Database,
     Loader2,
+    Logs,
     MoreVertical,
     Pencil,
     Plus,
@@ -30,7 +31,6 @@ import { executeActionClient } from '@/lib/actions/client';
 import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '@/lib/sql-console/tab-queries';
 import { effectiveInvestigationStatus, investigationActivityDisplay } from '@/lib/work/investigation-card-state';
 import {
-    analysisEvidenceLabel,
     fallbackConclusionMetadata,
     formatWorkEvidenceSummary,
     formatUnconfirmedAnalysisSummary,
@@ -56,7 +56,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
@@ -70,6 +70,7 @@ import type {
     WorkConclusionMetadata,
     WorkDetail,
     WorkInvestigation,
+    WorkInvestigationFinding,
     WorkRun,
     WorkRunEvent,
     WorkTimelineEvent,
@@ -91,14 +92,46 @@ function analysisInclusionClassName(status: WorkAnalysisAuditStatus) {
     return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
 }
 
-function analysisSourceLabel(investigation: WorkInvestigation) {
-    if (investigation.currentRevision?.instruction?.trim()) return 'Mixed';
-    if (investigation.currentRevision?.createdBy === 'user' || investigation.findings.some(finding => finding.createdBy === 'user')) return 'User edited';
+function analysisDisplayLabel(investigation: WorkInvestigation) {
+    if (investigation.auditStatus === 'rejected') return 'Excluded';
+    if (investigation.auditStatus === 'accepted' || investigation.auditStatus === 'reviewed') return 'Verified';
+    if (investigation.auditStatus === 'revised' || investigation.currentRevision?.createdBy === 'user' || investigation.findings.some(finding => finding.createdBy === 'user'))
+        return 'Human edited';
     return 'Agent generated';
+}
+
+function analysisDisplayClassName(investigation: WorkInvestigation) {
+    if (investigation.auditStatus === 'draft' || investigation.auditStatus === 'needs_review') return 'border-muted bg-muted/50 text-muted-foreground';
+    return analysisInclusionClassName(investigation.auditStatus);
 }
 
 function hasSqlBackedFinding(investigation: WorkInvestigation) {
     return investigation.findings.some(finding => Boolean(finding.sourceRunEventId || finding.sourceTabId));
+}
+
+type AnalysisDisplayFinding = Pick<
+    WorkInvestigationFinding,
+    'id' | 'content' | 'sourceTabId' | 'sourceRunEventId' | 'createdBy' | 'orderIndex' | 'createdAt' | 'updatedAt'
+> & {
+    whyItMatters?: string | null;
+};
+
+function displayFindingsForInvestigation(investigation: WorkInvestigation, latestRun: WorkRun | null, latestRunEvents: WorkRunEvent[]): AnalysisDisplayFinding[] {
+    const snapshotFindings = investigation.currentRevision?.findingsSnapshot ?? [];
+    const baseFindings: AnalysisDisplayFinding[] = snapshotFindings.length ? snapshotFindings : investigation.findings;
+    const revisionRunId = investigation.currentRevision?.runId ?? null;
+    if (!revisionRunId) return baseFindings;
+
+    const revisionRunEventIds = latestRun?.id === revisionRunId ? new Set(latestRunEvents.map(event => event.id)) : null;
+    const revisionStartedAt = latestRun?.id === revisionRunId ? Date.parse(latestRun.startedAt) : Number.NaN;
+    const runFindings = baseFindings.filter(finding => {
+        if (finding.sourceRunEventId && revisionRunEventIds?.has(finding.sourceRunEventId)) return true;
+        if (!Number.isFinite(revisionStartedAt)) return false;
+        const findingCreatedAt = Date.parse(finding.createdAt);
+        return Number.isFinite(findingCreatedAt) && findingCreatedAt >= revisionStartedAt;
+    });
+
+    return runFindings.length ? runFindings : baseFindings;
 }
 
 function workLifecycleDisplayStatusLabel(status: WorkLifecycleDisplayStatus) {
@@ -151,13 +184,15 @@ function analysisAuditStatusToastLabel(status: WorkAnalysisAuditStatus) {
     return 'included';
 }
 
-function buildIncludedAnalysesMarkdown(analyses: WorkInvestigation[]) {
+function buildIncludedAnalysesMarkdown(analyses: WorkInvestigation[], latestRun: WorkRun | null, latestRunEvents: WorkRunEvent[]) {
     const includedAnalyses = analyses.filter(investigation => investigation.auditStatus !== 'rejected');
     if (!includedAnalyses.length) return null;
 
     return includedAnalyses
         .flatMap(analysis => {
-            const findings = analysis.findings.map(finding => finding.content.trim()).filter(Boolean);
+            const findings = displayFindingsForInvestigation(analysis, latestRun, latestRunEvents)
+                .map(finding => finding.content.trim())
+                .filter(Boolean);
             return [`### ${analysis.title}`, '', ...(findings.length ? findings : ['_No findings recorded._'])];
         })
         .join('\n\n');
@@ -177,6 +212,19 @@ function InfoTooltip({ label = 'More info', children }: { label?: string; childr
             </TooltipTrigger>
             <TooltipContent side="top" align="start" className="max-w-80 text-left text-xs leading-5">
                 {children}
+            </TooltipContent>
+        </Tooltip>
+    );
+}
+
+function DropdownMenuItemWithTooltip({ tooltip, ...props }: ComponentProps<typeof DropdownMenuItem> & { tooltip: ReactNode }) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <DropdownMenuItem {...props} />
+            </TooltipTrigger>
+            <TooltipContent side="left" align="center" className="max-w-72 text-left text-xs leading-5">
+                {tooltip}
             </TooltipContent>
         </Tooltip>
     );
@@ -224,7 +272,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const evidenceCounts = useMemo(() => getWorkEvidenceCounts(investigations), [investigations]);
     const unconfirmedAnalysisSummary = useMemo(() => formatUnconfirmedAnalysisSummary(investigations), [investigations]);
     const conclusionSourceBoundary = useMemo(() => getConclusionSourceBoundary(investigations), [investigations]);
-    const includedAnalysisConclusion = useMemo(() => buildIncludedAnalysesMarkdown(investigations), [investigations]);
+    const includedAnalysisConclusion = useMemo(() => buildIncludedAnalysesMarkdown(investigations, latestRun, latestRunEvents), [investigations, latestRun, latestRunEvents]);
     const displayConclusionMarkdown = work?.conclusion?.trim() || includedAnalysisConclusion;
     const fallbackMetadata = useMemo(
         () => fallbackConclusionMetadata({ analyses: investigations, conclusionStatus: work?.conclusionStatus }),
@@ -1322,7 +1370,8 @@ function AnalysisCard({
     const isRevising = revisingInvestigationId === investigation.id;
     const sqlBackedFinding = hasSqlBackedFinding(investigation);
     const isExcluded = investigation.auditStatus === 'rejected';
-    const sourceLabel = analysisSourceLabel(investigation);
+    const displayFindings = displayFindingsForInvestigation(investigation, latestRun, latestRunEvents);
+    const displayLabel = analysisDisplayLabel(investigation);
     const revisionVersion = investigation.currentRevision?.version ?? 1;
     const revisionInstruction = investigation.currentRevision?.instruction?.trim() || null;
     const includeAuditStatus: WorkAnalysisAuditStatus = investigation.findings.some(finding => finding.createdBy === 'user') ? 'revised' : 'draft';
@@ -1357,25 +1406,32 @@ function AnalysisCard({
                         </Badge>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${investigation.title}`} title="More actions">
+                                <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions and logs for ${investigation.title}`} title="More actions and logs">
                                     <MoreVertical />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="w-64">
                                 {canConfirm ? (
-                                    <DropdownMenuItem
-                                        disabled={isAuditStatusUpdating || !sqlBackedFinding}
-                                        onSelect={() => {
-                                            if (isAuditStatusUpdating || !sqlBackedFinding) return;
+                                    <DropdownMenuItemWithTooltip
+                                        tooltip="Mark this Analysis as verified and keep its Findings available for the conclusion. Requires at least one SQL-backed Finding."
+                                        disabled={isAuditStatusUpdating}
+                                        aria-disabled={!sqlBackedFinding}
+                                        className={!sqlBackedFinding ? 'opacity-50' : undefined}
+                                        onSelect={event => {
+                                            if (isAuditStatusUpdating || !sqlBackedFinding) {
+                                                event.preventDefault();
+                                                return;
+                                            }
                                             updateAuditStatus('accepted');
                                         }}
                                     >
                                         {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
                                         Accept
-                                    </DropdownMenuItem>
+                                    </DropdownMenuItemWithTooltip>
                                 ) : null}
                                 {canExclude ? (
-                                    <DropdownMenuItem
+                                    <DropdownMenuItemWithTooltip
+                                        tooltip="Exclude this Analysis from the conclusion evidence without deleting its history, SQL, or Findings."
                                         disabled={isAuditStatusUpdating}
                                         onSelect={() => {
                                             if (isAuditStatusUpdating) return;
@@ -1384,7 +1440,7 @@ function AnalysisCard({
                                     >
                                         {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
                                         Exclude
-                                    </DropdownMenuItem>
+                                    </DropdownMenuItemWithTooltip>
                                 ) : null}
                                 {canInclude ? (
                                     <DropdownMenuItem
@@ -1402,20 +1458,27 @@ function AnalysisCard({
                                     <Trash2 />
                                     Delete
                                 </DropdownMenuItem>
+                                {revisionInstruction ? (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuLabel className="space-y-1.5 whitespace-normal text-xs font-normal text-muted-foreground">
+                                            <span className="flex items-center gap-2 font-medium text-foreground">
+                                                <Logs className="size-4 text-muted-foreground" />
+                                                Logs
+                                            </span>
+                                            <span className="block break-words [overflow-wrap:anywhere]">Changed by instruction: &quot;{revisionInstruction}&quot;</span>
+                                        </DropdownMenuLabel>
+                                    </>
+                                ) : null}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
                 </div>
                 <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-center gap-2">
                     {showReviewControls ? (
-                        <Badge variant="outline" className={analysisInclusionClassName(investigation.auditStatus)}>
-                            {!isExcluded ? <ShieldCheck className="mr-1 size-3" /> : null}
-                            {analysisEvidenceLabel(investigation)}
-                        </Badge>
-                    ) : null}
-                    {showReviewControls ? (
-                        <Badge variant="outline" className="border-muted bg-muted/50 text-muted-foreground">
-                            {sourceLabel}
+                        <Badge variant="outline" className={analysisDisplayClassName(investigation)}>
+                            {investigation.auditStatus === 'accepted' || investigation.auditStatus === 'reviewed' ? <ShieldCheck className="mr-1 size-3" /> : null}
+                            {displayLabel}
                         </Badge>
                     ) : null}
                     {isRunning ? (
@@ -1432,15 +1495,12 @@ function AnalysisCard({
                         {activity.label} {formatRelativeTime(activity.value)}
                     </span>
                 </div>
-                {revisionInstruction ? (
-                    <p className="mt-2 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">Changed by instruction: &quot;{revisionInstruction}&quot;</p>
-                ) : null}
             </div>
             <div className="mt-5 min-w-0 flex-1">
                 <div className="mb-2 text-[11px] font-medium uppercase tracking-normal text-muted-foreground">Findings</div>
-                {investigation.findings.length ? (
+                {displayFindings.length ? (
                     <ul className="space-y-2 text-sm leading-6">
-                        {investigation.findings.map(finding => (
+                        {displayFindings.map(finding => (
                             <li key={finding.id} className="min-w-0">
                                 <div className="flex min-w-0 items-start gap-2">
                                     <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
