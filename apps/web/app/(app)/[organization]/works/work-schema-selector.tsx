@@ -7,6 +7,7 @@ import { Check, ChevronsUpDown, Database, Layers3, Loader2, Table2, X } from 'lu
 import { executeActionClient } from '@/lib/actions/client';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/registry/new-york-v4/ui/command';
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
@@ -212,15 +213,13 @@ export function WorkSchemaSelector({ connectionId, connectionType, disabled = fa
                                             const value = qualifiedTableName({ database: selectedDatabase, schema: selectedSchema, table });
                                             const selected = selectedSet.has(value);
                                             return (
-                                                <CommandItem key={value} value={value} onSelect={() => toggleTable(table)} className="flex items-center gap-2">
-                                                    <span
-                                                        className={cn(
-                                                            'border-input pointer-events-none flex size-4 shrink-0 items-center justify-center rounded border transition data-[selected=true]:border-primary data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground',
-                                                        )}
-                                                        data-selected={selected}
-                                                    >
-                                                        <Check className={cn('size-3', selected ? 'opacity-100' : 'opacity-0')} />
-                                                    </span>
+                                                <CommandItem key={value} value={value} onSelect={() => toggleTable(table)} className="flex min-h-9 items-center gap-3 px-3">
+                                                    <Checkbox
+                                                        checked={selected}
+                                                        tabIndex={-1}
+                                                        aria-hidden="true"
+                                                        className="pointer-events-none"
+                                                    />
                                                     <span className="min-w-0 flex-1 truncate text-sm">{optionName(table)}</span>
                                                     {normalizeSchema(table) ? <span className="shrink-0 text-xs text-muted-foreground">{normalizeSchema(table)}</span> : null}
                                                 </CommandItem>

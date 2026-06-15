@@ -102,7 +102,7 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 
 /* =================================== component =================================== */
 
-export function ResultTable() {
+export function ResultTable({ autoSelectLatestResultOnInitialLoad = false }: { autoSelectLatestResultOnInitialLoad?: boolean }) {
     const t = useTranslations('SqlConsole');
     const locale = useLocale();
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
@@ -151,6 +151,7 @@ export function ResultTable() {
         sessionStatus, // 'running' | 'success' | 'error' | 'canceled' | null
 
         userPicked,
+        autoJumpOnInitialOverview: autoSelectLatestResultOnInitialLoad,
         autoSetActiveSet: v => autoSetActiveSet(v),
         getCurrentActiveSet: () => (typeof activeSet === 'number' ? activeSet : undefined),
     });

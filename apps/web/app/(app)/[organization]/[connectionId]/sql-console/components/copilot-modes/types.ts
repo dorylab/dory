@@ -16,6 +16,7 @@ export type BaseModeProps = Pick<
     chatWidth: number;
     setChatWidth: (width: number) => void;
     onCloseChatbot: () => void;
+    autoSelectLatestResultOnInitialLoad?: boolean;
 };
 
 export type SqlModeProps = BaseModeProps &

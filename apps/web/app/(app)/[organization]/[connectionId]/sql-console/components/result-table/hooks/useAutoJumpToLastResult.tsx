@@ -10,10 +10,11 @@ export function useAutoJumpToLastResult(opts: {
     sessionStatus: SessionStatus;
     finishedAt?: number | string | Date | null;
     userPicked?: boolean;
+    autoJumpOnInitialOverview?: boolean;
     autoSetActiveSet: (v: number) => void; 
     getCurrentActiveSet?: () => number | string | undefined;
 }) {
-    const { tabId, sessionId, indices, sessionStatus, finishedAt, userPicked = false, autoSetActiveSet, getCurrentActiveSet } = opts;
+    const { tabId, sessionId, indices, sessionStatus, finishedAt, userPicked = false, autoJumpOnInitialOverview = false, autoSetActiveSet, getCurrentActiveSet } = opts;
 
     const tabKey = useMemo(() => `${tabId ?? ''}:${sessionId ?? ''}`, [tabId, sessionId]);
 
@@ -56,7 +57,9 @@ export function useAutoJumpToLastResult(opts: {
         
         
         
-        const shouldJump = justFinished && !userPicked && !alreadyJumpedThisFinish && (resultsIncreased || current !== target) && target >= 0;
+        const shouldJumpOnFinish = justFinished && !userPicked && !alreadyJumpedThisFinish && (resultsIncreased || current !== target) && target >= 0;
+        const shouldJumpOnInitialOverview = autoJumpOnInitialOverview && !userPicked && current < 0 && target >= 0;
+        const shouldJump = shouldJumpOnFinish || shouldJumpOnInitialOverview;
 
         if (shouldJump) {
             if (current !== target) {
@@ -72,5 +75,5 @@ export function useAutoJumpToLastResult(opts: {
         prevMaxMapRef.current[tabKey] = nextMax;
         prevLenMapRef.current[tabKey] = nextLen;
         prevFinishMapRef.current[tabKey] = normFinished ?? prevFinished;
-    }, [tabKey, indices, sessionStatus, finishedAt, userPicked, autoSetActiveSet, getCurrentActiveSet]);
+    }, [tabKey, indices, sessionStatus, finishedAt, userPicked, autoJumpOnInitialOverview, autoSetActiveSet, getCurrentActiveSet]);
 }

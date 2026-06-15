@@ -77,26 +77,6 @@ function analysisInclusionClassName(status: WorkAnalysisAuditStatus) {
     return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
 }
 
-function analysisProvenanceClassName(status: WorkAnalysisAuditStatus) {
-    switch (status) {
-        case 'needs_review':
-            return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
-        case 'accepted':
-        case 'reviewed':
-            return 'border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-300';
-        case 'revised':
-            return 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300';
-        case 'draft':
-        default:
-            return 'border-muted bg-muted/50 text-muted-foreground';
-    }
-}
-
-function analysisReviewLabel(status: WorkAnalysisAuditStatus) {
-    if (status === 'accepted' || status === 'reviewed') return 'Accepted';
-    return 'Needs review';
-}
-
 function analysisSourceLabel(investigation: WorkInvestigation) {
     if (investigation.currentRevision?.instruction?.trim()) return 'Mixed';
     if (investigation.currentRevision?.createdBy === 'user' || investigation.findings.some(finding => finding.createdBy === 'user')) return 'User edited';
@@ -1097,6 +1077,42 @@ function AnalysisCard({
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                                {canConfirm ? (
+                                    <DropdownMenuItem
+                                        disabled={isAuditStatusUpdating || !sqlBackedFinding}
+                                        onSelect={() => {
+                                            if (isAuditStatusUpdating || !sqlBackedFinding) return;
+                                            updateAuditStatus('accepted');
+                                        }}
+                                    >
+                                        {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+                                        Accept
+                                    </DropdownMenuItem>
+                                ) : null}
+                                {canExclude ? (
+                                    <DropdownMenuItem
+                                        disabled={isAuditStatusUpdating}
+                                        onSelect={() => {
+                                            if (isAuditStatusUpdating) return;
+                                            updateAuditStatus('rejected');
+                                        }}
+                                    >
+                                        {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
+                                        Exclude
+                                    </DropdownMenuItem>
+                                ) : null}
+                                {canInclude ? (
+                                    <DropdownMenuItem
+                                        disabled={isAuditStatusUpdating}
+                                        onSelect={() => {
+                                            if (isAuditStatusUpdating) return;
+                                            updateAuditStatus(includeAuditStatus);
+                                        }}
+                                    >
+                                        {isAuditStatusUpdating && auditStatusUpdatingTo === includeAuditStatus ? <Loader2 className="animate-spin" /> : <Check />}
+                                        Include
+                                    </DropdownMenuItem>
+                                ) : null}
                                 <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onDelete(investigation)}>
                                     <Trash2 />
                                     Delete
@@ -1110,11 +1126,6 @@ function AnalysisCard({
                         <Badge variant="outline" className={analysisInclusionClassName(investigation.auditStatus)}>
                             {!isExcluded ? <ShieldCheck className="mr-1 size-3" /> : null}
                             {analysisInclusionLabel(investigation.auditStatus)}
-                        </Badge>
-                    ) : null}
-                    {showReviewControls ? (
-                        <Badge variant="outline" className={analysisProvenanceClassName(investigation.auditStatus)}>
-                            {analysisReviewLabel(investigation.auditStatus)}
                         </Badge>
                     ) : null}
                     {showReviewControls ? (
@@ -1189,36 +1200,11 @@ function AnalysisCard({
                     <span className="font-medium text-foreground">Assets</span>
                     <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
                 </div>
-                <div className="flex min-w-0 flex-wrap justify-end gap-2">
-                    {canConfirm ? (
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            disabled={isAuditStatusUpdating || !sqlBackedFinding}
-                            title={!sqlBackedFinding ? 'A SQL-backed Finding is required before accepting' : undefined}
-                            onClick={() => updateAuditStatus('accepted')}
-                        >
-                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'accepted' ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                            Accept
-                        </Button>
-                    ) : null}
+                <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
                     <Button type="button" size="sm" variant="secondary" disabled={!showReviewControls || isExcluded || isRevising} onClick={() => setReviseOpen(value => !value)}>
                         {isRevising ? <Loader2 className="animate-spin" /> : <RefreshCw />}
                         Revise
                     </Button>
-                    {canExclude ? (
-                        <Button type="button" size="sm" variant="secondary" disabled={isAuditStatusUpdating} onClick={() => updateAuditStatus('rejected')}>
-                            {isAuditStatusUpdating && auditStatusUpdatingTo === 'rejected' ? <Loader2 className="animate-spin" /> : <X />}
-                            Exclude
-                        </Button>
-                    ) : null}
-                    {canInclude ? (
-                        <Button type="button" size="sm" variant="secondary" disabled={isAuditStatusUpdating} onClick={() => updateAuditStatus(includeAuditStatus)}>
-                            {isAuditStatusUpdating && auditStatusUpdatingTo === includeAuditStatus ? <Loader2 className="animate-spin" /> : <Check />}
-                            Include
-                        </Button>
-                    ) : null}
                     <Button
                         size="sm"
                         variant="secondary"

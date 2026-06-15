@@ -59,5 +59,5 @@ export default function WorkInvestigationSQLConsoleClient({
         onWorkspaceSnapshotControllerChange,
     });
 
-    return <SQLConsoleView runtime={runtime} expectExistingTabs={expectExistingTabs} />;
+    return <SQLConsoleView runtime={runtime} expectExistingTabs={expectExistingTabs} autoSelectLatestResultOnInitialLoad />;
 }

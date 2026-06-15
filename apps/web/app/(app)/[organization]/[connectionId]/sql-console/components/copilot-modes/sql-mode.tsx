@@ -129,6 +129,7 @@ export function SqlMode({
     chatWidth,
     setChatWidth,
     onCloseChatbot,
+    autoSelectLatestResultOnInitialLoad,
 }: SqlModeProps) {
     const t = useTranslations('SqlConsole');
     const pathname = usePathname();
@@ -488,7 +489,7 @@ export function SqlMode({
 
                             <Panel id="result-panel" minSize="25%" className="min-h-0">
                                 <div className="flex h-full flex-col min-h-0">
-                                    <ResultTable />
+                                    <ResultTable autoSelectLatestResultOnInitialLoad={autoSelectLatestResultOnInitialLoad} />
                                 </div>
                             </Panel>
                         </Group>

@@ -97,7 +97,15 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     return <SQLConsoleView runtime={runtime} />;
 }
 
-export function SQLConsoleView({ runtime, expectExistingTabs }: { runtime: SQLConsoleRuntime; expectExistingTabs?: boolean }) {
+export function SQLConsoleView({
+    runtime,
+    expectExistingTabs,
+    autoSelectLatestResultOnInitialLoad,
+}: {
+    runtime: SQLConsoleRuntime;
+    expectExistingTabs?: boolean;
+    autoSelectLatestResultOnInitialLoad?: boolean;
+}) {
     const {
         normalizedLayout,
         onLayout: onLayoutFromHook,
@@ -496,6 +504,7 @@ export function SQLConsoleView({ runtime, expectExistingTabs }: { runtime: SQLCo
                                                             chatWidth={normalizedChatWidth}
                                                             setChatWidth={setClampedChatWidth}
                                                             onCloseChatbot={closeChatbotPanel}
+                                                            autoSelectLatestResultOnInitialLoad={autoSelectLatestResultOnInitialLoad}
                                                         />
                                                     )}
                                                 </div>
