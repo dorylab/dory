@@ -12,6 +12,7 @@ import {
     works,
     type Work,
     type WorkAnalysisAuditStatus,
+    type WorkConclusionMetadata,
     type WorkCreator,
     type WorkFindingCreator,
     type WorkInvestigation,
@@ -45,6 +46,7 @@ export type WorkCreateInput = {
     scope?: WorkScope | null;
     initialContext?: string | null;
     conclusion?: string | null;
+    conclusionMetadata?: WorkConclusionMetadata | null;
     connectionId: string;
     createdBy: WorkCreator;
     createdByUserId: string;
@@ -102,6 +104,7 @@ export type WorkInvestigationFindingCreateInput = {
     investigationId: string;
     organizationId: string;
     content: string;
+    whyItMatters?: string | null;
     sourceTabId?: string | null;
     sourceRunEventId?: string | null;
     createdBy: WorkFindingCreator;
@@ -110,6 +113,7 @@ export type WorkInvestigationFindingCreateInput = {
 
 export type WorkInvestigationFindingUpdateInput = {
     content?: string;
+    whyItMatters?: string | null;
     sourceTabId?: string | null;
     sourceRunEventId?: string | null;
     orderIndex?: number | null;
@@ -182,6 +186,7 @@ export class PostgresWorksRepository {
                 scope: input.scope ?? null,
                 initialContext: input.initialContext?.trim() || null,
                 conclusion: input.conclusion ?? null,
+                conclusionMetadata: input.conclusion?.trim() ? (input.conclusionMetadata ?? null) : null,
                 connectionId: input.connectionId,
                 createdBy: input.createdBy,
                 createdByUserId: input.createdByUserId,
@@ -284,16 +289,18 @@ export class PostgresWorksRepository {
         return this.update({ organizationId: params.organizationId, id: params.id, patch: { title: params.title } });
     }
 
-    async updateConclusion(params: { organizationId: string; id: string; conclusion: string | null }): Promise<Work> {
+    async updateConclusion(params: { organizationId: string; id: string; conclusion: string | null; conclusionMetadata?: WorkConclusionMetadata | null }): Promise<Work> {
         this.assertInited();
 
         const now = new Date();
+        const hasConclusion = Boolean(params.conclusion?.trim());
         const [row] = await this.db
             .update(works)
             .set({
                 conclusion: params.conclusion,
-                conclusionStatus: params.conclusion?.trim() ? 'fresh' : 'missing',
-                conclusionUpdatedAt: params.conclusion?.trim() ? now : null,
+                conclusionMetadata: hasConclusion ? (params.conclusionMetadata ?? null) : null,
+                conclusionStatus: hasConclusion ? 'fresh' : 'missing',
+                conclusionUpdatedAt: hasConclusion ? now : null,
                 updatedAt: now,
             } as any)
             .where(and(eq(works.organizationId, params.organizationId), eq(works.id, params.id)))
@@ -738,6 +745,7 @@ export class PostgresWorksRepository {
         return findings.map(finding => ({
             id: finding.id,
             content: finding.content,
+            whyItMatters: finding.whyItMatters ?? null,
             sourceTabId: finding.sourceTabId,
             sourceRunEventId: finding.sourceRunEventId,
             createdBy: finding.createdBy,
@@ -929,6 +937,7 @@ export class PostgresWorksRepository {
                 investigationId: input.investigationId,
                 organizationId: input.organizationId,
                 content: input.content,
+                whyItMatters: input.whyItMatters?.trim() || null,
                 sourceTabId: input.sourceTabId ?? null,
                 sourceRunEventId: input.sourceRunEventId ?? null,
                 createdBy: input.createdBy,
@@ -1006,6 +1015,10 @@ export class PostgresWorksRepository {
         let hasChanges = false;
         if (params.patch.content !== undefined) {
             updatePayload.content = params.patch.content;
+            hasChanges = true;
+        }
+        if (params.patch.whyItMatters !== undefined) {
+            updatePayload.whyItMatters = params.patch.whyItMatters?.trim() || null;
             hasChanges = true;
         }
         if (params.patch.sourceTabId !== undefined) {

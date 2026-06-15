@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    analysisEvidenceLabel,
     buildIncludedAnalysisConclusion,
     formatWorkEvidenceSummary,
     formatUnconfirmedAnalysisSummary,
@@ -129,16 +130,67 @@ test('all excluded analyses return no included-analysis conclusion', () => {
 
 test('work evidence counts are formatted for Evidence and Analyses summaries', () => {
     assert.equal(formatWorkEvidenceSummary(mixedAnalyses), '4 included · 1 excluded');
-    assert.equal(formatUnconfirmedAnalysisSummary(mixedAnalyses), '1 is Agent-generated and not confirmed.');
+    assert.equal(formatUnconfirmedAnalysisSummary(mixedAnalyses), '3 are included and not human-confirmed.');
 });
 
-test('completed Work lifecycle stays completed when evidence includes unconfirmed analysis', () => {
+test('completed Work display status needs review when evidence includes unconfirmed analysis', () => {
     assert.equal(
         getWorkLifecycleDisplayStatus({
             workStatus: 'completed',
             latestRun: { status: 'completed' },
+            analyses: mixedAnalyses,
+            conclusionStatus: 'fresh',
+            conclusionMetadata: {
+                confidence: 'medium',
+                caveats: [],
+                recommendedNextStep: null,
+            },
         }),
-        'completed',
+        'needs_review',
+    );
+});
+
+test('completed Work display status is ready when included evidence and conclusion metadata are verified', () => {
+    assert.equal(
+        getWorkLifecycleDisplayStatus({
+            workStatus: 'completed',
+            latestRun: { status: 'completed' },
+            analyses: [
+                {
+                    id: 'analysis-accepted',
+                    title: 'Verified Analysis',
+                    auditStatus: 'accepted',
+                    findings: [{ content: 'Confirmed finding.', createdBy: 'agent' }],
+                },
+            ],
+            conclusionStatus: 'fresh',
+            conclusionMetadata: {
+                confidence: 'high',
+                caveats: [],
+                recommendedNextStep: null,
+            },
+        }),
+        'ready',
+    );
+});
+
+test('fresh conclusion without metadata still needs review', () => {
+    assert.equal(
+        getWorkLifecycleDisplayStatus({
+            workStatus: 'completed',
+            latestRun: { status: 'completed' },
+            analyses: [
+                {
+                    id: 'analysis-reviewed',
+                    title: 'Reviewed Analysis',
+                    auditStatus: 'reviewed',
+                    findings: [{ content: 'Reviewed finding.', createdBy: 'agent' }],
+                },
+            ],
+            conclusionStatus: 'fresh',
+            conclusionMetadata: null,
+        }),
+        'needs_review',
     );
 });
 
@@ -167,4 +219,13 @@ test('latest failed and running runs override analysis review status', () => {
         }),
         'running',
     );
+});
+
+test('analysis evidence labels separate included drafts from verified evidence', () => {
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'rejected' }), 'Excluded');
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'accepted' }), 'Verified · Used in conclusion');
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'reviewed' }), 'Verified · Used in conclusion');
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'draft' }), 'Needs review · Included by Agent');
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'needs_review' }), 'Needs review · Included by Agent');
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'revised' }), 'Needs review · Human edited');
 });

@@ -5,6 +5,12 @@ export const workCreatorSchema = z.enum(['user', 'agent']);
 export const workTypeSchema = z.enum(['investigation', 'analysis', 'monitoring', 'data_qa', 'sql_workspace']);
 export const workAnalysisAuditStatusSchema = z.enum(['draft', 'needs_review', 'reviewed', 'revised', 'accepted', 'rejected']);
 export const workConclusionStatusSchema = z.enum(['fresh', 'outdated', 'missing']);
+export const workConclusionConfidenceSchema = z.enum(['low', 'medium', 'high']);
+export const workConclusionMetadataSchema = z.object({
+    confidence: workConclusionConfidenceSchema,
+    caveats: z.array(z.string().trim().min(1)).default([]),
+    recommendedNextStep: z.string().trim().min(1).nullable().default(null),
+});
 export const workScopeSchema = z
     .object({
         timeRange: z.string().nullable().optional(),
@@ -56,6 +62,7 @@ export const workOutputSchema = z.object({
     scope: workScopeSchema,
     initialContext: z.string().nullable(),
     conclusion: z.string().nullable(),
+    conclusionMetadata: workConclusionMetadataSchema.nullable().default(null),
     conclusionStatus: workConclusionStatusSchema.default('missing'),
     conclusionUpdatedAt: z.date().nullable().default(null),
     connectionId: z.string(),
@@ -87,6 +94,7 @@ export const workInvestigationOutputSchema = z.object({
 export const workInvestigationRevisionFindingSnapshotOutputSchema = z.object({
     id: z.string(),
     content: z.string(),
+    whyItMatters: z.string().nullable().default(null),
     sourceTabId: z.string().nullable(),
     sourceRunEventId: z.string().nullable(),
     createdBy: workFindingCreatorSchema,
@@ -122,6 +130,7 @@ export const workInvestigationFindingOutputSchema = z.object({
     investigationId: z.string(),
     organizationId: z.string(),
     content: z.string(),
+    whyItMatters: z.string().nullable().default(null),
     sourceTabId: z.string().nullable(),
     sourceRunEventId: z.string().nullable(),
     createdBy: workFindingCreatorSchema,

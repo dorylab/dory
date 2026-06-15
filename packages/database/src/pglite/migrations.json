@@ -373,5 +373,14 @@
     "bps": true,
     "folderMillis": 1781300000000,
     "hash": "0e638fc5cdf2dc06ee3389bc8fb7bf4c5fd9374eead1145b4b5c67bf376a9bee"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"work_investigation_findings\" ADD COLUMN \"why_it_matters\" text;",
+      "\nALTER TABLE \"works\" ADD COLUMN \"conclusion_metadata\" jsonb;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1781495214788,
+    "hash": "100da13b9b7711804e4d3e9605fa186b94eda0da595f09e9b9670d7ee80b2d3c"
   }
 ]

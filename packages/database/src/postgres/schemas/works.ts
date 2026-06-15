@@ -7,6 +7,12 @@ export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
 export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 export type WorkConclusionStatus = 'fresh' | 'outdated' | 'missing';
+export type WorkConclusionConfidence = 'low' | 'medium' | 'high';
+export type WorkConclusionMetadata = {
+    confidence: WorkConclusionConfidence;
+    caveats: string[];
+    recommendedNextStep: string | null;
+};
 export type WorkScope = {
     timeRange?: string | null;
     tablesMode?: 'auto' | 'selected' | null;
@@ -19,6 +25,7 @@ export type WorkRevisionCreator = 'user' | 'agent' | 'automation';
 export type WorkInvestigationRevisionFindingSnapshot = {
     id: string;
     content: string;
+    whyItMatters: string | null;
     sourceTabId: string | null;
     sourceRunEventId: string | null;
     createdBy: WorkFindingCreator;
@@ -73,6 +80,7 @@ export const works = pgTable(
         scope: jsonb('scope').$type<WorkScope | null>(),
         initialContext: text('initial_context'),
         conclusion: text('conclusion'),
+        conclusionMetadata: jsonb('conclusion_metadata').$type<WorkConclusionMetadata | null>(),
         conclusionStatus: text('conclusion_status').$type<WorkConclusionStatus>().notNull().default('missing'),
         conclusionUpdatedAt: timestamp('conclusion_updated_at', { withTimezone: true }),
         connectionId: text('connection_id').notNull(),
@@ -152,6 +160,7 @@ export const workInvestigationFindings = pgTable(
         investigationId: text('investigation_id').notNull(),
         organizationId: text('organization_id').notNull(),
         content: text('content').notNull(),
+        whyItMatters: text('why_it_matters'),
         sourceTabId: text('source_tab_id'),
         sourceRunEventId: text('source_run_event_id'),
         createdBy: text('created_by').$type<WorkFindingCreator>().notNull(),

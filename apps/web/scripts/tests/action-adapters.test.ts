@@ -95,6 +95,7 @@ function createServices() {
                               scope: null,
                               initialContext: null,
                               conclusion: null,
+                              conclusionMetadata: null,
                               connectionId: 'conn-1',
                               createdBy: 'user',
                               createdByUserId: 'user-1',
@@ -113,6 +114,7 @@ function createServices() {
                         scope: payload.scope ?? null,
                         initialContext: payload.initialContext ?? null,
                         conclusion: payload.conclusion ?? null,
+                        conclusionMetadata: payload.conclusionMetadata ?? null,
                         connectionId: payload.connectionId,
                         createdBy: payload.createdBy,
                         createdByUserId: payload.createdByUserId,
@@ -175,6 +177,7 @@ function createServices() {
                         scope: null,
                         initialContext: null,
                         conclusion: payload.conclusion,
+                        conclusionMetadata: payload.conclusionMetadata ?? null,
                         connectionId: 'conn-1',
                         createdBy: 'user',
                         createdByUserId: 'user-1',
@@ -217,6 +220,7 @@ function createServices() {
                         investigationId: payload.investigationId,
                         organizationId: payload.organizationId,
                         content: payload.content,
+                        whyItMatters: payload.whyItMatters ?? null,
                         sourceTabId: payload.sourceTabId ?? null,
                         sourceRunEventId: payload.sourceRunEventId ?? null,
                         createdBy: payload.createdBy,
@@ -296,6 +300,7 @@ function savedWorkSignature(savedWorks: unknown[]) {
         scope: payload.scope,
         initialContext: payload.initialContext,
         conclusion: payload.conclusion,
+        conclusionMetadata: payload.conclusionMetadata,
         connectionId: payload.connectionId,
         createdBy: payload.createdBy,
         createdByUserId: payload.createdByUserId,
@@ -319,6 +324,7 @@ function savedConclusionSignature(savedConclusions: unknown[]) {
     return {
         id: payload.id,
         conclusion: payload.conclusion,
+        conclusionMetadata: payload.conclusionMetadata,
     };
 }
 
@@ -348,6 +354,7 @@ function savedInvestigationFindingSignature(savedFindings: unknown[]) {
         workId: payload.workId,
         investigationId: payload.investigationId,
         content: payload.content,
+        whyItMatters: payload.whyItMatters,
         sourceTabId: payload.sourceTabId,
         sourceRunEventId: payload.sourceRunEventId,
         createdBy: payload.createdBy,
@@ -512,6 +519,7 @@ test('work.create can be executed through UI, Agent, and Automation with shared 
         scope: input.scope,
         initialContext: input.initialContext,
         conclusion: null,
+        conclusionMetadata: null,
         connectionId: 'conn-1',
         createdBy: 'user',
         createdByUserId: 'user-1',
@@ -778,6 +786,11 @@ test('work.updateConclusion accepts workId for Agent-facing tool calls', async (
     const input = {
         workId: 'work-1',
         conclusion: 'Gateway timeout errors increased after deploy.',
+        conclusionMetadata: {
+            confidence: 'medium',
+            caveats: ['One included analysis is not human-confirmed.'],
+            recommendedNextStep: 'Review the SQL-backed finding.',
+        },
     };
 
     const agent = createServices();
@@ -804,6 +817,7 @@ test('work.updateConclusion accepts workId for Agent-facing tool calls', async (
         investigationId: 'investigation-1',
         organizationId: 'org-1',
         content: 'Gateway timeout errors increased after deploy.',
+        whyItMatters: 'This supports the conclusion with SQL-backed evidence.',
         sourceTabId: 'tab-1',
         sourceRunEventId: null,
         createdBy: 'agent',
@@ -820,6 +834,7 @@ test('work.updateConclusion accepts workId for Agent-facing tool calls', async (
     assert.deepEqual(savedConclusionSignature(agent.savedConclusions), {
         id: 'work-1',
         conclusion: input.conclusion,
+        conclusionMetadata: input.conclusionMetadata,
     });
     assert.deepEqual(auditSignature(agentAudit), {
         actionId: 'work.updateConclusion',
@@ -845,6 +860,7 @@ test('work.updateInvestigation keeps confirm and exclude human-only while allowi
         investigationId: 'investigation-1',
         organizationId: 'org-1',
         content: 'Gateway timeout errors increased after deploy.',
+        whyItMatters: 'This finding has SQL-backed evidence for confirmation.',
         sourceTabId: 'tab-1',
         sourceRunEventId: null,
         createdBy: 'agent',
@@ -885,6 +901,7 @@ test('work.createInvestigationFinding can be executed through UI, Agent, and Aut
         workId: 'work-1',
         investigationId: 'investigation-1',
         content: 'Gateway timeout errors increased after deploy.',
+        whyItMatters: 'This identifies the likely deployment-related failure mode.',
         sourceTabId: 'tab-1',
         sourceRunEventId: 'event-1',
     };

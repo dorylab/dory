@@ -9,7 +9,9 @@ import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
 import { buildContinueAgentRunFetchInit } from '@/lib/work/continue-agent-request';
+import { analysisEvidenceLabel } from '@/lib/work/review-state';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
+import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/registry/new-york-v4/ui/drawer';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
@@ -237,32 +239,46 @@ export function WorkInvestigationWorkspaceContent({ workId, investigationId, def
 
     return (
         <div className="bg-background flex h-full min-h-0 flex-col">
-            <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 text-card-foreground">
-                <div className="min-w-0 flex-1 pr-3">
-                    <Button className="min-w-0 max-w-full justify-start px-2" variant="ghost" size="sm" onClick={onClose}>
-                        <ArrowLeft />
-                        <span className="shrink-0">Work</span>
-                        <span className="shrink-0 text-muted-foreground"> / </span>
-                        <span className="truncate font-medium">{investigation?.title ?? 'Workspace'}</span>
+            <header className="shrink-0 border-b bg-card px-4 py-3 text-card-foreground">
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1 pr-3">
+                        <Button className="min-w-0 max-w-full justify-start px-2" variant="ghost" size="sm" onClick={onClose}>
+                            <ArrowLeft />
+                            <span className="shrink-0">Work</span>
+                            <span className="shrink-0 text-muted-foreground"> / </span>
+                            <span className="truncate font-medium">{investigation?.title ?? 'Workspace'}</span>
+                        </Button>
+                    </div>
+                    {continueAgentMutation.isPending && (dirtyState.isDirty || continueAgentMutation.variables?.snapshot) ? (
+                        <div className="mr-3 flex max-w-[11rem] shrink-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
+                            <Loader2 className="size-3.5 animate-spin" />
+                            <span className="truncate">Sending workspace to Agent...</span>
+                        </div>
+                    ) : dirtyState.isDirty ? (
+                        <div className="mr-3 max-w-[11rem] shrink-0 truncate text-xs font-medium text-amber-600 dark:text-amber-400">Human edited · Not sent to Agent</div>
+                    ) : null}
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={!work || isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst}
+                        onClick={handleContinueAgent}
+                    >
+                        {isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst ? <Loader2 className="animate-spin" /> : <Bot />}
+                        Save & ask Agent to continue
                     </Button>
                 </div>
-                {continueAgentMutation.isPending && (dirtyState.isDirty || continueAgentMutation.variables?.snapshot) ? (
-                    <div className="mr-3 flex max-w-[11rem] shrink-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
-                        <Loader2 className="size-3.5 animate-spin" />
-                        <span className="truncate">Sending workspace to Agent...</span>
+                {work && investigation ? (
+                    <div className="mt-3 grid min-w-0 gap-2 text-xs text-muted-foreground lg:grid-cols-[minmax(0,1fr)_auto]">
+                        <div className="min-w-0 truncate">
+                            <span className="font-medium text-foreground">Goal:</span> {work.goal}
+                        </div>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <Badge variant="outline">{analysisEvidenceLabel(investigation)}</Badge>
+                            <Badge variant="secondary">v{investigation.currentRevision?.version ?? 1}</Badge>
+                            <span>{investigation.findings.length} {investigation.findings.length === 1 ? 'finding' : 'findings'}</span>
+                        </div>
                     </div>
-                ) : dirtyState.isDirty ? (
-                    <div className="mr-3 max-w-[11rem] shrink-0 truncate text-xs font-medium text-amber-600 dark:text-amber-400">Human edited · Not sent to Agent</div>
                 ) : null}
-                <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={!work || isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst}
-                    onClick={handleContinueAgent}
-                >
-                    {isAgentRunning || continueAgentMutation.isPending || isCollectingSnapshot || isRunningSqlFirst ? <Loader2 className="animate-spin" /> : <Bot />}
-                    Continue Agent
-                </Button>
             </header>
 
             <main className="min-h-0 flex-1">

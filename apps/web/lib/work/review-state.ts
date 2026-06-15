@@ -1,7 +1,14 @@
 export type WorkReviewAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 export type WorkLifecycleStatus = 'draft' | 'running' | 'completed';
 export type WorkReviewRunStatus = 'running' | 'completed' | 'failed';
-export type WorkLifecycleDisplayStatus = 'draft' | 'running' | 'completed' | 'failed';
+export type WorkLifecycleDisplayStatus = 'draft' | 'running' | 'in_progress' | 'needs_review' | 'ready' | 'failed';
+export type WorkConclusionStatus = 'fresh' | 'outdated' | 'missing';
+export type WorkConclusionConfidence = 'low' | 'medium' | 'high';
+export type WorkConclusionMetadata = {
+    confidence: WorkConclusionConfidence;
+    caveats: string[];
+    recommendedNextStep: string | null;
+} | null;
 
 export type WorkReviewFinding = {
     content: string;
@@ -53,6 +60,7 @@ export function getWorkEvidenceCounts(analyses: WorkReviewAnalysis[]) {
     let agentGenerated = 0;
     let humanConfirmed = 0;
     let needsReview = 0;
+    let humanEdited = 0;
 
     for (const analysis of analyses) {
         if (analysis.auditStatus === 'rejected') {
@@ -65,12 +73,14 @@ export function getWorkEvidenceCounts(analyses: WorkReviewAnalysis[]) {
             humanConfirmed += 1;
         } else if (analysis.auditStatus === 'needs_review') {
             needsReview += 1;
+        } else if (analysis.auditStatus === 'revised') {
+            humanEdited += 1;
         } else if (analysis.auditStatus === 'draft') {
             agentGenerated += 1;
         }
     }
 
-    return { included, excluded, agentGenerated, humanConfirmed, needsReview };
+    return { included, excluded, agentGenerated, humanConfirmed, needsReview, humanEdited, unconfirmed: included - humanConfirmed };
 }
 
 export function formatWorkEvidenceSummary(analyses: WorkReviewAnalysis[]) {
@@ -81,14 +91,61 @@ export function formatWorkEvidenceSummary(analyses: WorkReviewAnalysis[]) {
 
 export function formatUnconfirmedAnalysisSummary(analyses: WorkReviewAnalysis[]) {
     const counts = getWorkEvidenceCounts(analyses);
-    if (counts.agentGenerated === 0) return null;
-    return `${counts.agentGenerated} ${counts.agentGenerated === 1 ? 'is' : 'are'} Agent-generated and not confirmed.`;
+    if (counts.unconfirmed === 0) return null;
+    return `${counts.unconfirmed} ${counts.unconfirmed === 1 ? 'is' : 'are'} included and not human-confirmed.`;
 }
 
-export function getWorkLifecycleDisplayStatus(input: { workStatus: WorkLifecycleStatus; latestRun: WorkReviewRun }): WorkLifecycleDisplayStatus {
+export function getWorkLifecycleDisplayStatus(input: {
+    workStatus: WorkLifecycleStatus;
+    latestRun: WorkReviewRun;
+    analyses?: WorkReviewAnalysis[];
+    conclusionStatus?: WorkConclusionStatus;
+    conclusionMetadata?: WorkConclusionMetadata;
+}): WorkLifecycleDisplayStatus {
     if (input.latestRun?.status === 'running' || input.workStatus === 'running') return 'running';
     if (input.latestRun?.status === 'failed') return 'failed';
-    return input.workStatus;
+    if (input.workStatus === 'draft' && !input.latestRun) return 'draft';
+
+    const analyses = input.analyses ?? [];
+    const counts = getWorkEvidenceCounts(analyses);
+    if (analyses.length === 0 || counts.included === 0) return input.workStatus === 'draft' ? 'draft' : 'in_progress';
+
+    if (counts.unconfirmed > 0) return 'needs_review';
+    if (input.conclusionStatus !== 'fresh') return 'needs_review';
+    if (!input.conclusionMetadata) return 'needs_review';
+    return 'ready';
+}
+
+export function analysisEvidenceLabel(analysis: Pick<WorkReviewAnalysis, 'auditStatus'>) {
+    if (analysis.auditStatus === 'rejected') return 'Excluded';
+    if (analysis.auditStatus === 'accepted' || analysis.auditStatus === 'reviewed') return 'Verified · Used in conclusion';
+    if (analysis.auditStatus === 'revised') return 'Needs review · Human edited';
+    return 'Needs review · Included by Agent';
+}
+
+export function fallbackConclusionMetadata(input: { analyses: WorkReviewAnalysis[]; conclusionStatus?: WorkConclusionStatus }): NonNullable<WorkConclusionMetadata> {
+    const counts = getWorkEvidenceCounts(input.analyses);
+    const caveats: string[] = [];
+    if (counts.unconfirmed > 0) {
+        caveats.push(`${counts.unconfirmed} included ${counts.unconfirmed === 1 ? 'analysis is' : 'analyses are'} not human-confirmed.`);
+    }
+    if (input.conclusionStatus !== 'fresh') {
+        caveats.push('The conclusion is missing or may be outdated after Analysis changes.');
+    }
+    if (counts.excluded > 0) {
+        caveats.push(`${counts.excluded} ${counts.excluded === 1 ? 'analysis is' : 'analyses are'} excluded from the conclusion.`);
+    }
+
+    return {
+        confidence: counts.included > 0 && counts.unconfirmed === 0 && input.conclusionStatus === 'fresh' ? 'high' : counts.included > 0 ? 'medium' : 'low',
+        caveats,
+        recommendedNextStep:
+            counts.unconfirmed > 0
+                ? 'Review and verify the included analyses before trusting the conclusion.'
+                : input.conclusionStatus !== 'fresh'
+                  ? 'Update the conclusion from the current included analyses.'
+                  : null,
+    };
 }
 
 export function isIncludedAnalysis(analysis: Pick<WorkReviewAnalysis, 'auditStatus'>) {

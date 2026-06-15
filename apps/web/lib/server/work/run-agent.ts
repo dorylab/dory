@@ -23,7 +23,15 @@ import { buildIncludedAnalysisConclusionFromFindings } from '@/lib/work/review-s
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
-import type { WorkInvestigation, WorkInvestigationFinding, WorkRunEvent, WorkRunEventRole, WorkRunEventType, WorkWorkspaceSnapshot } from '@dory/database/postgres/schemas';
+import type {
+    WorkConclusionMetadata,
+    WorkInvestigation,
+    WorkInvestigationFinding,
+    WorkRunEvent,
+    WorkRunEventRole,
+    WorkRunEventType,
+    WorkWorkspaceSnapshot,
+} from '@dory/database/postgres/schemas';
 import { applyWorkAgentProtocolResult, checkWorkAgentProtocol, checkWorkAgentProtocolComplete, createWorkAgentProtocolState, workAgentProtocolError } from './protocol';
 import { formatWorkspaceSnapshotForAgent } from './workspace-snapshot';
 
@@ -231,6 +239,28 @@ function fallbackFindingContentFromSqlEvent(event: { payload?: Record<string, un
     return `SQL result was reviewed and preserved for this Analysis${suffix}${sqlSummary}`.trim();
 }
 
+function fallbackWhyItMattersFromSqlEvent(event: { payload?: Record<string, unknown> | null } | null) {
+    const payload = event?.payload && typeof event.payload === 'object' ? event.payload : null;
+    const query = payload?.query && typeof payload.query === 'object' ? (payload.query as Record<string, unknown>) : null;
+    const rowCount = typeof query?.rowCount === 'number' ? query.rowCount : typeof query?.totalRows === 'number' ? query.totalRows : null;
+    if (rowCount === 0) return 'The query returned no rows, so this Analysis may not provide supporting evidence yet.';
+    if (typeof rowCount === 'number') return 'This SQL-backed result gives the conclusion an auditable evidence point, but it still needs human review.';
+    return 'This preserved SQL result keeps the Analysis traceable, but the Finding should be reviewed before relying on it.';
+}
+
+function buildFallbackConclusionMetadata(params: { includedCount: number; unconfirmedCount: number; fallback: boolean }): WorkConclusionMetadata {
+    const caveats = [
+        params.unconfirmedCount > 0 ? `${params.unconfirmedCount} included ${params.unconfirmedCount === 1 ? 'analysis is' : 'analyses are'} Agent-generated or edited but not human-confirmed.` : null,
+        params.fallback ? 'The conclusion was generated from available Findings after the Agent did not provide complete conclusion metadata.' : null,
+    ].filter((item): item is string => Boolean(item));
+
+    return {
+        confidence: params.includedCount > 0 && params.unconfirmedCount === 0 && !params.fallback ? 'high' : params.includedCount > 0 ? 'medium' : 'low',
+        caveats,
+        recommendedNextStep: caveats.length ? 'Review the included evidence before treating this conclusion as final.' : null,
+    };
+}
+
 function extractSqlEventSource(event: WorkRunEvent | null) {
     const payload = event?.payload && typeof event.payload === 'object' ? event.payload : null;
     return {
@@ -263,11 +293,13 @@ async function createFallbackFindingForPendingSql(params: {
           })
         : null;
     const content = fallbackFindingContentFromSqlEvent(sourceEvent);
+    const whyItMatters = fallbackWhyItMattersFromSqlEvent(sourceEvent);
     const finding = await params.db.works.createInvestigationFinding({
         organizationId: params.organizationId,
         workId: params.workId,
         investigationId: pending.investigationId,
         content,
+        whyItMatters,
         sourceTabId: pending.sourceTabId,
         sourceRunEventId: pending.sourceRunEventId,
         createdBy: 'agent',
@@ -281,6 +313,7 @@ async function createFallbackFindingForPendingSql(params: {
         payload: sanitizePayload({
             toolName: 'work_createInvestigationFinding',
             output: finding,
+            whyItMatters,
             fallback: true,
             reason: 'Agent ended with a SQL result that still needed a Finding before conclusion.',
         }),
@@ -342,11 +375,15 @@ async function createFallbackFindingsForMissingAnalyses(params: {
         const content = sourceEvent
             ? fallbackFindingContentFromSqlEvent(sourceEvent)
             : `No SQL-backed Finding was produced for "${title}" before the Agent attempted the conclusion. Treat this Analysis as inconclusive and do not use it as supporting evidence.`;
+        const whyItMatters = sourceEvent
+            ? fallbackWhyItMattersFromSqlEvent(sourceEvent)
+            : 'This Analysis lacks SQL-backed evidence and should not increase confidence in the conclusion.';
         const finding = await params.db.works.createInvestigationFinding({
             organizationId: params.organizationId,
             workId: params.workId,
             investigationId,
             content,
+            whyItMatters,
             sourceTabId: source.tabId,
             sourceRunEventId: sourceEvent?.id ?? null,
             createdBy: 'agent',
@@ -360,6 +397,7 @@ async function createFallbackFindingsForMissingAnalyses(params: {
             payload: sanitizePayload({
                 toolName: 'work_createInvestigationFinding',
                 output: finding,
+                whyItMatters,
                 fallback: true,
                 reason: params.reason,
             }),
@@ -603,6 +641,18 @@ function formatWorkSetupSection(work: { id: string; workType?: string | null; sc
     return lines.join('\n');
 }
 
+const WORK_TOOL_BOUNDARY_INSTRUCTION = [
+    'Work Tool Boundary',
+    'Only call these Work tools by their exact tool names: work_createInvestigation, work_runInvestigationSql, work_createInvestigationFinding, work_updateInvestigation, work_updateConclusion.',
+    'Do not call describeTable, searchSchema, listTables, listDatabases, getTableProfile, getDatabaseSummary, sqlRunner, or any other generic chat/schema/sql tool; they are not available in Work runs.',
+    'If table or column metadata is needed, query metadata with work_runInvestigationSql using a read-only SQL statement appropriate for the database dialect, then create a Finding from the SQL result before running another query.',
+    'All business-data and metadata queries must go through work_runInvestigationSql so the SQL, result, and Analysis evidence remain auditable in the Work workspace.',
+].join('\n');
+
+function workToolBoundaryInstruction() {
+    return WORK_TOOL_BOUNDARY_INSTRUCTION;
+}
+
 function buildWorkRunInstruction(
     work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null },
     workspaceSnapshot: WorkWorkspaceSnapshot | null,
@@ -617,11 +667,12 @@ function buildWorkRunInstruction(
         return [
             'Work Run Context',
             `You are updating the conclusion for Dory Work ${work.id}.`,
+            workToolBoundaryInstruction(),
             formatWorkSetupSection(work),
             existingAnalysesForPrompt(existingAnalyses),
             'Only update the Work conclusion from the current included Analysis Findings.',
             'Do not run SQL, create analyses, or change analysis review status.',
-            'Call work.updateConclusion with a concise synthesis of included Findings.',
+            'Call work.updateConclusion with a concise synthesis of included Findings and conclusionMetadata containing confidence, caveats, and recommendedNextStep.',
             userInstructionSection,
         ]
             .filter(Boolean)
@@ -633,6 +684,7 @@ function buildWorkRunInstruction(
             'Work Run Context',
             `You are continuing a Dory Work. The current workId is ${work.id}.`,
             `Continue only the current Investigation. The current investigationId is ${workspaceSnapshot.investigationId}.`,
+            workToolBoundaryInstruction(),
             formatWorkSetupSection(work),
             'The human has already reviewed and modified the SQL workspace. Treat the Workspace Snapshot in the user message as the source of truth for the next step.',
             'Do not create new analyses for this continuation unless the human explicitly asks for a broader Work restart.',
@@ -653,6 +705,7 @@ function buildWorkRunInstruction(
         return [
             'Work Run Context',
             `You are running a Dory Work. The current workId is ${work.id}.`,
+            workToolBoundaryInstruction(),
             formatWorkSetupSection(work),
             focusedAnalysisForPrompt(focusedAnalysis),
             'The user just added this Analysis. Start running it now.',
@@ -665,7 +718,7 @@ function buildWorkRunInstruction(
             'Write SQL as a complete statement ending with a semicolon.',
             mode === 'revise_analysis'
                 ? 'Do not update the Work conclusion. The UI will mark it outdated and the human can update it explicitly.'
-                : 'Call work.updateConclusion after the focused included Analysis has SQL-backed Findings. Human confirmation is optional and should not block the conclusion.',
+                : 'Call work.updateConclusion after the focused included Analysis has SQL-backed Findings. Include conclusionMetadata with confidence, caveats, and recommendedNextStep. Human confirmation is optional and should not block the conclusion.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
             'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
@@ -679,6 +732,7 @@ function buildWorkRunInstruction(
         return [
             'Work Run Context',
             `You are running a Dory Work. The current workId is ${work.id}.`,
+            workToolBoundaryInstruction(),
             formatWorkSetupSection(work),
             existingAnalysesForPrompt(existingAnalyses),
             'This is a task-style continuation. The Work already has Analyses, so do not call work.createInvestigation.',
@@ -691,9 +745,9 @@ function buildWorkRunInstruction(
             'Every included non-rejected Analysis must have at least one Finding before the conclusion.',
             mode === 'continue_work'
                 ? 'Do not update the Work conclusion. The UI will mark it outdated and the human can update it explicitly.'
-                : 'Call work.updateConclusion after included Analyses have Findings. The conclusion must synthesize included Findings and should not simply repeat every Finding.',
+                : 'Call work.updateConclusion after included Analyses have Findings. Include conclusionMetadata with confidence, caveats, and recommendedNextStep. The conclusion must synthesize included Findings and should not simply repeat every Finding.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
-            'Use work.createInvestigationFinding after SQL results. Users can later confirm or exclude individual Analyses.',
+            'Use work.createInvestigationFinding after SQL results. Every Finding must include content and a short whyItMatters sentence explaining how the result affects the Work goal. Users can later confirm or exclude individual Analyses.',
             'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
             'Keep the final answer concise. Do not repeat the full step-by-step process in the final answer.',
             userInstructionSection,
@@ -705,6 +759,7 @@ function buildWorkRunInstruction(
     return [
         'Work Run Context',
         `You are running a Dory Work. The current workId is ${work.id}.`,
+        workToolBoundaryInstruction(),
         formatWorkSetupSection(work),
         'Follow this protocol exactly: first create 3-5 distinct analyses with work.createInvestigation, then run SQL for each analysis with work.runInvestigationSql, then create concrete Findings with work.createInvestigationFinding, then update the conclusion from included Analyses.',
         'Call exactly one protocol tool at a time. Do not call work.runInvestigationSql in the same step as work.createInvestigation.',
@@ -715,8 +770,9 @@ function buildWorkRunInstruction(
         'When calling work.runInvestigationSql, always pass the target investigationId from the Analysis you created, a stable groupKey for the human-readable SQL asset group, and a concise per-query title for the SQL Purpose. Use a distinct groupKey for each distinct SQL purpose. Reuse a groupKey only when the new SQL belongs in the same workspace tab as prior SQL for that Analysis.',
         'Write SQL as a complete statement ending with a semicolon.',
         'A Finding is a concise fact or observation backed by the SQL result. Prefer bullet-like short statements, not a long summary paragraph.',
+        'Every Finding must include content and a short whyItMatters sentence explaining how the result affects the Work goal.',
         'Every included non-rejected Analysis must have at least one Finding before the conclusion.',
-        'Call work.updateConclusion after included Analyses have Findings. Human confirmation is optional and should not block the conclusion.',
+        'Call work.updateConclusion after included Analyses have Findings. Include conclusionMetadata with confidence, caveats, and recommendedNextStep. Human confirmation is optional and should not block the conclusion.',
         'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
         'Use work.createInvestigationFinding after SQL results. Users can later confirm or exclude individual Analyses.',
         'Before each tool call, briefly state what you are about to do. Keep that explanation close to the step.',
@@ -961,7 +1017,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             table: null,
             tableSchema: null,
             connectionType: null,
-            sqlToolEnabled: true,
+            sqlToolEnabled: false,
             candidateTables: null,
             copilotEnvelope: null,
             locale,
@@ -1132,8 +1188,9 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                         workId: work.id,
                     });
                     const conclusionInvestigationIds = new Set(protocol.createdInvestigationIds.filter(id => protocol.auditStatusByInvestigationId[id] !== 'rejected'));
+                    const conclusionInvestigations = scopedInvestigationsForConclusion(investigations, conclusionInvestigationIds);
                     const fallbackConclusion = buildIncludedAnalysisConclusionFromFindings(
-                        scopedInvestigationsForConclusion(investigations, conclusionInvestigationIds),
+                        conclusionInvestigations,
                         scopedFindingsForConclusion(findings, conclusionInvestigationIds),
                     );
                     if (!fallbackConclusion) {
@@ -1161,9 +1218,15 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                         requestId,
                         currentConnectionId: work.connectionId,
                     });
+                    const unconfirmedCount = conclusionInvestigations.filter(investigation => investigation.auditStatus !== 'accepted' && investigation.auditStatus !== 'reviewed').length;
                     const conclusionEnvelope = await executeAction(ctx, 'work.updateConclusion', {
                         workId: work.id,
                         conclusion: fallbackConclusion,
+                        conclusionMetadata: buildFallbackConclusionMetadata({
+                            includedCount: conclusionInvestigations.length,
+                            unconfirmedCount,
+                            fallback: true,
+                        }),
                     });
                     applyWorkAgentProtocolResult(protocol, 'work_updateConclusion', conclusionEnvelope.data);
                     await appendEvent({

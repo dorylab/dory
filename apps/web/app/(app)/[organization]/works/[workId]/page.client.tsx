@@ -29,9 +29,12 @@ import { executeActionClient } from '@/lib/actions/client';
 import { fetchSqlTabs, SQL_TABS_PREFETCH_STALE_TIME_MS, sqlTabsQueryKey } from '@/lib/sql-console/tab-queries';
 import { effectiveInvestigationStatus, investigationActivityDisplay } from '@/lib/work/investigation-card-state';
 import {
+    analysisEvidenceLabel,
+    fallbackConclusionMetadata,
     formatWorkEvidenceSummary,
     formatUnconfirmedAnalysisSummary,
     getConclusionSourceBoundary,
+    getWorkEvidenceCounts,
     getWorkLifecycleDisplayStatus,
     type WorkLifecycleDisplayStatus,
 } from '@/lib/work/review-state';
@@ -58,7 +61,18 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { useConnections } from '../../connections/hooks/use-connections';
-import type { Work, WorkAnalysisAuditStatus, WorkDetail, WorkInvestigation, WorkRun, WorkRunEvent, WorkTimelineEvent, WorkWorkspaceSnapshot } from '../types';
+import type {
+    Work,
+    WorkAnalysisAuditStatus,
+    WorkConclusionConfidence,
+    WorkConclusionMetadata,
+    WorkDetail,
+    WorkInvestigation,
+    WorkRun,
+    WorkRunEvent,
+    WorkTimelineEvent,
+    WorkWorkspaceSnapshot,
+} from '../types';
 import { eventTypeLabel, formatRelativeTime, runStatusClassName, runStatusLabel, statusClassName, statusLabel } from '../utils';
 
 type WorkDetailPageClientProps = {
@@ -68,13 +82,10 @@ type WorkDetailPageClientProps = {
 
 const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
 
-function analysisInclusionLabel(status: WorkAnalysisAuditStatus) {
-    return status === 'rejected' ? 'Excluded' : 'Used in conclusion';
-}
-
 function analysisInclusionClassName(status: WorkAnalysisAuditStatus) {
     if (status === 'rejected') return 'border-red-300 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
-    return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+    if (status === 'accepted' || status === 'reviewed') return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+    return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
 }
 
 function analysisSourceLabel(investigation: WorkInvestigation) {
@@ -90,15 +101,41 @@ function hasSqlBackedFinding(investigation: WorkInvestigation) {
 function workLifecycleDisplayStatusLabel(status: WorkLifecycleDisplayStatus) {
     if (status === 'running') return 'Running';
     if (status === 'failed') return 'Failed';
-    if (status === 'completed') return 'Completed';
+    if (status === 'in_progress') return 'In Progress';
+    if (status === 'needs_review') return 'Needs Review';
+    if (status === 'ready') return 'Ready';
     return 'Draft';
 }
 
 function workLifecycleDisplayStatusClassName(status: WorkLifecycleDisplayStatus) {
     if (status === 'running') return statusClassName('running');
-    if (status === 'completed') return statusClassName('completed');
+    if (status === 'ready') return statusClassName('completed');
+    if (status === 'in_progress') return statusClassName('running');
+    if (status === 'needs_review') return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
     if (status === 'failed') return 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
     return statusClassName('draft');
+}
+
+function conclusionConfidenceClassName(confidence: WorkConclusionConfidence) {
+    if (confidence === 'high') return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+    if (confidence === 'medium') return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
+    return 'border-red-300 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
+}
+
+function normalizeConclusionMetadata(input: WorkConclusionMetadata | null, fallback: WorkConclusionMetadata): WorkConclusionMetadata {
+    if (!input) return fallback;
+    return {
+        confidence: input.confidence,
+        caveats: input.caveats.map(item => item.trim()).filter(Boolean),
+        recommendedNextStep: input.recommendedNextStep?.trim() || fallback.recommendedNextStep,
+    };
+}
+
+function parseCaveatsDraft(value: string) {
+    return value
+        .split('\n')
+        .map(item => item.replace(/^[-*]\s*/, '').trim())
+        .filter(Boolean);
 }
 
 function pluralizeAnalysis(count: number) {
@@ -132,6 +169,9 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const [titleDraft, setTitleDraft] = useState('');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
     const [conclusion, setConclusion] = useState('');
+    const [conclusionConfidence, setConclusionConfidence] = useState<WorkConclusionConfidence>('medium');
+    const [conclusionCaveatsDraft, setConclusionCaveatsDraft] = useState('');
+    const [recommendedNextStepDraft, setRecommendedNextStepDraft] = useState('');
     const [isEditingConclusion, setIsEditingConclusion] = useState(false);
     const [investigationTitle, setInvestigationTitle] = useState('');
     const [openingInvestigationId, setOpeningInvestigationId] = useState<string | null>(null);
@@ -159,11 +199,28 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const isRunRunning = latestRun?.status === 'running' || work?.status === 'running';
     const latestEvent = latestRunEvents[latestRunEvents.length - 1] ?? null;
     const evidenceSummary = useMemo(() => formatWorkEvidenceSummary(investigations), [investigations]);
+    const evidenceCounts = useMemo(() => getWorkEvidenceCounts(investigations), [investigations]);
     const unconfirmedAnalysisSummary = useMemo(() => formatUnconfirmedAnalysisSummary(investigations), [investigations]);
     const conclusionSourceBoundary = useMemo(() => getConclusionSourceBoundary(investigations), [investigations]);
     const includedAnalysisConclusion = useMemo(() => buildIncludedAnalysesMarkdown(investigations), [investigations]);
     const displayConclusionMarkdown = work?.conclusion?.trim() || includedAnalysisConclusion;
-    const workLifecycleStatus = work ? getWorkLifecycleDisplayStatus({ workStatus: work.status, latestRun }) : 'draft';
+    const fallbackMetadata = useMemo(
+        () => fallbackConclusionMetadata({ analyses: investigations, conclusionStatus: work?.conclusionStatus }),
+        [investigations, work?.conclusionStatus],
+    );
+    const displayConclusionMetadata = useMemo(
+        () => normalizeConclusionMetadata(work?.conclusionMetadata ?? null, fallbackMetadata),
+        [fallbackMetadata, work?.conclusionMetadata],
+    );
+    const workLifecycleStatus = work
+        ? getWorkLifecycleDisplayStatus({
+              workStatus: work.status,
+              latestRun,
+              analyses: investigations,
+              conclusionStatus: work.conclusionStatus,
+              conclusionMetadata: work.conclusionMetadata,
+          })
+        : 'draft';
     const includedAnalysisCount = conclusionSourceBoundary.includedAnalyses.length;
     const hasIncludedAnalysis = includedAnalysisCount > 0;
     const conclusionEvidenceLine =
@@ -186,8 +243,12 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         }
         if (!isEditingConclusion) {
             setConclusion(work.conclusion ?? '');
+            const metadata = normalizeConclusionMetadata(work.conclusionMetadata ?? null, fallbackMetadata);
+            setConclusionConfidence(metadata.confidence);
+            setConclusionCaveatsDraft(metadata.caveats.join('\n'));
+            setRecommendedNextStepDraft(metadata.recommendedNextStep ?? '');
         }
-    }, [work, isEditingGoal, isEditingTitle, isEditingConclusion]);
+    }, [work, fallbackMetadata, isEditingGoal, isEditingTitle, isEditingConclusion]);
 
     const invalidateWork = () => queryClient.invalidateQueries({ queryKey: ['work', workId] });
 
@@ -232,14 +293,19 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     });
 
     const updateConclusionMutation = useMutation({
-        mutationFn: (nextConclusion: string) =>
+        mutationFn: (input: { conclusion: string; conclusionMetadata: WorkConclusionMetadata | null }) =>
             executeActionClient<Work>('work.updateConclusion', {
                 id: workId,
-                conclusion: nextConclusion.trim() ? nextConclusion.trim() : null,
+                conclusion: input.conclusion.trim() ? input.conclusion.trim() : null,
+                conclusionMetadata: input.conclusion.trim() ? input.conclusionMetadata : null,
             }),
         onSuccess: updatedWork => {
             toast.success('Conclusion updated');
             setConclusion(updatedWork.conclusion ?? '');
+            const metadata = normalizeConclusionMetadata(updatedWork.conclusionMetadata, fallbackMetadata);
+            setConclusionConfidence(metadata.confidence);
+            setConclusionCaveatsDraft(metadata.caveats.join('\n'));
+            setRecommendedNextStepDraft(metadata.recommendedNextStep ?? '');
             setIsEditingConclusion(false);
             invalidateWork();
         },
@@ -328,7 +394,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         },
     });
 
-    const startContinueWork = () => {
+    const startContinueWork = useCallback(() => {
         if (!continueOpen) {
             setContinueOpen(true);
             return;
@@ -339,10 +405,75 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             return;
         }
         runWorkMutation.mutate({ mode: 'continue_work', userInstruction: instruction });
-    };
+    }, [continueInstruction, continueOpen, runWorkMutation]);
+
+    const nextStep = useMemo(() => {
+        if (isRunRunning) {
+            return {
+                title: 'Agent is working',
+                description: latestEvent?.content || 'Review the latest run details while Dory continues the Work.',
+                primaryLabel: 'View Run Details',
+                primaryAction: () => setRunDetailsOpen(true),
+                secondaryLabel: null as string | null,
+                secondaryAction: null as (() => void) | null,
+                disabled: false,
+            };
+        }
+        if (evidenceCounts.included > 0 && evidenceCounts.unconfirmed > 0) {
+            return {
+                title: 'Review Evidence',
+                description: `${evidenceCounts.unconfirmed} included ${pluralizeAnalysis(evidenceCounts.unconfirmed)} need human review before the conclusion is fully trusted.`,
+                primaryLabel: 'Review Evidence',
+                primaryAction: () => document.getElementById('work-analyses')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+                secondaryLabel: 'Continue Work',
+                secondaryAction: startContinueWork,
+                disabled: false,
+            };
+        }
+        if (hasIncludedAnalysis && work?.conclusionStatus !== 'fresh') {
+            return {
+                title: 'Update Conclusion',
+                description: 'The conclusion is missing or outdated for the current included evidence.',
+                primaryLabel: 'Update Conclusion',
+                primaryAction: () =>
+                    runWorkMutation.mutate({
+                        mode: 'update_conclusion',
+                        userInstruction: 'Update the conclusion from the current included analyses.',
+                    }),
+                secondaryLabel: 'Continue Work',
+                secondaryAction: startContinueWork,
+                disabled: runWorkMutation.isPending,
+            };
+        }
+        return {
+            title: 'Continue Work',
+            description: displayConclusionMetadata.recommendedNextStep || 'Ask a follow-up question, add another analysis, or refine the current conclusion.',
+            primaryLabel: 'Continue Work',
+            primaryAction: startContinueWork,
+            secondaryLabel: latestRun ? 'View Run Details' : null,
+            secondaryAction: latestRun ? () => setRunDetailsOpen(true) : null,
+            disabled: runWorkMutation.isPending || !goal.trim(),
+        };
+    }, [
+        displayConclusionMetadata.recommendedNextStep,
+        evidenceCounts.included,
+        evidenceCounts.unconfirmed,
+        goal,
+        hasIncludedAnalysis,
+        isRunRunning,
+        latestEvent?.content,
+        latestRun,
+        runWorkMutation,
+        startContinueWork,
+        work?.conclusionStatus,
+    ]);
 
     const startEditingConclusion = () => {
+        const metadata = normalizeConclusionMetadata(work?.conclusionMetadata ?? null, fallbackMetadata);
         setConclusion(work?.conclusion?.trim() ? work.conclusion : (includedAnalysisConclusion ?? ''));
+        setConclusionConfidence(metadata.confidence);
+        setConclusionCaveatsDraft(metadata.caveats.join('\n'));
+        setRecommendedNextStepDraft(metadata.recommendedNextStep ?? '');
         setIsEditingConclusion(true);
     };
 
@@ -658,12 +789,21 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                             <span>Last updated {formatRelativeTime(work.updatedAt)}</span>
                         </div>
                     </div>
-                    <div className="flex w-full min-w-0 flex-col gap-3 sm:w-auto sm:min-w-44">
-                        <div className="flex gap-2">
-                            <Button className="flex-1 sm:flex-none" onClick={startContinueWork} disabled={isRunRunning || runWorkMutation.isPending || !goal.trim()}>
-                                {isRunRunning || runWorkMutation.isPending ? <Loader2 className="animate-spin" /> : <Send />}
-                                {isRunRunning ? 'Running' : 'Continue Work'}
+                    <div className="w-full min-w-0 rounded-lg border bg-card p-4 text-card-foreground shadow-sm sm:w-[22rem]">
+                        <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Next step</div>
+                        <div className="mt-1 text-sm font-semibold">{nextStep.title}</div>
+                        <p className="mt-2 text-sm leading-5 text-muted-foreground">{nextStep.description}</p>
+                        <div className="mt-4 flex min-w-0 flex-wrap gap-2">
+                            <Button className="flex-1 sm:flex-none" onClick={nextStep.primaryAction} disabled={isRunRunning ? false : nextStep.disabled || runWorkMutation.isPending}>
+                                {runWorkMutation.isPending && !isRunRunning ? <Loader2 className="animate-spin" /> : nextStep.primaryLabel === 'Continue Work' ? <Send /> : <Check />}
+                                {nextStep.primaryLabel}
                             </Button>
+                            {nextStep.secondaryLabel && nextStep.secondaryAction ? (
+                                <Button type="button" variant="secondary" onClick={nextStep.secondaryAction} disabled={runWorkMutation.isPending || (nextStep.secondaryLabel === 'Continue Work' && !goal.trim())}>
+                                    {nextStep.secondaryLabel === 'Continue Work' ? <Send /> : <ChevronDown />}
+                                    {nextStep.secondaryLabel}
+                                </Button>
+                            ) : null}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -689,9 +829,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                            <div className="font-medium text-foreground">Evidence</div>
-                            <div className="mt-1">{evidenceSummary}</div>
+                        <div className="mt-4 border-t pt-3 text-xs text-muted-foreground">
+                            <div>{evidenceSummary}</div>
                             <div className="mt-1">{conclusionEvidenceLine}</div>
                         </div>
                     </div>
@@ -739,6 +878,15 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         )}
                         {continueOpen ? (
                             <div className="rounded-lg border bg-card p-3">
+                                <div className="mb-3">
+                                    <div className="text-sm font-medium">What should the agent do next?</div>
+                                    <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                                        <span>Exclude abnormal low prices and update the conclusion</span>
+                                        <span>Add a histogram of price distribution</span>
+                                        <span>Compare price distribution by model type</span>
+                                        <span>Check whether zero prices are data entry errors</span>
+                                    </div>
+                                </div>
                                 <Textarea
                                     value={continueInstruction}
                                     onChange={event => setContinueInstruction(event.target.value)}
@@ -818,12 +966,12 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         ) : null}
                     </section>
 
-                    <section className="min-w-0 space-y-3">
+                    <section id="work-analyses" className="scroll-mt-6 min-w-0 space-y-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div className="min-w-0">
                                 <h2 className="text-base font-semibold">Analyses</h2>
                                 <p className="mt-1 text-sm text-muted-foreground">{evidenceSummary}</p>
-                                <p className="mt-1 text-sm text-muted-foreground">Conclusion uses included analyses.</p>
+                                <p className="mt-1 text-sm text-muted-foreground">Included analyses support the current conclusion; verified analyses have been human-reviewed.</p>
                                 {unconfirmedAnalysisSummary ? <p className="mt-1 text-sm text-muted-foreground">{unconfirmedAnalysisSummary}</p> : null}
                             </div>
                             <div className="flex w-full min-w-0 gap-2 sm:w-auto">
@@ -901,7 +1049,11 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         size="sm"
                                         variant="ghost"
                                         onClick={() => {
+                                            const metadata = normalizeConclusionMetadata(work.conclusionMetadata, fallbackMetadata);
                                             setConclusion(work.conclusion ?? '');
+                                            setConclusionConfidence(metadata.confidence);
+                                            setConclusionCaveatsDraft(metadata.caveats.join('\n'));
+                                            setRecommendedNextStepDraft(metadata.recommendedNextStep ?? '');
                                             setIsEditingConclusion(false);
                                         }}
                                         disabled={updateConclusionMutation.isPending}
@@ -911,7 +1063,16 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     <Button
                                         size="sm"
                                         variant="secondary"
-                                        onClick={() => updateConclusionMutation.mutate(conclusion)}
+                                        onClick={() =>
+                                            updateConclusionMutation.mutate({
+                                                conclusion,
+                                                conclusionMetadata: {
+                                                    confidence: conclusionConfidence,
+                                                    caveats: parseCaveatsDraft(conclusionCaveatsDraft),
+                                                    recommendedNextStep: recommendedNextStepDraft.trim() || null,
+                                                },
+                                            })
+                                        }
                                         disabled={updateConclusionMutation.isPending || (Boolean(conclusion.trim()) && !hasIncludedAnalysis)}
                                         title={!hasIncludedAnalysis && conclusion.trim() ? 'Include at least one Analysis before saving a conclusion' : undefined}
                                     >
@@ -945,22 +1106,95 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         <Card className="min-w-0 overflow-hidden rounded-lg py-0">
                             <CardContent className="min-w-0 p-4">
                                 {isEditingConclusion ? (
-                                    <>
+                                    <div className="grid gap-4">
                                         {!hasIncludedAnalysis ? (
                                             <p className="mb-3 text-sm text-amber-600 dark:text-amber-400">Include at least one Analysis before saving a Conclusion.</p>
                                         ) : null}
-                                        <Textarea
-                                            value={conclusion}
-                                            onChange={event => setConclusion(event.target.value)}
-                                            placeholder="Write the conclusion in Markdown."
-                                            className="min-h-36 resize-none font-mono text-sm"
-                                        />
-                                    </>
+                                        <label className="grid gap-2">
+                                            <span className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Conclusion</span>
+                                            <Textarea
+                                                value={conclusion}
+                                                onChange={event => setConclusion(event.target.value)}
+                                                placeholder="Write the conclusion in Markdown."
+                                                className="min-h-36 resize-none font-mono text-sm"
+                                            />
+                                        </label>
+                                        <div className="grid gap-3 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]">
+                                            <div className="grid gap-2">
+                                                <span className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Confidence</span>
+                                                <div className="flex rounded-md border bg-background p-1">
+                                                    {(['low', 'medium', 'high'] as WorkConclusionConfidence[]).map(confidence => (
+                                                        <Button
+                                                            key={confidence}
+                                                            type="button"
+                                                            size="sm"
+                                                            variant={conclusionConfidence === confidence ? 'secondary' : 'ghost'}
+                                                            className="h-8 flex-1 capitalize"
+                                                            onClick={() => setConclusionConfidence(confidence)}
+                                                        >
+                                                            {confidence}
+                                                        </Button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <label className="grid gap-2">
+                                                <span className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Recommended next step</span>
+                                                <Input
+                                                    value={recommendedNextStepDraft}
+                                                    onChange={event => setRecommendedNextStepDraft(event.target.value)}
+                                                    placeholder="What should be verified or refined next?"
+                                                />
+                                            </label>
+                                        </div>
+                                        <label className="grid gap-2">
+                                            <span className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Caveats</span>
+                                            <Textarea
+                                                value={conclusionCaveatsDraft}
+                                                onChange={event => setConclusionCaveatsDraft(event.target.value)}
+                                                placeholder="One caveat per line."
+                                                className="min-h-24 resize-none text-sm"
+                                            />
+                                        </label>
+                                    </div>
                                 ) : displayConclusionMarkdown ? (
-                                    <div className="min-h-36 min-w-0 p-2 text-sm">
-                                        <MessageResponse className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] [&_*]:max-w-full [&_code]:break-words [&_pre]:overflow-x-auto">
-                                            {displayConclusionMarkdown}
-                                        </MessageResponse>
+                                    <div className="grid min-w-0 gap-5 p-2 text-sm">
+                                        <div className="min-w-0">
+                                            <div className="mb-2 text-xs font-medium uppercase tracking-normal text-muted-foreground">Conclusion</div>
+                                            <MessageResponse className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] [&_*]:max-w-full [&_code]:break-words [&_pre]:overflow-x-auto">
+                                                {displayConclusionMarkdown}
+                                            </MessageResponse>
+                                        </div>
+                                        <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
+                                            <div>
+                                                <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Based on</div>
+                                                <div className="mt-2 text-sm font-medium">{includedAnalysisCount} included {pluralizeAnalysis(includedAnalysisCount)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Confidence</div>
+                                                <Badge variant="outline" className={`mt-2 capitalize ${conclusionConfidenceClassName(displayConclusionMetadata.confidence)}`}>
+                                                    {displayConclusionMetadata.confidence}
+                                                </Badge>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Recommended next step</div>
+                                                <div className="mt-2 text-sm text-muted-foreground">
+                                                    {displayConclusionMetadata.recommendedNextStep || 'No specific next step recorded.'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {displayConclusionMetadata.caveats.length ? (
+                                            <div className="border-t pt-4">
+                                                <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Caveats</div>
+                                                <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+                                                    {displayConclusionMetadata.caveats.map((caveat, index) => (
+                                                        <li key={`${index}-${caveat}`} className="flex min-w-0 gap-2">
+                                                            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/70" />
+                                                            <span className="min-w-0 break-words [overflow-wrap:anywhere]">{caveat}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
                                     </div>
                                 ) : (
                                     <div className="min-h-36 p-2 text-sm text-muted-foreground">
@@ -1125,7 +1359,7 @@ function AnalysisCard({
                     {showReviewControls ? (
                         <Badge variant="outline" className={analysisInclusionClassName(investigation.auditStatus)}>
                             {!isExcluded ? <ShieldCheck className="mr-1 size-3" /> : null}
-                            {analysisInclusionLabel(investigation.auditStatus)}
+                            {analysisEvidenceLabel(investigation)}
                         </Badge>
                     ) : null}
                     {showReviewControls ? (
@@ -1156,9 +1390,17 @@ function AnalysisCard({
                 {investigation.findings.length ? (
                     <ul className="space-y-2 text-sm leading-6">
                         {investigation.findings.map(finding => (
-                            <li key={finding.id} className="flex min-w-0 gap-2">
-                                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
-                                <span className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{finding.content}</span>
+                            <li key={finding.id} className="min-w-0">
+                                <div className="flex min-w-0 gap-2">
+                                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
+                                    <span className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{finding.content}</span>
+                                </div>
+                                {finding.whyItMatters?.trim() ? (
+                                    <div className="mt-2 rounded-md border bg-card/70 p-3 text-xs leading-5 text-muted-foreground">
+                                        <div className="mb-1 font-medium text-foreground">Why it matters</div>
+                                        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{finding.whyItMatters}</div>
+                                    </div>
+                                ) : null}
                             </li>
                         ))}
                     </ul>
@@ -1203,7 +1445,7 @@ function AnalysisCard({
                 <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
                     <Button type="button" size="sm" variant="secondary" disabled={!showReviewControls || isExcluded || isRevising} onClick={() => setReviseOpen(value => !value)}>
                         {isRevising ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                        Revise
+                        Ask to revise
                     </Button>
                     <Button
                         size="sm"

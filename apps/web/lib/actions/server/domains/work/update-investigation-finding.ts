@@ -7,6 +7,7 @@ const inputSchema = z.object({
     workId: z.string().min(1),
     id: z.string().min(1),
     content: z.string().trim().min(1).optional(),
+    whyItMatters: z.string().trim().min(1).nullable().optional(),
     sourceTabId: z.string().min(1).nullable().optional(),
     sourceRunEventId: z.string().min(1).nullable().optional(),
     orderIndex: z.number().int().min(0).nullable().optional(),
@@ -42,6 +43,7 @@ export const workUpdateInvestigationFindingAction = defineWebAction({
             id: input.id,
             patch: {
                 content: input.content,
+                whyItMatters: input.whyItMatters,
                 sourceTabId: input.sourceTabId,
                 sourceRunEventId: input.sourceRunEventId,
                 orderIndex: input.orderIndex,

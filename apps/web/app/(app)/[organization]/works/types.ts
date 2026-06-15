@@ -3,6 +3,12 @@ export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
 export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 export type WorkConclusionStatus = 'fresh' | 'outdated' | 'missing';
+export type WorkConclusionConfidence = 'low' | 'medium' | 'high';
+export type WorkConclusionMetadata = {
+    confidence: WorkConclusionConfidence;
+    caveats: string[];
+    recommendedNextStep: string | null;
+};
 
 export type WorkScope = {
     timeRange?: string | null;
@@ -22,6 +28,7 @@ export type Work = {
     scope: WorkScope | null;
     initialContext: string | null;
     conclusion: string | null;
+    conclusionMetadata: WorkConclusionMetadata | null;
     conclusionStatus: WorkConclusionStatus;
     conclusionUpdatedAt: string | null;
     connectionId: string;
@@ -56,6 +63,7 @@ export type WorkInvestigation = {
 export type WorkInvestigationRevisionFindingSnapshot = {
     id: string;
     content: string;
+    whyItMatters?: string | null;
     sourceTabId: string | null;
     sourceRunEventId: string | null;
     createdBy: 'user' | 'agent' | 'automation';
@@ -91,6 +99,7 @@ export type WorkInvestigationFinding = {
     investigationId: string;
     organizationId: string;
     content: string;
+    whyItMatters: string | null;
     sourceTabId: string | null;
     sourceRunEventId: string | null;
     createdBy: 'user' | 'agent' | 'automation';
