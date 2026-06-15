@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -9,6 +9,7 @@ import {
     Bot,
     Check,
     ChevronDown,
+    CircleAlert,
     Clock,
     Database,
     Loader2,
@@ -59,6 +60,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { WorkspaceScope } from '@dory/shared/types/tabs';
 import { useConnections } from '../../connections/hooks/use-connections';
 import type {
@@ -84,7 +86,8 @@ const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
 
 function analysisInclusionClassName(status: WorkAnalysisAuditStatus) {
     if (status === 'rejected') return 'border-red-300 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
-    if (status === 'accepted' || status === 'reviewed') return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
+    if (status === 'accepted' || status === 'reviewed')
+        return 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300';
     return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
 }
 
@@ -160,6 +163,25 @@ function buildIncludedAnalysesMarkdown(analyses: WorkInvestigation[]) {
         .join('\n\n');
 }
 
+function InfoTooltip({ label = 'More info', children }: { label?: string; children: ReactNode }) {
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <button
+                    type="button"
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    aria-label={label}
+                >
+                    <CircleAlert className="size-4" />
+                </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" align="start" className="max-w-80 text-left text-xs leading-5">
+                {children}
+            </TooltipContent>
+        </Tooltip>
+    );
+}
+
 export function WorkDetailPageClient({ organization, workId }: WorkDetailPageClientProps) {
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -208,10 +230,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         () => fallbackConclusionMetadata({ analyses: investigations, conclusionStatus: work?.conclusionStatus }),
         [investigations, work?.conclusionStatus],
     );
-    const displayConclusionMetadata = useMemo(
-        () => normalizeConclusionMetadata(work?.conclusionMetadata ?? null, fallbackMetadata),
-        [fallbackMetadata, work?.conclusionMetadata],
-    );
+    const displayConclusionMetadata = useMemo(() => normalizeConclusionMetadata(work?.conclusionMetadata ?? null, fallbackMetadata), [fallbackMetadata, work?.conclusionMetadata]);
     const workLifecycleStatus = work
         ? getWorkLifecycleDisplayStatus({
               workStatus: work.status,
@@ -793,15 +812,39 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                         <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Next step</div>
                         <div className="mt-1 text-sm font-semibold">{nextStep.title}</div>
                         <p className="mt-2 text-sm leading-5 text-muted-foreground">{nextStep.description}</p>
-                        <div className="mt-4 flex min-w-0 flex-wrap gap-2">
-                            <Button className="flex-1 sm:flex-none" onClick={nextStep.primaryAction} disabled={isRunRunning ? false : nextStep.disabled || runWorkMutation.isPending}>
-                                {runWorkMutation.isPending && !isRunRunning ? <Loader2 className="animate-spin" /> : nextStep.primaryLabel === 'Continue Work' ? <Send /> : <Check />}
-                                {nextStep.primaryLabel}
+                        <div
+                            className={
+                                nextStep.secondaryLabel && nextStep.secondaryAction
+                                    ? 'mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.25rem] gap-2'
+                                    : 'mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)_2.25rem] gap-2'
+                            }
+                        >
+                            <Button
+                                size="sm"
+                                className="min-w-0 px-3"
+                                onClick={nextStep.primaryAction}
+                                disabled={isRunRunning ? false : nextStep.disabled || runWorkMutation.isPending}
+                            >
+                                {runWorkMutation.isPending && !isRunRunning ? (
+                                    <Loader2 className="animate-spin" />
+                                ) : nextStep.primaryLabel === 'Continue Work' ? (
+                                    <Send />
+                                ) : (
+                                    <Check />
+                                )}
+                                <span className="min-w-0 truncate">{nextStep.primaryLabel}</span>
                             </Button>
                             {nextStep.secondaryLabel && nextStep.secondaryAction ? (
-                                <Button type="button" variant="secondary" onClick={nextStep.secondaryAction} disabled={runWorkMutation.isPending || (nextStep.secondaryLabel === 'Continue Work' && !goal.trim())}>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="secondary"
+                                    className="min-w-0 px-3"
+                                    onClick={nextStep.secondaryAction}
+                                    disabled={runWorkMutation.isPending || (nextStep.secondaryLabel === 'Continue Work' && !goal.trim())}
+                                >
                                     {nextStep.secondaryLabel === 'Continue Work' ? <Send /> : <ChevronDown />}
-                                    {nextStep.secondaryLabel}
+                                    <span className="min-w-0 truncate">{nextStep.secondaryLabel}</span>
                                 </Button>
                             ) : null}
                             <DropdownMenu>
@@ -809,7 +852,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     <Button
                                         type="button"
                                         variant="secondary"
-                                        size="icon"
+                                        size="icon-sm"
                                         aria-label="Run options"
                                         title="Run options"
                                         disabled={isRunRunning || runWorkMutation.isPending}
@@ -969,10 +1012,16 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                     <section id="work-analyses" className="scroll-mt-6 min-w-0 space-y-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div className="min-w-0">
-                                <h2 className="text-base font-semibold">Analyses</h2>
-                                <p className="mt-1 text-sm text-muted-foreground">{evidenceSummary}</p>
-                                <p className="mt-1 text-sm text-muted-foreground">Included analyses support the current conclusion; verified analyses have been human-reviewed.</p>
-                                {unconfirmedAnalysisSummary ? <p className="mt-1 text-sm text-muted-foreground">{unconfirmedAnalysisSummary}</p> : null}
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <h2 className="text-base font-semibold">Analyses</h2>
+                                    <InfoTooltip label="Analysis evidence details">
+                                        <div className="space-y-1.5">
+                                            <p className="font-medium text-background">{evidenceSummary}</p>
+                                            <p>Included analyses support the current conclusion; verified analyses have been human-reviewed.</p>
+                                            {unconfirmedAnalysisSummary ? <p>{unconfirmedAnalysisSummary}</p> : null}
+                                        </div>
+                                    </InfoTooltip>
+                                </div>
                             </div>
                             <div className="flex w-full min-w-0 gap-2 sm:w-auto">
                                 <Input
@@ -1167,7 +1216,9 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                         <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
                                             <div>
                                                 <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Based on</div>
-                                                <div className="mt-2 text-sm font-medium">{includedAnalysisCount} included {pluralizeAnalysis(includedAnalysisCount)}</div>
+                                                <div className="mt-2 text-sm font-medium">
+                                                    {includedAnalysisCount} included {pluralizeAnalysis(includedAnalysisCount)}
+                                                </div>
                                             </div>
                                             <div>
                                                 <div className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Confidence</div>
@@ -1391,16 +1442,20 @@ function AnalysisCard({
                     <ul className="space-y-2 text-sm leading-6">
                         {investigation.findings.map(finding => (
                             <li key={finding.id} className="min-w-0">
-                                <div className="flex min-w-0 gap-2">
+                                <div className="flex min-w-0 items-start gap-2">
                                     <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
                                     <span className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{finding.content}</span>
+                                    {finding.whyItMatters?.trim() ? (
+                                        <span className="mt-0.5 shrink-0">
+                                            <InfoTooltip label="Why this finding matters">
+                                                <div className="space-y-1.5">
+                                                    <p className="font-medium text-background">Why it matters</p>
+                                                    <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{finding.whyItMatters}</p>
+                                                </div>
+                                            </InfoTooltip>
+                                        </span>
+                                    ) : null}
                                 </div>
-                                {finding.whyItMatters?.trim() ? (
-                                    <div className="mt-2 rounded-md border bg-card/70 p-3 text-xs leading-5 text-muted-foreground">
-                                        <div className="mb-1 font-medium text-foreground">Why it matters</div>
-                                        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{finding.whyItMatters}</div>
-                                    </div>
-                                ) : null}
                             </li>
                         ))}
                     </ul>
