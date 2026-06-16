@@ -1,7 +1,7 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
 
 import type { DuckDbDatasource } from '../datasource';
-import { getDuckDbTableDdl, getDuckDbTableIndexes, getDuckDbTableProperties, previewDuckDbTable } from '../runtime';
+import { getDuckDbTableDdl, getDuckDbTableIndexes, getDuckDbTableProperties, previewDuckDbTable, renameDuckDbTable } from '../runtime';
 
 export function createDuckDbTableInfoCapability(datasource: DuckDbDatasource): GetTableInfoAPI {
     return {
@@ -19,6 +19,9 @@ export function createDuckDbTableInfoCapability(datasource: DuckDbDatasource): G
         },
         async indexes() {
             return getDuckDbTableIndexes();
+        },
+        async rename(database, table, nextName) {
+            return renameDuckDbTable(datasource.getHandle(), database, table, nextName);
         },
     };
 }

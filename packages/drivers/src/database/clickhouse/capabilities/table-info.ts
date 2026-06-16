@@ -262,11 +262,25 @@ async function getTablePreview(datasource: ClickhouseDatasource, database: strin
     };
 }
 
+async function renameTable(datasource: ClickhouseDatasource, database: string, table: string, nextName: string): Promise<void> {
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    await datasource.command('RENAME TABLE {db:Identifier}.{table:Identifier} TO {db:Identifier}.{nextName:Identifier}', {
+        db: database,
+        table,
+        nextName: normalizedNextName,
+    });
+}
+
 export function createClickhouseTableInfoCapability(datasource: ClickhouseDatasource): GetTableInfoAPI {
     return {
         properties: (database: string, table: string) => getTableProperties(datasource, database, table),
         ddl: (database: string, table: string) => getTableDDL(datasource, database, table),
         stats: (database: string, table: string) => getTableStats(datasource, database, table),
         preview: (database: string, table: string, options) => getTablePreview(datasource, database, table, options),
+        rename: (database: string, table: string, nextName: string) => renameTable(datasource, database, table, nextName),
     };
 }

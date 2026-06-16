@@ -302,6 +302,16 @@ export async function getDuckDbTableIndexes(): Promise<TableIndexInfo[]> {
     return [];
 }
 
+export async function renameDuckDbTable(handle: DuckDbConnectionHandle, database: string, table: string, nextName: string): Promise<void> {
+    const { schema, tableName } = parseDuckDbTableReference(table);
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    await executeDuckDbQuery(handle, `ALTER TABLE ${buildQualifiedTable(database, tableName, schema)} RENAME TO ${quoteIdentifier(normalizedNextName)}`);
+}
+
 export function closeDuckDbConnection(handle: DuckDbConnectionHandle | null): void {
     if (!handle) return;
     handle.connection.closeSync();

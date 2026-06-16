@@ -386,7 +386,23 @@
         "Collapse": "Contraer",
         "Expand": "Expandir",
         "Columns": "columnas",
-        "Insert select for": "Insertar SELECT para {table}"
+        "Insert select for": "Insertar SELECT para {table}",
+        "Open query console": "Abrir consola de consulta",
+        "Query table": "Consultar tabla",
+        "Open table preview": "Abrir vista previa de tabla",
+        "Copy table name": "Copiar nombre de tabla",
+        "Open Console": "Nueva consulta",
+        "Quick Query": "Consulta rápida",
+        "Copy": "Copiar",
+        "Table name copied": "Nombre de tabla copiado",
+        "Copy table name failed": "No se pudo copiar el nombre de tabla",
+        "Rename table": "Renombrar tabla",
+        "Rename table description": "Introduce el nuevo nombre de la tabla. Esto renombrará la tabla en la fuente de datos actual.",
+        "Table name": "Nombre de tabla",
+        "Cancel": "Cancelar",
+        "Rename": "Renombrar",
+        "Table renamed": "Tabla renombrada",
+        "Rename table failed": "No se pudo renombrar la tabla"
     },
     "CatalogSchemaSidebar": {
         "Filter tables or views": "Filtrar tablas o vistas",
@@ -1115,6 +1131,8 @@
             "NoActiveTab": "No hay pestaña activa",
             "CloseTabAria": "Cerrar pestaña",
             "AddTabAria": "Añadir pestaña",
+            "AddTabTooltip": "Nueva consulta",
+            "QueryTableTabName": "Consultar {table}",
             "RenameDialogTitle": "Renombrar pestaña",
             "RenameDialogDescription": "Introduce un nuevo nombre para esta pestaña.",
             "RenamePlaceholder": "Nombre de la pestaña"

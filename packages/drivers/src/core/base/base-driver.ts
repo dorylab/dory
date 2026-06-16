@@ -169,6 +169,14 @@ export abstract class BaseDriver {
         return preview(database, table, options);
     }
 
+    async renameTable(database: string, table: string, nextName: string): Promise<void> {
+        const rename = this.capabilities.tableInfo?.rename;
+        if (!rename) {
+            throw new UnsupportedDriverCapabilityError('renameTable', this.config.type);
+        }
+        await rename(database, table, nextName);
+    }
+
     async getMonitoringSummary(options: DriverMonitoringSummaryOptions): Promise<DriverMonitoringSummary> {
         const insights = this.capabilities.queryInsights;
         if (!insights) {

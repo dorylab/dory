@@ -12,6 +12,7 @@ import { schemaDescribeTableAction } from './describe-table';
 import { schemaSearchAction } from './search';
 import { schemaGetDatabaseSummaryAction } from './summary';
 import { schemaGetMonitoringSummaryAction } from './monitoring-summary';
+import { schemaRenameTableAction } from './rename-table';
 
 export const schemaActions = [
     schemaListDatabasesAction,
@@ -28,4 +29,5 @@ export const schemaActions = [
     schemaSearchAction,
     schemaGetDatabaseSummaryAction,
     schemaGetMonitoringSummaryAction,
+    schemaRenameTableAction,
 ];

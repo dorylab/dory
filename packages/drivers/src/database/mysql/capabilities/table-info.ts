@@ -275,6 +275,18 @@ async function getTableIndexes(datasource: MySqlDatasource, database: string, ta
     return Array.isArray(result.rows) ? result.rows : [];
 }
 
+async function renameTable(datasource: MySqlDatasource, database: string, table: string, nextName: string): Promise<void> {
+    const target = resolveTableInput(database, table);
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    await datasource.command(`RENAME TABLE ${quoteMysqlQualifiedTable(target.database, target.table)} TO ${quoteMysqlQualifiedTable(target.database, normalizedNextName)}`, [], {
+        database: target.database,
+    });
+}
+
 export function createMysqlTableInfoCapability(datasource: MySqlDatasource): GetTableInfoAPI {
     return {
         properties: (database: string, table: string) => getTableProperties(datasource, database, table),
@@ -282,5 +294,6 @@ export function createMysqlTableInfoCapability(datasource: MySqlDatasource): Get
         stats: (database: string, table: string) => getTableStats(datasource, database, table),
         preview: (database: string, table: string, options) => getTablePreview(datasource, database, table, options),
         indexes: (database: string, table: string) => getTableIndexes(datasource, database, table),
+        rename: (database: string, table: string, nextName: string) => renameTable(datasource, database, table, nextName),
     };
 }

@@ -386,7 +386,23 @@
         "Collapse": "折りたたむ",
         "Expand": "展開",
         "Columns": "列",
-        "Insert select for": "{table} の SELECT を挿入"
+        "Insert select for": "{table} の SELECT を挿入",
+        "Open query console": "クエリコンソールを開く",
+        "Query table": "テーブルをクエリ",
+        "Open table preview": "テーブルプレビューを開く",
+        "Copy table name": "テーブル名をコピー",
+        "Open Console": "新しいクエリ",
+        "Quick Query": "クイッククエリ",
+        "Copy": "コピー",
+        "Table name copied": "テーブル名をコピーしました",
+        "Copy table name failed": "テーブル名をコピーできませんでした",
+        "Rename table": "テーブル名を変更",
+        "Rename table description": "新しいテーブル名を入力してください。現在のデータソースで直接変更されます。",
+        "Table name": "テーブル名",
+        "Cancel": "キャンセル",
+        "Rename": "名前を変更",
+        "Table renamed": "テーブル名を変更しました",
+        "Rename table failed": "テーブル名を変更できませんでした"
     },
     "CatalogSchemaSidebar": {
         "Filter tables or views": "テーブルまたはビューを絞り込み",
@@ -1115,6 +1131,8 @@
             "NoActiveTab": "アクティブなタブがありません",
             "CloseTabAria": "タブを閉じる",
             "AddTabAria": "タブを追加",
+            "AddTabTooltip": "新しいクエリ",
+            "QueryTableTabName": "{table} をクエリ",
             "RenameDialogTitle": "タブ名を変更",
             "RenameDialogDescription": "このタブの新しい名前を入力してください。",
             "RenamePlaceholder": "タブ名"

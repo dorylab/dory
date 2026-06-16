@@ -8,6 +8,7 @@ import { Plus, Loader2, FileText, X, Sparkles, Pencil, CircleOff, Table as Table
 import { ScrollArea, ScrollBar } from '@/registry/new-york-v4/ui/scroll-area';
 import { SQLTab } from '@dory/shared/types/tabs';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { useTranslations } from 'next-intl';
 
 interface SQLTabsProps {
@@ -23,26 +24,14 @@ interface SQLTabsProps {
     onHeightChange?: (height: number) => void;
 }
 
-export function SQLTabs({
-    tabs,
-    activeTabId,
-    setActiveTabId,
-    addTab,
-    closeTab,
-    closeOtherTabs,
-    updateTab,
-    reorderTabs,
-    onRequestAITitle,
-    onHeightChange,
-}: SQLTabsProps) {
+export function SQLTabs({ tabs, activeTabId, setActiveTabId, addTab, closeTab, closeOtherTabs, updateTab, reorderTabs, onRequestAITitle, onHeightChange }: SQLTabsProps) {
     const headerRef = useRef<HTMLDivElement | null>(null);
     const t = useTranslations('SqlConsole');
 
-    
     const rowRef = useRef<HTMLDivElement | null>(null);
     const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
-    const lastActionRef = useRef<'create' | null>(null); 
-    const hasInitializedScrollRef = useRef(false); 
+    const lastActionRef = useRef<'create' | null>(null);
+    const hasInitializedScrollRef = useRef(false);
 
     const [renamingTabs, setRenamingTabs] = useState<Record<string, boolean>>({});
     const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -114,7 +103,7 @@ export function SQLTabs({
     }, [renameDraft, renameTarget, updateTab]);
 
     const renderMenuItems = useCallback(
-        (tab: SQLTab, Item: any, Separator: any) => {
+        (tab: SQLTab, Item: typeof ContextMenuItem, Separator: typeof ContextMenuSeparator) => {
             const isRenaming = !!renamingTabs[tab.tabId];
 
             return (
@@ -151,23 +140,20 @@ export function SQLTabs({
                 </>
             );
         },
-        [handleCloseOthers, openRenameDialog, handleRequestAITitle, handleCloseTab, renamingTabs, setActiveTabId, tabs],
+        [handleCloseOthers, openRenameDialog, handleRequestAITitle, handleCloseTab, renamingTabs, setActiveTabId, t, tabs],
     );
 
-    
     const handleAddTab = useCallback(async () => {
         lastActionRef.current = 'create';
         await Promise.resolve(addTab());
     }, [addTab]);
 
-    
     useLayoutEffect(() => {
         if (!activeTabId) return;
 
         const row = rowRef.current;
         if (!row) return;
 
-        
         const viewport = (row.closest('[data-radix-scroll-area-viewport]') as HTMLElement | null) || (row.parentElement as HTMLElement | null);
 
         if (!viewport) return;
@@ -176,9 +162,7 @@ export function SQLTabs({
 
         if (!el) return;
 
-        
         const runScrollLogic = () => {
-            
             if (lastActionRef.current === 'create') {
                 lastActionRef.current = null;
 
@@ -189,7 +173,6 @@ export function SQLTabs({
                 return;
             }
 
-            
             if (!hasInitializedScrollRef.current) {
                 hasInitializedScrollRef.current = true;
 
@@ -205,7 +188,6 @@ export function SQLTabs({
                     visibleRight,
                 });
 
-                
                 if (elLeft >= visibleLeft && elRight <= visibleRight) {
                     return;
                 }
@@ -213,11 +195,9 @@ export function SQLTabs({
                 const margin = 16;
                 const target = Math.max(0, elLeft - margin);
                 viewport.scrollLeft = target;
-
             }
         };
 
-        
         const id = requestAnimationFrame(runScrollLogic);
 
         return () => cancelAnimationFrame(id);
@@ -237,14 +217,11 @@ export function SQLTabs({
     return (
         <div className="flex flex-col">
             {/* Tab Headers */}
-            <div ref={headerRef} className="flex items-center bg-card">
-                
+            <div ref={headerRef} className="flex items-start bg-card">
                 <ScrollArea className="flex-1 min-w-0">
                     <div ref={rowRef} className="flex items-center whitespace-nowrap">
                         {tabs.map(tab => {
                             const isActive = tab.tabId === activeTabId;
-                            const isRenaming = !!renamingTabs[tab.tabId];
-
                             return (
                                 <ContextMenu key={tab.tabId}>
                                     <ContextMenuTrigger asChild>
@@ -256,7 +233,6 @@ export function SQLTabs({
                                             role="tab"
                                             aria-selected={isActive}
                                             onClick={() => {
-                                                
                                                 setActiveTabId(tab.tabId);
                                             }}
                                             onContextMenu={() => {
@@ -268,7 +244,6 @@ export function SQLTabs({
                                             }}
                                             onDragOver={e => {
                                                 e.preventDefault();
-                                                
                                             }}
                                             onDrop={e => {
                                                 e.preventDefault();
@@ -289,13 +264,11 @@ export function SQLTabs({
                                                         : ['bg-muted/60 text-muted-foreground', 'hover:text-foreground hover:bg-muted'].join(' ')
                                                 }`}
                                         >
-                                            
                                             <div className="absolute inset-0 flex items-center justify-center px-6 pointer-events-none">
                                                 {tab.tabType === 'table' ? <TableIcon className="w-4 h-4 mr-2 shrink-0" /> : <FileText className="w-4 h-4 mr-2 shrink-0" />}
                                                 <span className="text-sm truncate text-center">{tab.tabName}</span>
                                             </div>
 
-                                            
                                             <button
                                                 className="absolute right-2 top-1/2 -translate-y-1/2 z-10
                                                            p-1 rounded hover:bg-muted
@@ -318,24 +291,29 @@ export function SQLTabs({
                         })}
                     </div>
 
-                    
                     <ScrollBar orientation="horizontal" className="h-2" />
                 </ScrollArea>
 
-                
-                <div className="flex-none w-10 h-full grid place-items-center">
-                    <button
-                        className="w-full h-full grid place-items-center
-                                   text-muted-foreground hover:text-foreground hover:bg-muted"
-                        onClick={() => void handleAddTab()}
-                        aria-label={t('Tabs.AddTabAria')}
-                    >
-                        <Plus className="w-4 h-4" />
-                    </button>
+                <div className="flex-none w-10 h-9 self-start grid place-items-center border-l border-border bg-card px-1">
+                    <TooltipProvider delayDuration={250}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <button
+                                    className="grid h-7 w-8 cursor-pointer place-items-center rounded-md border border-primary/30 bg-primary/10 text-primary shadow-sm transition-colors hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    onClick={() => void handleAddTab()}
+                                    aria-label={t('Tabs.AddTabAria')}
+                                >
+                                    <Plus className="w-4 h-4" />
+                                </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" align="end" className="text-xs">
+                                {t('Tabs.AddTabTooltip')}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
             </div>
 
-            
             <Dialog
                 open={renameDialogOpen}
                 onOpenChange={open => {

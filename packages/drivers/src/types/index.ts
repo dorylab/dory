@@ -291,6 +291,7 @@ export type GetTableInfoAPI = {
     stats: (database: string, table: string) => Promise<TableStats | null>;
     preview: (database: string, table: string, options?: TablePreviewOptions) => Promise<QueryResult<Record<string, unknown>>>;
     indexes?: (database: string, table: string) => Promise<TableIndexInfo[]>;
+    rename?: (database: string, table: string, nextName: string) => Promise<void>;
 };
 
 export type ConnectionMetadataAPI = {

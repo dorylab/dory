@@ -26,12 +26,20 @@ export type SidebarTableItem = {
 
 export type TableActionPayload = {
     database?: string;
+    schema?: string | null;
     tableName: string;
     tabLabel?: string;
 };
 
+export type RenameTablePayload = TableActionPayload & {
+    nextName: string;
+};
+
 export type SQLConsoleSidebarProps = {
     onOpenTableTab?: (payload: TableActionPayload) => void;
+    onOpenQueryConsole?: () => void | Promise<void>;
+    onQueryTable?: (payload: TableActionPayload) => void | Promise<void>;
+    onRenameTable?: (payload: RenameTablePayload) => void | Promise<void>;
     onSelectTable?: (payload: TableActionPayload) => void;
     onSelectDatabase?: (database: string) => void;
     selectedTable?: string;

@@ -15,7 +15,7 @@ import { DatabaseSelect } from './database-select';
 import { getSidebarConfig } from './sidebar-config';
 import { SchemaSelect } from './schema-select';
 import { TableList } from './table-list';
-import type { SQLConsoleSidebarProps, SidebarOption, SidebarTableItem, TableColumn } from './types';
+import type { RenameTablePayload, SQLConsoleSidebarProps, SidebarOption, SidebarTableItem, TableActionPayload, TableColumn } from './types';
 import { buildScopedTableKey, getInitialDatabase, isHiddenDatabase, matchesFilter, normalizeOption, toSidebarTableItem } from './utils';
 
 function parseConnectionOptions(raw: unknown): Record<string, unknown> {
@@ -39,7 +39,16 @@ function getOpenFilesTableLabel(tableName: string) {
     return parts[parts.length - 1] || tableName;
 }
 
-export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable, selectedDatabase, onSelectDatabase }: SQLConsoleSidebarProps) {
+export function SQLConsoleSidebar({
+    onOpenTableTab,
+    onOpenQueryConsole,
+    onQueryTable,
+    onRenameTable,
+    onSelectTable,
+    selectedTable,
+    selectedDatabase,
+    onSelectDatabase,
+}: SQLConsoleSidebarProps) {
     const [localFilter, setFilter] = useState('');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const deferredFilter = useDeferredValue(localFilter);
@@ -136,7 +145,7 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
                 return table.schemaName === activeSchema;
             })
             .filter(table => matchesFilter(table.value, table.label, normalizedFilter));
-    }, [activeSchema, deferredFilter, isLocalFilesDataset, sidebarConfig, tables]);
+    }, [activeDatabase, activeSchema, deferredFilter, isLocalFilesDataset, sidebarConfig, tables]);
 
     const handleDatabaseChange = (database: string) => {
         setActiveDatabase(database);
@@ -160,6 +169,31 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
             setIsRefreshing(false);
         }
     };
+
+    const handleRenameTable = async (payload: RenameTablePayload) => {
+        await onRenameTable?.(payload);
+        setExpandedTableKeys(prev => {
+            const next = new Set(prev);
+            if (payload.database) {
+                next.delete(buildScopedTableKey(payload.database, payload.tableName));
+            }
+            return next;
+        });
+        setColumnsByTableKey(prev => {
+            if (!payload.database) return prev;
+            const next = { ...prev };
+            delete next[buildScopedTableKey(payload.database, payload.tableName)];
+            return next;
+        });
+        await refreshTables();
+    };
+
+    const toTableActionPayload = (table: SidebarTableItem): TableActionPayload => ({
+        database: activeDatabase,
+        schema: table.schemaName,
+        tableName: table.value,
+        tabLabel: table.label,
+    });
 
     const toggleTableExpansion = async (table: SidebarTableItem) => {
         const scopedTableKey = table.key;
@@ -242,6 +276,10 @@ export function SQLConsoleSidebar({ onOpenTableTab, onSelectTable, selectedTable
                 onToggleTable={toggleTableExpansion}
                 onSelectTable={onSelectTable}
                 onOpenTableTab={onOpenTableTab}
+                onOpenQueryConsole={onOpenQueryConsole}
+                onQueryTable={onQueryTable}
+                onRenameTable={handleRenameTable}
+                getTableActionPayload={toTableActionPayload}
                 t={t}
             />
         </div>
