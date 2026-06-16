@@ -261,10 +261,7 @@ export function useTablePropertiesQuery({ databaseName, tableName, connectionId 
                 },
             );
 
-            if (res.properties) {
-                return { ...res.properties } as TableProperties;
-            }
-            throw new Error('Failed to load table properties');
+            return res.properties ? ({ ...res.properties } as TableProperties) : null;
         },
     });
 }

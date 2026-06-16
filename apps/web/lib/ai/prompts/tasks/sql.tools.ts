@@ -47,7 +47,7 @@ About the sqlRunner tool
 `.trim();
 
 export function buildDialectSqlPrompt(connectionType?: ConnectionType | null): string {
-    const normalizedType = connectionType === 'neon' ? 'postgres' : connectionType;
+    const normalizedType = connectionType === 'neon' ? 'postgres' : connectionType === 'cloudflare-d1' ? 'sqlite' : connectionType;
 
     const commonRules = [SQL_TOOL_INSTRUCTION, SQL_RUNNER_GUIDE, CHART_BUILDER_GUIDE];
 

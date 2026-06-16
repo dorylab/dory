@@ -19,6 +19,8 @@ type TlsWithSecrets = ConnectionTls & {
 export const CONNECTION_ERROR_CODES = {
     notFound: 'connection_not_found',
     missingHost: 'missing_host',
+    missingAccountId: 'missing_account_id',
+    missingDatabase: 'missing_database',
     missingPath: 'missing_path',
     missingUsername: 'missing_username',
     missingIdentity: 'missing_identity',

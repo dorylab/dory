@@ -44,6 +44,7 @@ export const ConnectionDialogFormSchema = z
             database: z.string().optional().nullable(),
             connectString: z.string().optional().nullable(),
             path: z.string().optional().nullable(),
+            accountId: z.string().optional().nullable(),
             duckdbMode: z.enum(['local', 'motherduck']).optional(),
             environment: z.string().optional(),
             tags: z.string().optional(),
@@ -160,6 +161,17 @@ export const ConnectionDialogFormSchema = z
                     code: 'custom',
                     path: ['connection', 'host'],
                     message: 'Please provide a Neon connection string',
+                });
+            }
+            return;
+        }
+
+        if (value.connection.type === 'cloudflare-d1') {
+            if (!value.identity.id && !value.identity.password?.trim()) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['identity', 'password'],
+                    message: 'Please provide a Cloudflare API token',
                 });
             }
             return;

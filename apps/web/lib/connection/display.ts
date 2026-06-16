@@ -81,6 +81,14 @@ export function getConnectionLocationLabel(connection?: ConnectionListItem['conn
         return getClickhouseLocationLabel(connection);
     }
 
+    if (connection.type === 'cloudflare-d1') {
+        const options = parseConnectionOptions(connection.options);
+        const accountId = typeof options.accountId === 'string' ? options.accountId.trim() : '';
+        const databaseId = connection.database?.trim() ?? '';
+        if (accountId && databaseId) return `${accountId}/${databaseId}`;
+        return databaseId || accountId || 'api.cloudflare.com';
+    }
+
     const rawHost = connection.host?.trim();
     const port = connection.port;
     if (!rawHost && !port) return null;

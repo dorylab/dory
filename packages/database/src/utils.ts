@@ -14,6 +14,10 @@ export const DatasourceTypesWithDBEngine = [
         engine: 'clickhouse',
     },
     {
+        type: 'cloudflare-d1',
+        engine: 'cloudflare-d1',
+    },
+    {
         type: 'duckdb',
         engine: 'duckdb',
     },

@@ -20,6 +20,7 @@ export type ConnectionDriverCtor = DriverCtor;
 export function isConnectionDriverType(value: unknown): value is ConnectionDriverType {
     return (
         value === 'clickhouse' ||
+        value === 'cloudflare-d1' ||
         value === 'duckdb' ||
         value === 'mariadb' ||
         value === 'mysql' ||

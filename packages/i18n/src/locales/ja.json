@@ -2333,6 +2333,8 @@
                 "FetchCatalogFailed": "カタログコンテキストの取得に失敗しました",
                 "NotFound": "データソースが見つからないか、権限が不足しています",
                 "MissingHost": "データソースにホスト情報がありません",
+                "MissingAccountId": "Cloudflare アカウント ID がありません",
+                "MissingDatabase": "データベース ID がありません",
                 "MissingPath": "データソースに SQLite ファイルパス情報がありません",
                 "MissingConnectionId": "データソース ID がありません",
                 "MissingUsername": "ユーザー名がありません",

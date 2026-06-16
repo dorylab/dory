@@ -14,6 +14,11 @@ const SIDEBAR_CONFIG_BY_DIALECT: Record<ConnectionType, SidebarConfig> = {
         supportsSchemas: false,
         hiddenDatabases: ['system', 'information_schema'],
     },
+    'cloudflare-d1': {
+        dialect: 'sqlite',
+        supportsSchemas: false,
+        hiddenDatabases: [],
+    },
     doris: {
         dialect: 'doris',
         supportsSchemas: false,

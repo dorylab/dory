@@ -13,6 +13,7 @@ type DatabaseTypeMeta = {
 
 export const DATABASE_TYPE_META: Partial<Record<ConnectionType, DatabaseTypeMeta>> = {
     clickhouse: { src: '/images/logos/clickhouse.svg', label: 'ClickHouse' },
+    'cloudflare-d1': { src: '/images/logos/cloudflare.svg', label: 'Cloudflare D1' },
     doris: { src: '/images/logos/apache-doris.svg', label: 'Apache Doris' },
     duckdb: { src: '/images/logos/duckdb.svg', label: 'DuckDB' },
     mariadb: { src: '/images/logos/mariadb.svg', label: 'MariaDB' },
@@ -35,15 +36,7 @@ export function getDatabaseTypeMeta(type?: string | null) {
     };
 }
 
-export function DatabaseTypeIcon({
-    type,
-    className,
-    fallbackClassName,
-}: {
-    type?: string | null;
-    className?: string;
-    fallbackClassName?: string;
-}) {
+export function DatabaseTypeIcon({ type, className, fallbackClassName }: { type?: string | null; className?: string; fallbackClassName?: string }) {
     const meta = getDatabaseTypeMeta(type);
     const normalizedType = type?.trim().toLowerCase();
 

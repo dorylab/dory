@@ -2334,6 +2334,8 @@
                 "FetchCatalogFailed": "Failed to fetch catalog context",
                 "NotFound": "Data source not found or insufficient permissions",
                 "MissingHost": "Data source is missing host information",
+                "MissingAccountId": "Cloudflare account ID is missing",
+                "MissingDatabase": "Database ID is missing",
                 "MissingPath": "Data source is missing SQLite file path information",
                 "MissingConnectionId": "Missing data source ID",
                 "MissingUsername": "Missing username",

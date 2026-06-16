@@ -1,18 +1,36 @@
 'use client';
 
+import { useMemo } from 'react';
+import { format as formatSql } from 'sql-formatter';
+import type { ConnectionType } from '@dory/shared/types/connections';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
+import { getSqlDialectConfigForConnectionType } from '@/lib/sql/sql-dialect';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useTranslations } from 'next-intl';
 
 type DdlSectionProps = {
     ddl?: string | null;
     loading?: boolean;
+    connectionType?: ConnectionType;
 };
 
-export function DdlSection({ ddl, loading }: DdlSectionProps) {
+function formatDdl(ddl: string, connectionType?: ConnectionType) {
+    try {
+        return formatSql(ddl, {
+            language: getSqlDialectConfigForConnectionType(connectionType).formatterLanguage,
+        }).trim();
+    } catch {
+        return ddl;
+    }
+}
+
+export function DdlSection({ ddl, loading, connectionType }: DdlSectionProps) {
     const isLoading = !!loading;
     const t = useTranslations('TableBrowser');
-    const content = ddl?.trim() || t('DDL not available');
+    const content = useMemo(() => {
+        const raw = ddl?.trim();
+        return raw ? formatDdl(raw, connectionType) : t('DDL not available');
+    }, [connectionType, ddl, t]);
 
     return (
         <div className="space-y-3">

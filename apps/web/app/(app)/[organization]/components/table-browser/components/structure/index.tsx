@@ -66,7 +66,7 @@ export default function TableStructure({ databaseName, tableName }: TableStructu
                 <ColumnsSection tableName={tableName} loading={loadingColumns} columns={columns} />
                 <PropertiesSection properties={tableProperties} loading={loadingTableProperties} />
                 {/* <ConstraintsSection constraints={constraints} /> */}
-                <DdlSection ddl={ddl} loading={loadingDdl} />
+                <DdlSection ddl={ddl} loading={loadingDdl} connectionType={currentConnection?.connection?.type} />
             </div>
         </ScrollArea>
     );

@@ -2333,6 +2333,8 @@
                 "FetchCatalogFailed": "No se pudo obtener el contexto del catálogo",
                 "NotFound": "Fuente de datos no encontrada o permisos insuficientes",
                 "MissingHost": "A la fuente de datos le falta información del host",
+                "MissingAccountId": "Falta el ID de cuenta de Cloudflare",
+                "MissingDatabase": "Falta el ID de la base de datos",
                 "MissingPath": "A la fuente de datos le falta la ruta del archivo SQLite",
                 "MissingConnectionId": "Falta el ID de la fuente de datos",
                 "MissingUsername": "Falta el nombre de usuario",

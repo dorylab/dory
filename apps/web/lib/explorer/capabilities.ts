@@ -27,6 +27,14 @@ export const EXPLORER_CAPABILITIES: Record<ExplorerDriver, DriverCapabilities> =
         listKinds: ['tables', 'views', 'materializedViews', 'dictionaries'],
         objectKinds: ['database', 'table', 'view', 'materializedView', 'dictionary'],
     },
+    'cloudflare-d1': {
+        driver: 'cloudflare-d1',
+        supportsSchema: false,
+        supportsDatabase: true,
+        supportsCatalog: false,
+        listKinds: ['tables', 'views'],
+        objectKinds: ['database', 'table', 'view'],
+    },
     mysql: {
         driver: 'mysql',
         supportsSchema: false,

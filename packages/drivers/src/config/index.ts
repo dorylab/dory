@@ -192,6 +192,32 @@ export function buildStoredConnectionConfig(
 ): DriverConfig {
     const type = resolveConnectionType(connection.type ?? connection.engine ?? 'clickhouse');
 
+    if (type === 'cloudflare-d1') {
+        const options = parseConnectionOptions(connection.options) ?? {};
+        if (typeof options.accountId !== 'string' || !options.accountId.trim()) {
+            throw createError('missing_account_id');
+        }
+        const databaseId = identity.database ?? connection.database;
+        if (!databaseId?.trim()) {
+            throw createError('missing_database');
+        }
+        if (!identity.password?.trim()) {
+            throw createError('missing_password');
+        }
+
+        return {
+            id: connection.id,
+            type,
+            host: connection.host?.trim() || 'api.cloudflare.com',
+            database: databaseId,
+            username: identity.username ?? 'cloudflare',
+            password: identity.password,
+            options,
+            configVersion: connection.configVersion ?? undefined,
+            updatedAt: connection.updatedAt instanceof Date ? connection.updatedAt.getTime() : (connection.updatedAt ?? undefined),
+        };
+    }
+
     if (type === 'sqlite' || type === 'duckdb') {
         const options = parseConnectionOptions(connection.options) ?? {};
         const isMotherDuck = type === 'duckdb' && options.mode === 'motherduck';
@@ -252,6 +278,30 @@ export function buildTestConnectionConfig(
 ): DriverConfig {
     const { connection, ssh, tls, identity } = payload;
     const type = resolveConnectionType(connection.type ?? connection.engine ?? 'clickhouse');
+
+    if (type === 'cloudflare-d1') {
+        const options = parseConnectionOptions(connection.options) ?? {};
+        if (typeof options.accountId !== 'string' || !options.accountId.trim()) {
+            throw createError('missing_account_id');
+        }
+        const databaseId = identity.database ?? connection.database;
+        if (!databaseId?.trim()) {
+            throw createError('missing_database');
+        }
+        if (!identity.password?.trim()) {
+            throw createError('missing_password');
+        }
+
+        return {
+            id: connection.id || connection.name ? `test-${connection.id ?? connection.name}` : `test-${type}`,
+            type,
+            host: connection.host?.trim() || 'api.cloudflare.com',
+            database: databaseId,
+            username: identity.username ?? 'cloudflare',
+            password: identity.password,
+            options,
+        };
+    }
 
     if (type === 'sqlite' || type === 'duckdb') {
         const options = parseConnectionOptions(connection.options) ?? {};

@@ -8,6 +8,13 @@ import {
     normalizeClickhouseConnectionForSubmit,
     validateClickhouseConnection,
 } from './clickhouse';
+import {
+    CloudflareD1ConnectionFields,
+    createCloudflareD1ConnectionDefaults,
+    normalizeCloudflareD1ConnectionForForm,
+    normalizeCloudflareD1ConnectionForSubmit,
+    validateCloudflareD1Connection,
+} from './cloudflare-d1';
 import { createDuckDbConnectionDefaults, DuckDbConnectionFields, normalizeDuckDbConnectionForForm, normalizeDuckDbConnectionForSubmit, validateDuckDbConnection } from './duckdb';
 import {
     createMariaDbConnectionDefaults,
@@ -35,7 +42,7 @@ import {
     validateSqlServerConnection,
 } from './sqlserver';
 
-export type SupportedConnectionDriver = 'clickhouse' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
+export type SupportedConnectionDriver = 'clickhouse' | 'cloudflare-d1' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
 
 type DriverDefinition = {
     label: string;
@@ -54,6 +61,14 @@ const DRIVERS: Record<SupportedConnectionDriver, DriverDefinition> = {
         normalizeForForm: normalizeClickhouseConnectionForForm,
         normalizeForSubmit: normalizeClickhouseConnectionForSubmit,
         validate: validateClickhouseConnection,
+    },
+    'cloudflare-d1': {
+        label: 'Cloudflare D1',
+        FormComponent: CloudflareD1ConnectionFields,
+        createDefaults: createCloudflareD1ConnectionDefaults,
+        normalizeForForm: normalizeCloudflareD1ConnectionForForm,
+        normalizeForSubmit: normalizeCloudflareD1ConnectionForSubmit,
+        validate: validateCloudflareD1Connection,
     },
     duckdb: {
         label: 'DuckDB',
@@ -132,6 +147,9 @@ export function getConnectionDriver(type?: string): DriverDefinition {
     }
     if (type === 'mysql') {
         return DRIVERS.mysql;
+    }
+    if (type === 'cloudflare-d1') {
+        return DRIVERS['cloudflare-d1'];
     }
     if (type === 'postgres') {
         return DRIVERS.postgres;

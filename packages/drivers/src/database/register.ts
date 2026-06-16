@@ -2,6 +2,7 @@ import { registerDriver } from '../core/registry';
 import type { DriverCtor } from '../core/registry/types';
 import type { DriverType } from '../types';
 import { ClickhouseDatasource } from './clickhouse/datasource';
+import { CloudflareD1Datasource } from './cloudflare-d1/datasource';
 import { MariaDbDatasource } from './mariadb/datasource';
 import { MySqlDatasource } from './mysql/datasource';
 import { OracleDatasource } from './oracle/datasource';
@@ -25,6 +26,7 @@ export function registerDatabaseDrivers() {
     registered = true;
 
     registerDriver('clickhouse', ClickhouseDatasource);
+    registerDriver('cloudflare-d1', CloudflareD1Datasource);
     registerDriver('mariadb', MariaDbDatasource);
     registerDriver('mysql', MySqlDatasource);
     registerDriver('neon', PostgresDatasource);
@@ -38,6 +40,7 @@ export function registerDatabaseDrivers() {
 export function isDatabaseDriverType(value: unknown): value is DriverType {
     return (
         value === 'clickhouse' ||
+        value === 'cloudflare-d1' ||
         value === 'duckdb' ||
         value === 'mariadb' ||
         value === 'mysql' ||

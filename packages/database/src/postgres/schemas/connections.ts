@@ -2,7 +2,7 @@ import { boolean, integer, text, timestamp, pgTable, check, index, uniqueIndex }
 import { sql } from 'drizzle-orm';
 import { newEntityId } from '@dory/shared/id';
 
-export type ConnectionType = 'clickhouse' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
+export type ConnectionType = 'clickhouse' | 'cloudflare-d1' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
 export type ConnectionStatus = 'draft' | 'ready' | 'error' | 'disabled';
 export type SyncSource = 'local' | 'cloud';
 export type SyncStatus =

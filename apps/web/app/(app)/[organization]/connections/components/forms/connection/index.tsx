@@ -45,6 +45,7 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
         form.setValue('connection.httpPort', nextDefaults.httpPort, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.database', nextDefaults.database, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.path', currentConnection.path ?? nextDefaults.path ?? null, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.accountId', nextDefaults.accountId, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.duckdbMode', nextDefaults.duckdbMode, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.ssl', nextDefaults.ssl, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.encrypt', nextDefaults.encrypt, { shouldDirty: true, shouldValidate: false });
@@ -73,6 +74,7 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
             'connection.httpPort',
             'connection.database',
             'connection.path',
+            'connection.accountId',
             'connection.duckdbMode',
             'connection.ssl',
         ]);
@@ -153,7 +155,10 @@ export function ConnectionMetadataForm(props: { form: UseFormReturn<FieldValues>
                     return (
                         <FormItem className="space-y-2">
                             <FormLabel>{tc('Environment')}</FormLabel>
-                            <Select value={environmentValue || EMPTY_ENVIRONMENT_SELECT_VALUE} onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_SELECT_VALUE ? '' : value)}>
+                            <Select
+                                value={environmentValue || EMPTY_ENVIRONMENT_SELECT_VALUE}
+                                onValueChange={value => field.onChange(value === EMPTY_ENVIRONMENT_SELECT_VALUE ? '' : value)}
+                            >
                                 <FormControl>
                                     <SelectTrigger className="w-full max-w-64">
                                         <span className="flex min-w-0 items-center gap-2">

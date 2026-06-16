@@ -76,6 +76,7 @@ const CONNECTION_SECTION_ERROR_PATHS: Record<ConnectionDialogSection, string[]> 
         'connection.database',
         'connection.connectString',
         'connection.path',
+        'connection.accountId',
         'connection.duckdbMode',
         'connection.ssl',
         'connection.encrypt',
@@ -159,13 +160,7 @@ function ConnectionSectionNav({
     );
 }
 
-export function ConnectionDialog({
-    open,
-    onOpenChange,
-    mode = 'Create',
-    connectionItem,
-    onSuccess,
-}: ConnectionDialogProps) {
+export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connectionItem, onSuccess }: ConnectionDialogProps) {
     const [submitting, setSubmitting] = useState(false);
     const [testing, setTesting] = useState(false);
     const [activeSection, setActiveSection] = useState<ConnectionDialogSection>('general');
@@ -191,9 +186,10 @@ export function ConnectionDialog({
     const isSqlite = connectionType === 'sqlite';
     const isNeon = connectionType === 'neon';
     const isDuckDb = connectionType === 'duckdb';
+    const isCloudflareD1 = connectionType === 'cloudflare-d1';
     const isMotherDuck = isDuckDb && duckDbMode === 'motherduck';
-    const hidesIdentityForm = isSqlite || isNeon || isDuckDb;
-    const hidesSshForm = isSqlite || isNeon || isDuckDb;
+    const hidesIdentityForm = isSqlite || isNeon || isDuckDb || isCloudflareD1;
+    const hidesSshForm = isSqlite || isNeon || isDuckDb || isCloudflareD1;
     const hidesTlsForm = !TLS_SUPPORTED_CONNECTION_TYPES.has(connectionType);
 
     const isEditMode = mode === 'Edit' && Boolean(connectionItem?.connection?.id);
@@ -236,6 +232,18 @@ export function ConnectionDialog({
                 password: isMotherDuck ? (identityValues?.password ?? null) : null,
                 isDefault: true,
                 database: isMotherDuck ? form.getValues('connection.database')?.trim?.() || null : null,
+            };
+        }
+
+        if (isCloudflareD1) {
+            return {
+                id: identityValues?.id,
+                name: identityValues?.name ?? 'Cloudflare D1',
+                username: 'cloudflare',
+                role: identityValues?.role ?? null,
+                password: identityValues?.password ?? null,
+                isDefault: true,
+                database: form.getValues('connection.database')?.trim?.() || null,
             };
         }
 
@@ -329,12 +337,7 @@ export function ConnectionDialog({
         }
     }, [activeSection, hidesSshForm, hidesTlsForm]);
 
-    const availableSectionIds: ConnectionDialogSection[] = [
-        'general',
-        ...(!hidesSshForm ? (['ssh'] as const) : []),
-        ...(!hidesTlsForm ? (['tls'] as const) : []),
-        'metadata',
-    ];
+    const availableSectionIds: ConnectionDialogSection[] = ['general', ...(!hidesSshForm ? (['ssh'] as const) : []), ...(!hidesTlsForm ? (['tls'] as const) : []), 'metadata'];
     const formErrors = form.formState.errors;
     const sectionItems: ConnectionDialogSectionItem[] = [
         {

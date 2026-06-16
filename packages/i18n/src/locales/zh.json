@@ -2338,6 +2338,8 @@
                 "FetchCatalogFailed": "获取目录对象失败",
                 "NotFound": "数据源不存在或无权限",
                 "MissingHost": "数据源缺少主机信息",
+                "MissingAccountId": "缺少 Cloudflare account ID",
+                "MissingDatabase": "缺少数据库 ID",
                 "MissingPath": "数据源缺少 SQLite 文件路径信息",
                 "MissingConnectionId": "缺少数据源 ID",
                 "MissingUsername": "缺少用户名",

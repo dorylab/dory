@@ -70,6 +70,7 @@ const SQL_DIALECT_CONFIGS: Record<ConnectionDialect, SqlDialectConfig> = {
 
 const SQL_DIALECT_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, ConnectionDialect>> = {
     clickhouse: 'clickhouse',
+    'cloudflare-d1': 'sqlite',
     duckdb: 'duckdb',
     mariadb: 'mysql',
     mysql: 'mysql',
@@ -96,6 +97,9 @@ export const normalizeSqlDialect = (value?: string | null): ConnectionDialect =>
     switch ((value ?? '').toLowerCase()) {
         case 'clickhouse':
             return 'clickhouse';
+        case 'cloudflare-d1':
+        case 'd1':
+            return 'sqlite';
         case 'duckdb':
             return 'duckdb';
         case 'mysql':
