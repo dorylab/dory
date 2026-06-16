@@ -56,7 +56,8 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/registry/new-york-v4/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
@@ -109,10 +110,7 @@ function hasSqlBackedFinding(investigation: WorkInvestigation) {
     return investigation.findings.some(finding => Boolean(finding.sourceRunEventId || finding.sourceTabId));
 }
 
-type AnalysisDisplayFinding = Pick<
-    WorkInvestigationFinding,
-    'id' | 'content' | 'sourceTabId' | 'sourceRunEventId' | 'createdBy' | 'orderIndex' | 'createdAt' | 'updatedAt'
-> & {
+type AnalysisDisplayFinding = Pick<WorkInvestigationFinding, 'id' | 'content' | 'sourceTabId' | 'sourceRunEventId' | 'createdBy' | 'orderIndex' | 'createdAt' | 'updatedAt'> & {
     whyItMatters?: string | null;
 };
 
@@ -1406,7 +1404,7 @@ function AnalysisCard({
                         </Badge>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions and logs for ${investigation.title}`} title="More actions and logs">
+                                <Button type="button" variant="ghost" size="icon-sm" aria-label={`More actions for ${investigation.title}`} title="More actions">
                                     <MoreVertical />
                                 </Button>
                             </DropdownMenuTrigger>
@@ -1458,18 +1456,6 @@ function AnalysisCard({
                                     <Trash2 />
                                     Delete
                                 </DropdownMenuItem>
-                                {revisionInstruction ? (
-                                    <>
-                                        <DropdownMenuSeparator />
-                                        <DropdownMenuLabel className="space-y-1.5 whitespace-normal text-xs font-normal text-muted-foreground">
-                                            <span className="flex items-center gap-2 font-medium text-foreground">
-                                                <Logs className="size-4 text-muted-foreground" />
-                                                Logs
-                                            </span>
-                                            <span className="block break-words [overflow-wrap:anywhere]">Changed by instruction: &quot;{revisionInstruction}&quot;</span>
-                                        </DropdownMenuLabel>
-                                    </>
-                                ) : null}
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
@@ -1558,6 +1544,31 @@ function AnalysisCard({
                     <span className="ml-2">{investigation.sqlAssetCount} SQL</span>
                 </div>
                 <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
+                    {revisionInstruction ? (
+                        <Dialog>
+                            <DialogTrigger asChild>
+                                <Button type="button" size="sm" variant="secondary">
+                                    <Logs />
+                                    Logs
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-lg">
+                                <DialogHeader>
+                                    <DialogTitle>Analysis logs</DialogTitle>
+                                    <DialogDescription>
+                                        v{revisionVersion} update for {investigation.title}
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                                    <div className="mb-2 flex items-center gap-2 font-medium">
+                                        <Logs className="size-4 text-muted-foreground" />
+                                        Changed by instruction
+                                    </div>
+                                    <p className="whitespace-pre-wrap break-words text-muted-foreground [overflow-wrap:anywhere]">{revisionInstruction}</p>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    ) : null}
                     <Button type="button" size="sm" variant="secondary" disabled={!showReviewControls || isExcluded || isRevising} onClick={() => setReviseOpen(value => !value)}>
                         {isRevising ? <Loader2 className="animate-spin" /> : <RefreshCw />}
                         Ask to revise

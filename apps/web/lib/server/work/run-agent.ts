@@ -250,7 +250,9 @@ function fallbackWhyItMattersFromSqlEvent(event: { payload?: Record<string, unkn
 
 function buildFallbackConclusionMetadata(params: { includedCount: number; unconfirmedCount: number; fallback: boolean }): WorkConclusionMetadata {
     const caveats = [
-        params.unconfirmedCount > 0 ? `${params.unconfirmedCount} included ${params.unconfirmedCount === 1 ? 'analysis is' : 'analyses are'} Agent-generated or edited but not human-confirmed.` : null,
+        params.unconfirmedCount > 0
+            ? `${params.unconfirmedCount} included ${params.unconfirmedCount === 1 ? 'analysis is' : 'analyses are'} Agent-generated or edited but not human-confirmed.`
+            : null,
         params.fallback ? 'The conclusion was generated from available Findings after the Agent did not provide complete conclusion metadata.' : null,
     ].filter((item): item is string => Boolean(item));
 
@@ -744,7 +746,7 @@ function buildWorkRunInstruction(
             'Write SQL as a complete statement ending with a semicolon.',
             'Every included non-rejected Analysis must have at least one Finding before the conclusion.',
             mode === 'continue_work'
-                ? 'Do not update the Work conclusion. The UI will mark it outdated and the human can update it explicitly.'
+                ? 'Call work.updateConclusion after affected included Analyses have Findings. Include conclusionMetadata with confidence, caveats, and recommendedNextStep. The conclusion must synthesize the updated included Findings and should not simply repeat every Finding.'
                 : 'Call work.updateConclusion after included Analyses have Findings. Include conclusionMetadata with confidence, caveats, and recommendedNextStep. The conclusion must synthesize included Findings and should not simply repeat every Finding.',
             'Run SQL only through work.runInvestigationSql so the SQL workspace tab and result are preserved. Do not use any direct query or tab tools.',
             'Use work.createInvestigationFinding after SQL results. Every Finding must include content and a short whyItMatters sentence explaining how the result affects the Work goal. Users can later confirm or exclude individual Analyses.',
@@ -860,7 +862,8 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             : mode === 'run' || mode === 'rerun_from_scratch'
               ? activeInvestigationIds(workInvestigations)
               : [];
-    const requiresConclusion = mode !== 'continue_work' && mode !== 'revise_analysis' && !workspaceSnapshot;
+    const requiresConclusion = mode !== 'revise_analysis' && !workspaceSnapshot;
+    const shouldRecordRunRevisions = Boolean(workspaceSnapshot) || mode === 'continue_work' || mode === 'revise_analysis';
     const existingRunAnalyses = resetInvestigationIds.length > 0 && mode !== 'update_conclusion' ? resetFindingCounts(selectedExistingRunAnalyses) : selectedExistingRunAnalyses;
 
     const { run, existingRunningRun } = await options.db.works.createRun({
@@ -953,7 +956,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
             workId: work.id,
             findings: workFindings,
             investigationIds: resetInvestigationIds,
-            resetConclusion: requiresConclusion && mode !== 'update_conclusion',
+            resetConclusion: requiresConclusion && mode !== 'update_conclusion' && mode !== 'continue_work',
         });
 
         const tools: Record<string, any> = workRunTools({
@@ -1047,7 +1050,10 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                 parts: [
                     {
                         type: 'text',
-                        text: [workspaceSnapshotContext ? `${work.goal}\n\n${workspaceSnapshotContext}` : work.goal, userInstruction ? `Human instruction: ${userInstruction}` : null]
+                        text: [
+                            workspaceSnapshotContext ? `${work.goal}\n\n${workspaceSnapshotContext}` : work.goal,
+                            userInstruction ? `Human instruction: ${userInstruction}` : null,
+                        ]
                             .filter(Boolean)
                             .join('\n\n'),
                     },
@@ -1218,7 +1224,9 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                         requestId,
                         currentConnectionId: work.connectionId,
                     });
-                    const unconfirmedCount = conclusionInvestigations.filter(investigation => investigation.auditStatus !== 'accepted' && investigation.auditStatus !== 'reviewed').length;
+                    const unconfirmedCount = conclusionInvestigations.filter(
+                        investigation => investigation.auditStatus !== 'accepted' && investigation.auditStatus !== 'reviewed',
+                    ).length;
                     const conclusionEnvelope = await executeAction(ctx, 'work.updateConclusion', {
                         workId: work.id,
                         conclusion: fallbackConclusion,
@@ -1261,7 +1269,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                     return;
                 }
 
-                if (!requiresConclusion) {
+                if (shouldRecordRunRevisions) {
                     const revisionInvestigationIds =
                         workspaceSnapshot || focusedAnalysis
                             ? [workspaceSnapshot?.investigationId ?? focusedAnalysis?.id].filter((id): id is string => Boolean(id))
@@ -1282,7 +1290,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                                 instruction: userInstruction ?? workspaceSnapshot?.humanEdits.userNote ?? null,
                                 runId: run.id,
                                 createdBy: 'agent',
-                                markConclusionOutdated: true,
+                                markConclusionOutdated: !requiresConclusion,
                             });
                         }),
                     );

@@ -226,6 +226,24 @@ test('Work Agent protocol allows existing-analysis Work continue without conclus
     assert.equal(checkWorkAgentProtocolComplete(state).allowed, true);
 });
 
+test('Work Agent protocol requires existing-analysis continuation conclusion by default', () => {
+    const state = createWorkAgentProtocolState({
+        existingInvestigationIds: ['analysis-1', 'analysis-2'],
+        existingFindingsByInvestigationId: {
+            'analysis-1': 1,
+            'analysis-2': 1,
+        },
+    });
+
+    const completionDecision = checkWorkAgentProtocolComplete(state);
+    assert.equal(completionDecision.allowed, false);
+    assert.match(completionDecision.allowed ? '' : completionDecision.message, /conclusion/);
+
+    assert.equal(checkWorkAgentProtocol(state, 'work_updateConclusion').allowed, true);
+    applyWorkAgentProtocolResult(state, 'work_updateConclusion', { ok: true });
+    assert.equal(checkWorkAgentProtocolComplete(state).allowed, true);
+});
+
 test('Work Agent protocol allows snapshot continuation without three new analyses', () => {
     const state = createWorkAgentProtocolState({
         mode: 'investigation_continue',
