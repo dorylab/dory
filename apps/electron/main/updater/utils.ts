@@ -32,15 +32,27 @@ export function getCenteredPosition(width: number, height: number) {
     };
 }
 
-export function showDialogAndFocus(window: BrowserWindow) {
+interface ShowDialogOptions {
+    focus?: boolean;
+}
+
+export function showDialog(window: BrowserWindow, options: ShowDialogOptions = {}) {
+    const { focus = false } = options;
     if (window.isMinimized()) {
         window.restore();
     }
     window.show();
+    if (!focus) {
+        return;
+    }
     if (process.platform === 'darwin') {
         app.focus({ steal: true });
     }
     window.focus();
+}
+
+export function showDialogAndFocus(window: BrowserWindow) {
+    showDialog(window, { focus: true });
 }
 
 export function compareVersions(a: string, b: string) {
