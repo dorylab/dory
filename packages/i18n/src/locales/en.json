@@ -386,7 +386,23 @@
         "Collapse": "Collapse",
         "Expand": "Expand",
         "Columns": "columns",
-        "Insert select for": "Insert SELECT for {table}"
+        "Insert select for": "Insert SELECT for {table}",
+        "Open query console": "Open query console",
+        "Query table": "Query table",
+        "Open table preview": "Open table preview",
+        "Copy table name": "Copy table name",
+        "Open Console": "New Query",
+        "Quick Query": "Quick Query",
+        "Copy": "Copy",
+        "Table name copied": "Table name copied",
+        "Copy table name failed": "Failed to copy table name",
+        "Rename table": "Rename table",
+        "Rename table description": "Enter the new table name. This will rename the table in the current data source.",
+        "Table name": "Table name",
+        "Cancel": "Cancel",
+        "Rename": "Rename",
+        "Table renamed": "Table renamed",
+        "Rename table failed": "Failed to rename table"
     },
     "CatalogSchemaSidebar": {
         "Filter tables or views": "Filter tables or views",
@@ -1115,6 +1131,8 @@
             "NoActiveTab": "No active tab",
             "CloseTabAria": "Close tab",
             "AddTabAria": "Add tab",
+            "AddTabTooltip": "New Query",
+            "QueryTableTabName": "Query {table}",
             "RenameDialogTitle": "Rename tab",
             "RenameDialogDescription": "Enter a new name for this tab.",
             "RenamePlaceholder": "Tab name"

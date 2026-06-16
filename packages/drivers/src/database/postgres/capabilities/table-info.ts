@@ -409,6 +409,18 @@ async function getTableIndexes(datasource: PostgresDatasource, database: string,
         }));
 }
 
+async function renameTable(datasource: PostgresDatasource, database: string, table: string, nextName: string): Promise<void> {
+    const parsed = parseTableName(table);
+    const schemaName = parsed.schema?.trim() || 'public';
+    const tableName = parsed.name.trim();
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    await datasource.command(`ALTER TABLE ${quoteIdentifier(schemaName)}.${quoteIdentifier(tableName)} RENAME TO ${quoteIdentifier(normalizedNextName)}`, [], { database });
+}
+
 export function createPostgresTableInfoCapability(datasource: PostgresDatasource): GetTableInfoAPI {
     return {
         properties: (database, table) => getTableProperties(datasource, database, table),
@@ -416,5 +428,6 @@ export function createPostgresTableInfoCapability(datasource: PostgresDatasource
         stats: (database, table) => getTableStats(datasource, database, table),
         preview: (database, table, options) => getTablePreview(datasource, database, table, options),
         indexes: (database, table) => getTableIndexes(datasource, database, table),
+        rename: (database, table, nextName) => renameTable(datasource, database, table, nextName),
     };
 }

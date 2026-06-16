@@ -259,6 +259,17 @@ async function getTableIndexes(datasource: OracleDatasource, database: string, t
     }));
 }
 
+async function renameTable(datasource: OracleDatasource, database: string, table: string, nextName: string): Promise<void> {
+    const currentSchema = await getCurrentSchema(datasource, database);
+    const target = parseOracleTableReference(table, currentSchema);
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    await datasource.command(`ALTER TABLE ${quoteOracleQualifiedName(target.schema, target.table)} RENAME TO ${quoteOracleIdentifier(normalizedNextName)}`, {}, { database });
+}
+
 export function createOracleTableInfoCapability(datasource: OracleDatasource): GetTableInfoAPI {
     return {
         async properties(database, table) {
@@ -275,6 +286,9 @@ export function createOracleTableInfoCapability(datasource: OracleDatasource): G
         },
         async indexes(database, table) {
             return getTableIndexes(datasource, database, table);
+        },
+        async rename(database, table, nextName) {
+            return renameTable(datasource, database, table, nextName);
         },
     };
 }

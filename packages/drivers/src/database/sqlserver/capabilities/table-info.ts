@@ -288,6 +288,24 @@ async function getTableIndexes(datasource: SqlServerDatasource, database: string
     }));
 }
 
+async function renameTable(datasource: SqlServerDatasource, database: string, table: string, nextName: string): Promise<void> {
+    const target = resolveTableInput(table);
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    await datasource.command(
+        'EXEC sp_rename @objectName, @newName, @objectType',
+        {
+            objectName: `${target.schema}.${target.table}`,
+            newName: normalizedNextName,
+            objectType: 'OBJECT',
+        },
+        { database },
+    );
+}
+
 export function createSqlServerTableInfoCapability(datasource: SqlServerDatasource): GetTableInfoAPI {
     return {
         properties: (database: string, table: string) => getTableProperties(datasource, database, table),
@@ -295,5 +313,6 @@ export function createSqlServerTableInfoCapability(datasource: SqlServerDatasour
         stats: (database: string, table: string) => getTableStats(datasource, database, table),
         preview: (database: string, table: string, options) => getTablePreview(datasource, database, table, options),
         indexes: (database: string, table: string) => getTableIndexes(datasource, database, table),
+        rename: (database: string, table: string, nextName: string) => renameTable(datasource, database, table, nextName),
     };
 }

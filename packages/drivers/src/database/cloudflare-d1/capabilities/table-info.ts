@@ -1,6 +1,6 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
 import type { CloudflareD1Datasource } from '../datasource';
-import { getCloudflareD1TableDdl, previewCloudflareD1Table } from '../runtime';
+import { getCloudflareD1TableDdl, previewCloudflareD1Table, renameCloudflareD1Table } from '../runtime';
 
 export function createCloudflareD1TableInfoCapability(datasource: CloudflareD1Datasource): GetTableInfoAPI {
     return {
@@ -18,6 +18,9 @@ export function createCloudflareD1TableInfoCapability(datasource: CloudflareD1Da
         },
         async indexes() {
             return [];
+        },
+        async rename(database, table, nextName) {
+            return renameCloudflareD1Table(datasource.config, database, table, nextName);
         },
     };
 }

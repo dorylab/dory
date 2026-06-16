@@ -1,12 +1,13 @@
 'use client';
 
-import React, { Activity, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Activity, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
 import { Sparkles } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { cn } from '@dory/web-utils';
+import type { SQLTab } from '@dory/shared/types/tabs';
+import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
 import {
@@ -19,14 +20,10 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import {
-    copilotPanelOpenAtom,
-    copilotPanelWidthAtom,
-    editorSelectionByTabAtom,
-    inlineSqlAskByTabAtom,
-} from './sql-console.store';
+import { copilotPanelOpenAtom, copilotPanelWidthAtom, editorSelectionByTabAtom, inlineSqlAskByTabAtom } from './sql-console.store';
 
 import { SQLConsoleSidebar } from '../../components/sql-console-sidebar/sql-console-sidebar';
+import type { RenameTablePayload, TableActionPayload } from '../../components/sql-console-sidebar/types';
 import { SavedQueriesSidebar, type SavedQueryItem } from './components/saved-queries/saved-queries-sidebar';
 import SQLTabEmpty from './components/tabs/tab-empty';
 import { SQLTabs } from './components/tabs';
@@ -34,8 +31,9 @@ import { SqlMode } from './components/copilot-modes/sql-mode';
 import { TableMode } from './components/copilot-modes/table-mode';
 import { useSqlConsoleClient } from './hooks/useSqlConsoleClient';
 import type { SQLEditorHandle } from './components/sql-editor';
+import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
-import { Separator } from '@/registry/new-york-v4/ui/separator';
+import { currentConnectionAtom } from '@/shared/stores/app.store';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -80,11 +78,7 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
-export default function SQLConsoleClient({
-    defaultLayout = INITIAL_LAYOUT.horizontal.default,
-}: {
-    defaultLayout: number[] | undefined;
-}) {
+export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizontal.default }: { defaultLayout: number[] | undefined }) {
     const {
         normalizedLayout,
         onLayout: onLayoutFromHook,
@@ -107,10 +101,10 @@ export default function SQLConsoleClient({
     } = useSqlConsoleClient(defaultLayout);
     const t = useTranslations('SqlConsole');
 
-    const editorRefsByTab = useRef<Record<string, React.MutableRefObject<SQLEditorHandle | null>>>({});
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);
     const [showChatbot, setShowChatbot] = useAtom(copilotPanelOpenAtom);
     const [chatWidth, setChatWidth] = useAtom(copilotPanelWidthAtom);
+    const currentConnection = useAtomValue(currentConnectionAtom);
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const setInlineAskByTab = useSetAtom(inlineSqlAskByTabAtom);
     const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot : false;
@@ -122,13 +116,21 @@ export default function SQLConsoleClient({
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
 
-    const ensureEditorRef = useCallback((tabId: string | undefined | null) => {
-        if (!tabId) return null;
-        if (!editorRefsByTab.current[tabId]) {
-            editorRefsByTab.current[tabId] = { current: null };
-        }
-        return editorRefsByTab.current[tabId];
-    }, []);
+    const sqlTabIds = useMemo(() => tabs.filter(tab => tab.tabType === 'sql').map(tab => tab.tabId), [tabs]);
+    const sqlTabIdKey = sqlTabIds.join('\0');
+    const editorRefsByTab = useMemo(
+        () => Object.fromEntries(sqlTabIds.map(tabId => [tabId, React.createRef<SQLEditorHandle>()])),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [sqlTabIdKey],
+    );
+
+    const ensureEditorRef = useCallback(
+        (tabId: string | undefined | null) => {
+            if (!tabId) return null;
+            return editorRefsByTab[tabId] ?? null;
+        },
+        [editorRefsByTab],
+    );
 
     useEffect(() => {
         if (!activeTabId) return;
@@ -188,6 +190,78 @@ export default function SQLConsoleClient({
             return runQuery(tab, options);
         },
         [ensureEditorRef, editorRef, runQuery, selectionByTab],
+    );
+
+    const handleOpenQueryConsole = useCallback(async () => {
+        await addTab({ activate: true });
+    }, [addTab]);
+
+    const handleQueryTable = useCallback(
+        async (payload: TableActionPayload) => {
+            const sqlText = buildQueryTableSql({
+                connectionType: currentConnection?.connection?.type,
+                database: payload.database,
+                schema: payload.schema,
+                tableName: payload.tableName,
+            });
+            const tabName = t('Tabs.QueryTableTabName', { table: payload.tabLabel ?? payload.tableName });
+            const tabId = await addTab({ tabName, content: sqlText, activate: true });
+            const tab: SQLTab = {
+                tabId,
+                tabType: 'sql',
+                tabName,
+                content: sqlText,
+                status: 'idle',
+                userId: '',
+                connectionId: currentConnection?.connection?.id ?? '',
+                createdAt: new Date().toISOString(),
+            };
+
+            await runQueryWithRef(tab, {
+                sqlOverride: sqlText,
+                databaseOverride: payload.database ?? null,
+            });
+        },
+        [addTab, currentConnection?.connection?.id, currentConnection?.connection?.type, runQueryWithRef, t],
+    );
+
+    const handleRenameTable = useCallback(
+        async (payload: RenameTablePayload) => {
+            const connectionId = currentConnection?.connection?.id;
+            if (!connectionId || !payload.database) {
+                throw new Error(t('Tabs.MissingConnectionContext'));
+            }
+
+            await executeActionClient(
+                'schema.renameTable',
+                {
+                    connectionId,
+                    database: payload.database,
+                    table: payload.tableName,
+                    nextName: payload.nextName,
+                },
+                { currentConnectionId: connectionId },
+            );
+
+            const nextTableName = applyRenamedTableName(payload.tableName, payload.nextName.trim());
+            await Promise.all(
+                tabs
+                    .filter(tab => tab.tabType === 'table' && tab.tableName === payload.tableName && (!payload.database || tab.databaseName === payload.database))
+                    .map(tab =>
+                        Promise.resolve(
+                            updateTab(
+                                tab.tabId,
+                                {
+                                    tableName: nextTableName,
+                                    tabName: applyRenamedTableName((tab.tabName as string | undefined) ?? payload.tableName, payload.nextName.trim()),
+                                },
+                                { immediate: true },
+                            ),
+                        ),
+                    ),
+            );
+        },
+        [currentConnection?.connection?.id, t, tabs, updateTab],
     );
 
     useEffect(() => {
@@ -301,18 +375,19 @@ export default function SQLConsoleClient({
 
             await applySavedQuery(item);
         },
-        [activeTab, activeTabId, addTab, applySavedQuery, setActiveTabId, tabs],
+        [activeTab, activeTabId, addTab, applySavedQuery, editorRef, setActiveTabId, tabs],
     );
 
     return (
         <main className="relative h-full w-full">
-            <Group orientation="horizontal" id="sql-console-horizontal" defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }} onLayoutChanged={handleLayoutChange}>
+            <Group
+                orientation="horizontal"
+                id="sql-console-horizontal"
+                defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
+                onLayoutChanged={handleLayoutChange}
+            >
                 {/* Left */}
-                <Panel
-                    id="left-panel"
-                    minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`}
-                    maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
-                >
+                <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}>
                     <div className="flex flex-col h-full min-h-0 bg-card">
                         <Tabs defaultValue="tables" className="flex-1 min-h-0">
                             <TabsList className="w-full rounded-none px-2">
@@ -327,6 +402,9 @@ export default function SQLConsoleClient({
                             <TabsContent value="tables" className="flex-1 min-h-0">
                                 <SQLConsoleSidebar
                                     onOpenTableTab={handleOpenTableTab}
+                                    onOpenQueryConsole={handleOpenQueryConsole}
+                                    onQueryTable={handleQueryTable}
+                                    onRenameTable={handleRenameTable}
                                     selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
                                     selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
                                 />

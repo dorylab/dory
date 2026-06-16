@@ -255,3 +255,12 @@ export function getSqliteTableIndexes(db: SqliteDatabase, database: string, tabl
         isUnique: row.unique === 1,
     }));
 }
+
+export function renameSqliteTable(db: SqliteDatabase, database: string, table: string, nextName: string): void {
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    db.prepare(`ALTER TABLE ${buildQualifiedName(database, table)} RENAME TO ${quoteIdentifier(normalizedNextName)}`).run();
+}

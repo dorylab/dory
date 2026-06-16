@@ -336,3 +336,12 @@ export async function previewCloudflareD1Table(
         limit: normalizedLimit,
     };
 }
+
+export async function renameCloudflareD1Table(config: BaseConfig, database: string, table: string, nextName: string): Promise<void> {
+    const normalizedNextName = nextName.trim();
+    if (!normalizedNextName || normalizedNextName.includes('.')) {
+        throw new Error('New table name must be an unqualified table name.');
+    }
+
+    await executeCloudflareD1Query(config, `ALTER TABLE ${buildQualifiedName(database, table)} RENAME TO ${quoteIdentifier(normalizedNextName)}`);
+}

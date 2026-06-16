@@ -390,7 +390,23 @@
         "Collapse": "收起",
         "Expand": "展开",
         "Columns": "列",
-        "Insert select for": "插入 {table} 的 SELECT"
+        "Insert select for": "插入 {table} 的 SELECT",
+        "Open query console": "打开查询控制台",
+        "Query table": "查询表",
+        "Open table preview": "打开表预览",
+        "Copy table name": "复制表名",
+        "Open Console": "新建查询",
+        "Quick Query": "快速查询",
+        "Copy": "复制",
+        "Table name copied": "表名已复制",
+        "Copy table name failed": "复制表名失败",
+        "Rename table": "重命名表",
+        "Rename table description": "输入新的表名。将直接在当前数据源执行重命名。",
+        "Table name": "表名",
+        "Cancel": "取消",
+        "Rename": "重命名",
+        "Table renamed": "表已重命名",
+        "Rename table failed": "重命名表失败"
     },
     "CatalogSchemaSidebar": {
         "Filter tables or views": "筛选表或视图",
@@ -1119,6 +1135,8 @@
             "NoActiveTab": "没有活动标签",
             "CloseTabAria": "关闭标签页",
             "AddTabAria": "新建标签页",
+            "AddTabTooltip": "新建查询",
+            "QueryTableTabName": "查询 {table}",
             "RenameDialogTitle": "重命名标签页",
             "RenameDialogDescription": "输入新的标签页名称。",
             "RenamePlaceholder": "标签页名称"

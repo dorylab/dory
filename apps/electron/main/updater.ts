@@ -32,6 +32,7 @@ import {
     getCenteredPosition,
     getDialogBackgroundColor,
     getDialogHtmlPath,
+    showDialog,
     showDialogAndFocus,
 } from './updater/utils.js';
 import { getMainWindow, setMainWindowQuitting } from './window.js';
@@ -57,6 +58,10 @@ let debugPreviewMode = false;
 let debugProgressTimer: NodeJS.Timeout | null = null;
 let restartInstallInFlight = false;
 let showCheckingDialog = false;
+let latestDownloadProgressState: ProgressDialogState | null = null;
+let hasFocusedProgressDialogForCurrentDownload = false;
+let progressDialogDismissedForCurrentDownload = false;
+let isClosingProgressDialogProgrammatically = false;
 let rendererUpdaterState: RendererUpdaterState = {
     readyToInstall: false,
     version: null,
@@ -128,6 +133,7 @@ function closeProgressDialog() {
         progressDialog = null;
         return;
     }
+    isClosingProgressDialogProgrammatically = true;
     progressDialog.close();
 }
 
@@ -158,6 +164,12 @@ function cancelActiveDownload(log: LogFn) {
     } catch (error) {
         log('[updater] cancelDownload failed:', error);
     }
+}
+
+function resetDownloadProgressTracking() {
+    latestDownloadProgressState = null;
+    hasFocusedProgressDialogForCurrentDownload = false;
+    progressDialogDismissedForCurrentDownload = false;
 }
 
 function openAvailableDialog(title: string) {
@@ -213,11 +225,15 @@ function openAvailableDialog(title: string) {
     });
 }
 
-function openProgressDialog(title: string) {
+function openProgressDialog(title: string, focusOnShow: boolean) {
     if (progressDialog && !progressDialog.isDestroyed()) {
         progressDialog.setTitle(title);
         progressDialog.setMovable(true);
-        showDialogAndFocus(progressDialog);
+        showDialog(progressDialog, { focus: focusOnShow });
+        return;
+    }
+
+    if (progressDialogDismissedForCurrentDownload && !focusOnShow) {
         return;
     }
 
@@ -252,7 +268,7 @@ function openProgressDialog(title: string) {
     progressDialog.once('ready-to-show', () => {
         if (!progressDialog || progressDialog.isDestroyed()) return;
         progressDialog.setMovable(true);
-        showDialogAndFocus(progressDialog);
+        showDialog(progressDialog, { focus: focusOnShow });
         if (isDev) {
             progressDialog.webContents.openDevTools({ mode: 'detach', activate: false });
         }
@@ -262,6 +278,10 @@ function openProgressDialog(title: string) {
     });
 
     progressDialog.on('closed', () => {
+        if (downloadInProgress && showDownloadProgressDialog && !isClosingProgressDialogProgrammatically) {
+            progressDialogDismissedForCurrentDownload = true;
+        }
+        isClosingProgressDialogProgrammatically = false;
         progressDialog = null;
     });
 }
@@ -275,9 +295,10 @@ function showAvailableDialog(state: AvailableDialogState) {
     closeProgressDialog();
 }
 
-function showProgressDialog(state: ProgressDialogState) {
+function showProgressDialog(state: ProgressDialogState, options: { focusOnShow?: boolean } = {}) {
+    const { focusOnShow = false } = options;
     queuedProgressState = state;
-    openProgressDialog(state.title);
+    openProgressDialog(state.title, focusOnShow);
     if (progressDialog && !progressDialog.isDestroyed()) {
         progressDialog.webContents.send('updater:progress-state', state);
     }
@@ -285,7 +306,7 @@ function showProgressDialog(state: ProgressDialogState) {
 }
 
 function showCheckInProgress(locale: string, t: MainTranslator) {
-    showProgressDialog(createCheckInProgressState(locale, t));
+    showProgressDialog(createCheckInProgressState(locale, t), { focusOnShow: true });
 }
 
 function showUpdateAvailable(locale: string, t: MainTranslator, info: UpdateInfo) {
@@ -300,11 +321,25 @@ function showDownloading(locale: string, t: MainTranslator, progress: ProgressIn
         mainWindow.setProgressBar(Math.max(0, Math.min(1, progress.percent / 100)));
     }
 
-    showProgressDialog(createDownloadingState(locale, t, progress));
+    const state = createDownloadingState(locale, t, progress);
+    latestDownloadProgressState = state;
+    showProgressDialog(state, {
+        focusOnShow: showDownloadProgressDialog && !hasFocusedProgressDialogForCurrentDownload,
+    });
+    if (showDownloadProgressDialog) {
+        hasFocusedProgressDialogForCurrentDownload = true;
+    }
 }
 
 function showDownloadPending(locale: string, t: MainTranslator) {
-    showProgressDialog(createDownloadPendingState(locale, t));
+    const state = createDownloadPendingState(locale, t);
+    latestDownloadProgressState = state;
+    showProgressDialog(state, {
+        focusOnShow: showDownloadProgressDialog && !hasFocusedProgressDialogForCurrentDownload,
+    });
+    if (showDownloadProgressDialog) {
+        hasFocusedProgressDialogForCurrentDownload = true;
+    }
 }
 
 function markUpdateReadyToInstall(log: LogFn, info: UpdateInfo) {
@@ -323,12 +358,20 @@ function markUpdateReadyToInstall(log: LogFn, info: UpdateInfo) {
 
 function showDebugDownloading(t: MainTranslator, percent: number) {
     const totalBytes = 157.7 * 1024 * 1024;
-    showProgressDialog(createDebugDownloadingState(currentLocale, t, percent, totalBytes));
+    const state = createDebugDownloadingState(currentLocale, t, percent, totalBytes);
+    latestDownloadProgressState = state;
+    showProgressDialog(state, {
+        focusOnShow: showDownloadProgressDialog && !hasFocusedProgressDialogForCurrentDownload,
+    });
+    if (showDownloadProgressDialog) {
+        hasFocusedProgressDialogForCurrentDownload = true;
+    }
 }
 
 function startDebugDownloadFlow(log: LogFn, t: MainTranslator) {
     stopDebugProgressTimer();
     downloadInProgress = true;
+    resetDownloadProgressTracking();
     let percent = 0;
     showDebugDownloading(t, percent);
 
@@ -339,6 +382,7 @@ function startDebugDownloadFlow(log: LogFn, t: MainTranslator) {
             stopDebugProgressTimer();
             log('[updater] debug download completed');
             downloadInProgress = false;
+            resetDownloadProgressTracking();
             markUpdateReadyToInstall(log, { version: '1.2026.048' } as UpdateInfo);
         }
     }, 160);
@@ -433,6 +477,8 @@ function handleUpdateAction(log: LogFn, t: MainTranslator, action: UpdateAction)
             downloadCanceledByUser = false;
             shouldAutoInstallAfterDownload = true;
             showDownloadProgressDialog = true;
+            hasFocusedProgressDialogForCurrentDownload = false;
+            progressDialogDismissedForCurrentDownload = false;
             showDownloadPending(currentLocale, t);
             closeAvailableDialog();
             if (debugPreviewMode) {
@@ -442,6 +488,7 @@ function handleUpdateAction(log: LogFn, t: MainTranslator, action: UpdateAction)
             downloadInProgress = true;
             autoUpdater.downloadUpdate().catch((error: unknown) => {
                 downloadInProgress = false;
+                resetDownloadProgressTracking();
                 showUpdateError(log, t, error, true);
             });
             break;
@@ -462,6 +509,7 @@ function handleUpdateAction(log: LogFn, t: MainTranslator, action: UpdateAction)
                 mainWindow.setProgressBar(-1);
             }
             downloadInProgress = false;
+            resetDownloadProgressTracking();
             closeAllDialogs();
             break;
         }
@@ -711,10 +759,12 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
         shouldAutoInstallAfterDownload = false;
         showDownloadProgressDialog = false;
         downloadInProgress = true;
+        resetDownloadProgressTracking();
         autoUpdater.downloadUpdate().catch((error: unknown) => {
             downloadInProgress = false;
             shouldAutoInstallAfterDownload = false;
             showDownloadProgressDialog = false;
+            resetDownloadProgressTracking();
             showUpdateError(logError, t, error, false);
         });
     });
@@ -744,7 +794,9 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
         }
         if (showDownloadProgressDialog) {
             showDownloading(locale, t, progress);
+            return;
         }
+        latestDownloadProgressState = createDownloadingState(locale, t, progress);
     });
 
     autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
@@ -758,6 +810,7 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
         shouldAutoInstallAfterDownload = false;
         showDownloadProgressDialog = false;
         downloadCanceledByUser = false;
+        resetDownloadProgressTracking();
         markUpdateReadyToInstall(log, info);
         if (autoInstallNow) {
             log('[updater] auto install enabled, restarting to install downloaded update');
@@ -775,6 +828,7 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
         showDownloadProgressDialog = false;
         isManualCheck = false;
         availableVersion = null;
+        resetDownloadProgressTracking();
         closeAllDialogs();
         // Dialog is handled by the catch block at each call site (runCheckForUpdates,
         // downloadUpdate, etc.) to avoid duplicate dialogs, so always pass manual=false here.
@@ -815,6 +869,17 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     const runCheckForUpdates = async (manual: boolean, source: 'menu' | 'startup' | 'interval' | 'focus' | 'channel-change') => {
         if (checkInProgress || downloadInProgress) {
             if (manual) {
+                if (downloadInProgress) {
+                    log('[updater] manual check during active download, showing progress dialog');
+                    showDownloadProgressDialog = true;
+                    hasFocusedProgressDialogForCurrentDownload = false;
+                    progressDialogDismissedForCurrentDownload = false;
+                    const currentProgressState = latestDownloadProgressState ?? createDownloadPendingState(locale, t);
+                    latestDownloadProgressState = currentProgressState;
+                    showProgressDialog(currentProgressState, { focusOnShow: true });
+                    hasFocusedProgressDialogForCurrentDownload = true;
+                    return;
+                }
                 logWarn('[updater] check ignored: update flow already in progress');
                 const options: MessageBoxOptions = {
                     type: 'info',
@@ -851,6 +916,7 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
             showDownloadProgressDialog = false;
             isManualCheck = false;
             availableVersion = null;
+            resetDownloadProgressTracking();
             closeAllDialogs();
             showUpdateError(logError, t, error, manual);
         } finally {
