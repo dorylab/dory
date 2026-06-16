@@ -263,23 +263,26 @@
   },
   {
     "sql": [
-      "CREATE TABLE \"work_investigations\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"title\" text NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"linked_tab_id\" text,\n\t\"last_query_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE TABLE \"works\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"title\" text DEFAULT 'Untitled Work' NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"goal\" text NOT NULL,\n\t\"conclusion\" text,\n\t\"connection_id\" text NOT NULL,\n\t\"created_by\" text NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "CREATE TABLE \"work_investigation_findings\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"investigation_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"content\" text NOT NULL,\n\t\"why_it_matters\" text,\n\t\"source_tab_id\" text,\n\t\"source_run_event_id\" text,\n\t\"created_by\" text NOT NULL,\n\t\"order_index\" integer DEFAULT 0 NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"work_investigation_revisions\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"investigation_id\" text NOT NULL,\n\t\"version\" integer NOT NULL,\n\t\"instruction\" text,\n\t\"title\" text NOT NULL,\n\t\"findings_snapshot\" jsonb NOT NULL,\n\t\"asset_summary\" jsonb NOT NULL,\n\t\"run_id\" text,\n\t\"created_by\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"work_investigations\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"title\" text NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"audit_status\" text DEFAULT 'draft' NOT NULL,\n\t\"current_revision_id\" text,\n\t\"linked_tab_id\" text,\n\t\"last_query_at\" timestamp with time zone,\n\t\"reviewed_at\" timestamp with time zone,\n\t\"accepted_at\" timestamp with time zone,\n\t\"rejected_at\" timestamp with time zone,\n\t\"audit_status_updated_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"work_run_events\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"run_id\" text NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"type\" text NOT NULL,\n\t\"role\" text NOT NULL,\n\t\"content\" text,\n\t\"payload\" jsonb,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"work_runs\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"status\" text DEFAULT 'running' NOT NULL,\n\t\"previous_work_status\" text NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"started_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"completed_at\" timestamp with time zone,\n\t\"error\" text\n);\n",
+      "\nCREATE TABLE \"work_workspace_snapshots\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"investigation_id\" text NOT NULL,\n\t\"workspace_id\" text NOT NULL,\n\t\"previous_agent_step_id\" text,\n\t\"intent\" text NOT NULL,\n\t\"human_edits\" jsonb NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"works\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"title\" text DEFAULT 'Untitled Work' NOT NULL,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"goal\" text NOT NULL,\n\t\"work_type\" text DEFAULT 'investigation' NOT NULL,\n\t\"scope\" jsonb,\n\t\"initial_context\" text,\n\t\"conclusion\" text,\n\t\"conclusion_metadata\" jsonb,\n\t\"conclusion_status\" text DEFAULT 'missing' NOT NULL,\n\t\"conclusion_updated_at\" timestamp with time zone,\n\t\"connection_id\" text NOT NULL,\n\t\"created_by\" text NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_type\" text DEFAULT 'connection' NOT NULL;",
+      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_work_id\" text;",
+      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_investigation_id\" text;",
+      "\nCREATE INDEX \"idx_work_investigation_findings_work\" ON \"work_investigation_findings\" USING btree (\"organization_id\",\"work_id\");",
+      "\nCREATE INDEX \"idx_work_investigation_findings_investigation\" ON \"work_investigation_findings\" USING btree (\"organization_id\",\"investigation_id\");",
+      "\nCREATE INDEX \"idx_work_investigation_findings_source_tab\" ON \"work_investigation_findings\" USING btree (\"source_tab_id\");",
+      "\nCREATE INDEX \"idx_work_investigation_findings_source_event\" ON \"work_investigation_findings\" USING btree (\"source_run_event_id\");",
+      "\nCREATE INDEX \"idx_work_investigation_revisions_work\" ON \"work_investigation_revisions\" USING btree (\"organization_id\",\"work_id\");",
+      "\nCREATE INDEX \"idx_work_investigation_revisions_investigation\" ON \"work_investigation_revisions\" USING btree (\"organization_id\",\"investigation_id\");",
+      "\nCREATE UNIQUE INDEX \"uidx_work_investigation_revisions_version\" ON \"work_investigation_revisions\" USING btree (\"investigation_id\",\"version\");",
       "\nCREATE INDEX \"idx_work_investigations_work_id\" ON \"work_investigations\" USING btree (\"work_id\");",
       "\nCREATE INDEX \"idx_work_investigations_organization_work\" ON \"work_investigations\" USING btree (\"organization_id\",\"work_id\");",
       "\nCREATE INDEX \"idx_work_investigations_connection_id\" ON \"work_investigations\" USING btree (\"connection_id\");",
-      "\nCREATE INDEX \"idx_works_organization_updated_at\" ON \"works\" USING btree (\"organization_id\",\"updated_at\");",
-      "\nCREATE INDEX \"idx_works_connection_id\" ON \"works\" USING btree (\"connection_id\");",
-      "\nCREATE INDEX \"idx_works_created_by_user_id\" ON \"works\" USING btree (\"created_by_user_id\");"
-    ],
-    "bps": true,
-    "folderMillis": 1780741423878,
-    "hash": "dd714498fd919bd0ae678a77294d948fd60730338e0e82487d61617a2afd71dd"
-  },
-  {
-    "sql": [
-      "CREATE TABLE \"work_run_events\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"run_id\" text NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"type\" text NOT NULL,\n\t\"role\" text NOT NULL,\n\t\"content\" text,\n\t\"payload\" jsonb,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE TABLE \"work_runs\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"work_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"connection_id\" text NOT NULL,\n\t\"status\" text DEFAULT 'running' NOT NULL,\n\t\"previous_work_status\" text NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"started_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"completed_at\" timestamp with time zone,\n\t\"error\" text\n);\n",
       "\nCREATE INDEX \"idx_work_run_events_run_created_at\" ON \"work_run_events\" USING btree (\"run_id\",\"created_at\");",
       "\nCREATE INDEX \"idx_work_run_events_work_created_at\" ON \"work_run_events\" USING btree (\"work_id\",\"created_at\");",
       "\nCREATE INDEX \"idx_work_run_events_organization_work\" ON \"work_run_events\" USING btree (\"organization_id\",\"work_id\");",
@@ -287,108 +290,17 @@
       "\nCREATE INDEX \"idx_work_runs_work_started_at\" ON \"work_runs\" USING btree (\"work_id\",\"started_at\");",
       "\nCREATE INDEX \"idx_work_runs_organization_work\" ON \"work_runs\" USING btree (\"organization_id\",\"work_id\");",
       "\nCREATE INDEX \"idx_work_runs_status\" ON \"work_runs\" USING btree (\"status\");",
-      "\nCREATE UNIQUE INDEX \"uidx_work_runs_one_running_per_work\" ON \"work_runs\" USING btree (\"work_id\") WHERE \"work_runs\".\"status\" = 'running';"
-    ],
-    "bps": true,
-    "folderMillis": 1780761178945,
-    "hash": "3bf4c0008872dbb83fc8144805e184e0101705600619718350ed0f5c2153d895"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"work_investigations\" ADD COLUMN \"summary\" text;"
-    ],
-    "bps": true,
-    "folderMillis": 1780763009172,
-    "hash": "04069cc4f86c19bd395b77ad6b35f5e0e36a31f8b66e33e2c762f5063a2770b0"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"work_investigations\" DROP COLUMN \"summary\";\n",
-      "\nCREATE TABLE \"work_investigation_findings\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"investigation_id\" text NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"content\" text NOT NULL,\n    \"source_tab_id\" text,\n    \"source_run_event_id\" text,\n    \"created_by\" text NOT NULL,\n    \"order_index\" integer DEFAULT 0 NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE INDEX \"idx_work_investigation_findings_work\" ON \"work_investigation_findings\" USING btree (\"organization_id\",\"work_id\");\n",
-      "\nCREATE INDEX \"idx_work_investigation_findings_investigation\" ON \"work_investigation_findings\" USING btree (\"organization_id\",\"investigation_id\");\n",
-      "\nCREATE INDEX \"idx_work_investigation_findings_source_tab\" ON \"work_investigation_findings\" USING btree (\"source_tab_id\");\n",
-      "\nCREATE INDEX \"idx_work_investigation_findings_source_event\" ON \"work_investigation_findings\" USING btree (\"source_run_event_id\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1780765000000,
-    "hash": "8db6adfbee7f6bb2f0006a91ebf428695fda31848527f767a50c42e5d7276851"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"work_investigation_findings\" ALTER COLUMN \"order_index\" SET DEFAULT 0;",
-      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_type\" text DEFAULT 'connection' NOT NULL;",
-      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_work_id\" text;",
-      "\nALTER TABLE \"tabs\" ADD COLUMN \"workspace_scope_investigation_id\" text;",
+      "\nCREATE UNIQUE INDEX \"uidx_work_runs_one_running_per_work\" ON \"work_runs\" USING btree (\"work_id\") WHERE \"work_runs\".\"status\" = 'running';",
+      "\nCREATE INDEX \"idx_work_workspace_snapshots_work_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"work_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_work_workspace_snapshots_investigation_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"investigation_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_work_workspace_snapshots_workspace_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"workspace_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_works_organization_updated_at\" ON \"works\" USING btree (\"organization_id\",\"updated_at\");",
+      "\nCREATE INDEX \"idx_works_connection_id\" ON \"works\" USING btree (\"connection_id\");",
+      "\nCREATE INDEX \"idx_works_created_by_user_id\" ON \"works\" USING btree (\"created_by_user_id\");",
       "\nCREATE INDEX \"idx_tabs_workspace_scope\" ON \"tabs\" USING btree (\"user_id\",\"connection_id\",\"workspace_scope_type\",\"workspace_scope_work_id\",\"workspace_scope_investigation_id\");"
     ],
     "bps": true,
-    "folderMillis": 1780888948383,
-    "hash": "b3ca451820e119b5db16f5d6be8362c732dff4f0d6bce7bad70ad0e0e5fca892"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"works\" ADD COLUMN \"work_type\" text DEFAULT 'investigation' NOT NULL;",
-      "\nALTER TABLE \"works\" ADD COLUMN \"scope\" jsonb;",
-      "\nALTER TABLE \"works\" ADD COLUMN \"initial_context\" text;"
-    ],
-    "bps": true,
-    "folderMillis": 1780922041547,
-    "hash": "9305937612a837a6c6b3df632234782b9599db234026c7d167f18c9ec12eeece"
-  },
-  {
-    "sql": [
-      "CREATE TABLE \"work_workspace_snapshots\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"investigation_id\" text NOT NULL,\n    \"workspace_id\" text NOT NULL,\n    \"previous_agent_step_id\" text,\n    \"intent\" text NOT NULL,\n    \"human_edits\" jsonb NOT NULL,\n    \"created_by_user_id\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE INDEX \"idx_work_workspace_snapshots_work_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"work_id\",\"created_at\");\n",
-      "\nCREATE INDEX \"idx_work_workspace_snapshots_investigation_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"investigation_id\",\"created_at\");\n",
-      "\nCREATE INDEX \"idx_work_workspace_snapshots_workspace_created\" ON \"work_workspace_snapshots\" USING btree (\"organization_id\",\"workspace_id\",\"created_at\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1780926000000,
-    "hash": "5e779b92440bd28e07eeeb9fa8cdcc0bb7c867148099641565598ffd1f624cf6"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"work_investigations\" ADD COLUMN \"audit_status\" text DEFAULT 'draft' NOT NULL;",
-      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"reviewed_at\" timestamp with time zone;",
-      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"accepted_at\" timestamp with time zone;",
-      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"rejected_at\" timestamp with time zone;",
-      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"audit_status_updated_at\" timestamp with time zone;\n"
-    ],
-    "bps": true,
-    "folderMillis": 1781246546313,
-    "hash": "e4e426209f24fa57543f0bdf136534bbdd0f7b8701533efeb2d400cac057b63c"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"works\" ADD COLUMN \"conclusion_status\" text DEFAULT 'missing' NOT NULL;",
-      "\nALTER TABLE \"works\" ADD COLUMN \"conclusion_updated_at\" timestamp with time zone;",
-      "\nUPDATE \"works\"\nSET\n    \"conclusion_status\" = CASE WHEN \"conclusion\" IS NULL OR btrim(\"conclusion\") = '' THEN 'missing' ELSE 'fresh' END,\n    \"conclusion_updated_at\" = CASE WHEN \"conclusion\" IS NULL OR btrim(\"conclusion\") = '' THEN NULL ELSE \"updated_at\" END;",
-      "\nALTER TABLE \"work_investigations\" ADD COLUMN \"current_revision_id\" text;",
-      "\nCREATE TABLE \"work_investigation_revisions\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"investigation_id\" text NOT NULL,\n    \"version\" integer NOT NULL,\n    \"instruction\" text,\n    \"title\" text NOT NULL,\n    \"findings_snapshot\" jsonb NOT NULL,\n    \"asset_summary\" jsonb NOT NULL,\n    \"run_id\" text,\n    \"created_by\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);",
-      "\nCREATE INDEX \"idx_work_investigation_revisions_work\" ON \"work_investigation_revisions\" USING btree (\"organization_id\",\"work_id\");",
-      "\nCREATE INDEX \"idx_work_investigation_revisions_investigation\" ON \"work_investigation_revisions\" USING btree (\"organization_id\",\"investigation_id\");",
-      "\nCREATE UNIQUE INDEX \"uidx_work_investigation_revisions_version\" ON \"work_investigation_revisions\" USING btree (\"investigation_id\",\"version\");\n"
-    ],
-    "bps": true,
-    "folderMillis": 1781300000000,
-    "hash": "0e638fc5cdf2dc06ee3389bc8fb7bf4c5fd9374eead1145b4b5c67bf376a9bee"
-  },
-  {
-    "sql": [
-      "ALTER TABLE \"work_investigation_findings\" ADD COLUMN \"why_it_matters\" text;",
-      "\nALTER TABLE \"works\" ADD COLUMN \"conclusion_metadata\" jsonb;\n"
-    ],
-    "bps": true,
-    "folderMillis": 1781495214788,
-    "hash": "100da13b9b7711804e4d3e9605fa186b94eda0da595f09e9b9670d7ee80b2d3c"
-  },
-  {
-    "sql": [
-      "UPDATE \"work_investigations\"\nSET \"audit_status\" = 'draft'\nWHERE \"audit_status\" = 'needs_review';\n"
-    ],
-    "bps": true,
-    "folderMillis": 1781500000000,
-    "hash": "ba208944316783f943091c597ccc3acc877f4f7d24c6f74a45641479b6e5c372"
+    "folderMillis": 1781594006874,
+    "hash": "204b016e55726240fdd78981bfc0df5e323925135e77be77ec54f4c022799e7b"
   }
 ]

@@ -1,1 +1,0 @@
-ALTER TABLE "work_investigations" ADD COLUMN "summary" text;

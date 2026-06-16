@@ -117,78 +117,8 @@
     {
       "idx": 16,
       "version": "7",
-      "when": 1780741423777,
-      "tag": "0016_chunky_vapor",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "7",
-      "when": 1780761169879,
-      "tag": "0017_good_red_skull",
-      "breakpoints": true
-    },
-    {
-      "idx": 18,
-      "version": "7",
-      "when": 1780763003972,
-      "tag": "0018_futuristic_prowler",
-      "breakpoints": true
-    },
-    {
-      "idx": 19,
-      "version": "7",
-      "when": 1780765000000,
-      "tag": "0019_work_investigation_findings",
-      "breakpoints": true
-    },
-    {
-      "idx": 20,
-      "version": "7",
-      "when": 1780888940337,
-      "tag": "0020_redundant_mariko_yashida",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "7",
-      "when": 1780922036716,
-      "tag": "0021_true_hammerhead",
-      "breakpoints": true
-    },
-    {
-      "idx": 22,
-      "version": "7",
-      "when": 1780926000000,
-      "tag": "0022_work_workspace_snapshots",
-      "breakpoints": true
-    },
-    {
-      "idx": 23,
-      "version": "7",
-      "when": 1781246541135,
-      "tag": "0023_dashing_vapor",
-      "breakpoints": true
-    },
-    {
-      "idx": 24,
-      "version": "7",
-      "when": 1781300000000,
-      "tag": "0024_work_investigation_revisions",
-      "breakpoints": true
-    },
-    {
-      "idx": 25,
-      "version": "7",
-      "when": 1781495218957,
-      "tag": "0025_fixed_blue_blade",
-      "breakpoints": true
-    },
-    {
-      "idx": 26,
-      "version": "7",
-      "when": 1781500000000,
-      "tag": "0026_remove_work_needs_review",
+      "when": 1781594000643,
+      "tag": "0016_silent_sasquatch",
       "breakpoints": true
     }
   ]
