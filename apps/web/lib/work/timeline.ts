@@ -1,8 +1,13 @@
 export type WorkTimelineRunEvent = {
     id: string;
+    runId: string;
     role: string;
     payload?: Record<string, unknown> | null;
     createdAt: string | Date;
+};
+
+export type WorkTimelineRun = {
+    id: string;
 };
 
 export type WorkTimelineWorkspaceSnapshot = {
@@ -16,6 +21,12 @@ export type WorkTimelineEvent<TRunEvent extends WorkTimelineRunEvent, TSnapshot 
     runEvent: TRunEvent | null;
     snapshot: TSnapshot | null;
     createdAt: TRunEvent['createdAt'] | TSnapshot['createdAt'];
+};
+
+export type WorkRunTimeline<TRun extends WorkTimelineRun, TRunEvent extends WorkTimelineRunEvent, TSnapshot extends WorkTimelineWorkspaceSnapshot> = {
+    run: TRun;
+    events: TRunEvent[];
+    timelineEvents: WorkTimelineEvent<TRunEvent, TSnapshot>[];
 };
 
 function toTimestamp(value: string | Date) {
@@ -34,9 +45,11 @@ function snapshotIdFromRunEvent(event: WorkTimelineRunEvent) {
 export function buildWorkTimelineEvents<TRunEvent extends WorkTimelineRunEvent, TSnapshot extends WorkTimelineWorkspaceSnapshot>(input: {
     runEvents: TRunEvent[];
     workspaceSnapshots: TSnapshot[];
+    includeUnmatchedSnapshots?: boolean;
 }): WorkTimelineEvent<TRunEvent, TSnapshot>[] {
     const snapshotsById = new Map(input.workspaceSnapshots.map(snapshot => [snapshot.id, snapshot]));
     const matchedSnapshotIds = new Set<string>();
+    const includeUnmatchedSnapshots = input.includeUnmatchedSnapshots ?? true;
 
     const timelineEvents: WorkTimelineEvent<TRunEvent, TSnapshot>[] = input.runEvents.map(event => {
         const snapshotId = snapshotIdFromRunEvent(event);
@@ -54,15 +67,17 @@ export function buildWorkTimelineEvents<TRunEvent extends WorkTimelineRunEvent, 
         };
     });
 
-    for (const snapshot of input.workspaceSnapshots) {
-        if (matchedSnapshotIds.has(snapshot.id)) continue;
-        timelineEvents.push({
-            id: `workspace-snapshot:${snapshot.id}`,
-            kind: 'workspace_snapshot',
-            runEvent: null,
-            snapshot,
-            createdAt: snapshot.createdAt,
-        });
+    if (includeUnmatchedSnapshots) {
+        for (const snapshot of input.workspaceSnapshots) {
+            if (matchedSnapshotIds.has(snapshot.id)) continue;
+            timelineEvents.push({
+                id: `workspace-snapshot:${snapshot.id}`,
+                kind: 'workspace_snapshot',
+                runEvent: null,
+                snapshot,
+                createdAt: snapshot.createdAt,
+            });
+        }
     }
 
     return timelineEvents.sort((a, b) => {
@@ -70,4 +85,50 @@ export function buildWorkTimelineEvents<TRunEvent extends WorkTimelineRunEvent, 
         if (timeDiff !== 0) return timeDiff;
         return a.id.localeCompare(b.id);
     });
+}
+
+export function buildWorkRunTimelines<TRun extends WorkTimelineRun, TRunEvent extends WorkTimelineRunEvent, TSnapshot extends WorkTimelineWorkspaceSnapshot>(input: {
+    runs: TRun[];
+    runEvents: TRunEvent[];
+    workspaceSnapshots: TSnapshot[];
+}): {
+    runTimelines: WorkRunTimeline<TRun, TRunEvent, TSnapshot>[];
+    unlinkedTimelineEvents: WorkTimelineEvent<TRunEvent, TSnapshot>[];
+} {
+    const eventsByRunId = new Map<string, TRunEvent[]>();
+    const matchedSnapshotIds = new Set<string>();
+
+    for (const event of input.runEvents) {
+        const existing = eventsByRunId.get(event.runId) ?? [];
+        existing.push(event);
+        eventsByRunId.set(event.runId, existing);
+
+        const snapshotId = snapshotIdFromRunEvent(event);
+        if (snapshotId) {
+            matchedSnapshotIds.add(snapshotId);
+        }
+    }
+
+    const runTimelines = input.runs.map(run => {
+        const events = eventsByRunId.get(run.id) ?? [];
+        return {
+            run,
+            events,
+            timelineEvents: buildWorkTimelineEvents({
+                runEvents: events,
+                workspaceSnapshots: input.workspaceSnapshots,
+                includeUnmatchedSnapshots: false,
+            }),
+        };
+    });
+
+    const unlinkedTimelineEvents = buildWorkTimelineEvents({
+        runEvents: [],
+        workspaceSnapshots: input.workspaceSnapshots.filter(snapshot => !matchedSnapshotIds.has(snapshot.id)),
+    });
+
+    return {
+        runTimelines,
+        unlinkedTimelineEvents,
+    };
 }

@@ -190,3 +190,9 @@ export const workTimelineEventOutputSchema = z.object({
     snapshot: workWorkspaceSnapshotOutputSchema.nullable(),
     createdAt: z.date(),
 });
+
+export const workRunTimelineOutputSchema = z.object({
+    run: workRunOutputSchema,
+    events: z.array(workRunEventOutputSchema),
+    timelineEvents: z.array(workTimelineEventOutputSchema),
+});

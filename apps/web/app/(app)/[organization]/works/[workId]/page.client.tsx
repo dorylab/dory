@@ -74,6 +74,7 @@ import type {
     WorkInvestigationFinding,
     WorkRun,
     WorkRunEvent,
+    WorkRunTimeline,
     WorkTimelineEvent,
     WorkWorkspaceSnapshot,
 } from '../types';
@@ -85,6 +86,7 @@ type WorkDetailPageClientProps = {
 };
 
 const WORKSPACE_PREFETCH_STALE_TIME_MS = 30_000;
+const DEFAULT_UPDATE_CONCLUSION_INSTRUCTION = 'Update the conclusion from the current included analyses.';
 
 function analysisInclusionClassName(status: WorkAnalysisAuditStatus) {
     if (status === 'rejected') return 'border-red-300 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
@@ -244,7 +246,8 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const [investigationTitle, setInvestigationTitle] = useState('');
     const [openingInvestigationId, setOpeningInvestigationId] = useState<string | null>(null);
     const [deletingInvestigation, setDeletingInvestigation] = useState<WorkInvestigation | null>(null);
-    const [runDetailsOpen, setRunDetailsOpen] = useState(false);
+    const [runsListOpen, setRunsListOpen] = useState(false);
+    const [expandedRunIds, setExpandedRunIds] = useState<Set<string>>(() => new Set());
     const [continueOpen, setContinueOpen] = useState(false);
     const [continueInstruction, setContinueInstruction] = useState('');
 
@@ -261,10 +264,18 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const work = workQuery.data?.work ?? null;
     const investigations = useMemo(() => workQuery.data?.investigations ?? [], [workQuery.data?.investigations]);
     const latestRun = workQuery.data?.latestRun ?? null;
+    const latestRunId = latestRun?.id ?? null;
+    const latestRunStatus = latestRun?.status ?? null;
     const latestRunEvents = useMemo(() => workQuery.data?.latestRunEvents ?? [], [workQuery.data?.latestRunEvents]);
-    const timelineEvents = useMemo(() => workQuery.data?.timelineEvents ?? [], [workQuery.data?.timelineEvents]);
+    const runTimelines = useMemo(() => workQuery.data?.runTimelines ?? [], [workQuery.data?.runTimelines]);
+    const visibleRunTimelines = useMemo(() => runTimelines.filter(runTimeline => !isInternalUpdateConclusionRun(runTimeline)), [runTimelines]);
+    const latestUserRunTimeline = useMemo(
+        () => visibleRunTimelines.find(runTimeline => Boolean(runUserSubmission(runTimeline.events))) ?? visibleRunTimelines[0] ?? null,
+        [visibleRunTimelines],
+    );
+    const displayedRunTimelines = runsListOpen ? visibleRunTimelines : latestUserRunTimeline ? [latestUserRunTimeline] : [];
     const connection = work ? connectionById.get(work.connectionId) : null;
-    const isRunRunning = latestRun?.status === 'running' || work?.status === 'running';
+    const isRunRunning = latestRunStatus === 'running' || work?.status === 'running';
     const latestEvent = latestRunEvents[latestRunEvents.length - 1] ?? null;
     const evidenceSummary = useMemo(() => formatWorkEvidenceSummary(investigations), [investigations]);
     const evidenceCounts = useMemo(() => getWorkEvidenceCounts(investigations), [investigations]);
@@ -317,11 +328,31 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
 
     const invalidateWork = () => queryClient.invalidateQueries({ queryKey: ['work', workId] });
 
-    useEffect(() => {
-        if (latestRun?.status === 'running') {
-            setRunDetailsOpen(true);
-        }
-    }, [latestRun?.status]);
+    const expandRunDetails = useCallback((runId: string) => {
+        setExpandedRunIds(current => {
+            const next = new Set(current);
+            next.add(runId);
+            return next;
+        });
+    }, []);
+
+    const openLatestRunDetails = useCallback(() => {
+        if (!latestRunId) return;
+        setRunsListOpen(true);
+        expandRunDetails(latestRunId);
+    }, [expandRunDetails, latestRunId]);
+
+    const toggleRunDetails = useCallback((runId: string) => {
+        setExpandedRunIds(current => {
+            const next = new Set(current);
+            if (next.has(runId)) {
+                next.delete(runId);
+            } else {
+                next.add(runId);
+            }
+            return next;
+        });
+    }, []);
 
     const updateTitleMutation = useMutation({
         mutationFn: (nextTitle: string) => executeActionClient<Work>('work.updateTitle', { id: workId, title: nextTitle }),
@@ -446,7 +477,6 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             }
 
             await invalidateWork();
-            setRunDetailsOpen(true);
             setContinueOpen(false);
             setContinueInstruction('');
             void response.text().finally(() => {
@@ -478,7 +508,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                 title: 'Agent is working',
                 description: latestEvent?.content || 'Review the latest run details while Dory continues the Work.',
                 primaryLabel: 'View Run Details',
-                primaryAction: () => setRunDetailsOpen(true),
+                primaryAction: openLatestRunDetails,
                 secondaryLabel: null as string | null,
                 secondaryAction: null as (() => void) | null,
                 disabled: false,
@@ -516,7 +546,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
             primaryLabel: 'Continue Work',
             primaryAction: startContinueWork,
             secondaryLabel: latestRun ? 'View Run Details' : null,
-            secondaryAction: latestRun ? () => setRunDetailsOpen(true) : null,
+            secondaryAction: latestRun ? openLatestRunDetails : null,
             disabled: runWorkMutation.isPending || !goal.trim(),
         };
     }, [
@@ -531,6 +561,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         runWorkMutation,
         startContinueWork,
         work?.conclusionStatus,
+        openLatestRunDetails,
     ]);
 
     const startEditingConclusion = () => {
@@ -907,7 +938,7 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => setRunDetailsOpen(true)} disabled={!latestRun}>
+                                    <DropdownMenuItem onClick={openLatestRunDetails} disabled={!latestRun}>
                                         <ChevronDown />
                                         View run details
                                     </DropdownMenuItem>
@@ -1006,52 +1037,35 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                     </section>
 
                     <section className="min-w-0 space-y-3">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0 flex-1">
+                        <div className="min-w-0 space-y-2">
+                            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <h2 className="text-base font-semibold">Latest Run</h2>
-                                    {latestRun ? (
-                                        <Badge variant="outline" className={runStatusClassName(latestRun.status)}>
-                                            {runStatusLabel(latestRun.status)}
-                                        </Badge>
-                                    ) : null}
+                                    <h2 className="text-base font-semibold">Runs</h2>
+                                    {visibleRunTimelines.length ? <Badge variant="secondary">{visibleRunTimelines.length}</Badge> : null}
                                 </div>
-                                {latestRun ? (
-                                    <div className="mt-2 flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                                        <span>Started {formatRelativeTime(latestRun.startedAt)}</span>
-                                        <span>Completed {formatRelativeTime(latestRun.completedAt)}</span>
-                                        {latestEvent ? (
-                                            <span className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
-                                                Latest: {latestEvent.content || eventTypeLabel(latestEvent.type)}
-                                            </span>
-                                        ) : null}
-                                    </div>
-                                ) : (
-                                    <p className="mt-2 text-sm text-muted-foreground">Run the Work to let Dory investigate the goal and record its steps here.</p>
-                                )}
+                                {visibleRunTimelines.length ? (
+                                    <Button size="sm" variant="secondary" onClick={() => setRunsListOpen(value => !value)}>
+                                        <ChevronDown className={runsListOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+                                        {runsListOpen ? 'Hide details' : 'View details'}
+                                    </Button>
+                                ) : null}
                             </div>
-                            <Button size="sm" variant="secondary" onClick={() => setRunDetailsOpen(value => !value)} disabled={!latestRun}>
-                                <ChevronDown className={runDetailsOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                                {runDetailsOpen ? 'Hide details' : 'View details'}
-                            </Button>
+                            {!latestRun ? <p className="mt-2 text-sm text-muted-foreground">Run the Work to let Dory investigate the goal and record its steps here.</p> : null}
                         </div>
 
-                        {latestRun && runDetailsOpen ? (
-                            <Card className="overflow-hidden rounded-lg py-0">
-                                <CardContent className="p-0">
-                                    {timelineEvents.length ? (
-                                        <div className="max-h-[520px] overflow-y-auto">
-                                            {timelineEvents.map(event => (
-                                                <WorkTimelineEventRow key={event.id} timelineEvent={event} onCopySql={copySql} onManualExecute={openSqlInConsole} />
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="p-6 text-center text-sm text-muted-foreground">
-                                            {latestRun.status === 'running' ? 'Waiting for the first Agent event...' : 'No events recorded for this run.'}
-                                        </div>
-                                    )}
-                                </CardContent>
-                            </Card>
+                        {displayedRunTimelines.length ? (
+                            <div className="grid min-w-0 gap-3">
+                                {displayedRunTimelines.map(runTimeline => (
+                                    <WorkRunHistoryCard
+                                        key={runTimeline.run.id}
+                                        runTimeline={runTimeline}
+                                        open={expandedRunIds.has(runTimeline.run.id)}
+                                        onOpenChange={() => toggleRunDetails(runTimeline.run.id)}
+                                        onCopySql={copySql}
+                                        onManualExecute={openSqlInConsole}
+                                    />
+                                ))}
+                            </div>
                         ) : null}
                     </section>
 
@@ -1668,6 +1682,106 @@ function WorkTimelineEventRow({
             </Collapsible>
         </div>
     );
+}
+
+function WorkRunHistoryCard({
+    runTimeline,
+    open,
+    onOpenChange,
+    onCopySql,
+    onManualExecute,
+}: {
+    runTimeline: WorkRunTimeline;
+    open: boolean;
+    onOpenChange: () => void;
+    onCopySql: (sql: string) => void | Promise<void>;
+    onManualExecute: (payload: { sql: string; database: string | null; mode?: SqlResultManualExecutionMode }) => void;
+}) {
+    const { run, events, timelineEvents } = runTimeline;
+    const userSubmission = runUserSubmission(events);
+    const runMode = runModeLabel(events);
+
+    return (
+        <Card className="overflow-hidden rounded-lg py-0">
+            <Collapsible open={open} onOpenChange={onOpenChange}>
+                <CollapsibleTrigger asChild>
+                    <button
+                        type="button"
+                        className="flex w-full min-w-0 flex-col gap-3 border-b p-4 text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:flex-row sm:items-start sm:justify-between"
+                    >
+                        <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+                                <Badge variant="outline" className={runStatusClassName(run.status)}>
+                                    {runStatusLabel(run.status)}
+                                </Badge>
+                                <Badge variant="secondary">{runMode}</Badge>
+                                <span className="text-sm text-muted-foreground">{runCompletionSummary(run)}</span>
+                            </div>
+                            {userSubmission ? (
+                                <div className="mt-2 flex min-w-0 max-w-full items-start gap-2 text-sm text-muted-foreground">
+                                    <User className="mt-0.5 size-4 shrink-0" />
+                                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">{userSubmission}</span>
+                                </div>
+                            ) : null}
+                        </div>
+                        <span className="inline-flex h-9 shrink-0 items-center gap-2 rounded-md bg-secondary px-3 text-sm font-medium text-secondary-foreground">
+                            <ChevronDown className={open ? 'size-4 rotate-180 transition-transform' : 'size-4 transition-transform'} />
+                            {open ? 'Hide details' : 'View details'}
+                        </span>
+                    </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <CardContent className="p-0">
+                        {timelineEvents.length ? (
+                            <div className="max-h-[520px] overflow-y-auto">
+                                {timelineEvents.map(event => (
+                                    <WorkTimelineEventRow key={event.id} timelineEvent={event} onCopySql={onCopySql} onManualExecute={onManualExecute} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-6 text-center text-sm text-muted-foreground">
+                                {run.status === 'running' ? 'Waiting for the first Agent event...' : 'No events recorded for this run.'}
+                            </div>
+                        )}
+                    </CardContent>
+                </CollapsibleContent>
+            </Collapsible>
+        </Card>
+    );
+}
+
+function isInternalUpdateConclusionRun(runTimeline: WorkRunTimeline) {
+    const payload = runUserPayload(runTimeline.events);
+    return payload?.mode === 'update_conclusion' && runUserSubmission(runTimeline.events) === DEFAULT_UPDATE_CONCLUSION_INSTRUCTION;
+}
+
+function runCompletionSummary(run: WorkRun) {
+    if (run.completedAt) return `Completed ${formatRelativeTime(run.completedAt)}`;
+    if (run.status === 'running') return `Started ${formatRelativeTime(run.startedAt)}`;
+    return `${runStatusLabel(run.status)} ${formatRelativeTime(run.startedAt)}`;
+}
+
+function runModeLabel(events: WorkRunEvent[]) {
+    const mode = runUserPayload(events)?.mode;
+    if (mode === 'continue_work') return 'Continue Work';
+    if (mode === 'revise_analysis') return 'Revise Analysis';
+    if (mode === 'update_conclusion') return 'Update Conclusion';
+    if (mode === 'rerun_from_scratch') return 'Rerun From Scratch';
+    return 'Run';
+}
+
+function runUserSubmission(events: WorkRunEvent[]) {
+    const payload = runUserPayload(events);
+    const instruction = payload?.userInstruction;
+    if (typeof instruction === 'string' && instruction.trim()) return instruction.trim();
+
+    const content = events.find(event => event.role === 'user')?.content;
+    return typeof content === 'string' && content.trim() ? content.trim() : null;
+}
+
+function runUserPayload(events: WorkRunEvent[]) {
+    const payload = events.find(event => event.role === 'user')?.payload;
+    return isRecord(payload) ? payload : null;
 }
 
 function formatAbsoluteTime(value?: string | Date | null) {

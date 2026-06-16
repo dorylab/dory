@@ -183,10 +183,19 @@ export type WorkTimelineEvent = {
     createdAt: string;
 };
 
+export type WorkRunTimeline = {
+    run: WorkRun;
+    events: WorkRunEvent[];
+    timelineEvents: WorkTimelineEvent[];
+};
+
 export type WorkDetail = {
     work: Work;
     investigations: WorkInvestigation[];
+    runs: WorkRun[];
     latestRun: WorkRun | null;
     latestRunEvents: WorkRunEvent[];
+    runTimelines: WorkRunTimeline[];
     timelineEvents: WorkTimelineEvent[];
+    unlinkedTimelineEvents: WorkTimelineEvent[];
 };

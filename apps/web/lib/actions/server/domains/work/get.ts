@@ -1,8 +1,15 @@
 import { z } from 'zod';
-import { buildWorkTimelineEvents } from '@/lib/work/timeline';
+import { buildWorkRunTimelines, buildWorkTimelineEvents } from '@/lib/work/timeline';
 import { defineWebAction } from '../../define-web-action';
 import { readWorkspace } from '../../policies';
-import { workInvestigationDetailOutputSchema, workOutputSchema, workRunEventOutputSchema, workRunOutputSchema, workTimelineEventOutputSchema } from './schemas';
+import {
+    workInvestigationDetailOutputSchema,
+    workOutputSchema,
+    workRunEventOutputSchema,
+    workRunOutputSchema,
+    workRunTimelineOutputSchema,
+    workTimelineEventOutputSchema,
+} from './schemas';
 
 type InvestigationDetail = z.infer<typeof workInvestigationDetailOutputSchema>;
 
@@ -32,9 +39,12 @@ export const workGetAction = defineWebAction({
     outputSchema: z.object({
         work: workOutputSchema,
         investigations: z.array(workInvestigationDetailOutputSchema),
+        runs: z.array(workRunOutputSchema),
         latestRun: workRunOutputSchema.nullable(),
         latestRunEvents: z.array(workRunEventOutputSchema),
+        runTimelines: z.array(workRunTimelineOutputSchema),
         timelineEvents: z.array(workTimelineEventOutputSchema),
+        unlinkedTimelineEvents: z.array(workTimelineEventOutputSchema),
     }),
     permissions: readWorkspace,
     scopes: ['works:read'],
@@ -67,20 +77,28 @@ export const workGetAction = defineWebAction({
             sqlAssetCount: Math.max(sqlAssetCountByInvestigationId.get(investigation.id) ?? 0, investigation.linkedTabId ? 1 : 0),
             currentRevision: investigation.currentRevisionId ? (currentRevisionById.get(investigation.currentRevisionId) ?? null) : null,
         }));
-        const runs = await ctx.services.db.works.listRuns({ organizationId: ctx.organizationId, workId: input.id, limit: 1 });
+        const runs = await ctx.services.db.works.listRuns({ organizationId: ctx.organizationId, workId: input.id });
         const latestRun = runs[0] ?? null;
-        const latestRunEvents = latestRun
-            ? await ctx.services.db.works.listRunEvents({
-                  organizationId: ctx.organizationId,
-                  workId: input.id,
-                  runId: latestRun.id,
-              })
-            : [];
+        const latestRunEvents = latestRun ? allRunEvents.filter(event => event.runId === latestRun.id) : [];
+        const { runTimelines, unlinkedTimelineEvents } = buildWorkRunTimelines({
+            runs,
+            runEvents: allRunEvents,
+            workspaceSnapshots,
+        });
         const timelineEvents = buildWorkTimelineEvents({
             runEvents: allRunEvents,
             workspaceSnapshots,
         });
 
-        return { work, investigations: selectVisibleInvestigationDetails(investigationDetails), latestRun, latestRunEvents, timelineEvents };
+        return {
+            work,
+            investigations: selectVisibleInvestigationDetails(investigationDetails),
+            runs,
+            latestRun,
+            latestRunEvents,
+            runTimelines,
+            timelineEvents,
+            unlinkedTimelineEvents,
+        };
     },
 });
