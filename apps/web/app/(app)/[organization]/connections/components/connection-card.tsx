@@ -4,9 +4,10 @@ import { MotionHighlight } from '@/components/animate-ui/effects/motion-highligh
 import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
-import { Edit2, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
+import { Copy, Edit2, EllipsisVertical, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
@@ -21,6 +22,7 @@ type Props = {
     errorMessage?: string | null;
     onEdit: (connection: ConnectionListItem) => void;
     onConnect: (connection: ConnectionListItem, navigateToConsole?: boolean) => void;
+    onDuplicateRequest?: (connection: ConnectionListItem) => void;
     onDeleteRequest?: (connection: ConnectionListItem) => void;
 };
 
@@ -51,7 +53,7 @@ function getLocalFilesMeta(connection: ConnectionListItem['connection']) {
     };
 }
 
-export default function ConnectionCard({ connectionItem, id, connectLoading, errorMessage, onEdit, onConnect, onDeleteRequest }: Props) {
+export default function ConnectionCard({ connectionItem, id, connectLoading, errorMessage, onEdit, onConnect, onDuplicateRequest, onDeleteRequest }: Props) {
     const t = useTranslations('Connections');
     const hasMounted = useHasMounted();
 
@@ -155,7 +157,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                 {isLocalFiles ? (
                     <div className="mb-1 grid min-h-6 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
                         <FolderOpen className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-muted-foreground text-sm">Open Files</span>
+                        <span className="text-muted-foreground text-sm">{t('Empty.openFiles')}</span>
                     </div>
                 ) : (
                     <div className="mb-1 grid min-h-6 grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-x-1">
@@ -198,26 +200,45 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                     </div>
                     <span aria-hidden="true" />
                     <div className="flex h-9 w-9 items-center justify-center">
-                        <Tooltip>
-                            <TooltipTrigger asChild>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="icon-xs"
-                                    className="h-9 w-9 cursor-pointer text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                                    className="h-9 w-9 cursor-pointer text-muted-foreground hover:bg-muted-foreground/10 hover:text-foreground"
+                                    onClick={e => {
+                                        e.stopPropagation();
+                                    }}
+                                    aria-label={t('More actions')}
+                                >
+                                    <EllipsisVertical className="h-5 w-5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" side="bottom" onClick={e => e.stopPropagation()}>
+                                {!isLocalFiles ? (
+                                    <DropdownMenuItem
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            onDuplicateRequest?.(connectionItem);
+                                        }}
+                                    >
+                                        <Copy className="h-4 w-4" />
+                                        {t('Duplicate')}
+                                    </DropdownMenuItem>
+                                ) : null}
+                                <DropdownMenuItem
+                                    variant="destructive"
                                     onClick={e => {
                                         e.stopPropagation();
                                         onDeleteRequest?.(connectionItem);
                                     }}
-                                    aria-label={t('Delete')}
                                 >
-                                    <Trash2 className="h-5 w-5" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{t('Delete')}</p>
-                            </TooltipContent>
-                        </Tooltip>
+                                    <Trash2 className="h-4 w-4" />
+                                    {t('Delete')}
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
             </div>

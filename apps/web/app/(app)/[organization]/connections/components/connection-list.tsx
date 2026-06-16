@@ -5,17 +5,18 @@ import { useAtomValue } from 'jotai';
 
 import ConnectionCard from './connection-card';
 import { ConnectionListItem } from '@dory/shared/types/connections';
-import { connectionErrorAtom, connectionsErrorAtom } from '../states';
+import { connectionsErrorAtom } from '../states';
 
 type Props = {
     items: ConnectionListItem[];
     connectLoadings: Record<string, boolean>;
-    onConnect: (payload: any, navigateToConsole?: boolean) => void;
-    onEdit: (ds: any) => void;
+    onConnect: (connection: ConnectionListItem, navigateToConsole?: boolean) => void;
+    onEdit: (connection: ConnectionListItem) => void;
+    onDuplicateRequest: (connection: ConnectionListItem) => void;
     onDeleteRequest: (connection: ConnectionListItem) => void;
 };
 
-export default function ConnectionList({ items, connectLoadings, onConnect, onEdit, onDeleteRequest }: Props) {
+export default function ConnectionList({ items, connectLoadings, onConnect, onEdit, onDuplicateRequest, onDeleteRequest }: Props) {
     const connectionErrors = useAtomValue(connectionsErrorAtom);
 
     return (
@@ -29,6 +30,7 @@ export default function ConnectionList({ items, connectLoadings, onConnect, onEd
                     errorMessage={connectionErrors[connectionItem.connection.id]}
                     onEdit={onEdit}
                     onConnect={onConnect}
+                    onDuplicateRequest={onDuplicateRequest}
                     onDeleteRequest={onDeleteRequest}
                 />
             ))}

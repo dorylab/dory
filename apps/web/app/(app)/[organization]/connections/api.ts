@@ -45,6 +45,10 @@ export async function addConnection(params: CreateConnectionPayload): Promise<Re
     return actionResponse(await executeActionClient<ConnectionListItem>('connection.create', { payload: params }));
 }
 
+export async function duplicateConnection(id: string): Promise<ResponseObject<ConnectionListItem>> {
+    return actionResponse(await executeActionClient<ConnectionListItem>('connection.duplicate', { id }));
+}
+
 export async function updateConnection(params: CreateConnectionPayload & { id?: string }): Promise<ResponseObject<ConnectionListItem>> {
     const id = params.id ?? params.connection?.id;
 

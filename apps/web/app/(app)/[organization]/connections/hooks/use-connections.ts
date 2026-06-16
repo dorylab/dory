@@ -2,7 +2,7 @@
 'use client';
 
 import { useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import posthog from 'posthog-js';
 import { useSetAtom } from 'jotai';
 import { toast } from 'sonner';
@@ -11,7 +11,7 @@ import { useTranslations } from 'next-intl';
 import { isSuccess } from '@/lib/result';
 import type { ResponseObject } from '@dory/shared';
 
-import { addConnection, deleteConnection, getConnectionDetail, testConnection, getConnections, updateConnection } from '../api';
+import { addConnection, deleteConnection, duplicateConnection, getConnectionDetail, testConnection, getConnections, updateConnection } from '../api';
 import { connectionsAtom } from '../states';
 import { ConnectionListItem, CreateConnectionPayload } from '@dory/shared/types/connections';
 
@@ -25,7 +25,6 @@ type MutationCallbacks<TResult = unknown> = {
 type ConnectionResponse = ResponseObject<ConnectionListItem>;
 type ConnectionListResponse = ResponseObject<ConnectionListItem[]>;
 type UpdateConnectionPayload = CreateConnectionPayload & { id?: string };
-type UseConnectionsOptions = Omit<UseQueryOptions<ConnectionListItem[], unknown, ConnectionListItem[], typeof CONNECTIONS_QUERY_KEY>, 'queryKey' | 'queryFn'>;
 
 function useSyncConnectionsState() {
     const setConnections = useSetAtom(connectionsAtom);
@@ -97,7 +96,7 @@ export function useCreateConnection(callback?: MutationCallbacks<ConnectionRespo
 
     return useMutation<ConnectionResponse, unknown, CreateConnectionPayload>({
         mutationFn: addConnection,
-        onSuccess: (res, _variables) => {
+        onSuccess: res => {
             if (isSuccess(res)) {
                 toast.success(t('Connection created'));
                 const created = res?.data;
@@ -167,6 +166,44 @@ export function useUpdateConnection(callback?: MutationCallbacks<ConnectionRespo
     });
 }
 
+export function useDuplicateConnection(callback?: MutationCallbacks<ConnectionResponse>) {
+    const { setAll, getSnapshot, invalidate } = useConnectionsCache();
+    const t = useTranslations('Connections');
+
+    return useMutation<ConnectionResponse, unknown, string>({
+        mutationFn: (connectionId: string) => duplicateConnection(connectionId),
+        onSuccess: (res, sourceConnectionId) => {
+            if (isSuccess(res)) {
+                toast.success(t('Connection duplicated'));
+                const duplicated = res?.data;
+
+                if (duplicated) {
+                    const snapshot = getSnapshot();
+                    const next = [...snapshot.filter(item => item.connection.id !== duplicated.connection.id), duplicated];
+                    setAll(next);
+                    posthog.capture('connection_duplicated', {
+                        source_connection_id: sourceConnectionId,
+                        connection_type: duplicated.connection.type,
+                        connection_id: duplicated.connection.id,
+                    });
+                } else {
+                    invalidate();
+                    posthog.capture('connection_duplicated', { source_connection_id: sourceConnectionId });
+                }
+
+                callback?.onSuccess?.(res);
+            } else {
+                toast.error(res?.message ?? t('Duplicate connection failed'));
+            }
+        },
+        onError: err => {
+            console.error(err);
+            toast.error((err as Error)?.message ?? t('Request error'));
+            callback?.onError?.(err);
+        },
+    });
+}
+
 export function useDeleteConnection(callback?: MutationCallbacks<ResponseObject<null>>) {
     const { setAll, getSnapshot } = useConnectionsCache();
     const t = useTranslations('Connections');
@@ -201,11 +238,12 @@ export function useTestConnection(callback?: MutationCallbacks<ResponseObject<un
     const { invalidate } = useConnectionsCache();
     const t = useTranslations('Connections');
 
-    return useMutation<ResponseObject<any>, unknown, CreateConnectionPayload>({
+    return useMutation<ResponseObject<unknown>, unknown, CreateConnectionPayload>({
         mutationFn: testConnection,
-        onSuccess: (res, _variables) => {
+        onSuccess: res => {
             if (isSuccess(res)) {
-                toast.success(t('Connection test success', { version: res?.data?.version ?? t('Unknown') }));
+                const version = res?.data && typeof res.data === 'object' && 'version' in res.data && typeof res.data.version === 'string' ? res.data.version : t('Unknown');
+                toast.success(t('Connection test success', { version }));
                 invalidate();
                 callback?.onSuccess?.(res);
             } else {

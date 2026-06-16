@@ -228,6 +228,29 @@ export class PostgresConnectionsRepository {
         return false;
     }
 
+    private isManagedLocalFilesDataset(connection: { type?: string | null; options?: string | null }) {
+        const options = this.parseConnectionOptions(connection.options);
+        return connection.type === 'duckdb' && options.managedBy === 'local-files' && options.mode === 'localFilesDataset';
+    }
+
+    private async getUniqueDuplicateName(db: DbExecutor, organizationId: string, sourceName: string) {
+        const baseName = `${sourceName} copy`;
+        const rows = await db
+            .select({ name: connections.name })
+            .from(connections)
+            .where(and(eq(connections.organizationId, organizationId), isNull(connections.deletedAt)));
+        const existingNames = new Set(rows.map(row => row.name));
+
+        if (!existingNames.has(baseName)) return baseName;
+
+        for (let index = 2; index < 1000; index += 1) {
+            const candidate = `${baseName} ${index}`;
+            if (!existingNames.has(candidate)) return candidate;
+        }
+
+        return `${baseName} ${Date.now()}`;
+    }
+
     /* -------------------- Detail: single connection -------------------- */
 
     async getById(organizationId: string, connectionId: string, db: DbExecutor = this.db): Promise<ConnectionListItem | null> {
@@ -301,6 +324,138 @@ export class PostgresConnectionsRepository {
             }
             throw error;
         }
+    }
+
+    async duplicate(userId: string, organizationId: string, connectionId: string): Promise<ConnectionListItem> {
+        return this.db.transaction(async tx => {
+            const [sourceConnection] = await tx
+                .select()
+                .from(connections)
+                .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
+                .limit(1);
+
+            if (!sourceConnection) {
+                throw new ConnectionNotFoundError();
+            }
+
+            if (this.isManagedLocalFilesDataset(sourceConnection)) {
+                throw new DatabaseError(translateDatabase('Database.Errors.LocalFilesDuplicateUnsupported'), 400);
+            }
+
+            const duplicateName = await this.getUniqueDuplicateName(tx, organizationId, sourceConnection.name);
+            const [createdConnection] = await tx
+                .insert(connections)
+                .values({
+                    createdByUserId: userId,
+                    organizationId,
+                    type: sourceConnection.type,
+                    engine: sourceConnection.engine,
+                    name: duplicateName,
+                    description: sourceConnection.description,
+                    host: sourceConnection.host,
+                    port: sourceConnection.port,
+                    httpPort: sourceConnection.httpPort,
+                    database: sourceConnection.database,
+                    path: sourceConnection.path,
+                    options: sourceConnection.options,
+                    status: sourceConnection.status,
+                    configVersion: sourceConnection.configVersion,
+                    environment: sourceConnection.environment,
+                    tags: sourceConnection.tags,
+                })
+                .returning();
+
+            if (!createdConnection) {
+                throw new DatabaseError(translateDatabase('Database.Errors.ConnectionCreateFailed'), 500);
+            }
+
+            const sourceSshRows = await tx.select().from(connectionSsh).where(eq(connectionSsh.connectionId, sourceConnection.id)).limit(1);
+            const sourceSsh = sourceSshRows[0];
+            if (sourceSsh) {
+                await tx.insert(connectionSsh).values({
+                    connectionId: createdConnection.id,
+                    enabled: sourceSsh.enabled,
+                    host: sourceSsh.host,
+                    port: sourceSsh.port,
+                    username: sourceSsh.username,
+                    authMethod: sourceSsh.authMethod,
+                    passwordEncrypted: sourceSsh.passwordEncrypted,
+                    privateKeyEncrypted: sourceSsh.privateKeyEncrypted,
+                    passphraseEncrypted: sourceSsh.passphraseEncrypted,
+                });
+            } else {
+                await tx.insert(connectionSsh).values({
+                    connectionId: createdConnection.id,
+                    enabled: false,
+                });
+            }
+
+            const sourceTlsRows = await tx.select().from(connectionTls).where(eq(connectionTls.connectionId, sourceConnection.id)).limit(1);
+            const sourceTls = sourceTlsRows[0];
+            if (sourceTls) {
+                await tx.insert(connectionTls).values({
+                    connectionId: createdConnection.id,
+                    mode: sourceTls.mode,
+                    caCertificatePath: sourceTls.caCertificatePath,
+                    clientCertificatePath: sourceTls.clientCertificatePath,
+                    clientPrivateKeyPath: sourceTls.clientPrivateKeyPath,
+                    serverName: sourceTls.serverName,
+                    ciphers: sourceTls.ciphers,
+                    minVersion: sourceTls.minVersion,
+                    maxVersion: sourceTls.maxVersion,
+                    caCertificateEncrypted: sourceTls.caCertificateEncrypted,
+                    clientCertificateEncrypted: sourceTls.clientCertificateEncrypted,
+                    clientPrivateKeyEncrypted: sourceTls.clientPrivateKeyEncrypted,
+                    clientPrivateKeyPassphraseEncrypted: sourceTls.clientPrivateKeyPassphraseEncrypted,
+                });
+            }
+
+            const sourceIdentities = await tx
+                .select()
+                .from(connectionIdentities)
+                .where(
+                    and(
+                        eq(connectionIdentities.connectionId, sourceConnection.id),
+                        eq(connectionIdentities.organizationId, organizationId),
+                        isNull(connectionIdentities.deletedAt),
+                    ),
+                );
+
+            for (const sourceIdentity of sourceIdentities) {
+                const [createdIdentity] = await tx
+                    .insert(connectionIdentities)
+                    .values({
+                        createdByUserId: userId,
+                        organizationId,
+                        connectionId: createdConnection.id,
+                        name: sourceIdentity.name,
+                        username: sourceIdentity.username,
+                        role: sourceIdentity.role,
+                        options: sourceIdentity.options,
+                        isDefault: sourceIdentity.isDefault,
+                        enabled: sourceIdentity.enabled,
+                        status: sourceIdentity.status,
+                        database: sourceIdentity.database,
+                    })
+                    .returning();
+
+                if (!createdIdentity) {
+                    throw new DatabaseError(translateDatabase('Database.Errors.ConnectionIdentityCreateFailed'), 500);
+                }
+
+                const [sourceSecret] = await tx.select().from(connectionIdentitySecrets).where(eq(connectionIdentitySecrets.identityId, sourceIdentity.id)).limit(1);
+                if (sourceSecret) {
+                    await tx.insert(connectionIdentitySecrets).values({
+                        identityId: createdIdentity.id,
+                        passwordEncrypted: sourceSecret.passwordEncrypted,
+                        vaultRef: sourceSecret.vaultRef,
+                        secretRef: sourceSecret.secretRef,
+                    });
+                }
+            }
+
+            return this.toConnectionListItem(tx, organizationId, createdConnection);
+        });
     }
 
     async update(organizationId: string, connectionId: string, payload: ConnectionPayload): Promise<ConnectionListItem> {

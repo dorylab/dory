@@ -23,7 +23,7 @@ import {
     searchResultAtom,
 } from './states';
 import { useConnectConnection } from './hooks/use-connect-connection';
-import { useConnections, useDeleteConnection } from './hooks/use-connections';
+import { useConnections, useDeleteConnection, useDuplicateConnection } from './hooks/use-connections';
 import { DeleteDialog } from './components/delete-dialog';
 import { LocalFilesDialog } from './components/local-files-dialog';
 
@@ -44,6 +44,7 @@ export default function ConnectionsPage() {
 
     const items = useAtomValue(searchResultAtom);
     const deleteConnectionMutation = useDeleteConnection();
+    const duplicateConnectionMutation = useDuplicateConnection();
     const connectMutation = useConnectConnection();
     const searchQuery = useAtomValue(connectionSearchQueryAtom);
     const environmentFilters = useAtomValue(connectionEnvironmentFilterAtom);
@@ -103,6 +104,15 @@ export default function ConnectionsPage() {
         setDeleteOpen(true);
     }
 
+    function onDuplicate(connection: ConnectionListItem) {
+        const targetId = connection.connection.id;
+        if (!targetId) {
+            toast.error(t('Missing connection id'));
+            return;
+        }
+        duplicateConnectionMutation.mutate(targetId);
+    }
+
     return (
         <div className="bg-n8 h-screen overflow-auto">
             <div className="container mx-auto mt-10 p-12 lg:p-12 xl:p-8 2xl:p-4">
@@ -119,7 +129,7 @@ export default function ConnectionsPage() {
                     {!showEmptyState && (
                         <div className="flex gap-2">
                             <Button className="cursor-pointer" variant="secondary" disabled={isLoading} onClick={openLocalFilesCreate}>
-                                Open Files
+                                {t('Empty.openFiles')}
                             </Button>
                             <Button className="cursor-pointer" disabled={isLoading} onClick={handleNewConnection} data-testid="add-connection">
                                 {t('Add Connection')}
@@ -129,7 +139,14 @@ export default function ConnectionsPage() {
                 </div>
 
                 {connectionItems.length > 0 ? (
-                    <ConnectionList items={connectionItems} connectLoadings={connectLoadings} onConnect={onConnect} onEdit={onEdit} onDeleteRequest={onDelete} />
+                    <ConnectionList
+                        items={connectionItems}
+                        connectLoadings={connectLoadings}
+                        onConnect={onConnect}
+                        onEdit={onEdit}
+                        onDuplicateRequest={onDuplicate}
+                        onDeleteRequest={onDelete}
+                    />
                 ) : (
                     showEmptyState && (
                         <ConnectionsEmptyState
