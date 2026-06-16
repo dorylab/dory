@@ -40,7 +40,7 @@ export const workReviseInvestigationAction = defineWebAction({
             organizationId: ctx.organizationId,
             workId: input.workId,
             id: input.investigationId,
-            patch: { auditStatus: 'needs_review' },
+            patch: { auditStatus: 'draft' },
         });
         await ctx.services.db.works.markConclusionOutdated({
             organizationId: ctx.organizationId,

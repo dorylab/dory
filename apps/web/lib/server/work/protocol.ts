@@ -6,7 +6,7 @@ export type WorkAgentProtocolTool =
     | 'work_updateConclusion'
     | string;
 
-export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
+export type WorkAnalysisAuditStatus = 'draft' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 
 export type WorkAgentProtocolState = {
     mode: 'full_work' | 'investigation_continue';
@@ -349,7 +349,7 @@ function extractString(input: unknown, key: string) {
 
 function extractAuditStatus(input: unknown): WorkAnalysisAuditStatus | null {
     const status = extractString(input, 'auditStatus');
-    if (status === 'draft' || status === 'needs_review' || status === 'reviewed' || status === 'revised' || status === 'accepted' || status === 'rejected') {
+    if (status === 'draft' || status === 'reviewed' || status === 'revised' || status === 'accepted' || status === 'rejected') {
         return status;
     }
     return null;

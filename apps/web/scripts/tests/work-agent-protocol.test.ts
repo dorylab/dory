@@ -29,7 +29,7 @@ function runSql(state: ReturnType<typeof createWorkAgentProtocolState>, investig
 function updateAuditStatus(
     state: ReturnType<typeof createWorkAgentProtocolState>,
     investigationId: string,
-    auditStatus: 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected',
+    auditStatus: 'draft' | 'reviewed' | 'revised' | 'accepted' | 'rejected',
 ) {
     assert.equal(checkWorkAgentProtocol(state, 'work_updateInvestigation', { id: investigationId, auditStatus }).allowed, true);
     applyWorkAgentProtocolResult(state, 'work_updateInvestigation', {

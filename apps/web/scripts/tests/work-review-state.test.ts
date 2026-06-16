@@ -31,12 +31,6 @@ const mixedAnalyses: WorkReviewAnalysis[] = [
         findings: [{ content: 'Draft distribution finding.', createdBy: 'agent' }],
     },
     {
-        id: 'analysis-needs-review',
-        title: '价格风险分析',
-        auditStatus: 'needs_review',
-        findings: [{ content: 'Legacy needs-review finding.', createdBy: 'agent' }],
-    },
-    {
         id: 'analysis-revised',
         title: '价格异常分析',
         auditStatus: 'revised',
@@ -52,8 +46,6 @@ test('included-analysis conclusion includes non-rejected findings', () => {
     assert.match(conclusion, /Confirmed trend finding/);
     assert.match(conclusion, /价格分布分析/);
     assert.match(conclusion, /Draft distribution finding/);
-    assert.match(conclusion, /价格风险分析/);
-    assert.match(conclusion, /Legacy needs-review finding/);
     assert.match(conclusion, /价格异常分析/);
     assert.match(conclusion, /Human edited anomaly finding/);
     assert.doesNotMatch(conclusion, /模型价格对比分析/);
@@ -74,12 +66,6 @@ test('source boundary lists included and excluded analyses separately', () => {
                 title: '价格分布分析',
                 auditStatus: 'draft',
                 provenanceLabel: 'Agent output',
-            },
-            {
-                id: 'analysis-needs-review',
-                title: '价格风险分析',
-                auditStatus: 'needs_review',
-                provenanceLabel: 'Needs review',
             },
             {
                 id: 'analysis-revised',
@@ -129,11 +115,11 @@ test('all excluded analyses return no included-analysis conclusion', () => {
 });
 
 test('work evidence counts are formatted for Evidence and Analyses summaries', () => {
-    assert.equal(formatWorkEvidenceSummary(mixedAnalyses), '4 included · 1 excluded');
-    assert.equal(formatUnconfirmedAnalysisSummary(mixedAnalyses), '3 are included and not human-confirmed.');
+    assert.equal(formatWorkEvidenceSummary(mixedAnalyses), '3 included · 1 excluded');
+    assert.equal(formatUnconfirmedAnalysisSummary(mixedAnalyses), '2 are included and not human-confirmed.');
 });
 
-test('completed Work display status needs review when evidence includes unconfirmed analysis', () => {
+test('completed Work display status is ready when evidence includes unconfirmed analysis', () => {
     assert.equal(
         getWorkLifecycleDisplayStatus({
             workStatus: 'completed',
@@ -146,7 +132,7 @@ test('completed Work display status needs review when evidence includes unconfir
                 recommendedNextStep: null,
             },
         }),
-        'needs_review',
+        'ready',
     );
 });
 
@@ -174,7 +160,7 @@ test('completed Work display status is ready when included evidence and conclusi
     );
 });
 
-test('fresh conclusion without metadata still needs review', () => {
+test('fresh conclusion without metadata needs attention', () => {
     assert.equal(
         getWorkLifecycleDisplayStatus({
             workStatus: 'completed',
@@ -190,17 +176,17 @@ test('fresh conclusion without metadata still needs review', () => {
             conclusionStatus: 'fresh',
             conclusionMetadata: null,
         }),
-        'needs_review',
+        'needs_attention',
     );
 });
 
-test('draft Work lifecycle stays draft before a run', () => {
+test('draft Work lifecycle is ready before a run', () => {
     assert.equal(
         getWorkLifecycleDisplayStatus({
             workStatus: 'draft',
             latestRun: null,
         }),
-        'draft',
+        'ready',
     );
 });
 
@@ -225,7 +211,6 @@ test('analysis evidence labels separate included drafts from verified evidence',
     assert.equal(analysisEvidenceLabel({ auditStatus: 'rejected' }), 'Excluded');
     assert.equal(analysisEvidenceLabel({ auditStatus: 'accepted' }), 'Verified · Used in conclusion');
     assert.equal(analysisEvidenceLabel({ auditStatus: 'reviewed' }), 'Verified · Used in conclusion');
-    assert.equal(analysisEvidenceLabel({ auditStatus: 'draft' }), 'Needs review · Included by Agent');
-    assert.equal(analysisEvidenceLabel({ auditStatus: 'needs_review' }), 'Needs review · Included by Agent');
-    assert.equal(analysisEvidenceLabel({ auditStatus: 'revised' }), 'Needs review · Human edited');
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'draft' }), 'Included · Agent output');
+    assert.equal(analysisEvidenceLabel({ auditStatus: 'revised' }), 'Included · Human edited');
 });

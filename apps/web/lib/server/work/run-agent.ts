@@ -1281,7 +1281,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
                                 organizationId: options.organizationId,
                                 workId: work.id,
                                 id: investigationId,
-                                patch: { auditStatus: 'needs_review' },
+                                patch: { auditStatus: 'draft' },
                             });
                             await options.db.works.createInvestigationRevision({
                                 organizationId: options.organizationId,

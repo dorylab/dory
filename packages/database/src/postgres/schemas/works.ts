@@ -5,7 +5,7 @@ import { newEntityId } from '@dory/shared/id';
 export type WorkStatus = 'draft' | 'running' | 'completed';
 export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
-export type WorkAnalysisAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
+export type WorkAnalysisAuditStatus = 'draft' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 export type WorkConclusionStatus = 'fresh' | 'outdated' | 'missing';
 export type WorkConclusionConfidence = 'low' | 'medium' | 'high';
 export type WorkConclusionMetadata = {

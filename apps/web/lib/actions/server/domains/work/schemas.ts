@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const workStatusSchema = z.enum(['draft', 'running', 'completed']);
 export const workCreatorSchema = z.enum(['user', 'agent']);
 export const workTypeSchema = z.enum(['investigation', 'analysis', 'monitoring', 'data_qa', 'sql_workspace']);
-export const workAnalysisAuditStatusSchema = z.enum(['draft', 'needs_review', 'reviewed', 'revised', 'accepted', 'rejected']);
+export const workAnalysisAuditStatusSchema = z.enum(['draft', 'reviewed', 'revised', 'accepted', 'rejected']);
 export const workConclusionStatusSchema = z.enum(['fresh', 'outdated', 'missing']);
 export const workConclusionConfidenceSchema = z.enum(['low', 'medium', 'high']);
 export const workConclusionMetadataSchema = z.object({

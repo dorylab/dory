@@ -1,7 +1,7 @@
-export type WorkReviewAuditStatus = 'draft' | 'needs_review' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
+export type WorkReviewAuditStatus = 'draft' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
 export type WorkLifecycleStatus = 'draft' | 'running' | 'completed';
 export type WorkReviewRunStatus = 'running' | 'completed' | 'failed';
-export type WorkLifecycleDisplayStatus = 'draft' | 'running' | 'in_progress' | 'needs_review' | 'ready' | 'failed';
+export type WorkLifecycleDisplayStatus = 'draft' | 'running' | 'in_progress' | 'needs_attention' | 'ready' | 'failed';
 export type WorkConclusionStatus = 'fresh' | 'outdated' | 'missing';
 export type WorkConclusionConfidence = 'low' | 'medium' | 'high';
 export type WorkConclusionMetadata = {
@@ -26,14 +26,13 @@ export type WorkReviewRun = {
     status: WorkReviewRunStatus;
 } | null;
 
-export const WORK_REVIEW_AUDIT_STATUS_ORDER: WorkReviewAuditStatus[] = ['accepted', 'rejected', 'needs_review', 'reviewed', 'revised', 'draft'];
+export const WORK_REVIEW_AUDIT_STATUS_ORDER: WorkReviewAuditStatus[] = ['accepted', 'rejected', 'reviewed', 'revised', 'draft'];
 
 function normalizedTitle(analysis: Pick<WorkReviewAnalysis, 'title'>) {
     return analysis.title.trim() || 'Analysis';
 }
 
 function formatAuditStatus(status: WorkReviewAuditStatus) {
-    if (status === 'needs_review') return 'agent output';
     return status.replace(/_/g, ' ');
 }
 
@@ -59,7 +58,6 @@ export function getWorkEvidenceCounts(analyses: WorkReviewAnalysis[]) {
     let excluded = 0;
     let agentGenerated = 0;
     let humanConfirmed = 0;
-    let needsReview = 0;
     let humanEdited = 0;
 
     for (const analysis of analyses) {
@@ -71,8 +69,6 @@ export function getWorkEvidenceCounts(analyses: WorkReviewAnalysis[]) {
         included += 1;
         if (analysis.auditStatus === 'accepted' || analysis.auditStatus === 'reviewed') {
             humanConfirmed += 1;
-        } else if (analysis.auditStatus === 'needs_review') {
-            needsReview += 1;
         } else if (analysis.auditStatus === 'revised') {
             humanEdited += 1;
         } else if (analysis.auditStatus === 'draft') {
@@ -80,7 +76,7 @@ export function getWorkEvidenceCounts(analyses: WorkReviewAnalysis[]) {
         }
     }
 
-    return { included, excluded, agentGenerated, humanConfirmed, needsReview, humanEdited, unconfirmed: included - humanConfirmed };
+    return { included, excluded, agentGenerated, humanConfirmed, humanEdited, unconfirmed: included - humanConfirmed };
 }
 
 export function formatWorkEvidenceSummary(analyses: WorkReviewAnalysis[]) {
@@ -104,23 +100,22 @@ export function getWorkLifecycleDisplayStatus(input: {
 }): WorkLifecycleDisplayStatus {
     if (input.latestRun?.status === 'running' || input.workStatus === 'running') return 'running';
     if (input.latestRun?.status === 'failed') return 'failed';
-    if (input.workStatus === 'draft' && !input.latestRun) return 'draft';
+    if (input.workStatus === 'draft' && !input.latestRun) return 'ready';
 
     const analyses = input.analyses ?? [];
     const counts = getWorkEvidenceCounts(analyses);
     if (analyses.length === 0 || counts.included === 0) return input.workStatus === 'draft' ? 'draft' : 'in_progress';
 
-    if (counts.unconfirmed > 0) return 'needs_review';
-    if (input.conclusionStatus !== 'fresh') return 'needs_review';
-    if (!input.conclusionMetadata) return 'needs_review';
+    if (input.conclusionStatus !== 'fresh') return 'needs_attention';
+    if (!input.conclusionMetadata) return 'needs_attention';
     return 'ready';
 }
 
 export function analysisEvidenceLabel(analysis: Pick<WorkReviewAnalysis, 'auditStatus'>) {
     if (analysis.auditStatus === 'rejected') return 'Excluded';
     if (analysis.auditStatus === 'accepted' || analysis.auditStatus === 'reviewed') return 'Verified · Used in conclusion';
-    if (analysis.auditStatus === 'revised') return 'Needs review · Human edited';
-    return 'Needs review · Included by Agent';
+    if (analysis.auditStatus === 'revised') return 'Included · Human edited';
+    return 'Included · Agent output';
 }
 
 export function fallbackConclusionMetadata(input: { analyses: WorkReviewAnalysis[]; conclusionStatus?: WorkConclusionStatus }): NonNullable<WorkConclusionMetadata> {
@@ -163,7 +158,6 @@ export function getExcludedAnalyses<T extends Pick<WorkReviewAnalysis, 'auditSta
 export function analysisProvenanceLabel(analysis: Pick<WorkReviewAnalysis, 'auditStatus'> & { findings?: WorkReviewFinding[] }) {
     if (analysis.auditStatus === 'accepted' || analysis.auditStatus === 'reviewed') return 'Human confirmed';
     if (analysis.auditStatus === 'revised') return 'Human edited';
-    if (analysis.auditStatus === 'needs_review') return 'Needs review';
     if (analysis.findings?.some(finding => finding.createdBy === 'user')) return 'Human edited';
     return 'Agent output';
 }

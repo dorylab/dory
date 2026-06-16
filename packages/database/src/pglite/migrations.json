@@ -382,5 +382,13 @@
     "bps": true,
     "folderMillis": 1781495214788,
     "hash": "100da13b9b7711804e4d3e9605fa186b94eda0da595f09e9b9670d7ee80b2d3c"
+  },
+  {
+    "sql": [
+      "UPDATE \"work_investigations\"\nSET \"audit_status\" = 'draft'\nWHERE \"audit_status\" = 'needs_review';\n"
+    ],
+    "bps": true,
+    "folderMillis": 1781500000000,
+    "hash": "ba208944316783f943091c597ccc3acc877f4f7d24c6f74a45641479b6e5c372"
   }
 ]

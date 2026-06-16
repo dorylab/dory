@@ -35,7 +35,6 @@ import {
     formatWorkEvidenceSummary,
     formatUnconfirmedAnalysisSummary,
     getConclusionSourceBoundary,
-    getWorkEvidenceCounts,
     getWorkLifecycleDisplayStatus,
     type WorkLifecycleDisplayStatus,
 } from '@/lib/work/review-state';
@@ -104,7 +103,7 @@ function analysisDisplayLabel(investigation: WorkInvestigation) {
 }
 
 function analysisDisplayClassName(investigation: WorkInvestigation) {
-    if (investigation.auditStatus === 'draft' || investigation.auditStatus === 'needs_review') return 'border-muted bg-muted/50 text-muted-foreground';
+    if (investigation.auditStatus === 'draft') return 'border-muted bg-muted/50 text-muted-foreground';
     return analysisInclusionClassName(investigation.auditStatus);
 }
 
@@ -138,7 +137,7 @@ function workLifecycleDisplayStatusLabel(status: WorkLifecycleDisplayStatus) {
     if (status === 'running') return 'Running';
     if (status === 'failed') return 'Failed';
     if (status === 'in_progress') return 'In Progress';
-    if (status === 'needs_review') return 'Needs Review';
+    if (status === 'needs_attention') return 'Needs Attention';
     if (status === 'ready') return 'Ready';
     return 'Draft';
 }
@@ -147,7 +146,7 @@ function workLifecycleDisplayStatusClassName(status: WorkLifecycleDisplayStatus)
     if (status === 'running') return statusClassName('running');
     if (status === 'ready') return statusClassName('completed');
     if (status === 'in_progress') return statusClassName('running');
-    if (status === 'needs_review') return 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300';
+    if (status === 'needs_attention') return 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
     if (status === 'failed') return 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300';
     return statusClassName('draft');
 }
@@ -278,7 +277,6 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
     const isRunRunning = latestRunStatus === 'running' || work?.status === 'running';
     const latestEvent = latestRunEvents[latestRunEvents.length - 1] ?? null;
     const evidenceSummary = useMemo(() => formatWorkEvidenceSummary(investigations), [investigations]);
-    const evidenceCounts = useMemo(() => getWorkEvidenceCounts(investigations), [investigations]);
     const unconfirmedAnalysisSummary = useMemo(() => formatUnconfirmedAnalysisSummary(investigations), [investigations]);
     const conclusionSourceBoundary = useMemo(() => getConclusionSourceBoundary(investigations), [investigations]);
     const includedAnalysisConclusion = useMemo(() => buildIncludedAnalysesMarkdown(investigations, latestRun, latestRunEvents), [investigations, latestRun, latestRunEvents]);
@@ -514,17 +512,6 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
                 disabled: false,
             };
         }
-        if (evidenceCounts.included > 0 && evidenceCounts.unconfirmed > 0) {
-            return {
-                title: 'Review Evidence',
-                description: `${evidenceCounts.unconfirmed} included ${pluralizeAnalysis(evidenceCounts.unconfirmed)} need human review before the conclusion is fully trusted.`,
-                primaryLabel: 'Review Evidence',
-                primaryAction: () => document.getElementById('work-analyses')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
-                secondaryLabel: 'Continue Work',
-                secondaryAction: startContinueWork,
-                disabled: false,
-            };
-        }
         if (hasIncludedAnalysis && work?.conclusionStatus !== 'fresh') {
             return {
                 title: 'Update Conclusion',
@@ -551,8 +538,6 @@ export function WorkDetailPageClient({ organization, workId }: WorkDetailPageCli
         };
     }, [
         displayConclusionMetadata.recommendedNextStep,
-        evidenceCounts.included,
-        evidenceCounts.unconfirmed,
         goal,
         hasIncludedAnalysis,
         isRunRunning,
