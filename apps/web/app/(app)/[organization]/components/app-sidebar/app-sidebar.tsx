@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { ArrowUpCircle, Bot, Compass, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
+import { ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -80,6 +80,9 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             : connectionId
               ? buildExplorerBasePath({ organization, connectionId })
               : `/${organization}/connections`;
+    const dataSourcesUrl = `/${organization}/connections`;
+    const sqlConsoleUrl = connectionId ? `/${organization}/${connectionId}/sql-console` : `/${organization}/connections`;
+    const chatbotUrl = connectionId ? `/${organization}/${connectionId}/chatbot` : `/${organization}/chatbot`;
     const [updaterState, setUpdaterState] = React.useState<{ readyToInstall: boolean; version: string | null }>({
         readyToInstall: false,
         version: null,
@@ -89,49 +92,64 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const updateTooltip = updaterState.version ? t('UpdateTooltip', { version: updaterState.version }) : t('UpdateTooltipUnknown');
     const [showStarNotification, setShowStarNotification] = React.useState<boolean | null>(null);
 
-    const navMain = [
-        {
-            title: t('SQLConsole'),
-            url: connectionId ? `/${organization}/${connectionId}/sql-console` : `/${organization}/connections`,
-            icon: SquareCode,
-            requiresConnection: true,
-        },
-        {
-            title: t('Explorer'),
-            url: explorerUrl,
-            matchPrefix: connectionId ? buildExplorerBasePath({ organization, connectionId }) : undefined,
-            icon: Compass,
-            requiresConnection: true,
-        },
-        {
-            title: t('Chatbot'),
-            url: connectionId ? `/${organization}/${connectionId}/chatbot` : `/${organization}/chatbot`,
-            icon: IconFileAi,
-            requiresConnection: true,
-        },
-        {
-            title: 'Agent Runs',
-            url: `/${organization}/agent-runs`,
-            icon: Bot,
-            requiresConnection: false,
-        },
-        ...(supportsOperationalPages
-            ? [
-                  {
-                      title: t('Monitoring'),
-                      url: connectionId ? `/${organization}/${connectionId}/monitoring` : `/${organization}/connections`,
-                      icon: FileChartColumnIncreasing,
-                      requiresConnection: true,
-                  },
-                  {
-                      title: t('Privileges'),
-                      url: connectionId ? `/${organization}/${connectionId}/privileges` : `/${organization}/privileges`,
-                      icon: IconUsers,
-                      requiresConnection: true,
-                  },
-              ]
-            : []),
-    ];
+    const navMain = connectionId
+        ? [
+              {
+                  title: t('SQLConsole'),
+                  url: sqlConsoleUrl,
+                  icon: SquareCode,
+                  requiresConnection: true,
+              },
+              {
+                  title: t('Explorer'),
+                  url: explorerUrl,
+                  matchPrefix: buildExplorerBasePath({ organization, connectionId }),
+                  icon: Compass,
+                  requiresConnection: true,
+              },
+              {
+                  title: t('Chatbot'),
+                  url: chatbotUrl,
+                  icon: IconFileAi,
+                  requiresConnection: true,
+              },
+              ...(supportsOperationalPages
+                  ? [
+                        {
+                            title: t('Monitoring'),
+                            url: `/${organization}/${connectionId}/monitoring`,
+                            icon: FileChartColumnIncreasing,
+                            requiresConnection: true,
+                        },
+                        {
+                            title: t('Privileges'),
+                            url: `/${organization}/${connectionId}/privileges`,
+                            icon: IconUsers,
+                            requiresConnection: true,
+                        },
+                    ]
+                  : []),
+              {
+                  title: t('AgentRuns'),
+                  url: `/${organization}/agent-runs`,
+                  icon: Bot,
+                  requiresConnection: false,
+              },
+          ]
+        : [
+              {
+                  title: t('DataSources'),
+                  url: dataSourcesUrl,
+                  icon: Database,
+                  requiresConnection: false,
+              },
+              {
+                  title: t('AgentRuns'),
+                  url: `/${organization}/agent-runs`,
+                  icon: Bot,
+                  requiresConnection: false,
+              },
+          ];
 
     const navSecondary = [
         {

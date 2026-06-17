@@ -14,6 +14,10 @@ export type NavItem = {
     requiresConnection?: boolean;
 };
 
+function getIsDisabled(item: NavItem, disabled: boolean, hasActiveConnection: boolean) {
+    return item.requiresConnection ? disabled || !hasActiveConnection : false;
+}
+
 export function NavMain({
     items,
     disabled = false,
@@ -33,7 +37,7 @@ export function NavMain({
                 <SidebarMenu>
                     {items.map(item => {
                         const IconComp = item.icon;
-                        const itemDisabled = item.requiresConnection ? disabled || !hasActiveConnection : false;
+                        const itemDisabled = getIsDisabled(item, disabled, hasActiveConnection);
 
                         const matchBase = item.matchPrefix ?? item.url;
                         const isActive =
