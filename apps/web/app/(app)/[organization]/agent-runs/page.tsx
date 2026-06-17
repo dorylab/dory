@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Bot, ExternalLink } from 'lucide-react';
+import { Bot, ExternalLink, ListChecks } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
+import { buildAgentRunDetailPath, buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -33,6 +34,19 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
 
     const db = await getDBService();
     const [works, connections] = await Promise.all([db.works.list({ organizationId, userId, limit: 100 }), db.connections.list(organizationId)]);
+    const snapshotsByWorkId = new Map(
+        (
+            await Promise.all(
+                works.map(async work => {
+                    if (work.connectionId) {
+                        return null;
+                    }
+                    const snapshot = await db.works.getSnapshot({ organizationId, userId, workId: work.workId });
+                    return snapshot ? ([work.workId, snapshot] as const) : null;
+                }),
+            )
+        ).filter(entry => entry !== null),
+    );
     const connectionNames = new Map(connections.map(item => [item.connection.id, item.connection.name ?? item.connection.id]));
 
     return (
@@ -52,7 +66,7 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Run</TableHead>
+                                <TableHead>Question</TableHead>
                                 <TableHead>Connection</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>External session</TableHead>
@@ -63,14 +77,16 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
                         <TableBody>
                             {works.length ? (
                                 works.map(work => {
-                                    const detailHref = `/${organization}/agent-runs/${work.workId}`;
-                                    const workspaceHref = work.connectionId
-                                        ? `/${organization}/${work.connectionId}/sql-console?workId=${encodeURIComponent(work.workId)}`
-                                        : detailHref;
+                                    const detailHref = buildAgentRunDetailPath(organization, work.workId);
+                                    const workspaceHref = buildAgentWorkspacePathFromSnapshot(organization, {
+                                        work,
+                                        sessions: snapshotsByWorkId.get(work.workId)?.sessions ?? [],
+                                        tabs: snapshotsByWorkId.get(work.workId)?.tabs ?? [],
+                                    });
                                     return (
                                         <TableRow key={work.workId}>
                                             <TableCell>
-                                                <Link href={detailHref} className="font-medium hover:underline">
+                                                <Link href={detailHref} className="line-clamp-2 font-medium hover:underline" title={work.title || 'Agent Run'}>
                                                     {work.title || 'Agent Run'}
                                                 </Link>
                                                 <div className="mt-1 max-w-[320px] truncate font-mono text-xs text-muted-foreground">{work.workId}</div>
@@ -82,12 +98,20 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
                                             <TableCell className="max-w-[220px] truncate font-mono text-xs">{work.externalSessionId ?? 'None'}</TableCell>
                                             <TableCell>{formatDate(work.lastActiveAt)}</TableCell>
                                             <TableCell className="text-right">
-                                                <Button asChild variant="outline" size="sm">
-                                                    <Link href={workspaceHref}>
-                                                        <ExternalLink className="h-4 w-4" />
-                                                        Workspace
-                                                    </Link>
-                                                </Button>
+                                                <div className="flex justify-end gap-2">
+                                                    <Button asChild size="sm">
+                                                        <Link href={detailHref}>
+                                                            <ListChecks className="h-4 w-4" />
+                                                            Activity
+                                                        </Link>
+                                                    </Button>
+                                                    <Button asChild variant="outline" size="sm">
+                                                        <Link href={workspaceHref}>
+                                                            <ExternalLink className="h-4 w-4" />
+                                                            Workspace
+                                                        </Link>
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { useDB } from '@/lib/client/use-pglite';
 import { useQuery } from '@/hooks/use-query';
@@ -13,6 +13,7 @@ import { useTranslations } from 'next-intl';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
 import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
+import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 
 type RequestAITabTitle = (tab: SQLTab, options?: { force?: boolean; sqlTextOverride?: string }) => Promise<void> | void;
 
@@ -49,19 +50,23 @@ export function useSqlQueryRunner({
     tabs,
     userId,
     requestAITabTitle,
+    workspaceScope,
 }: {
     activeDatabase: string | null | undefined;
     activeTab: SQLTab | undefined;
     tabs: SQLTab[];
     userId: string | undefined;
     requestAITabTitle: RequestAITabTitle;
+    workspaceScope?: SqlWorkspaceScope;
 }) {
     const { run: query } = useQuery();
     const { dbReady, setUserId, createQuerySession, finishQuerySession, applyServerResult } = useDB();
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const limitDialect: SelectLimitDialect = currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
+    const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
+    const limitDialect: SelectLimitDialect =
+        currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
 
     const editorRef = useRef<SQLEditorHandle | null>(null);
     const abortControllersRef = useRef<Record<string, AbortController | undefined>>({});
@@ -106,7 +111,10 @@ export function useSqlQueryRunner({
             const sessionId = genSessionId();
             setSessionIdMap(p => ({ ...p, [tabId]: sessionId }));
             try {
-                localStorage.setItem(`sqlconsole:sessionId:${tabId}`, sessionId);
+                localStorage.setItem(
+                    getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null }),
+                    sessionId,
+                );
             } catch {
                 // ignore
             }
@@ -234,7 +242,10 @@ export function useSqlQueryRunner({
             let sessionId = sessionIdMap[tabId];
             if (!sessionId) {
                 try {
-                    sessionId = (localStorage.getItem(`sqlconsole:sessionId:${tabId}`) as string) ?? undefined;
+                    sessionId =
+                        (localStorage.getItem(
+                            getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null }),
+                        ) as string) ?? undefined;
                 } catch {
                     // ignore
                 }
@@ -248,7 +259,7 @@ export function useSqlQueryRunner({
                 console.error('[SQLConsoleClient.cancelQuery] cancel API failed', error);
             });
         },
-        [sessionIdMap],
+        [currentConnection?.connection?.id, normalizedWorkspaceScope, sessionIdMap],
     );
 
     return {

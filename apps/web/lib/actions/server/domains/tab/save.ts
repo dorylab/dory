@@ -49,6 +49,7 @@ export const tabSaveAction = defineWebAction({
                 tabId: input.tabId,
                 userId: ctx.userId,
                 connectionId: resolveConnectionId(ctx, input),
+                workId: input.workId ?? input.state.workId ?? null,
                 newName: input.state.tabName,
             });
         }

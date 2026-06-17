@@ -155,6 +155,52 @@ test('tab.create uses the same tabs:write gate through UI, Agent, and MCP adapte
     assert.equal((mcpOutput.structuredContent as any).error.code, 'ACTION_SCOPE_MISSING');
 });
 
+test('tab list/save/delete actions forward workspace scope to the tab repository', async () => {
+    const calls: Array<{ method: string; args: any[]; payload?: any }> = [];
+    const services = {
+        db: {
+            tabState: {
+                loadAllTab: async (...args: any[]) => {
+                    calls.push({ method: 'loadAllTab', args });
+                    return [];
+                },
+                saveTabState: async (payload: any) => {
+                    calls.push({ method: 'saveTabState', args: [], payload });
+                },
+                updateTabName: async (payload: any) => {
+                    calls.push({ method: 'updateTabName', args: [], payload });
+                },
+                deleteTabState: async (...args: any[]) => {
+                    calls.push({ method: 'deleteTabState', args });
+                },
+            },
+        },
+    } as unknown as WebActionServices;
+
+    await executeUiAction(createContext('user', ['tabs:read'], services), 'tab.list', { connectionId: 'conn-1' });
+    await executeUiAction(createContext('user', ['tabs:read'], services), 'tab.list', { connectionId: 'conn-1', workId: 'work-1' });
+    await executeUiAction(createContext('user', ['tabs:write'], services), 'tab.save', {
+        connectionId: 'conn-1',
+        workId: 'work-1',
+        tabId: 'tab-1',
+        state: {
+            tabType: 'sql',
+            tabName: 'Scoped',
+            content: 'select 1',
+            orderIndex: 0,
+        },
+    });
+    await executeUiAction(createContext('user', ['tabs:write'], services), 'tab.delete', { connectionId: 'conn-1', workId: 'work-1', tabId: 'tab-1' });
+
+    assert.deepEqual(calls[0], { method: 'loadAllTab', args: ['user-1', 'conn-1', null] });
+    assert.deepEqual(calls[1], { method: 'loadAllTab', args: ['user-1', 'conn-1', 'work-1'] });
+    assert.equal(calls[2]?.method, 'saveTabState');
+    assert.equal(calls[2]?.payload.workId, 'work-1');
+    assert.equal(calls[3]?.method, 'updateTabName');
+    assert.equal(calls[3]?.payload.workId, 'work-1');
+    assert.deepEqual(calls[4], { method: 'deleteTabState', args: ['tab-1', 'user-1', 'conn-1', 'work-1'] });
+});
+
 test('MCP adapter returns structured tool errors for invalid input and permission denials', async () => {
     const invalid = createServices();
     const invalidTool = actionToMcpTool(tabCreateAction, () => createContext('mcp', ['tabs:write'], invalid.services));

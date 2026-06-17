@@ -533,4 +533,20 @@ test('matchSchemaSearch matches table and column metadata', () => {
         ),
         false,
     );
+
+    assert.equal(
+        matchSchemaSearch(
+            {
+                kind: 'column',
+                database: 'default',
+                table: 'hn_stories',
+                name: 'comment_count',
+                type: 'integer',
+                comment: 'number of comments',
+                isPrimaryKey: null,
+            },
+            'hacknews hacker news hn posts stories score comments',
+        ),
+        true,
+    );
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSetAtom } from 'jotai';
 
@@ -9,6 +9,7 @@ import type { ResultSetStatsV1, ResultSetViewState } from '@/lib/client/type';
 import { useDB } from '@/lib/client/use-pglite';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
+import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 
 type WorkSnapshotResponse = {
     code?: number;
@@ -63,9 +64,20 @@ type WorkSnapshotResponse = {
     message?: string;
 };
 
-export function useWorkHydration({ tabs, isLoading, setActiveTabId }: { tabs: UITabPayload[]; isLoading: boolean; setActiveTabId: (tabId: string) => void }) {
+export function useWorkHydration({
+    tabs,
+    isLoading,
+    setActiveTabId,
+    workspaceScope,
+}: {
+    tabs: UITabPayload[];
+    isLoading: boolean;
+    setActiveTabId: (tabId: string) => void;
+    workspaceScope?: SqlWorkspaceScope;
+}) {
     const searchParams = useSearchParams();
-    const workId = searchParams.get('workId');
+    const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
+    const workId = normalizedWorkspaceScope.workspaceMode === 'agent' ? normalizedWorkspaceScope.workId : null;
     const requestedTabId = searchParams.get('tabId');
     const requestedSessionId = searchParams.get('sessionId');
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
@@ -112,7 +124,7 @@ export function useWorkHydration({ tabs, isLoading, setActiveTabId }: { tabs: UI
             if (targetTabId && targetSessionId) {
                 setSessionIdMap(prev => ({ ...prev, [targetTabId]: targetSessionId }));
                 try {
-                    localStorage.setItem(`sqlconsole:sessionId:${targetTabId}`, targetSessionId);
+                    localStorage.setItem(getSessionStorageKey(targetTabId, normalizedWorkspaceScope), targetSessionId);
                 } catch {
                     // ignore
                 }
@@ -131,5 +143,5 @@ export function useWorkHydration({ tabs, isLoading, setActiveTabId }: { tabs: UI
         return () => {
             cancelled = true;
         };
-    }, [applyServerResult, dbReady, isLoading, requestedSessionId, requestedTabId, setActiveTabId, setSessionIdMap, tabs, workId]);
+    }, [applyServerResult, dbReady, isLoading, normalizedWorkspaceScope, requestedSessionId, requestedTabId, setActiveTabId, setSessionIdMap, tabs, workId]);
 }

@@ -34,7 +34,7 @@ import type { SQLEditorHandle } from './components/sql-editor';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { humanSqlWorkspaceScope, sqlWorkspaceScopeAtom } from './workspace-scope';
+import { sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -79,7 +79,23 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
-export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizontal.default }: { defaultLayout: number[] | undefined }) {
+export default function AgentWorkspaceClient({
+    defaultLayout = INITIAL_LAYOUT.horizontal.default,
+    workId,
+    connectionId,
+}: {
+    defaultLayout: number[] | undefined;
+    workId: string;
+    connectionId: string;
+}) {
+    const workspaceScope = useMemo<SqlWorkspaceScope>(
+        () => ({
+            workspaceMode: 'agent',
+            workId,
+            connectionId,
+        }),
+        [connectionId, workId],
+    );
     const {
         normalizedLayout,
         onLayout: onLayoutFromHook,
@@ -99,7 +115,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
-    } = useSqlConsoleClient(defaultLayout, humanSqlWorkspaceScope);
+    } = useSqlConsoleClient(defaultLayout, workspaceScope);
     const t = useTranslations('SqlConsole');
     const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
 
@@ -114,13 +130,13 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         () => clamp(chatWidth ?? INITIAL_LAYOUT.copilot.defaultWidth, INITIAL_LAYOUT.copilot.minWidth, INITIAL_LAYOUT.copilot.maxWidth),
         [chatWidth],
     );
-    const [tabHeaderHeight, setTabHeaderHeight] = useState<number>(INITIAL_LAYOUT.tabs.defaultHeaderHeight); // measured from SQLTabs
+    const [tabHeaderHeight, setTabHeaderHeight] = useState<number>(INITIAL_LAYOUT.tabs.defaultHeaderHeight);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
 
     useEffect(() => {
-        setWorkspaceScope(humanSqlWorkspaceScope);
-    }, [setWorkspaceScope]);
+        setWorkspaceScope(workspaceScope);
+    }, [setWorkspaceScope, workspaceScope]);
 
     const sqlTabIds = useMemo(() => tabs.filter(tab => tab.tabType === 'sql').map(tab => tab.tabId), [tabs]);
     const sqlTabIdKey = sqlTabIds.join('\0');
@@ -219,7 +235,8 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                 content: sqlText,
                 status: 'idle',
                 userId: '',
-                connectionId: currentConnection?.connection?.id ?? '',
+                connectionId: currentConnection?.connection?.id ?? connectionId,
+                workId,
                 createdAt: new Date().toISOString(),
             };
 
@@ -228,25 +245,25 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                 databaseOverride: payload.database ?? null,
             });
         },
-        [addTab, currentConnection?.connection?.id, currentConnection?.connection?.type, runQueryWithRef, t],
+        [addTab, connectionId, currentConnection?.connection?.id, currentConnection?.connection?.type, runQueryWithRef, t, workId],
     );
 
     const handleRenameTable = useCallback(
         async (payload: RenameTablePayload) => {
-            const connectionId = currentConnection?.connection?.id;
-            if (!connectionId || !payload.database) {
+            const scopedConnectionId = currentConnection?.connection?.id ?? connectionId;
+            if (!scopedConnectionId || !payload.database) {
                 throw new Error(t('Tabs.MissingConnectionContext'));
             }
 
             await executeActionClient(
                 'schema.renameTable',
                 {
-                    connectionId,
+                    connectionId: scopedConnectionId,
                     database: payload.database,
                     table: payload.tableName,
                     nextName: payload.nextName,
                 },
-                { currentConnectionId: connectionId },
+                { currentConnectionId: scopedConnectionId },
             );
 
             const nextTableName = applyRenamedTableName(payload.tableName, payload.nextName.trim());
@@ -267,7 +284,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                     ),
             );
         },
-        [currentConnection?.connection?.id, t, tabs, updateTab],
+        [connectionId, currentConnection?.connection?.id, t, tabs, updateTab],
     );
 
     useEffect(() => {
@@ -388,11 +405,10 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         <main className="relative h-full w-full">
             <Group
                 orientation="horizontal"
-                id="sql-console-horizontal"
+                id="agent-workspace-horizontal"
                 defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
                 onLayoutChanged={handleLayoutChange}
             >
-                {/* Left */}
                 <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}>
                     <div className="flex flex-col h-full min-h-0 bg-card">
                         <Tabs defaultValue="tables" className="flex-1 min-h-0">
@@ -404,7 +420,6 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                                     {t('Sidebar.Queries')}
                                 </TabsTrigger>
                             </TabsList>
-                            {/* <Separator /> */}
                             <TabsContent value="tables" className="flex-1 min-h-0">
                                 <SQLConsoleSidebar
                                     onOpenTableTab={handleOpenTableTab}
@@ -424,7 +439,6 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
 
                 <PanelSeparator className="w-1.5 bg-border transition-colors" />
 
-                {/* Middle */}
                 <Panel id="middle-panel" minSize={`${INITIAL_LAYOUT.horizontal.middlePanel.min}%`}>
                     <div className="flex h-full flex-col">
                         {isLoading || tabs.length === 0 ? (

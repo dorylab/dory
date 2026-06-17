@@ -1,11 +1,15 @@
 import { z } from 'zod';
 import type { ActionContext } from '@dory/actions';
 import { toActionError } from '@dory/actions';
+import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { executeAction } from '@/lib/actions/server/execute';
 import type { WebActionServices } from '@/lib/actions/server/types';
 import type { WorkSqlSnapshotPayload } from '@dory/database/postgres/impl/works';
 
 const DEFAULT_APPEND_SEPARATOR = '\n\n';
+const DEFAULT_WORK_TITLE = 'Agent Run';
+const MAX_WORK_TITLE_LENGTH = 240;
+const WORK_CONTEXT_INSTRUCTION = 'Call dory_create_work once for this Codex task, then pass the returned work.workId as workId to every later Dory tool call.';
 
 const workResolutionInputSchema = z.object({
     workId: z.string().min(1).optional(),
@@ -90,7 +94,10 @@ const createWorkInputSchema = z
     .object({
         connectionId: z.string().min(1).optional(),
         externalSessionId: z.string().min(1).optional(),
-        title: z.string().min(1).max(160).optional(),
+        title: z.string().min(1).max(1000).optional().describe('Use the user question for this Codex task. This becomes the Agent Run title.'),
+        userQuestion: z.string().min(1).max(4000).optional().describe('Original user question for this Codex task. Used as the Agent Run title when title is omitted.'),
+        question: z.string().min(1).max(4000).optional().describe('Original user question for this Codex task. Used as the Agent Run title when title is omitted.'),
+        prompt: z.string().min(1).max(4000).optional().describe('Original user prompt for this Codex task. Used as the Agent Run title when title is omitted.'),
         metadata: z.record(z.string(), z.unknown()).nullable().optional(),
     })
     .passthrough();
@@ -169,6 +176,12 @@ type ReadonlySqlExecutionOutput = WorkSqlSnapshotPayload & {
     results: WorkSqlSnapshotPayload['results'];
 };
 
+type McpStructuredError = Error & {
+    code?: string;
+    status?: number;
+    details?: unknown;
+};
+
 type McpFacadeTool = {
     name: string;
     title: string;
@@ -178,6 +191,20 @@ type McpFacadeTool = {
     annotations?: Record<string, unknown>;
     execute: (ctx: ActionContext<WebActionServices>, input: unknown) => Promise<unknown>;
 };
+
+class McpFacadeError extends Error {
+    readonly code: string;
+    readonly status: number;
+    readonly details?: unknown;
+
+    constructor(code: string, message: string, options: { status?: number; details?: unknown } = {}) {
+        super(message);
+        this.name = 'McpFacadeError';
+        this.code = code;
+        this.status = options.status ?? 400;
+        this.details = options.details;
+    }
+}
 
 function requireString(value: unknown, name: string): string {
     if (typeof value !== 'string' || !value.trim()) {
@@ -202,6 +229,13 @@ function getNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function normalizeWorkTitle(input: UnknownRecord) {
+    const candidates = [input.title, input.userQuestion, input.question, input.prompt];
+    const title = candidates.map(value => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '')).find(Boolean);
+    if (!title) return null;
+    return title.length > MAX_WORK_TITLE_LENGTH ? `${title.slice(0, MAX_WORK_TITLE_LENGTH - 3)}...` : title;
+}
+
 function firstResultSet(output: ReadonlySqlExecutionOutput) {
     const firstRows = Array.isArray(output.results[0]) ? output.results[0] : [];
     const firstSet = toRecord(output.queryResultSets[0]);
@@ -224,14 +258,13 @@ function buildWorkspaceUrl(
     work: { workId: string; connectionId?: string | null },
     options: { tabId?: string | null; sessionId?: string | null } = {},
 ) {
-    const path =
-        work.connectionId && (options.tabId || options.sessionId)
-            ? `/${encodeURIComponent(ctx.organizationId)}/${encodeURIComponent(work.connectionId)}/sql-console?${new URLSearchParams({
-                  workId: work.workId,
-                  ...(options.tabId ? { tabId: options.tabId } : {}),
-                  ...(options.sessionId ? { sessionId: options.sessionId } : {}),
-              }).toString()}`
-            : `/${encodeURIComponent(ctx.organizationId)}/agent-runs/${encodeURIComponent(work.workId)}`;
+    const path = buildAgentWorkspacePath({
+        organization: ctx.organizationId,
+        workId: work.workId,
+        connectionId: work.connectionId ?? null,
+        tabId: options.tabId,
+        sessionId: options.sessionId,
+    });
     return new URL(path, ctx.services.requestOrigin ?? 'http://localhost:3000').toString();
 }
 
@@ -251,16 +284,42 @@ async function resolveMcpWork(
     ctx: ActionContext<WebActionServices>,
     input: { connectionId?: string | null; workId?: string | null; externalSessionId?: string | null; title?: string | null; metadata?: Record<string, unknown> | null },
 ) {
-    const work = await ctx.services.db.works.resolve({
+    const workId = input.workId?.trim() || null;
+    const externalSessionId = input.externalSessionId?.trim() || null;
+    if (!workId && !externalSessionId) {
+        throw new McpFacadeError('MISSING_WORK_CONTEXT', `Missing workId. ${WORK_CONTEXT_INSTRUCTION}`, {
+            status: 400,
+            details: {
+                required: 'workId',
+                nextStep: WORK_CONTEXT_INSTRUCTION,
+            },
+        });
+    }
+
+    const work = await ctx.services.db.works.resolveExisting({
         organizationId: ctx.organizationId,
         userId: ctx.userId,
         tokenId: ctx.actor.id ?? null,
         connectionId: input.connectionId ?? null,
-        workId: input.workId ?? null,
-        externalSessionId: input.externalSessionId ?? null,
+        workId,
+        externalSessionId,
         title: input.title ?? null,
         metadata: input.metadata ?? null,
     });
+    if (!work) {
+        throw new McpFacadeError(
+            workId ? 'WORK_NOT_FOUND' : 'WORK_SESSION_NOT_FOUND',
+            workId ? `Work not found: ${workId}.` : `No existing work found for externalSessionId: ${externalSessionId}.`,
+            {
+                status: 404,
+                details: {
+                    workId,
+                    externalSessionId,
+                    nextStep: WORK_CONTEXT_INSTRUCTION,
+                },
+            },
+        );
+    }
 
     return {
         workId: work.workId,
@@ -301,7 +360,7 @@ async function executeWithWork(ctx: ActionContext<WebActionServices>, toolName: 
         });
         return output;
     } catch (error: unknown) {
-        const actionError = toActionError(error);
+        const structuredError = toMcpStructuredError(error);
         await ctx.services.db.works.recordEvent({
             workId: work.workId,
             organizationId: ctx.organizationId,
@@ -311,12 +370,30 @@ async function executeWithWork(ctx: ActionContext<WebActionServices>, toolName: 
             toolName,
             status: 'error',
             inputSummary: ctx.services.db.works.summarizeInput(input),
-            errorCode: actionError.code ?? null,
-            errorMessage: actionError.message,
+            errorCode: structuredError.code ?? null,
+            errorMessage: structuredError.message,
             durationMs: performance.now() - t0,
         });
         throw error;
     }
+}
+
+function toMcpStructuredError(error: unknown) {
+    const record = isRecord(error) ? (error as unknown as McpStructuredError) : null;
+    if (record && typeof record.code === 'string' && record.message) {
+        return {
+            code: record.code,
+            message: record.message,
+            details: record.details ?? null,
+        };
+    }
+
+    const actionError = toActionError(error);
+    return {
+        code: actionError.code,
+        message: actionError.message,
+        details: actionError.details ?? null,
+    };
 }
 
 function toPublicConnection(item: unknown) {
@@ -339,14 +416,40 @@ function toPublicConnection(item: unknown) {
     };
 }
 
-async function findSqlTab(ctx: ActionContext<WebActionServices>, connectionId: string, tabId: string) {
-    const tabs = await executeInternal<UnknownRecord[]>(ctx, 'tab.list', { connectionId });
+async function findSqlTab(ctx: ActionContext<WebActionServices>, connectionId: string, tabId: string, workId?: string | null) {
+    const tabs = await executeInternal<UnknownRecord[]>(ctx, 'tab.list', { connectionId, workId: workId ?? null });
     const tab = tabs.find(item => item.tabId === tabId);
     if (!tab) {
-        throw new Error(`SQL tab not found: ${tabId}`);
+        const anyWorkTab = await ctx.services.db.tabState.loadTabStateById(tabId, ctx.userId, connectionId);
+        if (anyWorkTab) {
+            throw new McpFacadeError('SQL_TAB_WORK_MISMATCH', `SQL tab ${tabId} belongs to a different work context.`, {
+                status: 409,
+                details: {
+                    tabId,
+                    expectedWorkId: workId ?? null,
+                    actualWorkId: anyWorkTab.workId ?? null,
+                    nextStep: 'Use the workId that owns this tab, or create a new SQL tab inside the current work before appending or replacing SQL.',
+                },
+            });
+        }
+
+        throw new McpFacadeError('SQL_TAB_NOT_FOUND', `SQL tab not found: ${tabId}.`, {
+            status: 404,
+            details: {
+                tabId,
+                workId: workId ?? null,
+            },
+        });
     }
     if (tab.tabType !== 'sql') {
-        throw new Error(`Target tab must be a SQL tab: ${tabId}`);
+        throw new McpFacadeError('SQL_TAB_TYPE_MISMATCH', `Target tab must be a SQL tab: ${tabId}.`, {
+            status: 409,
+            details: {
+                tabId,
+                tabType: tab.tabType ?? null,
+                workId: workId ?? null,
+            },
+        });
     }
     return tab;
 }
@@ -390,7 +493,7 @@ async function applySqlWorkspaceAction(
     }
 
     const targetTabId = requireString(input.targetTabId, 'targetTabId');
-    const existing = await findSqlTab(ctx, input.connectionId, targetTabId);
+    const existing = await findSqlTab(ctx, input.connectionId, targetTabId, input.workId ?? null);
     const content =
         mode === 'append_to_tab' ? `${typeof existing.content === 'string' ? existing.content : ''}${input.appendSeparator ?? DEFAULT_APPEND_SEPARATOR}${input.sql}` : input.sql;
     const tabName = input.tabName ?? getString(existing.tabName);
@@ -535,6 +638,7 @@ async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInp
                 {
                     tabs: await executeInternal(ctx, 'tab.list', {
                         connectionId: input.connectionId,
+                        workId: work.workId,
                     }),
                 },
                 work,
@@ -583,6 +687,7 @@ async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInp
             return withWork(
                 await executeInternal(ctx, 'tab.delete', {
                     connectionId: input.connectionId,
+                    workId: work.workId,
                     tabId: requireString(input.tabId, 'tabId'),
                 }),
                 work,
@@ -668,13 +773,14 @@ async function savedQueriesFacade(ctx: ActionContext<WebActionServices>, rawInpu
 
 async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
     const input = createWorkInputSchema.parse(rawInput);
+    const title = normalizeWorkTitle(input) ?? DEFAULT_WORK_TITLE;
     const work = await ctx.services.db.works.create({
         organizationId: ctx.organizationId,
         userId: ctx.userId,
         tokenId: ctx.actor.id ?? null,
         connectionId: input.connectionId ?? null,
         externalSessionId: input.externalSessionId ?? null,
-        title: input.title ?? null,
+        title,
         metadata: input.metadata ?? null,
     });
     const workspaceUrl = buildWorkspaceUrl(ctx, work);
@@ -691,6 +797,7 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     });
     return {
         workId: work.workId,
+        title: work.title,
         status: work.status,
         connectionId: work.connectionId,
         externalSessionId: work.externalSessionId,
@@ -719,13 +826,13 @@ export function structuredMcpFacadeResult(data: unknown) {
 }
 
 export function structuredMcpFacadeError(error: unknown) {
-    const actionError = toActionError(error);
+    const structuredError = toMcpStructuredError(error);
     const output = {
         ok: false,
         error: {
-            code: actionError.code,
-            message: actionError.message,
-            details: actionError.details ?? null,
+            code: structuredError.code,
+            message: structuredError.message,
+            details: structuredError.details,
         },
     };
 
@@ -746,7 +853,8 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_create_work',
             title: 'Create Dory Work',
-            description: 'Create a Dory Agent Run work context that later MCP calls can reuse with workId.',
+            description:
+                'Create or reuse one Dory Agent Run work context for the current Codex task. Call this once first with title set to the user question, then pass the returned work.workId as workId to every later Dory tool call.',
             inputSchema: createWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -759,7 +867,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_list_connections',
             title: 'List Dory connections',
-            description: 'List available Dory database connections with enough context to choose the likely target connection.',
+            description: `List available Dory database connections with enough context to choose the likely target connection. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: connectionListInputSchema,
             outputSchema: connectionListOutputSchema,
             annotations: {
@@ -781,7 +889,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_explore_schema',
             title: 'Explore Dory schema',
-            description: 'Explore available data, find business fields, inspect table structure, preview table rows, get table profiles, and fetch table DDL.',
+            description: `Explore available data, find business fields, inspect table structure, preview table rows, get table profiles, and fetch table DDL. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: schemaExploreInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -794,7 +902,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_run_readonly_sql',
             title: 'Run read-only SQL',
-            description: 'Run read-only SQL against a Dory connection, resolve an Agent Run, create or update a SQL workspace tab, and persist a result snapshot.',
+            description: `Run read-only SQL against a Dory connection, update the existing Agent Run workspace tab, and persist a result snapshot. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: readonlySqlInputSchema,
             outputSchema: readonlySqlOutputSchema,
             annotations: {
@@ -807,7 +915,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_workspace_tabs',
             title: 'Manage Dory workspace tabs',
-            description: 'Manage Dory workspace tabs: list tabs, create SQL tabs, append or replace SQL tab content, delete tabs, or open a table tab.',
+            description: `Manage Dory workspace tabs: list tabs, create SQL tabs, append or replace SQL tab content, delete tabs, or open a table tab. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: workspaceTabsInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -820,8 +928,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_saved_queries',
             title: 'Manage Dory saved queries',
-            description:
-                'Low-priority saved query facade for listing, reading, creating, updating, or deleting reusable saved SQL. Do not use this for ordinary one-off SQL execution.',
+            description: `Low-priority saved query facade for listing, reading, creating, updating, or deleting reusable saved SQL. Do not use this for ordinary one-off SQL execution. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: savedQueriesInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

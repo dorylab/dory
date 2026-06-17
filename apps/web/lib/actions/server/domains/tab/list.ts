@@ -9,7 +9,7 @@ export const tabListAction = defineWebAction({
     domain: 'tab',
     kind: 'query',
     risk: 'read',
-    inputSchema: z.object({ connectionId: z.string().min(1).optional() }),
+    inputSchema: z.object({ connectionId: z.string().min(1).optional(), workId: z.string().min(1).nullable().optional() }),
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['tabs:read'],
@@ -19,5 +19,5 @@ export const tabListAction = defineWebAction({
         title: 'List Dory tabs',
         description: 'List saved SQL console tabs for a Dory connection.',
     },
-    handler: (ctx, input) => ctx.services.db.tabState.loadAllTab(ctx.userId, resolveConnectionId(ctx, input)),
+    handler: (ctx, input) => ctx.services.db.tabState.loadAllTab(ctx.userId, resolveConnectionId(ctx, input), input.workId ?? null),
 });

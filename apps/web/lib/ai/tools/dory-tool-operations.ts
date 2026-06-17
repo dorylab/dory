@@ -4,16 +4,7 @@ import { getDBService } from '@dory/database';
 import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
 import { buildResultContext } from '@dory/analysis/result-context';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
-import type {
-    DatabaseObjectRow,
-    DatabaseSummaryEngine,
-    QueryInsightsFilters,
-    QueryType,
-    TableColumnInfo,
-    TablePreviewFilter,
-    TablePreviewSort,
-    TimeRange,
-} from '@dory/drivers/types';
+import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, TableColumnInfo, TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
@@ -22,14 +13,34 @@ import { getReadonlyMcpStatements } from '@/lib/server/mcp/sql-safety';
 import { routing, type Locale } from '@dory/i18n/routing';
 import { getSqlAuditConnectionSnapshot, logDeniedSqlAudit, runWithSqlAudit } from '@/lib/server/sql-audit';
 import type { QuerySource } from '@dory/shared/types/audit';
+import {
+    DEFAULT_DORY_MONITORING_PAGE_SIZE,
+    DEFAULT_DORY_SCHEMA_SEARCH_LIMIT,
+    MAX_DORY_MONITORING_PAGE_SIZE,
+    MAX_DORY_SCHEMA_SEARCH_DATABASES,
+    MAX_DORY_SCHEMA_SEARCH_LIMIT,
+    clampDoryToolLimit,
+    normalizeMonitoringFilters,
+    searchSchemaItems,
+    toSchemaColumn,
+    toSchemaObject,
+    type SchemaSearchItem,
+} from '@/lib/ai/tools/dory-tool-utils';
+
+export {
+    DEFAULT_DORY_MONITORING_PAGE_SIZE,
+    DEFAULT_DORY_SCHEMA_SEARCH_LIMIT,
+    MAX_DORY_MONITORING_PAGE_SIZE,
+    MAX_DORY_SCHEMA_SEARCH_DATABASES,
+    MAX_DORY_SCHEMA_SEARCH_LIMIT,
+    clampDoryToolLimit,
+    matchSchemaSearch,
+    normalizeMonitoringFilters,
+    type SchemaSearchItem,
+} from '@/lib/ai/tools/dory-tool-utils';
 
 export const MAX_DORY_TOOL_RESULT_ROWS = 100;
 export const MAX_TABLE_PREVIEW_ROWS = 1000;
-export const MAX_DORY_SCHEMA_SEARCH_DATABASES = 20;
-export const DEFAULT_DORY_SCHEMA_SEARCH_LIMIT = 25;
-export const MAX_DORY_SCHEMA_SEARCH_LIMIT = 100;
-export const DEFAULT_DORY_MONITORING_PAGE_SIZE = 10;
-export const MAX_DORY_MONITORING_PAGE_SIZE = 100;
 
 export type DoryToolOperationContext = {
     organizationId: string;
@@ -42,31 +53,6 @@ export type DoryToolOperationContext = {
     requestId?: string | null;
 };
 
-export type SchemaSearchItem =
-    | {
-          kind: 'table' | 'view';
-          database: string;
-          name: string;
-          comment?: string | null;
-          totalBytes?: number | null;
-          totalRows?: number | null;
-          lastModified?: string | null;
-      }
-    | {
-          kind: 'column';
-          database: string;
-          table: string;
-          name: string;
-          type?: string | null;
-          comment?: string | null;
-          isPrimaryKey?: boolean | number | string | null;
-      };
-
-export function clampDoryToolLimit(limit: number | null | undefined, defaultValue: number, maxValue: number) {
-    if (!Number.isFinite(limit ?? NaN)) return defaultValue;
-    return Math.max(1, Math.min(maxValue, Math.floor(limit!)));
-}
-
 function clampResultLimit(limit?: number | null) {
     if (!Number.isFinite(limit ?? NaN)) return DEFAULT_TABLE_PREVIEW_LIMIT;
     return Math.max(1, Math.min(MAX_DORY_TOOL_RESULT_ROWS, Math.floor(limit!)));
@@ -75,48 +61,6 @@ function clampResultLimit(limit?: number | null) {
 function clampTablePreviewLimit(limit?: number | null) {
     if (!Number.isFinite(limit ?? NaN)) return DEFAULT_TABLE_PREVIEW_LIMIT;
     return Math.max(1, Math.min(MAX_TABLE_PREVIEW_ROWS, Math.floor(limit!)));
-}
-
-function isTimeRange(value: unknown): value is TimeRange {
-    return value === '1h' || value === '6h' || value === '24h' || value === '7d';
-}
-
-function isQueryType(value: unknown): value is QueryType {
-    return value === 'all' || value === 'select' || value === 'insert' || value === 'ddl' || value === 'other';
-}
-
-export function normalizeMonitoringFilters(input?: Partial<QueryInsightsFilters> | null): QueryInsightsFilters {
-    return {
-        search: typeof input?.search === 'string' ? input.search : '',
-        user: typeof input?.user === 'string' && input.user ? input.user : 'all',
-        database: typeof input?.database === 'string' && input.database ? input.database : 'all',
-        queryType: isQueryType(input?.queryType) ? input.queryType : 'all',
-        minDurationMs: Number.isFinite(input?.minDurationMs) ? Math.max(0, Math.floor(input!.minDurationMs!)) : 0,
-        timeRange: isTimeRange(input?.timeRange) ? input.timeRange : '1h',
-    };
-}
-
-function includesQuery(value: unknown, query: string) {
-    return typeof value === 'string' && value.toLowerCase().includes(query);
-}
-
-export function matchSchemaSearch(item: SchemaSearchItem, query: string) {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return true;
-
-    if (item.kind === 'column') {
-        return (
-            includesQuery(item.database, normalized) ||
-            includesQuery(item.table, normalized) ||
-            includesQuery(item.name, normalized) ||
-            includesQuery(item.type, normalized) ||
-            includesQuery(item.comment, normalized)
-        );
-    }
-
-    return (
-        includesQuery(item.database, normalized) || includesQuery(item.name, normalized) || includesQuery(item.comment, normalized) || includesQuery(item.lastModified, normalized)
-    );
 }
 
 function toSavedQueryPayload(record: {
@@ -148,30 +92,6 @@ function toSavedQueryPayload(record: {
         createdAt: record.createdAt ?? null,
         updatedAt: record.updatedAt ?? null,
         archivedAt: record.archivedAt ?? null,
-    };
-}
-
-function toSchemaObject(kind: 'table' | 'view', database: string, item: DatabaseObjectRow): SchemaSearchItem {
-    return {
-        kind,
-        database,
-        name: item.name,
-        comment: item.comment ?? null,
-        totalBytes: item.totalBytes ?? null,
-        totalRows: item.totalRows ?? null,
-        lastModified: item.lastModified ?? null,
-    };
-}
-
-function toSchemaColumn(database: string, table: string, column: TableColumnInfo): SchemaSearchItem {
-    return {
-        kind: 'column',
-        database,
-        table,
-        name: column.columnName,
-        type: column.columnType ?? null,
-        comment: column.comment ?? null,
-        isPrimaryKey: column.isPrimaryKey ?? null,
     };
 }
 
@@ -352,7 +272,8 @@ export async function searchSchemaOperation(
         );
     }
 
-    const results: SchemaSearchItem[] = [];
+    const candidates: SchemaSearchItem[] = [];
+    const hasSearchQuery = input.query.trim().length > 0;
     const scanned = {
         databases: 0,
         tables: 0,
@@ -361,7 +282,7 @@ export async function searchSchemaOperation(
     };
 
     for (const databaseName of databases) {
-        if (results.length >= maxResults) break;
+        if (!hasSearchQuery && candidates.length >= maxResults) break;
         scanned.databases += 1;
 
         const tables = await withDoryToolSqlAudit(context, { ...input, database: databaseName }, metadataAuditSource(context), async () =>
@@ -377,32 +298,30 @@ export async function searchSchemaOperation(
         scanned.views += viewObjects.length;
 
         for (const object of [...tableObjects, ...viewObjects]) {
-            if (results.length >= maxResults) break;
-            if (matchSchemaSearch(object, input.query)) {
-                results.push(object);
-            }
+            if (!hasSearchQuery && candidates.length >= maxResults) break;
+            candidates.push(object);
         }
 
-        if (!shouldIncludeColumns) {
+        if (!shouldIncludeColumns || (!hasSearchQuery && candidates.length >= maxResults)) {
             continue;
         }
 
         for (const object of [...tableObjects, ...viewObjects]) {
-            if (results.length >= maxResults) break;
+            if (!hasSearchQuery && candidates.length >= maxResults) break;
             const columns = await withDoryToolSqlAudit(context, { ...input, database: databaseName }, metadataAuditSource(context), async () =>
                 entry.instance.describeTable(databaseName, object.name).catch(() => [] as TableColumnInfo[]),
             );
             scanned.columns += columns.length;
 
             for (const column of columns) {
-                if (results.length >= maxResults) break;
+                if (!hasSearchQuery && candidates.length >= maxResults) break;
                 const item = toSchemaColumn(databaseName, object.name, column);
-                if (matchSchemaSearch(item, input.query)) {
-                    results.push(item);
-                }
+                candidates.push(item);
             }
         }
     }
+
+    const results = searchSchemaItems(candidates, input.query, maxResults);
 
     return {
         query: input.query,

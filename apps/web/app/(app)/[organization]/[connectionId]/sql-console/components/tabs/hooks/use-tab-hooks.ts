@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
@@ -11,14 +11,26 @@ import { executeActionClient } from '@/lib/actions/client';
 import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
 import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
+import { getActiveTabStorageKey, getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../../../workspace-scope';
 
-const ACTIVE_KEY = (connectionId?: string | null) => `sqlconsole:activeTabId:${connectionId ?? 'default'}`;
-const SID = (tabId: string) => `sqlconsole:sessionId:${tabId}`;
-
-export function useSQLTabs() {
+export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionId = currentConnection?.connection?.id ?? null;
+    const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const routeConnectionId = useRouteConnectionId();
+    const scopedRouteConnectionId = normalizedWorkspaceScope.connectionId ?? routeConnectionId;
+    const connectionId =
+        currentConnection?.connection?.id === scopedRouteConnectionId ? currentConnection.connection.id : (scopedRouteConnectionId ?? currentConnection?.connection?.id ?? null);
+    const workId = normalizedWorkspaceScope.workspaceMode === 'agent' ? (normalizedWorkspaceScope.workId ?? null) : null;
+    const storageScope = useMemo(
+        () =>
+            normalizeSqlWorkspaceScope({
+                ...normalizedWorkspaceScope,
+                connectionId,
+                workId,
+            }),
+        [connectionId, normalizedWorkspaceScope, workId],
+    );
+    const activeStorageKey = useMemo(() => getActiveTabStorageKey(storageScope), [storageScope]);
 
     const [tabs, setTabs] = useAtom(tabsAtom);
     const [activeTabId, internalSetActiveTabId] = useAtom(activeTabIdAtom);
@@ -46,7 +58,7 @@ export function useSQLTabs() {
                                       createdAt: tab.createdAt,
                                       userId: tab.userId ?? '',
                                       connectionId: tab.connectionId ?? connectionId,
-                                      workId: tab.workId ?? null,
+                                      workId,
                                       content: tab.content ?? '',
                                       status: tab.status,
                                   }
@@ -58,7 +70,7 @@ export function useSQLTabs() {
                                       createdAt: tab.createdAt,
                                       userId: tab.userId ?? '',
                                       connectionId: tab.connectionId ?? connectionId,
-                                      workId: tab.workId ?? null,
+                                      workId,
                                       databaseName: tab.databaseName,
                                       tableName: tab.tableName,
                                       activeSubTab: tab.activeSubTab,
@@ -74,7 +86,7 @@ export function useSQLTabs() {
                 console.error('[useSQLTabs] persist order failed', err);
             }
         },
-        [connectionId],
+        [connectionId, workId],
     );
 
     // ---------------------------------------------------
@@ -83,7 +95,7 @@ export function useSQLTabs() {
     async function saveTabToServer(tabId: string, tab: TabPayload) {
         if (!connectionId) return;
 
-        await executeActionClient('tab.save', { connectionId, tabId, state: tab }, { currentConnectionId: connectionId });
+        await executeActionClient('tab.save', { connectionId, workId, tabId, state: { ...tab, workId } }, { currentConnectionId: connectionId });
     }
 
     async function createTabOnServer(tab: UITabPayload) {
@@ -93,7 +105,7 @@ export function useSQLTabs() {
             'tab.create',
             {
                 connectionId,
-                workId: tab.workId ?? null,
+                workId,
                 tabId: tab.tabId,
                 tabType: tab.tabType,
                 tabName: tab.tabName,
@@ -132,7 +144,7 @@ export function useSQLTabs() {
             fn.flush();
             fn.cancel();
         };
-    }, [connectionId]);
+    }, [connectionId, workId]);
 
     // ---------------------------------------------------
 
@@ -146,7 +158,7 @@ export function useSQLTabs() {
 
         if (connectionId) {
             try {
-                localStorage.setItem(ACTIVE_KEY(connectionId), id);
+                localStorage.setItem(activeStorageKey, id);
             } catch {
                 // ignore
             }
@@ -154,7 +166,7 @@ export function useSQLTabs() {
 
         let persisted = '';
         try {
-            persisted = localStorage.getItem(SID(id)) || '';
+            persisted = localStorage.getItem(getSessionStorageKey(id, storageScope)) || '';
         } catch {
             // ignore
         }
@@ -186,11 +198,11 @@ export function useSQLTabs() {
 
     // ---------------------------------------------------
     useEffect(() => {
-        if (!routeConnectionId) {
+        if (!scopedRouteConnectionId) {
             setIsLoading(false);
             return;
         }
-        if (!connectionId || connectionId !== routeConnectionId) {
+        if (!connectionId || connectionId !== scopedRouteConnectionId) {
             return;
         }
         if (!connectionId) {
@@ -199,7 +211,7 @@ export function useSQLTabs() {
             setSessionIdMap({});
             internalSetActiveTabId('');
             try {
-                localStorage.removeItem(ACTIVE_KEY(null));
+                localStorage.removeItem(activeStorageKey);
             } catch {
                 // ignore
             }
@@ -210,7 +222,7 @@ export function useSQLTabs() {
 
         (async () => {
             try {
-                const res = await executeActionClient<UITabPayload[]>('tab.list', { connectionId }, { currentConnectionId: connectionId });
+                const res = await executeActionClient<UITabPayload[]>('tab.list', { connectionId, workId }, { currentConnectionId: connectionId });
 
                 if (Array.isArray(res)) {
                     const serverTabs = [...res].sort((a, b) => {
@@ -228,7 +240,7 @@ export function useSQLTabs() {
 
                     let nextActive = serverTabs[0]?.tabId ?? '';
                     try {
-                        const saved = localStorage.getItem(ACTIVE_KEY(connectionId));
+                        const saved = localStorage.getItem(activeStorageKey);
                         if (saved && serverTabs.some(t => t.tabId === saved)) {
                             nextActive = saved;
                         }
@@ -242,7 +254,7 @@ export function useSQLTabs() {
                     setSessionIdMap({});
                     internalSetActiveTabId('');
                     try {
-                        localStorage.removeItem(ACTIVE_KEY(connectionId));
+                        localStorage.removeItem(activeStorageKey);
                     } catch {
                         // ignore
                     }
@@ -256,7 +268,7 @@ export function useSQLTabs() {
                 setIsLoading(false);
             }
         })();
-    }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId]);
+    }, [activeStorageKey, connectionId, scopedRouteConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, workId]);
 
     // ---------------------------------------------------
 
@@ -303,6 +315,7 @@ export function useSQLTabs() {
             status: 'idle',
             userId: '',
             connectionId: connectionId ?? '',
+            workId,
             orderIndex: tabs.length,
             createdAt: new Date().toISOString(),
         };
@@ -341,6 +354,7 @@ export function useSQLTabs() {
             dataView: { limit: 1000, page: 1 },
             userId: '',
             connectionId: connectionId ?? '',
+            workId,
             orderIndex: tabs.length,
             createdAt: new Date().toISOString(),
         };
@@ -373,7 +387,7 @@ export function useSQLTabs() {
         });
 
         try {
-            localStorage.removeItem(SID(tabId));
+            localStorage.removeItem(getSessionStorageKey(tabId, storageScope));
         } catch {
             // ignore
         }
@@ -386,7 +400,7 @@ export function useSQLTabs() {
                 internalSetActiveTabId('');
                 try {
                     if (connectionId) {
-                        localStorage.removeItem(ACTIVE_KEY(connectionId));
+                        localStorage.removeItem(activeStorageKey);
                     }
                 } catch {
                     // ignore
@@ -396,7 +410,7 @@ export function useSQLTabs() {
         }
 
         if (connectionId) {
-            await executeActionClient('tab.delete', { connectionId, tabId }, { currentConnectionId: connectionId });
+            await executeActionClient('tab.delete', { connectionId, workId, tabId }, { currentConnectionId: connectionId });
         }
     };
 
@@ -422,7 +436,7 @@ export function useSQLTabs() {
 
         toClose.forEach(t => {
             try {
-                localStorage.removeItem(SID(t.tabId));
+                localStorage.removeItem(getSessionStorageKey(t.tabId, storageScope));
             } catch {
                 // ignore
             }
@@ -431,7 +445,7 @@ export function useSQLTabs() {
         setActiveTabId(tabId);
 
         if (connectionId) {
-            await Promise.all(toClose.map(tab => executeActionClient('tab.delete', { connectionId, tabId: tab.tabId }, { currentConnectionId: connectionId })));
+            await Promise.all(toClose.map(tab => executeActionClient('tab.delete', { connectionId, workId, tabId: tab.tabId }, { currentConnectionId: connectionId })));
         }
     };
 

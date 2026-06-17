@@ -27,6 +27,7 @@ function createWorksMock() {
     const works = new Map<string, any>();
     let nextId = 1;
     const now = new Date('2026-06-01T00:00:00.000Z');
+    const defaultTitle = 'Agent Run';
 
     const materialize = (input: any, workId = input.workId ?? `work-${nextId++}`) => {
         const existing = works.get(workId);
@@ -38,7 +39,7 @@ function createWorksMock() {
             tokenId: input.tokenId ?? null,
             connectionId: input.connectionId ?? null,
             externalSessionId: input.externalSessionId ?? null,
-            title: input.title ?? 'Agent Run',
+            title: input.title ?? defaultTitle,
             status: 'active',
             metadata: input.metadata ?? null,
             createdAt: now,
@@ -50,22 +51,58 @@ function createWorksMock() {
         return row;
     };
 
+    const prepareExisting = (work: any, input: any) => {
+        const requestedConnectionId = input.connectionId ?? null;
+        if (requestedConnectionId && work.connectionId && work.connectionId !== requestedConnectionId) {
+            throw Object.assign(new Error(`Work ${work.workId} is already bound to connection ${work.connectionId}; received ${requestedConnectionId}.`), {
+                code: 'WORK_CONNECTION_MISMATCH',
+                status: 409,
+                details: {
+                    workId: work.workId,
+                    expectedConnectionId: work.connectionId,
+                    receivedConnectionId: requestedConnectionId,
+                },
+            });
+        }
+        if (requestedConnectionId && !work.connectionId) {
+            work.connectionId = requestedConnectionId;
+        }
+        if (input.title && work.title === defaultTitle) {
+            work.title = input.title;
+        }
+        work.updatedAt = now;
+        work.lastActiveAt = now;
+        return work;
+    };
+
+    const findByExternalSessionId = (input: any) =>
+        [...works.values()].find(
+            work =>
+                work.organizationId === input.organizationId &&
+                work.userId === input.userId &&
+                work.tokenId === (input.tokenId ?? null) &&
+                work.externalSessionId === input.externalSessionId &&
+                !work.archivedAt,
+        );
+
     return {
         events,
-        create: async (input: any) => materialize(input),
-        resolve: async (input: any) => {
+        works,
+        create: async (input: any) => {
             if (input.externalSessionId) {
-                const existing = [...works.values()].find(
-                    work =>
-                        work.organizationId === input.organizationId &&
-                        work.userId === input.userId &&
-                        work.tokenId === (input.tokenId ?? null) &&
-                        work.connectionId === (input.connectionId ?? null) &&
-                        work.externalSessionId === input.externalSessionId,
-                );
-                if (existing) return existing;
+                const existing = findByExternalSessionId(input);
+                if (existing) return prepareExisting(existing, input);
             }
             return materialize(input);
+        },
+        resolve: async (input: any) => {
+            const existing = input.workId ? (works.get(input.workId) ?? null) : input.externalSessionId ? (findByExternalSessionId(input) ?? null) : null;
+            if (existing) return prepareExisting(existing, input);
+            return materialize(input);
+        },
+        resolveExisting: async (input: any) => {
+            const existing = input.workId ? (works.get(input.workId) ?? null) : input.externalSessionId ? (findByExternalSessionId(input) ?? null) : null;
+            return existing ? prepareExisting(existing, input) : null;
         },
         recordEvent: async (event: any) => {
             events.push(event);
@@ -80,6 +117,15 @@ function getTool(name: string) {
     const tool = getPublicDoryMcpTools().find((item: any) => item.name === name);
     assert.ok(tool, `Expected MCP facade tool ${name}`);
     return tool;
+}
+
+async function assertRejectsCode(run: () => Promise<unknown>, code: string) {
+    try {
+        await run();
+        assert.fail(`Expected rejection with code ${code}`);
+    } catch (error) {
+        assert.equal((error as any).code, code);
+    }
 }
 
 function createContext(
@@ -126,8 +172,70 @@ test('dory_create_work returns a workspace URL', async () => {
     const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', externalSessionId: 'session-1', title: 'Revenue check' })) as any;
 
     assert.equal(output.workId, 'work-1');
-    assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1');
+    assert.equal(output.title, 'Revenue check');
+    assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1/workspace/conn-1');
     assert.equal(output.work.workId, 'work-1');
+});
+
+test('dory_create_work uses the user question as the Agent Run title', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+
+    const output = (await getTool('dory_create_work').execute(ctx, { question: 'Which customers drove revenue growth last month?' })) as any;
+
+    assert.equal(output.title, 'Which customers drove revenue growth last month?');
+    assert.equal(works.works.get(output.workId)?.title, 'Which customers drove revenue growth last month?');
+});
+
+test('dory_create_work is idempotent for an external session', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+
+    const first = (await getTool('dory_create_work').execute(ctx, { externalSessionId: 'session-1', title: 'Revenue check' })) as any;
+    const second = (await getTool('dory_create_work').execute(ctx, { externalSessionId: 'session-1', connectionId: 'conn-1', title: 'Revenue check again' })) as any;
+
+    assert.equal(first.workId, 'work-1');
+    assert.equal(second.workId, 'work-1');
+    assert.equal(second.connectionId, 'conn-1');
+    assert.equal(works.works.size, 1);
+});
+
+test('dory_create_work can fill a default title when reusing an external session', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+
+    const first = (await getTool('dory_create_work').execute(ctx, { externalSessionId: 'session-1' })) as any;
+    const second = (await getTool('dory_create_work').execute(ctx, { externalSessionId: 'session-1', userQuestion: 'Show order volume by day' })) as any;
+
+    assert.equal(first.workId, 'work-1');
+    assert.equal(second.workId, 'work-1');
+    assert.equal(second.title, 'Show order volume by day');
+    assert.equal(works.works.get(second.workId)?.title, 'Show order volume by day');
+});
+
+test('ordinary MCP facade tools require an existing work context', async () => {
+    const ctx = createContext({
+        db: {
+            works: createWorksMock(),
+            connections: {
+                list: async () => [],
+            },
+        },
+    } as unknown as WebActionServices);
+
+    await assertRejectsCode(() => getTool('dory_list_connections').execute(ctx, { includeRecent: true }), 'MISSING_WORK_CONTEXT');
 });
 
 test('strict MCP output schemas accept structured error envelopes', () => {
@@ -181,9 +289,10 @@ test('registered MCP schema does not require SQL success fields for error output
 });
 
 test('dory_list_connections returns agent-oriented connection context', async () => {
+    const works = createWorksMock();
     const ctx = createContext({
         db: {
-            works: createWorksMock(),
+            works,
             connections: {
                 list: async () => [
                     {
@@ -208,7 +317,8 @@ test('dory_list_connections returns agent-oriented connection context', async ()
         },
     } as unknown as WebActionServices);
 
-    const output = (await getTool('dory_list_connections').execute(ctx, { includeRecent: true })) as any;
+    const work = (await getTool('dory_create_work').execute(ctx, { title: 'Connection discovery' })) as any;
+    const output = (await getTool('dory_list_connections').execute(ctx, { includeRecent: true, workId: work.workId })) as any;
 
     assert.equal(output.work.workId, 'work-1');
     assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1');
@@ -231,6 +341,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         tabId: 'tab-1',
         userId: 'user-1',
         connectionId: 'conn-1',
+        workId: 'work-1',
         tabType: 'sql',
         tabName: 'Existing',
         content: 'select 1',
@@ -238,11 +349,14 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         createdAt: '2026-06-01T00:00:00.000Z',
     });
     const deleted: string[] = [];
+    const works = createWorksMock();
     const ctx = createContext({
         db: {
-            works: createWorksMock(),
+            works,
             tabState: {
-                loadAllTab: async () => [...savedTabs.values()],
+                loadAllTab: async (_userId: string, _connectionId: string, workId?: string | null) =>
+                    [...savedTabs.values()].filter(tab => (tab.workId ?? null) === (workId ?? null)),
+                loadTabStateById: async (tabId: string) => savedTabs.get(tabId) ?? null,
                 saveTabState: async (payload: any) => {
                     savedTabs.set(payload.tabId, {
                         tabId: payload.tabId,
@@ -267,15 +381,16 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         },
     } as unknown as WebActionServices);
     const tool = getTool('dory_workspace_tabs');
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', externalSessionId: 'session-1', title: 'Workspace tabs' })) as any;
 
-    const listed = (await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1', externalSessionId: 'session-1' })) as any;
+    const listed = (await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1', workId: work.workId })) as any;
     assert.equal(listed.tabs.length, 1);
     assert.equal(listed.work.workId, 'work-1');
 
     const created = (await tool.execute(ctx, {
         operation: 'create_sql',
         connectionId: 'conn-1',
-        externalSessionId: 'session-1',
+        workId: work.workId,
         sql: 'select 2',
         tabName: 'Created',
     })) as any;
@@ -286,7 +401,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     const appended = (await tool.execute(ctx, {
         operation: 'append_sql',
         connectionId: 'conn-1',
-        externalSessionId: 'session-1',
+        workId: work.workId,
         tabId: 'tab-1',
         sql: 'select 3',
         appendSeparator: '\n-- next\n',
@@ -302,7 +417,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     await tool.execute(ctx, {
         operation: 'replace_sql',
         connectionId: 'conn-1',
-        externalSessionId: 'session-1',
+        workId: work.workId,
         tabId: 'tab-1',
         sql: 'select 4',
         tabName: 'Replaced',
@@ -313,7 +428,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     const tableTab = (await tool.execute(ctx, {
         operation: 'open_table',
         connectionId: 'conn-1',
-        externalSessionId: 'session-1',
+        workId: work.workId,
         databaseName: 'analytics',
         tableName: 'orders',
     })) as any;
@@ -323,14 +438,53 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     await tool.execute(ctx, {
         operation: 'delete',
         connectionId: 'conn-1',
-        externalSessionId: 'session-1',
+        workId: work.workId,
         tabId: 'tab-1',
     });
     assert.deepEqual(deleted, ['tab-1']);
 });
 
+test('dory_workspace_tabs reports tab work mismatches clearly', async () => {
+    const savedTabs = new Map<string, any>();
+    savedTabs.set('tab-other', {
+        tabId: 'tab-other',
+        userId: 'user-1',
+        connectionId: 'conn-1',
+        workId: 'work-other',
+        tabType: 'sql',
+        tabName: 'Other work',
+        content: 'select 1',
+    });
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+            tabState: {
+                loadAllTab: async (_userId: string, _connectionId: string, workId?: string | null) =>
+                    [...savedTabs.values()].filter(tab => (tab.workId ?? null) === (workId ?? null)),
+                loadTabStateById: async (tabId: string) => savedTabs.get(tabId) ?? null,
+                saveTabState: async () => {},
+            },
+        },
+    } as unknown as WebActionServices);
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Current work' })) as any;
+
+    await assertRejectsCode(
+        () =>
+            getTool('dory_workspace_tabs').execute(ctx, {
+                operation: 'append_sql',
+                connectionId: 'conn-1',
+                workId: work.workId,
+                tabId: 'tab-other',
+                sql: 'select 2',
+            }),
+        'SQL_TAB_WORK_MISMATCH',
+    );
+});
+
 test('dory_saved_queries dispatches v1 operations and preserves write scope checks', async () => {
     const calls: Array<{ method: string; payload: any }> = [];
+    const works = createWorksMock();
     const services = {
         db: {
             savedQueries: {
@@ -354,17 +508,18 @@ test('dory_saved_queries dispatches v1 operations and preserves write scope chec
                     calls.push({ method: 'delete', payload });
                 },
             },
-            works: createWorksMock(),
+            works,
         },
     } as unknown as WebActionServices;
     const ctx = createContext(services);
     const tool = getTool('dory_saved_queries');
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', externalSessionId: 'session-1', title: 'Saved queries' })) as any;
 
-    assert.equal(((await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1', externalSessionId: 'session-1' })) as any).savedQueries.length, 1);
-    assert.equal(((await tool.execute(ctx, { operation: 'get', connectionId: 'conn-1', externalSessionId: 'session-1', id: 'query-1' })) as any).savedQuery.id, 'query-1');
-    await tool.execute(ctx, { operation: 'create', connectionId: 'conn-1', externalSessionId: 'session-1', title: 'New', sqlText: 'select 2' });
-    await tool.execute(ctx, { operation: 'update', connectionId: 'conn-1', externalSessionId: 'session-1', id: 'query-1', title: 'Updated' });
-    const deleted = (await tool.execute(ctx, { operation: 'delete', connectionId: 'conn-1', externalSessionId: 'session-1', id: 'query-1' })) as any;
+    assert.equal(((await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1', workId: work.workId })) as any).savedQueries.length, 1);
+    assert.equal(((await tool.execute(ctx, { operation: 'get', connectionId: 'conn-1', workId: work.workId, id: 'query-1' })) as any).savedQuery.id, 'query-1');
+    await tool.execute(ctx, { operation: 'create', connectionId: 'conn-1', workId: work.workId, title: 'New', sqlText: 'select 2' });
+    await tool.execute(ctx, { operation: 'update', connectionId: 'conn-1', workId: work.workId, id: 'query-1', title: 'Updated' });
+    const deleted = (await tool.execute(ctx, { operation: 'delete', connectionId: 'conn-1', workId: work.workId, id: 'query-1' })) as any;
     assert.deepEqual(deleted.deleted, ['query-1']);
     assert.equal(deleted.work.workId, 'work-1');
     assert.deepEqual(
@@ -380,6 +535,7 @@ test('dory_saved_queries dispatches v1 operations and preserves write scope chec
             tool.execute(readOnlyCtx, {
                 operation: 'create',
                 connectionId: 'conn-1',
+                workId: work.workId,
                 title: 'Denied',
                 sqlText: 'select 1',
             }),

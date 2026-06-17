@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
+import { buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -22,6 +23,11 @@ function statusVariant(status: string | null | undefined): 'default' | 'secondar
     return 'default';
 }
 
+function formatSummary(value: Record<string, unknown> | null | undefined) {
+    if (!value || !Object.keys(value).length) return '';
+    return JSON.stringify(value, null, 2);
+}
+
 export default async function AgentRunDetailPage({ params }: { params: Promise<{ organization: string; workId: string }> }) {
     const { organization, workId } = await params;
     const bootstrap = await getAppBootstrapState({ organizationSlugOrId: organization });
@@ -36,15 +42,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
     const [snapshot, events] = await Promise.all([db.works.getSnapshot({ organizationId, userId, workId }), db.works.listEvents({ organizationId, userId, workId })]);
     if (!snapshot) notFound();
 
-    const firstSession = snapshot.sessions[0]?.session;
-    const firstTabId = firstSession?.tabId || snapshot.tabs[0]?.tabId || null;
-    const workspaceHref = snapshot.work.connectionId
-        ? `/${organization}/${snapshot.work.connectionId}/sql-console?${new URLSearchParams({
-              workId: snapshot.work.workId,
-              ...(firstTabId ? { tabId: firstTabId } : {}),
-              ...(firstSession?.sessionId ? { sessionId: firstSession.sessionId } : {}),
-          }).toString()}`
-        : `/${organization}/agent-runs/${snapshot.work.workId}`;
+    const workspaceHref = buildAgentWorkspacePathFromSnapshot(organization, snapshot);
 
     return (
         <div className="h-full overflow-auto bg-background">
@@ -106,25 +104,47 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                                 <TableHead>Tool</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Duration</TableHead>
+                                <TableHead>Input</TableHead>
+                                <TableHead>Output</TableHead>
                                 <TableHead>Error</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {events.length ? (
-                                events.map(event => (
-                                    <TableRow key={event.eventId}>
-                                        <TableCell>{formatDate(event.createdAt)}</TableCell>
-                                        <TableCell className="font-mono text-xs">{event.toolName}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={event.status === 'error' ? 'destructive' : 'secondary'}>{event.status}</Badge>
-                                        </TableCell>
-                                        <TableCell>{event.durationMs} ms</TableCell>
-                                        <TableCell className="max-w-[360px] truncate text-muted-foreground">{event.errorMessage ?? ''}</TableCell>
-                                    </TableRow>
-                                ))
+                                events.map(event => {
+                                    const inputSummary = formatSummary(event.inputSummary);
+                                    const outputSummary = formatSummary(event.outputSummary);
+                                    const errorSummary = [event.errorCode, event.errorMessage].filter(Boolean).join(': ');
+
+                                    return (
+                                        <TableRow key={event.eventId} className="align-top">
+                                            <TableCell className="whitespace-nowrap">{formatDate(event.createdAt)}</TableCell>
+                                            <TableCell className="font-mono text-xs">{event.toolName}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={event.status === 'error' ? 'destructive' : 'secondary'}>{event.status}</Badge>
+                                            </TableCell>
+                                            <TableCell className="whitespace-nowrap">{event.durationMs} ms</TableCell>
+                                            <TableCell className="max-w-[240px]">
+                                                {inputSummary ? (
+                                                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                                                        {inputSummary}
+                                                    </pre>
+                                                ) : null}
+                                            </TableCell>
+                                            <TableCell className="max-w-[220px]">
+                                                {outputSummary ? (
+                                                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
+                                                        {outputSummary}
+                                                    </pre>
+                                                ) : null}
+                                            </TableCell>
+                                            <TableCell className="max-w-[260px] whitespace-pre-wrap break-words text-sm text-muted-foreground">{errorSummary}</TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                                         No activity recorded.
                                     </TableCell>
                                 </TableRow>

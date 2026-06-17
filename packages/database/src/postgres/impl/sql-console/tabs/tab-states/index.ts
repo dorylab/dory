@@ -1,6 +1,6 @@
 import { tabs } from '@dory/database/postgres/schemas';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
 import { TabPayload, TabResultMetaPayload, TableTabPayload } from '@dory/shared/types/tabs';
 import { getClient } from '@dory/database/postgres/client';
@@ -48,17 +48,22 @@ export class PostgresTabStateRepository {
         const isTable = state.tabType === 'table';
         const now = new Date();
         const hasOrderIndex = typeof state.orderIndex === 'number' && Number.isFinite(state.orderIndex);
-        const orderIndex = hasOrderIndex ? state.orderIndex! : await this.getNextOrderIndex(userId, connectionId);
+        const scopedWorkId = workId ?? null;
+        const orderIndex = hasOrderIndex ? state.orderIndex! : await this.getNextOrderIndex(userId, connectionId, scopedWorkId);
         const createdAt = state.createdAt ? new Date(state.createdAt) : undefined;
         const activeSubTab = isTable ? (state.activeSubTab ?? 'data') : 'data';
         const serializedResultMeta = serializeResultMeta(resultMeta);
+        const existing = await this.loadTabStateById(tabId, userId, connectionId);
+        if (existing && (existing.workId ?? null) !== scopedWorkId) {
+            throw new DatabaseError('Tab belongs to a different workspace.', 409);
+        }
         const updateSet: Record<string, any> = {
             content: isTable ? '' : (state.content ?? ''),
             databaseName: isTable ? state.databaseName : null,
             tableName: isTable ? state.tableName : null,
             resultMeta: serializedResultMeta,
             connectionId,
-            workId: workId ?? null,
+            workId: scopedWorkId,
             updatedAt: now,
             activeSubTab,
             ...(hasOrderIndex ? { orderIndex: state.orderIndex! } : {}),
@@ -74,7 +79,7 @@ export class PostgresTabStateRepository {
                 tabId,
                 userId,
                 connectionId,
-                workId: workId ?? null,
+                workId: scopedWorkId,
                 tabType: state.tabType, // sql | table
                 tabName: state.tabName,
                 content: isTable ? '' : (state.content ?? ''), // SQL text or empty string
@@ -96,32 +101,41 @@ export class PostgresTabStateRepository {
             });
     }
 
-    async updateTabName({ tabId, userId, connectionId, newName }: { tabId: string; userId: string; connectionId: string; newName: string }) {
+    async updateTabName({ tabId, userId, connectionId, workId, newName }: { tabId: string; userId: string; connectionId: string; workId?: string | null; newName: string }) {
         await this.db
             .update(tabs)
             .set({ tabName: newName })
-            .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
+            .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), scopedWorkCondition(workId)));
     }
 
-    async loadTabState(tabId: string, userId: string, connectionId: string) {
+    async loadTabState(tabId: string, userId: string, connectionId: string, workId?: string | null) {
         const result = await this.db
             .select()
             .from(tabs)
-            .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
+            .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), scopedWorkCondition(workId)));
         return normalizeTabRow(result[0] ?? null);
     }
 
-    async loadAllTab(userId: string, connectionId: string) {
+    async loadTabStateById(tabId: string, userId: string, connectionId: string) {
         const result = await this.db
             .select()
             .from(tabs)
-            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)))
+            .where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)))
+            .limit(1);
+        return normalizeTabRow(result[0] ?? null);
+    }
+
+    async loadAllTab(userId: string, connectionId: string, workId?: string | null) {
+        const result = await this.db
+            .select()
+            .from(tabs)
+            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), scopedWorkCondition(workId)))
             .orderBy(tabs.orderIndex, tabs.createdAt, tabs.tabId);
         return (result ?? []).map(row => normalizeTabRow(row));
     }
 
-    async deleteTabState(tabId: string, userId: string, connectionId: string): Promise<void> {
-        await this.db.delete(tabs).where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
+    async deleteTabState(tabId: string, userId: string, connectionId: string, workId?: string | null): Promise<void> {
+        await this.db.delete(tabs).where(and(eq(tabs.tabId, tabId), eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), scopedWorkCondition(workId)));
     }
 
     async clearSession(userId: string, connectionId?: string): Promise<void> {
@@ -132,17 +146,21 @@ export class PostgresTabStateRepository {
         await this.db.delete(tabs).where(eq(tabs.userId, userId));
     }
 
-    private async getNextOrderIndex(userId: string, connectionId: string) {
+    private async getNextOrderIndex(userId: string, connectionId: string, workId?: string | null) {
         const [row] = await this.db
             .select({
                 maxOrder: sql<number>`coalesce(max(${tabs.orderIndex}), -1)`,
             })
             .from(tabs)
-            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId)));
+            .where(and(eq(tabs.userId, userId), eq(tabs.connectionId, connectionId), scopedWorkCondition(workId)));
 
         const maxOrder = row?.maxOrder ?? -1;
         return maxOrder + 1;
     }
+}
+
+function scopedWorkCondition(workId?: string | null) {
+    return workId ? eq(tabs.workId, workId) : isNull(tabs.workId);
 }
 
 function serializeResultMeta(value: TabResultMetaPayload | null | undefined): string | null {

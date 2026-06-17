@@ -18,14 +18,12 @@ export interface ConnectionRepository {
 export interface TabStateRepository<State = unknown, ResultMeta = unknown> {
     init(): Promise<void>;
     saveTabState(tab: TabPayload): Promise<void>;
-    loadTabState(tabId: string, userId: string, connectionId: string): Promise<TabPayload | null>;
-    loadAllTab(userId: string, connectionId: string): Promise<TabPayload[]>;
-    deleteTabState(tabId: string, userId: string, connectionId: string): Promise<void>;
+    loadTabState(tabId: string, userId: string, connectionId: string, workId?: string | null): Promise<TabPayload | null>;
+    loadTabStateById(tabId: string, userId: string, connectionId: string): Promise<TabPayload | null>;
+    loadAllTab(userId: string, connectionId: string, workId?: string | null): Promise<TabPayload[]>;
+    deleteTabState(tabId: string, userId: string, connectionId: string, workId?: string | null): Promise<void>;
     clearSession(userId: string, connectionId?: string): Promise<void>;
 }
-
-
-
 
 export type PostgresDBClient = NodePgDatabase<any> & { $client: Pool };
 

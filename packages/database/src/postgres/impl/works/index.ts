@@ -9,6 +9,7 @@ import { newEntityId } from '@dory/shared/id';
 import type { PostgresDBClient } from '@dory/shared';
 
 const ROWS_PER_PAGE = 1000;
+const DEFAULT_WORK_TITLE = 'Agent Run';
 
 export type WorkRecord = typeof works.$inferSelect;
 export type WorkEventRecord = typeof workEvents.$inferSelect;
@@ -94,7 +95,23 @@ function getNumber(value: unknown): number | null {
 
 function compactToolInput(input: Record<string, unknown>) {
     const out: Record<string, unknown> = {};
-    for (const key of ['operation', 'connectionId', 'database', 'table', 'query', 'limit', 'workspaceMode', 'targetTabId', 'tabName', 'workId', 'externalSessionId']) {
+    for (const key of [
+        'operation',
+        'connectionId',
+        'database',
+        'table',
+        'query',
+        'limit',
+        'workspaceMode',
+        'targetTabId',
+        'tabName',
+        'workId',
+        'externalSessionId',
+        'title',
+        'userQuestion',
+        'question',
+        'prompt',
+    ]) {
         if (typeof input[key] !== 'undefined') out[key] = input[key];
     }
     if (typeof input.sql === 'string') {
@@ -124,6 +141,11 @@ export class PostgresWorksRepository {
 
     async create(input: ResolveWorkInput): Promise<WorkRecord> {
         this.assertInited();
+        if (input.externalSessionId?.trim()) {
+            const existing = await this.resolveExisting(input);
+            if (existing) return existing;
+        }
+
         const now = new Date();
         const [row] = await this.db
             .insert(works)
@@ -134,7 +156,7 @@ export class PostgresWorksRepository {
                 tokenId: input.tokenId ?? null,
                 connectionId: input.connectionId ?? null,
                 externalSessionId: input.externalSessionId ?? null,
-                title: input.title?.trim() || 'Agent Run',
+                title: input.title?.trim() || DEFAULT_WORK_TITLE,
                 status: 'active',
                 metadata: input.metadata ?? null,
                 createdAt: now,
@@ -149,6 +171,13 @@ export class PostgresWorksRepository {
     }
 
     async resolve(input: ResolveWorkInput): Promise<WorkRecord> {
+        const existing = await this.resolveExisting(input);
+        if (existing) return existing;
+
+        return this.create(input);
+    }
+
+    async resolveExisting(input: ResolveWorkInput): Promise<WorkRecord | null> {
         this.assertInited();
         const now = new Date();
         const requestedWorkId = input.workId?.trim();
@@ -159,9 +188,8 @@ export class PostgresWorksRepository {
                 userId: input.userId,
                 workId: requestedWorkId,
             });
-            if (!row) throw new DatabaseError('Work not found.', 404);
-            await this.touch(row.workId, now);
-            return { ...row, lastActiveAt: now, updatedAt: now } as WorkRecord;
+            if (!row) return null;
+            return this.prepareExistingWork(row, input, now);
         }
 
         const externalSessionId = input.externalSessionId?.trim();
@@ -171,7 +199,6 @@ export class PostgresWorksRepository {
                 eq(works.userId, input.userId),
                 eq(works.externalSessionId, externalSessionId),
                 input.tokenId ? eq(works.tokenId, input.tokenId) : isNull(works.tokenId),
-                input.connectionId ? eq(works.connectionId, input.connectionId) : isNull(works.connectionId),
                 isNull(works.archivedAt),
             ];
             const [existing] = await this.db
@@ -182,17 +209,53 @@ export class PostgresWorksRepository {
                 .limit(1);
 
             if (existing) {
-                await this.touch(existing.workId, now);
-                return { ...(existing as WorkRecord), lastActiveAt: now, updatedAt: now };
+                return this.prepareExistingWork(existing as WorkRecord, input, now);
             }
         }
 
-        return this.create(input);
+        return null;
     }
 
     async touch(workId: string, now = new Date()) {
         this.assertInited();
         await this.db.update(works).set({ updatedAt: now, lastActiveAt: now }).where(eq(works.workId, workId));
+    }
+
+    private async prepareExistingWork(row: WorkRecord, input: ResolveWorkInput, now: Date): Promise<WorkRecord> {
+        const requestedConnectionId = input.connectionId?.trim() || null;
+        if (requestedConnectionId && row.connectionId && row.connectionId !== requestedConnectionId) {
+            throw Object.assign(new Error(`Work ${row.workId} is already bound to connection ${row.connectionId}; received ${requestedConnectionId}.`), {
+                code: 'WORK_CONNECTION_MISMATCH',
+                status: 409,
+                details: {
+                    workId: row.workId,
+                    expectedConnectionId: row.connectionId,
+                    receivedConnectionId: requestedConnectionId,
+                },
+            });
+        }
+
+        const requestedTitle = input.title?.trim() || null;
+        const patch: {
+            connectionId?: string | null;
+            title?: string;
+            updatedAt: Date;
+            lastActiveAt: Date;
+        } = {
+            updatedAt: now,
+            lastActiveAt: now,
+        };
+
+        if (requestedConnectionId && !row.connectionId) {
+            patch.connectionId = requestedConnectionId;
+        }
+
+        if (requestedTitle && row.title === DEFAULT_WORK_TITLE) {
+            patch.title = requestedTitle;
+        }
+
+        await this.db.update(works).set(patch).where(eq(works.workId, row.workId));
+        return { ...row, ...patch } as WorkRecord;
     }
 
     async getById(params: { organizationId: string; userId: string; workId: string }): Promise<WorkRecord | null> {
