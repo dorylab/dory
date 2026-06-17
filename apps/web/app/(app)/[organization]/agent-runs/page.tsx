@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Bot, ExternalLink, ListChecks } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
+import { getAgentRunStatusLabel, getAgentRunStatusVariant } from '@/lib/agent-runs/summary';
 import { buildAgentRunDetailPath, buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -13,13 +14,6 @@ function formatDate(value: Date | string | null | undefined) {
     if (!value) return 'Never';
     const date = value instanceof Date ? value : new Date(value);
     return date.toLocaleString();
-}
-
-function statusVariant(status: string | null | undefined): 'default' | 'secondary' | 'destructive' | 'outline' {
-    if (status === 'error') return 'destructive';
-    if (status === 'completed') return 'secondary';
-    if (status === 'archived') return 'outline';
-    return 'default';
 }
 
 export default async function AgentRunsPage({ params }: { params: Promise<{ organization: string }> }) {
@@ -93,7 +87,7 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
                                             </TableCell>
                                             <TableCell>{work.connectionId ? (connectionNames.get(work.connectionId) ?? work.connectionId) : 'None'}</TableCell>
                                             <TableCell>
-                                                <Badge variant={statusVariant(work.status)}>{work.status}</Badge>
+                                                <Badge variant={getAgentRunStatusVariant(work.status)}>{getAgentRunStatusLabel(work.status)}</Badge>
                                             </TableCell>
                                             <TableCell className="max-w-[220px] truncate font-mono text-xs">{work.externalSessionId ?? 'None'}</TableCell>
                                             <TableCell>{formatDate(work.lastActiveAt)}</TableCell>

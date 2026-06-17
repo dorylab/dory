@@ -1,14 +1,14 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Database, ExternalLink, PanelTop, TerminalSquare } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
+import { AgentRunActivityTimeline } from '@/components/agent-runs/agent-run-activity-timeline';
+import { buildAgentRunTimeline, getAgentRunStats, getAgentRunStatusLabel, getAgentRunStatusVariant, getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 
 function formatDate(value: Date | string | null | undefined) {
     if (!value) return 'Never';
@@ -16,16 +16,18 @@ function formatDate(value: Date | string | null | undefined) {
     return date.toLocaleString();
 }
 
-function statusVariant(status: string | null | undefined): 'default' | 'secondary' | 'destructive' | 'outline' {
-    if (status === 'error') return 'destructive';
-    if (status === 'completed') return 'secondary';
-    if (status === 'archived') return 'outline';
-    return 'default';
-}
-
-function formatSummary(value: Record<string, unknown> | null | undefined) {
-    if (!value || !Object.keys(value).length) return '';
-    return JSON.stringify(value, null, 2);
+function Metric({ icon: Icon, label, value }: { icon: typeof Database; label: string; value: string | number }) {
+    return (
+        <div className="flex min-w-0 items-start gap-3 rounded-md border bg-card px-4 py-3">
+            <div className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
+                <Icon className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+                <div className="mt-1 truncate text-sm font-semibold">{value}</div>
+            </div>
+        </div>
+    );
 }
 
 export default async function AgentRunDetailPage({ params }: { params: Promise<{ organization: string; workId: string }> }) {
@@ -39,118 +41,87 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
     }
 
     const db = await getDBService();
-    const [snapshot, events] = await Promise.all([db.works.getSnapshot({ organizationId, userId, workId }), db.works.listEvents({ organizationId, userId, workId })]);
+    const [snapshot, events, connections] = await Promise.all([
+        db.works.getSnapshot({ organizationId, userId, workId }),
+        db.works.listEvents({ organizationId, userId, workId }),
+        db.connections.list(organizationId),
+    ]);
     if (!snapshot) notFound();
 
     const workspaceHref = buildAgentWorkspacePathFromSnapshot(organization, snapshot);
+    const connectionNames = new Map(connections.map(item => [item.connection.id, item.connection.name ?? item.connection.id]));
+    const connectionName = snapshot.work.connectionId ? (connectionNames.get(snapshot.work.connectionId) ?? snapshot.work.connectionId) : null;
+    const stats = getAgentRunStats(snapshot, connectionName);
+    const summary = getAgentRunSummary(snapshot.work.metadata);
+    const timeline = buildAgentRunTimeline(snapshot, events);
 
     return (
         <div className="h-full overflow-auto bg-background">
-            <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-8">
-                <header className="flex items-center justify-between gap-4">
-                    <div>
+            <main className="mx-auto flex w-full max-w-6xl flex-col gap-7 px-8 py-8">
+                <header className="flex flex-col gap-5">
+                    <div className="flex items-center justify-between gap-4">
                         <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">
                             <Link href={`/${organization}/agent-runs`}>
                                 <ArrowLeft className="h-4 w-4" />
                                 Agent Runs
                             </Link>
                         </Button>
-                        <h1 className="text-2xl font-semibold tracking-normal">{snapshot.work.title || 'Agent Run'}</h1>
-                        <div className="mt-2 font-mono text-xs text-muted-foreground">{snapshot.work.workId}</div>
+                        <Button asChild>
+                            <Link href={workspaceHref}>
+                                <ExternalLink className="h-4 w-4" />
+                                Open Workspace
+                            </Link>
+                        </Button>
                     </div>
-                    <Button asChild>
-                        <Link href={workspaceHref}>
-                            <ExternalLink className="h-4 w-4" />
-                            Open Workspace
-                        </Link>
-                    </Button>
+
+                    <div className="rounded-lg border bg-card p-6">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">Agent Run</div>
+                                <h1 className="max-w-3xl text-2xl font-semibold tracking-normal">{summary?.summaryTitle || snapshot.work.title || 'Agent Run'}</h1>
+                                <div className="mt-2 font-mono text-xs text-muted-foreground">{snapshot.work.workId}</div>
+                            </div>
+                            <Badge variant={getAgentRunStatusVariant(snapshot.work.status)}>{getAgentRunStatusLabel(snapshot.work.status)}</Badge>
+                        </div>
+
+                        <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                            <Metric icon={Database} label="Data source" value={stats.dataSource} />
+                            <Metric icon={PanelTop} label="Tabs created" value={stats.tabCount} />
+                            <Metric icon={TerminalSquare} label="SQL runs" value={stats.sqlExecutionCount} />
+                            <Metric icon={CheckCircle2} label="Last active" value={formatDate(stats.lastActiveAt)} />
+                        </div>
+                    </div>
                 </header>
 
-                <div className="grid gap-4 md:grid-cols-4">
-                    <Card className="rounded-lg">
-                        <CardHeader>
-                            <CardTitle className="text-sm">Status</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Badge variant={statusVariant(snapshot.work.status)}>{snapshot.work.status}</Badge>
-                        </CardContent>
-                    </Card>
-                    <Card className="rounded-lg">
-                        <CardHeader>
-                            <CardTitle className="text-sm">Tabs</CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-2xl font-semibold">{snapshot.tabs.length}</CardContent>
-                    </Card>
-                    <Card className="rounded-lg">
-                        <CardHeader>
-                            <CardTitle className="text-sm">SQL Sessions</CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-2xl font-semibold">{snapshot.sessions.length}</CardContent>
-                    </Card>
-                    <Card className="rounded-lg">
-                        <CardHeader>
-                            <CardTitle className="text-sm">Last Active</CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-sm">{formatDate(snapshot.work.lastActiveAt)}</CardContent>
-                    </Card>
-                </div>
+                <section className="grid gap-3">
+                    <div>
+                        <h2 className="text-base font-semibold">What the agent did</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">A product summary written by the agent for this run.</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-5">
+                        {summary ? (
+                            <ul className="grid gap-3">
+                                {summary.summaryBullets.map(item => (
+                                    <li key={item} className="flex gap-3 text-sm">
+                                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                        <span>{item}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                                No agent-written summary yet. Activity is still available below for this run.
+                            </div>
+                        )}
+                    </div>
+                </section>
 
-                <section className="rounded-lg border bg-card">
-                    <div className="border-b px-4 py-3 text-sm font-medium">Activity</div>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Time</TableHead>
-                                <TableHead>Tool</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Duration</TableHead>
-                                <TableHead>Input</TableHead>
-                                <TableHead>Output</TableHead>
-                                <TableHead>Error</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {events.length ? (
-                                events.map(event => {
-                                    const inputSummary = formatSummary(event.inputSummary);
-                                    const outputSummary = formatSummary(event.outputSummary);
-                                    const errorSummary = [event.errorCode, event.errorMessage].filter(Boolean).join(': ');
-
-                                    return (
-                                        <TableRow key={event.eventId} className="align-top">
-                                            <TableCell className="whitespace-nowrap">{formatDate(event.createdAt)}</TableCell>
-                                            <TableCell className="font-mono text-xs">{event.toolName}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={event.status === 'error' ? 'destructive' : 'secondary'}>{event.status}</Badge>
-                                            </TableCell>
-                                            <TableCell className="whitespace-nowrap">{event.durationMs} ms</TableCell>
-                                            <TableCell className="max-w-[240px]">
-                                                {inputSummary ? (
-                                                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
-                                                        {inputSummary}
-                                                    </pre>
-                                                ) : null}
-                                            </TableCell>
-                                            <TableCell className="max-w-[220px]">
-                                                {outputSummary ? (
-                                                    <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words font-mono text-xs text-muted-foreground">
-                                                        {outputSummary}
-                                                    </pre>
-                                                ) : null}
-                                            </TableCell>
-                                            <TableCell className="max-w-[260px] whitespace-pre-wrap break-words text-sm text-muted-foreground">{errorSummary}</TableCell>
-                                        </TableRow>
-                                    );
-                                })
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                                        No activity recorded.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                <section className="grid gap-3">
+                    <div>
+                        <h2 className="text-base font-semibold">Activity</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">Readable timeline first. Raw tool details are available inside each item.</p>
+                    </div>
+                    <AgentRunActivityTimeline items={timeline} />
                 </section>
             </main>
         </div>

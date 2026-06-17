@@ -84,6 +84,11 @@ function createWorksMock() {
                 work.externalSessionId === input.externalSessionId &&
                 !work.archivedAt,
         );
+    const findByWorkId = (input: any) => {
+        const work = works.get(input.workId);
+        if (!work) return null;
+        return work.organizationId === input.organizationId && work.userId === input.userId ? work : null;
+    };
 
     return {
         events,
@@ -96,17 +101,38 @@ function createWorksMock() {
             return materialize(input);
         },
         resolve: async (input: any) => {
-            const existing = input.workId ? (works.get(input.workId) ?? null) : input.externalSessionId ? (findByExternalSessionId(input) ?? null) : null;
+            const existing = input.workId ? (findByWorkId(input) ?? null) : input.externalSessionId ? (findByExternalSessionId(input) ?? null) : null;
             if (existing) return prepareExisting(existing, input);
             return materialize(input);
         },
         resolveExisting: async (input: any) => {
-            const existing = input.workId ? (works.get(input.workId) ?? null) : input.externalSessionId ? (findByExternalSessionId(input) ?? null) : null;
+            const existing = input.workId ? (findByWorkId(input) ?? null) : input.externalSessionId ? (findByExternalSessionId(input) ?? null) : null;
             return existing ? prepareExisting(existing, input) : null;
         },
         recordEvent: async (event: any) => {
             events.push(event);
             return { ...event, id: events.length, createdAt: now };
+        },
+        finishWithSummary: async (input: any) => {
+            const work = works.get(input.workId);
+            if (!work || work.organizationId !== input.organizationId || work.userId !== input.userId) {
+                throw Object.assign(new Error(`Work not found: ${input.workId}.`), {
+                    code: 'WORK_NOT_FOUND',
+                    status: 404,
+                });
+            }
+            work.status = input.status;
+            work.metadata = {
+                ...(work.metadata ?? {}),
+                agentRunSummary: {
+                    summaryTitle: input.summaryTitle ?? null,
+                    summaryBullets: input.summaryBullets,
+                    updatedAt: now.toISOString(),
+                },
+            };
+            work.updatedAt = now;
+            work.lastActiveAt = now;
+            return work;
         },
         summarizeInput: (input: unknown) => input,
         saveSqlSnapshot: async () => {},
@@ -158,7 +184,7 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
         getPublicDoryMcpTools()
             .map((tool: any) => tool.name)
             .sort(),
-        ['dory_create_work', 'dory_explore_schema', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs'],
+        ['dory_create_work', 'dory_explore_schema', 'dory_finish_work', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs'],
     );
 });
 
@@ -223,6 +249,58 @@ test('dory_create_work can fill a default title when reusing an external session
     assert.equal(second.workId, 'work-1');
     assert.equal(second.title, 'Show order volume by day');
     assert.equal(works.works.get(second.workId)?.title, 'Show order volume by day');
+});
+
+test('dory_finish_work persists agent summary metadata and status', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Analyze HN hot posts' })) as any;
+    const output = (await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        summaryTitle: 'HN hot posts analysis',
+        summaryBullets: ['Queried story score distribution', 'Created editable SQL tabs'],
+    })) as any;
+
+    assert.equal(output.status, 'completed');
+    assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1/workspace/conn-1');
+    assert.deepEqual(works.works.get(work.workId)?.metadata?.agentRunSummary, {
+        summaryTitle: 'HN hot posts analysis',
+        summaryBullets: ['Queried story score distribution', 'Created editable SQL tabs'],
+        updatedAt: '2026-06-01T00:00:00.000Z',
+    });
+    assert.equal(works.works.get(work.workId)?.status, 'completed');
+    assert.equal(works.events.at(-1)?.toolName, 'dory_finish_work');
+    assert.equal(works.events.at(-1)?.status, 'success');
+});
+
+test('dory_finish_work rejects work owned by another user', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+    const work = (await getTool('dory_create_work').execute(ctx, { title: 'Owned run' })) as any;
+    const otherCtx = {
+        ...ctx,
+        userId: 'user-2',
+    } as ActionContext<WebActionServices>;
+
+    await assertRejectsCode(
+        () =>
+            getTool('dory_finish_work').execute(otherCtx, {
+                workId: work.workId,
+                status: 'completed',
+                summaryBullets: ['Should not write'],
+            }),
+        'WORK_NOT_FOUND',
+    );
 });
 
 test('ordinary MCP facade tools require an existing work context', async () => {

@@ -35,6 +35,7 @@ import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
+import { AgentRunContextDrawer } from './agent-run-context-drawer';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -456,6 +457,7 @@ export default function AgentWorkspaceClient({
                                     reorderTabs={reorderTabs}
                                     onRequestAITitle={manualRenameTab}
                                     onHeightChange={setTabHeaderHeight}
+                                    headerAccessory={<AgentRunContextDrawer workId={workId} connectionName={currentConnection?.connection?.name ?? connectionId} />}
                                 />
                                 <div className="flex-1 min-h-0">
                                     {tabs.map(tab => {

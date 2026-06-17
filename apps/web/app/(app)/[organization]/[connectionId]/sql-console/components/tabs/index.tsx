@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/registry/new-york-v4/ui/context-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
@@ -22,9 +22,22 @@ interface SQLTabsProps {
     reorderTabs: (sourceId: string, targetId: string, options?: { persist?: boolean }) => void;
     onRequestAITitle: (tab: SQLTab) => Promise<void> | void;
     onHeightChange?: (height: number) => void;
+    headerAccessory?: ReactNode;
 }
 
-export function SQLTabs({ tabs, activeTabId, setActiveTabId, addTab, closeTab, closeOtherTabs, updateTab, reorderTabs, onRequestAITitle, onHeightChange }: SQLTabsProps) {
+export function SQLTabs({
+    tabs,
+    activeTabId,
+    setActiveTabId,
+    addTab,
+    closeTab,
+    closeOtherTabs,
+    updateTab,
+    reorderTabs,
+    onRequestAITitle,
+    onHeightChange,
+    headerAccessory,
+}: SQLTabsProps) {
     const headerRef = useRef<HTMLDivElement | null>(null);
     const t = useTranslations('SqlConsole');
 
@@ -293,6 +306,8 @@ export function SQLTabs({ tabs, activeTabId, setActiveTabId, addTab, closeTab, c
 
                     <ScrollBar orientation="horizontal" className="h-2" />
                 </ScrollArea>
+
+                {headerAccessory ? <div className="flex h-9 flex-none items-center border-l border-border bg-card px-2">{headerAccessory}</div> : null}
 
                 <div className="flex-none w-10 h-9 self-start grid place-items-center border-l border-border bg-card px-1">
                     <TooltipProvider delayDuration={250}>

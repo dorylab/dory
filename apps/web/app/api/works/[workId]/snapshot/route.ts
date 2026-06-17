@@ -28,10 +28,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ workId: str
     }
 
     const db = await getDBService();
-    const snapshot = await db.works.getSnapshot({ organizationId, userId, workId });
+    const [snapshot, events] = await Promise.all([db.works.getSnapshot({ organizationId, userId, workId }), db.works.listEvents({ organizationId, userId, workId })]);
     if (!snapshot) {
         return NextResponse.json(ResponseUtil.error({ code: ErrorCodes.NOT_FOUND, message: 'Work not found.' }), { status: 404 });
     }
 
-    return NextResponse.json(ResponseUtil.success({ snapshot }));
+    return NextResponse.json(ResponseUtil.success({ snapshot, events }));
 }

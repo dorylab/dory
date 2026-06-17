@@ -2,7 +2,7 @@ import { gzipSync, gunzipSync } from 'node:zlib';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
-import { tabs, workChartStates, workEvents, workQueryResultPages, workQueryResultSets, workQuerySessions, works } from '@dory/database/postgres/schemas';
+import { tabs, workChartStates, workEvents, workQueryResultPages, workQueryResultSets, workQuerySessions, works, type WorkStatus } from '@dory/database/postgres/schemas';
 import { translateDatabase } from '@dory/database/i18n';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
@@ -39,6 +39,15 @@ export type WorkEventCreateInput = {
     errorCode?: string | null;
     errorMessage?: string | null;
     durationMs?: number | null;
+};
+
+export type WorkFinishInput = {
+    organizationId: string;
+    userId: string;
+    workId: string;
+    status: Extract<WorkStatus, 'active' | 'completed' | 'error'>;
+    summaryTitle?: string | null;
+    summaryBullets: string[];
 };
 
 export type WorkSqlSnapshotPayload = {
@@ -108,6 +117,8 @@ function compactToolInput(input: Record<string, unknown>) {
         'workId',
         'externalSessionId',
         'title',
+        'status',
+        'summaryTitle',
         'userQuestion',
         'question',
         'prompt',
@@ -116,6 +127,9 @@ function compactToolInput(input: Record<string, unknown>) {
     }
     if (typeof input.sql === 'string') {
         out.sqlLength = input.sql.length;
+    }
+    if (Array.isArray(input.summaryBullets)) {
+        out.summaryBulletCount = input.summaryBullets.length;
     }
     return out;
 }
@@ -310,6 +324,49 @@ export class PostgresWorksRepository {
 
         await this.touch(input.workId);
         return row as WorkEventRecord;
+    }
+
+    async finishWithSummary(input: WorkFinishInput): Promise<WorkRecord> {
+        this.assertInited();
+        const existing = await this.getById({
+            organizationId: input.organizationId,
+            userId: input.userId,
+            workId: input.workId,
+        });
+        if (!existing) {
+            throw Object.assign(new Error(`Work not found: ${input.workId}.`), {
+                code: 'WORK_NOT_FOUND',
+                status: 404,
+                details: {
+                    workId: input.workId,
+                },
+            });
+        }
+
+        const now = new Date();
+        const currentMetadata = existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata) ? existing.metadata : {};
+        const metadata = {
+            ...currentMetadata,
+            agentRunSummary: {
+                summaryTitle: input.summaryTitle?.trim() || null,
+                summaryBullets: input.summaryBullets.map(item => item.trim()).filter(Boolean),
+                updatedAt: now.toISOString(),
+            },
+        };
+
+        const [row] = await this.db
+            .update(works)
+            .set({
+                status: input.status,
+                metadata,
+                updatedAt: now,
+                lastActiveAt: now,
+            })
+            .where(and(eq(works.workId, input.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId)))
+            .returning();
+
+        if (!row) throw new DatabaseError('Failed to finish Work', 500);
+        return row as WorkRecord;
     }
 
     summarizeInput(input: unknown) {

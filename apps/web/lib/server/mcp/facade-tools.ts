@@ -102,6 +102,15 @@ const createWorkInputSchema = z
     })
     .passthrough();
 
+const finishWorkInputSchema = z
+    .object({
+        workId: z.string().min(1),
+        status: z.enum(['active', 'completed', 'error']),
+        summaryTitle: z.string().min(1).max(1000).optional(),
+        summaryBullets: z.array(z.string().min(1).max(500)).min(1).max(20),
+    })
+    .passthrough();
+
 const mcpErrorShape = {
     ok: z.literal(false).optional(),
     error: z
@@ -810,6 +819,30 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     };
 }
 
+async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
+    const input = finishWorkInputSchema.parse(rawInput);
+    const updated = await ctx.services.db.works.finishWithSummary({
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        workId: work.workId,
+        status: input.status,
+        summaryTitle: input.summaryTitle ?? null,
+        summaryBullets: input.summaryBullets,
+    });
+
+    work.connectionId = updated.connectionId ?? work.connectionId;
+    work.workspaceUrl = buildWorkspaceUrl(ctx, updated);
+
+    return withWork(
+        {
+            status: updated.status,
+            summaryTitle: input.summaryTitle ?? null,
+            summaryBullets: input.summaryBullets,
+        },
+        work,
+    );
+}
+
 export function structuredMcpFacadeResult(data: unknown) {
     const structuredContent = isRecord(data) ? data : { value: data };
 
@@ -863,6 +896,19 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 openWorldHint: true,
             },
             execute: createWorkFacade,
+        },
+        {
+            name: 'dory_finish_work',
+            title: 'Finish Dory Work',
+            description: 'Finish or update a Dory Agent Run with the user-facing summary bullets that should appear in the Agent Run summary. Requires an existing workId.',
+            inputSchema: finishWorkInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                openWorldHint: true,
+            },
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_finish_work', input, (parsed, work) => finishWorkFacade(ctx, parsed, work)),
         },
         {
             name: 'dory_list_connections',
