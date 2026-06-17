@@ -188,7 +188,7 @@
     },
     "Connections": {
         "Connections": "Data sources",
-        "All Connections": "All data sources",
+        "All Connections": "Manage data sources",
         "about": "about",
         "MoreActions": "More actions",
         "Search": {
@@ -3243,6 +3243,7 @@
     },
     "AppSidebar": {
         "DataSources": "Data Sources",
+        "NoDataSourceSelected": "No data source selected",
         "AgentRuns": "Agent Runs",
         "SQLConsole": "SQL Console",
         "Explorer": "Explorer",

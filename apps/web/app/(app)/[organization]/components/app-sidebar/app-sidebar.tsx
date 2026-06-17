@@ -1,11 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { IconFileAi, IconHelp, IconUsers } from '@tabler/icons-react';
 import { IconBrandGithub } from '@tabler/icons-react';
 import React from 'react';
 import { useTranslations } from 'next-intl';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
 import { ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
@@ -60,6 +61,25 @@ function getExplorerDefaultDatabase(connection?: ConnectionListItem['connection'
     }
 
     return null;
+}
+
+function GlobalConnectionPlaceholder({ href, label }: { href: string; label: string }) {
+    return (
+        <SidebarMenu>
+            <SidebarMenuItem>
+                <SidebarMenuButton asChild size="lg">
+                    <Link href={href} prefetch={false}>
+                        <div className="flex aspect-square size-8 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent/60 text-muted-foreground">
+                            <Database className="size-4" />
+                        </div>
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="truncate text-sm font-semibold text-muted-foreground">{label}</span>
+                        </div>
+                    </Link>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
+        </SidebarMenu>
+    );
 }
 
 export function AppSidebar({ initialUser = null, organizationId, enterpriseLicense, ...props }: AppSidebarProps) {
@@ -129,12 +149,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                         },
                     ]
                   : []),
-              {
-                  title: t('AgentRuns'),
-                  url: `/${organization}/agent-runs`,
-                  icon: Bot,
-                  requiresConnection: false,
-              },
           ]
         : [
               {
@@ -219,7 +233,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     return (
         <Sidebar {...props}>
             <SidebarHeader className="pb-2">
-                <ConnectionSwitcher />
+                {connectionId ? <ConnectionSwitcher /> : <GlobalConnectionPlaceholder href={dataSourcesUrl} label={t('NoDataSourceSelected')} />}
             </SidebarHeader>
 
             <SidebarContent>

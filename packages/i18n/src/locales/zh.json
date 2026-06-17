@@ -3247,6 +3247,7 @@
     },
     "AppSidebar": {
         "DataSources": "数据源",
+        "NoDataSourceSelected": "未选择数据源",
         "AgentRuns": "Agent Runs",
         "SQLConsole": "SQL 控制台",
         "Explorer": "资源浏览",

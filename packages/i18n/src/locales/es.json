@@ -3242,6 +3242,7 @@
     },
     "AppSidebar": {
         "DataSources": "Fuentes de datos",
+        "NoDataSourceSelected": "Sin fuente de datos seleccionada",
         "AgentRuns": "Ejecuciones de agente",
         "SQLConsole": "Consola SQL",
         "Explorer": "Explorador",
