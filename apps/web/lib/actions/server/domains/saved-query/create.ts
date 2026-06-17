@@ -23,7 +23,12 @@ export const savedQueryCreateAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['saved_queries:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_create_saved_query',
+        title: 'Create saved query',
+        description: 'Create a saved SQL query in Dory for a connection.',
+    },
     handler: (ctx, input) =>
         ctx.services.db.savedQueries.create({
             ...input,

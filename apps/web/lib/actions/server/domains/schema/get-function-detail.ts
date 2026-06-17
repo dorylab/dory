@@ -20,7 +20,12 @@ export const schemaGetFunctionDetailAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readConnection,
     scopes: ['schema:read'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_get_function_detail',
+        title: 'Get function detail',
+        description: 'Get detailed metadata for a database function in a Dory connection.',
+    },
     handler: async (ctx, input) => {
         const connectionId = resolveConnectionId(ctx, input);
         const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);

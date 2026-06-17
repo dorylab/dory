@@ -6,7 +6,10 @@ import type { McpAuthContext } from './auth';
 export { clampDoryToolLimit as clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '@/lib/ai/tools/dory-tool-utils';
 
 export function registerDoryMcpTools(server: McpServer, context: McpAuthContext) {
-    const tools = listMcpActions(webActionRegistry as any, 'mcp').map(tool =>
+    const tools = listMcpActions(webActionRegistry as any, 'mcp', {
+        scopes: context.scopes,
+        access: context.access,
+    }).map(tool =>
         actionToMcpTool(tool.action as any, async () => {
             const { createMcpActionContext } = await import('@/lib/actions/server/context');
             return createMcpActionContext(context);
@@ -21,6 +24,7 @@ export function registerDoryMcpTools(server: McpServer, context: McpAuthContext)
                 description: tool.description,
                 inputSchema: tool.inputSchema as any,
                 outputSchema: tool.outputSchema as any,
+                annotations: tool.annotations,
             },
             async (input: unknown) => tool.execute(input),
         );

@@ -13,6 +13,11 @@ export const tabListAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['tabs:read'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_list_tabs',
+        title: 'List Dory tabs',
+        description: 'List saved SQL console tabs for a Dory connection.',
+    },
     handler: (ctx, input) => ctx.services.db.tabState.loadAllTab(ctx.userId, resolveConnectionId(ctx, input)),
 });

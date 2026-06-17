@@ -52,6 +52,11 @@ export const aiSchemaExplanationsAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['analysis:run'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_generate_schema_explanations',
+        title: 'Generate schema explanations',
+        description: 'Generate concise explanations for database columns using Dory AI, with fallback summaries.',
+    },
     handler: runSchemaExplanationsAction,
 });

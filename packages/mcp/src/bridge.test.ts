@@ -73,3 +73,71 @@ test('bridge forwards tools/list schemas and tools/call without rewriting remote
         await server.close().catch(() => undefined);
     }
 });
+
+test('bridge forwards remote tool error results without rewriting them', async () => {
+    const remote = {
+        client: {
+            async listTools() {
+                return {
+                    tools: [
+                        {
+                            name: 'dory_needs_scope',
+                            description: 'Requires a missing scope',
+                            inputSchema: {
+                                type: 'object',
+                                properties: {},
+                            },
+                        },
+                    ],
+                };
+            },
+            async callTool() {
+                return {
+                    isError: true,
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: JSON.stringify({
+                                ok: false,
+                                error: {
+                                    code: 'ACTION_SCOPE_MISSING',
+                                    message: 'Missing action scope "tabs:write".',
+                                },
+                            }),
+                        },
+                    ],
+                    structuredContent: {
+                        ok: false,
+                        error: {
+                            code: 'ACTION_SCOPE_MISSING',
+                            message: 'Missing action scope "tabs:write".',
+                        },
+                    },
+                };
+            },
+        },
+        async close() {},
+    } as unknown as RemoteMcpClient;
+
+    const server = await createBridgeServer(remote);
+    const client = new Client({
+        name: 'bridge-error-test-client',
+        version: '1.0.0',
+    });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+        await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+        const result = (await client.callTool({
+            name: 'dory_needs_scope',
+            arguments: {},
+        })) as any;
+
+        assert.equal(result.isError, true);
+        assert.equal(result.structuredContent.error.code, 'ACTION_SCOPE_MISSING');
+    } finally {
+        await client.close().catch(() => undefined);
+        await server.close().catch(() => undefined);
+    }
+});

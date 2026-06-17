@@ -52,6 +52,11 @@ export const aiSchemaTagsAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['analysis:run'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_generate_schema_tags',
+        title: 'Generate schema tags',
+        description: 'Generate semantic tags for database columns using Dory AI, with heuristic fallback.',
+    },
     handler: runSchemaTagsAction,
 });

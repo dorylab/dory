@@ -1,11 +1,22 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
 import { ActionError, ActionRegistry, assertActionAllowed, buildActionManifest, defineAction, executeAction, listMcpActions } from '@dory/actions';
 import type { ActionActorType, ActionAuditRecord, ActionContext, ActionId } from '@dory/actions';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
-import { webActionRegistry } from '@/lib/actions/server/registry';
 import { z } from 'zod';
+
+const require = createRequire(import.meta.url);
+const serverOnlyPath = require.resolve('server-only');
+require.cache[serverOnlyPath] = {
+    id: serverOnlyPath,
+    filename: serverOnlyPath,
+    loaded: true,
+    exports: {},
+} as NodeJS.Module;
+
+const { webActionRegistry } = await import('@/lib/actions/server/registry');
 
 const permissions = {
     organization: { read: true, update: false, delete: false },
@@ -478,6 +489,46 @@ test('MCP action listing hides destructive actions', () => {
     );
 });
 
+test('web registry exposes one shared non-destructive core catalog to Agent and MCP', () => {
+    const scopes = ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run', 'monitoring:read'];
+    const access = roleContext('member').access;
+    const agentTools = listMcpActions(webActionRegistry as any, 'agent', { scopes, access })
+        .map(item => item.name)
+        .sort();
+    const mcpTools = listMcpActions(webActionRegistry as any, 'mcp', { scopes, access })
+        .map(item => item.name)
+        .sort();
+
+    assert.deepEqual(agentTools, mcpTools);
+    assert.ok(mcpTools.includes('dory_get_connection'));
+    assert.ok(mcpTools.includes('dory_search_query_audit'));
+    assert.ok(mcpTools.includes('dory_generate_table_summary'));
+    assert.ok(mcpTools.includes('dory_create_saved_query'));
+    assert.ok(mcpTools.includes('dory_save_tab'));
+    assert.equal(mcpTools.includes('dory_execute_sql'), false);
+    assert.equal(mcpTools.includes('dory_test_connection'), false);
+});
+
+test('MCP action listing filters tools by token scopes and organization permissions', () => {
+    const access = roleContext('member').access;
+    const readOnlySavedQueryTools = listMcpActions(webActionRegistry as any, 'mcp', {
+        scopes: ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'saved_queries:read', 'analysis:run', 'monitoring:read'],
+        access,
+    }).map(item => item.name);
+    assert.ok(readOnlySavedQueryTools.includes('dory_list_saved_queries'));
+    assert.ok(readOnlySavedQueryTools.includes('dory_list_saved_query_folders'));
+    assert.equal(readOnlySavedQueryTools.includes('dory_create_saved_query'), false);
+    assert.equal(readOnlySavedQueryTools.includes('dory_save_tab'), false);
+
+    const viewerTools = listMcpActions(webActionRegistry as any, 'mcp', {
+        scopes: ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run', 'monitoring:read'],
+        access: roleContext('viewer').access,
+    }).map(item => item.name);
+    assert.equal(viewerTools.includes('dory_create_saved_query'), false);
+    assert.equal(viewerTools.includes('dory_create_tab'), false);
+    assert.ok(viewerTools.includes('dory_list_connections'));
+});
+
 test('web registry enforces role and actor permission matrix', async () => {
     await assertAllowed('query.readOnlyExecute', roleContext('viewer'), { sql: 'select 1' });
     await assertDenied('query.execute', roleContext('viewer'), /Missing permission workspace:write/, { sql: 'select 1' });
@@ -551,6 +602,16 @@ test('web registry projects connection.list for MCP without leaking canonical co
     } as ActionContext<any>;
 
     const { data: output } = await executeAction<{ connections: Array<Record<string, unknown>> }>(webActionRegistry as any, ctx, 'connection.list', {});
+    const { data: getOutput } = await executeAction<{ connection: Record<string, unknown> }>(webActionRegistry as any, {
+        ...baseContext,
+        services: {
+            db: {
+                connections: {
+                    getById: async () => fakeConnection,
+                },
+            },
+        },
+    } as ActionContext<any>, 'connection.get', { id: 'conn-1' });
 
     assert.deepEqual(output, {
         connections: [
@@ -577,4 +638,10 @@ test('web registry projects connection.list for MCP without leaking canonical co
     });
     assert.equal('connection' in output.connections[0]!, false);
     assert.equal('ssh' in output.connections[0]!, false);
+    assert.deepEqual(getOutput, {
+        connection: output.connections[0],
+    });
+    assert.equal('connection' in getOutput.connection, false);
+    assert.equal('ssh' in getOutput.connection, false);
+    assert.equal(JSON.stringify(getOutput).includes('hidden'), false);
 });

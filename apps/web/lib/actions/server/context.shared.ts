@@ -26,7 +26,7 @@ export const TRUSTED_USER_SCOPES = [
     'action:destructive',
 ];
 
-export const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:write', 'saved_queries:read', 'analysis:run', 'monitoring:read'];
+export const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run', 'monitoring:read'];
 
 export type ActionRequestBody = {
     actionId?: string;

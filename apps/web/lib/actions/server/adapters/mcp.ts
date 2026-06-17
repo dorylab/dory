@@ -1,5 +1,5 @@
 import type { ActionContext, ActionDefinition } from '@dory/actions';
-import { DEFAULT_ACTION_PROJECTION_BY_ACTOR } from '@dory/actions';
+import { DEFAULT_ACTION_PROJECTION_BY_ACTOR, toActionError } from '@dory/actions';
 import { executeAction } from '../execute';
 import type { WebActionServices } from '../types';
 
@@ -22,6 +22,8 @@ function isZodObjectSchema(schema: unknown) {
 }
 
 export function structuredMcpActionResult(data: unknown) {
+    const structuredContent = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : { value: data };
+
     return {
         content: [
             {
@@ -29,7 +31,30 @@ export function structuredMcpActionResult(data: unknown) {
                 text: JSON.stringify(data, null, 2),
             },
         ],
-        structuredContent: data as Record<string, unknown>,
+        structuredContent,
+    };
+}
+
+function structuredMcpActionError(error: unknown) {
+    const actionError = toActionError(error);
+    const output = {
+        ok: false,
+        error: {
+            code: actionError.code,
+            message: actionError.message,
+            details: actionError.details ?? null,
+        },
+    };
+
+    return {
+        isError: true as const,
+        content: [
+            {
+                type: 'text' as const,
+                text: JSON.stringify(output, null, 2),
+            },
+        ],
+        structuredContent: output,
     };
 }
 
@@ -51,10 +76,20 @@ export function actionToMcpTool(
         description: action.exposure.mcp.description,
         inputSchema: action.inputSchema,
         outputSchema: isZodObjectSchema(outputSchema) ? outputSchema : undefined,
+        annotations: {
+            readOnlyHint: action.risk === 'read',
+            destructiveHint: action.risk === 'destructive',
+            idempotentHint: action.risk === 'read',
+            openWorldHint: true,
+        },
         execute: async (input: unknown) => {
-            const ctx = await createContext();
-            const { data } = await executeAction(ctx, action.id, input ?? {});
-            return structuredMcpActionResult(data);
+            try {
+                const ctx = await createContext();
+                const { data } = await executeAction(ctx, action.id, input ?? {});
+                return structuredMcpActionResult(data);
+            } catch (error) {
+                return structuredMcpActionError(error);
+            }
         },
     };
 }

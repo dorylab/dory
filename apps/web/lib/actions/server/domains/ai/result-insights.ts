@@ -143,6 +143,11 @@ export const aiResultInsightsAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['analysis:run'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_generate_result_insights',
+        title: 'Generate result insights',
+        description: 'Generate Dory AI insights for a query result context.',
+    },
     handler: (ctx, input) => runResultInsightsAction(ctx, input),
 });

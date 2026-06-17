@@ -26,7 +26,12 @@ export const queryAuditSearchAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['query:read'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_search_query_audit',
+        title: 'Search query audit',
+        description: 'Search Dory query audit records by time range, source, status, user, connection, database, or text.',
+    },
     handler: (ctx, input) =>
         ctx.services.db.audit.search({
             organizationId: ctx.organizationId,
