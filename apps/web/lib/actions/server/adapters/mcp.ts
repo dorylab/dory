@@ -25,6 +25,7 @@ export function structuredMcpActionResult(data: unknown) {
     const structuredContent = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : { value: data };
 
     return {
+        isError: false as const,
         content: [
             {
                 type: 'text' as const,

@@ -17,6 +17,7 @@ require.cache[serverOnlyPath] = {
 } as NodeJS.Module;
 
 const { webActionRegistry } = await import('@/lib/actions/server/registry');
+const { getPublicDoryMcpTools } = await import('@/lib/server/mcp/facade-tools');
 
 const permissions = {
     organization: { read: true, update: false, delete: false },
@@ -489,7 +490,19 @@ test('MCP action listing hides destructive actions', () => {
     );
 });
 
-test('web registry exposes one shared non-destructive core catalog to Agent and MCP', () => {
+test('MCP public catalog exposes only high-level facade tools', () => {
+    const publicTools = getPublicDoryMcpTools()
+        .map((tool: any) => tool.name)
+        .sort();
+
+    assert.deepEqual(publicTools, ['dory_explore_schema', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs']);
+    assert.equal(publicTools.includes('dory_create_tab'), false);
+    assert.equal(publicTools.includes('dory_save_tab'), false);
+    assert.equal(publicTools.includes('dory_create_saved_query'), false);
+    assert.equal(publicTools.includes('dory_generate_table_summary'), false);
+});
+
+test('web registry keeps the shared non-destructive action catalog available internally to Agent and MCP actors', () => {
     const scopes = ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run', 'monitoring:read'];
     const access = roleContext('member').access;
     const agentTools = listMcpActions(webActionRegistry as any, 'agent', { scopes, access })
@@ -509,7 +522,7 @@ test('web registry exposes one shared non-destructive core catalog to Agent and 
     assert.equal(mcpTools.includes('dory_test_connection'), false);
 });
 
-test('MCP action listing filters tools by token scopes and organization permissions', () => {
+test('internal MCP action listing still filters tools by token scopes and organization permissions', () => {
     const access = roleContext('member').access;
     const readOnlySavedQueryTools = listMcpActions(webActionRegistry as any, 'mcp', {
         scopes: ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'saved_queries:read', 'analysis:run', 'monitoring:read'],
@@ -602,16 +615,21 @@ test('web registry projects connection.list for MCP without leaking canonical co
     } as ActionContext<any>;
 
     const { data: output } = await executeAction<{ connections: Array<Record<string, unknown>> }>(webActionRegistry as any, ctx, 'connection.list', {});
-    const { data: getOutput } = await executeAction<{ connection: Record<string, unknown> }>(webActionRegistry as any, {
-        ...baseContext,
-        services: {
-            db: {
-                connections: {
-                    getById: async () => fakeConnection,
+    const { data: getOutput } = await executeAction<{ connection: Record<string, unknown> }>(
+        webActionRegistry as any,
+        {
+            ...baseContext,
+            services: {
+                db: {
+                    connections: {
+                        getById: async () => fakeConnection,
+                    },
                 },
             },
-        },
-    } as ActionContext<any>, 'connection.get', { id: 'conn-1' });
+        } as ActionContext<any>,
+        'connection.get',
+        { id: 'conn-1' },
+    );
 
     assert.deepEqual(output, {
         connections: [
