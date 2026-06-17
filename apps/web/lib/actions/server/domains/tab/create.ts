@@ -8,6 +8,7 @@ const tabTypeSchema = z.enum(['sql', 'table']);
 
 const tabCreateInputSchema = z.object({
     connectionId: z.string().min(1).optional(),
+    workId: z.string().min(1).nullable().optional(),
     tabId: z.string().min(1).optional(),
     tabType: tabTypeSchema.default('sql'),
     tabName: z.string().nullable().optional(),
@@ -28,6 +29,7 @@ const tabCreateOutputSchema = z.object({
     status: z.string().optional(),
     userId: z.string(),
     connectionId: z.string(),
+    workId: z.string().nullable().optional(),
     databaseName: z.string().nullable().optional(),
     tableName: z.string().nullable().optional(),
     activeSubTab: z.string().nullable().optional(),
@@ -108,6 +110,7 @@ export const tabCreateAction = defineWebAction({
             tabId,
             userId: ctx.userId,
             connectionId,
+            workId: input.workId ?? null,
             state,
             resultMeta: input.resultMeta ?? null,
         });
@@ -119,6 +122,7 @@ export const tabCreateAction = defineWebAction({
             ...(tabType === 'sql' ? { content: input.content ?? '', status: 'idle' } : {}),
             userId: ctx.userId,
             connectionId,
+            workId: input.workId ?? null,
             databaseName: input.databaseName ?? null,
             tableName: tabType === 'table' ? (input.tableName ?? null) : null,
             activeSubTab: tabType === 'table' ? (input.activeSubTab ?? 'data') : null,

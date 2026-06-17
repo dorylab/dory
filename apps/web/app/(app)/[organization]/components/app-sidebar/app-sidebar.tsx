@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { ArrowUpCircle, Compass, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
+import { ArrowUpCircle, Bot, Compass, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -108,6 +108,12 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             url: connectionId ? `/${organization}/${connectionId}/chatbot` : `/${organization}/chatbot`,
             icon: IconFileAi,
             requiresConnection: true,
+        },
+        {
+            title: 'Agent Runs',
+            url: `/${organization}/agent-runs`,
+            icon: Bot,
+            requiresConnection: false,
         },
         ...(supportsOperationalPages
             ? [

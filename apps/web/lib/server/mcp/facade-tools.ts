@@ -3,12 +3,20 @@ import type { ActionContext } from '@dory/actions';
 import { toActionError } from '@dory/actions';
 import { executeAction } from '@/lib/actions/server/execute';
 import type { WebActionServices } from '@/lib/actions/server/types';
+import type { WorkSqlSnapshotPayload } from '@dory/database/postgres/impl/works';
 
 const DEFAULT_APPEND_SEPARATOR = '\n\n';
 
-const connectionListInputSchema = z.object({
-    includeRecent: z.boolean().optional(),
+const workResolutionInputSchema = z.object({
+    workId: z.string().min(1).optional(),
+    externalSessionId: z.string().min(1).optional(),
 });
+
+const connectionListInputSchema = z
+    .object({
+        includeRecent: z.boolean().optional(),
+    })
+    .merge(workResolutionInputSchema);
 
 const schemaExploreInputSchema = z
     .object({
@@ -26,20 +34,23 @@ const schemaExploreInputSchema = z
         search: z.string().max(200).nullable().optional(),
         searchColumns: z.array(z.string().min(1)).max(200).optional(),
     })
+    .merge(workResolutionInputSchema)
     .passthrough();
 
-const readonlySqlInputSchema = z.object({
-    connectionId: z.string().min(1),
-    sql: z.string().min(1),
-    reason: z.string().optional(),
-    workspaceMode: z.enum(['none', 'create_tab', 'append_to_tab', 'replace_tab']).default('none'),
-    targetTabId: z.string().min(1).optional(),
-    tabName: z.string().min(1).optional(),
-    appendSeparator: z.string().optional(),
-    maxRows: z.number().int().positive().max(1000).optional(),
-    database: z.string().optional().nullable(),
-    identityId: z.string().min(1).optional(),
-});
+const readonlySqlInputSchema = z
+    .object({
+        connectionId: z.string().min(1),
+        sql: z.string().min(1),
+        reason: z.string().optional(),
+        workspaceMode: z.enum(['none', 'create_tab', 'append_to_tab', 'replace_tab']).default('none'),
+        targetTabId: z.string().min(1).optional(),
+        tabName: z.string().min(1).optional(),
+        appendSeparator: z.string().optional(),
+        maxRows: z.number().int().positive().max(1000).optional(),
+        database: z.string().optional().nullable(),
+        identityId: z.string().min(1).optional(),
+    })
+    .merge(workResolutionInputSchema);
 
 const workspaceTabsInputSchema = z
     .object({
@@ -53,6 +64,7 @@ const workspaceTabsInputSchema = z
         activeSubTab: z.enum(['overview', 'data', 'structure', 'indexes', 'stats']).optional(),
         appendSeparator: z.string().optional(),
     })
+    .merge(workResolutionInputSchema)
     .passthrough();
 
 const savedQueriesInputSchema = z
@@ -71,39 +83,91 @@ const savedQueriesInputSchema = z
         limit: z.number().int().positive().max(100).optional(),
         includeArchived: z.boolean().optional(),
     })
+    .merge(workResolutionInputSchema)
     .passthrough();
 
-const connectionListOutputSchema = z.object({
-    connections: z.array(
-        z.object({
-            connectionId: z.string(),
-            name: z.string().nullable().optional(),
-            type: z.string().nullable().optional(),
-            environment: z.string().nullable().optional(),
-            defaultDatabase: z.string().nullable().optional(),
-            lastUsedAt: z.string().nullable().optional(),
-            permissionsSummary: z.string().nullable().optional(),
-        }),
-    ),
-});
+const createWorkInputSchema = z
+    .object({
+        connectionId: z.string().min(1).optional(),
+        externalSessionId: z.string().min(1).optional(),
+        title: z.string().min(1).max(160).optional(),
+        metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+    })
+    .passthrough();
 
-const readonlySqlOutputSchema = z.object({
-    result: z.array(z.record(z.string(), z.unknown())),
-    columns: z.array(z.unknown()),
-    rowCount: z.number(),
-    truncated: z.boolean(),
-    executionTimeMs: z.number(),
-    workspaceAction: z
+const mcpErrorShape = {
+    ok: z.literal(false).optional(),
+    error: z
         .object({
-            mode: z.enum(['none', 'create_tab', 'append_to_tab', 'replace_tab']),
-            tabId: z.string().optional(),
-            tabName: z.string().optional(),
-            status: z.enum(['created', 'updated', 'skipped']),
+            code: z.unknown().optional(),
+            message: z.string(),
+            details: z.unknown().nullable().optional(),
         })
+        .passthrough()
         .optional(),
-});
+};
+
+const connectionListOutputSchema = z
+    .object({
+        connections: z
+            .array(
+                z.object({
+                    connectionId: z.string(),
+                    name: z.string().nullable().optional(),
+                    type: z.string().nullable().optional(),
+                    environment: z.string().nullable().optional(),
+                    defaultDatabase: z.string().nullable().optional(),
+                    lastUsedAt: z.string().nullable().optional(),
+                    permissionsSummary: z.string().nullable().optional(),
+                }),
+            )
+            .optional(),
+        ...mcpErrorShape,
+    })
+    .passthrough();
+
+const readonlySqlOutputSchema = z
+    .object({
+        result: z.array(z.record(z.string(), z.unknown())).optional(),
+        columns: z.array(z.unknown()).optional(),
+        rowCount: z.number().optional(),
+        truncated: z.boolean().optional(),
+        executionTimeMs: z.number().optional(),
+        workspaceAction: z
+            .object({
+                mode: z.enum(['none', 'create_tab', 'append_to_tab', 'replace_tab']),
+                tabId: z.string().optional(),
+                tabName: z.string().optional(),
+                status: z.enum(['created', 'updated', 'skipped']),
+            })
+            .optional(),
+        ...mcpErrorShape,
+    })
+    .passthrough();
 
 const unknownObjectOutputSchema = z.object({}).passthrough();
+
+type ResolvedMcpWork = {
+    workId: string;
+    workspaceUrl: string;
+    connectionId: string | null;
+    externalSessionId: string | null;
+};
+
+type UnknownRecord = Record<string, unknown>;
+
+type WorkspaceActionResult = {
+    mode: 'none' | 'create_tab' | 'append_to_tab' | 'replace_tab';
+    tabId?: string;
+    tabName?: string;
+    status: 'created' | 'updated' | 'skipped';
+};
+
+type ReadonlySqlExecutionOutput = WorkSqlSnapshotPayload & {
+    session: WorkSqlSnapshotPayload['session'];
+    queryResultSets: WorkSqlSnapshotPayload['queryResultSets'];
+    results: WorkSqlSnapshotPayload['results'];
+};
 
 type McpFacadeTool = {
     name: string;
@@ -122,15 +186,31 @@ function requireString(value: unknown, name: string): string {
     return value;
 }
 
-function firstResultSet(output: any) {
-    const firstRows = Array.isArray(output?.results?.[0]) ? output.results[0] : [];
-    const firstSet = output?.queryResultSets?.[0] && typeof output.queryResultSets[0] === 'object' ? output.queryResultSets[0] : {};
+function isRecord(value: unknown): value is UnknownRecord {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function toRecord(value: unknown): UnknownRecord {
+    return isRecord(value) ? value : {};
+}
+
+function getString(value: unknown): string | null {
+    return typeof value === 'string' ? value : null;
+}
+
+function getNumber(value: unknown): number | null {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function firstResultSet(output: ReadonlySqlExecutionOutput) {
+    const firstRows = Array.isArray(output.results[0]) ? output.results[0] : [];
+    const firstSet = toRecord(output.queryResultSets[0]);
     return {
         rows: firstRows as Array<Record<string, unknown>>,
         columns: Array.isArray(firstSet.columns) ? firstSet.columns : [],
-        rowCount: Number.isFinite(firstSet.rowCount) ? Number(firstSet.rowCount) : firstRows.length,
+        rowCount: getNumber(firstSet.rowCount) ?? firstRows.length,
         truncated: Boolean(firstSet.limited),
-        executionTimeMs: Number.isFinite(firstSet.durationMs) ? Number(firstSet.durationMs) : 0,
+        executionTimeMs: getNumber(firstSet.durationMs) ?? 0,
     };
 }
 
@@ -139,18 +219,120 @@ async function executeInternal<T = unknown>(ctx: ActionContext<WebActionServices
     return data;
 }
 
-function toPublicConnection(item: any) {
-    const connection = item?.connection ?? item;
-    const identities = Array.isArray(item?.identities) ? item.identities : Array.isArray(connection?.identities) ? connection.identities : [];
-    const defaultIdentity = identities.find((identity: any) => identity?.isDefault) ?? identities[0] ?? null;
-    const defaultDatabase = connection?.database ?? defaultIdentity?.database ?? null;
-    const lastUsedAt = connection?.lastUsedAt ?? connection?.updatedAt ?? null;
+function buildWorkspaceUrl(
+    ctx: ActionContext<WebActionServices>,
+    work: { workId: string; connectionId?: string | null },
+    options: { tabId?: string | null; sessionId?: string | null } = {},
+) {
+    const path =
+        work.connectionId && (options.tabId || options.sessionId)
+            ? `/${encodeURIComponent(ctx.organizationId)}/${encodeURIComponent(work.connectionId)}/sql-console?${new URLSearchParams({
+                  workId: work.workId,
+                  ...(options.tabId ? { tabId: options.tabId } : {}),
+                  ...(options.sessionId ? { sessionId: options.sessionId } : {}),
+              }).toString()}`
+            : `/${encodeURIComponent(ctx.organizationId)}/agent-runs/${encodeURIComponent(work.workId)}`;
+    return new URL(path, ctx.services.requestOrigin ?? 'http://localhost:3000').toString();
+}
+
+function withWork(data: unknown, work: ResolvedMcpWork): Record<string, unknown> & { work: { workId: string; workspaceUrl: string }; workspaceUrl: string } {
+    const base = isRecord(data) ? data : { value: data };
+    return {
+        ...base,
+        workspaceUrl: work.workspaceUrl,
+        work: {
+            workId: work.workId,
+            workspaceUrl: work.workspaceUrl,
+        },
+    };
+}
+
+async function resolveMcpWork(
+    ctx: ActionContext<WebActionServices>,
+    input: { connectionId?: string | null; workId?: string | null; externalSessionId?: string | null; title?: string | null; metadata?: Record<string, unknown> | null },
+) {
+    const work = await ctx.services.db.works.resolve({
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        tokenId: ctx.actor.id ?? null,
+        connectionId: input.connectionId ?? null,
+        workId: input.workId ?? null,
+        externalSessionId: input.externalSessionId ?? null,
+        title: input.title ?? null,
+        metadata: input.metadata ?? null,
+    });
 
     return {
-        connectionId: String(connection?.id ?? item?.id ?? ''),
-        name: connection?.name ?? null,
-        type: connection?.type ?? connection?.engine ?? null,
-        environment: connection?.environment ?? null,
+        workId: work.workId,
+        connectionId: work.connectionId ?? input.connectionId ?? null,
+        externalSessionId: work.externalSessionId ?? input.externalSessionId ?? null,
+        workspaceUrl: buildWorkspaceUrl(ctx, work),
+    };
+}
+
+function summarizeMcpOutput(output: unknown) {
+    const value = toRecord(output);
+    const workspaceAction = toRecord(value.workspaceAction);
+    return {
+        rowCount: value.rowCount ?? null,
+        tabId: value.tabId ?? workspaceAction.tabId ?? null,
+        sessionId: value.sessionId ?? null,
+        status: value.status ?? null,
+    };
+}
+
+async function executeWithWork(ctx: ActionContext<WebActionServices>, toolName: string, rawInput: unknown, run: (input: UnknownRecord, work: ResolvedMcpWork) => Promise<unknown>) {
+    const input = toRecord(rawInput);
+    const t0 = performance.now();
+    const work = await resolveMcpWork(ctx, input);
+    try {
+        const output = await run(input, work);
+        await ctx.services.db.works.recordEvent({
+            workId: work.workId,
+            organizationId: ctx.organizationId,
+            userId: ctx.userId,
+            tokenId: ctx.actor.id ?? null,
+            connectionId: work.connectionId,
+            toolName,
+            status: 'success',
+            inputSummary: ctx.services.db.works.summarizeInput(input),
+            outputSummary: summarizeMcpOutput(output),
+            durationMs: performance.now() - t0,
+        });
+        return output;
+    } catch (error: unknown) {
+        const actionError = toActionError(error);
+        await ctx.services.db.works.recordEvent({
+            workId: work.workId,
+            organizationId: ctx.organizationId,
+            userId: ctx.userId,
+            tokenId: ctx.actor.id ?? null,
+            connectionId: work.connectionId,
+            toolName,
+            status: 'error',
+            inputSummary: ctx.services.db.works.summarizeInput(input),
+            errorCode: actionError.code ?? null,
+            errorMessage: actionError.message,
+            durationMs: performance.now() - t0,
+        });
+        throw error;
+    }
+}
+
+function toPublicConnection(item: unknown) {
+    const wrapper = toRecord(item);
+    const connection = toRecord(wrapper.connection ?? item);
+    const rawIdentities = Array.isArray(wrapper.identities) ? wrapper.identities : Array.isArray(connection.identities) ? connection.identities : [];
+    const identities = rawIdentities.map(toRecord);
+    const defaultIdentity = identities.find(identity => identity.isDefault) ?? identities[0] ?? {};
+    const defaultDatabase = connection.database ?? defaultIdentity.database ?? null;
+    const lastUsedAt = connection.lastUsedAt ?? connection.updatedAt ?? null;
+
+    return {
+        connectionId: String(connection.id ?? wrapper.id ?? ''),
+        name: getString(connection.name),
+        type: getString(connection.type ?? connection.engine),
+        environment: getString(connection.environment),
         defaultDatabase,
         lastUsedAt: lastUsedAt instanceof Date ? lastUsedAt.toISOString() : (lastUsedAt ?? null),
         permissionsSummary: 'read-only SQL, schema exploration, workspace tabs, and saved queries according to granted scopes',
@@ -158,8 +340,8 @@ function toPublicConnection(item: any) {
 }
 
 async function findSqlTab(ctx: ActionContext<WebActionServices>, connectionId: string, tabId: string) {
-    const tabs = await executeInternal<any[]>(ctx, 'tab.list', { connectionId });
-    const tab = tabs.find(item => item?.tabId === tabId);
+    const tabs = await executeInternal<UnknownRecord[]>(ctx, 'tab.list', { connectionId });
+    const tab = tabs.find(item => item.tabId === tabId);
     if (!tab) {
         throw new Error(`SQL tab not found: ${tabId}`);
     }
@@ -179,8 +361,9 @@ async function applySqlWorkspaceAction(
         tabName?: string;
         appendSeparator?: string;
         resultMeta?: Record<string, unknown> | null;
+        workId?: string | null;
     },
-) {
+): Promise<WorkspaceActionResult> {
     const mode = input.workspaceMode ?? 'none';
     if (mode === 'none') {
         return {
@@ -190,12 +373,13 @@ async function applySqlWorkspaceAction(
     }
 
     if (mode === 'create_tab') {
-        const tab = await executeInternal<any>(ctx, 'tab.create', {
+        const tab = await executeInternal<{ tabId: string; tabName?: string | null }>(ctx, 'tab.create', {
             connectionId: input.connectionId,
             tabType: 'sql',
             tabName: input.tabName ?? 'MCP query',
             content: input.sql,
             resultMeta: input.resultMeta ?? null,
+            workId: input.workId ?? null,
         });
         return {
             mode,
@@ -209,7 +393,7 @@ async function applySqlWorkspaceAction(
     const existing = await findSqlTab(ctx, input.connectionId, targetTabId);
     const content =
         mode === 'append_to_tab' ? `${typeof existing.content === 'string' ? existing.content : ''}${input.appendSeparator ?? DEFAULT_APPEND_SEPARATOR}${input.sql}` : input.sql;
-    const tabName = input.tabName ?? existing.tabName ?? null;
+    const tabName = input.tabName ?? getString(existing.tabName);
 
     await executeInternal(ctx, 'tab.save', {
         connectionId: input.connectionId,
@@ -221,6 +405,7 @@ async function applySqlWorkspaceAction(
             tabType: 'sql',
         },
         resultMeta: input.resultMeta ?? existing.resultMeta ?? null,
+        workId: input.workId ?? existing.workId ?? null,
     });
 
     return {
@@ -231,9 +416,9 @@ async function applySqlWorkspaceAction(
     };
 }
 
-async function runReadonlySqlFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
+async function runReadonlySqlFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = readonlySqlInputSchema.parse(rawInput);
-    const output = await executeInternal<any>(ctx, 'query.readOnlyExecute', {
+    const output = await executeInternal<ReadonlySqlExecutionOutput>(ctx, 'query.readOnlyExecute', {
         connectionId: input.connectionId,
         database: input.database,
         sql: input.sql,
@@ -241,106 +426,130 @@ async function runReadonlySqlFacade(ctx: ActionContext<WebActionServices>, rawIn
         identityId: input.identityId,
     });
     const firstSet = firstResultSet(output);
+    const workspaceMode = input.workspaceMode && input.workspaceMode !== 'none' ? input.workspaceMode : input.targetTabId ? 'replace_tab' : 'create_tab';
     const workspaceAction = await applySqlWorkspaceAction(ctx, {
         connectionId: input.connectionId,
         sql: input.sql,
-        workspaceMode: input.workspaceMode,
+        workspaceMode,
         targetTabId: input.targetTabId,
         tabName: input.tabName,
         appendSeparator: input.appendSeparator,
+        workId: work.workId,
         resultMeta: {
             rows: firstSet.rowCount,
             columns: firstSet.columns.length,
             durationMs: firstSet.executionTimeMs,
         },
     });
-
-    return {
-        result: firstSet.rows,
-        columns: firstSet.columns,
-        rowCount: firstSet.rowCount,
-        truncated: firstSet.truncated,
-        executionTimeMs: firstSet.executionTimeMs,
-        workspaceAction,
-    };
-}
-
-async function exploreSchemaFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
-    const input = schemaExploreInputSchema.parse(rawInput);
-    switch (input.operation) {
-        case 'search':
-            return executeInternal(ctx, 'schema.search', {
-                connectionId: input.connectionId,
-                query: input.query ?? '',
-                database: input.database,
-                limit: input.limit,
-                includeColumns: input.includeColumns,
-                identityId: input.identityId,
-            });
-        case 'list_databases':
-            return executeInternal(ctx, 'schema.listDatabases', {
-                connectionId: input.connectionId,
-                identityId: input.identityId,
-            });
-        case 'list_tables':
-            return executeInternal(ctx, 'schema.listTables', {
-                connectionId: input.connectionId,
-                database: requireString(input.database, 'database'),
-                identityId: input.identityId,
-            });
-        case 'describe_table':
-            return executeInternal(ctx, 'schema.describeTable', {
-                connectionId: input.connectionId,
-                database: requireString(input.database, 'database'),
-                table: requireString(input.table, 'table'),
-                identityId: input.identityId,
-            });
-        case 'preview_table':
-            return executeInternal(ctx, 'table.preview', {
-                connectionId: input.connectionId,
-                database: requireString(input.database, 'database'),
-                table: requireString(input.table, 'table'),
-                limit: input.limit,
-                offset: input.offset,
-                sort: input.sort,
-                filters: input.filters,
-                search: input.search,
-                searchColumns: input.searchColumns,
-                identityId: input.identityId,
-            });
-        case 'table_profile':
-            return executeInternal(ctx, 'table.getProfile', {
-                connectionId: input.connectionId,
-                database: requireString(input.database, 'database'),
-                table: requireString(input.table, 'table'),
-                identityId: input.identityId,
-            });
-        case 'get_ddl':
-            return executeInternal(ctx, 'table.getDdl', {
-                connectionId: input.connectionId,
-                database: requireString(input.database, 'database'),
-                table: requireString(input.table, 'table'),
-                identityId: input.identityId,
-            });
+    const tabId = 'tabId' in workspaceAction ? workspaceAction.tabId : undefined;
+    if (output.session && tabId) {
+        output.session.tabId = tabId;
     }
+    await ctx.services.db.works.saveSqlSnapshot(work.workId, output);
+    work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId, sessionId: output.session.sessionId });
+
+    return withWork(
+        {
+            result: firstSet.rows,
+            columns: firstSet.columns,
+            rowCount: firstSet.rowCount,
+            truncated: firstSet.truncated,
+            executionTimeMs: firstSet.executionTimeMs,
+            tabId,
+            sessionId: output.session.sessionId,
+            resultSetIds: output.queryResultSets.map(set => ({ sessionId: set.sessionId, setIndex: set.setIndex })),
+            workspaceAction,
+        },
+        work,
+    );
 }
 
-async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
+async function exploreSchemaFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
+    const input = schemaExploreInputSchema.parse(rawInput);
+    const run = async () => {
+        switch (input.operation) {
+            case 'search':
+                return executeInternal(ctx, 'schema.search', {
+                    connectionId: input.connectionId,
+                    query: input.query ?? '',
+                    database: input.database,
+                    limit: input.limit,
+                    includeColumns: input.includeColumns,
+                    identityId: input.identityId,
+                });
+            case 'list_databases':
+                return executeInternal(ctx, 'schema.listDatabases', {
+                    connectionId: input.connectionId,
+                    identityId: input.identityId,
+                });
+            case 'list_tables':
+                return executeInternal(ctx, 'schema.listTables', {
+                    connectionId: input.connectionId,
+                    database: requireString(input.database, 'database'),
+                    identityId: input.identityId,
+                });
+            case 'describe_table':
+                return executeInternal(ctx, 'schema.describeTable', {
+                    connectionId: input.connectionId,
+                    database: requireString(input.database, 'database'),
+                    table: requireString(input.table, 'table'),
+                    identityId: input.identityId,
+                });
+            case 'preview_table':
+                return executeInternal(ctx, 'table.preview', {
+                    connectionId: input.connectionId,
+                    database: requireString(input.database, 'database'),
+                    table: requireString(input.table, 'table'),
+                    limit: input.limit,
+                    offset: input.offset,
+                    sort: input.sort,
+                    filters: input.filters,
+                    search: input.search,
+                    searchColumns: input.searchColumns,
+                    identityId: input.identityId,
+                });
+            case 'table_profile':
+                return executeInternal(ctx, 'table.getProfile', {
+                    connectionId: input.connectionId,
+                    database: requireString(input.database, 'database'),
+                    table: requireString(input.table, 'table'),
+                    identityId: input.identityId,
+                });
+            case 'get_ddl':
+                return executeInternal(ctx, 'table.getDdl', {
+                    connectionId: input.connectionId,
+                    database: requireString(input.database, 'database'),
+                    table: requireString(input.table, 'table'),
+                    identityId: input.identityId,
+                });
+        }
+    };
+    return withWork(await run(), work);
+}
+
+async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = workspaceTabsInputSchema.parse(rawInput);
     switch (input.operation) {
         case 'list':
-            return {
-                tabs: await executeInternal(ctx, 'tab.list', {
-                    connectionId: input.connectionId,
-                }),
-            };
-        case 'create_sql':
-            return executeInternal(ctx, 'tab.create', {
+            return withWork(
+                {
+                    tabs: await executeInternal(ctx, 'tab.list', {
+                        connectionId: input.connectionId,
+                    }),
+                },
+                work,
+            );
+        case 'create_sql': {
+            const tab = await executeInternal<{ tabId: string }>(ctx, 'tab.create', {
                 connectionId: input.connectionId,
+                workId: work.workId,
                 tabType: 'sql',
                 tabName: input.tabName ?? 'MCP query',
                 content: requireString(input.sql, 'sql'),
             });
+            work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId: tab.tabId });
+            return withWork(tab, work);
+        }
         case 'append_sql': {
             const tabId = requireString(input.tabId, 'tabId');
             const sql = requireString(input.sql, 'sql');
@@ -351,8 +560,10 @@ async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInp
                 targetTabId: tabId,
                 tabName: input.tabName,
                 appendSeparator: input.appendSeparator,
+                workId: work.workId,
             });
-            return { workspaceAction };
+            work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId });
+            return withWork({ workspaceAction }, work);
         }
         case 'replace_sql': {
             const tabId = requireString(input.tabId, 'tabId');
@@ -363,76 +574,137 @@ async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInp
                 workspaceMode: 'replace_tab',
                 targetTabId: tabId,
                 tabName: input.tabName,
+                workId: work.workId,
             });
-            return { workspaceAction };
+            work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId });
+            return withWork({ workspaceAction }, work);
         }
         case 'delete':
-            return executeInternal(ctx, 'tab.delete', {
+            return withWork(
+                await executeInternal(ctx, 'tab.delete', {
+                    connectionId: input.connectionId,
+                    tabId: requireString(input.tabId, 'tabId'),
+                }),
+                work,
+            );
+        case 'open_table': {
+            const tab = await executeInternal<{ tabId: string }>(ctx, 'tab.create', {
                 connectionId: input.connectionId,
-                tabId: requireString(input.tabId, 'tabId'),
-            });
-        case 'open_table':
-            return executeInternal(ctx, 'tab.create', {
-                connectionId: input.connectionId,
+                workId: work.workId,
                 tabType: 'table',
                 tabName: input.tabName ?? input.tableName,
                 databaseName: requireString(input.databaseName, 'databaseName'),
                 tableName: requireString(input.tableName, 'tableName'),
                 activeSubTab: input.activeSubTab ?? 'data',
             });
+            work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId: tab.tabId });
+            return withWork(tab, work);
+        }
     }
 }
 
-async function savedQueriesFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
+async function savedQueriesFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = savedQueriesInputSchema.parse(rawInput);
     switch (input.operation) {
         case 'list':
-            return executeInternal(ctx, 'savedQuery.list', {
-                connectionId: input.connectionId,
-                limit: input.limit,
-                includeArchived: input.includeArchived,
-            });
+            return withWork(
+                await executeInternal(ctx, 'savedQuery.list', {
+                    connectionId: input.connectionId,
+                    limit: input.limit,
+                    includeArchived: input.includeArchived,
+                }),
+                work,
+            );
         case 'get':
-            return executeInternal(ctx, 'savedQuery.get', {
-                connectionId: input.connectionId,
-                id: requireString(input.id, 'id'),
-                includeArchived: input.includeArchived,
-            });
+            return withWork(
+                await executeInternal(ctx, 'savedQuery.get', {
+                    connectionId: input.connectionId,
+                    id: requireString(input.id, 'id'),
+                    includeArchived: input.includeArchived,
+                }),
+                work,
+            );
         case 'create':
-            return executeInternal(ctx, 'savedQuery.create', {
-                connectionId: input.connectionId,
-                id: input.id,
-                title: requireString(input.title, 'title'),
-                description: input.description,
-                folderId: input.folderId,
-                sqlText: requireString(input.sqlText, 'sqlText'),
-                context: input.context,
-                tags: input.tags,
-                workId: input.workId,
-            });
+            return withWork(
+                await executeInternal(ctx, 'savedQuery.create', {
+                    connectionId: input.connectionId,
+                    id: input.id,
+                    title: requireString(input.title, 'title'),
+                    description: input.description,
+                    folderId: input.folderId,
+                    sqlText: requireString(input.sqlText, 'sqlText'),
+                    context: input.context,
+                    tags: input.tags,
+                    workId: work.workId,
+                }),
+                work,
+            );
         case 'update':
-            return executeInternal(ctx, 'savedQuery.update', {
-                connectionId: input.connectionId,
-                id: requireString(input.id, 'id'),
-                patch: input.patch ?? {
-                    ...(typeof input.title !== 'undefined' ? { title: input.title } : {}),
-                    ...(typeof input.description !== 'undefined' ? { description: input.description } : {}),
-                    ...(typeof input.folderId !== 'undefined' ? { folderId: input.folderId } : {}),
-                    ...(typeof input.sqlText !== 'undefined' ? { sqlText: input.sqlText } : {}),
-                    ...(typeof input.context !== 'undefined' ? { context: input.context } : {}),
-                    ...(typeof input.tags !== 'undefined' ? { tags: input.tags } : {}),
-                },
-            });
+            return withWork(
+                await executeInternal(ctx, 'savedQuery.update', {
+                    connectionId: input.connectionId,
+                    id: requireString(input.id, 'id'),
+                    patch: input.patch ?? {
+                        ...(typeof input.title !== 'undefined' ? { title: input.title } : {}),
+                        ...(typeof input.description !== 'undefined' ? { description: input.description } : {}),
+                        ...(typeof input.folderId !== 'undefined' ? { folderId: input.folderId } : {}),
+                        ...(typeof input.sqlText !== 'undefined' ? { sqlText: input.sqlText } : {}),
+                        ...(typeof input.context !== 'undefined' ? { context: input.context } : {}),
+                        ...(typeof input.tags !== 'undefined' ? { tags: input.tags } : {}),
+                    },
+                }),
+                work,
+            );
         case 'delete':
-            return executeInternal(ctx, 'savedQuery.delete', {
-                connectionId: input.connectionId,
-                id: requireString(input.id, 'id'),
-            });
+            return withWork(
+                await executeInternal(ctx, 'savedQuery.delete', {
+                    connectionId: input.connectionId,
+                    id: requireString(input.id, 'id'),
+                }),
+                work,
+            );
     }
 }
 
+async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
+    const input = createWorkInputSchema.parse(rawInput);
+    const work = await ctx.services.db.works.create({
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        tokenId: ctx.actor.id ?? null,
+        connectionId: input.connectionId ?? null,
+        externalSessionId: input.externalSessionId ?? null,
+        title: input.title ?? null,
+        metadata: input.metadata ?? null,
+    });
+    const workspaceUrl = buildWorkspaceUrl(ctx, work);
+    await ctx.services.db.works.recordEvent({
+        workId: work.workId,
+        organizationId: ctx.organizationId,
+        userId: ctx.userId,
+        tokenId: ctx.actor.id ?? null,
+        connectionId: work.connectionId ?? null,
+        toolName: 'dory_create_work',
+        status: 'success',
+        inputSummary: ctx.services.db.works.summarizeInput(input),
+        outputSummary: { workId: work.workId },
+    });
+    return {
+        workId: work.workId,
+        status: work.status,
+        connectionId: work.connectionId,
+        externalSessionId: work.externalSessionId,
+        workspaceUrl,
+        createdAt: work.createdAt instanceof Date ? work.createdAt.toISOString() : work.createdAt,
+        work: {
+            workId: work.workId,
+            workspaceUrl,
+        },
+    };
+}
+
 export function structuredMcpFacadeResult(data: unknown) {
-    const structuredContent = data && typeof data === 'object' && !Array.isArray(data) ? (data as Record<string, unknown>) : { value: data };
+    const structuredContent = isRecord(data) ? data : { value: data };
 
     return {
         isError: false as const,
@@ -472,6 +744,19 @@ export function structuredMcpFacadeError(error: unknown) {
 export function getPublicDoryMcpTools(): McpFacadeTool[] {
     return [
         {
+            name: 'dory_create_work',
+            title: 'Create Dory Work',
+            description: 'Create a Dory Agent Run work context that later MCP calls can reuse with workId.',
+            inputSchema: createWorkInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                openWorldHint: true,
+            },
+            execute: createWorkFacade,
+        },
+        {
             name: 'dory_list_connections',
             title: 'List Dory connections',
             description: 'List available Dory database connections with enough context to choose the likely target connection.',
@@ -482,12 +767,16 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            execute: async ctx => {
-                const output = await executeInternal<any>(ctx, 'connection.list', {});
-                return {
-                    connections: (Array.isArray(output?.connections) ? output.connections : []).map(toPublicConnection).filter((item: any) => item.connectionId),
-                };
-            },
+            execute: async (ctx, rawInput) =>
+                executeWithWork(ctx, 'dory_list_connections', rawInput, async (_input, work) => {
+                    const output = await executeInternal<UnknownRecord>(ctx, 'connection.list', {});
+                    return withWork(
+                        {
+                            connections: (Array.isArray(output.connections) ? output.connections : []).map(toPublicConnection).filter(item => item.connectionId),
+                        },
+                        work,
+                    );
+                }),
         },
         {
             name: 'dory_explore_schema',
@@ -500,12 +789,12 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 idempotentHint: true,
                 openWorldHint: true,
             },
-            execute: exploreSchemaFacade,
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_explore_schema', input, (parsed, work) => exploreSchemaFacade(ctx, parsed, work)),
         },
         {
             name: 'dory_run_readonly_sql',
             title: 'Run read-only SQL',
-            description: 'Run read-only SQL against a Dory connection. Optionally create, append to, or replace a SQL workspace tab only when explicitly requested.',
+            description: 'Run read-only SQL against a Dory connection, resolve an Agent Run, create or update a SQL workspace tab, and persist a result snapshot.',
             inputSchema: readonlySqlInputSchema,
             outputSchema: readonlySqlOutputSchema,
             annotations: {
@@ -513,7 +802,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 destructiveHint: false,
                 openWorldHint: true,
             },
-            execute: runReadonlySqlFacade,
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_run_readonly_sql', input, (parsed, work) => runReadonlySqlFacade(ctx, parsed, work)),
         },
         {
             name: 'dory_workspace_tabs',
@@ -526,7 +815,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 destructiveHint: false,
                 openWorldHint: true,
             },
-            execute: workspaceTabsFacade,
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_workspace_tabs', input, (parsed, work) => workspaceTabsFacade(ctx, parsed, work)),
         },
         {
             name: 'dory_saved_queries',
@@ -540,7 +829,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 destructiveHint: false,
                 openWorldHint: true,
             },
-            execute: savedQueriesFacade,
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_saved_queries', input, (parsed, work) => savedQueriesFacade(ctx, parsed, work)),
         },
     ];
 }

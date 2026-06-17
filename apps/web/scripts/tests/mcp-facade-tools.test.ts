@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import test from 'node:test';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ActionContext } from '@dory/actions';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
 import type { WebActionServices } from '@/lib/actions/server/types';
@@ -14,7 +17,64 @@ require.cache[serverOnlyPath] = {
     exports: {},
 } as NodeJS.Module;
 
-const { getPublicDoryMcpTools } = await import('@/lib/server/mcp/facade-tools');
+const [{ getPublicDoryMcpTools, structuredMcpFacadeError }, { registerDoryMcpTools }] = await Promise.all([
+    import('@/lib/server/mcp/facade-tools'),
+    import('@/lib/server/mcp/tools'),
+]);
+
+function createWorksMock() {
+    const events: any[] = [];
+    const works = new Map<string, any>();
+    let nextId = 1;
+    const now = new Date('2026-06-01T00:00:00.000Z');
+
+    const materialize = (input: any, workId = input.workId ?? `work-${nextId++}`) => {
+        const existing = works.get(workId);
+        if (existing) return existing;
+        const row = {
+            workId,
+            organizationId: input.organizationId,
+            userId: input.userId,
+            tokenId: input.tokenId ?? null,
+            connectionId: input.connectionId ?? null,
+            externalSessionId: input.externalSessionId ?? null,
+            title: input.title ?? 'Agent Run',
+            status: 'active',
+            metadata: input.metadata ?? null,
+            createdAt: now,
+            updatedAt: now,
+            lastActiveAt: now,
+            archivedAt: null,
+        };
+        works.set(workId, row);
+        return row;
+    };
+
+    return {
+        events,
+        create: async (input: any) => materialize(input),
+        resolve: async (input: any) => {
+            if (input.externalSessionId) {
+                const existing = [...works.values()].find(
+                    work =>
+                        work.organizationId === input.organizationId &&
+                        work.userId === input.userId &&
+                        work.tokenId === (input.tokenId ?? null) &&
+                        work.connectionId === (input.connectionId ?? null) &&
+                        work.externalSessionId === input.externalSessionId,
+                );
+                if (existing) return existing;
+            }
+            return materialize(input);
+        },
+        recordEvent: async (event: any) => {
+            events.push(event);
+            return { ...event, id: events.length, createdAt: now };
+        },
+        summarizeInput: (input: unknown) => input,
+        saveSqlSnapshot: async () => {},
+    };
+}
 
 function getTool(name: string) {
     const tool = getPublicDoryMcpTools().find((item: any) => item.name === name);
@@ -40,7 +100,10 @@ function createContext(
             id: 'token-1',
         },
         requestId: 'request-1',
-        services,
+        services: {
+            requestOrigin: 'https://dory.test',
+            ...services,
+        },
     };
 }
 
@@ -49,13 +112,78 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
         getPublicDoryMcpTools()
             .map((tool: any) => tool.name)
             .sort(),
-        ['dory_explore_schema', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs'],
+        ['dory_create_work', 'dory_explore_schema', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs'],
     );
+});
+
+test('dory_create_work returns a workspace URL', async () => {
+    const ctx = createContext({
+        db: {
+            works: createWorksMock(),
+        },
+    } as unknown as WebActionServices);
+
+    const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', externalSessionId: 'session-1', title: 'Revenue check' })) as any;
+
+    assert.equal(output.workId, 'work-1');
+    assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1');
+    assert.equal(output.work.workId, 'work-1');
+});
+
+test('strict MCP output schemas accept structured error envelopes', () => {
+    const readonlyTool = getTool('dory_run_readonly_sql');
+    const errorEnvelope = structuredMcpFacadeError(new Error('boom')).structuredContent;
+
+    assert.equal(readonlyTool.outputSchema.safeParse(errorEnvelope).success, true);
+});
+
+test('registered MCP schema does not require SQL success fields for error outputs', async () => {
+    const server = new McpServer({ name: 'dory-test', version: '1.0.0' });
+    registerDoryMcpTools(server, {
+        organizationId: 'org-1',
+        userId: 'user-1',
+        tokenId: 'token-1',
+        scopes: ['query:read'],
+        access: {
+            source: 'local',
+            organizationId: 'org-1',
+            userId: 'user-1',
+            isMember: true,
+            role: 'member',
+            permissions: getOrganizationPermissionMap('member'),
+            organization: {
+                id: 'org-1',
+                slug: 'org-1',
+                name: 'Org 1',
+            },
+        },
+        requestOrigin: 'https://dory.test',
+    });
+
+    const client = new Client({ name: 'dory-test-client', version: '1.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+
+    try {
+        await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+        const tools = await client.listTools();
+        const readonlyTool = tools.tools.find(tool => tool.name === 'dory_run_readonly_sql');
+        assert.ok(readonlyTool?.outputSchema);
+
+        const required = Array.isArray(readonlyTool.outputSchema.required) ? readonlyTool.outputSchema.required : [];
+        assert.equal(required.includes('result'), false);
+        assert.equal(required.includes('columns'), false);
+        assert.equal(required.includes('rowCount'), false);
+        assert.ok((readonlyTool.outputSchema.properties as any)?.error, 'Expected error envelope in SQL output schema.');
+    } finally {
+        await client.close().catch(() => undefined);
+        await server.close().catch(() => undefined);
+    }
 });
 
 test('dory_list_connections returns agent-oriented connection context', async () => {
     const ctx = createContext({
         db: {
+            works: createWorksMock(),
             connections: {
                 list: async () => [
                     {
@@ -82,6 +210,8 @@ test('dory_list_connections returns agent-oriented connection context', async ()
 
     const output = (await getTool('dory_list_connections').execute(ctx, { includeRecent: true })) as any;
 
+    assert.equal(output.work.workId, 'work-1');
+    assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1');
     assert.deepEqual(output.connections, [
         {
             connectionId: 'conn-1',
@@ -110,6 +240,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     const deleted: string[] = [];
     const ctx = createContext({
         db: {
+            works: createWorksMock(),
             tabState: {
                 loadAllTab: async () => [...savedTabs.values()],
                 saveTabState: async (payload: any) => {
@@ -117,6 +248,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
                         tabId: payload.tabId,
                         userId: payload.userId,
                         connectionId: payload.connectionId,
+                        workId: payload.workId ?? null,
                         ...payload.state,
                         resultMeta: payload.resultMeta ?? null,
                     });
@@ -136,19 +268,25 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     } as unknown as WebActionServices);
     const tool = getTool('dory_workspace_tabs');
 
-    assert.equal(((await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1' })) as any).tabs.length, 1);
+    const listed = (await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1', externalSessionId: 'session-1' })) as any;
+    assert.equal(listed.tabs.length, 1);
+    assert.equal(listed.work.workId, 'work-1');
 
     const created = (await tool.execute(ctx, {
         operation: 'create_sql',
         connectionId: 'conn-1',
+        externalSessionId: 'session-1',
         sql: 'select 2',
         tabName: 'Created',
     })) as any;
     assert.equal(savedTabs.get(created.tabId).content, 'select 2');
+    assert.equal(created.work.workId, 'work-1');
+    assert.equal(savedTabs.get(created.tabId).workId, 'work-1');
 
     const appended = (await tool.execute(ctx, {
         operation: 'append_sql',
         connectionId: 'conn-1',
+        externalSessionId: 'session-1',
         tabId: 'tab-1',
         sql: 'select 3',
         appendSeparator: '\n-- next\n',
@@ -164,6 +302,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     await tool.execute(ctx, {
         operation: 'replace_sql',
         connectionId: 'conn-1',
+        externalSessionId: 'session-1',
         tabId: 'tab-1',
         sql: 'select 4',
         tabName: 'Replaced',
@@ -174,6 +313,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     const tableTab = (await tool.execute(ctx, {
         operation: 'open_table',
         connectionId: 'conn-1',
+        externalSessionId: 'session-1',
         databaseName: 'analytics',
         tableName: 'orders',
     })) as any;
@@ -183,6 +323,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
     await tool.execute(ctx, {
         operation: 'delete',
         connectionId: 'conn-1',
+        externalSessionId: 'session-1',
         tabId: 'tab-1',
     });
     assert.deepEqual(deleted, ['tab-1']);
@@ -213,16 +354,19 @@ test('dory_saved_queries dispatches v1 operations and preserves write scope chec
                     calls.push({ method: 'delete', payload });
                 },
             },
+            works: createWorksMock(),
         },
     } as unknown as WebActionServices;
     const ctx = createContext(services);
     const tool = getTool('dory_saved_queries');
 
-    assert.equal(((await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1' })) as any).savedQueries.length, 1);
-    assert.equal(((await tool.execute(ctx, { operation: 'get', connectionId: 'conn-1', id: 'query-1' })) as any).savedQuery.id, 'query-1');
-    await tool.execute(ctx, { operation: 'create', connectionId: 'conn-1', title: 'New', sqlText: 'select 2' });
-    await tool.execute(ctx, { operation: 'update', connectionId: 'conn-1', id: 'query-1', title: 'Updated' });
-    assert.deepEqual(await tool.execute(ctx, { operation: 'delete', connectionId: 'conn-1', id: 'query-1' }), { deleted: ['query-1'] });
+    assert.equal(((await tool.execute(ctx, { operation: 'list', connectionId: 'conn-1', externalSessionId: 'session-1' })) as any).savedQueries.length, 1);
+    assert.equal(((await tool.execute(ctx, { operation: 'get', connectionId: 'conn-1', externalSessionId: 'session-1', id: 'query-1' })) as any).savedQuery.id, 'query-1');
+    await tool.execute(ctx, { operation: 'create', connectionId: 'conn-1', externalSessionId: 'session-1', title: 'New', sqlText: 'select 2' });
+    await tool.execute(ctx, { operation: 'update', connectionId: 'conn-1', externalSessionId: 'session-1', id: 'query-1', title: 'Updated' });
+    const deleted = (await tool.execute(ctx, { operation: 'delete', connectionId: 'conn-1', externalSessionId: 'session-1', id: 'query-1' })) as any;
+    assert.deepEqual(deleted.deleted, ['query-1']);
+    assert.equal(deleted.work.workId, 'work-1');
     assert.deepEqual(
         calls.map(call => call.method),
         ['list', 'getById', 'create', 'update', 'delete'],

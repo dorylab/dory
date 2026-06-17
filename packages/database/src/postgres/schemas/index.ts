@@ -14,6 +14,7 @@ import * as syncOperationsSchema from './sync-operations';
 import * as mcpSchema from './mcp';
 import * as localFilesSchema from './local-files';
 import * as organizationAiProvidersSchema from './organization-ai-providers';
+import * as worksSchema from './works';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -31,6 +32,7 @@ export * from './sync-operations';
 export * from './mcp';
 export * from './local-files';
 export * from './organization-ai-providers';
+export * from './works';
 
 export const schema = {
     ...tabsSchema,
@@ -49,6 +51,7 @@ export const schema = {
     ...mcpSchema,
     ...localFilesSchema,
     ...organizationAiProvidersSchema,
+    ...worksSchema,
 };
 
 export type DBSchema = typeof schema;

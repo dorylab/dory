@@ -39,29 +39,31 @@ export function useSQLTabs() {
                         const base: TabPayload =
                             tab.tabType === 'sql'
                                 ? {
-                                    tabId: tab.tabId,
-                                    tabType: tab.tabType,
-                                    tabName: tab.tabName,
-                                    orderIndex: idx,
-                                    createdAt: tab.createdAt,
-                                    userId: tab.userId ?? '',
-                                    connectionId: tab.connectionId ?? connectionId,
-                                    content: tab.content ?? '',
-                                    status: tab.status,
-                                }
+                                      tabId: tab.tabId,
+                                      tabType: tab.tabType,
+                                      tabName: tab.tabName,
+                                      orderIndex: idx,
+                                      createdAt: tab.createdAt,
+                                      userId: tab.userId ?? '',
+                                      connectionId: tab.connectionId ?? connectionId,
+                                      workId: tab.workId ?? null,
+                                      content: tab.content ?? '',
+                                      status: tab.status,
+                                  }
                                 : {
-                                    tabId: tab.tabId,
-                                    tabType: tab.tabType,
-                                    tabName: tab.tabName,
-                                    orderIndex: idx,
-                                    createdAt: tab.createdAt,
-                                    userId: tab.userId ?? '',
-                                    connectionId: tab.connectionId ?? connectionId,
-                                    databaseName: tab.databaseName,
-                                    tableName: tab.tableName,
-                                    activeSubTab: tab.activeSubTab,
-                                    dataView: tab.dataView,
-                                };
+                                      tabId: tab.tabId,
+                                      tabType: tab.tabType,
+                                      tabName: tab.tabName,
+                                      orderIndex: idx,
+                                      createdAt: tab.createdAt,
+                                      userId: tab.userId ?? '',
+                                      connectionId: tab.connectionId ?? connectionId,
+                                      workId: tab.workId ?? null,
+                                      databaseName: tab.databaseName,
+                                      tableName: tab.tableName,
+                                      activeSubTab: tab.activeSubTab,
+                                      dataView: tab.dataView,
+                                  };
                         console.log('Persist tab order to server:', tab.tabId, 'as', base);
                         return saveTabToServer(tab.tabId, base).catch(err => {
                             console.error('[useSQLTabs] persist order failed for', tab.tabId, err);
@@ -76,7 +78,7 @@ export function useSQLTabs() {
     );
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     async function saveTabToServer(tabId: string, tab: TabPayload) {
         if (!connectionId) return;
@@ -91,6 +93,7 @@ export function useSQLTabs() {
             'tab.create',
             {
                 connectionId,
+                workId: tab.workId ?? null,
                 tabId: tab.tabId,
                 tabType: tab.tabType,
                 tabName: tab.tabName,
@@ -107,12 +110,11 @@ export function useSQLTabs() {
     }
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     const debouncedSaveRef = useRef<ReturnType<typeof debounce> | null>(null);
 
     useEffect(() => {
-        
         if (debouncedSaveRef.current) {
             debouncedSaveRef.current.flush();
             debouncedSaveRef.current.cancel();
@@ -122,7 +124,7 @@ export function useSQLTabs() {
             saveTabToServer(tabId, tab).catch(err => {
                 console.error('debounced save tab error', err);
             });
-        }, 500); 
+        }, 500);
 
         debouncedSaveRef.current = fn;
 
@@ -133,10 +135,9 @@ export function useSQLTabs() {
     }, [connectionId]);
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     const setActiveTabId = (id: string) => {
-        
         if (debouncedSaveRef.current) {
             debouncedSaveRef.current.flush();
         }
@@ -166,7 +167,7 @@ export function useSQLTabs() {
     };
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     useEffect(() => {
         const handleBeforeUnload = () => {
@@ -182,7 +183,7 @@ export function useSQLTabs() {
     }, []);
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     useEffect(() => {
         if (!routeConnectionId) {
@@ -258,40 +259,38 @@ export function useSQLTabs() {
     }, [connectionId, routeConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId]);
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
-    const updateTab = useCallback((
-        tabId: string,
-        patch: Partial<UITabPayload>,
-        options?: { immediate?: boolean },
-    ) => {
-        let updated: UITabPayload | undefined;
+    const updateTab = useCallback(
+        (tabId: string, patch: Partial<UITabPayload>, options?: { immediate?: boolean }) => {
+            let updated: UITabPayload | undefined;
 
-        setTabs(prevTabs => {
-            const nextTabs = prevTabs.map(t => {
-                if (t.tabId !== tabId) return t;
-                updated = { ...t, ...patch } as UITabPayload;
-                return updated;
+            setTabs(prevTabs => {
+                const nextTabs = prevTabs.map(t => {
+                    if (t.tabId !== tabId) return t;
+                    updated = { ...t, ...patch } as UITabPayload;
+                    return updated;
+                });
+                return nextTabs;
             });
-            return nextTabs;
-        });
 
-        if (!updated) return;
+            if (!updated) return;
 
-        if (options?.immediate) {
-            
-            saveTabToServer(tabId, updated).catch(err => {
-                console.error('immediate save tab error', err);
-            });
-        } else {
-            if (debouncedSaveRef.current) {
-                debouncedSaveRef.current(tabId, updated);
+            if (options?.immediate) {
+                saveTabToServer(tabId, updated).catch(err => {
+                    console.error('immediate save tab error', err);
+                });
+            } else {
+                if (debouncedSaveRef.current) {
+                    debouncedSaveRef.current(tabId, updated);
+                }
             }
-        }
-    }, [setTabs]);
+        },
+        [setTabs],
+    );
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     const addTab = async (payload?: { tabName?: string; content?: string; activate?: boolean }) => {
         const tabId = uuidv4();
@@ -325,12 +324,7 @@ export function useSQLTabs() {
         const { tableName, databaseName, tabName } = payload;
         if (!tableName) return;
 
-        const existing = tabs.find(
-            t =>
-                t.tabType === 'table' &&
-                t.tableName === tableName &&
-                (databaseName ? t.databaseName === databaseName : true),
-        );
+        const existing = tabs.find(t => t.tabType === 'table' && t.tableName === tableName && (databaseName ? t.databaseName === databaseName : true));
         if (existing) {
             setActiveTabId(existing.tabId);
             return existing;
@@ -362,10 +356,9 @@ export function useSQLTabs() {
     };
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     const closeTab = async (tabId: string) => {
-        
         if (debouncedSaveRef.current) {
             debouncedSaveRef.current.flush();
         }
@@ -408,7 +401,7 @@ export function useSQLTabs() {
     };
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     const closeOtherTabs = async (tabId: string) => {
         if (debouncedSaveRef.current) {
@@ -443,7 +436,7 @@ export function useSQLTabs() {
     };
 
     // ---------------------------------------------------
-    
+
     // ---------------------------------------------------
     const reorderTabs = useCallback(
         (sourceId: string, targetId: string, options?: { persist?: boolean }) => {

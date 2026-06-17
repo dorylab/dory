@@ -11,13 +11,13 @@ export type NavItem = {
     url: string;
     matchPrefix?: string;
     icon?: React.ComponentType<{ className?: string }>;
-    requiresConnection?: boolean; 
+    requiresConnection?: boolean;
 };
 
 export function NavMain({
     items,
-    disabled = false, 
-    hasActiveConnection = false, 
+    disabled = false,
+    hasActiveConnection = false,
     className,
 }: {
     items: NavItem[];
@@ -33,10 +33,11 @@ export function NavMain({
                 <SidebarMenu>
                     {items.map(item => {
                         const IconComp = item.icon;
-                        const itemDisabled = disabled || (item.requiresConnection && !hasActiveConnection);
+                        const itemDisabled = item.requiresConnection ? disabled || !hasActiveConnection : false;
 
                         const matchBase = item.matchPrefix ?? item.url;
-                        const isActive = !itemDisabled && (pathname === item.url || pathname.startsWith(`${item.url}/`) || pathname === matchBase || pathname.startsWith(`${matchBase}/`));
+                        const isActive =
+                            !itemDisabled && (pathname === item.url || pathname.startsWith(`${item.url}/`) || pathname === matchBase || pathname.startsWith(`${matchBase}/`));
 
                         const content = itemDisabled ? (
                             <span
@@ -65,10 +66,8 @@ export function NavMain({
                                 <SidebarMenuButton
                                     asChild
                                     tooltip={item.title}
-                                    
                                     isActive={isActive}
                                     className={cn(
-                                        
                                         'data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground data-[active=true]:active:bg-primary/90 data-[active=true]:active:text-primary-foreground',
                                     )}
                                 >

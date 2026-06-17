@@ -10,6 +10,7 @@ import { useSqlLayout } from './useSqlLayout';
 import { useSqlAiTabTitle } from './useSqlAiTabTitle';
 import { useSqlQueryRunner } from './useSqlQueryRunner';
 import { useSqlChatHandoff } from './useSqlChatHandoff';
+import { useWorkHydration } from './useWorkHydration';
 
 export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
     const { normalizedLayout, onLayout } = useSqlLayout(defaultLayout);
@@ -56,6 +57,12 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
         setActiveTabId,
         setActiveDatabase,
         isLoading,
+    });
+
+    useWorkHydration({
+        tabs,
+        isLoading,
+        setActiveTabId,
     });
 
     return {

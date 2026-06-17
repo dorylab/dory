@@ -9,7 +9,13 @@ export const tabSaveAction = defineWebAction({
     domain: 'tab',
     kind: 'command',
     risk: 'low',
-    inputSchema: z.object({ connectionId: z.string().min(1).optional(), tabId: z.string().min(1), state: z.any(), resultMeta: z.any().optional().nullable() }),
+    inputSchema: z.object({
+        connectionId: z.string().min(1).optional(),
+        workId: z.string().min(1).nullable().optional(),
+        tabId: z.string().min(1),
+        state: z.any(),
+        resultMeta: z.any().optional().nullable(),
+    }),
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['tabs:write'],
@@ -25,6 +31,7 @@ export const tabSaveAction = defineWebAction({
             tabId: input.tabId,
             userId: ctx.userId,
             connectionId: resolveConnectionId(ctx, input),
+            workId: input.workId ?? input.state.workId ?? null,
             state: {
                 content: isTable ? '' : input.state.content || null,
                 databaseName: isTable ? input.state.databaseName : (input.state.databaseName ?? null),

@@ -10,6 +10,7 @@ export const tabs = pgTable('tabs', {
     tabName: text('tab_name').notNull().default('New Query'),
     userId: text('user_id').notNull(),
     connectionId: text('connection_id').notNull(),
+    workId: text('work_id'),
 
     // SQL tabs leave empty; Table tabs fill this
     databaseName: text('database_name'),
