@@ -8,11 +8,10 @@ import { createValidatedWorkspaceSnapshot, workRunRequestBodySchema, WorkspaceSn
 
 export const runtime = 'nodejs';
 
-export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
+export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }, context) => {
     const runReq = req.clone() as NextRequest;
-    const { pathname } = new URL(req.url);
-    const parts = pathname.split('/').filter(Boolean);
-    const workId = parts[parts.length - 2];
+    const params = (await context?.params) ?? {};
+    const workId = typeof params.workId === 'string' ? params.workId : null;
 
     if (!workId) {
         return Response.json({ error: 'Missing work id.' }, { status: 400 });
@@ -20,6 +19,8 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
 
     let workspaceSnapshotId: string | null = null;
     let focusInvestigationId: string | null = null;
+    let focusTabId: string | null = null;
+    let trigger: 'user_instruction' | 'continue_from_workspace' | 'continue_from_tab' | null = null;
     let mode: 'run' | 'continue_work' | 'revise_analysis' | 'update_conclusion' | 'rerun_from_scratch' = 'run';
     let userInstruction: string | null = null;
     const text = await req.text();
@@ -40,6 +41,8 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         mode = parsed.data?.mode ?? 'run';
         userInstruction = parsed.data?.userInstruction ?? null;
         focusInvestigationId = parsed.data?.focusInvestigationId ?? null;
+        focusTabId = parsed.data?.focusTabId ?? null;
+        trigger = parsed.data?.trigger ?? null;
         if (workspaceSnapshot) {
             const existingRunningRun = await db.works.getRunningRun({ organizationId, workId });
             if (existingRunningRun) {
@@ -83,6 +86,8 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
         workId,
         workspaceSnapshotId,
         focusInvestigationId,
+        focusTabId,
+        trigger,
         mode,
         userInstruction,
     });

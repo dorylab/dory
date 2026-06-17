@@ -38,6 +38,11 @@ export const tabSaveAction = defineWebAction({
                 tabName: input.state.tabName ?? null,
                 orderIndex: input.state.orderIndex,
                 createdAt: input.state.createdAt,
+                workSyncState: input.state.workSyncState,
+                lastAgentRunId: input.state.lastAgentRunId ?? null,
+                lastAgentEventId: input.state.lastAgentEventId ?? null,
+                lastAgentSyncedAt: input.state.lastAgentSyncedAt ?? null,
+                lastHumanEditedAt: input.state.lastHumanEditedAt ?? null,
             },
             resultMeta: input.resultMeta ?? input.state.resultMeta ?? null,
         });

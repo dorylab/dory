@@ -3521,6 +3521,96 @@
             }
         }
     },
+    "WorkDetail": {
+        "Work": "Work",
+        "BackToWork": "Volver a Work",
+        "WorkNotFound": "Work no encontrado.",
+        "Goal": "Objetivo: {goal}",
+        "DataSource": "Fuente de datos: {name}",
+        "Updated": "Actualizado {time}",
+        "OpenWorkspace": "Abrir espacio de trabajo",
+        "ContinueWithAgent": "Continuar con Agent",
+        "Workspace": "Espacio de trabajo",
+        "WorkspaceCounts": "{tabCount} pestañas SQL · {resultCount} resultados · {unsyncedCount} cambios sin sincronizar",
+        "Open": "Abrir",
+        "Run": "Ejecutar",
+        "Continue": "Continuar",
+        "NoSqlTabs": "Aún no hay pestañas SQL. Indica al Agent qué hacer después o abre el espacio de trabajo para empezar manualmente.",
+        "AgentSummary": "Resumen del Agent",
+        "Outcome": "Resultado",
+        "TellAgent": "Indica al Agent qué hacer después",
+        "InstructionPlaceholder": "Desglosa los nuevos usuarios de esta semana por canal",
+        "Execution": "Ejecución",
+        "ExecutionEvents": "{count} eventos",
+        "Show": "Mostrar",
+        "Hide": "Ocultar",
+        "NoExecutionHistory": "Aún no hay historial de ejecución.",
+        "UntitledSqlTab": "Pestaña SQL sin título",
+        "SqlTab": "Pestaña SQL",
+        "QueryResult": "resultado de consulta",
+        "Rows": "{count} filas",
+        "TabMeta": "{rows} filas · {columns} columnas · Actualizado {time}",
+        "DefaultContinueInstruction": "Continúa desde el espacio de trabajo actual.",
+        "ContinueFromTabInstruction": "Continúa desde la pestaña SQL: {title}",
+        "Status": {
+            "Running": "En ejecución",
+            "WaitingForUser": "Esperando al usuario",
+            "Completed": "Completado",
+            "Failed": "Fallido"
+        },
+        "TabStatus": {
+            "Unsynced": "Sin sincronizar",
+            "AgentGenerated": "Generado por Agent",
+            "Running": "En ejecución",
+            "Failed": "Fallido",
+            "Synced": "Sincronizado"
+        },
+        "OutcomeBody": {
+            "FailedNoResult": "La ejecución del Agent falló antes de producir un resultado en el espacio de trabajo.",
+            "Running": "Agent sigue trabajando en este Work.",
+            "Workspace": "El espacio de trabajo contiene {tabCount} pestañas SQL y {resultCount} resultados.",
+            "WorkspaceWithTitles": "El espacio de trabajo contiene {tabCount} pestañas SQL y {resultCount} resultados: {titles}",
+            "Empty": "Aún no hay un resultado completado del Agent. Continúa con Agent para generar contenido SQL en el espacio de trabajo."
+        },
+        "OutcomeMeta": {
+            "Completed": "Completado {time}",
+            "FailedAt": "Falló {time}",
+            "Failed": "Fallido",
+            "Started": "Iniciado {time}",
+            "Updated": "Actualizado {time}",
+            "WorkspaceUpdated": "Espacio de trabajo actualizado",
+            "Waiting": "Esperando salida del Agent"
+        },
+        "EventType": {
+            "ToolCall": "Llamada de herramienta",
+            "ToolResult": "Resultado de herramienta",
+            "SqlExecuted": "SQL ejecutado",
+            "SqlTabCreated": "Pestaña SQL creada",
+            "SqlTabUpdated": "Pestaña SQL actualizada",
+            "WorkspaceSnapshot": "Espacio de trabajo entregado",
+            "WorkDone": "Agent resumió el resultado",
+            "InvestigationCreated": "Análisis creado",
+            "InvestigationUpdated": "Análisis actualizado",
+            "ConclusionUpdated": "Conclusión actualizada",
+            "Error": "Error",
+            "Completed": "Completado",
+            "Message": "Mensaje"
+        },
+        "EventContent": {
+            "SqlTabCreated": "Agent creó la pestaña SQL: {title}",
+            "SqlTabUpdated": "Agent actualizó la pestaña SQL: {title}",
+            "SqlExecuted": "Agent ejecutó la consulta: {result}",
+            "WorkspaceSnapshot": "El usuario continuó desde el espacio de trabajo",
+            "ToolCall": "Agent inició una acción del espacio de trabajo",
+            "ToolResult": "Agent terminó una acción del espacio de trabajo"
+        },
+        "Toast": {
+            "AgentRunStarted": "Ejecución del Agent iniciada",
+            "ContinueAgentFailed": "No se pudo continuar con Agent",
+            "SqlTabExecuted": "Pestaña SQL ejecutada",
+            "RunSqlTabFailed": "No se pudo ejecutar la pestaña SQL"
+        }
+    },
     "Routes": {
         "SQL Console": "Consola SQL"
     }

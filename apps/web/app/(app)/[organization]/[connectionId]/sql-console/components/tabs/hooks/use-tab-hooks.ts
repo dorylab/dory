@@ -71,6 +71,11 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                                     content: tab.content ?? '',
                                     status: tab.status,
                                     resultMeta: tab.resultMeta,
+                                    workSyncState: tab.workSyncState,
+                                    lastAgentRunId: tab.lastAgentRunId ?? null,
+                                    lastAgentEventId: tab.lastAgentEventId ?? null,
+                                    lastAgentSyncedAt: tab.lastAgentSyncedAt ?? null,
+                                    lastHumanEditedAt: tab.lastHumanEditedAt ?? null,
                                 }
                                 : {
                                     tabId: tab.tabId,
@@ -85,6 +90,11 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                                     tableName: tab.tableName,
                                     activeSubTab: tab.activeSubTab,
                                     dataView: tab.dataView,
+                                    workSyncState: tab.workSyncState,
+                                    lastAgentRunId: tab.lastAgentRunId ?? null,
+                                    lastAgentEventId: tab.lastAgentEventId ?? null,
+                                    lastAgentSyncedAt: tab.lastAgentSyncedAt ?? null,
+                                    lastHumanEditedAt: tab.lastHumanEditedAt ?? null,
                                 };
                         console.log('Persist tab order to server:', tab.tabId, 'as', base);
                         return saveTabToServer(tab.tabId, base).catch(err => {
@@ -126,6 +136,11 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                 createdAt: typeof tab.createdAt === 'undefined' ? undefined : String(tab.createdAt),
                 resultMeta: tab.tabType === 'sql' ? (tab.resultMeta ?? null) : null,
                 workspaceScope: normalizedWorkspaceScope,
+                workSyncState: tab.workSyncState,
+                lastAgentRunId: tab.lastAgentRunId ?? null,
+                lastAgentEventId: tab.lastAgentEventId ?? null,
+                lastAgentSyncedAt: tab.lastAgentSyncedAt ?? null,
+                lastHumanEditedAt: tab.lastHumanEditedAt ?? null,
             },
             { currentConnectionId: connectionId },
         );
@@ -325,11 +340,19 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
         options?: { immediate?: boolean },
     ) => {
         let updated: UITabPayload | undefined;
+        const normalizedPatch =
+            normalizedWorkspaceScope.type === 'work' && 'content' in patch && typeof patch.content === 'string' && patch.workSyncState === undefined
+                ? {
+                      ...patch,
+                      workSyncState: 'unsynced' as const,
+                      lastHumanEditedAt: new Date().toISOString(),
+                  }
+                : patch;
 
         setTabs(prevTabs => {
             const nextTabs = prevTabs.map(t => {
                 if (t.tabId !== tabId) return t;
-                updated = { ...t, ...patch } as UITabPayload;
+                updated = { ...t, ...normalizedPatch } as UITabPayload;
                 return updated;
             });
             return nextTabs;
@@ -347,7 +370,7 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
                 debouncedSaveRef.current(tabId, updated);
             }
         }
-    }, [setTabs]);
+    }, [normalizedWorkspaceScope.type, setTabs]);
 
     // ---------------------------------------------------
     
@@ -366,6 +389,8 @@ export function useSQLTabs(options?: { workspaceScope?: WorkspaceScope | null; c
             workspaceScope: normalizedWorkspaceScope,
             orderIndex: tabs.length,
             createdAt: new Date().toISOString(),
+            workSyncState: normalizedWorkspaceScope.type === 'work' ? 'unsynced' : undefined,
+            lastHumanEditedAt: normalizedWorkspaceScope.type === 'work' ? new Date().toISOString() : undefined,
         };
 
         setTabs(prev => [...prev, newTab]);

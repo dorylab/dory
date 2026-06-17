@@ -18,6 +18,7 @@ import { workSuggestGoalsAction } from './suggest-goals';
 import { workUpdateInvestigationFindingAction } from './update-investigation-finding';
 import { workUpdateInvestigationAction } from './update-investigation';
 import { workReviseInvestigationAction } from './revise-investigation';
+import { workWorkspaceActions } from './workspace-actions';
 
 export const workActions = [
     workCreateAction,
@@ -40,4 +41,5 @@ export const workActions = [
     workGetRunEventResultAction,
     workUpdateInvestigationAction,
     workReviseInvestigationAction,
+    ...workWorkspaceActions,
 ];

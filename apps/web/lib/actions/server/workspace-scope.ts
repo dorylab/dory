@@ -7,6 +7,10 @@ export const workspaceScopeInputSchema = z
             type: z.literal('connection'),
         }),
         z.object({
+            type: z.literal('work'),
+            workId: z.string().min(1),
+        }),
+        z.object({
             type: z.literal('work_investigation'),
             workId: z.string().min(1),
             investigationId: z.string().min(1),

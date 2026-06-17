@@ -20,9 +20,10 @@ export type WorkInvestigationWorkspaceDirtyState = {
 };
 
 export type WorkInvestigationWorkspaceSnapshotInput = {
-    investigationId: string;
+    investigationId?: string;
     workspaceId: string;
-    intent: 'continue_analysis';
+    focusTabId?: string | null;
+    intent: 'continue_analysis' | 'continue_from_workspace' | 'continue_from_tab';
     humanEdits: {
         sql: string | null;
         resultPreview: Record<string, unknown> | null;
@@ -98,13 +99,15 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
     runtime,
     workId,
     investigationId,
+    intent = 'continue_analysis',
     linkedTabId,
     onWorkspaceDirtyStateChange,
     onWorkspaceSnapshotControllerChange,
 }: {
     runtime: SQLConsoleRuntime;
     workId: string;
-    investigationId: string;
+    investigationId?: string;
+    intent?: WorkInvestigationWorkspaceSnapshotInput['intent'];
     linkedTabId?: string | null;
     onWorkspaceDirtyStateChange?: (state: WorkInvestigationWorkspaceDirtyState) => void;
     onWorkspaceSnapshotControllerChange?: (controller: WorkInvestigationWorkspaceSnapshotController | null) => void;
@@ -129,7 +132,7 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
     const latestSignatureRef = useRef<WorkspaceSnapshotSignature | null>(null);
     const lastCollectedSignatureRef = useRef<WorkspaceSnapshotSignature | null>(null);
     const lastEmittedDirtyStateKeyRef = useRef<string | null>(null);
-    const workspaceIdentity = `${workId}:${investigationId}:${linkedTabId ?? ''}`;
+    const workspaceIdentity = `${workId}:${investigationId ?? ''}:${intent}:${linkedTabId ?? ''}`;
 
     const currentSignature = useMemo<WorkspaceSnapshotSignature | null>(() => {
         if (!activeTabId || activeTab?.tabType !== 'sql') return null;
@@ -243,7 +246,8 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
             return {
                 investigationId,
                 workspaceId: activeTabId,
-                intent: 'continue_analysis',
+                focusTabId: activeTabId,
+                intent,
                 humanEdits: {
                     sql: sqlText,
                     resultPreview,
@@ -264,6 +268,7 @@ export function useWorkInvestigationWorkspaceSnapshotBridge({
             dbReady,
             getResultRows,
             investigationId,
+            intent,
             listResultSetsMeta,
             runtime.editorRef,
         ],

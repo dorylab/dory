@@ -9,7 +9,9 @@ import {
     workRunOutputSchema,
     workRunTimelineOutputSchema,
     workTimelineEventOutputSchema,
+    workWorkspaceSummaryOutputSchema,
 } from './schemas';
+import { getWorkWorkspaceSummary } from './workspace-summary';
 
 type InvestigationDetail = z.infer<typeof workInvestigationDetailOutputSchema>;
 
@@ -45,6 +47,7 @@ export const workGetAction = defineWebAction({
         runTimelines: z.array(workRunTimelineOutputSchema),
         timelineEvents: z.array(workTimelineEventOutputSchema),
         unlinkedTimelineEvents: z.array(workTimelineEventOutputSchema),
+        workspaceSummary: workWorkspaceSummaryOutputSchema,
     }),
     permissions: readWorkspace,
     scopes: ['works:read'],
@@ -89,6 +92,13 @@ export const workGetAction = defineWebAction({
             runEvents: allRunEvents,
             workspaceSnapshots,
         });
+        const workspaceSummary = await getWorkWorkspaceSummary({
+            db: ctx.services.db,
+            organizationId: ctx.organizationId,
+            userId: ctx.userId,
+            workId: input.id,
+            connectionId: work.connectionId,
+        });
 
         return {
             work,
@@ -99,6 +109,7 @@ export const workGetAction = defineWebAction({
             runTimelines,
             timelineEvents,
             unlinkedTimelineEvents,
+            workspaceSummary,
         };
     },
 });

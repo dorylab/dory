@@ -3521,6 +3521,96 @@
             }
         }
     },
+    "WorkDetail": {
+        "Work": "Work",
+        "BackToWork": "Work に戻る",
+        "WorkNotFound": "Work が見つかりません。",
+        "Goal": "目標: {goal}",
+        "DataSource": "データソース: {name}",
+        "Updated": "{time}に更新",
+        "OpenWorkspace": "ワークスペースを開く",
+        "ContinueWithAgent": "Agent で続行",
+        "Workspace": "ワークスペース",
+        "WorkspaceCounts": "{tabCount} 個の SQL タブ · {resultCount} 件の結果 · {unsyncedCount} 件の未同期変更",
+        "Open": "開く",
+        "Run": "実行",
+        "Continue": "続行",
+        "NoSqlTabs": "SQL タブはまだありません。Agent に次の作業を伝えるか、ワークスペースを開いて手動で開始してください。",
+        "AgentSummary": "Agent サマリー",
+        "Outcome": "結果",
+        "TellAgent": "Agent に次の作業を伝える",
+        "InstructionPlaceholder": "今週の新規ユーザーをチャネル別に分解する",
+        "Execution": "実行履歴",
+        "ExecutionEvents": "{count} 件のイベント",
+        "Show": "表示",
+        "Hide": "非表示",
+        "NoExecutionHistory": "実行履歴はまだありません。",
+        "UntitledSqlTab": "無題の SQL タブ",
+        "SqlTab": "SQL タブ",
+        "QueryResult": "クエリ結果",
+        "Rows": "{count} 行",
+        "TabMeta": "{rows} 行 · {columns} 列 · {time}に更新",
+        "DefaultContinueInstruction": "現在のワークスペースから続行してください。",
+        "ContinueFromTabInstruction": "SQL タブから続行: {title}",
+        "Status": {
+            "Running": "実行中",
+            "WaitingForUser": "ユーザー待ち",
+            "Completed": "完了",
+            "Failed": "失敗"
+        },
+        "TabStatus": {
+            "Unsynced": "未同期",
+            "AgentGenerated": "Agent 生成",
+            "Running": "実行中",
+            "Failed": "失敗",
+            "Synced": "同期済み"
+        },
+        "OutcomeBody": {
+            "FailedNoResult": "Agent の実行は、ワークスペース結果を生成する前に失敗しました。",
+            "Running": "Agent はこの Work を処理中です。",
+            "Workspace": "ワークスペースには {tabCount} 個の SQL タブと {resultCount} 件の結果があります。",
+            "WorkspaceWithTitles": "ワークスペースには {tabCount} 個の SQL タブと {resultCount} 件の結果があります: {titles}",
+            "Empty": "完了した Agent の結果はまだありません。Agent で続行して SQL ワークスペースの内容を生成してください。"
+        },
+        "OutcomeMeta": {
+            "Completed": "{time}に完了",
+            "FailedAt": "{time}に失敗",
+            "Failed": "失敗",
+            "Started": "{time}に開始",
+            "Updated": "{time}に更新",
+            "WorkspaceUpdated": "ワークスペースを更新しました",
+            "Waiting": "Agent の出力待ち"
+        },
+        "EventType": {
+            "ToolCall": "ツール呼び出し",
+            "ToolResult": "ツール結果",
+            "SqlExecuted": "SQL 実行",
+            "SqlTabCreated": "SQL タブ作成",
+            "SqlTabUpdated": "SQL タブ更新",
+            "WorkspaceSnapshot": "ワークスペース引き継ぎ",
+            "WorkDone": "Agent が結果を要約",
+            "InvestigationCreated": "分析を作成",
+            "InvestigationUpdated": "分析を更新",
+            "ConclusionUpdated": "結論を更新",
+            "Error": "エラー",
+            "Completed": "完了",
+            "Message": "メッセージ"
+        },
+        "EventContent": {
+            "SqlTabCreated": "Agent が SQL タブを作成しました: {title}",
+            "SqlTabUpdated": "Agent が SQL タブを更新しました: {title}",
+            "SqlExecuted": "Agent がクエリを実行しました: {result}",
+            "WorkspaceSnapshot": "ユーザーがワークスペースから続行しました",
+            "ToolCall": "Agent がワークスペース操作を開始しました",
+            "ToolResult": "Agent がワークスペース操作を完了しました"
+        },
+        "Toast": {
+            "AgentRunStarted": "Agent の実行を開始しました",
+            "ContinueAgentFailed": "Agent の続行に失敗しました",
+            "SqlTabExecuted": "SQL タブを実行しました",
+            "RunSqlTabFailed": "SQL タブの実行に失敗しました"
+        }
+    },
     "Routes": {
         "SQL Console": "SQL コンソール"
     }

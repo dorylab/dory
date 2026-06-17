@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createAgentUIStreamResponse, createIdGenerator, type ToolSet, type UIMessage } from 'ai';
 import { randomUUID } from 'node:crypto';
+import type { NextRequest } from 'next/server';
 
 import { createChartBuilderTool } from '@/app/api/chat/tools/chart-builder';
 import { createDoryChatTools } from '@/app/api/chat/tools/dory-tools';
@@ -20,6 +21,7 @@ import { executeAction } from '@/lib/actions/server/execute';
 import type { WebActionServices } from '@/lib/actions/server/types';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
 import { buildIncludedAnalysisConclusionFromFindings } from '@/lib/work/review-state';
+import { workspaceScopeKey, type UITabPayload } from '@dory/shared/types/tabs';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import type { ActionContext } from '@dory/actions';
 import type { DBService } from '@dory/database';
@@ -36,13 +38,15 @@ import { applyWorkAgentProtocolResult, checkWorkAgentProtocol, checkWorkAgentPro
 import { formatWorkspaceSnapshotForAgent } from './workspace-snapshot';
 
 type RunWorkAgentOptions = {
-    req: Request;
+    req: NextRequest;
     db: DBService;
     organizationId: string;
     userId: string;
     workId: string;
     workspaceSnapshotId?: string | null;
     focusInvestigationId?: string | null;
+    focusTabId?: string | null;
+    trigger?: 'user_instruction' | 'continue_from_workspace' | 'continue_from_tab' | null;
     mode?: WorkRunMode | null;
     userInstruction?: string | null;
 };
@@ -428,6 +432,124 @@ function workRunTools(tools: Record<string, any>) {
     return Object.fromEntries(Object.entries(tools).filter(([toolName]) => allowed.has(toolName)));
 }
 
+function workWorkspaceRunTools(tools: Record<string, unknown>) {
+    const allowed = new Set(['work_createMessage', 'work_createSqlTab', 'work_updateSqlTab', 'work_executeSqlTab', 'work_markDone', 'work_getWorkspace']);
+    return Object.fromEntries(Object.entries(tools).filter(([toolName]) => allowed.has(toolName)));
+}
+
+function withWorkWorkspaceContext(input: unknown, params: { toolName: string; workId: string; runId: string; focusTabId?: string | null }) {
+    const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+    if (params.toolName === 'work_getWorkspace') {
+        return {
+            ...record,
+            workId: params.workId,
+        };
+    }
+
+    return {
+        ...record,
+        workId: params.workId,
+        runId: params.runId,
+        tabId:
+            typeof record.tabId === 'string' && record.tabId
+                ? record.tabId
+                : params.toolName === 'work_executeSqlTab' || params.toolName === 'work_updateSqlTab'
+                  ? (params.focusTabId ?? undefined)
+                  : undefined,
+    };
+}
+
+function toolOutputError(output: unknown) {
+    const record = output && typeof output === 'object' && !Array.isArray(output) ? (output as Record<string, unknown>) : null;
+    if (record?.ok !== false) return null;
+    const error = record.error && typeof record.error === 'object' && !Array.isArray(record.error) ? (record.error as Record<string, unknown>) : null;
+    const message = typeof error?.message === 'string' && error.message.trim() ? error.message.trim() : 'Workspace tool failed.';
+    return message;
+}
+
+function isMeaningfulWorkRunSqlTab(tab: UITabPayload) {
+    if (tab.tabType !== 'sql') return false;
+    if (tab.content?.trim()) return true;
+    if (tab.resultMeta?.sessionId || tab.sessionId) return true;
+    if (tab.resultMeta?.source === 'work-run') return true;
+    if (tab.lastAgentRunId || tab.lastAgentEventId || tab.lastAgentSyncedAt) return true;
+    return false;
+}
+
+function wrapWorkspaceToolsWithRunEvents(params: {
+    tools: Record<string, unknown>;
+    workId: string;
+    runId: string;
+    focusTabId?: string | null;
+    appendEvent: (event: {
+        type: WorkRunEventType;
+        role: WorkRunEventRole;
+        content?: string | null;
+        payload?: Record<string, unknown> | null;
+        createdAt?: string | Date | null;
+    }) => Promise<void>;
+}): ToolSet {
+    return Object.fromEntries(
+        Object.entries(params.tools).map(([toolName, definition]) => {
+            const objectDefinition = definition && typeof definition === 'object' ? (definition as Record<string, unknown>) : null;
+            const executeTool = objectDefinition?.execute;
+            if (!objectDefinition || typeof executeTool !== 'function') {
+                return [toolName, definition];
+            }
+
+            return [
+                toolName,
+                {
+                    ...objectDefinition,
+                    execute: async (input: unknown, options: unknown) => {
+                        const executionInput = withWorkWorkspaceContext(input, {
+                            toolName,
+                            workId: params.workId,
+                            runId: params.runId,
+                            focusTabId: params.focusTabId,
+                        });
+                        await params.appendEvent({
+                            type: 'tool_call',
+                            role: 'tool',
+                            content: `${toolName} called`,
+                            payload: sanitizePayload({ toolName, input: executionInput }),
+                        });
+
+                        try {
+                            const output = await executeTool(executionInput, options);
+                            const outputError = toolOutputError(output);
+                            if (outputError) {
+                                await params.appendEvent({
+                                    type: 'error',
+                                    role: 'tool',
+                                    content: outputError,
+                                    payload: sanitizePayload({ toolName, input: executionInput, output }),
+                                });
+                                return output;
+                            }
+                            await params.appendEvent({
+                                type: 'tool_result',
+                                role: 'tool',
+                                content: toMessageContent(output, `${toolName} completed`),
+                                payload: sanitizePayload({ toolName, output }),
+                            });
+                            return output;
+                        } catch (error) {
+                            await params.appendEvent({
+                                type: 'error',
+                                role: 'tool',
+                                content: error instanceof Error ? error.message : String(error ?? `${toolName} failed`),
+                                payload: sanitizePayload({ toolName, error }),
+                            });
+                            throw error;
+                        }
+                    },
+                },
+            ];
+        }),
+    ) as ToolSet;
+}
+
 function withWorkSqlContext(input: unknown, params: { toolName: string; workId: string; runId: string; investigationId?: string | null }) {
     if (params.toolName !== 'work_runInvestigationSql') return input;
     const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
@@ -785,16 +907,54 @@ function buildWorkRunInstruction(
         .filter(Boolean)
         .join('\n');
 }
+
+function buildWorkWorkspaceRunInstruction(input: {
+    work: { id: string; workType?: string | null; scope?: unknown; initialContext?: string | null };
+    workspaceContext: string | null;
+    userInstruction: string | null;
+    focusTabId?: string | null;
+    trigger?: string | null;
+}) {
+    const userInstructionSection = input.userInstruction?.trim() ? ['Human instruction', input.userInstruction.trim()].join('\n') : null;
+    return [
+        'Dory Work Workspace Protocol',
+        `You are operating Dory Work ${input.work.id}.`,
+        'Dory Work is not a chatbot, notebook, or structured Analysis workflow. Your job is to operate the SQL workspace.',
+        'Only call these Work tools by their exact tool names: work_getWorkspace, work_createMessage, work_createSqlTab, work_updateSqlTab, work_executeSqlTab, work_markDone.',
+        'Do not call Analysis, Finding, Evidence, Conclusion, or Investigation tools for this Work run.',
+        'Use work_getWorkspace when you need the current tabs and sync state.',
+        'Use work_createSqlTab for a new SQL purpose. Use work_updateSqlTab when modifying an existing tab. Use work_executeSqlTab to run a tab and preserve the result.',
+        'For a new Work with no meaningful SQL tab, your first workspace-changing tool call must be work_createSqlTab with a clear title and a complete non-empty SQL statement. The sql field must not be empty and must not be placeholder text.',
+        'After creating or updating a SQL tab, call work_executeSqlTab for that same tab before calling work_markDone unless the human explicitly asks you only to draft SQL.',
+        'Never call work_markDone until at least one Work SQL tab contains non-empty SQL that directly addresses the human instruction or Work goal.',
+        'If the human continued from a focused tab, prioritize that tab before creating new tabs.',
+        input.focusTabId ? `Focused tab ID: ${input.focusTabId}` : null,
+        input.trigger ? `Run trigger: ${input.trigger}` : null,
+        formatWorkSetupSection(input.work),
+        input.workspaceContext,
+        'Before tool calls, briefly state the workspace action you are taking. Keep messages short and operational.',
+        'Finish by calling work_markDone with a concise summary of what changed in the workspace.',
+        userInstructionSection,
+    ]
+        .filter(Boolean)
+        .join('\n');
+}
 function extractResponseText(message: unknown): string | null {
-    const parts = (message as any)?.parts;
+    const record = message && typeof message === 'object' && !Array.isArray(message) ? (message as Record<string, unknown>) : null;
+    const parts = record?.parts;
     if (!Array.isArray(parts)) return null;
     const text = parts
-        .filter((part: any) => part?.type === 'text' && typeof part.text === 'string')
-        .map((part: any) => part.text.trim())
+        .map(part => (part && typeof part === 'object' && !Array.isArray(part) ? (part as Record<string, unknown>) : null))
+        .filter((part): part is Record<string, unknown> => part?.type === 'text' && typeof part.text === 'string')
+        .map(part => String(part.text).trim())
         .filter(Boolean)
         .join('\n\n')
         .trim();
     return text || null;
+}
+
+function extractFinishEventText(event: { responseMessage?: unknown; text?: unknown }) {
+    return extractResponseText(event.responseMessage) ?? (typeof event.text === 'string' ? event.text : null);
 }
 
 export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Response> {
@@ -932,6 +1092,316 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         },
     });
 
+    const useWorkWorkspaceProtocol =
+        !focusedAnalysis && mode !== 'update_conclusion' && mode !== 'revise_analysis' && (!workspaceSnapshot || workspaceSnapshot.intent !== 'continue_analysis');
+
+    if (useWorkWorkspaceProtocol) {
+        try {
+            const execution = await resolveAiRouteExecution({
+                req: options.req,
+                db: options.db,
+                organizationId: options.organizationId,
+                role: 'chat',
+                requestedModel: null,
+                includeModel: true,
+            });
+            const preset = execution.preset;
+            const compiledSystem = compileSystemPrompt(preset.system);
+            const entitlements = await resolveAiEntitlements({
+                organizationId: options.organizationId,
+                userId: options.userId,
+                feature: 'chat_agent',
+            });
+            assertAiQuotaAllowed(entitlements.quota);
+
+            const workspaceScope = { type: 'work' as const, workId: work.id };
+            const workspaceTabs = (await options.db.tabState.loadAllTab(options.userId, work.connectionId, workspaceScope)) as unknown as UITabPayload[];
+            const workspaceContext = [
+                'Current SQL Workspace',
+                `Workspace ID: ${workspaceScopeKey(workspaceScope)}`,
+                workspaceTabs.length
+                    ? workspaceTabs
+                          .map((tab, index) => {
+                              const resultMeta = tab.tabType === 'sql' && tab.resultMeta && typeof tab.resultMeta === 'object' ? tab.resultMeta : null;
+                              const rows = typeof resultMeta?.rows === 'number' ? `${resultMeta.rows} rows` : 'no result rows';
+                              const columns = typeof resultMeta?.columns === 'number' ? `${resultMeta.columns} columns` : 'unknown columns';
+                              const syncState = typeof tab.workSyncState === 'string' ? tab.workSyncState : 'synced';
+                              return `${index + 1}. tabId=${tab.tabId}; title=${tab.tabName ?? 'Untitled SQL tab'}; status=${syncState}; result=${rows}, ${columns}`;
+                          })
+                          .join('\n')
+                    : 'No SQL tabs exist yet.',
+            ].join('\n');
+
+            const tools = workWorkspaceRunTools({
+                ...createDoryChatTools({
+                    userId: options.userId,
+                    organizationId: options.organizationId,
+                    currentConnectionId: work.connectionId,
+                    locale,
+                }),
+            });
+            const wrappedTools = wrapWorkspaceToolsWithRunEvents({
+                tools,
+                workId: work.id,
+                runId: run.id,
+                focusTabId: options.focusTabId ?? workspaceSnapshot?.workspaceId ?? null,
+                appendEvent,
+            });
+            const agentContext = await buildDoryAgentContext({
+                baseSystem: compiledSystem ?? '',
+                userLanguageInstruction: buildUserLanguageInstruction(userInstruction ?? work.goal, locale),
+                userId: options.userId,
+                organizationId: options.organizationId,
+                connectionId: work.connectionId,
+                database: null,
+                activeSchema: null,
+                table: null,
+                tableSchema: null,
+                connectionType: null,
+                sqlToolEnabled: false,
+                candidateTables: null,
+                copilotEnvelope: null,
+                locale,
+            });
+            const agentInstructions = [
+                agentContext.instructions,
+                buildWorkWorkspaceRunInstruction({
+                    work,
+                    workspaceContext: [workspaceContext, workspaceSnapshotContext].filter(Boolean).join('\n\n') || null,
+                    userInstruction,
+                    focusTabId: options.focusTabId ?? workspaceSnapshot?.workspaceId ?? null,
+                    trigger: options.trigger,
+                }),
+            ]
+                .filter(Boolean)
+                .join('\n\n');
+            const model = resolveDoryAgentModel({
+                execution,
+                req: options.req,
+            });
+            const gatewayHeaders = buildCloudflareAiGatewayHeaders(
+                {
+                    organizationId: options.organizationId,
+                    userId: options.userId,
+                    userEmail: entitlements.userEmail,
+                    plan: entitlements.plan,
+                    feature: 'chat_agent',
+                },
+                execution.gateway,
+            );
+            const headers = mergeHeaders(undefined, gatewayHeaders);
+            const uiMessages: UIMessage[] = [
+                {
+                    id: `work-run-${run.id}`,
+                    role: 'user',
+                    parts: [
+                        {
+                            type: 'text',
+                            text: [work.goal, workspaceSnapshotContext, userInstruction ? `Human instruction: ${userInstruction}` : null].filter(Boolean).join('\n\n'),
+                        },
+                    ],
+                } as UIMessage,
+            ];
+            let modelStepMessageCount = 0;
+
+            const agent = buildDoryChatAgent({
+                model,
+                tools: wrappedTools,
+                instructions: agentInstructions,
+                temperature: preset.temperature,
+                maxSteps: 18,
+                headers,
+                context: {
+                    organizationId: options.organizationId,
+                    userId: options.userId,
+                    userEmail: entitlements.userEmail,
+                    plan: entitlements.plan,
+                    feature: 'chat_agent',
+                    model: execution.modelName,
+                    requestId,
+                    connectionId: work.connectionId,
+                    gateway: execution.gateway,
+                    provider: execution.providerKey,
+                },
+                requestId,
+                startedAt,
+                debugInput: {
+                    system: agentInstructions,
+                    messages: uiMessages as never,
+                    prompt: null,
+                },
+            });
+
+            return await createAgentUIStreamResponse({
+                agent,
+                uiMessages: uiMessages as never,
+                originalMessages: uiMessages as never,
+                generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
+                headers: {
+                    'x-work-run-id': run.id,
+                },
+                onStepFinish: async step => {
+                    const text = step.text?.trim();
+                    if (!text || step.toolCalls.length === 0) return;
+                    modelStepMessageCount += 1;
+                    await appendEvent({
+                        type: 'message',
+                        role: 'agent',
+                        content: text,
+                        payload: sanitizePayload({
+                            stepNumber: step.stepNumber,
+                            toolCalls: step.toolCalls.map(toolCall => ({
+                                toolCallId: toolCall.toolCallId,
+                                toolName: toolCall.toolName,
+                            })),
+                        }),
+                    });
+                },
+                onFinish: async event => {
+                    if (event.isAborted) {
+                        await appendEvent({
+                            type: 'error',
+                            role: 'system',
+                            content: 'Agent run aborted',
+                            payload: { finishReason: event.finishReason ?? null },
+                        });
+                        await options.db.works.failRun({
+                            organizationId: options.organizationId,
+                            workId: work.id,
+                            id: run.id,
+                            error: 'Agent run aborted.',
+                        });
+                        return;
+                    }
+
+                    const text = extractFinishEventText(event);
+                    if (text && modelStepMessageCount === 0) {
+                        await appendEvent({
+                            type: 'message',
+                            role: 'agent',
+                            content: String(text),
+                            payload: sanitizePayload({
+                                finishReason: event.finishReason ?? null,
+                            }),
+                        });
+                    }
+
+                    const finalWorkspaceTabs = (await options.db.tabState.loadAllTab(options.userId, work.connectionId, {
+                        type: 'work',
+                        workId: work.id,
+                    })) as unknown as UITabPayload[];
+                    if (!finalWorkspaceTabs.some(isMeaningfulWorkRunSqlTab)) {
+                        const message = 'Agent finished without creating any SQL workspace tabs.';
+                        await appendEvent({
+                            type: 'error',
+                            role: 'system',
+                            content: message,
+                            payload: {
+                                finishReason: event.finishReason ?? null,
+                            },
+                        });
+                        await options.db.works.failRun({
+                            organizationId: options.organizationId,
+                            workId: work.id,
+                            id: run.id,
+                            error: message,
+                        });
+                        return;
+                    }
+
+                    await appendEvent({
+                        type: 'completed',
+                        role: 'system',
+                        content: 'Agent run completed',
+                        payload: {
+                            finishReason: event.finishReason ?? null,
+                        },
+                    });
+                    await options.db.works.completeRun({
+                        organizationId: options.organizationId,
+                        workId: work.id,
+                        id: run.id,
+                    });
+                },
+                onError: error => {
+                    const message = error instanceof Error ? error.message : String(error ?? 'AI_SERVICE_UNAVAILABLE');
+                    void appendEvent({
+                        type: 'error',
+                        role: 'system',
+                        content: message,
+                        payload: sanitizePayload({ error }),
+                    }).then(() =>
+                        options.db.works.failRun({
+                            organizationId: options.organizationId,
+                            workId: work.id,
+                            id: run.id,
+                            error: message,
+                        }),
+                    );
+
+                    void recordAiUsage({
+                        requestId,
+                        context: {
+                            organizationId: options.organizationId,
+                            userId: options.userId,
+                            feature: 'chat_agent',
+                            model: execution.modelName,
+                            requestId,
+                            connectionId: work.connectionId,
+                            gateway: execution.gateway,
+                            provider: execution.providerKey,
+                        },
+                        input: {
+                            system: agentContext.instructions,
+                            messages: uiMessages as never,
+                            prompt: null,
+                        },
+                        latencyMs: Date.now() - startedAt,
+                        status: 'error',
+                        error,
+                    });
+
+                    return message;
+                },
+            });
+        } catch (error) {
+            if (isAiQuotaExceededError(error)) {
+                await options.db.works.failRun({
+                    organizationId: options.organizationId,
+                    workId: work.id,
+                    id: run.id,
+                    error: error.message,
+                });
+                await appendEvent({
+                    type: 'error',
+                    role: 'system',
+                    content: error.message,
+                    payload: sanitizePayload({ error }),
+                });
+                return toAiQuotaExceededResponse(error);
+            }
+
+            const message = isLocalMissingAiEnvError(error) ? 'MISSING_AI_ENV' : error instanceof Error ? error.message : 'Internal error';
+            await options.db.works.failRun({
+                organizationId: options.organizationId,
+                workId: work.id,
+                id: run.id,
+                error: message,
+            });
+            await appendEvent({
+                type: 'error',
+                role: 'system',
+                content: message,
+                payload: sanitizePayload({ error }),
+            });
+
+            return new Response(message, {
+                status: 500,
+                headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+            });
+        }
+    }
+
     try {
         const execution = await resolveAiRouteExecution({
             req: options.req as any,
@@ -1011,7 +1481,7 @@ export async function runWorkAgent(options: RunWorkAgentOptions): Promise<Respon
         });
         const agentContext = await buildDoryAgentContext({
             baseSystem: compiledSystem ?? '',
-            userLanguageInstruction: buildUserLanguageInstruction(work.goal, locale),
+            userLanguageInstruction: buildUserLanguageInstruction(userInstruction ?? work.goal, locale),
             userId: options.userId,
             organizationId: options.organizationId,
             connectionId: work.connectionId,

@@ -5,6 +5,10 @@ export type WorkspaceScope =
           type: 'connection';
       }
     | {
+          type: 'work';
+          workId: string;
+      }
+    | {
           type: 'work_investigation';
           workId: string;
           investigationId: string;
@@ -13,6 +17,13 @@ export type WorkspaceScope =
 export const DEFAULT_WORKSPACE_SCOPE: WorkspaceScope = { type: 'connection' };
 
 export function normalizeWorkspaceScope(scope?: WorkspaceScope | null): WorkspaceScope {
+    if (scope?.type === 'work' && scope.workId) {
+        return {
+            type: 'work',
+            workId: scope.workId,
+        };
+    }
+
     if (scope?.type === 'work_investigation' && scope.workId && scope.investigationId) {
         return {
             type: 'work_investigation',
@@ -26,6 +37,9 @@ export function normalizeWorkspaceScope(scope?: WorkspaceScope | null): Workspac
 
 export function workspaceScopeKey(scope?: WorkspaceScope | null): string {
     const normalized = normalizeWorkspaceScope(scope);
+    if (normalized.type === 'work') {
+        return `work:${normalized.workId}`;
+    }
     if (normalized.type === 'work_investigation') {
         return `work_investigation:${normalized.workId}:${normalized.investigationId}`;
     }
@@ -53,6 +67,16 @@ export interface BaseTabPayload {
     createdAt?: string;
 
     updatedAt?: string;
+
+    workSyncState?: WorkTabSyncState;
+
+    lastAgentRunId?: string | null;
+
+    lastAgentEventId?: string | null;
+
+    lastAgentSyncedAt?: string | null;
+
+    lastHumanEditedAt?: string | null;
 }
 export interface SqlTabPayload extends BaseTabPayload {
     tabType: 'sql';
@@ -99,6 +123,16 @@ export type TabResultMetaPayload = {
     workRunEventId?: string;
     sqlAssetGroupKey?: string;
     source?: 'work-run' | string;
+};
+
+export type WorkTabSyncState = 'agent_generated' | 'human_edited' | 'unsynced' | 'synced' | 'running' | 'failed';
+
+export type WorkTabMetadata = {
+    workSyncState?: WorkTabSyncState;
+    lastAgentRunId?: string | null;
+    lastAgentEventId?: string | null;
+    lastAgentSyncedAt?: string | null;
+    lastHumanEditedAt?: string | null;
 };
 
 export interface TabRuntimeInfo {

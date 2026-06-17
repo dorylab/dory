@@ -19,6 +19,11 @@ const tabCreateInputSchema = z.object({
     createdAt: z.string().nullable().optional(),
     resultMeta: z.any().optional().nullable(),
     workspaceScope: workspaceScopeInputSchema,
+    workSyncState: z.enum(['agent_generated', 'human_edited', 'unsynced', 'synced', 'running', 'failed']).optional(),
+    lastAgentRunId: z.string().nullable().optional(),
+    lastAgentEventId: z.string().nullable().optional(),
+    lastAgentSyncedAt: z.string().nullable().optional(),
+    lastHumanEditedAt: z.string().nullable().optional(),
 });
 
 const tabCreateOutputSchema = z.object({
@@ -35,6 +40,11 @@ const tabCreateOutputSchema = z.object({
     orderIndex: z.number().nullable().optional(),
     createdAt: z.string(),
     workspaceScope: z.any().optional(),
+    workSyncState: z.string().optional(),
+    lastAgentRunId: z.string().nullable().optional(),
+    lastAgentEventId: z.string().nullable().optional(),
+    lastAgentSyncedAt: z.string().nullable().optional(),
+    lastHumanEditedAt: z.string().nullable().optional(),
 });
 
 export const tabCreateAction = defineWebAction({

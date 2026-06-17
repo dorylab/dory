@@ -19,6 +19,11 @@ export type CreateWorkspaceTabInput = {
     createdAt?: string | null;
     resultMeta?: unknown;
     workspaceScope?: WorkspaceScope | null;
+    workSyncState?: 'agent_generated' | 'human_edited' | 'unsynced' | 'synced' | 'running' | 'failed';
+    lastAgentRunId?: string | null;
+    lastAgentEventId?: string | null;
+    lastAgentSyncedAt?: string | null;
+    lastHumanEditedAt?: string | null;
 };
 
 export async function createWorkspaceTab(ctx: ActionContext<WebActionServices>, input: CreateWorkspaceTabInput) {
@@ -38,6 +43,11 @@ export async function createWorkspaceTab(ctx: ActionContext<WebActionServices>, 
                   tabName,
                   orderIndex: input.orderIndex ?? null,
                   createdAt,
+                  workSyncState: input.workSyncState,
+                  lastAgentRunId: input.lastAgentRunId ?? null,
+                  lastAgentEventId: input.lastAgentEventId ?? null,
+                  lastAgentSyncedAt: input.lastAgentSyncedAt ?? null,
+                  lastHumanEditedAt: input.lastHumanEditedAt ?? null,
               }
             : {
                   content: input.content ?? '',
@@ -48,6 +58,11 @@ export async function createWorkspaceTab(ctx: ActionContext<WebActionServices>, 
                   tabName,
                   orderIndex: input.orderIndex ?? null,
                   createdAt,
+                  workSyncState: input.workSyncState,
+                  lastAgentRunId: input.lastAgentRunId ?? null,
+                  lastAgentEventId: input.lastAgentEventId ?? null,
+                  lastAgentSyncedAt: input.lastAgentSyncedAt ?? null,
+                  lastHumanEditedAt: input.lastHumanEditedAt ?? null,
               };
 
     await ctx.services.db.tabState.saveTabState({
@@ -72,5 +87,10 @@ export async function createWorkspaceTab(ctx: ActionContext<WebActionServices>, 
         activeSubTab: tabType === 'table' ? (input.activeSubTab ?? 'data') : null,
         orderIndex: input.orderIndex ?? null,
         createdAt,
+        workSyncState: input.workSyncState,
+        lastAgentRunId: input.lastAgentRunId ?? null,
+        lastAgentEventId: input.lastAgentEventId ?? null,
+        lastAgentSyncedAt: input.lastAgentSyncedAt ?? null,
+        lastHumanEditedAt: input.lastHumanEditedAt ?? null,
     };
 }

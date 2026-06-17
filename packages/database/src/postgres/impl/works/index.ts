@@ -180,7 +180,7 @@ export class PostgresWorksRepository {
                 id: input.id ?? newEntityId(),
                 organizationId: input.organizationId,
                 title: input.title?.trim() || 'Untitled Work',
-                status: 'draft',
+                status: 'waiting_for_user',
                 goal: input.goal,
                 workType: input.workType ?? 'investigation',
                 scope: input.scope ?? null,
@@ -505,12 +505,14 @@ export class PostgresWorksRepository {
     async createWorkspaceSnapshot(input: WorkWorkspaceSnapshotCreateInput): Promise<WorkWorkspaceSnapshot> {
         this.assertInited();
 
-        const investigation = await this.getInvestigationById({
-            organizationId: input.organizationId,
-            workId: input.workId,
-            id: input.investigationId,
-        });
-        if (!investigation) throw new DatabaseError('Work investigation not found.', 404);
+        if (input.intent === 'continue_analysis') {
+            const investigation = await this.getInvestigationById({
+                organizationId: input.organizationId,
+                workId: input.workId,
+                id: input.investigationId,
+            });
+            if (!investigation) throw new DatabaseError('Work investigation not found.', 404);
+        }
 
         const [row] = await this.db
             .insert(workWorkspaceSnapshots)

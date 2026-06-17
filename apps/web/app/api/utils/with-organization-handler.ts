@@ -27,12 +27,15 @@ type UserOrganizationHandlerContext = Omit<OrganizationHandlerContext, 'userId'>
 type ManagedOrganizationHandlerContext = UserOrganizationHandlerContext & {
     access: Awaited<ReturnType<typeof resolveOrganizationAccess>>;
 };
+type RouteHandlerContext = {
+    params?: Promise<Record<string, string | string[] | undefined>>;
+};
 
-type OrganizationHandlerFn = (ctx: OrganizationHandlerContext) => Promise<Response>;
-type UserHandlerFn = (ctx: UserHandlerContext) => Promise<Response>;
-type UserOrganizationHandlerFn = (ctx: UserOrganizationHandlerContext) => Promise<Response>;
-type ManagedOrganizationHandlerFn = (ctx: ManagedOrganizationHandlerContext) => Promise<Response>;
-type PlatformAdminHandlerFn = (ctx: UserHandlerContext) => Promise<Response>;
+type OrganizationHandlerFn = (ctx: OrganizationHandlerContext, routeContext?: RouteHandlerContext) => Promise<Response>;
+type UserHandlerFn = (ctx: UserHandlerContext, routeContext?: RouteHandlerContext) => Promise<Response>;
+type UserOrganizationHandlerFn = (ctx: UserOrganizationHandlerContext, routeContext?: RouteHandlerContext) => Promise<Response>;
+type ManagedOrganizationHandlerFn = (ctx: ManagedOrganizationHandlerContext, routeContext?: RouteHandlerContext) => Promise<Response>;
+type PlatformAdminHandlerFn = (ctx: UserHandlerContext, routeContext?: RouteHandlerContext) => Promise<Response>;
 
 function parseCsvEnv(name: string): string[] {
     const raw = process.env[name];
@@ -61,12 +64,13 @@ async function withHandlerErrorBoundary(handler: () => Promise<Response>) {
 
     try {
         return await handler();
-    } catch (err: any) {
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : null;
         return NextResponse.json(
             ResponseUtil.error({
                 code: ErrorCodes.DATABASE_ERROR,
-                message: err?.message ?? translateApi('Api.Errors.InternalError', undefined, locale),
-                error: err,
+                message: message ?? translateApi('Api.Errors.InternalError', undefined, locale),
+                error: err instanceof Error ? err : undefined,
             }),
             { status: 500 },
         );
@@ -74,7 +78,7 @@ async function withHandlerErrorBoundary(handler: () => Promise<Response>) {
 }
 
 export function withUserHandler(handler: UserHandlerFn) {
-    return async function routeHandler(req: NextRequest): Promise<Response> {
+    return async function routeHandler(req: NextRequest, routeContext?: RouteHandlerContext): Promise<Response> {
         const locale = await getApiLocale();
         const session = await getSessionFromRequest(req);
         const userId = session?.user?.id ?? null;
@@ -92,18 +96,21 @@ export function withUserHandler(handler: UserHandlerFn) {
         const db = await getDBService();
 
         return withHandlerErrorBoundary(async () => {
-            return handler({
-                req,
-                db,
-                session,
-                userId,
-            });
+            return handler(
+                {
+                    req,
+                    db,
+                    session,
+                    userId,
+                },
+                routeContext,
+            );
         });
     };
 }
 
 export function withOrganizationHandler(handler: OrganizationHandlerFn) {
-    return async function routeHandler(req: NextRequest): Promise<Response> {
+    return async function routeHandler(req: NextRequest, routeContext?: RouteHandlerContext): Promise<Response> {
         const locale = await getApiLocale();
         const session = await getSessionFromRequest(req);
         const organizationId = resolveCurrentOrganizationId(session);
@@ -149,20 +156,23 @@ export function withOrganizationHandler(handler: OrganizationHandlerFn) {
                     userId,
                 }),
                 () =>
-                    handler({
-                        req,
-                        db,
-                        session,
-                        userId,
-                        organizationId,
-                    }),
+                    handler(
+                        {
+                            req,
+                            db,
+                            session,
+                            userId,
+                            organizationId,
+                        },
+                        routeContext,
+                    ),
             );
         });
     };
 }
 
 export function withUserAndOrganizationHandler(handler: UserOrganizationHandlerFn) {
-    return async function routeHandler(req: NextRequest): Promise<Response> {
+    return async function routeHandler(req: NextRequest, routeContext?: RouteHandlerContext): Promise<Response> {
         const locale = await getApiLocale();
         const session = await getSessionFromRequest(req);
         const organizationId = resolveCurrentOrganizationId(session);
@@ -220,20 +230,23 @@ export function withUserAndOrganizationHandler(handler: UserOrganizationHandlerF
                     userId,
                 }),
                 () =>
-                    handler({
-                        req,
-                        db,
-                        session,
-                        userId,
-                        organizationId,
-                    }),
+                    handler(
+                        {
+                            req,
+                            db,
+                            session,
+                            userId,
+                            organizationId,
+                        },
+                        routeContext,
+                    ),
             );
         });
     };
 }
 
 export function withPlatformAdminHandler(handler: PlatformAdminHandlerFn) {
-    return async function routeHandler(req: NextRequest): Promise<Response> {
+    return async function routeHandler(req: NextRequest, routeContext?: RouteHandlerContext): Promise<Response> {
         const locale = await getApiLocale();
         const session = await getSessionFromRequest(req);
         const userId = session?.user?.id ?? null;
@@ -261,12 +274,15 @@ export function withPlatformAdminHandler(handler: PlatformAdminHandlerFn) {
         const db = await getDBService();
 
         return withHandlerErrorBoundary(async () => {
-            return handler({
-                req,
-                db,
-                session,
-                userId,
-            });
+            return handler(
+                {
+                    req,
+                    db,
+                    session,
+                    userId,
+                },
+                routeContext,
+            );
         });
     };
 }

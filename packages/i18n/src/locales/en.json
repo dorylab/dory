@@ -3522,6 +3522,96 @@
             }
         }
     },
+    "WorkDetail": {
+        "Work": "Work",
+        "BackToWork": "Back to Work",
+        "WorkNotFound": "Work not found.",
+        "Goal": "Goal: {goal}",
+        "DataSource": "Data Source: {name}",
+        "Updated": "Updated {time}",
+        "OpenWorkspace": "Open Workspace",
+        "ContinueWithAgent": "Continue with Agent",
+        "Workspace": "Workspace",
+        "WorkspaceCounts": "{tabCount} SQL tabs · {resultCount} results · {unsyncedCount} unsynced changes",
+        "Open": "Open",
+        "Run": "Run",
+        "Continue": "Continue",
+        "NoSqlTabs": "No SQL tabs yet. Tell Agent what to do next or open the workspace to start one manually.",
+        "AgentSummary": "Agent Summary",
+        "Outcome": "Outcome",
+        "TellAgent": "Tell Agent what to do next",
+        "InstructionPlaceholder": "Break this down by channel for new users this week",
+        "Execution": "Execution",
+        "ExecutionEvents": "{count} events",
+        "Show": "Show",
+        "Hide": "Hide",
+        "NoExecutionHistory": "No execution history yet.",
+        "UntitledSqlTab": "Untitled SQL tab",
+        "SqlTab": "SQL tab",
+        "QueryResult": "query result",
+        "Rows": "{count} rows",
+        "TabMeta": "{rows} rows · {columns} columns · Updated {time}",
+        "DefaultContinueInstruction": "Continue from the current workspace.",
+        "ContinueFromTabInstruction": "Continue from SQL tab: {title}",
+        "Status": {
+            "Running": "Running",
+            "WaitingForUser": "Waiting for user",
+            "Completed": "Completed",
+            "Failed": "Failed"
+        },
+        "TabStatus": {
+            "Unsynced": "Unsynced",
+            "AgentGenerated": "Agent generated",
+            "Running": "Running",
+            "Failed": "Failed",
+            "Synced": "Synced"
+        },
+        "OutcomeBody": {
+            "FailedNoResult": "Agent run failed before producing a workspace result.",
+            "Running": "Agent is still working on this Work.",
+            "Workspace": "Workspace contains {tabCount} SQL tabs and {resultCount} results.",
+            "WorkspaceWithTitles": "Workspace contains {tabCount} SQL tabs and {resultCount} results: {titles}",
+            "Empty": "No completed agent outcome yet. Continue with Agent to generate SQL workspace content."
+        },
+        "OutcomeMeta": {
+            "Completed": "Completed {time}",
+            "FailedAt": "Failed {time}",
+            "Failed": "Failed",
+            "Started": "Started {time}",
+            "Updated": "Updated {time}",
+            "WorkspaceUpdated": "Workspace updated",
+            "Waiting": "Waiting for agent output"
+        },
+        "EventType": {
+            "ToolCall": "Tool call",
+            "ToolResult": "Tool result",
+            "SqlExecuted": "SQL executed",
+            "SqlTabCreated": "SQL tab created",
+            "SqlTabUpdated": "SQL tab updated",
+            "WorkspaceSnapshot": "Workspace handed off",
+            "WorkDone": "Agent summarized result",
+            "InvestigationCreated": "Analysis created",
+            "InvestigationUpdated": "Analysis updated",
+            "ConclusionUpdated": "Conclusion updated",
+            "Error": "Error",
+            "Completed": "Completed",
+            "Message": "Message"
+        },
+        "EventContent": {
+            "SqlTabCreated": "Agent created SQL tab: {title}",
+            "SqlTabUpdated": "Agent updated SQL tab: {title}",
+            "SqlExecuted": "Agent executed query: {result}",
+            "WorkspaceSnapshot": "User continued from workspace",
+            "ToolCall": "Agent started workspace action",
+            "ToolResult": "Agent finished workspace action"
+        },
+        "Toast": {
+            "AgentRunStarted": "Agent run started",
+            "ContinueAgentFailed": "Failed to continue Agent",
+            "SqlTabExecuted": "SQL tab executed",
+            "RunSqlTabFailed": "Failed to run SQL tab"
+        }
+    },
     "Routes": {
         "SQL Console": "SQL Console"
     }

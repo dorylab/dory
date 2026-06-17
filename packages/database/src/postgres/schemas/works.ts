@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
 
-export type WorkStatus = 'draft' | 'running' | 'completed';
+export type WorkStatus = 'draft' | 'waiting_for_user' | 'running' | 'completed' | 'failed';
 export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
 export type WorkAnalysisAuditStatus = 'draft' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
@@ -39,7 +39,7 @@ export type WorkInvestigationRevisionAssetSummary = {
     lastQueryAt: string | null;
 };
 export type WorkRunStatus = 'running' | 'completed' | 'failed';
-export type WorkWorkspaceSnapshotIntent = 'continue_analysis';
+export type WorkWorkspaceSnapshotIntent = 'continue_analysis' | 'continue_from_workspace' | 'continue_from_tab';
 export type WorkWorkspaceSnapshotChangeSummary = {
     sqlEdited?: boolean;
     resultRefreshed?: boolean;
@@ -59,6 +59,10 @@ export type WorkRunEventType =
     | 'tool_call'
     | 'tool_result'
     | 'sql_executed'
+    | 'sql_tab_created'
+    | 'sql_tab_updated'
+    | 'workspace_snapshot'
+    | 'work_done'
     | 'investigation_created'
     | 'investigation_updated'
     | 'conclusion_updated'

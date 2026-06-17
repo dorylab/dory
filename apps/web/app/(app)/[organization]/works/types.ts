@@ -1,4 +1,4 @@
-export type WorkStatus = 'draft' | 'running' | 'completed';
+export type WorkStatus = 'draft' | 'waiting_for_user' | 'running' | 'completed' | 'failed';
 export type WorkCreator = 'user' | 'agent';
 export type WorkType = 'investigation' | 'analysis' | 'monitoring' | 'data_qa' | 'sql_workspace';
 export type WorkAnalysisAuditStatus = 'draft' | 'reviewed' | 'revised' | 'accepted' | 'rejected';
@@ -114,6 +114,10 @@ export type WorkRunEventType =
     | 'tool_call'
     | 'tool_result'
     | 'sql_executed'
+    | 'sql_tab_created'
+    | 'sql_tab_updated'
+    | 'workspace_snapshot'
+    | 'work_done'
     | 'investigation_created'
     | 'investigation_updated'
     | 'conclusion_updated'
@@ -169,7 +173,7 @@ export type WorkWorkspaceSnapshot = {
     investigationId: string;
     workspaceId: string;
     previousAgentStepId: string | null;
-    intent: 'continue_analysis';
+    intent: 'continue_analysis' | 'continue_from_workspace' | 'continue_from_tab';
     humanEdits: WorkWorkspaceSnapshotHumanEdits;
     createdByUserId: string;
     createdAt: string;
@@ -189,6 +193,27 @@ export type WorkRunTimeline = {
     timelineEvents: WorkTimelineEvent[];
 };
 
+export type WorkWorkspaceSummaryTab = {
+    tabId: string;
+    title: string;
+    status: string;
+    rows: number | null;
+    columns: number | null;
+    resultMeta: Record<string, unknown> | null;
+    updatedAt: string | null;
+};
+
+export type WorkWorkspaceSummary = {
+    workspaceId: string;
+    tabs: WorkWorkspaceSummaryTab[];
+    tabCount: number;
+    resultCount: number;
+    unsyncedCount: number;
+    activeTabId: string | null;
+    recentSnapshots: WorkWorkspaceSnapshot[];
+    latestAcknowledgedAgentEventId: string | null;
+};
+
 export type WorkDetail = {
     work: Work;
     investigations: WorkInvestigation[];
@@ -198,4 +223,5 @@ export type WorkDetail = {
     runTimelines: WorkRunTimeline[];
     timelineEvents: WorkTimelineEvent[];
     unlinkedTimelineEvents: WorkTimelineEvent[];
+    workspaceSummary: WorkWorkspaceSummary;
 };

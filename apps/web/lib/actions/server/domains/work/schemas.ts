@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const workStatusSchema = z.enum(['draft', 'running', 'completed']);
+export const workStatusSchema = z.enum(['draft', 'waiting_for_user', 'running', 'completed', 'failed']);
 export const workCreatorSchema = z.enum(['user', 'agent']);
 export const workTypeSchema = z.enum(['investigation', 'analysis', 'monitoring', 'data_qa', 'sql_workspace']);
 export const workAnalysisAuditStatusSchema = z.enum(['draft', 'reviewed', 'revised', 'accepted', 'rejected']);
@@ -28,6 +28,10 @@ export const workRunEventTypeSchema = z.enum([
     'tool_call',
     'tool_result',
     'sql_executed',
+    'sql_tab_created',
+    'sql_tab_updated',
+    'workspace_snapshot',
+    'work_done',
     'investigation_created',
     'investigation_updated',
     'conclusion_updated',
@@ -177,10 +181,31 @@ export const workWorkspaceSnapshotOutputSchema = z.object({
     investigationId: z.string(),
     workspaceId: z.string(),
     previousAgentStepId: z.string().nullable(),
-    intent: z.literal('continue_analysis'),
+    intent: z.enum(['continue_analysis', 'continue_from_workspace', 'continue_from_tab']),
     humanEdits: workWorkspaceSnapshotHumanEditsOutputSchema,
     createdByUserId: z.string(),
     createdAt: z.date(),
+});
+
+export const workWorkspaceSummaryTabOutputSchema = z.object({
+    tabId: z.string(),
+    title: z.string(),
+    status: z.string(),
+    rows: z.number().nullable(),
+    columns: z.number().nullable(),
+    resultMeta: z.record(z.string(), z.unknown()).nullable(),
+    updatedAt: z.date().nullable(),
+});
+
+export const workWorkspaceSummaryOutputSchema = z.object({
+    workspaceId: z.string(),
+    tabs: z.array(workWorkspaceSummaryTabOutputSchema),
+    tabCount: z.number(),
+    resultCount: z.number(),
+    unsyncedCount: z.number(),
+    activeTabId: z.string().nullable(),
+    recentSnapshots: z.array(workWorkspaceSnapshotOutputSchema),
+    latestAcknowledgedAgentEventId: z.string().nullable(),
 });
 
 export const workTimelineEventOutputSchema = z.object({

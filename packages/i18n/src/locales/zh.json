@@ -3526,6 +3526,96 @@
             }
         }
     },
+    "WorkDetail": {
+        "Work": "Work",
+        "BackToWork": "返回 Work",
+        "WorkNotFound": "未找到 Work。",
+        "Goal": "目标：{goal}",
+        "DataSource": "数据源：{name}",
+        "Updated": "更新于 {time}",
+        "OpenWorkspace": "打开工作区",
+        "ContinueWithAgent": "让 Agent 继续",
+        "Workspace": "工作区",
+        "WorkspaceCounts": "{tabCount} 个 SQL 标签 · {resultCount} 个结果 · {unsyncedCount} 个未同步变更",
+        "Open": "打开",
+        "Run": "运行",
+        "Continue": "继续",
+        "NoSqlTabs": "还没有 SQL 标签。告诉 Agent 下一步要做什么，或打开工作区手动开始。",
+        "AgentSummary": "Agent 总结",
+        "Outcome": "结果",
+        "TellAgent": "告诉 Agent 下一步要做什么",
+        "InstructionPlaceholder": "再按渠道拆分一下本周新增用户",
+        "Execution": "执行记录",
+        "ExecutionEvents": "{count} 条事件",
+        "Show": "展开",
+        "Hide": "折叠",
+        "NoExecutionHistory": "还没有执行记录。",
+        "UntitledSqlTab": "未命名 SQL 标签",
+        "SqlTab": "SQL 标签",
+        "QueryResult": "查询结果",
+        "Rows": "{count} 行",
+        "TabMeta": "{rows} 行 · {columns} 列 · 更新于 {time}",
+        "DefaultContinueInstruction": "基于当前工作区继续。",
+        "ContinueFromTabInstruction": "基于 SQL 标签继续：{title}",
+        "Status": {
+            "Running": "运行中",
+            "WaitingForUser": "等待用户",
+            "Completed": "已完成",
+            "Failed": "失败"
+        },
+        "TabStatus": {
+            "Unsynced": "未同步",
+            "AgentGenerated": "Agent 生成",
+            "Running": "运行中",
+            "Failed": "失败",
+            "Synced": "已同步"
+        },
+        "OutcomeBody": {
+            "FailedNoResult": "Agent 运行失败，尚未生成工作区结果。",
+            "Running": "Agent 正在处理这个 Work。",
+            "Workspace": "工作区当前有 {tabCount} 个 SQL 标签和 {resultCount} 个结果。",
+            "WorkspaceWithTitles": "工作区当前有 {tabCount} 个 SQL 标签和 {resultCount} 个结果：{titles}",
+            "Empty": "还没有已完成的 Agent 结果。让 Agent 继续以生成 SQL 工作区内容。"
+        },
+        "OutcomeMeta": {
+            "Completed": "完成于 {time}",
+            "FailedAt": "失败于 {time}",
+            "Failed": "失败",
+            "Started": "开始于 {time}",
+            "Updated": "更新于 {time}",
+            "WorkspaceUpdated": "工作区已更新",
+            "Waiting": "等待 Agent 输出"
+        },
+        "EventType": {
+            "ToolCall": "工具调用",
+            "ToolResult": "工具结果",
+            "SqlExecuted": "SQL 已执行",
+            "SqlTabCreated": "SQL 标签已创建",
+            "SqlTabUpdated": "SQL 标签已更新",
+            "WorkspaceSnapshot": "工作区已交接",
+            "WorkDone": "Agent 已总结结果",
+            "InvestigationCreated": "分析已创建",
+            "InvestigationUpdated": "分析已更新",
+            "ConclusionUpdated": "结论已更新",
+            "Error": "错误",
+            "Completed": "已完成",
+            "Message": "消息"
+        },
+        "EventContent": {
+            "SqlTabCreated": "Agent 创建了 SQL 标签：{title}",
+            "SqlTabUpdated": "Agent 更新了 SQL 标签：{title}",
+            "SqlExecuted": "Agent 执行了查询：{result}",
+            "WorkspaceSnapshot": "用户从工作区继续",
+            "ToolCall": "Agent 开始执行工作区操作",
+            "ToolResult": "Agent 完成了工作区操作"
+        },
+        "Toast": {
+            "AgentRunStarted": "Agent 运行已开始",
+            "ContinueAgentFailed": "让 Agent 继续失败",
+            "SqlTabExecuted": "SQL 标签已执行",
+            "RunSqlTabFailed": "运行 SQL 标签失败"
+        }
+    },
     "Routes": {
         "SQL Console": "SQL 控制台"
     }

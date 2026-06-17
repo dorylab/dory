@@ -43,6 +43,11 @@ export class PostgresTabStateRepository {
             orderIndex?: number | null;
             createdAt?: string | Date | null;
             activeSubTab?: TableTabPayload['activeSubTab'] | null;
+            workSyncState?: TabPayload['workSyncState'];
+            lastAgentRunId?: string | null;
+            lastAgentEventId?: string | null;
+            lastAgentSyncedAt?: string | null;
+            lastHumanEditedAt?: string | null;
         };
         resultMeta?: TabResultMetaPayload | null;
     }) {
@@ -55,11 +60,17 @@ export class PostgresTabStateRepository {
         const createdAt = state.createdAt ? new Date(state.createdAt) : undefined;
         const activeSubTab = isTable ? state.activeSubTab ?? 'data' : 'data';
         const serializedResultMeta = this.serializeResultMeta(resultMeta ?? null);
+        const persistedState = {
+            ...state,
+            workspaceScope: normalizedScope,
+            resultMeta: resultMeta ?? null,
+        } as TabPayload;
         const updateSet: Record<string, any> = {
             content: isTable ? '' : (state.content ?? ''),
             databaseName: isTable ? state.databaseName : null,
             tableName: isTable ? state.tableName : null,
             resultMeta: serializedResultMeta,
+            state: this.serializeState(persistedState),
             connectionId,
             ...scopeColumns,
             updatedAt: now,
@@ -90,6 +101,7 @@ export class PostgresTabStateRepository {
                 orderIndex,
                 createdAt,
                 resultMeta: serializedResultMeta,
+                state: this.serializeState(persistedState),
 
                 updatedAt: now,
             }) as unknown as any)
@@ -167,6 +179,14 @@ export class PostgresTabStateRepository {
 
     private workspaceScopeColumns(workspaceScope?: WorkspaceScope | null) {
         const normalizedScope = normalizeWorkspaceScope(workspaceScope);
+        if (normalizedScope.type === 'work') {
+            return {
+                workspaceScopeType: 'work',
+                workspaceScopeWorkId: normalizedScope.workId,
+                workspaceScopeInvestigationId: null,
+            };
+        }
+
         if (normalizedScope.type === 'work_investigation') {
             return {
                 workspaceScopeType: 'work_investigation',
@@ -184,6 +204,14 @@ export class PostgresTabStateRepository {
 
     private workspaceScopeConditions(workspaceScope?: WorkspaceScope | null) {
         const normalizedScope = normalizeWorkspaceScope(workspaceScope);
+        if (normalizedScope.type === 'work') {
+            return [
+                eq(tabs.workspaceScopeType, 'work'),
+                eq(tabs.workspaceScopeWorkId, normalizedScope.workId),
+                isNull(tabs.workspaceScopeInvestigationId),
+            ];
+        }
+
         if (normalizedScope.type === 'work_investigation') {
             return [
                 eq(tabs.workspaceScopeType, 'work_investigation'),
@@ -204,6 +232,23 @@ export class PostgresTabStateRepository {
         return JSON.stringify(resultMeta);
     }
 
+    private serializeState(state: TabPayload | null) {
+        if (!state) return null;
+        return JSON.stringify(state);
+    }
+
+    private deserializeState(state: unknown): Partial<TabPayload> | null {
+        if (!state) return null;
+        if (typeof state === 'object') return state as Partial<TabPayload>;
+        if (typeof state !== 'string') return null;
+        try {
+            const parsed = JSON.parse(state) as unknown;
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Partial<TabPayload>) : null;
+        } catch {
+            return null;
+        }
+    }
+
     private deserializeResultMeta(resultMeta: unknown): TabResultMetaPayload | null {
         if (!resultMeta) return null;
         if (typeof resultMeta === 'object') return resultMeta as TabResultMetaPayload;
@@ -216,9 +261,15 @@ export class PostgresTabStateRepository {
     }
 
     private deserializeTabRow<T extends { resultMeta?: unknown }>(row: T): Omit<T, 'resultMeta'> & { resultMeta: TabResultMetaPayload | null } {
+        const state = this.deserializeState((row as T & { state?: unknown }).state);
         const scope = normalizeWorkspaceScope(
-            (row as T & { workspaceScopeType?: string | null; workspaceScopeWorkId?: string | null; workspaceScopeInvestigationId?: string | null }).workspaceScopeType === 'work_investigation'
+            (row as T & { workspaceScopeType?: string | null; workspaceScopeWorkId?: string | null; workspaceScopeInvestigationId?: string | null }).workspaceScopeType === 'work'
                 ? {
+                      type: 'work',
+                      workId: (row as T & { workspaceScopeWorkId?: string | null }).workspaceScopeWorkId ?? '',
+                  }
+                : (row as T & { workspaceScopeType?: string | null; workspaceScopeWorkId?: string | null; workspaceScopeInvestigationId?: string | null }).workspaceScopeType === 'work_investigation'
+                  ? {
                       type: 'work_investigation',
                       workId: (row as T & { workspaceScopeWorkId?: string | null }).workspaceScopeWorkId ?? '',
                       investigationId: (row as T & { workspaceScopeInvestigationId?: string | null }).workspaceScopeInvestigationId ?? '',
@@ -227,6 +278,7 @@ export class PostgresTabStateRepository {
         );
         return {
             ...row,
+            ...state,
             workspaceScope: scope,
             resultMeta: this.deserializeResultMeta(row.resultMeta),
         };
