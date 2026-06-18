@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Database, ExternalLink, PanelTop, TerminalSquare } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Database, PanelTop, TerminalSquare } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
-import { AgentRunActivityTimeline } from '@/components/agent-runs/agent-run-activity-timeline';
+import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
 import { buildAgentRunTimeline, getAgentRunStats, getAgentRunStatusLabel, getAgentRunStatusVariant, getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
@@ -67,29 +67,23 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                             </Link>
                         </Button>
                         <Button asChild>
-                            <Link href={workspaceHref}>
-                                <ExternalLink className="h-4 w-4" />
-                                Open Workspace
-                            </Link>
+                            <Link href={workspaceHref}>Open Workspace</Link>
                         </Button>
                     </div>
 
-                    <div className="rounded-lg border bg-card p-6">
-                        <div className="flex flex-wrap items-start justify-between gap-4">
-                            <div className="min-w-0">
-                                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">Agent Run</div>
-                                <h1 className="max-w-3xl text-2xl font-semibold tracking-normal">{summary?.summaryTitle || snapshot.work.title || 'Agent Run'}</h1>
-                                <div className="mt-2 font-mono text-xs text-muted-foreground">{snapshot.work.workId}</div>
-                            </div>
-                            <Badge variant={getAgentRunStatusVariant(snapshot.work.status)}>{getAgentRunStatusLabel(snapshot.work.status)}</Badge>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0">
+                            <div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">Agent Run</div>
+                            <h1 className="max-w-3xl text-2xl font-semibold tracking-normal">{summary?.summaryTitle || snapshot.work.title || 'Agent Run'}</h1>
                         </div>
+                        <Badge variant={getAgentRunStatusVariant(snapshot.work.status)}>{getAgentRunStatusLabel(snapshot.work.status)}</Badge>
+                    </div>
 
-                        <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                            <Metric icon={Database} label="Data source" value={stats.dataSource} />
-                            <Metric icon={PanelTop} label="Tabs created" value={stats.tabCount} />
-                            <Metric icon={TerminalSquare} label="SQL runs" value={stats.sqlExecutionCount} />
-                            <Metric icon={CheckCircle2} label="Last active" value={formatDate(stats.lastActiveAt)} />
-                        </div>
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                        <Metric icon={Database} label="Data source" value={stats.dataSource} />
+                        <Metric icon={PanelTop} label="Tabs created" value={stats.tabCount} />
+                        <Metric icon={TerminalSquare} label="SQL runs" value={stats.sqlExecutionCount} />
+                        <Metric icon={CheckCircle2} label="Last active" value={formatDate(stats.lastActiveAt)} />
                     </div>
                 </header>
 
@@ -116,13 +110,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                     </div>
                 </section>
 
-                <section className="grid gap-3">
-                    <div>
-                        <h2 className="text-base font-semibold">Activity</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">Readable timeline first. Raw tool details are available inside each item.</p>
-                    </div>
-                    <AgentRunActivityTimeline items={timeline} />
-                </section>
+                <AgentRunActivitySection items={timeline} />
             </main>
         </div>
     );

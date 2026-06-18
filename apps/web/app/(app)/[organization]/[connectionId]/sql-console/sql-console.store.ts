@@ -30,6 +30,7 @@ export const sqlEditorResultLayoutByScopeAtom = atomWithStorage<Record<string, S
     'sqlConsole.editorResultLayoutByScope',
     {},
     createJSONStorage(() => localStorage),
+    { getOnInit: true },
 );
 
 export type SavedQueriesView = 'my-queries' | 'query-history';

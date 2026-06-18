@@ -249,9 +249,10 @@ function ensureSqlStatementBoundary(sql: string) {
 function appendSqlToTabContent(existingContent: unknown, sql: string, separator = DEFAULT_APPEND_SEPARATOR) {
     const existing = typeof existingContent === 'string' ? existingContent : '';
     const prefix = ensureSqlStatementBoundary(existing);
-    if (!prefix) return sql;
+    const suffix = ensureSqlStatementBoundary(sql);
+    if (!prefix) return suffix;
 
-    return `${prefix}${separator}${sql}`;
+    return `${prefix}${separator}${suffix}`;
 }
 
 function normalizeWorkTitle(input: UnknownRecord) {
@@ -500,12 +501,14 @@ async function applySqlWorkspaceAction(
         };
     }
 
+    const sql = ensureSqlStatementBoundary(input.sql);
+
     if (mode === 'create_tab') {
         const tab = await executeInternal<{ tabId: string; tabName?: string | null }>(ctx, 'tab.create', {
             connectionId: input.connectionId,
             tabType: 'sql',
             tabName: input.tabName ?? 'MCP query',
-            content: input.sql,
+            content: sql,
             resultMeta: input.resultMeta ?? null,
             workId: input.workId ?? null,
         });
@@ -519,7 +522,7 @@ async function applySqlWorkspaceAction(
 
     const targetTabId = requireString(input.targetTabId, 'targetTabId');
     const existing = await findSqlTab(ctx, input.connectionId, targetTabId, input.workId ?? null);
-    const content = mode === 'append_to_tab' ? appendSqlToTabContent(existing.content, input.sql, input.appendSeparator ?? DEFAULT_APPEND_SEPARATOR) : input.sql;
+    const content = mode === 'append_to_tab' ? appendSqlToTabContent(existing.content, sql, input.appendSeparator ?? DEFAULT_APPEND_SEPARATOR) : sql;
     const tabName = input.tabName ?? getString(existing.tabName);
 
     await executeInternal(ctx, 'tab.save', {

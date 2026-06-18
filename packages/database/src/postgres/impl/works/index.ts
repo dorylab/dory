@@ -1,5 +1,5 @@
 import { gzipSync, gunzipSync } from 'node:zlib';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, isNull } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
 import { tabs, workChartStates, workEvents, workQueryResultPages, workQueryResultSets, workQuerySessions, works, type WorkStatus } from '@dory/database/postgres/schemas';
@@ -13,6 +13,11 @@ const DEFAULT_WORK_TITLE = 'Agent Run';
 
 export type WorkRecord = typeof works.$inferSelect;
 export type WorkEventRecord = typeof workEvents.$inferSelect;
+
+export type WorkListPage = {
+    rows: WorkRecord[];
+    total: number;
+};
 
 export type ResolveWorkInput = {
     organizationId: string;
@@ -282,14 +287,36 @@ export class PostgresWorksRepository {
         return (row as WorkRecord | undefined) ?? null;
     }
 
-    async list(params: { organizationId: string; userId: string; limit?: number }): Promise<WorkRecord[]> {
+    async list(params: { organizationId: string; userId: string; limit?: number; offset?: number }): Promise<WorkRecord[]> {
         this.assertInited();
+        const parsedOffset = Number(params.offset ?? 0);
+        const offset = Number.isFinite(parsedOffset) ? Math.max(Math.floor(parsedOffset), 0) : 0;
         return (await this.db
             .select()
             .from(works)
             .where(and(eq(works.organizationId, params.organizationId), eq(works.userId, params.userId), isNull(works.archivedAt)))
             .orderBy(desc(works.lastActiveAt))
-            .limit(params.limit ?? 100)) as WorkRecord[];
+            .limit(params.limit ?? 100)
+            .offset(offset)) as WorkRecord[];
+    }
+
+    async listPage(params: { organizationId: string; userId: string; limit?: number; offset?: number }): Promise<WorkListPage> {
+        this.assertInited();
+        const parsedLimit = Number(params.limit ?? 20);
+        const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(Math.floor(parsedLimit), 100)) : 20;
+        const parsedOffset = Number(params.offset ?? 0);
+        const offset = Number.isFinite(parsedOffset) ? Math.max(Math.floor(parsedOffset), 0) : 0;
+        const whereCondition = and(eq(works.organizationId, params.organizationId), eq(works.userId, params.userId), isNull(works.archivedAt));
+
+        const [rows, totalRows] = await Promise.all([
+            this.db.select().from(works).where(whereCondition).orderBy(desc(works.lastActiveAt)).limit(limit).offset(offset),
+            this.db.select({ total: count() }).from(works).where(whereCondition),
+        ]);
+
+        return {
+            rows: rows as WorkRecord[],
+            total: totalRows[0]?.total ?? 0,
+        };
     }
 
     async listEvents(params: { organizationId: string; userId: string; workId: string }): Promise<WorkEventRecord[]> {

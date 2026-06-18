@@ -1,14 +1,14 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { Bot, ExternalLink, ListChecks } from 'lucide-react';
+import { Bot } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
 import { getAgentRunStatusLabel, getAgentRunStatusVariant } from '@/lib/agent-runs/summary';
 import { buildAgentRunDetailPath, buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
-import { Button } from '@/registry/new-york-v4/ui/button';
-import { Badge } from '@/registry/new-york-v4/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
+import { AgentRunsTable, type AgentRunListItem } from './agent-runs-table';
+
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 function formatDate(value: Date | string | null | undefined) {
     if (!value) return 'Never';
@@ -16,8 +16,36 @@ function formatDate(value: Date | string | null | undefined) {
     return date.toLocaleString();
 }
 
-export default async function AgentRunsPage({ params }: { params: Promise<{ organization: string }> }) {
+function parsePage(value: string | string[] | undefined) {
+    const raw = Array.isArray(value) ? value[0] : value;
+    const parsed = Number(raw ?? 1);
+    return Number.isFinite(parsed) ? Math.max(1, Math.floor(parsed)) : 1;
+}
+
+function parsePageSize(value: string | string[] | undefined) {
+    const raw = Array.isArray(value) ? value[0] : value;
+    const parsed = Number(raw ?? DEFAULT_PAGE_SIZE);
+    return PAGE_SIZE_OPTIONS.includes(parsed) ? parsed : DEFAULT_PAGE_SIZE;
+}
+
+function pageHref(organization: string, page: number, pageSize: number) {
+    const query = new URLSearchParams();
+    query.set('page', String(page));
+    query.set('pageSize', String(pageSize));
+    return `/${encodeURIComponent(organization)}/agent-runs?${query.toString()}`;
+}
+
+export default async function AgentRunsPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ organization: string }>;
+    searchParams?: Promise<{ page?: string | string[]; pageSize?: string | string[] }>;
+}) {
     const { organization } = await params;
+    const query = await searchParams;
+    const page = parsePage(query?.page);
+    const pageSize = parsePageSize(query?.pageSize);
     const bootstrap = await getAppBootstrapState({ organizationSlugOrId: organization });
     const userId = bootstrap.session?.user?.id ?? null;
     const organizationId = bootstrap.organization?.id ?? bootstrap.activeOrganizationId;
@@ -27,11 +55,20 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
     }
 
     const db = await getDBService();
-    const [works, connections] = await Promise.all([db.works.list({ organizationId, userId, limit: 100 }), db.connections.list(organizationId)]);
+    const offset = (page - 1) * pageSize;
+    const [{ rows: works, total }, connections] = await Promise.all([db.works.listPage({ organizationId, userId, limit: pageSize, offset }), db.connections.list(organizationId)]);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    if (page > totalPages) {
+        redirect(pageHref(organization, totalPages, pageSize));
+    }
+
+    const currentPage = page;
+    const pageOffset = offset;
+    const pageWorks = works;
     const snapshotsByWorkId = new Map(
         (
             await Promise.all(
-                works.map(async work => {
+                pageWorks.map(async work => {
                     if (work.connectionId) {
                         return null;
                     }
@@ -41,7 +78,35 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
             )
         ).filter(entry => entry !== null),
     );
-    const connectionNames = new Map(connections.map(item => [item.connection.id, item.connection.name ?? item.connection.id]));
+    const connectionsById = new Map(connections.map(item => [item.connection.id, item.connection]));
+    const runItems: AgentRunListItem[] = pageWorks.map(work => {
+        const detailHref = buildAgentRunDetailPath(organization, work.workId);
+        const workspaceHref = buildAgentWorkspacePathFromSnapshot(organization, {
+            work,
+            sessions: snapshotsByWorkId.get(work.workId)?.sessions ?? [],
+            tabs: snapshotsByWorkId.get(work.workId)?.tabs ?? [],
+        });
+        const connection = work.connectionId ? connectionsById.get(work.connectionId) : null;
+
+        return {
+            workId: work.workId,
+            title: work.title || 'Agent Run',
+            dataSource: {
+                connectionId: work.connectionId,
+                connectionName: connection?.name ?? null,
+                connectionType: connection?.type ?? null,
+                connectionHost: connection?.host ?? null,
+                connectionPort: connection?.port ?? null,
+                connectionHttpPort: connection?.httpPort ?? null,
+                databaseName: connection?.database ?? null,
+            },
+            statusLabel: getAgentRunStatusLabel(work.status),
+            statusVariant: getAgentRunStatusVariant(work.status),
+            lastActiveLabel: formatDate(work.lastActiveAt),
+            detailHref,
+            workspaceHref,
+        };
+    });
 
     return (
         <div className="h-full overflow-auto bg-background">
@@ -57,68 +122,14 @@ export default async function AgentRunsPage({ params }: { params: Promise<{ orga
                 </header>
 
                 <section className="rounded-lg border bg-card">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Question</TableHead>
-                                <TableHead>Connection</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>External session</TableHead>
-                                <TableHead>Last active</TableHead>
-                                <TableHead className="text-right">Open</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {works.length ? (
-                                works.map(work => {
-                                    const detailHref = buildAgentRunDetailPath(organization, work.workId);
-                                    const workspaceHref = buildAgentWorkspacePathFromSnapshot(organization, {
-                                        work,
-                                        sessions: snapshotsByWorkId.get(work.workId)?.sessions ?? [],
-                                        tabs: snapshotsByWorkId.get(work.workId)?.tabs ?? [],
-                                    });
-                                    return (
-                                        <TableRow key={work.workId}>
-                                            <TableCell>
-                                                <Link href={detailHref} className="line-clamp-2 font-medium hover:underline" title={work.title || 'Agent Run'}>
-                                                    {work.title || 'Agent Run'}
-                                                </Link>
-                                                <div className="mt-1 max-w-[320px] truncate font-mono text-xs text-muted-foreground">{work.workId}</div>
-                                            </TableCell>
-                                            <TableCell>{work.connectionId ? (connectionNames.get(work.connectionId) ?? work.connectionId) : 'None'}</TableCell>
-                                            <TableCell>
-                                                <Badge variant={getAgentRunStatusVariant(work.status)}>{getAgentRunStatusLabel(work.status)}</Badge>
-                                            </TableCell>
-                                            <TableCell className="max-w-[220px] truncate font-mono text-xs">{work.externalSessionId ?? 'None'}</TableCell>
-                                            <TableCell>{formatDate(work.lastActiveAt)}</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button asChild size="sm">
-                                                        <Link href={detailHref}>
-                                                            <ListChecks className="h-4 w-4" />
-                                                            Activity
-                                                        </Link>
-                                                    </Button>
-                                                    <Button asChild variant="outline" size="sm">
-                                                        <Link href={workspaceHref}>
-                                                            <ExternalLink className="h-4 w-4" />
-                                                            Workspace
-                                                        </Link>
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                                        No Agent Runs yet.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                    <AgentRunsTable
+                        runs={runItems}
+                        total={total}
+                        pageIndex={currentPage - 1}
+                        pageSize={pageSize}
+                        pageSizeOptions={PAGE_SIZE_OPTIONS}
+                        baseHref={`/${encodeURIComponent(organization)}/agent-runs`}
+                    />
                 </section>
             </main>
         </div>
