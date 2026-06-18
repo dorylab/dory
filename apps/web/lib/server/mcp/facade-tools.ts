@@ -238,6 +238,22 @@ function getNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function ensureSqlStatementBoundary(sql: string) {
+    const trimmed = sql.trimEnd();
+    if (!trimmed || trimmed.endsWith(';')) return trimmed;
+
+    const lastLine = trimmed.split(/\r?\n/).at(-1)?.trimStart() ?? '';
+    return lastLine.startsWith('--') ? `${trimmed}\n;` : `${trimmed};`;
+}
+
+function appendSqlToTabContent(existingContent: unknown, sql: string, separator = DEFAULT_APPEND_SEPARATOR) {
+    const existing = typeof existingContent === 'string' ? existingContent : '';
+    const prefix = ensureSqlStatementBoundary(existing);
+    if (!prefix) return sql;
+
+    return `${prefix}${separator}${sql}`;
+}
+
 function normalizeWorkTitle(input: UnknownRecord) {
     const candidates = [input.title, input.userQuestion, input.question, input.prompt];
     const title = candidates.map(value => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '')).find(Boolean);
@@ -503,8 +519,7 @@ async function applySqlWorkspaceAction(
 
     const targetTabId = requireString(input.targetTabId, 'targetTabId');
     const existing = await findSqlTab(ctx, input.connectionId, targetTabId, input.workId ?? null);
-    const content =
-        mode === 'append_to_tab' ? `${typeof existing.content === 'string' ? existing.content : ''}${input.appendSeparator ?? DEFAULT_APPEND_SEPARATOR}${input.sql}` : input.sql;
+    const content = mode === 'append_to_tab' ? appendSqlToTabContent(existing.content, input.sql, input.appendSeparator ?? DEFAULT_APPEND_SEPARATOR) : input.sql;
     const tabName = input.tabName ?? getString(existing.tabName);
 
     await executeInternal(ctx, 'tab.save', {

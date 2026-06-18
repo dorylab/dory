@@ -490,7 +490,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         tabName: 'Existing',
         status: 'updated',
     });
-    assert.equal(savedTabs.get('tab-1').content, 'select 1\n-- next\nselect 3');
+    assert.equal(savedTabs.get('tab-1').content, 'select 1;\n-- next\nselect 3');
 
     await tool.execute(ctx, {
         operation: 'replace_sql',

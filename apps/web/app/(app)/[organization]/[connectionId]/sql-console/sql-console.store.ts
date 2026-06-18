@@ -24,6 +24,14 @@ export const copilotPanelTabAtom = atomWithStorage<'ask' | 'action' | 'context'>
     createJSONStorage(() => localStorage),
 );
 
+export type SqlEditorResultLayout = [number, number];
+
+export const sqlEditorResultLayoutByScopeAtom = atomWithStorage<Record<string, SqlEditorResultLayout>>(
+    'sqlConsole.editorResultLayoutByScope',
+    {},
+    createJSONStorage(() => localStorage),
+);
+
 export type SavedQueriesView = 'my-queries' | 'query-history';
 
 export const savedQueriesViewByConnectionAtom = atomWithStorage<Record<string, SavedQueriesView>>(
