@@ -319,6 +319,23 @@ export class PostgresWorksRepository {
         };
     }
 
+    async archive(params: { organizationId: string; userId: string; workId: string }): Promise<WorkRecord | null> {
+        this.assertInited();
+        const now = new Date();
+        const [row] = await this.db
+            .update(works)
+            .set({
+                status: 'archived',
+                archivedAt: now,
+                updatedAt: now,
+                lastActiveAt: now,
+            })
+            .where(and(eq(works.workId, params.workId), eq(works.organizationId, params.organizationId), eq(works.userId, params.userId), isNull(works.archivedAt)))
+            .returning();
+
+        return (row as WorkRecord | undefined) ?? null;
+    }
+
     async listEvents(params: { organizationId: string; userId: string; workId: string }): Promise<WorkEventRecord[]> {
         this.assertInited();
         return (await this.db

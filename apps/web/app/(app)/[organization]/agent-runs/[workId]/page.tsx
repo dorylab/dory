@@ -56,8 +56,8 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
     const timeline = buildAgentRunTimeline(snapshot, events);
 
     return (
-        <div className="h-full overflow-auto bg-background">
-            <main className="mx-auto flex w-full max-w-6xl flex-col gap-7 px-8 py-8">
+        <div className="bg-n8 h-screen overflow-auto">
+            <main className="container mx-auto mt-10 flex flex-col gap-7 p-12 lg:p-12 xl:p-8 2xl:p-4">
                 <header className="flex flex-col gap-5">
                     <div className="flex items-center justify-between gap-4">
                         <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">

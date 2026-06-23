@@ -203,7 +203,7 @@ test('dory_create_work returns a workspace URL', async () => {
     assert.equal(output.work.workId, 'work-1');
 });
 
-test('dory_create_work uses the user question as the Agent Run title', async () => {
+test('dory_create_work derives a short Agent Run title from the user question', async () => {
     const works = createWorksMock();
     const ctx = createContext({
         db: {
@@ -211,10 +211,10 @@ test('dory_create_work uses the user question as the Agent Run title', async () 
         },
     } as unknown as WebActionServices);
 
-    const output = (await getTool('dory_create_work').execute(ctx, { question: 'Which customers drove revenue growth last month?' })) as any;
+    const output = (await getTool('dory_create_work').execute(ctx, { question: '使用 dory 查询 play 数据库，分析 Hacker News 最热帖子的特性' })) as any;
 
-    assert.equal(output.title, 'Which customers drove revenue growth last month?');
-    assert.equal(works.works.get(output.workId)?.title, 'Which customers drove revenue growth last month?');
+    assert.equal(output.title, 'Hacker News 最热帖子的特性');
+    assert.equal(works.works.get(output.workId)?.title, 'Hacker News 最热帖子的特性');
 });
 
 test('dory_create_work is idempotent for an external session', async () => {
@@ -490,7 +490,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         tabName: 'Existing',
         status: 'updated',
     });
-    assert.equal(savedTabs.get('tab-1').content, 'select 1;\n-- next\nselect 3');
+    assert.equal(savedTabs.get('tab-1').content, 'select 1;\n-- next\nselect 3;');
 
     await tool.execute(ctx, {
         operation: 'replace_sql',
@@ -500,7 +500,7 @@ test('dory_workspace_tabs manages SQL and table workspace tabs through internal 
         sql: 'select 4',
         tabName: 'Replaced',
     });
-    assert.equal(savedTabs.get('tab-1').content, 'select 4');
+    assert.equal(savedTabs.get('tab-1').content, 'select 4;');
     assert.equal(savedTabs.get('tab-1').tabName, 'Replaced');
 
     const tableTab = (await tool.execute(ctx, {

@@ -9,6 +9,7 @@ import type { WorkSqlSnapshotPayload } from '@dory/database/postgres/impl/works'
 const DEFAULT_APPEND_SEPARATOR = '\n\n';
 const DEFAULT_WORK_TITLE = 'Agent Run';
 const MAX_WORK_TITLE_LENGTH = 240;
+const MAX_SHORT_WORK_TITLE_LENGTH = 64;
 const WORK_CONTEXT_INSTRUCTION = 'Call dory_create_work once for this Codex task, then pass the returned work.workId as workId to every later Dory tool call.';
 
 const workResolutionInputSchema = z.object({
@@ -94,10 +95,25 @@ const createWorkInputSchema = z
     .object({
         connectionId: z.string().min(1).optional(),
         externalSessionId: z.string().min(1).optional(),
-        title: z.string().min(1).max(1000).optional().describe('Use the user question for this Codex task. This becomes the Agent Run title.'),
-        userQuestion: z.string().min(1).max(4000).optional().describe('Original user question for this Codex task. Used as the Agent Run title when title is omitted.'),
-        question: z.string().min(1).max(4000).optional().describe('Original user question for this Codex task. Used as the Agent Run title when title is omitted.'),
-        prompt: z.string().min(1).max(4000).optional().describe('Original user prompt for this Codex task. Used as the Agent Run title when title is omitted.'),
+        title: z
+            .string()
+            .min(1)
+            .max(1000)
+            .optional()
+            .describe('Generate a short, human-readable Agent Run title from the user question. Do not paste the full question. Aim for 3-8 words or 16-32 CJK characters.'),
+        userQuestion: z
+            .string()
+            .min(1)
+            .max(4000)
+            .optional()
+            .describe('Original user question for this Codex task. Dory derives a short Agent Run title from it when title is omitted.'),
+        question: z
+            .string()
+            .min(1)
+            .max(4000)
+            .optional()
+            .describe('Original user question for this Codex task. Dory derives a short Agent Run title from it when title is omitted.'),
+        prompt: z.string().min(1).max(4000).optional().describe('Original user prompt for this Codex task. Dory derives a short Agent Run title from it when title is omitted.'),
         metadata: z.record(z.string(), z.unknown()).nullable().optional(),
     })
     .passthrough();
@@ -255,9 +271,47 @@ function appendSqlToTabContent(existingContent: unknown, sql: string, separator 
     return `${prefix}${separator}${suffix}`;
 }
 
+function cleanWorkTitleText(value: unknown) {
+    return typeof value === 'string'
+        ? value
+              .replace(/\s+/g, ' ')
+              .replace(/^[`"'\s]+|[`"'\s]+$/g, '')
+              .trim()
+        : '';
+}
+
+function trimWorkTitle(value: string, maxLength = MAX_SHORT_WORK_TITLE_LENGTH) {
+    const title = value.replace(/\s+/g, ' ').trim();
+    if (title.length <= maxLength) return title;
+
+    const boundary = title.slice(0, maxLength).search(/[\s,，.。:：;；!?！？][^,\s，.。:：;；!?！？]*$/);
+    const trimmed = boundary > Math.floor(maxLength * 0.55) ? title.slice(0, boundary) : title.slice(0, maxLength - 3);
+    return `${trimmed.trim()}...`;
+}
+
+function deriveWorkTitleFromQuestion(value: string) {
+    const original = cleanWorkTitleText(value);
+    let title = original
+        .replace(/^请(?:帮我|帮忙)?\s*/i, '')
+        .replace(/^帮我\s*/i, '')
+        .replace(/^使用\s*dory\s*(?:来|去)?(?:查询|分析|查看)?\s*/i, '')
+        .replace(/^查询\s*[^，,。；;：:]*?(?:数据库|database)\s*[，,。；;：:]?\s*/i, '')
+        .replace(/^[\w.-]+\s*(?:数据库|database)\s*[，,。；;：:]?\s*/i, '')
+        .replace(/^分析\s*/i, '')
+        .replace(/^(?:please\s+)?(?:use\s+dory\s+(?:to\s+)?)?/i, '')
+        .replace(/^(?:please\s+)?(?:help\s+me\s+)?(?:analyze|analyse|query|summarize|summarise|inspect)\s+/i, '')
+        .replace(/^(?:query|analyze|analyse|inspect|check)\s+[\w.-]+\s+database\s+(?:and\s+)?/i, '')
+        .replace(/^(?:from|in|against)\s+[\w.-]+\s+database\s+(?:and\s+)?/i, '')
+        .trim();
+
+    if (!title) title = original;
+    return trimWorkTitle(title);
+}
+
 function normalizeWorkTitle(input: UnknownRecord) {
     const candidates = [input.title, input.userQuestion, input.question, input.prompt];
-    const title = candidates.map(value => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '')).find(Boolean);
+    const candidate = candidates.map(cleanWorkTitleText).find(Boolean);
+    const title = candidate ? deriveWorkTitleFromQuestion(candidate) : null;
     if (!title) return null;
     return title.length > MAX_WORK_TITLE_LENGTH ? `${title.slice(0, MAX_WORK_TITLE_LENGTH - 3)}...` : title;
 }

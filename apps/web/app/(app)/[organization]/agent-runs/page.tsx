@@ -63,7 +63,6 @@ export default async function AgentRunsPage({
     }
 
     const currentPage = page;
-    const pageOffset = offset;
     const pageWorks = works;
     const snapshotsByWorkId = new Map(
         (
@@ -109,9 +108,9 @@ export default async function AgentRunsPage({
     });
 
     return (
-        <div className="h-full overflow-auto bg-background">
-            <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-8 py-8">
-                <header className="flex items-center justify-between gap-4">
+        <div className="bg-n8 h-screen overflow-auto">
+            <main className="container mx-auto mt-10 flex flex-col gap-6 p-12 lg:p-12 xl:p-8 2xl:p-4">
+                <header className="mb-0 flex items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Bot className="h-4 w-4" />
