@@ -37,6 +37,8 @@
             "@dory/files/*": ["../../packages/files/src/*"],
             "@dory/i18n": ["../../packages/i18n/src/index.ts"],
             "@dory/i18n/*": ["../../packages/i18n/src/*"],
+            "@dory/server-core": ["../../packages/server-core/src/index.ts"],
+            "@dory/server-core/*": ["../../packages/server-core/src/*"],
             "@dory/shared": ["../../packages/shared/src/index.ts"],
             "@dory/shared/*": ["../../packages/shared/src/*"],
             "@dory/ui": ["../../packages/ui/src/index.ts"],

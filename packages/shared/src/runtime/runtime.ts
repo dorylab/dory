@@ -1,4 +1,4 @@
-export type DoryRuntime = 'desktop' | 'web' | 'docker';
+export type DoryRuntime = 'desktop' | 'web' | 'docker' | 'headless';
 export type DoryLicense = 'oss' | 'enterprise';
 
 export function normalizeRuntime(value: string | null | undefined): DoryRuntime | null {
@@ -6,6 +6,7 @@ export function normalizeRuntime(value: string | null | undefined): DoryRuntime 
     if (!runtime) return null;
     if (runtime === 'desktop') return 'desktop';
     if (runtime === 'docker') return 'docker';
+    if (runtime === 'headless') return 'headless';
     if (runtime === 'web') return 'web';
     return null;
 }

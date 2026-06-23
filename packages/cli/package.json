@@ -1,0 +1,44 @@
+{
+    "name": "@getdory/cli",
+    "version": "0.1.0",
+    "description": "Dory CLI and headless runtime for MCP and automation",
+    "type": "module",
+    "bin": {
+        "dory": "./dist/cli.js"
+    },
+    "files": [
+        "dist",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "yarn workspace @dory/server-core build && rm -rf dist && esbuild src/cli.ts --bundle --platform=node --format=esm --log-level=error --alias:server-only=../server-core/src/compat/server-only.ts --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/cli.js --external:@electric-sql/pglite --external:@electric-sql/pglite-legacy --external:oracledb --external:mysql2 --external:mariadb --external:better-sqlite3 --external:@duckdb/node-api --external:cpu-features --external:ssh2-no-cpu-features --external:pg-native && chmod +x dist/cli.js",
+        "dory": "yarn run build >/dev/null && node dist/cli.js",
+        "pack:smoke": "node scripts/pack-smoke.mjs",
+        "prepack": "yarn run build",
+        "typecheck": "tsc --noEmit",
+        "test": "node --import tsx --test \"src/**/*.test.ts\""
+    },
+    "dependencies": {
+        "@duckdb/node-api": "^1.5.2-r.1",
+        "@electric-sql/pglite": "^0.4.3",
+        "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17",
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "better-sqlite3": "^12.8.0",
+        "mysql2": "^3.20.0",
+        "oracledb": "^6.10.0",
+        "pg": "^8.20.0",
+        "ssh2-no-cpu-features": "^2.0.0",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@dory/server-core": "0.1.0",
+        "@types/node": "^25.5.2",
+        "@types/pg": "^8.20.0",
+        "esbuild": "^0.27.7",
+        "tsx": "^4.21.0",
+        "typescript": "^6.0.2"
+    },
+    "engines": {
+        "node": ">=18"
+    }
+}

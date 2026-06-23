@@ -2386,6 +2386,26 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/server-core@npm:0.1.0, @dory/server-core@workspace:packages/server-core":
+  version: 0.0.0-use.local
+  resolution: "@dory/server-core@workspace:packages/server-core"
+  dependencies:
+    "@dory/actions": "npm:0.1.0"
+    "@dory/analysis": "npm:0.1.0"
+    "@dory/database": "npm:0.1.0"
+    "@dory/drivers": "npm:0.1.0"
+    "@dory/i18n": "npm:0.1.0"
+    "@dory/shared": "npm:0.1.0"
+    "@modelcontextprotocol/sdk": "npm:^1.29.0"
+    "@types/node": "npm:^25.5.2"
+    drizzle-orm: "npm:^0.45.2"
+    esbuild: "npm:^0.27.7"
+    tsx: "npm:^4.21.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  languageName: unknown
+  linkType: soft
+
 "@dory/shared@npm:0.1.0, @dory/shared@workspace:packages/shared":
   version: 0.0.0-use.local
   resolution: "@dory/shared@workspace:packages/shared"
@@ -3684,6 +3704,31 @@ __metadata:
   checksum: 10c0/885b02c8b0d75b2d215da25f3b639158c4fbe8fefe0d79163304534b9a6d0710db4b7699f7cd3cc1a730792bff04cbe19f4850a62d3e105a663eaeec88f38332
   languageName: node
   linkType: hard
+
+"@getdory/cli@workspace:packages/cli":
+  version: 0.0.0-use.local
+  resolution: "@getdory/cli@workspace:packages/cli"
+  dependencies:
+    "@dory/server-core": "npm:0.1.0"
+    "@duckdb/node-api": "npm:^1.5.2-r.1"
+    "@electric-sql/pglite": "npm:^0.4.3"
+    "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
+    "@modelcontextprotocol/sdk": "npm:^1.29.0"
+    "@types/node": "npm:^25.5.2"
+    "@types/pg": "npm:^8.20.0"
+    better-sqlite3: "npm:^12.8.0"
+    esbuild: "npm:^0.27.7"
+    mysql2: "npm:^3.20.0"
+    oracledb: "npm:^6.10.0"
+    pg: "npm:^8.20.0"
+    ssh2-no-cpu-features: "npm:^2.0.0"
+    tsx: "npm:^4.21.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  bin:
+    dory: ./dist/cli.js
+  languageName: unknown
+  linkType: soft
 
 "@getdory/mcp@workspace:packages/mcp":
   version: 0.0.0-use.local
@@ -13011,7 +13056,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@npm:~0.27.0":
+"esbuild@npm:^0.27.7, esbuild@npm:~0.27.0":
   version: 0.27.7
   resolution: "esbuild@npm:0.27.7"
   dependencies:
@@ -22814,6 +22859,7 @@ __metadata:
     "@dory/ee": "npm:0.1.0"
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
+    "@dory/server-core": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@dory/ui": "npm:0.1.0"
     "@dory/web-utils": "npm:0.1.0"

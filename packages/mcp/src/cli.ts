@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawn } from 'node:child_process';
+
 import { login } from './auth.js';
 import { getConfigPath, removeCredential, resolveCredential } from './config.js';
 import { createRemoteMcpClient } from './remote.js';
@@ -46,7 +48,23 @@ Environment:
 }
 
 async function run() {
-    const args = parseArgs(process.argv.slice(2));
+    const argv = process.argv.slice(2);
+    if (argv[0] === 'serve' || argv[0] === 'token' || argv[0] === 'init') {
+        await new Promise<void>((resolve, reject) => {
+            const child = spawn('npx', ['-y', '@getdory/cli', ...(argv[0] === 'init' ? argv : ['mcp', ...argv])], {
+                stdio: 'inherit',
+                env: process.env,
+            });
+            child.on('error', reject);
+            child.on('exit', code => {
+                if (code === 0) resolve();
+                else reject(new Error(`@getdory/cli exited with code ${code ?? 'unknown'}`));
+            });
+        });
+        return;
+    }
+
+    const args = parseArgs(argv);
     const configPath = args.configPath ?? getConfigPath();
     const target = normalizeDoryTarget(args.url);
 
