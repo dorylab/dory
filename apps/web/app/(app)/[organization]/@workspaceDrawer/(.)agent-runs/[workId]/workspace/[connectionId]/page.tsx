@@ -1,6 +1,6 @@
 import { AgentWorkspaceDrawerPage } from '@/components/agent-runs/agent-workspace-drawer-page';
 
-export default async function AgentRunWorkspacePage({
+export default async function InterceptedAgentRunWorkspacePage({
     params,
 }: {
     params: Promise<{
