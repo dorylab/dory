@@ -1,11 +1,21 @@
 'use client';
 
 import type { User } from 'better-auth';
-import { SidebarInset, SidebarProvider } from '@/registry/new-york-v4/ui/sidebar';
+import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/registry/new-york-v4/ui/sidebar';
 import { SettingsProvider } from '../../components/settings/settings';
 import { AppContentShell } from './app-sidebar/app-content-shell';
 import { AppSidebar } from './app-sidebar/app-sidebar';
 import { ConnectionDialogRoot } from '../connections/components/connection-dialog-root';
+
+function CollapsedSidebarTrigger() {
+    const { isMobile, state } = useSidebar();
+
+    if (isMobile || state !== 'collapsed') {
+        return null;
+    }
+
+    return <SidebarTrigger className="absolute left-3 top-3 z-50 size-8 border border-border bg-background/95 shadow-sm backdrop-blur hover:bg-muted" aria-label="Open sidebar" />;
+}
 
 export function OrganizationAppShell({
     children,
@@ -51,12 +61,13 @@ export function OrganizationAppShell({
                     <AppSidebar
                         className="md:top-0 md:bottom-0 md:h-auto"
                         variant="inset"
-                        collapsible="icon"
+                        collapsible="offcanvas"
                         initialUser={initialUser}
                         organizationId={organizationId}
                         enterpriseLicense={enterpriseLicense}
                     />
-                    <SidebarInset className="flex min-h-0 flex-col" style={{ height: 'calc(100% - 1rem)', width: 'calc(100% - 248px)' }}>
+                    <SidebarInset className="flex min-h-0 flex-col" style={{ height: 'calc(100% - 1rem)' }}>
+                        <CollapsedSidebarTrigger />
                         <AppContentShell>{children}</AppContentShell>
                     </SidebarInset>
                 </SidebarProvider>

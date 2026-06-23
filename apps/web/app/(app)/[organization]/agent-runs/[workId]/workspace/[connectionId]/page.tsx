@@ -12,7 +12,7 @@ export default async function AgentRunWorkspacePage({
         connectionId: string;
     }>;
 }) {
-    const { workId, connectionId } = await params;
+    const { organization, workId, connectionId } = await params;
     const layout = (await cookies()).get('react-resizable-panels:layout');
 
     let defaultLayout;
@@ -22,7 +22,7 @@ export default async function AgentRunWorkspacePage({
 
     return (
         <SqlConsoleLayout>
-            <AgentWorkspaceClient defaultLayout={defaultLayout} workId={workId} connectionId={connectionId} />
+            <AgentWorkspaceClient defaultLayout={defaultLayout} organization={organization} workId={workId} connectionId={connectionId} />
         </SqlConsoleLayout>
     );
 }

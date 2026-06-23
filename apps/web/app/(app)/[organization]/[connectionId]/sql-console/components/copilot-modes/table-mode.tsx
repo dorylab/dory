@@ -18,13 +18,13 @@ export function TableMode({
     chatWidth,
     setChatWidth,
     onCloseChatbot,
+    reserveRightRail = true,
 }: BaseModeProps) {
     if (!activeTab) {
         return null;
     }
     return (
-        
-        <div className="flex flex-1 flex-col min-h-0 mr-10">
+        <div className={['flex flex-1 flex-col min-h-0', reserveRightRail ? 'mr-10' : ''].join(' ')}>
             <Group
                 key={showChatbot ? 'table-with-copilot' : 'table-without-copilot'}
                 orientation="horizontal"
@@ -42,19 +42,9 @@ export function TableMode({
                     </div>
                 </Panel>
 
-                <Separator
-                    className={[
-                        'w-1.5 bg-border transition-colors',
-                        showChatbot ? '' : 'hidden',
-                    ].join(' ')}
-                />
+                <Separator className={['w-1.5 bg-border transition-colors', showChatbot ? '' : 'hidden'].join(' ')} />
 
-                <Panel
-                    id="copilot-panel"
-                    defaultSize={`${showChatbot ? chatWidth : 0}%`}
-                    minSize={`${showChatbot ? 15 : 0}%`}
-                    className="min-h-0"
-                >
+                <Panel id="copilot-panel" defaultSize={`${showChatbot ? chatWidth : 0}%`} minSize={`${showChatbot ? 15 : 0}%`} className="min-h-0">
                     {showChatbot ? (
                         <div className="flex h-full flex-col border-l min-h-0 bg-card">
                             <CopilotPanel

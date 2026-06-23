@@ -19,7 +19,8 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
     const { data: session } = authClient.useSession();
     const userId = session?.user?.id;
 
-    const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs } = useSQLTabs(normalizedWorkspaceScope);
+    const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs, saveWorkspaceNow } =
+        useSQLTabs(normalizedWorkspaceScope);
     const activeTab = useMemo(() => tabs.find(t => t.tabId === activeTabId), [tabs, activeTabId]);
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
 
@@ -90,5 +91,6 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
+        saveWorkspaceNow,
     };
 }

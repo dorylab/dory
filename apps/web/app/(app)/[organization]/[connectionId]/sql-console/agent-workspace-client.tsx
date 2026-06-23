@@ -3,7 +3,7 @@
 import React, { Activity, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
-import { Sparkles } from 'lucide-react';
+import { Bot, Sparkles } from 'lucide-react';
 
 import { cn } from '@dory/web-utils';
 import type { SQLTab } from '@dory/shared/types/tabs';
@@ -35,7 +35,7 @@ import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
-import { AgentRunContextDrawer } from './agent-run-context-drawer';
+import { AgentRunWorkspacePanel } from './agent-run-workspace-panel';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -63,6 +63,9 @@ const INITIAL_LAYOUT = {
     },
 } as const;
 
+const WORKSPACE_RAIL_WIDTH = 40;
+const AGENT_RUN_PANEL_WIDTH = 300;
+
 function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
@@ -82,10 +85,12 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
 
 export default function AgentWorkspaceClient({
     defaultLayout = INITIAL_LAYOUT.horizontal.default,
+    organization,
     workId,
     connectionId,
 }: {
     defaultLayout: number[] | undefined;
+    organization: string;
     workId: string;
     connectionId: string;
 }) {
@@ -116,6 +121,7 @@ export default function AgentWorkspaceClient({
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
+        saveWorkspaceNow,
     } = useSqlConsoleClient(defaultLayout, workspaceScope);
     const t = useTranslations('SqlConsole');
     const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
@@ -126,14 +132,15 @@ export default function AgentWorkspaceClient({
     const currentConnection = useAtomValue(currentConnectionAtom);
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const setInlineAskByTab = useSetAtom(inlineSqlAskByTabAtom);
-    const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot : false;
+    const [agentRunPanelOpen, setAgentRunPanelOpen] = useState(true);
+    const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot && !agentRunPanelOpen : false;
     const normalizedChatWidth = useMemo(
         () => clamp(chatWidth ?? INITIAL_LAYOUT.copilot.defaultWidth, INITIAL_LAYOUT.copilot.minWidth, INITIAL_LAYOUT.copilot.maxWidth),
         [chatWidth],
     );
-    const [tabHeaderHeight, setTabHeaderHeight] = useState<number>(INITIAL_LAYOUT.tabs.defaultHeaderHeight);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
+    const agentRunsHref = useMemo(() => `/${encodeURIComponent(organization)}/agent-runs`, [organization]);
 
     useEffect(() => {
         setWorkspaceScope(workspaceScope);
@@ -318,7 +325,30 @@ export default function AgentWorkspaceClient({
     );
 
     const closeChatbotPanel = () => setShowChatbot(false);
-    const toggleChatbotPanel = () => setShowChatbot(prev => !prev);
+    const toggleChatbotPanel = () => {
+        setAgentRunPanelOpen(false);
+        setShowChatbot(prev => !prev);
+    };
+    const toggleAgentRunPanel = () => {
+        setShowChatbot(false);
+        setAgentRunPanelOpen(prev => !prev);
+    };
+    const saveAgentWorkspace = useCallback(async () => {
+        if (activeTab?.tabType !== 'sql') {
+            await saveWorkspaceNow();
+            return;
+        }
+
+        const refForActive = ensureEditorRef(activeTab.tabId) ?? editorRef;
+        const activeSqlContent = refForActive.current?.getValue() ?? activeTab.content ?? '';
+        refForActive.current?.flushSave?.();
+
+        await saveWorkspaceNow({
+            activeTabId: activeTab.tabId,
+            activeSqlContent,
+        });
+    }, [activeTab, editorRef, ensureEditorRef, saveWorkspaceNow]);
+    const reservedRightWidth = WORKSPACE_RAIL_WIDTH + (agentRunPanelOpen ? AGENT_RUN_PANEL_WIDTH : 0);
 
     useEffect(() => {
         const handler = (event: KeyboardEvent) => {
@@ -404,113 +434,115 @@ export default function AgentWorkspaceClient({
 
     return (
         <main className="relative h-full w-full">
-            <Group
-                orientation="horizontal"
-                id="agent-workspace-horizontal"
-                defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
-                onLayoutChanged={handleLayoutChange}
-            >
-                <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}>
-                    <div className="flex flex-col h-full min-h-0 bg-card">
-                        <Tabs defaultValue="tables" className="flex-1 min-h-0">
-                            <TabsList className="w-full rounded-none px-2">
-                                <TabsTrigger value="tables" className="flex-1">
-                                    {t('Sidebar.Tables')}
-                                </TabsTrigger>
-                                <TabsTrigger value="saved" className="flex-1">
-                                    {t('Sidebar.Queries')}
-                                </TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="tables" className="flex-1 min-h-0">
-                                <SQLConsoleSidebar
-                                    onOpenTableTab={handleOpenTableTab}
-                                    onOpenQueryConsole={handleOpenQueryConsole}
-                                    onQueryTable={handleQueryTable}
-                                    onRenameTable={handleRenameTable}
-                                    selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
-                                    selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
-                                />
-                            </TabsContent>
-                            <TabsContent value="saved" className="flex-1 min-h-0">
-                                <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />
-                            </TabsContent>
-                        </Tabs>
-                    </div>
-                </Panel>
+            <div className="absolute inset-y-0 left-0 transition-[right] duration-200 ease-out" style={{ right: `${reservedRightWidth}px` }}>
+                <Group
+                    orientation="horizontal"
+                    id="agent-workspace-horizontal"
+                    defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
+                    onLayoutChanged={handleLayoutChange}
+                >
+                    <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}>
+                        <div className="flex flex-col h-full min-h-0 bg-card">
+                            <Tabs defaultValue="tables" className="flex-1 min-h-0">
+                                <TabsList className="w-full rounded-none px-2">
+                                    <TabsTrigger value="tables" className="flex-1">
+                                        {t('Sidebar.Tables')}
+                                    </TabsTrigger>
+                                    <TabsTrigger value="saved" className="flex-1">
+                                        {t('Sidebar.Queries')}
+                                    </TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="tables" className="flex-1 min-h-0">
+                                    <SQLConsoleSidebar
+                                        onOpenTableTab={handleOpenTableTab}
+                                        onOpenQueryConsole={handleOpenQueryConsole}
+                                        onQueryTable={handleQueryTable}
+                                        onRenameTable={handleRenameTable}
+                                        selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
+                                        selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
+                                    />
+                                </TabsContent>
+                                <TabsContent value="saved" className="flex-1 min-h-0">
+                                    <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />
+                                </TabsContent>
+                            </Tabs>
+                        </div>
+                    </Panel>
 
-                <PanelSeparator className="w-1.5 bg-border transition-colors" />
+                    <PanelSeparator className="w-1.5 bg-border transition-colors" />
 
-                <Panel id="middle-panel" minSize={`${INITIAL_LAYOUT.horizontal.middlePanel.min}%`}>
-                    <div className="flex h-full flex-col">
-                        {isLoading || tabs.length === 0 ? (
-                            <SQLTabEmpty addTab={addTab} disabled={isLoading} />
-                        ) : (
-                            <>
-                                <SQLTabs
-                                    tabs={tabs}
-                                    activeTabId={activeTabId}
-                                    setActiveTabId={setActiveTabId}
-                                    addTab={addTab}
-                                    closeTab={handleCloseTab}
-                                    closeOtherTabs={handleCloseOthers}
-                                    updateTab={updateTab}
-                                    reorderTabs={reorderTabs}
-                                    onRequestAITitle={manualRenameTab}
-                                    onHeightChange={setTabHeaderHeight}
-                                    headerAccessory={<AgentRunContextDrawer workId={workId} connectionName={currentConnection?.connection?.name ?? connectionId} />}
-                                />
-                                <div className="flex-1 min-h-0">
-                                    {tabs.map(tab => {
-                                        const isActive = tab.tabId === activeTabId;
-                                        const tabEditorRef = tab.tabType === 'sql' ? (ensureEditorRef(tab.tabId) ?? editorRef) : editorRef;
+                    <Panel id="middle-panel" minSize={`${INITIAL_LAYOUT.horizontal.middlePanel.min}%`}>
+                        <div className="flex h-full flex-col">
+                            {isLoading || tabs.length === 0 ? (
+                                <SQLTabEmpty addTab={addTab} disabled={isLoading} />
+                            ) : (
+                                <>
+                                    <SQLTabs
+                                        tabs={tabs}
+                                        activeTabId={activeTabId}
+                                        setActiveTabId={setActiveTabId}
+                                        addTab={addTab}
+                                        closeTab={handleCloseTab}
+                                        closeOtherTabs={handleCloseOthers}
+                                        updateTab={updateTab}
+                                        reorderTabs={reorderTabs}
+                                        onRequestAITitle={manualRenameTab}
+                                    />
+                                    <div className="flex-1 min-h-0">
+                                        {tabs.map(tab => {
+                                            const isActive = tab.tabId === activeTabId;
+                                            const tabEditorRef = tab.tabType === 'sql' ? (ensureEditorRef(tab.tabId) ?? editorRef) : editorRef;
 
-                                        return (
-                                            <Activity key={tab.tabId} mode={isActive ? 'visible' : 'hidden'}>
-                                                <div className={cn('flex h-full flex-col', isActive ? '' : 'hidden')}>
-                                                    {tab.tabType === 'table' ? (
-                                                        <TableMode
-                                                            tabs={tabs}
-                                                            activeTab={tab}
-                                                            activeTabId={tab.tabId}
-                                                            setActiveTabId={setActiveTabId}
-                                                            addTab={addTab}
-                                                            updateTab={updateTab}
-                                                            showChatbot={false}
-                                                            chatWidth={normalizedChatWidth}
-                                                            setChatWidth={setClampedChatWidth}
-                                                            runQuery={runQueryWithRef}
-                                                            onCloseChatbot={closeChatbotPanel}
-                                                        />
-                                                    ) : (
-                                                        <SqlMode
-                                                            tabs={tabs}
-                                                            activeTab={tab}
-                                                            activeTabId={tab.tabId}
-                                                            setActiveTabId={setActiveTabId}
-                                                            addTab={addTab}
-                                                            updateTab={updateTab}
-                                                            editorRef={tabEditorRef}
-                                                            runQuery={runQueryWithRef}
-                                                            cancelQuery={cancelQuery}
-                                                            runningTabs={runningTabs}
-                                                            showChatbot={shouldShowChatbot}
-                                                            chatWidth={normalizedChatWidth}
-                                                            setChatWidth={setClampedChatWidth}
-                                                            onCloseChatbot={closeChatbotPanel}
-                                                        />
-                                                    )}
-                                                </div>
-                                            </Activity>
-                                        );
-                                    })}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </Panel>
-            </Group>
+                                            return (
+                                                <Activity key={tab.tabId} mode={isActive ? 'visible' : 'hidden'}>
+                                                    <div className={cn('flex h-full flex-col', isActive ? '' : 'hidden')}>
+                                                        {tab.tabType === 'table' ? (
+                                                            <TableMode
+                                                                tabs={tabs}
+                                                                activeTab={tab}
+                                                                activeTabId={tab.tabId}
+                                                                setActiveTabId={setActiveTabId}
+                                                                addTab={addTab}
+                                                                updateTab={updateTab}
+                                                                showChatbot={false}
+                                                                chatWidth={normalizedChatWidth}
+                                                                setChatWidth={setClampedChatWidth}
+                                                                runQuery={runQueryWithRef}
+                                                                onCloseChatbot={closeChatbotPanel}
+                                                                reserveRightRail={false}
+                                                            />
+                                                        ) : (
+                                                            <SqlMode
+                                                                tabs={tabs}
+                                                                activeTab={tab}
+                                                                activeTabId={tab.tabId}
+                                                                setActiveTabId={setActiveTabId}
+                                                                addTab={addTab}
+                                                                updateTab={updateTab}
+                                                                editorRef={tabEditorRef}
+                                                                runQuery={runQueryWithRef}
+                                                                cancelQuery={cancelQuery}
+                                                                runningTabs={runningTabs}
+                                                                showChatbot={shouldShowChatbot}
+                                                                chatWidth={normalizedChatWidth}
+                                                                setChatWidth={setClampedChatWidth}
+                                                                onCloseChatbot={closeChatbotPanel}
+                                                                reserveRightRail={false}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </Activity>
+                                            );
+                                        })}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </Panel>
+                </Group>
+            </div>
 
-            <div className="absolute right-0 bottom-0 z-20 flex" style={{ top: isLoading || tabs.length === 0 ? 0 : `${tabHeaderHeight}px` }}>
+            <div className="absolute bottom-0 right-0 top-0 z-20 flex">
                 <div className="flex h-full w-10 flex-col items-center gap-2 border-l bg-background/95 py-3 shadow-xl backdrop-blur">
                     {activeTab?.tabType === 'sql' && (
                         <Button
@@ -525,8 +557,34 @@ export default function AgentWorkspaceClient({
                             <span className="sr-only">{t('Copilot.ToggleLabel')}</span>
                         </Button>
                     )}
+                    <Button
+                        size="icon"
+                        variant={agentRunPanelOpen ? 'default' : 'ghost'}
+                        className="group h-8 w-8"
+                        onClick={toggleAgentRunPanel}
+                        title={agentRunPanelOpen ? 'Close Agent Run panel' : 'Open Agent Run panel'}
+                        aria-label={agentRunPanelOpen ? 'Close Agent Run panel' : 'Open Agent Run panel'}
+                    >
+                        <Bot className={cn('h-5 w-5 transition-colors', agentRunPanelOpen ? 'text-background' : 'text-muted-foreground group-hover:text-primary')} />
+                        <span className="sr-only">Agent Run</span>
+                    </Button>
                 </div>
             </div>
+
+            {agentRunPanelOpen ? (
+                <div className="absolute bottom-0 top-0 z-10" style={{ right: `${WORKSPACE_RAIL_WIDTH}px`, width: `${AGENT_RUN_PANEL_WIDTH}px` }}>
+                    <AgentRunWorkspacePanel
+                        workId={workId}
+                        connectionId={connectionId}
+                        connectionName={currentConnection?.connection?.name ?? connectionId}
+                        workspaceUrl={typeof window !== 'undefined' ? window.location.href : null}
+                        tabCount={tabs.length}
+                        agentRunsHref={agentRunsHref}
+                        onClose={() => setAgentRunPanelOpen(false)}
+                        onSaveWorkspace={saveAgentWorkspace}
+                    />
+                </div>
+            ) : null}
 
             <AlertDialog open={confirmOpen} onOpenChange={open => setConfirmOpen(open)}>
                 <AlertDialogContent>

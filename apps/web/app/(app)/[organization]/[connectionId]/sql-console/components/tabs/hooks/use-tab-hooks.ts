@@ -13,6 +13,39 @@ import { debounce } from 'lodash-es';
 import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
 import { getActiveTabStorageKey, getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../../../workspace-scope';
 
+function toPersistedTabPayload(tab: UITabPayload, index: number, connectionId: string, workId: string | null): TabPayload {
+    if (tab.tabType === 'table') {
+        return {
+            tabId: tab.tabId,
+            tabType: tab.tabType,
+            tabName: tab.tabName,
+            orderIndex: tab.orderIndex ?? index,
+            createdAt: typeof tab.createdAt === 'undefined' ? undefined : String(tab.createdAt),
+            userId: tab.userId ?? '',
+            connectionId: tab.connectionId ?? connectionId,
+            workId,
+            databaseName: tab.databaseName,
+            tableName: tab.tableName,
+            activeSubTab: tab.activeSubTab,
+            dataView: tab.dataView,
+        };
+    }
+
+    return {
+        tabId: tab.tabId,
+        tabType: tab.tabType,
+        tabName: tab.tabName,
+        orderIndex: tab.orderIndex ?? index,
+        createdAt: typeof tab.createdAt === 'undefined' ? undefined : String(tab.createdAt),
+        userId: tab.userId ?? '',
+        connectionId: tab.connectionId ?? connectionId,
+        workId,
+        content: tab.content ?? '',
+        status: tab.status,
+        resultMeta: tab.resultMeta,
+    };
+}
+
 export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
     const currentConnection = useAtomValue(currentConnectionAtom);
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
@@ -48,34 +81,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
             try {
                 await Promise.all(
                     orderedTabs.map((tab, idx) => {
-                        const base: TabPayload =
-                            tab.tabType === 'sql'
-                                ? {
-                                      tabId: tab.tabId,
-                                      tabType: tab.tabType,
-                                      tabName: tab.tabName,
-                                      orderIndex: idx,
-                                      createdAt: tab.createdAt,
-                                      userId: tab.userId ?? '',
-                                      connectionId: tab.connectionId ?? connectionId,
-                                      workId,
-                                      content: tab.content ?? '',
-                                      status: tab.status,
-                                  }
-                                : {
-                                      tabId: tab.tabId,
-                                      tabType: tab.tabType,
-                                      tabName: tab.tabName,
-                                      orderIndex: idx,
-                                      createdAt: tab.createdAt,
-                                      userId: tab.userId ?? '',
-                                      connectionId: tab.connectionId ?? connectionId,
-                                      workId,
-                                      databaseName: tab.databaseName,
-                                      tableName: tab.tableName,
-                                      activeSubTab: tab.activeSubTab,
-                                      dataView: tab.dataView,
-                                  };
+                        const base = toPersistedTabPayload({ ...tab, orderIndex: idx }, idx, connectionId, workId);
                         console.log('Persist tab order to server:', tab.tabId, 'as', base);
                         return saveTabToServer(tab.tabId, base).catch(err => {
                             console.error('[useSQLTabs] persist order failed for', tab.tabId, err);
@@ -301,6 +307,52 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
         [setTabs],
     );
 
+    const saveWorkspaceNow = async (options?: { activeTabId?: string | null; activeSqlContent?: string | null }) => {
+        if (debouncedSaveRef.current) {
+            debouncedSaveRef.current.flush();
+        }
+
+        if (!connectionId) {
+            return { saved: false, tabCount: 0 };
+        }
+
+        const activeTabIdForSave = options?.activeTabId ?? null;
+        const activeSqlContent = typeof options?.activeSqlContent === 'string' ? options.activeSqlContent : null;
+        const tabsToSave = tabs.map((tab, index) => {
+            const nextTab =
+                activeSqlContent !== null && activeTabIdForSave === tab.tabId && tab.tabType === 'sql'
+                    ? ({
+                          ...tab,
+                          content: activeSqlContent,
+                          orderIndex: tab.orderIndex ?? index,
+                      } as UITabPayload)
+                    : ({
+                          ...tab,
+                          orderIndex: tab.orderIndex ?? index,
+                      } as UITabPayload);
+
+            return nextTab;
+        });
+
+        if (activeSqlContent !== null && activeTabIdForSave) {
+            setTabs(prevTabs =>
+                prevTabs.map((tab, index) =>
+                    tab.tabId === activeTabIdForSave && tab.tabType === 'sql'
+                        ? ({
+                              ...tab,
+                              content: activeSqlContent,
+                              orderIndex: tab.orderIndex ?? index,
+                          } as UITabPayload)
+                        : tab,
+                ),
+            );
+        }
+
+        await Promise.all(tabsToSave.map((tab, index) => saveTabToServer(tab.tabId, toPersistedTabPayload(tab, index, connectionId, workId))));
+
+        return { saved: true, tabCount: tabsToSave.length };
+    };
+
     // ---------------------------------------------------
 
     // ---------------------------------------------------
@@ -486,5 +538,6 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
         closeTab,
         closeOtherTabs,
         reorderTabs,
+        saveWorkspaceNow,
     };
 }

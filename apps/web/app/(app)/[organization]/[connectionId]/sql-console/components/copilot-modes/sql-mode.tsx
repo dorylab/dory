@@ -155,6 +155,7 @@ export function SqlMode({
     chatWidth,
     setChatWidth,
     onCloseChatbot,
+    reserveRightRail = true,
 }: SqlModeProps) {
     const t = useTranslations('SqlConsole');
     const pathname = usePathname();
@@ -423,7 +424,7 @@ export function SqlMode({
     ]);
 
     return (
-        <div className="flex flex-1 flex-col min-h-0 mr-10">
+        <div className={['flex flex-1 flex-col min-h-0', reserveRightRail ? 'mr-10' : ''].join(' ')}>
             <Group
                 key={showChatbot ? 'sql-with-copilot' : 'sql-without-copilot'}
                 orientation="horizontal"
