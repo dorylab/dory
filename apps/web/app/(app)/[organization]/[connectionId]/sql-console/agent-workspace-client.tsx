@@ -349,6 +349,11 @@ export default function AgentWorkspaceClient({
         });
     }, [activeTab, editorRef, ensureEditorRef, saveWorkspaceNow]);
     const reservedRightWidth = WORKSPACE_RAIL_WIDTH + (agentRunPanelOpen ? AGENT_RUN_PANEL_WIDTH : 0);
+    const workspaceStyle = {
+        '--agent-run-panel-width': `${AGENT_RUN_PANEL_WIDTH}px`,
+        '--workspace-rail-width': `${WORKSPACE_RAIL_WIDTH}px`,
+        '--workspace-reserved-right-width': `${reservedRightWidth}px`,
+    } as React.CSSProperties;
 
     useEffect(() => {
         const handler = (event: KeyboardEvent) => {
@@ -433,8 +438,8 @@ export default function AgentWorkspaceClient({
     );
 
     return (
-        <main className="relative h-full w-full">
-            <div className="absolute inset-y-0 left-0 transition-[right] duration-200 ease-out" style={{ right: `${reservedRightWidth}px` }}>
+        <main className="relative h-full w-full" style={workspaceStyle}>
+            <div className="absolute inset-y-0 left-0 right-[var(--workspace-rail-width)] transition-[right] duration-200 ease-out xl:right-[var(--workspace-reserved-right-width)]">
                 <Group
                     orientation="horizontal"
                     id="agent-workspace-horizontal"
@@ -572,7 +577,7 @@ export default function AgentWorkspaceClient({
             </div>
 
             {agentRunPanelOpen ? (
-                <div className="absolute bottom-0 top-0 z-10" style={{ right: `${WORKSPACE_RAIL_WIDTH}px`, width: `${AGENT_RUN_PANEL_WIDTH}px` }}>
+                <div className="absolute bottom-0 right-[var(--workspace-rail-width)] top-0 z-10 w-[var(--agent-run-panel-width)] max-w-[calc(100%_-_var(--workspace-rail-width))]">
                     <AgentRunWorkspacePanel
                         workId={workId}
                         connectionId={connectionId}

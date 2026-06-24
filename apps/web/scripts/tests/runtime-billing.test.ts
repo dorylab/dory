@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getLicenseForServer, isBillingAvailableRuntimeValue, normalizeRuntime } from '@dory/shared/runtime';
+import { getLicenseForServer, hasDesktopBrowserBridge, isBillingAvailableRuntimeValue, normalizeRuntime } from '@dory/shared/runtime';
 
 test('normalizeRuntime resolves known runtime values', () => {
     assert.equal(normalizeRuntime('desktop'), 'desktop');
@@ -18,6 +18,29 @@ test('isBillingAvailableRuntimeValue only enables web', () => {
 test('normalizeRuntime rejects unsupported values', () => {
     assert.equal(normalizeRuntime('mobile'), null);
     assert.equal(normalizeRuntime(''), null);
+});
+
+test('hasDesktopBrowserBridge detects Electron preload bridges', () => {
+    const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+
+    try {
+        assert.equal(hasDesktopBrowserBridge(), false);
+
+        Object.defineProperty(globalThis, 'window', {
+            configurable: true,
+            value: {
+                mcpBridge: {},
+            },
+        });
+
+        assert.equal(hasDesktopBrowserBridge(), true);
+    } finally {
+        if (originalWindowDescriptor) {
+            Object.defineProperty(globalThis, 'window', originalWindowDescriptor);
+        } else {
+            Reflect.deleteProperty(globalThis, 'window');
+        }
+    }
 });
 
 test('docker runtime always uses OSS license', () => {

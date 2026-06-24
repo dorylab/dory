@@ -3,12 +3,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, Copy, Loader2, Save, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, Copy, FileText, Loader2, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { cn } from '@dory/web-utils';
 import { buildAgentRunHandoffPrompt } from '@/lib/agent-runs/handoff-prompt';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 
 type WorkSnapshotResponse = {
     code?: number;
@@ -41,6 +43,21 @@ function summaryTitle(metadata: Record<string, unknown> | null | undefined) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     const title = (raw as Record<string, unknown>).summaryTitle;
     return typeof title === 'string' && title.trim() ? title : null;
+}
+
+function tabSummaries(tabs: unknown[] | undefined) {
+    if (!tabs?.length) return [];
+
+    return tabs.map((tab, index) => {
+        const record = tab && typeof tab === 'object' && !Array.isArray(tab) ? (tab as Record<string, unknown>) : {};
+        const name = record.tabName ?? record.title ?? record.name;
+        const id = record.tabId ?? record.id;
+
+        return {
+            id: typeof id === 'string' && id.trim() ? id : `tab-${index}`,
+            name: typeof name === 'string' && name.trim() ? name : `Tab ${index + 1}`,
+        };
+    });
 }
 
 async function copyTextToClipboard(content: string) {
@@ -92,6 +109,7 @@ export function AgentRunWorkspacePanel({
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [saveError, setSaveError] = useState<string | null>(null);
     const [handoffBusy, setHandoffBusy] = useState(false);
+    const [generatedTabsOpen, setGeneratedTabsOpen] = useState(false);
     const query = useQuery({
         queryKey: ['agent-run-handoff', workId],
         queryFn: () => fetchRunContext(workId),
@@ -100,6 +118,8 @@ export function AgentRunWorkspacePanel({
     const snapshot = query.data ?? null;
     const resolvedWorkspaceUrl = workspaceUrl || (typeof window !== 'undefined' ? window.location.href : null);
     const title = useMemo(() => summaryTitle(snapshot?.work.metadata) || snapshot?.work.title || 'Agent Run', [snapshot?.work.metadata, snapshot?.work.title]);
+    const generatedTabs = useMemo(() => tabSummaries(snapshot?.tabs), [snapshot?.tabs]);
+    const generatedTabCount = generatedTabs.length || tabCount || 0;
     const isSaving = saveState === 'saving' || handoffBusy;
 
     const performSave = useCallback(
@@ -179,6 +199,38 @@ export function AgentRunWorkspacePanel({
                 </div>
 
                 {query.error ? <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{query.error.message}</div> : null}
+
+                {generatedTabCount > 0 ? (
+                    <Collapsible open={generatedTabsOpen} onOpenChange={setGeneratedTabsOpen} className="rounded-md border bg-background">
+                        <div className="flex items-center justify-between gap-3 px-3 py-2">
+                            <div className="min-w-0">
+                                <div className="text-sm font-medium">Generated tabs</div>
+                                <div className="text-xs text-muted-foreground">
+                                    {generatedTabCount} {generatedTabCount === 1 ? 'tab' : 'tabs'}
+                                </div>
+                            </div>
+                            {generatedTabs.length ? (
+                                <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="icon-sm" aria-label={generatedTabsOpen ? 'Collapse generated tabs' : 'Expand generated tabs'}>
+                                        <ChevronDown className={cn('transition-transform', !generatedTabsOpen && '-rotate-90')} />
+                                    </Button>
+                                </CollapsibleTrigger>
+                            ) : null}
+                        </div>
+                        {generatedTabs.length ? (
+                            <CollapsibleContent>
+                                <div className="grid gap-1 border-t px-3 py-2">
+                                    {generatedTabs.map(tab => (
+                                        <div key={tab.id} className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                                            <FileText className="shrink-0" />
+                                            <span className="truncate">{tab.name}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CollapsibleContent>
+                        ) : null}
+                    </Collapsible>
+                ) : null}
 
                 <div className="grid gap-2">
                     <Button variant="outline" className="justify-start gap-2" disabled={isSaving} onClick={() => void performSave()}>

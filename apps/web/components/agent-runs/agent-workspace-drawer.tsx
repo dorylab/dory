@@ -18,8 +18,8 @@ export function AgentWorkspaceDrawer({ children, closeHref }: { children: ReactN
     }, [closeHref, router]);
 
     return (
-        <Drawer direction="right" open onOpenChange={open => !open && closeDrawer()}>
-            <DrawerContent className="!inset-0 !h-dvh !w-screen !max-w-none !rounded-none !border-0 !p-0">
+        <Drawer direction="bottom" open onOpenChange={open => !open && closeDrawer()}>
+            <DrawerContent className="!inset-0 !m-0 !h-dvh !max-h-none !w-screen !max-w-none !rounded-none !border-0 !p-0 [&>div:first-child]:!hidden">
                 <DrawerTitle className="sr-only">Agent Run workspace</DrawerTitle>
                 <DrawerDescription className="sr-only">SQL workspace for this Agent Run.</DrawerDescription>
                 {children}
