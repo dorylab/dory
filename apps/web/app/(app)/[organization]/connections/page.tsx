@@ -115,7 +115,7 @@ export default function ConnectionsPage() {
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
-            <div className="container mx-auto mt-10 p-12 lg:p-12 xl:p-8 2xl:p-4">
+            <div className="container mx-auto px-12 pt-8 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="mb-6">
                     <h1 className="mb-2 text-2xl font-bold">{t('title')}</h1>
                     {/* <p className="text-sm text-muted-eground">{t('description')}</p> */}

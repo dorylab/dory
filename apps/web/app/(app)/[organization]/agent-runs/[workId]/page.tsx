@@ -67,7 +67,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
-            <main className="container mx-auto mt-10 flex flex-col gap-7 p-12 lg:p-12 xl:p-8 2xl:p-4">
+            <main className="container mx-auto flex flex-col gap-7 px-12 pt-8 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="flex flex-col gap-5">
                     <div className="flex items-center justify-between gap-4">
                         <Button asChild variant="ghost" size="sm" className="-ml-2 mb-3">
@@ -100,9 +100,8 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                         <Metric icon={CheckCircle2} label="Last active" value={formatDate(stats.lastActiveAt)} />
                     </div>
                     <p className="text-sm text-muted-foreground">
-                        This run generated a workspace with {stats.tabCount.toLocaleString()} {stats.tabCount === 1 ? 'tab' : 'tabs'} and{' '}
-                        {stats.sqlExecutionCount.toLocaleString()} {stats.sqlExecutionCount === 1 ? 'SQL run' : 'SQL runs'}. Open the workspace to inspect, edit, and continue the generated SQL
-                        analysis.
+                        This run generated a workspace with {stats.tabCount.toLocaleString()} {stats.tabCount === 1 ? 'tab' : 'tabs'} and {stats.sqlExecutionCount.toLocaleString()}{' '}
+                        {stats.sqlExecutionCount === 1 ? 'SQL run' : 'SQL runs'}. Open the workspace to inspect, edit, and continue the generated SQL analysis.
                     </p>
                 </header>
 

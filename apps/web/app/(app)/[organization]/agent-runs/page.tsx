@@ -115,7 +115,7 @@ export default async function AgentRunsPage({
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
-            <main className="container mx-auto mt-10 flex flex-col gap-6 p-12 lg:p-12 xl:p-8 2xl:p-4">
+            <main className="container mx-auto flex flex-col gap-6 px-12 pt-8 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="mb-0 flex items-center justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
