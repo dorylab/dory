@@ -3432,6 +3432,22 @@
                 "Open": "Agent Run パネルを開く",
                 "Close": "Agent Run パネルを閉じる"
             }
+        },
+        "WorkspaceTour": {
+            "CopyTask": {
+                "Title": "外部 Agent で続行",
+                "Description": "このワークスペースのコンテキストをコピーし、Claude、Codex、または別の外部 Agent に貼り付けると、ここから作業を続けられます。"
+            },
+            "Back": {
+                "Title": "Agent Runs に戻る",
+                "Description": "このボタンで Agent Runs 一覧に戻り、この run や過去の run を確認できます。"
+            },
+            "Actions": {
+                "Next": "次へ",
+                "Finish": "完了",
+                "Skip": "スキップ",
+                "Close": "ツアーを閉じる"
+            }
         }
     },
     "OrganizationSettings": {

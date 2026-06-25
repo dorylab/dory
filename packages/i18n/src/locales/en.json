@@ -3434,6 +3434,22 @@
                 "Open": "Open Agent Run panel",
                 "Close": "Close Agent Run panel"
             }
+        },
+        "WorkspaceTour": {
+            "CopyTask": {
+                "Title": "Continue with an external Agent",
+                "Description": "Copy this workspace context and paste it into Claude, Codex, or another external Agent to keep working from here."
+            },
+            "Back": {
+                "Title": "Return to Agent Runs",
+                "Description": "Use this button to go back to the Agent Runs list and review this run or earlier runs."
+            },
+            "Actions": {
+                "Next": "Next",
+                "Finish": "Finish",
+                "Skip": "Skip",
+                "Close": "Close tour"
+            }
         }
     },
     "OrganizationSettings": {

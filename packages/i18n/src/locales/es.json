@@ -3432,6 +3432,22 @@
                 "Open": "Abrir panel de ejecución de agente",
                 "Close": "Cerrar panel de ejecución de agente"
             }
+        },
+        "WorkspaceTour": {
+            "CopyTask": {
+                "Title": "Continuar con un agente externo",
+                "Description": "Copia el contexto de este espacio y pégalo en Claude, Codex u otro agente externo para seguir trabajando desde aquí."
+            },
+            "Back": {
+                "Title": "Volver a ejecuciones de agente",
+                "Description": "Usa este botón para volver a la lista de ejecuciones de agente y revisar esta ejecución o ejecuciones anteriores."
+            },
+            "Actions": {
+                "Next": "Siguiente",
+                "Finish": "Finalizar",
+                "Skip": "Omitir",
+                "Close": "Cerrar tour"
+            }
         }
     },
     "OrganizationSettings": {
