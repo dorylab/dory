@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { cn } from '@dory/web-utils';
 import type { SQLTab } from '@dory/shared/types/tabs';
 import { executeActionClient } from '@/lib/actions/client';
+import { authFetch } from '@/lib/client/auth-fetch';
 import { buildAgentRunDetailPath } from '@/lib/agent-runs/workspace-url';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
@@ -86,7 +87,7 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
-function serializeWorkspaceTabs(tabs: readonly SQLTab[], activeTabId: string | null | undefined, activeSqlContent?: string | null) {
+function serializeWorkspaceTabs(tabs: readonly SQLTab[], activeTabId: string | null | undefined, activeSqlContent?: string | null, sqlContentsByTabId?: Record<string, string>) {
     return JSON.stringify(
         tabs.map((tab, index) => {
             const base = {
@@ -110,7 +111,9 @@ function serializeWorkspaceTabs(tabs: readonly SQLTab[], activeTabId: string | n
 
             return {
                 ...base,
-                content: tab.tabId === activeTabId && activeSqlContent !== null && typeof activeSqlContent !== 'undefined' ? activeSqlContent : (tab.content ?? ''),
+                content:
+                    sqlContentsByTabId?.[tab.tabId] ??
+                    (tab.tabId === activeTabId && activeSqlContent !== null && typeof activeSqlContent !== 'undefined' ? activeSqlContent : (tab.content ?? '')),
                 status: tab.status ?? 'idle',
                 resultMeta: tab.resultMeta ?? null,
             };
@@ -374,39 +377,82 @@ export default function AgentWorkspaceClient({
         setShowChatbot(false);
         setAgentRunPanelOpen(prev => !prev);
     };
-    const saveAgentWorkspace = useCallback(async () => {
-        let nextFingerprint: string;
 
-        if (activeTab?.tabType !== 'sql') {
-            await saveWorkspaceNow();
-            nextFingerprint = serializeWorkspaceTabs(tabs, activeTabId, null);
-            setSavedWorkspaceFingerprint(nextFingerprint);
-            return nextFingerprint;
+    const getSqlContentsByTabId = useCallback(() => {
+        const contents: Record<string, string> = {};
+
+        for (const tab of tabs) {
+            if (tab.tabType !== 'sql') continue;
+
+            const refForTab = ensureEditorRef(tab.tabId);
+            const editorHandle = refForTab?.current ?? (tab.tabId === activeTabId ? editorRef.current : null);
+            contents[tab.tabId] = editorHandle?.getValue?.() ?? tab.content ?? '';
         }
 
-        const refForActive = ensureEditorRef(activeTab.tabId) ?? editorRef;
-        const activeSqlContent = refForActive.current?.getValue() ?? activeTab.content ?? '';
-        refForActive.current?.flushSave?.();
+        return contents;
+    }, [activeTabId, editorRef, ensureEditorRef, tabs]);
 
-        await saveWorkspaceNow({
-            activeTabId: activeTab.tabId,
-            activeSqlContent,
+    const flushSqlEditorSaves = useCallback(() => {
+        for (const tab of tabs) {
+            if (tab.tabType !== 'sql') continue;
+            const refForTab = ensureEditorRef(tab.tabId);
+            const editorHandle = refForTab?.current ?? (tab.tabId === activeTabId ? editorRef.current : null);
+            editorHandle?.flushSave?.();
+        }
+    }, [activeTabId, editorRef, ensureEditorRef, tabs]);
+
+    const recordWorkspaceSaveActivity = useCallback(async () => {
+        const sqlTabCount = tabs.filter(tab => tab.tabType === 'sql').length;
+        const tableTabCount = tabs.filter(tab => tab.tabType === 'table').length;
+        const response = await authFetch(`/api/works/${encodeURIComponent(workId)}/events`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                toolName: 'dory_user_save_workspace',
+                operation: 'save_workspace',
+                tabCount: tabs.length,
+                sqlTabCount,
+                tableTabCount,
+            }),
         });
 
-        nextFingerprint = serializeWorkspaceTabs(tabs, activeTab.tabId, activeSqlContent);
+        if (!response.ok) {
+            const payload = (await response.json().catch(() => null)) as { message?: string } | { error?: { message?: string } } | null;
+            const message =
+                payload && 'error' in payload && payload.error?.message
+                    ? payload.error.message
+                    : payload && 'message' in payload && payload.message
+                      ? payload.message
+                      : 'Failed to record workspace activity.';
+            throw new Error(message);
+        }
+    }, [tabs, workId]);
+
+    const saveAgentWorkspace = useCallback(async () => {
+        const sqlContentsByTabId = getSqlContentsByTabId();
+        const activeSqlContent = activeTab?.tabType === 'sql' ? (sqlContentsByTabId[activeTab.tabId] ?? activeTab.content ?? '') : null;
+        flushSqlEditorSaves();
+
+        await saveWorkspaceNow({
+            activeTabId,
+            activeSqlContent,
+            sqlContentsByTabId,
+        });
+
+        await recordWorkspaceSaveActivity();
+
+        const nextFingerprint = serializeWorkspaceTabs(tabs, activeTabId, activeSqlContent, sqlContentsByTabId);
         setSavedWorkspaceFingerprint(nextFingerprint);
         return nextFingerprint;
-    }, [activeTab, activeTabId, editorRef, ensureEditorRef, saveWorkspaceNow, tabs]);
+    }, [activeTab, activeTabId, flushSqlEditorSaves, getSqlContentsByTabId, recordWorkspaceSaveActivity, saveWorkspaceNow, tabs]);
 
     const getCurrentWorkspaceFingerprint = useCallback(() => {
-        if (activeTab?.tabType !== 'sql') {
-            return serializeWorkspaceTabs(tabs, activeTabId, null);
-        }
-
-        const refForActive = ensureEditorRef(activeTab.tabId) ?? editorRef;
-        const activeSqlContent = refForActive.current?.getValue() ?? activeTab.content ?? '';
-        return serializeWorkspaceTabs(tabs, activeTab.tabId, activeSqlContent);
-    }, [activeTab, activeTabId, editorRef, ensureEditorRef, tabs]);
+        const sqlContentsByTabId = getSqlContentsByTabId();
+        const activeSqlContent = activeTab?.tabType === 'sql' ? (sqlContentsByTabId[activeTab.tabId] ?? activeTab.content ?? '') : null;
+        return serializeWorkspaceTabs(tabs, activeTabId, activeSqlContent, sqlContentsByTabId);
+    }, [activeTab, activeTabId, getSqlContentsByTabId, tabs]);
 
     const hasUnsavedChanges = savedWorkspaceFingerprint !== null && getCurrentWorkspaceFingerprint() !== savedWorkspaceFingerprint;
 

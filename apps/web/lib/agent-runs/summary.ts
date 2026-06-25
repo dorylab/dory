@@ -134,6 +134,11 @@ function formatRows(rows: number | null | undefined) {
     return `${rows.toLocaleString()} ${rows === 1 ? 'row' : 'rows'}`;
 }
 
+function formatTabs(tabs: number | null | undefined) {
+    if (tabs == null) return null;
+    return `${tabs.toLocaleString()} ${tabs === 1 ? 'tab' : 'tabs'}`;
+}
+
 function formatDuration(ms: number | null | undefined) {
     if (ms == null || !Number.isFinite(ms)) return null;
     if (ms < 1000) return `${Math.max(0, Math.round(ms))}ms`;
@@ -180,6 +185,8 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike) {
             return 'Explored schema';
         case 'dory_workspace_tabs':
             return tabName ? `Updated workspace tab "${tabName}"` : 'Updated workspace tabs';
+        case 'dory_user_save_workspace':
+            return 'Saved workspace changes';
         case 'dory_saved_queries':
             return 'Managed saved queries';
         case 'dory_run_readonly_sql':
@@ -196,15 +203,18 @@ export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: Ag
         const session = sessionId ? sessions.get(sessionId) : undefined;
         const sqlLength = numberValue(event.inputSummary?.sqlLength) ?? (typeof session?.session?.sqlText === 'string' ? session.session.sqlText.length : null);
         const error = [event.errorCode, event.errorMessage].filter(Boolean).join(': ') || session?.session?.errorMessage || null;
+        const meta =
+            event.toolName === 'dory_run_readonly_sql'
+                ? sqlExecutionMeta(session, event)
+                : event.toolName === 'dory_user_save_workspace'
+                  ? [formatTabs(numberValue(event.outputSummary?.tabCount)), event.status ?? null].filter((item): item is string => Boolean(item))
+                  : [formatDuration(event.durationMs), event.status ?? null].filter((item): item is string => Boolean(item));
 
         return {
             id: event.eventId || `${event.toolName || 'event'}-${index}`,
             time: event.createdAt,
             title: eventTitle(event, snapshot),
-            meta:
-                event.toolName === 'dory_run_readonly_sql'
-                    ? sqlExecutionMeta(session, event)
-                    : [formatDuration(event.durationMs), event.status ?? null].filter((item): item is string => Boolean(item)),
+            meta,
             status: event.status,
             rawInput: event.inputSummary ?? null,
             rawOutput: event.outputSummary ?? null,

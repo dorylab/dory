@@ -30,6 +30,28 @@ It combines intelligent SQL editing, context-aware AI assistance, conversational
 
 ![Dory Preview](./public/actions.png)
 
+## Vision
+
+Dory is building the data workspace for the Agent era.
+
+As AI agents become capable of writing SQL, exploring schemas, debugging queries, and answering analytical questions, the bottleneck is no longer only whether an agent can generate a query. The harder problem is how humans and agents work together around real data: how queries are executed, how results are inspected, how mistakes are corrected, how context is preserved, and how useful work can continue after the first answer.
+
+Dory is designed as an agent-first SQL workspace where every important operation is action-based and can be used by both humans and agents. Agents can list connections, explore schemas, run read-only SQL, create or update workspace tabs, and organize saved queries through the same underlying action system that powers the product UI.
+
+We believe the future data workflow will not be a standalone chatbot beside a database. It will be a shared working environment where an agent can create a complete analytical workspace, produce SQL and result sets, and let the user open, inspect, filter, chart, edit, and continue the work directly.
+
+In Dory, the result is not just text. SQL tabs, query results, filters, charts, saved queries, and workspace state are first-class parts of the workflow. This makes Dory different from simply connecting an LLM to a database through MCP: the agent does not just return an answer — it creates a real workspace that humans can trust, modify, and build on.
+
+Our long-term goal is to make Dory the default data workbench for agentic data analysis:
+
+- agents can understand database structure and execute safe analytical actions;
+- humans can review and refine the agent’s work in a real SQL workspace;
+- every meaningful step can be recorded, reopened, and continued;
+- query results can become charts, dashboards, exports, or reusable analysis artifacts;
+- external agents such as coding assistants can use Dory as their data execution layer through MCP.
+
+Dory is not trying to replace SQL professionals with a black-box assistant. It is building the interface where humans and agents collaborate on data with transparency, control, and persistent context.
+
 ## 🚀 Quick Start
 ### Install on macOS with Homebrew
 
@@ -242,7 +264,8 @@ Dory manages the desktop MCP grant automatically. The local MCP endpoint can lis
 
 See the latest roadmap here:
 
-<a href="https://github.com/dorylab/dory/discussions/35" target="_blank" rel="noopener noreferrer">Dory Roadmap</a>
+- [Dory Roadmap](./ROADMAP.md)
+- Historical reference: <a href="https://github.com/dorylab/dory/discussions/35" target="_blank" rel="noopener noreferrer">GitHub Discussion #35</a>
 
 ---
 
