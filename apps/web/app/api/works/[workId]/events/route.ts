@@ -18,6 +18,14 @@ function stringValue(value: unknown) {
     return typeof value === 'string' ? value : null;
 }
 
+function booleanValue(value: unknown) {
+    return typeof value === 'boolean' ? value : false;
+}
+
+function stringArrayValue(value: unknown) {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).slice(0, 8) : [];
+}
+
 export async function POST(req: NextRequest, ctx: { params: Promise<{ workId: string }> }) {
     const session = await getSessionFromRequest(req);
     const userId = session?.user?.id ?? null;
@@ -54,6 +62,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ workId: st
     const tabCount = numberValue(body?.tabCount);
     const sqlTabCount = numberValue(body?.sqlTabCount);
     const tableTabCount = numberValue(body?.tableTabCount);
+    const changed = booleanValue(body?.changed);
+    const changeSummary = stringArrayValue(body?.changeSummary);
+    const actorName = session?.user.name || session?.user.email || userId;
     const event = await db.works.recordEvent({
         workId,
         organizationId,
@@ -65,12 +76,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ workId: st
             operation: 'save_workspace',
             workspaceMode: 'agent',
             tabCount,
+            actorName,
+            actorUserId: userId,
         },
         outputSummary: {
             tabCount,
             sqlTabCount,
             tableTabCount,
-            changed: true,
+            changed,
+            changeSummary,
+            addedTabCount: numberValue(body?.addedTabCount),
+            removedTabCount: numberValue(body?.removedTabCount),
+            renamedTabCount: numberValue(body?.renamedTabCount),
+            editedSqlTabCount: numberValue(body?.editedSqlTabCount),
+            updatedTableTabCount: numberValue(body?.updatedTableTabCount),
+            reordered: booleanValue(body?.reordered),
+            actorName,
+            actorUserId: userId,
         },
     });
 

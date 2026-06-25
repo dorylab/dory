@@ -70,6 +70,29 @@ const INITIAL_LAYOUT = {
 const WORKSPACE_RAIL_WIDTH = 40;
 const AGENT_RUN_PANEL_WIDTH = 300;
 
+type SerializedWorkspaceTab = {
+    tabId: string;
+    tabType: string;
+    tabName: string;
+    orderIndex: number;
+    content?: string;
+    databaseName?: string;
+    tableName?: string;
+    activeSubTab?: string | null;
+    dataView?: unknown;
+};
+
+type WorkspaceChangeSummary = {
+    changed: boolean;
+    changeSummary: string[];
+    addedTabCount: number;
+    removedTabCount: number;
+    renamedTabCount: number;
+    editedSqlTabCount: number;
+    updatedTableTabCount: number;
+    reordered: boolean;
+};
+
 function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
@@ -119,6 +142,88 @@ function serializeWorkspaceTabs(tabs: readonly SQLTab[], activeTabId: string | n
             };
         }),
     );
+}
+
+function parseWorkspaceTabs(value: string | null): SerializedWorkspaceTab[] {
+    if (!value) return [];
+    try {
+        const parsed = JSON.parse(value);
+        if (!Array.isArray(parsed)) return [];
+        return parsed.filter((item): item is SerializedWorkspaceTab => item && typeof item === 'object' && typeof item.tabId === 'string' && typeof item.tabName === 'string');
+    } catch {
+        return [];
+    }
+}
+
+function tabNames(tabs: SerializedWorkspaceTab[]) {
+    return tabs
+        .map(tab => tab.tabName || 'Untitled tab')
+        .slice(0, 3)
+        .join(', ');
+}
+
+function summarizeWorkspaceChanges(beforeFingerprint: string | null, afterFingerprint: string): WorkspaceChangeSummary {
+    const beforeTabs = parseWorkspaceTabs(beforeFingerprint);
+    const afterTabs = parseWorkspaceTabs(afterFingerprint);
+    const beforeById = new Map(beforeTabs.map(tab => [tab.tabId, tab]));
+    const afterById = new Map(afterTabs.map(tab => [tab.tabId, tab]));
+    const addedTabs = afterTabs.filter(tab => !beforeById.has(tab.tabId));
+    const removedTabs = beforeTabs.filter(tab => !afterById.has(tab.tabId));
+    let renamedTabCount = 0;
+    let editedSqlTabCount = 0;
+    let updatedTableTabCount = 0;
+
+    for (const afterTab of afterTabs) {
+        const beforeTab = beforeById.get(afterTab.tabId);
+        if (!beforeTab) continue;
+
+        if ((beforeTab.tabName ?? '') !== (afterTab.tabName ?? '')) {
+            renamedTabCount += 1;
+        }
+
+        if (afterTab.tabType === 'sql' && (beforeTab.content ?? '') !== (afterTab.content ?? '')) {
+            editedSqlTabCount += 1;
+        }
+
+        if (
+            afterTab.tabType === 'table' &&
+            ((beforeTab.databaseName ?? '') !== (afterTab.databaseName ?? '') ||
+                (beforeTab.tableName ?? '') !== (afterTab.tableName ?? '') ||
+                (beforeTab.activeSubTab ?? null) !== (afterTab.activeSubTab ?? null) ||
+                JSON.stringify(beforeTab.dataView ?? null) !== JSON.stringify(afterTab.dataView ?? null))
+        ) {
+            updatedTableTabCount += 1;
+        }
+    }
+
+    const beforeOrder = beforeTabs
+        .filter(tab => afterById.has(tab.tabId))
+        .map(tab => tab.tabId)
+        .join('\0');
+    const afterOrder = afterTabs
+        .filter(tab => beforeById.has(tab.tabId))
+        .map(tab => tab.tabId)
+        .join('\0');
+    const reordered = beforeOrder !== afterOrder && beforeTabs.length > 1 && afterTabs.length > 1;
+    const changeSummary = [
+        addedTabs.length ? `Added ${addedTabs.length} ${addedTabs.length === 1 ? 'tab' : 'tabs'}${tabNames(addedTabs) ? `: ${tabNames(addedTabs)}` : ''}` : null,
+        removedTabs.length ? `Removed ${removedTabs.length} ${removedTabs.length === 1 ? 'tab' : 'tabs'}${tabNames(removedTabs) ? `: ${tabNames(removedTabs)}` : ''}` : null,
+        renamedTabCount ? `Renamed ${renamedTabCount} ${renamedTabCount === 1 ? 'tab' : 'tabs'}` : null,
+        editedSqlTabCount ? `Edited SQL in ${editedSqlTabCount} ${editedSqlTabCount === 1 ? 'tab' : 'tabs'}` : null,
+        updatedTableTabCount ? `Updated ${updatedTableTabCount} table ${updatedTableTabCount === 1 ? 'tab' : 'tabs'}` : null,
+        reordered ? 'Reordered tabs' : null,
+    ].filter((item): item is string => Boolean(item));
+
+    return {
+        changed: changeSummary.length > 0,
+        changeSummary,
+        addedTabCount: addedTabs.length,
+        removedTabCount: removedTabs.length,
+        renamedTabCount,
+        editedSqlTabCount,
+        updatedTableTabCount,
+        reordered,
+    };
 }
 
 export default function AgentWorkspaceClient({
@@ -401,34 +506,45 @@ export default function AgentWorkspaceClient({
         }
     }, [activeTabId, editorRef, ensureEditorRef, tabs]);
 
-    const recordWorkspaceSaveActivity = useCallback(async () => {
-        const sqlTabCount = tabs.filter(tab => tab.tabType === 'sql').length;
-        const tableTabCount = tabs.filter(tab => tab.tabType === 'table').length;
-        const response = await authFetch(`/api/works/${encodeURIComponent(workId)}/events`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                toolName: 'dory_user_save_workspace',
-                operation: 'save_workspace',
-                tabCount: tabs.length,
-                sqlTabCount,
-                tableTabCount,
-            }),
-        });
+    const recordWorkspaceSaveActivity = useCallback(
+        async (changes: WorkspaceChangeSummary) => {
+            const sqlTabCount = tabs.filter(tab => tab.tabType === 'sql').length;
+            const tableTabCount = tabs.filter(tab => tab.tabType === 'table').length;
+            const response = await authFetch(`/api/works/${encodeURIComponent(workId)}/events`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    toolName: 'dory_user_save_workspace',
+                    operation: 'save_workspace',
+                    tabCount: tabs.length,
+                    sqlTabCount,
+                    tableTabCount,
+                    changed: changes.changed,
+                    changeSummary: changes.changeSummary,
+                    addedTabCount: changes.addedTabCount,
+                    removedTabCount: changes.removedTabCount,
+                    renamedTabCount: changes.renamedTabCount,
+                    editedSqlTabCount: changes.editedSqlTabCount,
+                    updatedTableTabCount: changes.updatedTableTabCount,
+                    reordered: changes.reordered,
+                }),
+            });
 
-        if (!response.ok) {
-            const payload = (await response.json().catch(() => null)) as { message?: string } | { error?: { message?: string } } | null;
-            const message =
-                payload && 'error' in payload && payload.error?.message
-                    ? payload.error.message
-                    : payload && 'message' in payload && payload.message
-                      ? payload.message
-                      : 'Failed to record workspace activity.';
-            throw new Error(message);
-        }
-    }, [tabs, workId]);
+            if (!response.ok) {
+                const payload = (await response.json().catch(() => null)) as { message?: string } | { error?: { message?: string } } | null;
+                const message =
+                    payload && 'error' in payload && payload.error?.message
+                        ? payload.error.message
+                        : payload && 'message' in payload && payload.message
+                          ? payload.message
+                          : 'Failed to record workspace activity.';
+                throw new Error(message);
+            }
+        },
+        [tabs, workId],
+    );
 
     const saveAgentWorkspace = useCallback(async () => {
         const sqlContentsByTabId = getSqlContentsByTabId();
@@ -441,12 +557,15 @@ export default function AgentWorkspaceClient({
             sqlContentsByTabId,
         });
 
-        await recordWorkspaceSaveActivity();
-
         const nextFingerprint = serializeWorkspaceTabs(tabs, activeTabId, activeSqlContent, sqlContentsByTabId);
+        const changes = summarizeWorkspaceChanges(savedWorkspaceFingerprint, nextFingerprint);
+        if (changes.changed) {
+            await recordWorkspaceSaveActivity(changes);
+        }
+
         setSavedWorkspaceFingerprint(nextFingerprint);
         return nextFingerprint;
-    }, [activeTab, activeTabId, flushSqlEditorSaves, getSqlContentsByTabId, recordWorkspaceSaveActivity, saveWorkspaceNow, tabs]);
+    }, [activeTab, activeTabId, flushSqlEditorSaves, getSqlContentsByTabId, recordWorkspaceSaveActivity, saveWorkspaceNow, savedWorkspaceFingerprint, tabs]);
 
     const getCurrentWorkspaceFingerprint = useCallback(() => {
         const sqlContentsByTabId = getSqlContentsByTabId();

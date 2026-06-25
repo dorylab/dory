@@ -129,6 +129,10 @@ function numberValue(value: unknown) {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function stringArrayValue(value: unknown) {
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
+}
+
 function formatRows(rows: number | null | undefined) {
     if (rows == null) return null;
     return `${rows.toLocaleString()} ${rows === 1 ? 'row' : 'rows'}`;
@@ -166,6 +170,11 @@ function sqlExecutionMeta(session: AgentRunSessionLike | undefined, event: Agent
     return [formatRows(rows), formatDuration(duration), event.status ?? session?.session?.status ?? null].filter((item): item is string => Boolean(item));
 }
 
+function userWorkspaceSaveMeta(event: AgentRunEventLike) {
+    const changes = stringArrayValue(event.outputSummary?.changeSummary);
+    return [...changes, formatTabs(numberValue(event.outputSummary?.tabCount)), event.status ?? null].filter((item): item is string => Boolean(item));
+}
+
 function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike) {
     const tabs = tabNameById(snapshot);
     const sessions = sessionById(snapshot);
@@ -173,6 +182,7 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike) {
     const session = sessionId ? sessions.get(sessionId) : undefined;
     const resolvedTabId = tabId ?? session?.session?.tabId ?? null;
     const tabName = resolvedTabId ? tabs.get(resolvedTabId) : null;
+    const actorName = stringValue(event.outputSummary?.actorName) ?? stringValue(event.inputSummary?.actorName);
 
     switch (event.toolName) {
         case 'dory_create_work':
@@ -186,7 +196,7 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike) {
         case 'dory_workspace_tabs':
             return tabName ? `Updated workspace tab "${tabName}"` : 'Updated workspace tabs';
         case 'dory_user_save_workspace':
-            return 'Saved workspace changes';
+            return actorName ? `${actorName} saved workspace changes` : 'Saved workspace changes';
         case 'dory_saved_queries':
             return 'Managed saved queries';
         case 'dory_run_readonly_sql':
@@ -207,7 +217,7 @@ export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: Ag
             event.toolName === 'dory_run_readonly_sql'
                 ? sqlExecutionMeta(session, event)
                 : event.toolName === 'dory_user_save_workspace'
-                  ? [formatTabs(numberValue(event.outputSummary?.tabCount)), event.status ?? null].filter((item): item is string => Boolean(item))
+                  ? userWorkspaceSaveMeta(event)
                   : [formatDuration(event.durationMs), event.status ?? null].filter((item): item is string => Boolean(item));
 
         return {
