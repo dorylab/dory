@@ -7,6 +7,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { Plus, Loader2, FileText, X, Sparkles, Pencil, CircleOff, Table as TableIcon } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/registry/new-york-v4/ui/scroll-area';
 import { SQLTab } from '@dory/shared/types/tabs';
+import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { useTranslations } from 'next-intl';
@@ -244,8 +245,14 @@ export function SQLTabs({
                                             }}
                                             draggable
                                             role="tab"
+                                            tabIndex={0}
                                             aria-selected={isActive}
                                             onClick={() => {
+                                                setActiveTabId(tab.tabId);
+                                            }}
+                                            onKeyDown={e => {
+                                                if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                e.preventDefault();
                                                 setActiveTabId(tab.tabId);
                                             }}
                                             onContextMenu={() => {
@@ -277,9 +284,9 @@ export function SQLTabs({
                                                         : ['bg-muted/60 text-muted-foreground', 'hover:text-foreground hover:bg-muted'].join(' ')
                                                 }`}
                                         >
-                                            <div className="absolute inset-0 flex items-center justify-center px-6 pointer-events-none">
+                                            <div className="absolute inset-0 flex items-center justify-center px-6">
                                                 {tab.tabType === 'table' ? <TableIcon className="w-4 h-4 mr-2 shrink-0" /> : <FileText className="w-4 h-4 mr-2 shrink-0" />}
-                                                <span className="text-sm truncate text-center">{tab.tabName}</span>
+                                                <OverflowTooltip text={tab.tabName} className="block min-w-0 flex-1 truncate text-center text-sm" />
                                             </div>
 
                                             <button

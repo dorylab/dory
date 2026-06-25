@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { cn } from '@dory/web-utils';
+import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { buildAgentRunHandoffPrompt } from '@/lib/agent-runs/handoff-prompt';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -232,7 +233,7 @@ export function AgentRunWorkspacePanel({
                 {generatedTabCount > 0 ? (
                     <Collapsible open={generatedTabsOpen} onOpenChange={setGeneratedTabsOpen} className="rounded-md border bg-background">
                         <CollapsibleTrigger asChild>
-                            <button type="button" className="flex w-full items-center justify-between gap-3 rounded-t-md px-3 py-2 text-left transition-colors hover:bg-muted/50">
+                            <button type="button" className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-t-md px-3 py-2 text-left transition-colors hover:bg-muted/50">
                                 <div className="min-w-0">
                                     <div className="text-sm font-medium">{t('WorkspacePanel.GeneratedTabs.Title')}</div>
                                     <div className="text-xs text-muted-foreground">{t('Counts.Tabs', { count: generatedTabCount })}</div>
@@ -253,14 +254,14 @@ export function AgentRunWorkspacePanel({
                                             key={tab.id}
                                             type="button"
                                             className={cn(
-                                                'flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm transition-colors hover:bg-muted hover:text-foreground',
+                                                'flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm transition-colors hover:bg-muted hover:text-foreground',
                                                 activeTabId === tab.id ? 'bg-muted text-foreground' : 'text-muted-foreground',
                                             )}
                                             onClick={() => onSelectGeneratedTab(tab.id)}
                                             aria-label={t('WorkspacePanel.GeneratedTabs.OpenTab', { name: tab.name })}
                                         >
                                             <FileText className="shrink-0" />
-                                            <span className="truncate">{tab.name}</span>
+                                            <OverflowTooltip text={tab.name} className="block min-w-0 flex-1 truncate" />
                                         </button>
                                     ))}
                                 </div>
