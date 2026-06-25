@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, ChevronDown, Copy, FileText, Loader2, Save, X } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, Copy, FileText, Loader2, MoreHorizontal, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@dory/web-utils';
@@ -11,6 +10,7 @@ import { buildAgentRunHandoffPrompt } from '@/lib/agent-runs/handoff-prompt';
 import { authFetch } from '@/lib/client/auth-fetch';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 
 type WorkSnapshotResponse = {
     code?: number;
@@ -93,18 +93,22 @@ export function AgentRunWorkspacePanel({
     connectionName,
     workspaceUrl,
     tabCount,
-    agentRunsHref,
-    onClose,
     onSaveWorkspace,
+    hasUnsavedChanges,
+    onRequestCloseWorkspace,
+    onOpenAgentRuns,
 }: {
     workId: string;
     connectionId?: string | null;
     connectionName?: string | null;
     workspaceUrl?: string | null;
     tabCount?: number | null;
-    agentRunsHref: string;
-    onClose: () => void;
     onSaveWorkspace: () => Promise<void>;
+    hasUnsavedChanges: boolean;
+    onRequestCloseWorkspace: () => void;
+    onOpenAgentRuns: () => void;
+    onSaveAndCloseWorkspace: () => Promise<void>;
+    onCloseWorkspaceWithoutSaving: () => void;
 }) {
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [saveError, setSaveError] = useState<string | null>(null);
@@ -121,6 +125,7 @@ export function AgentRunWorkspacePanel({
     const generatedTabs = useMemo(() => tabSummaries(snapshot?.tabs), [snapshot?.tabs]);
     const generatedTabCount = generatedTabs.length || tabCount || 0;
     const isSaving = saveState === 'saving' || handoffBusy;
+    const workspaceHasChangesLabel = hasUnsavedChanges ? 'Unsaved changes' : 'Saved';
 
     const performSave = useCallback(
         async ({ showToast = true, refetch = true }: { showToast?: boolean; refetch?: boolean } = {}) => {
@@ -179,17 +184,31 @@ export function AgentRunWorkspacePanel({
         <aside className="flex h-full w-full flex-col border-l bg-card shadow-xl">
             <div className="flex h-16 shrink-0 items-center justify-between border-b px-3">
                 <div className="min-w-0">
-                    <Button asChild variant="ghost" size="sm" className="-ml-2 h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground">
-                        <Link href={agentRunsHref} prefetch={false}>
-                            <ArrowLeft className="h-3.5 w-3.5" />
-                            Agent Runs
-                        </Link>
+                    <Button variant="ghost" size="sm" className="-ml-2 h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={onOpenAgentRuns}>
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                        Agent Runs
                     </Button>
                     <div className="truncate px-0.5 text-sm font-semibold">{title}</div>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onClose} aria-label="Close Agent Run panel">
-                    <X className="h-4 w-4" />
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm" className="shrink-0" aria-label="Workspace actions">
+                            <MoreHorizontal />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuGroup>
+                            <DropdownMenuItem disabled={isSaving} onSelect={() => void performSave()}>
+                                <Save />
+                                Save workspace
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={onRequestCloseWorkspace}>
+                                <ArrowLeft />
+                                Close workspace
+                            </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 py-4">
@@ -233,10 +252,6 @@ export function AgentRunWorkspacePanel({
                 ) : null}
 
                 <div className="grid gap-2">
-                    <Button variant="outline" className="justify-start gap-2" disabled={isSaving} onClick={() => void performSave()}>
-                        {saveState === 'saving' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        Save workspace
-                    </Button>
                     <Button className="justify-start gap-2" disabled={handoffBusy || saveState === 'saving'} onClick={() => void handleCopyHandoff()}>
                         {handoffBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
                         Copy external Agent task
@@ -251,7 +266,7 @@ export function AgentRunWorkspacePanel({
                 ) : saveState === 'error' ? (
                     <div className="text-xs text-destructive">{saveError ?? 'Failed to save workspace.'}</div>
                 ) : (
-                    <div className="text-xs text-muted-foreground">This action uses the Agent Run workId, not the active tab.</div>
+                    <div className="text-xs text-muted-foreground">{workspaceHasChangesLabel}. This action uses the Agent Run workId, not the active tab.</div>
                 )}
             </div>
         </aside>

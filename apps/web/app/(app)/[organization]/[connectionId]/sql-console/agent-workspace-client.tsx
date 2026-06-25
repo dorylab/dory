@@ -4,10 +4,13 @@ import React, { Activity, useCallback, useEffect, useMemo, useState } from 'reac
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
 import { Bot, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 import { cn } from '@dory/web-utils';
 import type { SQLTab } from '@dory/shared/types/tabs';
 import { executeActionClient } from '@/lib/actions/client';
+import { buildAgentRunDetailPath } from '@/lib/agent-runs/workspace-url';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
 import {
@@ -83,6 +86,38 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
+function serializeWorkspaceTabs(tabs: readonly SQLTab[], activeTabId: string | null | undefined, activeSqlContent?: string | null) {
+    return JSON.stringify(
+        tabs.map((tab, index) => {
+            const base = {
+                tabId: tab.tabId,
+                tabType: tab.tabType,
+                tabName: tab.tabName ?? '',
+                orderIndex: index,
+                connectionId: tab.connectionId ?? '',
+                workId: tab.workId ?? null,
+            };
+
+            if (tab.tabType === 'table') {
+                return {
+                    ...base,
+                    databaseName: tab.databaseName ?? '',
+                    tableName: tab.tableName ?? '',
+                    activeSubTab: tab.activeSubTab ?? null,
+                    dataView: tab.dataView ?? null,
+                };
+            }
+
+            return {
+                ...base,
+                content: tab.tabId === activeTabId && activeSqlContent !== null && typeof activeSqlContent !== 'undefined' ? activeSqlContent : (tab.content ?? ''),
+                status: tab.status ?? 'idle',
+                resultMeta: tab.resultMeta ?? null,
+            };
+        }),
+    );
+}
+
 export default function AgentWorkspaceClient({
     defaultLayout = INITIAL_LAYOUT.horizontal.default,
     organization,
@@ -124,6 +159,7 @@ export default function AgentWorkspaceClient({
         saveWorkspaceNow,
     } = useSqlConsoleClient(defaultLayout, workspaceScope);
     const t = useTranslations('SqlConsole');
+    const router = useRouter();
     const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
 
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);
@@ -140,7 +176,12 @@ export default function AgentWorkspaceClient({
     );
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
+    const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
+    const [closeBusy, setCloseBusy] = useState(false);
+    const [closeTargetHref, setCloseTargetHref] = useState<string | null>(null);
+    const [savedWorkspaceFingerprint, setSavedWorkspaceFingerprint] = useState<string | null>(null);
     const agentRunsHref = useMemo(() => `/${encodeURIComponent(organization)}/agent-runs`, [organization]);
+    const agentRunDetailHref = useMemo(() => buildAgentRunDetailPath(organization, workId), [organization, workId]);
 
     useEffect(() => {
         setWorkspaceScope(workspaceScope);
@@ -334,9 +375,13 @@ export default function AgentWorkspaceClient({
         setAgentRunPanelOpen(prev => !prev);
     };
     const saveAgentWorkspace = useCallback(async () => {
+        let nextFingerprint: string;
+
         if (activeTab?.tabType !== 'sql') {
             await saveWorkspaceNow();
-            return;
+            nextFingerprint = serializeWorkspaceTabs(tabs, activeTabId, null);
+            setSavedWorkspaceFingerprint(nextFingerprint);
+            return nextFingerprint;
         }
 
         const refForActive = ensureEditorRef(activeTab.tabId) ?? editorRef;
@@ -347,7 +392,88 @@ export default function AgentWorkspaceClient({
             activeTabId: activeTab.tabId,
             activeSqlContent,
         });
-    }, [activeTab, editorRef, ensureEditorRef, saveWorkspaceNow]);
+
+        nextFingerprint = serializeWorkspaceTabs(tabs, activeTab.tabId, activeSqlContent);
+        setSavedWorkspaceFingerprint(nextFingerprint);
+        return nextFingerprint;
+    }, [activeTab, activeTabId, editorRef, ensureEditorRef, saveWorkspaceNow, tabs]);
+
+    const getCurrentWorkspaceFingerprint = useCallback(() => {
+        if (activeTab?.tabType !== 'sql') {
+            return serializeWorkspaceTabs(tabs, activeTabId, null);
+        }
+
+        const refForActive = ensureEditorRef(activeTab.tabId) ?? editorRef;
+        const activeSqlContent = refForActive.current?.getValue() ?? activeTab.content ?? '';
+        return serializeWorkspaceTabs(tabs, activeTab.tabId, activeSqlContent);
+    }, [activeTab, activeTabId, editorRef, ensureEditorRef, tabs]);
+
+    const hasUnsavedChanges = savedWorkspaceFingerprint !== null && getCurrentWorkspaceFingerprint() !== savedWorkspaceFingerprint;
+
+    const closeWorkspace = useCallback(
+        (targetHref?: string | null) => {
+            if (targetHref) {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                    router.back();
+                    window.setTimeout(() => {
+                        router.replace(targetHref, { scroll: false });
+                    }, 0);
+                    return;
+                }
+
+                router.replace(targetHref, { scroll: false });
+                return;
+            }
+
+            if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back();
+                return;
+            }
+            router.replace(agentRunDetailHref, { scroll: false });
+        },
+        [agentRunDetailHref, router],
+    );
+
+    const requestCloseTo = useCallback(
+        (targetHref?: string | null) => {
+            if (savedWorkspaceFingerprint !== null && getCurrentWorkspaceFingerprint() !== savedWorkspaceFingerprint) {
+                setCloseTargetHref(targetHref ?? null);
+                setCloseConfirmOpen(true);
+                return;
+            }
+
+            closeWorkspace(targetHref);
+        },
+        [closeWorkspace, getCurrentWorkspaceFingerprint, savedWorkspaceFingerprint],
+    );
+
+    const closeWorkspaceToAgentRuns = useCallback(() => {
+        requestCloseTo(agentRunsHref);
+    }, [agentRunsHref, requestCloseTo]);
+
+    const requestCloseWorkspace = useCallback(() => {
+        requestCloseTo(null);
+    }, [requestCloseTo]);
+
+    const saveAndCloseWorkspace = useCallback(async () => {
+        setCloseBusy(true);
+        try {
+            await saveAgentWorkspace();
+            setCloseConfirmOpen(false);
+            closeWorkspace(closeTargetHref);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to save workspace.';
+            toast.error(message);
+        } finally {
+            setCloseBusy(false);
+        }
+    }, [closeTargetHref, closeWorkspace, saveAgentWorkspace]);
+
+    const closeWorkspaceWithoutSaving = useCallback(() => {
+        setCloseConfirmOpen(false);
+        closeWorkspace(closeTargetHref);
+    }, [closeTargetHref, closeWorkspace]);
+
     const reservedRightWidth = WORKSPACE_RAIL_WIDTH + (agentRunPanelOpen ? AGENT_RUN_PANEL_WIDTH : 0);
     const workspaceStyle = {
         '--agent-run-panel-width': `${AGENT_RUN_PANEL_WIDTH}px`,
@@ -381,6 +507,11 @@ export default function AgentWorkspaceClient({
             window.removeEventListener('keydown', handler);
         };
     }, [addTab]);
+
+    useEffect(() => {
+        if (isLoading || savedWorkspaceFingerprint !== null) return;
+        setSavedWorkspaceFingerprint(serializeWorkspaceTabs(tabs, activeTabId, activeTab?.tabType === 'sql' ? (activeTab.content ?? '') : null));
+    }, [activeTab, activeTabId, isLoading, savedWorkspaceFingerprint, tabs]);
 
     const applySavedQuery = useCallback(
         async (item: SavedQueryItem) => {
@@ -584,9 +715,14 @@ export default function AgentWorkspaceClient({
                         connectionName={currentConnection?.connection?.name ?? connectionId}
                         workspaceUrl={typeof window !== 'undefined' ? window.location.href : null}
                         tabCount={tabs.length}
-                        agentRunsHref={agentRunsHref}
-                        onClose={() => setAgentRunPanelOpen(false)}
-                        onSaveWorkspace={saveAgentWorkspace}
+                        onSaveWorkspace={async () => {
+                            await saveAgentWorkspace();
+                        }}
+                        hasUnsavedChanges={hasUnsavedChanges}
+                        onRequestCloseWorkspace={requestCloseWorkspace}
+                        onOpenAgentRuns={closeWorkspaceToAgentRuns}
+                        onSaveAndCloseWorkspace={saveAndCloseWorkspace}
+                        onCloseWorkspaceWithoutSaving={closeWorkspaceWithoutSaving}
                     />
                 </div>
             ) : null}
@@ -616,6 +752,24 @@ export default function AgentWorkspaceClient({
                         >
                             {t('SavedQueries.Override')}
                         </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={closeConfirmOpen} onOpenChange={open => !closeBusy && setCloseConfirmOpen(open)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Close workspace?</AlertDialogTitle>
+                        <AlertDialogDescription>This workspace has unsaved changes.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={closeBusy}>Cancel</AlertDialogCancel>
+                        <Button variant="outline" disabled={closeBusy} onClick={closeWorkspaceWithoutSaving}>
+                            Close without saving
+                        </Button>
+                        <Button disabled={closeBusy} onClick={() => void saveAndCloseWorkspace()}>
+                            Save and close
+                        </Button>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
