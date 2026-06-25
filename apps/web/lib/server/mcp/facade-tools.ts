@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ActionContext } from '@dory/actions';
 import { toActionError } from '@dory/actions';
+import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { executeAction } from '@/lib/actions/server/execute';
 import type { WebActionServices } from '@/lib/actions/server/types';
@@ -904,12 +905,13 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
 
     work.connectionId = updated.connectionId ?? work.connectionId;
     work.workspaceUrl = buildWorkspaceUrl(ctx, updated);
+    const summary = getAgentRunSummary(updated.metadata);
 
     return withWork(
         {
             status: updated.status,
-            summaryTitle: input.summaryTitle ?? null,
-            summaryBullets: input.summaryBullets,
+            summaryTitle: summary?.summaryTitle ?? null,
+            summaryBullets: summary?.summaryBullets ?? input.summaryBullets,
         },
         work,
     );

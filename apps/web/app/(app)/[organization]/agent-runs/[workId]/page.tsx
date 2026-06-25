@@ -4,7 +4,14 @@ import { ArrowLeft, CheckCircle2, Database, PanelTop, TerminalSquare } from 'luc
 
 import { getDBService } from '@dory/database';
 import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
-import { buildAgentRunTimeline, getAgentRunStats, getAgentRunStatusLabel, getAgentRunStatusVariant, getAgentRunSummary } from '@/lib/agent-runs/summary';
+import {
+    buildAgentRunTimeline,
+    getAgentRunStats,
+    getAgentRunStatusLabel,
+    getAgentRunStatusVariant,
+    getAgentRunSummary,
+    getAgentRunSummarySections,
+} from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -14,6 +21,11 @@ function formatDate(value: Date | string | null | undefined) {
     if (!value) return 'Never';
     const date = value instanceof Date ? value : new Date(value);
     return date.toLocaleString();
+}
+
+function formatSummarySectionDate(value: Date | string | null | undefined) {
+    if (!value) return 'Summary';
+    return formatDate(value);
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof Database; label: string; value: string | number }) {
@@ -53,6 +65,7 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
     const connectionName = snapshot.work.connectionId ? (connectionNames.get(snapshot.work.connectionId) ?? snapshot.work.connectionId) : null;
     const stats = getAgentRunStats(snapshot, connectionName);
     const summary = getAgentRunSummary(snapshot.work.metadata);
+    const summarySections = getAgentRunSummarySections(snapshot.work.metadata, events);
     const timeline = buildAgentRunTimeline(snapshot, events);
 
     return (
@@ -93,15 +106,22 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                         <p className="mt-1 text-sm text-muted-foreground">A product summary written by the agent for this run.</p>
                     </div>
                     <div className="rounded-lg border bg-card p-5">
-                        {summary ? (
-                            <ul className="grid gap-3">
-                                {summary.summaryBullets.map(item => (
-                                    <li key={item} className="flex gap-3 text-sm">
-                                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                                        <span>{item}</span>
-                                    </li>
+                        {summarySections.length ? (
+                            <div className="grid gap-5">
+                                {summarySections.map((section, sectionIndex) => (
+                                    <section key={`${section.finishedAt ?? 'summary'}-${sectionIndex}`} className={sectionIndex === 0 ? 'grid gap-3' : 'grid gap-3 border-t pt-5'}>
+                                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{formatSummarySectionDate(section.finishedAt)}</div>
+                                        <ul className="grid gap-3">
+                                            {section.summaryBullets.map((item, itemIndex) => (
+                                                <li key={`${sectionIndex}-${itemIndex}-${item}`} className="flex gap-3 text-sm">
+                                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                                                    <span>{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </section>
                                 ))}
-                            </ul>
+                            </div>
                         ) : (
                             <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
                                 No agent-written summary yet. Activity is still available below for this run.

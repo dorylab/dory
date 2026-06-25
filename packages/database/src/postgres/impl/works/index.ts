@@ -139,6 +139,48 @@ function compactToolInput(input: Record<string, unknown>) {
     return out;
 }
 
+function cleanSummaryBullets(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
+}
+
+function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
+    const raw = metadata.agentRunSummary;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        return {
+            summaryTitle: null,
+            summaryBullets: [],
+            sections: [],
+        };
+    }
+
+    const record = raw as Record<string, unknown>;
+    const summaryTitle = typeof record.summaryTitle === 'string' && record.summaryTitle.trim() ? record.summaryTitle.trim() : null;
+    const sections = Array.isArray(record.sections)
+        ? record.sections
+              .map(section => {
+                  if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+                  const sectionRecord = section as Record<string, unknown>;
+                  const summaryBullets = cleanSummaryBullets(sectionRecord.summaryBullets);
+                  const finishedAt = typeof sectionRecord.finishedAt === 'string' && sectionRecord.finishedAt.trim() ? sectionRecord.finishedAt : null;
+                  if (!summaryBullets.length || !finishedAt) return null;
+
+                  return {
+                      summaryTitle: typeof sectionRecord.summaryTitle === 'string' && sectionRecord.summaryTitle.trim() ? sectionRecord.summaryTitle.trim() : null,
+                      summaryBullets,
+                      finishedAt,
+                  };
+              })
+              .filter((section): section is { summaryTitle: string | null; summaryBullets: string[]; finishedAt: string } => Boolean(section))
+        : [];
+
+    return {
+        summaryTitle,
+        summaryBullets: cleanSummaryBullets(record.summaryBullets),
+        sections,
+    };
+}
+
 export class PostgresWorksRepository {
     private db!: PostgresDBClient;
 
@@ -388,13 +430,25 @@ export class PostgresWorksRepository {
         }
 
         const now = new Date();
+        const finishedAt = now.toISOString();
         const currentMetadata = existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata) ? existing.metadata : {};
+        const existingSummary = getAgentRunSummaryMetadata(currentMetadata);
+        const newSummaryBullets = cleanSummaryBullets(input.summaryBullets);
+        const nextSummaryBullets = [...existingSummary.summaryBullets, ...newSummaryBullets];
         const metadata = {
             ...currentMetadata,
             agentRunSummary: {
-                summaryTitle: input.summaryTitle?.trim() || null,
-                summaryBullets: input.summaryBullets.map(item => item.trim()).filter(Boolean),
-                updatedAt: now.toISOString(),
+                summaryTitle: input.summaryTitle?.trim() || existingSummary.summaryTitle,
+                summaryBullets: nextSummaryBullets,
+                sections: [
+                    ...existingSummary.sections,
+                    {
+                        summaryTitle: input.summaryTitle?.trim() || null,
+                        summaryBullets: newSummaryBullets,
+                        finishedAt,
+                    },
+                ],
+                updatedAt: finishedAt,
             },
         };
 

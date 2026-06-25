@@ -29,6 +29,43 @@ function createWorksMock() {
     const now = new Date('2026-06-01T00:00:00.000Z');
     const defaultTitle = 'Agent Run';
 
+    const cleanSummaryBullets = (value: unknown) => (Array.isArray(value) ? value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean) : []);
+    const getAgentRunSummaryMetadata = (metadata: Record<string, unknown> | null | undefined) => {
+        const raw = metadata?.agentRunSummary;
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+            return {
+                summaryTitle: null,
+                summaryBullets: [],
+                sections: [],
+            };
+        }
+
+        const record = raw as Record<string, unknown>;
+        const sections = Array.isArray(record.sections)
+            ? record.sections
+                  .map(section => {
+                      if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+                      const sectionRecord = section as Record<string, unknown>;
+                      const summaryBullets = cleanSummaryBullets(sectionRecord.summaryBullets);
+                      const finishedAt = typeof sectionRecord.finishedAt === 'string' && sectionRecord.finishedAt.trim() ? sectionRecord.finishedAt : null;
+                      if (!summaryBullets.length || !finishedAt) return null;
+
+                      return {
+                          summaryTitle: typeof sectionRecord.summaryTitle === 'string' && sectionRecord.summaryTitle.trim() ? sectionRecord.summaryTitle.trim() : null,
+                          summaryBullets,
+                          finishedAt,
+                      };
+                  })
+                  .filter((section): section is { summaryTitle: string | null; summaryBullets: string[]; finishedAt: string } => Boolean(section))
+            : [];
+
+        return {
+            summaryTitle: typeof record.summaryTitle === 'string' && record.summaryTitle.trim() ? record.summaryTitle.trim() : null,
+            summaryBullets: cleanSummaryBullets(record.summaryBullets),
+            sections,
+        };
+    };
+
     const materialize = (input: any, workId = input.workId ?? `work-${nextId++}`) => {
         const existing = works.get(workId);
         if (existing) return existing;
@@ -122,11 +159,21 @@ function createWorksMock() {
                 });
             }
             work.status = input.status;
+            const existingSummary = getAgentRunSummaryMetadata(work.metadata);
+            const nextSummaryBullets = cleanSummaryBullets(input.summaryBullets);
             work.metadata = {
                 ...(work.metadata ?? {}),
                 agentRunSummary: {
-                    summaryTitle: input.summaryTitle ?? null,
-                    summaryBullets: input.summaryBullets,
+                    summaryTitle: input.summaryTitle?.trim() || existingSummary.summaryTitle,
+                    summaryBullets: [...existingSummary.summaryBullets, ...nextSummaryBullets],
+                    sections: [
+                        ...existingSummary.sections,
+                        {
+                            summaryTitle: input.summaryTitle?.trim() || null,
+                            summaryBullets: nextSummaryBullets,
+                            finishedAt: now.toISOString(),
+                        },
+                    ],
                     updatedAt: now.toISOString(),
                 },
             };
@@ -269,14 +316,68 @@ test('dory_finish_work persists agent summary metadata and status', async () => 
 
     assert.equal(output.status, 'completed');
     assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1/workspace/conn-1');
+    assert.deepEqual(output.summaryBullets, ['Queried story score distribution', 'Created editable SQL tabs']);
     assert.deepEqual(works.works.get(work.workId)?.metadata?.agentRunSummary, {
         summaryTitle: 'HN hot posts analysis',
         summaryBullets: ['Queried story score distribution', 'Created editable SQL tabs'],
+        sections: [
+            {
+                summaryTitle: 'HN hot posts analysis',
+                summaryBullets: ['Queried story score distribution', 'Created editable SQL tabs'],
+                finishedAt: '2026-06-01T00:00:00.000Z',
+            },
+        ],
         updatedAt: '2026-06-01T00:00:00.000Z',
     });
     assert.equal(works.works.get(work.workId)?.status, 'completed');
     assert.equal(works.events.at(-1)?.toolName, 'dory_finish_work');
     assert.equal(works.events.at(-1)?.status, 'success');
+});
+
+test('dory_finish_work appends continuation summary bullets without replacing existing summary', async () => {
+    const works = createWorksMock();
+    const ctx = createContext({
+        db: {
+            works,
+        },
+    } as unknown as WebActionServices);
+
+    const work = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Analyze orders' })) as any;
+    await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        summaryTitle: 'Initial order analysis',
+        summaryBullets: ['Created order status tab', 'Ran baseline distribution query'],
+    });
+    const output = (await getTool('dory_finish_work').execute(ctx, {
+        workId: work.workId,
+        status: 'completed',
+        summaryBullets: ['Continued from human-edited workspace', 'Added one-year comparison tab'],
+    })) as any;
+
+    assert.deepEqual(output.summaryBullets, [
+        'Created order status tab',
+        'Ran baseline distribution query',
+        'Continued from human-edited workspace',
+        'Added one-year comparison tab',
+    ]);
+    assert.deepEqual(works.works.get(work.workId)?.metadata?.agentRunSummary, {
+        summaryTitle: 'Initial order analysis',
+        summaryBullets: ['Created order status tab', 'Ran baseline distribution query', 'Continued from human-edited workspace', 'Added one-year comparison tab'],
+        sections: [
+            {
+                summaryTitle: 'Initial order analysis',
+                summaryBullets: ['Created order status tab', 'Ran baseline distribution query'],
+                finishedAt: '2026-06-01T00:00:00.000Z',
+            },
+            {
+                summaryTitle: null,
+                summaryBullets: ['Continued from human-edited workspace', 'Added one-year comparison tab'],
+                finishedAt: '2026-06-01T00:00:00.000Z',
+            },
+        ],
+        updatedAt: '2026-06-01T00:00:00.000Z',
+    });
 });
 
 test('dory_finish_work rejects work owned by another user', async () => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildAgentRunTimeline, getAgentRunStats, getAgentRunStatusLabel, getAgentRunSummary } from '@/lib/agent-runs/summary';
+import { buildAgentRunTimeline, getAgentRunStats, getAgentRunStatusLabel, getAgentRunSummary, getAgentRunSummarySections } from '@/lib/agent-runs/summary';
 
 test('Agent Run status labels map internal storage to product labels', () => {
     assert.equal(getAgentRunStatusLabel('active'), 'Active');
@@ -39,6 +39,113 @@ test('Agent Run summary accepts only persisted agent summary metadata', () => {
         summaryBullets: ['Queried stories'],
         updatedAt: null,
     });
+});
+
+test('Agent Run summary sections prefer persisted sections', () => {
+    assert.deepEqual(
+        getAgentRunSummarySections({
+            agentRunSummary: {
+                summaryTitle: 'Orders analysis',
+                summaryBullets: ['Created status tab', 'Added country tab'],
+                updatedAt: '2026-06-01T00:05:00.000Z',
+                sections: [
+                    {
+                        summaryTitle: 'Initial order analysis',
+                        summaryBullets: ['Created status tab'],
+                        finishedAt: '2026-06-01T00:00:00.000Z',
+                    },
+                    {
+                        summaryTitle: null,
+                        summaryBullets: ['Added country tab'],
+                        finishedAt: '2026-06-01T00:05:00.000Z',
+                    },
+                ],
+            },
+        }),
+        [
+            {
+                summaryTitle: 'Initial order analysis',
+                summaryBullets: ['Created status tab'],
+                finishedAt: '2026-06-01T00:00:00.000Z',
+            },
+            {
+                summaryTitle: null,
+                summaryBullets: ['Added country tab'],
+                finishedAt: '2026-06-01T00:05:00.000Z',
+            },
+        ],
+    );
+});
+
+test('Agent Run summary sections infer legacy flat summaries from finish events', () => {
+    assert.deepEqual(
+        getAgentRunSummarySections(
+            {
+                agentRunSummary: {
+                    summaryBullets: ['Created status tab', 'Ran baseline query', 'Added country tab'],
+                    updatedAt: '2026-06-01T00:10:00.000Z',
+                },
+            },
+            [
+                {
+                    eventId: 'event-2',
+                    toolName: 'dory_finish_work',
+                    status: 'success',
+                    inputSummary: { summaryBulletCount: 1 },
+                    createdAt: '2026-06-01T00:10:00.000Z',
+                },
+                {
+                    eventId: 'event-1',
+                    toolName: 'dory_finish_work',
+                    status: 'success',
+                    inputSummary: { summaryBulletCount: 2 },
+                    createdAt: '2026-06-01T00:00:00.000Z',
+                },
+            ],
+        ),
+        [
+            {
+                summaryTitle: null,
+                summaryBullets: ['Created status tab', 'Ran baseline query'],
+                finishedAt: '2026-06-01T00:00:00.000Z',
+            },
+            {
+                summaryTitle: null,
+                summaryBullets: ['Added country tab'],
+                finishedAt: '2026-06-01T00:10:00.000Z',
+            },
+        ],
+    );
+});
+
+test('Agent Run summary sections fall back to one section when finish event counts mismatch', () => {
+    assert.deepEqual(
+        getAgentRunSummarySections(
+            {
+                agentRunSummary: {
+                    summaryTitle: 'Orders analysis',
+                    summaryBullets: ['Created status tab', 'Added country tab'],
+                    updatedAt: '2026-06-01T00:10:00.000Z',
+                },
+            },
+            [
+                {
+                    eventId: 'event-1',
+                    toolName: 'dory_finish_work',
+                    status: 'success',
+                    inputSummary: { summaryBulletCount: 1 },
+                    createdAt: '2026-06-01T00:00:00.000Z',
+                },
+            ],
+        ),
+        [
+            {
+                summaryTitle: 'Orders analysis',
+                summaryBullets: ['Created status tab', 'Added country tab'],
+                finishedAt: '2026-06-01T00:10:00.000Z',
+            },
+        ],
+    );
 });
 
 test('Agent Run timeline renders SQL activity with tab, rows, duration, and raw details', () => {
