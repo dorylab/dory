@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation';
 import { Bot } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
-import { getAgentRunStatusLabel, getAgentRunStatusVariant } from '@/lib/agent-runs/summary';
-import { buildAgentRunDetailPath, buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
+import { getAgentRunOutputLabel, getAgentRunStatusLabel, getAgentRunStatusVariant, getAgentRunSummaryPreview } from '@/lib/agent-runs/summary';
+import { buildAgentRunDetailPath, buildAgentWorkspacePathFromSnapshot, resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { AgentRunsTable, type AgentRunListItem } from './agent-runs-table';
 
@@ -33,6 +33,10 @@ function pageHref(organization: string, page: number, pageSize: number) {
     query.set('page', String(page));
     query.set('pageSize', String(pageSize));
     return `/${encodeURIComponent(organization)}/agent-runs?${query.toString()}`;
+}
+
+function shortWorkId(workId: string) {
+    return workId.length > 12 ? workId.slice(0, 8) : workId;
 }
 
 export default async function AgentRunsPage({
@@ -68,9 +72,6 @@ export default async function AgentRunsPage({
         (
             await Promise.all(
                 pageWorks.map(async work => {
-                    if (work.connectionId) {
-                        return null;
-                    }
                     const snapshot = await db.works.getSnapshot({ organizationId, userId, workId: work.workId });
                     return snapshot ? ([work.workId, snapshot] as const) : null;
                 }),
@@ -79,19 +80,24 @@ export default async function AgentRunsPage({
     );
     const connectionsById = new Map(connections.map(item => [item.connection.id, item.connection]));
     const runItems: AgentRunListItem[] = pageWorks.map(work => {
+        const snapshot = snapshotsByWorkId.get(work.workId) ?? { work, sessions: [], tabs: [] };
+        const target = resolveAgentWorkspaceTarget(snapshot);
+        const dataSourceConnectionId = work.connectionId ?? target.connectionId;
         const detailHref = buildAgentRunDetailPath(organization, work.workId);
-        const workspaceHref = buildAgentWorkspacePathFromSnapshot(organization, {
-            work,
-            sessions: snapshotsByWorkId.get(work.workId)?.sessions ?? [],
-            tabs: snapshotsByWorkId.get(work.workId)?.tabs ?? [],
-        });
-        const connection = work.connectionId ? connectionsById.get(work.connectionId) : null;
+        const workspaceHref = buildAgentWorkspacePathFromSnapshot(organization, snapshot);
+        const connection = dataSourceConnectionId ? connectionsById.get(dataSourceConnectionId) : null;
 
         return {
             workId: work.workId,
+            shortWorkId: shortWorkId(work.workId),
             title: work.title || 'Agent Run',
+            outputLabel: getAgentRunOutputLabel(snapshot),
+            summaryPreview: getAgentRunSummaryPreview(work.metadata),
+            tabCount: snapshot.tabs?.length ?? 0,
+            sqlExecutionCount: snapshot.sessions?.length ?? 0,
+            hasWorkspace: Boolean(target.connectionId),
             dataSource: {
-                connectionId: work.connectionId,
+                connectionId: dataSourceConnectionId,
                 connectionName: connection?.name ?? null,
                 connectionType: connection?.type ?? null,
                 connectionHost: connection?.host ?? null,
@@ -117,6 +123,7 @@ export default async function AgentRunsPage({
                             MCP activity
                         </div>
                         <h1 className="mt-2 text-2xl font-semibold tracking-normal">Agent Runs</h1>
+                        <p className="mt-1 text-sm text-muted-foreground">Database work created by external agents through Dory MCP.</p>
                     </div>
                 </header>
 

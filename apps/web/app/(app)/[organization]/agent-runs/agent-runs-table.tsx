@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { ExternalLink, Info, Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Copy, ExternalLink, Info, Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
@@ -27,7 +27,13 @@ import type { getAgentRunStatusVariant } from '@/lib/agent-runs/summary';
 
 export type AgentRunListItem = {
     workId: string;
+    shortWorkId: string;
     title: string;
+    outputLabel: string;
+    summaryPreview: string;
+    tabCount: number;
+    sqlExecutionCount: number;
+    hasWorkspace: boolean;
     dataSource: DataSourceCellInfo;
     statusLabel: string;
     statusVariant: ReturnType<typeof getAgentRunStatusVariant>;
@@ -45,6 +51,10 @@ async function deleteAgentRun(workId: string) {
     if (!response.ok || payload?.code !== 0) {
         throw new Error(payload?.message || 'Failed to delete Agent Run.');
     }
+}
+
+async function copyText(content: string) {
+    await navigator.clipboard.writeText(content);
 }
 
 export function AgentRunsTable({
@@ -88,7 +98,7 @@ export function AgentRunsTable({
             <Table className="[&_td]:px-4 [&_th]:px-4 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6">
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Question</TableHead>
+                        <TableHead>Run</TableHead>
                         <TableHead>Data source</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Last active</TableHead>
@@ -116,7 +126,11 @@ export function AgentRunsTable({
                                     <div className="line-clamp-2 font-medium group-hover:underline" title={run.title}>
                                         {run.title}
                                     </div>
-                                    <div className="mt-1 max-w-[360px] truncate font-mono text-xs text-muted-foreground">{run.workId}</div>
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                        <span className="font-mono">{run.shortWorkId}</span>
+                                        <span>{run.outputLabel}</span>
+                                    </div>
+                                    <div className="mt-1 line-clamp-1 max-w-[480px] text-sm text-muted-foreground">{run.summaryPreview}</div>
                                 </TableCell>
                                 <TableCell>
                                     <DataSourceCell dataSource={run.dataSource} emptyLabel="None" />
@@ -126,38 +140,55 @@ export function AgentRunsTable({
                                 </TableCell>
                                 <TableCell>{run.lastActiveLabel}</TableCell>
                                 <TableCell className="text-right" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" aria-label={`Actions for ${run.title}`}>
-                                                <MoreHorizontal className="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="w-44">
-                                            <DropdownMenuItem asChild>
+                                    <div className="flex items-center justify-end gap-2">
+                                        {run.hasWorkspace ? (
+                                            <Button asChild size="sm" variant="outline">
                                                 <Link href={run.workspaceHref}>
                                                     <ExternalLink className="h-4 w-4" />
                                                     Open Workspace
                                                 </Link>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem asChild>
-                                                <Link href={run.detailHref}>
-                                                    <Info className="h-4 w-4" />
-                                                    View Details
-                                                </Link>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                                variant="destructive"
-                                                onSelect={event => {
-                                                    event.preventDefault();
-                                                    setPendingDelete(run);
-                                                }}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                                Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                            </Button>
+                                        ) : (
+                                            <Button size="sm" variant="outline" disabled>
+                                                <ExternalLink className="h-4 w-4" />
+                                                Open Workspace
+                                            </Button>
+                                        )}
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" aria-label={`Actions for ${run.title}`}>
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-44">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={run.detailHref}>
+                                                        <Info className="h-4 w-4" />
+                                                        View Details
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onSelect={() => {
+                                                        void copyText(run.workId).then(() => toast.success('Run ID copied.'));
+                                                    }}
+                                                >
+                                                    <Copy className="h-4 w-4" />
+                                                    Copy Run ID
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    onSelect={event => {
+                                                        event.preventDefault();
+                                                        setPendingDelete(run);
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
                                 </TableCell>
                             </TableRow>
                         ))

@@ -52,7 +52,8 @@ export type WorkFinishInput = {
     workId: string;
     status: Extract<WorkStatus, 'active' | 'completed' | 'error'>;
     summaryTitle?: string | null;
-    summaryBullets: string[];
+    findings: string[];
+    steps: string[];
 };
 
 export type WorkSqlSnapshotPayload = {
@@ -133,13 +134,16 @@ function compactToolInput(input: Record<string, unknown>) {
     if (typeof input.sql === 'string') {
         out.sqlLength = input.sql.length;
     }
-    if (Array.isArray(input.summaryBullets)) {
-        out.summaryBulletCount = input.summaryBullets.length;
+    if (Array.isArray(input.findings)) {
+        out.findingCount = input.findings.length;
+    }
+    if (Array.isArray(input.steps)) {
+        out.stepCount = input.steps.length;
     }
     return out;
 }
 
-function cleanSummaryBullets(value: unknown): string[] {
+function cleanSummaryItems(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
 }
@@ -149,7 +153,8 @@ function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
         return {
             summaryTitle: null,
-            summaryBullets: [],
+            findings: [],
+            steps: [],
             sections: [],
         };
     }
@@ -161,22 +166,25 @@ function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
               .map(section => {
                   if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
                   const sectionRecord = section as Record<string, unknown>;
-                  const summaryBullets = cleanSummaryBullets(sectionRecord.summaryBullets);
+                  const findings = cleanSummaryItems(sectionRecord.findings);
+                  const steps = cleanSummaryItems(sectionRecord.steps);
                   const finishedAt = typeof sectionRecord.finishedAt === 'string' && sectionRecord.finishedAt.trim() ? sectionRecord.finishedAt : null;
-                  if (!summaryBullets.length || !finishedAt) return null;
+                  if ((!findings.length && !steps.length) || !finishedAt) return null;
 
                   return {
                       summaryTitle: typeof sectionRecord.summaryTitle === 'string' && sectionRecord.summaryTitle.trim() ? sectionRecord.summaryTitle.trim() : null,
-                      summaryBullets,
+                      findings,
+                      steps,
                       finishedAt,
                   };
               })
-              .filter((section): section is { summaryTitle: string | null; summaryBullets: string[]; finishedAt: string } => Boolean(section))
+              .filter((section): section is { summaryTitle: string | null; findings: string[]; steps: string[]; finishedAt: string } => Boolean(section))
         : [];
 
     return {
         summaryTitle,
-        summaryBullets: cleanSummaryBullets(record.summaryBullets),
+        findings: cleanSummaryItems(record.findings),
+        steps: cleanSummaryItems(record.steps),
         sections,
     };
 }
@@ -433,18 +441,22 @@ export class PostgresWorksRepository {
         const finishedAt = now.toISOString();
         const currentMetadata = existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata) ? existing.metadata : {};
         const existingSummary = getAgentRunSummaryMetadata(currentMetadata);
-        const newSummaryBullets = cleanSummaryBullets(input.summaryBullets);
-        const nextSummaryBullets = [...existingSummary.summaryBullets, ...newSummaryBullets];
+        const newFindings = cleanSummaryItems(input.findings);
+        const newSteps = cleanSummaryItems(input.steps);
+        const nextFindings = [...existingSummary.findings, ...newFindings];
+        const nextSteps = [...existingSummary.steps, ...newSteps];
         const metadata = {
             ...currentMetadata,
             agentRunSummary: {
                 summaryTitle: input.summaryTitle?.trim() || existingSummary.summaryTitle,
-                summaryBullets: nextSummaryBullets,
+                findings: nextFindings,
+                steps: nextSteps,
                 sections: [
                     ...existingSummary.sections,
                     {
                         summaryTitle: input.summaryTitle?.trim() || null,
-                        summaryBullets: newSummaryBullets,
+                        findings: newFindings,
+                        steps: newSteps,
                         finishedAt,
                     },
                 ],

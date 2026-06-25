@@ -29,13 +29,14 @@ function createWorksMock() {
     const now = new Date('2026-06-01T00:00:00.000Z');
     const defaultTitle = 'Agent Run';
 
-    const cleanSummaryBullets = (value: unknown) => (Array.isArray(value) ? value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean) : []);
+    const cleanSummaryItems = (value: unknown) => (Array.isArray(value) ? value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean) : []);
     const getAgentRunSummaryMetadata = (metadata: Record<string, unknown> | null | undefined) => {
         const raw = metadata?.agentRunSummary;
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
             return {
                 summaryTitle: null,
-                summaryBullets: [],
+                findings: [],
+                steps: [],
                 sections: [],
             };
         }
@@ -44,24 +45,27 @@ function createWorksMock() {
         const sections = Array.isArray(record.sections)
             ? record.sections
                   .map(section => {
-                      if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
-                      const sectionRecord = section as Record<string, unknown>;
-                      const summaryBullets = cleanSummaryBullets(sectionRecord.summaryBullets);
-                      const finishedAt = typeof sectionRecord.finishedAt === 'string' && sectionRecord.finishedAt.trim() ? sectionRecord.finishedAt : null;
-                      if (!summaryBullets.length || !finishedAt) return null;
+                  if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+                  const sectionRecord = section as Record<string, unknown>;
+                  const findings = cleanSummaryItems(sectionRecord.findings);
+                  const steps = cleanSummaryItems(sectionRecord.steps);
+                  const finishedAt = typeof sectionRecord.finishedAt === 'string' && sectionRecord.finishedAt.trim() ? sectionRecord.finishedAt : null;
+                  if ((!findings.length && !steps.length) || !finishedAt) return null;
 
-                      return {
-                          summaryTitle: typeof sectionRecord.summaryTitle === 'string' && sectionRecord.summaryTitle.trim() ? sectionRecord.summaryTitle.trim() : null,
-                          summaryBullets,
-                          finishedAt,
-                      };
-                  })
-                  .filter((section): section is { summaryTitle: string | null; summaryBullets: string[]; finishedAt: string } => Boolean(section))
+                  return {
+                      summaryTitle: typeof sectionRecord.summaryTitle === 'string' && sectionRecord.summaryTitle.trim() ? sectionRecord.summaryTitle.trim() : null,
+                      findings,
+                      steps,
+                      finishedAt,
+                  };
+              })
+                  .filter((section): section is { summaryTitle: string | null; findings: string[]; steps: string[]; finishedAt: string } => Boolean(section))
             : [];
 
         return {
             summaryTitle: typeof record.summaryTitle === 'string' && record.summaryTitle.trim() ? record.summaryTitle.trim() : null,
-            summaryBullets: cleanSummaryBullets(record.summaryBullets),
+            findings: cleanSummaryItems(record.findings),
+            steps: cleanSummaryItems(record.steps),
             sections,
         };
     };
@@ -160,17 +164,20 @@ function createWorksMock() {
             }
             work.status = input.status;
             const existingSummary = getAgentRunSummaryMetadata(work.metadata);
-            const nextSummaryBullets = cleanSummaryBullets(input.summaryBullets);
+            const nextFindings = cleanSummaryItems(input.findings);
+            const nextSteps = cleanSummaryItems(input.steps);
             work.metadata = {
                 ...(work.metadata ?? {}),
                 agentRunSummary: {
                     summaryTitle: input.summaryTitle?.trim() || existingSummary.summaryTitle,
-                    summaryBullets: [...existingSummary.summaryBullets, ...nextSummaryBullets],
+                    findings: [...existingSummary.findings, ...nextFindings],
+                    steps: [...existingSummary.steps, ...nextSteps],
                     sections: [
                         ...existingSummary.sections,
                         {
                             summaryTitle: input.summaryTitle?.trim() || null,
-                            summaryBullets: nextSummaryBullets,
+                            findings: nextFindings,
+                            steps: nextSteps,
                             finishedAt: now.toISOString(),
                         },
                     ],
@@ -311,19 +318,23 @@ test('dory_finish_work persists agent summary metadata and status', async () => 
         workId: work.workId,
         status: 'completed',
         summaryTitle: 'HN hot posts analysis',
-        summaryBullets: ['Queried story score distribution', 'Created editable SQL tabs'],
+        findings: ['Story scores are concentrated in the middle of the sampled range.'],
+        steps: ['Queried story score distribution', 'Created editable SQL tabs'],
     })) as any;
 
     assert.equal(output.status, 'completed');
     assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1/workspace/conn-1');
-    assert.deepEqual(output.summaryBullets, ['Queried story score distribution', 'Created editable SQL tabs']);
+    assert.deepEqual(output.findings, ['Story scores are concentrated in the middle of the sampled range.']);
+    assert.deepEqual(output.steps, ['Queried story score distribution', 'Created editable SQL tabs']);
     assert.deepEqual(works.works.get(work.workId)?.metadata?.agentRunSummary, {
         summaryTitle: 'HN hot posts analysis',
-        summaryBullets: ['Queried story score distribution', 'Created editable SQL tabs'],
+        findings: ['Story scores are concentrated in the middle of the sampled range.'],
+        steps: ['Queried story score distribution', 'Created editable SQL tabs'],
         sections: [
             {
                 summaryTitle: 'HN hot posts analysis',
-                summaryBullets: ['Queried story score distribution', 'Created editable SQL tabs'],
+                findings: ['Story scores are concentrated in the middle of the sampled range.'],
+                steps: ['Queried story score distribution', 'Created editable SQL tabs'],
                 finishedAt: '2026-06-01T00:00:00.000Z',
             },
         ],
@@ -334,7 +345,7 @@ test('dory_finish_work persists agent summary metadata and status', async () => 
     assert.equal(works.events.at(-1)?.status, 'success');
 });
 
-test('dory_finish_work appends continuation summary bullets without replacing existing summary', async () => {
+test('dory_finish_work appends continuation findings and steps without replacing existing summary', async () => {
     const works = createWorksMock();
     const ctx = createContext({
         db: {
@@ -347,32 +358,33 @@ test('dory_finish_work appends continuation summary bullets without replacing ex
         workId: work.workId,
         status: 'completed',
         summaryTitle: 'Initial order analysis',
-        summaryBullets: ['Created order status tab', 'Ran baseline distribution query'],
+        findings: ['Pending orders are the largest status group.'],
+        steps: ['Created order status tab', 'Ran baseline distribution query'],
     });
     const output = (await getTool('dory_finish_work').execute(ctx, {
         workId: work.workId,
         status: 'completed',
-        summaryBullets: ['Continued from human-edited workspace', 'Added one-year comparison tab'],
+        findings: ['One-year order status distribution matches the baseline pattern.'],
+        steps: ['Continued from human-edited workspace', 'Added one-year comparison tab'],
     })) as any;
 
-    assert.deepEqual(output.summaryBullets, [
-        'Created order status tab',
-        'Ran baseline distribution query',
-        'Continued from human-edited workspace',
-        'Added one-year comparison tab',
-    ]);
+    assert.deepEqual(output.findings, ['Pending orders are the largest status group.', 'One-year order status distribution matches the baseline pattern.']);
+    assert.deepEqual(output.steps, ['Created order status tab', 'Ran baseline distribution query', 'Continued from human-edited workspace', 'Added one-year comparison tab']);
     assert.deepEqual(works.works.get(work.workId)?.metadata?.agentRunSummary, {
         summaryTitle: 'Initial order analysis',
-        summaryBullets: ['Created order status tab', 'Ran baseline distribution query', 'Continued from human-edited workspace', 'Added one-year comparison tab'],
+        findings: ['Pending orders are the largest status group.', 'One-year order status distribution matches the baseline pattern.'],
+        steps: ['Created order status tab', 'Ran baseline distribution query', 'Continued from human-edited workspace', 'Added one-year comparison tab'],
         sections: [
             {
                 summaryTitle: 'Initial order analysis',
-                summaryBullets: ['Created order status tab', 'Ran baseline distribution query'],
+                findings: ['Pending orders are the largest status group.'],
+                steps: ['Created order status tab', 'Ran baseline distribution query'],
                 finishedAt: '2026-06-01T00:00:00.000Z',
             },
             {
                 summaryTitle: null,
-                summaryBullets: ['Continued from human-edited workspace', 'Added one-year comparison tab'],
+                findings: ['One-year order status distribution matches the baseline pattern.'],
+                steps: ['Continued from human-edited workspace', 'Added one-year comparison tab'],
                 finishedAt: '2026-06-01T00:00:00.000Z',
             },
         ],
@@ -398,7 +410,8 @@ test('dory_finish_work rejects work owned by another user', async () => {
             getTool('dory_finish_work').execute(otherCtx, {
                 workId: work.workId,
                 status: 'completed',
-                summaryBullets: ['Should not write'],
+                findings: ['Should not write'],
+                steps: ['Attempted unauthorized finish'],
             }),
         'WORK_NOT_FOUND',
     );

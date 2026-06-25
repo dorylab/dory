@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildAgentRunTimeline, getAgentRunStats, getAgentRunStatusLabel, getAgentRunSummary, getAgentRunSummarySections } from '@/lib/agent-runs/summary';
+import {
+    buildAgentRunTimeline,
+    getAgentRunActivitySummary,
+    getAgentRunOutputLabel,
+    getAgentRunStats,
+    getAgentRunStatusLabel,
+    getAgentRunSummary,
+    getAgentRunSummaryPreview,
+    getAgentRunSummarySections,
+} from '@/lib/agent-runs/summary';
 
 test('Agent Run status labels map internal storage to product labels', () => {
     assert.equal(getAgentRunStatusLabel('active'), 'Active');
@@ -33,11 +42,13 @@ test('Agent Run stats derive counts from snapshot data', () => {
 
 test('Agent Run summary accepts only persisted agent summary metadata', () => {
     assert.equal(getAgentRunSummary(null), null);
-    assert.equal(getAgentRunSummary({ agentRunSummary: { summaryBullets: [] } }), null);
-    assert.deepEqual(getAgentRunSummary({ agentRunSummary: { summaryTitle: 'HN analysis', summaryBullets: ['Queried stories'] } }), {
+    assert.equal(getAgentRunSummary({ agentRunSummary: { summaryBullets: ['Legacy flat summary'] } }), null);
+    assert.deepEqual(getAgentRunSummary({ agentRunSummary: { summaryTitle: 'HN analysis', findings: ['Score distribution is concentrated'], steps: ['Queried stories'] } }), {
         summaryTitle: 'HN analysis',
-        summaryBullets: ['Queried stories'],
+        findings: ['Score distribution is concentrated'],
+        steps: ['Queried stories'],
         updatedAt: null,
+        sections: [],
     });
 });
 
@@ -46,17 +57,20 @@ test('Agent Run summary sections prefer persisted sections', () => {
         getAgentRunSummarySections({
             agentRunSummary: {
                 summaryTitle: 'Orders analysis',
-                summaryBullets: ['Created status tab', 'Added country tab'],
+                findings: ['Pending orders are the largest group', 'Users are spread across 83 countries'],
+                steps: ['Created status tab', 'Added country tab'],
                 updatedAt: '2026-06-01T00:05:00.000Z',
                 sections: [
                     {
                         summaryTitle: 'Initial order analysis',
-                        summaryBullets: ['Created status tab'],
+                        findings: ['Pending orders are the largest group'],
+                        steps: ['Created status tab'],
                         finishedAt: '2026-06-01T00:00:00.000Z',
                     },
                     {
                         summaryTitle: null,
-                        summaryBullets: ['Added country tab'],
+                        findings: ['Users are spread across 83 countries'],
+                        steps: ['Added country tab'],
                         finishedAt: '2026-06-01T00:05:00.000Z',
                     },
                 ],
@@ -65,87 +79,67 @@ test('Agent Run summary sections prefer persisted sections', () => {
         [
             {
                 summaryTitle: 'Initial order analysis',
-                summaryBullets: ['Created status tab'],
+                findings: ['Pending orders are the largest group'],
+                steps: ['Created status tab'],
                 finishedAt: '2026-06-01T00:00:00.000Z',
             },
             {
                 summaryTitle: null,
-                summaryBullets: ['Added country tab'],
+                findings: ['Users are spread across 83 countries'],
+                steps: ['Added country tab'],
                 finishedAt: '2026-06-01T00:05:00.000Z',
             },
         ],
     );
 });
 
-test('Agent Run summary sections infer legacy flat summaries from finish events', () => {
+test('Agent Run summary sections fall back to one structured section', () => {
     assert.deepEqual(
-        getAgentRunSummarySections(
-            {
-                agentRunSummary: {
-                    summaryBullets: ['Created status tab', 'Ran baseline query', 'Added country tab'],
-                    updatedAt: '2026-06-01T00:10:00.000Z',
-                },
+        getAgentRunSummarySections({
+            agentRunSummary: {
+                summaryTitle: 'Orders analysis',
+                findings: ['Pending orders are the largest group'],
+                steps: ['Created status tab', 'Ran baseline query'],
+                updatedAt: '2026-06-01T00:10:00.000Z',
             },
-            [
-                {
-                    eventId: 'event-2',
-                    toolName: 'dory_finish_work',
-                    status: 'success',
-                    inputSummary: { summaryBulletCount: 1 },
-                    createdAt: '2026-06-01T00:10:00.000Z',
-                },
-                {
-                    eventId: 'event-1',
-                    toolName: 'dory_finish_work',
-                    status: 'success',
-                    inputSummary: { summaryBulletCount: 2 },
-                    createdAt: '2026-06-01T00:00:00.000Z',
-                },
-            ],
-        ),
+        }),
         [
             {
-                summaryTitle: null,
-                summaryBullets: ['Created status tab', 'Ran baseline query'],
-                finishedAt: '2026-06-01T00:00:00.000Z',
-            },
-            {
-                summaryTitle: null,
-                summaryBullets: ['Added country tab'],
+                summaryTitle: 'Orders analysis',
+                findings: ['Pending orders are the largest group'],
+                steps: ['Created status tab', 'Ran baseline query'],
                 finishedAt: '2026-06-01T00:10:00.000Z',
             },
         ],
     );
 });
 
-test('Agent Run summary sections fall back to one section when finish event counts mismatch', () => {
-    assert.deepEqual(
-        getAgentRunSummarySections(
-            {
-                agentRunSummary: {
-                    summaryTitle: 'Orders analysis',
-                    summaryBullets: ['Created status tab', 'Added country tab'],
-                    updatedAt: '2026-06-01T00:10:00.000Z',
-                },
-            },
-            [
-                {
-                    eventId: 'event-1',
-                    toolName: 'dory_finish_work',
-                    status: 'success',
-                    inputSummary: { summaryBulletCount: 1 },
-                    createdAt: '2026-06-01T00:00:00.000Z',
-                },
-            ],
-        ),
-        [
-            {
-                summaryTitle: 'Orders analysis',
-                summaryBullets: ['Created status tab', 'Added country tab'],
-                finishedAt: '2026-06-01T00:10:00.000Z',
-            },
-        ],
-    );
+test('Agent Run list labels and previews use structured summary data', () => {
+    const snapshot = {
+        work: {
+            workId: 'work-1',
+            status: 'completed',
+        },
+        tabs: [{ tabId: 'tab-1' }, { tabId: 'tab-2' }],
+        sessions: [{ session: { sessionId: 'session-1' } }],
+    };
+
+    assert.equal(getAgentRunOutputLabel(snapshot), 'Generated 2 tabs · 1 SQL run');
+    assert.equal(getAgentRunSummaryPreview({ agentRunSummary: { findings: ['Pending orders account for 28.4%'], steps: ['Ran order status query'] } }), 'Pending orders account for 28.4%');
+    assert.equal(getAgentRunSummaryPreview({ agentRunSummary: { summaryBullets: ['Legacy flat summary'] } }), 'No summary generated yet.');
+});
+
+test('Agent Run activity summary derives compact status text', () => {
+    const snapshot = {
+        work: {
+            workId: 'work-1',
+            status: 'error',
+        },
+        tabs: [{ tabId: 'tab-1' }],
+        sessions: [{ session: { sessionId: 'session-1' } }, { session: { sessionId: 'session-2' } }],
+    };
+
+    assert.equal(getAgentRunActivitySummary(snapshot, [{ durationMs: 9 }]), '2 SQL runs · 1 tab created · failed in 9ms');
 });
 
 test('Agent Run timeline renders SQL activity with tab, rows, duration, and raw details', () => {

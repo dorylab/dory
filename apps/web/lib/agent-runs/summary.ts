@@ -2,14 +2,16 @@ export type AgentRunStatus = 'active' | 'completed' | 'error' | 'archived' | (st
 
 export type AgentRunSummaryMetadata = {
     summaryTitle?: string | null;
-    summaryBullets: string[];
+    findings: string[];
+    steps: string[];
     updatedAt?: string | null;
     sections?: AgentRunSummarySectionMetadata[];
 };
 
 export type AgentRunSummarySectionMetadata = {
     summaryTitle?: string | null;
-    summaryBullets: string[];
+    findings: string[];
+    steps: string[];
     finishedAt?: string | null;
 };
 
@@ -101,24 +103,21 @@ export function getAgentRunSummary(metadata: Record<string, unknown> | null | un
     const raw = metadata?.agentRunSummary;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     const record = raw as Record<string, unknown>;
-    const summaryBullets = Array.isArray(record.summaryBullets) ? record.summaryBullets.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
-    if (!summaryBullets.length) return null;
+    const findings = cleanSummaryItems(record.findings);
+    const steps = cleanSummaryItems(record.steps);
+    if (!findings.length && !steps.length) return null;
 
     return {
         summaryTitle: typeof record.summaryTitle === 'string' && record.summaryTitle.trim() ? record.summaryTitle : null,
-        summaryBullets,
+        findings,
+        steps,
         updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : null,
+        sections: getPersistedSummarySections(record.sections),
     };
 }
 
-function cleanSummaryBullets(value: unknown) {
-    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
-}
-
-function stringOrDateIso(value: string | Date | null | undefined) {
-    if (typeof value === 'string' && value.trim()) return value;
-    if (value instanceof Date) return value.toISOString();
-    return null;
+function cleanSummaryItems(value: unknown) {
+    return Array.isArray(value) ? value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean) : [];
 }
 
 function getPersistedSummarySections(rawSections: unknown): AgentRunSummarySectionMetadata[] {
@@ -128,78 +127,39 @@ function getPersistedSummarySections(rawSections: unknown): AgentRunSummarySecti
         .map((section): AgentRunSummarySectionMetadata | null => {
             if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
             const record = section as Record<string, unknown>;
-            const summaryBullets = cleanSummaryBullets(record.summaryBullets);
+            const findings = cleanSummaryItems(record.findings);
+            const steps = cleanSummaryItems(record.steps);
             const finishedAt = typeof record.finishedAt === 'string' && record.finishedAt.trim() ? record.finishedAt : null;
-            if (!summaryBullets.length || !finishedAt) return null;
+            if ((!findings.length && !steps.length) || !finishedAt) return null;
 
             return {
                 summaryTitle: typeof record.summaryTitle === 'string' && record.summaryTitle.trim() ? record.summaryTitle : null,
-                summaryBullets,
+                findings,
+                steps,
                 finishedAt,
             };
         })
         .filter((section): section is AgentRunSummarySectionMetadata => section !== null);
 }
 
-function inferSummarySectionsFromEvents(summaryBullets: string[], events: AgentRunEventLike[] = []): AgentRunSummarySectionMetadata[] | null {
-    const finishEvents = events
-        .filter(event => event.toolName === 'dory_finish_work' && event.status === 'success')
-        .map(event => ({
-            count: numberValue(event.inputSummary?.summaryBulletCount),
-            finishedAt: stringOrDateIso(event.createdAt),
-            time: toTime(event.createdAt),
-        }))
-        .filter((event): event is { count: number; finishedAt: string; time: number } => Boolean(event.finishedAt) && typeof event.count === 'number' && event.count > 0)
-        .sort((a, b) => a.time - b.time);
-
-    if (!finishEvents.length) return null;
-    const inferredCount = finishEvents.reduce((sum, event) => sum + event.count, 0);
-    if (inferredCount !== summaryBullets.length) return null;
-
-    let offset = 0;
-    return finishEvents.map(event => {
-        const sectionBullets = summaryBullets.slice(offset, offset + event.count);
-        offset += event.count;
-        return {
-            summaryTitle: null,
-            summaryBullets: sectionBullets,
-            finishedAt: event.finishedAt,
-        };
-    });
-}
-
-export function getAgentRunSummarySections(metadata: Record<string, unknown> | null | undefined, events: AgentRunEventLike[] = []): AgentRunSummarySectionMetadata[] {
+export function getAgentRunSummarySections(metadata: Record<string, unknown> | null | undefined): AgentRunSummarySectionMetadata[] {
     const summary = getAgentRunSummary(metadata);
     if (!summary) return [];
 
-    const raw = metadata?.agentRunSummary;
-    const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-    const persistedSections = getPersistedSummarySections(record.sections);
-    const persistedBulletCount = persistedSections.reduce((sum, section) => sum + section.summaryBullets.length, 0);
-
-    if (persistedSections.length && persistedBulletCount === summary.summaryBullets.length) {
-        return persistedSections;
-    }
-
-    if (persistedSections.length && persistedBulletCount < summary.summaryBullets.length) {
-        const legacyBullets = summary.summaryBullets.slice(0, summary.summaryBullets.length - persistedBulletCount);
-        const inferredLegacySections = inferSummarySectionsFromEvents(legacyBullets, events);
-        return [
-            ...(inferredLegacySections ?? [{ summaryTitle: summary.summaryTitle, summaryBullets: legacyBullets, finishedAt: summary.updatedAt ?? null }]),
-            ...persistedSections,
-        ];
-    }
-
-    const inferredSections = inferSummarySectionsFromEvents(summary.summaryBullets, events);
-    if (inferredSections) return inferredSections;
+    if (summary.sections?.length) return summary.sections;
 
     return [
         {
             summaryTitle: summary.summaryTitle,
-            summaryBullets: summary.summaryBullets,
+            findings: summary.findings,
+            steps: summary.steps,
             finishedAt: summary.updatedAt ?? null,
         },
     ];
+}
+
+export function getAgentRunSummaryPreview(metadata: Record<string, unknown> | null | undefined) {
+    return getAgentRunSummary(metadata)?.findings[0] ?? 'No summary generated yet.';
 }
 
 export function getAgentRunStats(snapshot: AgentRunSnapshotLike, connectionName?: string | null) {
@@ -210,6 +170,34 @@ export function getAgentRunStats(snapshot: AgentRunSnapshotLike, connectionName?
         lastActiveAt: snapshot.work.lastActiveAt ?? snapshot.work.createdAt ?? null,
         statusLabel: getAgentRunStatusLabel(snapshot.work.status),
     };
+}
+
+function formatSqlRuns(count: number) {
+    return `${count.toLocaleString()} ${count === 1 ? 'SQL run' : 'SQL runs'}`;
+}
+
+function formatTabsCreated(count: number) {
+    return `${count.toLocaleString()} ${count === 1 ? 'tab created' : 'tabs created'}`;
+}
+
+function formatTabsOnly(count: number) {
+    return `${count.toLocaleString()} ${count === 1 ? 'tab' : 'tabs'}`;
+}
+
+export function getAgentRunOutputLabel(snapshot: AgentRunSnapshotLike) {
+    const tabCount = snapshot.tabs?.length ?? 0;
+    const sqlExecutionCount = snapshot.sessions?.length ?? 0;
+    const output = `${formatTabsOnly(tabCount)} · ${formatSqlRuns(sqlExecutionCount)}`;
+    return snapshot.work.status === 'active' ? `Running · ${output}` : `Generated ${output}`;
+}
+
+export function getAgentRunActivitySummary(snapshot: AgentRunSnapshotLike, events: AgentRunEventLike[] = []) {
+    const tabCount = snapshot.tabs?.length ?? 0;
+    const sqlExecutionCount = snapshot.sessions?.length ?? 0;
+    const status = snapshot.work.status === 'error' ? 'failed' : snapshot.work.status === 'completed' ? 'completed' : snapshot.work.status === 'archived' ? 'archived' : 'active';
+    const durationMs = events.reduce((sum, event) => sum + (numberValue(event.durationMs) ?? 0), 0);
+    const duration = durationMs > 0 ? formatDuration(durationMs) : null;
+    return [formatSqlRuns(sqlExecutionCount), formatTabsCreated(tabCount), duration ? `${status} in ${duration}` : status].join(' · ');
 }
 
 function toTime(value: string | Date | null | undefined) {

@@ -124,7 +124,16 @@ const finishWorkInputSchema = z
         workId: z.string().min(1),
         status: z.enum(['active', 'completed', 'error']),
         summaryTitle: z.string().min(1).max(1000).optional(),
-        summaryBullets: z.array(z.string().min(1).max(500)).min(1).max(20),
+        findings: z
+            .array(z.string().min(1).max(500))
+            .min(1)
+            .max(20)
+            .describe('User-facing analytical conclusions from this Agent Run. These appear under Findings.'),
+        steps: z
+            .array(z.string().min(1).max(500))
+            .min(1)
+            .max(20)
+            .describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
     })
     .passthrough();
 
@@ -900,7 +909,8 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         workId: work.workId,
         status: input.status,
         summaryTitle: input.summaryTitle ?? null,
-        summaryBullets: input.summaryBullets,
+        findings: input.findings,
+        steps: input.steps,
     });
 
     work.connectionId = updated.connectionId ?? work.connectionId;
@@ -911,7 +921,8 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         {
             status: updated.status,
             summaryTitle: summary?.summaryTitle ?? null,
-            summaryBullets: summary?.summaryBullets ?? input.summaryBullets,
+            findings: summary?.findings ?? input.findings,
+            steps: summary?.steps ?? input.steps,
         },
         work,
     );
@@ -974,7 +985,8 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_finish_work',
             title: 'Finish Dory Work',
-            description: 'Finish or update a Dory Agent Run with the user-facing summary bullets that should appear in the Agent Run summary. Requires an existing workId.',
+            description:
+                'Finish or update a Dory Agent Run with structured Run summary content. Provide findings for analytical conclusions and steps for execution actions. Requires an existing workId.',
             inputSchema: finishWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

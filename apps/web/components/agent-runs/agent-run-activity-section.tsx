@@ -9,8 +9,8 @@ import type { AgentRunTimelineItem } from '@/lib/agent-runs/summary';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 
-export function AgentRunActivitySection({ items }: { items: AgentRunTimelineItem[] }) {
-    const [open, setOpen] = useState(true);
+export function AgentRunActivitySection({ items, summary }: { items: AgentRunTimelineItem[]; summary: string }) {
+    const [open, setOpen] = useState(false);
 
     return (
         <Collapsible open={open} onOpenChange={setOpen} asChild>
@@ -18,7 +18,7 @@ export function AgentRunActivitySection({ items }: { items: AgentRunTimelineItem
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <h2 className="text-base font-semibold">Activity</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">Readable timeline first. Raw tool details are available inside each item.</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
                     </div>
                     <CollapsibleTrigger asChild>
                         <Button variant="ghost" size="sm" className="shrink-0 gap-1">

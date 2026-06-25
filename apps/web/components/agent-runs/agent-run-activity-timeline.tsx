@@ -65,7 +65,7 @@ export function AgentRunActivityTimeline({ items, compact = false }: { items: Ag
                                 {item.meta.length ? <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">{item.meta.join(' · ')}</div> : null}
                                 {details ? (
                                     <details className="mt-2 group">
-                                        <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground hover:text-foreground">Details</summary>
+                                        <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground hover:text-foreground">Show raw details</summary>
                                         <div className="mt-2 grid gap-2 text-xs">
                                             {item.sessionId || item.tabId || item.sqlLength ? (
                                                 <div className="grid gap-1 rounded-md bg-muted/50 p-2 text-muted-foreground">

@@ -5,14 +5,14 @@ import { ArrowLeft, CheckCircle2, Database, PanelTop, TerminalSquare } from 'luc
 import { getDBService } from '@dory/database';
 import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
 import {
+    getAgentRunActivitySummary,
     buildAgentRunTimeline,
     getAgentRunStats,
     getAgentRunStatusLabel,
     getAgentRunStatusVariant,
     getAgentRunSummary,
-    getAgentRunSummarySections,
 } from '@/lib/agent-runs/summary';
-import { buildAgentWorkspacePathFromSnapshot } from '@/lib/agent-runs/workspace-url';
+import { buildAgentWorkspacePathFromSnapshot, resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -21,11 +21,6 @@ function formatDate(value: Date | string | null | undefined) {
     if (!value) return 'Never';
     const date = value instanceof Date ? value : new Date(value);
     return date.toLocaleString();
-}
-
-function formatSummarySectionDate(value: Date | string | null | undefined) {
-    if (!value) return 'Summary';
-    return formatDate(value);
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof Database; label: string; value: string | number }) {
@@ -65,8 +60,10 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
     const connectionName = snapshot.work.connectionId ? (connectionNames.get(snapshot.work.connectionId) ?? snapshot.work.connectionId) : null;
     const stats = getAgentRunStats(snapshot, connectionName);
     const summary = getAgentRunSummary(snapshot.work.metadata);
-    const summarySections = getAgentRunSummarySections(snapshot.work.metadata, events);
     const timeline = buildAgentRunTimeline(snapshot, events);
+    const activitySummary = getAgentRunActivitySummary(snapshot, events);
+    const hasWorkspace = Boolean(resolveAgentWorkspaceTarget(snapshot).connectionId);
+    const hasSummary = Boolean(summary && (summary.findings.length || summary.steps.length));
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
@@ -79,9 +76,13 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                                 Agent Runs
                             </Link>
                         </Button>
-                        <Button asChild>
-                            <Link href={workspaceHref}>Open Workspace</Link>
-                        </Button>
+                        {hasWorkspace ? (
+                            <Button asChild>
+                                <Link href={workspaceHref}>Open Workspace</Link>
+                            </Button>
+                        ) : (
+                            <Button disabled>Open Workspace</Button>
+                        )}
                     </div>
 
                     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -98,39 +99,61 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                         <Metric icon={TerminalSquare} label="SQL runs" value={stats.sqlExecutionCount} />
                         <Metric icon={CheckCircle2} label="Last active" value={formatDate(stats.lastActiveAt)} />
                     </div>
+                    <p className="text-sm text-muted-foreground">
+                        This run generated a workspace with {stats.tabCount.toLocaleString()} {stats.tabCount === 1 ? 'tab' : 'tabs'} and{' '}
+                        {stats.sqlExecutionCount.toLocaleString()} {stats.sqlExecutionCount === 1 ? 'SQL run' : 'SQL runs'}. Open the workspace to inspect, edit, and continue the generated SQL
+                        analysis.
+                    </p>
                 </header>
 
                 <section className="grid gap-3">
                     <div>
-                        <h2 className="text-base font-semibold">What the agent did</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">A product summary written by the agent for this run.</p>
+                        <h2 className="text-base font-semibold">Run summary</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">A readable summary of the agent&apos;s findings and execution steps.</p>
                     </div>
                     <div className="rounded-lg border bg-card p-5">
-                        {summarySections.length ? (
-                            <div className="grid gap-5">
-                                {summarySections.map((section, sectionIndex) => (
-                                    <section key={`${section.finishedAt ?? 'summary'}-${sectionIndex}`} className={sectionIndex === 0 ? 'grid gap-3' : 'grid gap-3 border-t pt-5'}>
-                                        <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{formatSummarySectionDate(section.finishedAt)}</div>
+                        {hasSummary ? (
+                            <div className="grid gap-6 md:grid-cols-2">
+                                <section className="grid content-start gap-3">
+                                    <h3 className="text-sm font-semibold">Findings</h3>
+                                    {summary?.findings.length ? (
                                         <ul className="grid gap-3">
-                                            {section.summaryBullets.map((item, itemIndex) => (
-                                                <li key={`${sectionIndex}-${itemIndex}-${item}`} className="flex gap-3 text-sm">
+                                            {summary.findings.map((item, itemIndex) => (
+                                                <li key={`finding-${itemIndex}-${item}`} className="flex gap-3 text-sm">
                                                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                                                     <span>{item}</span>
                                                 </li>
                                             ))}
                                         </ul>
-                                    </section>
-                                ))}
+                                    ) : (
+                                        <div className="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">No findings generated yet.</div>
+                                    )}
+                                </section>
+                                <section className="grid content-start gap-3">
+                                    <h3 className="text-sm font-semibold">Steps</h3>
+                                    {summary?.steps.length ? (
+                                        <ul className="grid gap-3">
+                                            {summary.steps.map((item, itemIndex) => (
+                                                <li key={`step-${itemIndex}-${item}`} className="flex gap-3 text-sm">
+                                                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                                                    <span>{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <div className="rounded-md border border-dashed px-4 py-6 text-sm text-muted-foreground">No execution steps recorded yet.</div>
+                                    )}
+                                </section>
                             </div>
                         ) : (
                             <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-                                No agent-written summary yet. Activity is still available below for this run.
+                                No summary generated for this run. Open the workspace to inspect generated SQL and results.
                             </div>
                         )}
                     </div>
                 </section>
 
-                <AgentRunActivitySection items={timeline} />
+                <AgentRunActivitySection items={timeline} summary={activitySummary} />
             </main>
         </div>
     );
