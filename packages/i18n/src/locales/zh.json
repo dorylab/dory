@@ -3282,6 +3282,164 @@
             "DeleteFailed": "删除访客会话失败，请重试。"
         }
     },
+    "AgentRuns": {
+        "Common": {
+            "AgentRun": "Agent Run",
+            "None": "无",
+            "Never": "从未",
+            "UnknownTime": "未知时间"
+        },
+        "List": {
+            "Eyebrow": "MCP 活动",
+            "Title": "Agent Runs",
+            "Description": "外部 Agent 通过 Dory MCP 创建的数据库工作。"
+        },
+        "Actions": {
+            "OpenWorkspace": "打开工作区",
+            "ViewDetails": "查看详情",
+            "CopyRunId": "复制 Run ID",
+            "Delete": "删除",
+            "Cancel": "取消",
+            "Expand": "展开",
+            "Collapse": "收起"
+        },
+        "Table": {
+            "Run": "Run",
+            "DataSource": "数据源",
+            "Status": "状态",
+            "LastActive": "最近活动",
+            "Actions": "操作",
+            "Empty": "还没有 Agent Runs。"
+        },
+        "Accessibility": {
+            "OpenRun": "打开 Agent Run {title}",
+            "ActionsForRun": "{title} 的操作"
+        },
+        "Toasts": {
+            "Deleted": "Agent Run 已删除。",
+            "DeleteFailed": "删除 Agent Run 失败。",
+            "RunIdCopied": "Run ID 已复制。"
+        },
+        "DeleteDialog": {
+            "Title": "删除 Agent Run？",
+            "DefaultRunTitle": "这个 Agent Run",
+            "Description": "这会从 Agent Runs 中移除 <strong>{title}</strong>。现有工作区数据会被归档，并从列表中隐藏。"
+        },
+        "Status": {
+            "Loading": "运行中",
+            "Completed": "已完成",
+            "Failed": "失败",
+            "Archived": "已归档",
+            "Active": "活动中"
+        },
+        "Counts": {
+            "SqlRuns": "{count} 次 SQL 运行",
+            "TabsCreated": "创建 {count} 个标签页",
+            "Tabs": "{count} 个标签页",
+            "Rows": "{count} 行"
+        },
+        "Output": {
+            "Running": "运行中 · {output}",
+            "Generated": "已生成 {output}"
+        },
+        "Metrics": {
+            "DataSource": "数据源",
+            "TabsCreated": "创建的标签页",
+            "SqlRuns": "SQL 运行",
+            "LastActive": "最近活动"
+        },
+        "Detail": {
+            "WorkspaceDescription": "这个 run 生成了包含{tabs}和{sqlRuns}的工作区。打开工作区可以检查、编辑并继续生成的 SQL 分析。"
+        },
+        "Summary": {
+            "Title": "Run 总结",
+            "Description": "Agent 发现和执行步骤的可读总结。",
+            "Findings": "发现",
+            "Steps": "步骤",
+            "NoPreview": "尚未生成总结。",
+            "NoFindings": "尚未生成发现。",
+            "NoSteps": "尚未记录执行步骤。",
+            "Empty": "这个 run 尚未生成总结。打开工作区可检查生成的 SQL 和结果。"
+        },
+        "Activity": {
+            "Title": "活动",
+            "Summary": "{sqlRuns} · {tabsCreated} · {status}",
+            "Status": {
+                "active": "运行中",
+                "completed": "已完成",
+                "failed": "失败",
+                "archived": "已归档"
+            },
+            "StatusWithDuration": "{status}，耗时 {duration}",
+            "NoActivity": "尚无活动记录。"
+        },
+        "Timeline": {
+            "FallbackSqlTab": "SQL 标签页",
+            "ResultNotSaved": "结果未保存",
+            "ShowRawDetails": "显示原始详情",
+            "SqlLength": "SQL 长度：{length}",
+            "Titles": {
+                "created": "已创建 Agent Run",
+                "finished": "已完成 Agent Run",
+                "listedDataSources": "已列出数据源",
+                "exploredSchema": "已探索 schema",
+                "updatedWorkspaceTab": "已更新工作区标签页“{tabName}”",
+                "updatedWorkspaceTabs": "已更新工作区标签页",
+                "actorSavedWorkspaceChanges": "{actorName} 保存了工作区更改",
+                "savedWorkspaceChanges": "已保存工作区更改",
+                "managedSavedQueries": "已管理保存的查询",
+                "ranSqlInTab": "在“{tabName}”中运行 SQL",
+                "ranSql": "已运行 SQL",
+                "ranTool": "已运行 {toolName}",
+                "recordedActivity": "已记录活动"
+            }
+        },
+        "EventStatus": {
+            "success": "成功",
+            "error": "错误",
+            "failed": "失败",
+            "completed": "完成"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Agent Run 工作区",
+            "Description": "这个 Agent Run 的 SQL 工作区。"
+        },
+        "WorkspacePanel": {
+            "LoadFailed": "加载 Agent Run 失败。",
+            "Actions": {
+                "WorkspaceActions": "工作区操作",
+                "SaveWorkspace": "保存工作区",
+                "CloseWorkspace": "关闭工作区",
+                "CopyTask": "复制给外部 Agent 的任务"
+            },
+            "Continue": {
+                "Title": "继续交给外部 Agent",
+                "Description": "复制带有当前工作区上下文的任务，然后粘贴到 Claude、Codex 或其他外部 Agent 中，从这个 Agent Run 继续。"
+            },
+            "GeneratedTabs": {
+                "Title": "生成的标签页",
+                "Expand": "展开生成的标签页",
+                "Collapse": "收起生成的标签页",
+                "FallbackName": "标签页 {index}",
+                "OpenTab": "打开标签页 {name}"
+            },
+            "Status": {
+                "SavedDescription": "已保存。复制的任务会引用这个 Agent Run 及其生成的工作区。",
+                "UnsavedDescription": "有未保存的更改。复制的任务会引用这个 Agent Run 及其生成的工作区。",
+                "CopiedSavedDescription": "已保存。复制的任务会引用这个 Agent Run 及其生成的工作区。"
+            },
+            "Toasts": {
+                "WorkspaceSaved": "工作区已保存。",
+                "WorkspaceSaveFailed": "保存工作区失败。",
+                "TaskCopied": "给外部 Agent 的任务已复制。",
+                "TaskCopyFailed": "复制给外部 Agent 的任务失败。"
+            },
+            "Rail": {
+                "Open": "打开 Agent Run 面板",
+                "Close": "关闭 Agent Run 面板"
+            }
+        }
+    },
     "OrganizationSettings": {
         "Title": "组织设置",
         "Description": "管理组织信息和访问权限。",

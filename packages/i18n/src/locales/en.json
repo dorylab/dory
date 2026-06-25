@@ -3278,6 +3278,164 @@
             "DeleteFailed": "Failed to delete guest session. Please try again."
         }
     },
+    "AgentRuns": {
+        "Common": {
+            "AgentRun": "Agent Run",
+            "None": "None",
+            "Never": "Never",
+            "UnknownTime": "Unknown time"
+        },
+        "List": {
+            "Eyebrow": "MCP activity",
+            "Title": "Agent Runs",
+            "Description": "Database work created by external agents through Dory MCP."
+        },
+        "Actions": {
+            "OpenWorkspace": "Open Workspace",
+            "ViewDetails": "View Details",
+            "CopyRunId": "Copy Run ID",
+            "Delete": "Delete",
+            "Cancel": "Cancel",
+            "Expand": "Expand",
+            "Collapse": "Collapse"
+        },
+        "Table": {
+            "Run": "Run",
+            "DataSource": "Data source",
+            "Status": "Status",
+            "LastActive": "Last active",
+            "Actions": "Actions",
+            "Empty": "No Agent Runs yet."
+        },
+        "Accessibility": {
+            "OpenRun": "Open Agent Run {title}",
+            "ActionsForRun": "Actions for {title}"
+        },
+        "Toasts": {
+            "Deleted": "Agent Run deleted.",
+            "DeleteFailed": "Failed to delete Agent Run.",
+            "RunIdCopied": "Run ID copied."
+        },
+        "DeleteDialog": {
+            "Title": "Delete Agent Run?",
+            "DefaultRunTitle": "this Agent Run",
+            "Description": "This removes <strong>{title}</strong> from Agent Runs. Existing workspace data is archived and hidden from this list."
+        },
+        "Status": {
+            "Loading": "Loading",
+            "Completed": "Completed",
+            "Failed": "Failed",
+            "Archived": "Archived",
+            "Active": "Active"
+        },
+        "Counts": {
+            "SqlRuns": "{count, plural, one {# SQL run} other {# SQL runs}}",
+            "TabsCreated": "{count, plural, one {# tab created} other {# tabs created}}",
+            "Tabs": "{count, plural, one {# tab} other {# tabs}}",
+            "Rows": "{count, plural, one {# row} other {# rows}}"
+        },
+        "Output": {
+            "Running": "Running · {output}",
+            "Generated": "Generated {output}"
+        },
+        "Metrics": {
+            "DataSource": "Data source",
+            "TabsCreated": "Tabs created",
+            "SqlRuns": "SQL runs",
+            "LastActive": "Last active"
+        },
+        "Detail": {
+            "WorkspaceDescription": "This run generated a workspace with {tabs} and {sqlRuns}. Open the workspace to inspect, edit, and continue the generated SQL analysis."
+        },
+        "Summary": {
+            "Title": "Run summary",
+            "Description": "A readable summary of the agent's findings and execution steps.",
+            "Findings": "Findings",
+            "Steps": "Steps",
+            "NoPreview": "No summary generated yet.",
+            "NoFindings": "No findings generated yet.",
+            "NoSteps": "No execution steps recorded yet.",
+            "Empty": "No summary generated for this run. Open the workspace to inspect generated SQL and results."
+        },
+        "Activity": {
+            "Title": "Activity",
+            "Summary": "{sqlRuns} · {tabsCreated} · {status}",
+            "Status": {
+                "active": "active",
+                "completed": "completed",
+                "failed": "failed",
+                "archived": "archived"
+            },
+            "StatusWithDuration": "{status} in {duration}",
+            "NoActivity": "No activity recorded yet."
+        },
+        "Timeline": {
+            "FallbackSqlTab": "SQL tab",
+            "ResultNotSaved": "result not saved",
+            "ShowRawDetails": "Show raw details",
+            "SqlLength": "SQL length: {length}",
+            "Titles": {
+                "created": "Created Agent Run",
+                "finished": "Finished Agent Run",
+                "listedDataSources": "Listed data sources",
+                "exploredSchema": "Explored schema",
+                "updatedWorkspaceTab": "Updated workspace tab \"{tabName}\"",
+                "updatedWorkspaceTabs": "Updated workspace tabs",
+                "actorSavedWorkspaceChanges": "{actorName} saved workspace changes",
+                "savedWorkspaceChanges": "Saved workspace changes",
+                "managedSavedQueries": "Managed saved queries",
+                "ranSqlInTab": "Ran SQL in \"{tabName}\"",
+                "ranSql": "Ran SQL",
+                "ranTool": "Ran {toolName}",
+                "recordedActivity": "Recorded activity"
+            }
+        },
+        "EventStatus": {
+            "success": "success",
+            "error": "error",
+            "failed": "failed",
+            "completed": "completed"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Agent Run workspace",
+            "Description": "SQL workspace for this Agent Run."
+        },
+        "WorkspacePanel": {
+            "LoadFailed": "Failed to load Agent Run.",
+            "Actions": {
+                "WorkspaceActions": "Workspace actions",
+                "SaveWorkspace": "Save workspace",
+                "CloseWorkspace": "Close workspace",
+                "CopyTask": "Copy task for external Agent"
+            },
+            "Continue": {
+                "Title": "Continue with external Agent",
+                "Description": "Copy a task with this workspace context, then paste it into Claude, Codex, or another external agent to continue from this Agent Run."
+            },
+            "GeneratedTabs": {
+                "Title": "Generated tabs",
+                "Expand": "Expand generated tabs",
+                "Collapse": "Collapse generated tabs",
+                "FallbackName": "Tab {index}",
+                "OpenTab": "Open tab {name}"
+            },
+            "Status": {
+                "SavedDescription": "Saved. The copied task will reference this Agent Run and its generated workspace.",
+                "UnsavedDescription": "Unsaved changes. The copied task will reference this Agent Run and its generated workspace.",
+                "CopiedSavedDescription": "Saved. The copied task will reference this Agent Run and its generated workspace."
+            },
+            "Toasts": {
+                "WorkspaceSaved": "Workspace saved.",
+                "WorkspaceSaveFailed": "Failed to save workspace.",
+                "TaskCopied": "Task for external Agent copied.",
+                "TaskCopyFailed": "Failed to copy task for external Agent."
+            },
+            "Rail": {
+                "Open": "Open Agent Run panel",
+                "Close": "Close Agent Run panel"
+            }
+        }
+    },
     "OrganizationSettings": {
         "Title": "Organization settings",
         "Description": "Manage organization details and access.",

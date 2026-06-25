@@ -3276,6 +3276,164 @@
             "DeleteFailed": "No se pudo eliminar la sesión de invitado. Inténtalo de nuevo."
         }
     },
+    "AgentRuns": {
+        "Common": {
+            "AgentRun": "Ejecución de agente",
+            "None": "Ninguna",
+            "Never": "Nunca",
+            "UnknownTime": "Hora desconocida"
+        },
+        "List": {
+            "Eyebrow": "Actividad MCP",
+            "Title": "Ejecuciones de agente",
+            "Description": "Trabajo de base de datos creado por agentes externos mediante Dory MCP."
+        },
+        "Actions": {
+            "OpenWorkspace": "Abrir espacio",
+            "ViewDetails": "Ver detalles",
+            "CopyRunId": "Copiar Run ID",
+            "Delete": "Eliminar",
+            "Cancel": "Cancelar",
+            "Expand": "Expandir",
+            "Collapse": "Contraer"
+        },
+        "Table": {
+            "Run": "Run",
+            "DataSource": "Fuente de datos",
+            "Status": "Estado",
+            "LastActive": "Última actividad",
+            "Actions": "Acciones",
+            "Empty": "Aún no hay ejecuciones de agente."
+        },
+        "Accessibility": {
+            "OpenRun": "Abrir ejecución de agente {title}",
+            "ActionsForRun": "Acciones para {title}"
+        },
+        "Toasts": {
+            "Deleted": "Ejecución de agente eliminada.",
+            "DeleteFailed": "No se pudo eliminar la ejecución de agente.",
+            "RunIdCopied": "Run ID copiado."
+        },
+        "DeleteDialog": {
+            "Title": "¿Eliminar ejecución de agente?",
+            "DefaultRunTitle": "esta ejecución de agente",
+            "Description": "Esto elimina <strong>{title}</strong> de las ejecuciones de agente. Los datos existentes del espacio se archivan y se ocultan de esta lista."
+        },
+        "Status": {
+            "Loading": "Cargando",
+            "Completed": "Completada",
+            "Failed": "Fallida",
+            "Archived": "Archivada",
+            "Active": "Activa"
+        },
+        "Counts": {
+            "SqlRuns": "{count, plural, one {# ejecución SQL} other {# ejecuciones SQL}}",
+            "TabsCreated": "{count, plural, one {# pestaña creada} other {# pestañas creadas}}",
+            "Tabs": "{count, plural, one {# pestaña} other {# pestañas}}",
+            "Rows": "{count, plural, one {# fila} other {# filas}}"
+        },
+        "Output": {
+            "Running": "En ejecución · {output}",
+            "Generated": "Generó {output}"
+        },
+        "Metrics": {
+            "DataSource": "Fuente de datos",
+            "TabsCreated": "Pestañas creadas",
+            "SqlRuns": "Ejecuciones SQL",
+            "LastActive": "Última actividad"
+        },
+        "Detail": {
+            "WorkspaceDescription": "Esta ejecución generó un espacio con {tabs} y {sqlRuns}. Abre el espacio para inspeccionar, editar y continuar el análisis SQL generado."
+        },
+        "Summary": {
+            "Title": "Resumen del run",
+            "Description": "Un resumen legible de los hallazgos y pasos de ejecución del agente.",
+            "Findings": "Hallazgos",
+            "Steps": "Pasos",
+            "NoPreview": "Aún no se generó ningún resumen.",
+            "NoFindings": "Aún no se generaron hallazgos.",
+            "NoSteps": "Aún no se registraron pasos de ejecución.",
+            "Empty": "No se generó ningún resumen para esta ejecución. Abre el espacio para inspeccionar el SQL generado y los resultados."
+        },
+        "Activity": {
+            "Title": "Actividad",
+            "Summary": "{sqlRuns} · {tabsCreated} · {status}",
+            "Status": {
+                "active": "activa",
+                "completed": "completada",
+                "failed": "fallida",
+                "archived": "archivada"
+            },
+            "StatusWithDuration": "{status} en {duration}",
+            "NoActivity": "Aún no se registró actividad."
+        },
+        "Timeline": {
+            "FallbackSqlTab": "Pestaña SQL",
+            "ResultNotSaved": "resultado no guardado",
+            "ShowRawDetails": "Mostrar detalles sin procesar",
+            "SqlLength": "Longitud SQL: {length}",
+            "Titles": {
+                "created": "Ejecución de agente creada",
+                "finished": "Ejecución de agente finalizada",
+                "listedDataSources": "Fuentes de datos listadas",
+                "exploredSchema": "Esquema explorado",
+                "updatedWorkspaceTab": "Pestaña de espacio \"{tabName}\" actualizada",
+                "updatedWorkspaceTabs": "Pestañas de espacio actualizadas",
+                "actorSavedWorkspaceChanges": "{actorName} guardó cambios del espacio",
+                "savedWorkspaceChanges": "Cambios del espacio guardados",
+                "managedSavedQueries": "Consultas guardadas administradas",
+                "ranSqlInTab": "SQL ejecutado en \"{tabName}\"",
+                "ranSql": "SQL ejecutado",
+                "ranTool": "{toolName} ejecutado",
+                "recordedActivity": "Actividad registrada"
+            }
+        },
+        "EventStatus": {
+            "success": "éxito",
+            "error": "error",
+            "failed": "fallida",
+            "completed": "completada"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Espacio de ejecución de agente",
+            "Description": "Espacio SQL para esta ejecución de agente."
+        },
+        "WorkspacePanel": {
+            "LoadFailed": "No se pudo cargar la ejecución de agente.",
+            "Actions": {
+                "WorkspaceActions": "Acciones del espacio",
+                "SaveWorkspace": "Guardar espacio",
+                "CloseWorkspace": "Cerrar espacio",
+                "CopyTask": "Copiar tarea para agente externo"
+            },
+            "Continue": {
+                "Title": "Continuar con agente externo",
+                "Description": "Copia una tarea con el contexto de este espacio y pégala en Claude, Codex u otro agente externo para continuar desde esta ejecución de agente."
+            },
+            "GeneratedTabs": {
+                "Title": "Pestañas generadas",
+                "Expand": "Expandir pestañas generadas",
+                "Collapse": "Contraer pestañas generadas",
+                "FallbackName": "Pestaña {index}",
+                "OpenTab": "Abrir pestaña {name}"
+            },
+            "Status": {
+                "SavedDescription": "Guardado. La tarea copiada hará referencia a esta ejecución de agente y a su espacio generado.",
+                "UnsavedDescription": "Hay cambios sin guardar. La tarea copiada hará referencia a esta ejecución de agente y a su espacio generado.",
+                "CopiedSavedDescription": "Guardado. La tarea copiada hará referencia a esta ejecución de agente y a su espacio generado."
+            },
+            "Toasts": {
+                "WorkspaceSaved": "Espacio guardado.",
+                "WorkspaceSaveFailed": "No se pudo guardar el espacio.",
+                "TaskCopied": "Tarea para agente externo copiada.",
+                "TaskCopyFailed": "No se pudo copiar la tarea para agente externo."
+            },
+            "Rail": {
+                "Open": "Abrir panel de ejecución de agente",
+                "Close": "Cerrar panel de ejecución de agente"
+            }
+        }
+    },
     "OrganizationSettings": {
         "Title": "Configuración de la organización",
         "Description": "Gestiona los detalles y el acceso de la organización.",

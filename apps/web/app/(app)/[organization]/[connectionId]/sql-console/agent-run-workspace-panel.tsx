@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle2, ChevronDown, Copy, FileText, Loader2, MoreHorizontal, Save } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { cn } from '@dory/web-utils';
@@ -33,7 +34,7 @@ async function fetchRunContext(workId: string) {
     const response = await authFetch(`/api/works/${encodeURIComponent(workId)}/snapshot`);
     const payload = (await response.json().catch(() => null)) as WorkSnapshotResponse | null;
     if (!response.ok || payload?.code !== 0 || !payload.data?.snapshot) {
-        throw new Error(payload?.message ?? 'Failed to load Agent Run.');
+        throw new Error(payload?.message ?? 'AGENT_RUN_LOAD_FAILED');
     }
     return payload.data.snapshot;
 }
@@ -45,7 +46,7 @@ function summaryTitle(metadata: Record<string, unknown> | null | undefined) {
     return typeof title === 'string' && title.trim() ? title : null;
 }
 
-function tabSummaries(tabs: unknown[] | undefined) {
+function tabSummaries(tabs: unknown[] | undefined, fallbackName: (index: number) => string) {
     if (!tabs?.length) return [];
 
     return tabs.map((tab, index) => {
@@ -55,7 +56,7 @@ function tabSummaries(tabs: unknown[] | undefined) {
 
         return {
             id: typeof id === 'string' && id.trim() ? id : `tab-${index}`,
-            name: typeof name === 'string' && name.trim() ? name : `Tab ${index + 1}`,
+            name: typeof name === 'string' && name.trim() ? name : fallbackName(index),
         };
     });
 }
@@ -97,6 +98,8 @@ export function AgentRunWorkspacePanel({
     hasUnsavedChanges,
     onRequestCloseWorkspace,
     onOpenAgentRuns,
+    onSelectGeneratedTab,
+    activeTabId,
 }: {
     workId: string;
     connectionId?: string | null;
@@ -107,9 +110,12 @@ export function AgentRunWorkspacePanel({
     hasUnsavedChanges: boolean;
     onRequestCloseWorkspace: () => void;
     onOpenAgentRuns: () => void;
+    onSelectGeneratedTab: (tabId: string) => void;
+    activeTabId?: string | null;
     onSaveAndCloseWorkspace: () => Promise<void>;
     onCloseWorkspaceWithoutSaving: () => void;
 }) {
+    const t = useTranslations('AgentRuns');
     const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [saveError, setSaveError] = useState<string | null>(null);
     const [handoffBusy, setHandoffBusy] = useState(false);
@@ -121,11 +127,11 @@ export function AgentRunWorkspacePanel({
     });
     const snapshot = query.data ?? null;
     const resolvedWorkspaceUrl = workspaceUrl || (typeof window !== 'undefined' ? window.location.href : null);
-    const title = useMemo(() => summaryTitle(snapshot?.work.metadata) || snapshot?.work.title || 'Agent Run', [snapshot?.work.metadata, snapshot?.work.title]);
-    const generatedTabs = useMemo(() => tabSummaries(snapshot?.tabs), [snapshot?.tabs]);
+    const title = useMemo(() => summaryTitle(snapshot?.work.metadata) || snapshot?.work.title || t('Common.AgentRun'), [snapshot?.work.metadata, snapshot?.work.title, t]);
+    const generatedTabs = useMemo(() => tabSummaries(snapshot?.tabs, index => t('WorkspacePanel.GeneratedTabs.FallbackName', { index: index + 1 })), [snapshot?.tabs, t]);
     const generatedTabCount = generatedTabs.length || tabCount || 0;
     const isSaving = saveState === 'saving' || handoffBusy;
-    const workspaceHasChangesLabel = hasUnsavedChanges ? 'Unsaved changes' : 'Saved';
+    const workspaceStatusDescription = hasUnsavedChanges ? t('WorkspacePanel.Status.UnsavedDescription') : t('WorkspacePanel.Status.SavedDescription');
 
     const performSave = useCallback(
         async ({ showToast = true, refetch = true }: { showToast?: boolean; refetch?: boolean } = {}) => {
@@ -138,10 +144,10 @@ export function AgentRunWorkspacePanel({
                     void query.refetch();
                 }
                 if (showToast) {
-                    toast.success('Workspace saved.');
+                    toast.success(t('WorkspacePanel.Toasts.WorkspaceSaved'));
                 }
             } catch (error) {
-                const message = error instanceof Error ? error.message : 'Failed to save workspace.';
+                const message = error instanceof Error && error.message ? error.message : t('WorkspacePanel.Toasts.WorkspaceSaveFailed');
                 setSaveState('error');
                 setSaveError(message);
                 if (showToast) {
@@ -150,7 +156,7 @@ export function AgentRunWorkspacePanel({
                 throw error;
             }
         },
-        [onSaveWorkspace, query],
+        [onSaveWorkspace, query, t],
     );
 
     const handleCopyHandoff = useCallback(async () => {
@@ -171,14 +177,14 @@ export function AgentRunWorkspacePanel({
 
             await copyTextToClipboard(prompt);
             setSaveState('saved');
-            toast.success('Task for external Agent copied.');
+            toast.success(t('WorkspacePanel.Toasts.TaskCopied'));
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Failed to copy task for external Agent.';
+            const message = error instanceof Error && error.message ? error.message : t('WorkspacePanel.Toasts.TaskCopyFailed');
             toast.error(message);
         } finally {
             setHandoffBusy(false);
         }
-    }, [connectionId, connectionName, performSave, query, resolvedWorkspaceUrl, snapshot, tabCount, title, workId]);
+    }, [connectionId, connectionName, performSave, query, resolvedWorkspaceUrl, snapshot, tabCount, title, t, workId]);
 
     return (
         <aside className="flex h-full w-full flex-col border-l bg-card shadow-xl">
@@ -186,13 +192,13 @@ export function AgentRunWorkspacePanel({
                 <div className="min-w-0">
                     <Button variant="ghost" size="sm" className="-ml-2 h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={onOpenAgentRuns}>
                         <ArrowLeft className="h-3.5 w-3.5" />
-                        Agent Runs
+                        {t('List.Title')}
                     </Button>
                     <div className="truncate px-0.5 text-sm font-semibold">{title}</div>
                 </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon-sm" className="shrink-0" aria-label="Workspace actions">
+                        <Button variant="ghost" size="icon-sm" className="shrink-0" aria-label={t('WorkspacePanel.Actions.WorkspaceActions')}>
                             <MoreHorizontal />
                         </Button>
                     </DropdownMenuTrigger>
@@ -200,11 +206,11 @@ export function AgentRunWorkspacePanel({
                         <DropdownMenuGroup>
                             <DropdownMenuItem disabled={isSaving} onSelect={() => void performSave()}>
                                 <Save />
-                                Save workspace
+                                {t('WorkspacePanel.Actions.SaveWorkspace')}
                             </DropdownMenuItem>
                             <DropdownMenuItem onSelect={onRequestCloseWorkspace}>
                                 <ArrowLeft />
-                                Close workspace
+                                {t('WorkspacePanel.Actions.CloseWorkspace')}
                             </DropdownMenuItem>
                         </DropdownMenuGroup>
                     </DropdownMenuContent>
@@ -213,39 +219,49 @@ export function AgentRunWorkspacePanel({
 
             <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 py-4">
                 <div className="grid gap-1.5">
-                    <h2 className="text-sm font-semibold">Continue with external Agent</h2>
-                    <p className="text-sm leading-5 text-muted-foreground">
-                        Copy a task with this workspace context, then paste it into Claude, Codex, or another external agent to continue from this Agent Run.
-                    </p>
+                    <h2 className="text-sm font-semibold">{t('WorkspacePanel.Continue.Title')}</h2>
+                    <p className="text-sm leading-5 text-muted-foreground">{t('WorkspacePanel.Continue.Description')}</p>
                 </div>
 
-                {query.error ? <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">{query.error.message}</div> : null}
+                {query.error ? (
+                    <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                        {query.error instanceof Error && query.error.message !== 'AGENT_RUN_LOAD_FAILED' ? query.error.message : t('WorkspacePanel.LoadFailed')}
+                    </div>
+                ) : null}
 
                 {generatedTabCount > 0 ? (
                     <Collapsible open={generatedTabsOpen} onOpenChange={setGeneratedTabsOpen} className="rounded-md border bg-background">
-                        <div className="flex items-center justify-between gap-3 px-3 py-2">
-                            <div className="min-w-0">
-                                <div className="text-sm font-medium">Generated tabs</div>
-                                <div className="text-xs text-muted-foreground">
-                                    {generatedTabCount} {generatedTabCount === 1 ? 'tab' : 'tabs'}
+                        <CollapsibleTrigger asChild>
+                            <button type="button" className="flex w-full items-center justify-between gap-3 rounded-t-md px-3 py-2 text-left transition-colors hover:bg-muted/50">
+                                <div className="min-w-0">
+                                    <div className="text-sm font-medium">{t('WorkspacePanel.GeneratedTabs.Title')}</div>
+                                    <div className="text-xs text-muted-foreground">{t('Counts.Tabs', { count: generatedTabCount })}</div>
                                 </div>
-                            </div>
-                            {generatedTabs.length ? (
-                                <CollapsibleTrigger asChild>
-                                    <Button variant="ghost" size="icon-sm" aria-label={generatedTabsOpen ? 'Collapse generated tabs' : 'Expand generated tabs'}>
-                                        <ChevronDown className={cn('transition-transform', !generatedTabsOpen && '-rotate-90')} />
-                                    </Button>
-                                </CollapsibleTrigger>
-                            ) : null}
-                        </div>
+                                {generatedTabs.length ? (
+                                    <ChevronDown
+                                        className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', !generatedTabsOpen && '-rotate-90')}
+                                        aria-hidden="true"
+                                    />
+                                ) : null}
+                            </button>
+                        </CollapsibleTrigger>
                         {generatedTabs.length ? (
                             <CollapsibleContent>
                                 <div className="grid gap-1 border-t px-3 py-2">
                                     {generatedTabs.map(tab => (
-                                        <div key={tab.id} className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            className={cn(
+                                                'flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm transition-colors hover:bg-muted hover:text-foreground',
+                                                activeTabId === tab.id ? 'bg-muted text-foreground' : 'text-muted-foreground',
+                                            )}
+                                            onClick={() => onSelectGeneratedTab(tab.id)}
+                                            aria-label={t('WorkspacePanel.GeneratedTabs.OpenTab', { name: tab.name })}
+                                        >
                                             <FileText className="shrink-0" />
                                             <span className="truncate">{tab.name}</span>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             </CollapsibleContent>
@@ -256,19 +272,19 @@ export function AgentRunWorkspacePanel({
                 <div className="grid gap-2">
                     <Button className="justify-start gap-2" disabled={handoffBusy || saveState === 'saving'} onClick={() => void handleCopyHandoff()}>
                         {handoffBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                        Copy task for external Agent
+                        {t('WorkspacePanel.Actions.CopyTask')}
                     </Button>
                 </div>
 
                 {saveState === 'saved' ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                        Saved. The copied task will reference this Agent Run and its generated workspace.
+                        {t('WorkspacePanel.Status.CopiedSavedDescription')}
                     </div>
                 ) : saveState === 'error' ? (
-                    <div className="text-xs text-destructive">{saveError ?? 'Failed to save workspace.'}</div>
+                    <div className="text-xs text-destructive">{saveError ?? t('WorkspacePanel.Toasts.WorkspaceSaveFailed')}</div>
                 ) : (
-                    <div className="text-xs text-muted-foreground">{workspaceHasChangesLabel}. The copied task will reference this Agent Run and its generated workspace.</div>
+                    <div className="text-xs text-muted-foreground">{workspaceStatusDescription}</div>
                 )}
             </div>
         </aside>

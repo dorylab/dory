@@ -1,11 +1,12 @@
 import { cn } from '@dory/web-utils';
+import { useTranslations } from 'next-intl';
 import type { AgentRunTimelineItem } from '@/lib/agent-runs/summary';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 
-function formatDate(value: string | Date | null | undefined, compact: boolean) {
-    if (!value) return 'Unknown time';
+function formatDate(value: string | Date | null | undefined, compact: boolean, unknownLabel: string) {
+    if (!value) return unknownLabel;
     const date = value instanceof Date ? value : new Date(value);
-    if (!Number.isFinite(date.getTime())) return 'Unknown time';
+    if (!Number.isFinite(date.getTime())) return unknownLabel;
     if (compact) {
         return date.toLocaleTimeString(undefined, {
             hour: 'numeric',
@@ -31,13 +32,23 @@ function statusVariant(status: string | null | undefined): 'default' | 'secondar
     return 'outline';
 }
 
+function statusLabel(status: string, t: ReturnType<typeof useTranslations>) {
+    if (status === 'success') return t('EventStatus.success');
+    if (status === 'error') return t('EventStatus.error');
+    if (status === 'failed') return t('EventStatus.failed');
+    if (status === 'completed') return t('EventStatus.completed');
+    return status;
+}
+
 function hasDetails(item: AgentRunTimelineItem) {
     return Boolean(item.rawInput || item.rawOutput || item.sessionId || item.tabId || item.sqlLength || item.error);
 }
 
 export function AgentRunActivityTimeline({ items, compact = false }: { items: AgentRunTimelineItem[]; compact?: boolean }) {
+    const t = useTranslations('AgentRuns');
+
     if (!items.length) {
-        return <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">No activity recorded yet.</div>;
+        return <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">{t('Activity.NoActivity')}</div>;
     }
 
     return (
@@ -49,7 +60,7 @@ export function AgentRunActivityTimeline({ items, compact = false }: { items: Ag
 
                 return (
                     <article key={item.id} className={cn('relative grid gap-3', compact ? 'grid-cols-[4.75rem_1fr]' : 'grid-cols-[7rem_1fr]')}>
-                        <div className="break-words pt-0.5 text-right text-xs text-muted-foreground">{formatDate(item.time, compact)}</div>
+                        <div className="break-words pt-0.5 text-right text-xs text-muted-foreground">{formatDate(item.time, compact, t('Common.UnknownTime'))}</div>
                         <div className="relative pb-4 pl-5">
                             <div className="absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full border border-background bg-muted-foreground" />
                             <div className="absolute bottom-0 left-[4px] top-5 w-px bg-border" />
@@ -58,20 +69,20 @@ export function AgentRunActivityTimeline({ items, compact = false }: { items: Ag
                                     <div className="min-w-0 truncate text-sm font-medium">{item.title}</div>
                                     {item.status ? (
                                         <Badge variant={statusVariant(item.status)} className="capitalize">
-                                            {item.status}
+                                            {statusLabel(item.status, t)}
                                         </Badge>
                                     ) : null}
                                 </div>
                                 {item.meta.length ? <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-muted-foreground">{item.meta.join(' · ')}</div> : null}
                                 {details ? (
                                     <details className="mt-2 group">
-                                        <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground hover:text-foreground">Show raw details</summary>
+                                        <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground hover:text-foreground">{t('Timeline.ShowRawDetails')}</summary>
                                         <div className="mt-2 grid gap-2 text-xs">
                                             {item.sessionId || item.tabId || item.sqlLength ? (
                                                 <div className="grid gap-1 rounded-md bg-muted/50 p-2 text-muted-foreground">
                                                     {item.sessionId ? <div>sessionId: {item.sessionId}</div> : null}
                                                     {item.tabId ? <div>tabId: {item.tabId}</div> : null}
-                                                    {item.sqlLength ? <div>SQL length: {item.sqlLength}</div> : null}
+                                                    {item.sqlLength ? <div>{t('Timeline.SqlLength', { length: item.sqlLength })}</div> : null}
                                                 </div>
                                             ) : null}
                                             {input ? (

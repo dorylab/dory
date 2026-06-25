@@ -267,6 +267,7 @@ export default function AgentWorkspaceClient({
         saveWorkspaceNow,
     } = useSqlConsoleClient(defaultLayout, workspaceScope);
     const t = useTranslations('SqlConsole');
+    const tAgentRuns = useTranslations('AgentRuns');
     const router = useRouter();
     const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
 
@@ -863,11 +864,11 @@ export default function AgentWorkspaceClient({
                         variant={agentRunPanelOpen ? 'default' : 'ghost'}
                         className="group h-8 w-8"
                         onClick={toggleAgentRunPanel}
-                        title={agentRunPanelOpen ? 'Close Agent Run panel' : 'Open Agent Run panel'}
-                        aria-label={agentRunPanelOpen ? 'Close Agent Run panel' : 'Open Agent Run panel'}
+                        title={agentRunPanelOpen ? tAgentRuns('WorkspacePanel.Rail.Close') : tAgentRuns('WorkspacePanel.Rail.Open')}
+                        aria-label={agentRunPanelOpen ? tAgentRuns('WorkspacePanel.Rail.Close') : tAgentRuns('WorkspacePanel.Rail.Open')}
                     >
                         <Bot className={cn('h-5 w-5 transition-colors', agentRunPanelOpen ? 'text-background' : 'text-muted-foreground group-hover:text-primary')} />
-                        <span className="sr-only">Agent Run</span>
+                        <span className="sr-only">{tAgentRuns('Common.AgentRun')}</span>
                     </Button>
                 </div>
             </div>
@@ -886,6 +887,8 @@ export default function AgentWorkspaceClient({
                         hasUnsavedChanges={hasUnsavedChanges}
                         onRequestCloseWorkspace={requestCloseWorkspace}
                         onOpenAgentRuns={closeWorkspaceToAgentRuns}
+                        onSelectGeneratedTab={setActiveTabId}
+                        activeTabId={activeTabId}
                         onSaveAndCloseWorkspace={saveAndCloseWorkspace}
                         onCloseWorkspaceWithoutSaving={closeWorkspaceWithoutSaving}
                     />

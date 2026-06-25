@@ -5,9 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { Copy, ExternalLink, Info, Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
+import { AgentRunStatusBadge } from '@/components/agent-runs/agent-run-status-badge';
 import { DataSourceCell, type DataSourceCellInfo } from '@/components/data-source/data-source-cell';
 import {
     AlertDialog,
@@ -19,11 +21,9 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
-import type { getAgentRunStatusVariant } from '@/lib/agent-runs/summary';
 
 export type AgentRunListItem = {
     workId: string;
@@ -35,8 +35,7 @@ export type AgentRunListItem = {
     sqlExecutionCount: number;
     hasWorkspace: boolean;
     dataSource: DataSourceCellInfo;
-    statusLabel: string;
-    statusVariant: ReturnType<typeof getAgentRunStatusVariant>;
+    status: string | null;
     lastActiveLabel: string;
     detailHref: string;
     workspaceHref: string;
@@ -49,7 +48,7 @@ async function deleteAgentRun(workId: string) {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || payload?.code !== 0) {
-        throw new Error(payload?.message || 'Failed to delete Agent Run.');
+        throw new Error(payload?.message || 'DELETE_AGENT_RUN_FAILED');
     }
 }
 
@@ -72,17 +71,19 @@ export function AgentRunsTable({
     pageSizeOptions: number[];
     baseHref: string;
 }) {
+    const t = useTranslations('AgentRuns');
     const router = useRouter();
     const [pendingDelete, setPendingDelete] = useState<AgentRunListItem | null>(null);
     const deleteMutation = useMutation({
         mutationFn: deleteAgentRun,
         onSuccess: () => {
-            toast.success('Agent Run deleted.');
+            toast.success(t('Toasts.Deleted'));
             setPendingDelete(null);
             router.refresh();
         },
         onError: error => {
-            toast.error(error instanceof Error ? error.message : 'Failed to delete Agent Run.');
+            const message = error instanceof Error && error.message !== 'DELETE_AGENT_RUN_FAILED' ? error.message : t('Toasts.DeleteFailed');
+            toast.error(message);
         },
     });
 
@@ -98,11 +99,11 @@ export function AgentRunsTable({
             <Table className="[&_td]:px-4 [&_th]:px-4 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6">
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Run</TableHead>
-                        <TableHead>Data source</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Last active</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>{t('Table.Run')}</TableHead>
+                        <TableHead>{t('Table.DataSource')}</TableHead>
+                        <TableHead>{t('Table.Status')}</TableHead>
+                        <TableHead>{t('Table.LastActive')}</TableHead>
+                        <TableHead className="text-right">{t('Table.Actions')}</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -120,7 +121,7 @@ export function AgentRunsTable({
                                         router.push(run.detailHref);
                                     }
                                 }}
-                                aria-label={`Open Agent Run ${run.title}`}
+                                aria-label={t('Accessibility.OpenRun', { title: run.title })}
                             >
                                 <TableCell className="min-w-[320px] max-w-[520px]">
                                     <div className="line-clamp-2 font-medium group-hover:underline" title={run.title}>
@@ -133,10 +134,10 @@ export function AgentRunsTable({
                                     <div className="mt-1 line-clamp-1 max-w-[480px] text-sm text-muted-foreground">{run.summaryPreview}</div>
                                 </TableCell>
                                 <TableCell>
-                                    <DataSourceCell dataSource={run.dataSource} emptyLabel="None" />
+                                    <DataSourceCell dataSource={run.dataSource} emptyLabel={t('Common.None')} />
                                 </TableCell>
                                 <TableCell>
-                                    <Badge variant={run.statusVariant}>{run.statusLabel}</Badge>
+                                    <AgentRunStatusBadge status={run.status} />
                                 </TableCell>
                                 <TableCell>{run.lastActiveLabel}</TableCell>
                                 <TableCell className="text-right" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
@@ -145,18 +146,18 @@ export function AgentRunsTable({
                                             <Button asChild size="sm" variant="outline">
                                                 <Link href={run.workspaceHref}>
                                                     <ExternalLink className="h-4 w-4" />
-                                                    Open Workspace
+                                                    {t('Actions.OpenWorkspace')}
                                                 </Link>
                                             </Button>
                                         ) : (
                                             <Button size="sm" variant="outline" disabled>
                                                 <ExternalLink className="h-4 w-4" />
-                                                Open Workspace
+                                                {t('Actions.OpenWorkspace')}
                                             </Button>
                                         )}
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" aria-label={`Actions for ${run.title}`}>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" aria-label={t('Accessibility.ActionsForRun', { title: run.title })}>
                                                     <MoreHorizontal className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -164,16 +165,16 @@ export function AgentRunsTable({
                                                 <DropdownMenuItem asChild>
                                                     <Link href={run.detailHref}>
                                                         <Info className="h-4 w-4" />
-                                                        View Details
+                                                        {t('Actions.ViewDetails')}
                                                     </Link>
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem
                                                     onSelect={() => {
-                                                        void copyText(run.workId).then(() => toast.success('Run ID copied.'));
+                                                        void copyText(run.workId).then(() => toast.success(t('Toasts.RunIdCopied')));
                                                     }}
                                                 >
                                                     <Copy className="h-4 w-4" />
-                                                    Copy Run ID
+                                                    {t('Actions.CopyRunId')}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem
@@ -184,7 +185,7 @@ export function AgentRunsTable({
                                                     }}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
-                                                    Delete
+                                                    {t('Actions.Delete')}
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -195,7 +196,7 @@ export function AgentRunsTable({
                     ) : (
                         <TableRow>
                             <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
-                                No Agent Runs yet.
+                                {t('Table.Empty')}
                             </TableCell>
                         </TableRow>
                     )}
@@ -213,14 +214,16 @@ export function AgentRunsTable({
             <AlertDialog open={Boolean(pendingDelete)} onOpenChange={open => !open && !deleteMutation.isPending && setPendingDelete(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Agent Run?</AlertDialogTitle>
+                        <AlertDialogTitle>{t('DeleteDialog.Title')}</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This removes <span className="font-medium text-foreground">{pendingDelete?.title ?? 'this Agent Run'}</span> from Agent Runs. Existing workspace data is
-                            archived and hidden from this list.
+                            {t.rich('DeleteDialog.Description', {
+                                title: pendingDelete?.title ?? t('DeleteDialog.DefaultRunTitle'),
+                                strong: chunks => <span className="font-medium text-foreground">{chunks}</span>,
+                            })}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>{t('Actions.Cancel')}</AlertDialogCancel>
                         <AlertDialogAction
                             disabled={!pendingDelete || deleteMutation.isPending}
                             onClick={event => {
@@ -231,7 +234,7 @@ export function AgentRunsTable({
                             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         >
                             {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                            Delete
+                            {t('Actions.Delete')}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

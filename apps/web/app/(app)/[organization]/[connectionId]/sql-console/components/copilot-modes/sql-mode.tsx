@@ -59,9 +59,10 @@ const buildInlineAskSqlComment = (prompt: string) => {
     return commentText ? `-- ${commentText}` : '';
 };
 
-const DEFAULT_EDITOR_RESULT_LAYOUT = [25, 75] as const;
+const DEFAULT_EDITOR_RESULT_LAYOUT = [45, 55] as const;
+const LEGACY_DEFAULT_EDITOR_RESULT_LAYOUT = [25, 75] as const;
 const MIN_EDITOR_PANEL_SIZE = 15;
-const MIN_RESULT_PANEL_SIZE = 25;
+const MIN_RESULT_PANEL_SIZE = 20;
 
 function normalizeEditorResultLayout(layout: readonly number[] | undefined): [number, number] {
     if (!Array.isArray(layout) || layout.length < 2) return [...DEFAULT_EDITOR_RESULT_LAYOUT];
@@ -74,6 +75,10 @@ function normalizeEditorResultLayout(layout: readonly number[] | undefined): [nu
     }
 
     const normalizedEditor = (editor / total) * 100;
+    if (Math.abs(normalizedEditor - LEGACY_DEFAULT_EDITOR_RESULT_LAYOUT[0]) < 0.5) {
+        return [...DEFAULT_EDITOR_RESULT_LAYOUT];
+    }
+
     const clampedEditor = Math.max(MIN_EDITOR_PANEL_SIZE, Math.min(100 - MIN_RESULT_PANEL_SIZE, normalizedEditor));
     return [clampedEditor, 100 - clampedEditor];
 }

@@ -85,12 +85,91 @@ export type AgentRunTimelineItem = {
     sqlLength?: number | null;
 };
 
+export type AgentRunTextFormatter = {
+    statusLabel: (status: string | null | undefined) => string;
+    noSummaryPreview: () => string;
+    dataSourceNone: () => string;
+    sqlRuns: (count: number) => string;
+    tabsCreated: (count: number) => string;
+    tabs: (count: number) => string;
+    rows: (count: number) => string;
+    outputLabel: (input: { isRunning: boolean; output: string }) => string;
+    activitySummary: (input: { sqlRuns: string; tabsCreated: string; status: string; duration: string | null }) => string;
+    activityStatus: (status: string) => string;
+    activityStatusWithDuration: (status: string, duration: string) => string;
+    eventTitle: (key: AgentRunEventTitleKey, values?: Record<string, string>) => string;
+    fallbackSqlTab: () => string;
+    resultNotSaved: () => string;
+};
+
+type AgentRunEventTitleKey =
+    | 'created'
+    | 'finished'
+    | 'listedDataSources'
+    | 'exploredSchema'
+    | 'updatedWorkspaceTab'
+    | 'updatedWorkspaceTabs'
+    | 'actorSavedWorkspaceChanges'
+    | 'savedWorkspaceChanges'
+    | 'managedSavedQueries'
+    | 'ranSqlInTab'
+    | 'ranSql'
+    | 'ranTool'
+    | 'recordedActivity';
+
 export function getAgentRunStatusLabel(status: string | null | undefined) {
+    if (status === 'active') return 'Loading';
     if (status === 'completed') return 'Completed';
     if (status === 'error') return 'Failed';
     if (status === 'archived') return 'Archived';
     return 'Active';
 }
+
+export const defaultAgentRunTextFormatter: AgentRunTextFormatter = {
+    statusLabel: getAgentRunStatusLabel,
+    noSummaryPreview: () => 'No summary generated yet.',
+    dataSourceNone: () => 'None',
+    sqlRuns: count => `${count.toLocaleString()} ${count === 1 ? 'SQL run' : 'SQL runs'}`,
+    tabsCreated: count => `${count.toLocaleString()} ${count === 1 ? 'tab created' : 'tabs created'}`,
+    tabs: count => `${count.toLocaleString()} ${count === 1 ? 'tab' : 'tabs'}`,
+    rows: count => `${count.toLocaleString()} ${count === 1 ? 'row' : 'rows'}`,
+    outputLabel: ({ isRunning, output }) => (isRunning ? `Running · ${output}` : `Generated ${output}`),
+    activitySummary: ({ sqlRuns, tabsCreated, status, duration }) => [sqlRuns, tabsCreated, duration ? `${status} in ${duration}` : status].join(' · '),
+    activityStatus: status => status,
+    activityStatusWithDuration: (status, duration) => `${status} in ${duration}`,
+    eventTitle: (key, values) => {
+        switch (key) {
+            case 'created':
+                return 'Created Agent Run';
+            case 'finished':
+                return 'Finished Agent Run';
+            case 'listedDataSources':
+                return 'Listed data sources';
+            case 'exploredSchema':
+                return 'Explored schema';
+            case 'updatedWorkspaceTab':
+                return `Updated workspace tab "${values?.tabName ?? ''}"`;
+            case 'updatedWorkspaceTabs':
+                return 'Updated workspace tabs';
+            case 'actorSavedWorkspaceChanges':
+                return `${values?.actorName ?? ''} saved workspace changes`;
+            case 'savedWorkspaceChanges':
+                return 'Saved workspace changes';
+            case 'managedSavedQueries':
+                return 'Managed saved queries';
+            case 'ranSqlInTab':
+                return `Ran SQL in "${values?.tabName ?? ''}"`;
+            case 'ranSql':
+                return 'Ran SQL';
+            case 'ranTool':
+                return `Ran ${values?.toolName ?? ''}`;
+            case 'recordedActivity':
+                return 'Recorded activity';
+        }
+    },
+    fallbackSqlTab: () => 'SQL tab',
+    resultNotSaved: () => 'result not saved',
+};
 
 export function getAgentRunStatusVariant(status: string | null | undefined): 'default' | 'secondary' | 'destructive' | 'outline' {
     if (status === 'error') return 'destructive';
@@ -158,46 +237,51 @@ export function getAgentRunSummarySections(metadata: Record<string, unknown> | n
     ];
 }
 
-export function getAgentRunSummaryPreview(metadata: Record<string, unknown> | null | undefined) {
-    return getAgentRunSummary(metadata)?.findings[0] ?? 'No summary generated yet.';
+export function getAgentRunSummaryPreview(metadata: Record<string, unknown> | null | undefined, formatter: AgentRunTextFormatter = defaultAgentRunTextFormatter) {
+    return getAgentRunSummary(metadata)?.findings[0] ?? formatter.noSummaryPreview();
 }
 
-export function getAgentRunStats(snapshot: AgentRunSnapshotLike, connectionName?: string | null) {
+export function getAgentRunStats(snapshot: AgentRunSnapshotLike, connectionName?: string | null, formatter: AgentRunTextFormatter = defaultAgentRunTextFormatter) {
     return {
-        dataSource: connectionName || snapshot.work.connectionId || 'None',
+        dataSource: connectionName || snapshot.work.connectionId || formatter.dataSourceNone(),
         tabCount: snapshot.tabs?.length ?? 0,
         sqlExecutionCount: snapshot.sessions?.length ?? 0,
         lastActiveAt: snapshot.work.lastActiveAt ?? snapshot.work.createdAt ?? null,
-        statusLabel: getAgentRunStatusLabel(snapshot.work.status),
+        statusLabel: formatter.statusLabel(snapshot.work.status),
     };
 }
 
-function formatSqlRuns(count: number) {
-    return `${count.toLocaleString()} ${count === 1 ? 'SQL run' : 'SQL runs'}`;
+function formatSqlRuns(count: number, formatter: AgentRunTextFormatter) {
+    return formatter.sqlRuns(count);
 }
 
-function formatTabsCreated(count: number) {
-    return `${count.toLocaleString()} ${count === 1 ? 'tab created' : 'tabs created'}`;
+function formatTabsCreated(count: number, formatter: AgentRunTextFormatter) {
+    return formatter.tabsCreated(count);
 }
 
-function formatTabsOnly(count: number) {
-    return `${count.toLocaleString()} ${count === 1 ? 'tab' : 'tabs'}`;
+function formatTabsOnly(count: number, formatter: AgentRunTextFormatter) {
+    return formatter.tabs(count);
 }
 
-export function getAgentRunOutputLabel(snapshot: AgentRunSnapshotLike) {
+export function getAgentRunOutputLabel(snapshot: AgentRunSnapshotLike, formatter: AgentRunTextFormatter = defaultAgentRunTextFormatter) {
     const tabCount = snapshot.tabs?.length ?? 0;
     const sqlExecutionCount = snapshot.sessions?.length ?? 0;
-    const output = `${formatTabsOnly(tabCount)} · ${formatSqlRuns(sqlExecutionCount)}`;
-    return snapshot.work.status === 'active' ? `Running · ${output}` : `Generated ${output}`;
+    const output = `${formatTabsOnly(tabCount, formatter)} · ${formatSqlRuns(sqlExecutionCount, formatter)}`;
+    return formatter.outputLabel({ isRunning: snapshot.work.status === 'active', output });
 }
 
-export function getAgentRunActivitySummary(snapshot: AgentRunSnapshotLike, events: AgentRunEventLike[] = []) {
+export function getAgentRunActivitySummary(snapshot: AgentRunSnapshotLike, events: AgentRunEventLike[] = [], formatter: AgentRunTextFormatter = defaultAgentRunTextFormatter) {
     const tabCount = snapshot.tabs?.length ?? 0;
     const sqlExecutionCount = snapshot.sessions?.length ?? 0;
     const status = snapshot.work.status === 'error' ? 'failed' : snapshot.work.status === 'completed' ? 'completed' : snapshot.work.status === 'archived' ? 'archived' : 'active';
     const durationMs = events.reduce((sum, event) => sum + (numberValue(event.durationMs) ?? 0), 0);
     const duration = durationMs > 0 ? formatDuration(durationMs) : null;
-    return [formatSqlRuns(sqlExecutionCount), formatTabsCreated(tabCount), duration ? `${status} in ${duration}` : status].join(' · ');
+    return formatter.activitySummary({
+        sqlRuns: formatSqlRuns(sqlExecutionCount, formatter),
+        tabsCreated: formatTabsCreated(tabCount, formatter),
+        status: formatter.activityStatus(status),
+        duration,
+    });
 }
 
 function toTime(value: string | Date | null | undefined) {
@@ -219,14 +303,14 @@ function stringArrayValue(value: unknown) {
     return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : [];
 }
 
-function formatRows(rows: number | null | undefined) {
+function formatRows(rows: number | null | undefined, formatter: AgentRunTextFormatter) {
     if (rows == null) return null;
-    return `${rows.toLocaleString()} ${rows === 1 ? 'row' : 'rows'}`;
+    return formatter.rows(rows);
 }
 
-function formatTabs(tabs: number | null | undefined) {
+function formatTabs(tabs: number | null | undefined, formatter: AgentRunTextFormatter) {
     if (tabs == null) return null;
-    return `${tabs.toLocaleString()} ${tabs === 1 ? 'tab' : 'tabs'}`;
+    return formatter.tabs(tabs);
 }
 
 function formatDuration(ms: number | null | undefined) {
@@ -235,8 +319,8 @@ function formatDuration(ms: number | null | undefined) {
     return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`;
 }
 
-function tabNameById(snapshot: AgentRunSnapshotLike) {
-    return new Map((snapshot.tabs ?? []).filter(tab => tab.tabId).map(tab => [tab.tabId!, tab.tabName || 'SQL tab']));
+function tabNameById(snapshot: AgentRunSnapshotLike, formatter: AgentRunTextFormatter) {
+    return new Map((snapshot.tabs ?? []).filter(tab => tab.tabId).map(tab => [tab.tabId!, tab.tabName || formatter.fallbackSqlTab()]));
 }
 
 function sessionById(snapshot: AgentRunSnapshotLike) {
@@ -249,20 +333,20 @@ function firstOutputIdentity(output: Record<string, unknown> | null | undefined)
     return { sessionId, tabId };
 }
 
-function sqlExecutionMeta(session: AgentRunSessionLike | undefined, event: AgentRunEventLike) {
+function sqlExecutionMeta(session: AgentRunSessionLike | undefined, event: AgentRunEventLike, formatter: AgentRunTextFormatter) {
     const firstSet = session?.queryResultSets?.[0];
     const rows = numberValue(event.outputSummary?.rowCount) ?? firstSet?.rowCount ?? null;
     const duration = event.durationMs ?? session?.session?.durationMs ?? firstSet?.durationMs ?? null;
-    return [formatRows(rows), formatDuration(duration), event.status ?? session?.session?.status ?? null, 'result not saved'].filter((item): item is string => Boolean(item));
+    return [formatRows(rows, formatter), formatDuration(duration), event.status ?? session?.session?.status ?? null, formatter.resultNotSaved()].filter((item): item is string => Boolean(item));
 }
 
-function userWorkspaceSaveMeta(event: AgentRunEventLike) {
+function userWorkspaceSaveMeta(event: AgentRunEventLike, formatter: AgentRunTextFormatter) {
     const changes = stringArrayValue(event.outputSummary?.changeSummary);
-    return [...changes, formatTabs(numberValue(event.outputSummary?.tabCount)), event.status ?? null].filter((item): item is string => Boolean(item));
+    return [...changes, formatTabs(numberValue(event.outputSummary?.tabCount), formatter), event.status ?? null].filter((item): item is string => Boolean(item));
 }
 
-function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike) {
-    const tabs = tabNameById(snapshot);
+function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike, formatter: AgentRunTextFormatter) {
+    const tabs = tabNameById(snapshot, formatter);
     const sessions = sessionById(snapshot);
     const { sessionId, tabId } = firstOutputIdentity(event.outputSummary);
     const session = sessionId ? sessions.get(sessionId) : undefined;
@@ -272,27 +356,27 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike) {
 
     switch (event.toolName) {
         case 'dory_create_work':
-            return 'Created Agent Run';
+            return formatter.eventTitle('created');
         case 'dory_finish_work':
-            return 'Finished Agent Run';
+            return formatter.eventTitle('finished');
         case 'dory_list_connections':
-            return 'Listed data sources';
+            return formatter.eventTitle('listedDataSources');
         case 'dory_explore_schema':
-            return 'Explored schema';
+            return formatter.eventTitle('exploredSchema');
         case 'dory_workspace_tabs':
-            return tabName ? `Updated workspace tab "${tabName}"` : 'Updated workspace tabs';
+            return tabName ? formatter.eventTitle('updatedWorkspaceTab', { tabName }) : formatter.eventTitle('updatedWorkspaceTabs');
         case 'dory_user_save_workspace':
-            return actorName ? `${actorName} saved workspace changes` : 'Saved workspace changes';
+            return actorName ? formatter.eventTitle('actorSavedWorkspaceChanges', { actorName }) : formatter.eventTitle('savedWorkspaceChanges');
         case 'dory_saved_queries':
-            return 'Managed saved queries';
+            return formatter.eventTitle('managedSavedQueries');
         case 'dory_run_readonly_sql':
-            return tabName ? `Ran SQL in "${tabName}"` : 'Ran SQL';
+            return tabName ? formatter.eventTitle('ranSqlInTab', { tabName }) : formatter.eventTitle('ranSql');
         default:
-            return event.toolName ? `Ran ${event.toolName}` : 'Recorded activity';
+            return event.toolName ? formatter.eventTitle('ranTool', { toolName: event.toolName }) : formatter.eventTitle('recordedActivity');
     }
 }
 
-export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: AgentRunEventLike[] = []): AgentRunTimelineItem[] {
+export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: AgentRunEventLike[] = [], formatter: AgentRunTextFormatter = defaultAgentRunTextFormatter): AgentRunTimelineItem[] {
     const sessions = sessionById(snapshot);
     const eventItems = events.map((event, index): AgentRunTimelineItem => {
         const { sessionId, tabId } = firstOutputIdentity(event.outputSummary);
@@ -301,15 +385,15 @@ export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: Ag
         const error = [event.errorCode, event.errorMessage].filter(Boolean).join(': ') || session?.session?.errorMessage || null;
         const meta =
             event.toolName === 'dory_run_readonly_sql'
-                ? sqlExecutionMeta(session, event)
+                ? sqlExecutionMeta(session, event, formatter)
                 : event.toolName === 'dory_user_save_workspace'
-                  ? userWorkspaceSaveMeta(event)
+                  ? userWorkspaceSaveMeta(event, formatter)
                   : [formatDuration(event.durationMs), event.status ?? null].filter((item): item is string => Boolean(item));
 
         return {
             id: event.eventId || `${event.toolName || 'event'}-${index}`,
             time: event.createdAt,
-            title: eventTitle(event, snapshot),
+            title: eventTitle(event, snapshot, formatter),
             meta,
             status: event.status,
             rawInput: event.inputSummary ?? null,
@@ -323,7 +407,7 @@ export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: Ag
 
     if (eventItems.length) return eventItems;
 
-    const tabs = tabNameById(snapshot);
+    const tabs = tabNameById(snapshot, formatter);
     return (snapshot.sessions ?? [])
         .map((item, index): AgentRunTimelineItem => {
             const session = item.session;
@@ -332,9 +416,9 @@ export function buildAgentRunTimeline(snapshot: AgentRunSnapshotLike, events: Ag
             return {
                 id: session?.sessionId || `session-${index}`,
                 time: session?.finishedAt ?? session?.startedAt ?? session?.createdAt,
-                title: tabName ? `Ran SQL in "${tabName}"` : 'Ran SQL',
+                title: tabName ? formatter.eventTitle('ranSqlInTab', { tabName }) : formatter.eventTitle('ranSql'),
                 meta: [
-                    formatRows(firstSet?.rowCount ?? null),
+                    formatRows(firstSet?.rowCount ?? null, formatter),
                     formatDuration(session?.durationMs ?? firstSet?.durationMs ?? null),
                     session?.status ?? firstSet?.status ?? null,
                 ].filter((value): value is string => Boolean(value)),

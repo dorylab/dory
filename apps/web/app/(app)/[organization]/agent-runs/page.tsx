@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation';
+import { getTranslations } from 'next-intl/server';
 import { Bot } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
-import { getAgentRunOutputLabel, getAgentRunStatusLabel, getAgentRunStatusVariant, getAgentRunSummaryPreview } from '@/lib/agent-runs/summary';
+import { createAgentRunTextFormatter } from '@/lib/agent-runs/i18n';
+import { getAgentRunOutputLabel, getAgentRunSummaryPreview } from '@/lib/agent-runs/summary';
 import { buildAgentRunDetailPath, buildAgentWorkspacePathFromSnapshot, resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { AgentRunsTable, type AgentRunListItem } from './agent-runs-table';
@@ -10,8 +12,8 @@ import { AgentRunsTable, type AgentRunListItem } from './agent-runs-table';
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-function formatDate(value: Date | string | null | undefined) {
-    if (!value) return 'Never';
+function formatDate(value: Date | string | null | undefined, emptyLabel: string) {
+    if (!value) return emptyLabel;
     const date = value instanceof Date ? value : new Date(value);
     return date.toLocaleString();
 }
@@ -48,6 +50,8 @@ export default async function AgentRunsPage({
 }) {
     const { organization } = await params;
     const query = await searchParams;
+    const t = await getTranslations('AgentRuns');
+    const formatter = createAgentRunTextFormatter(t);
     const page = parsePage(query?.page);
     const pageSize = parsePageSize(query?.pageSize);
     const bootstrap = await getAppBootstrapState({ organizationSlugOrId: organization });
@@ -90,9 +94,9 @@ export default async function AgentRunsPage({
         return {
             workId: work.workId,
             shortWorkId: shortWorkId(work.workId),
-            title: work.title || 'Agent Run',
-            outputLabel: getAgentRunOutputLabel(snapshot),
-            summaryPreview: getAgentRunSummaryPreview(work.metadata),
+            title: work.title || t('Common.AgentRun'),
+            outputLabel: getAgentRunOutputLabel(snapshot, formatter),
+            summaryPreview: getAgentRunSummaryPreview(work.metadata, formatter),
             tabCount: snapshot.tabs?.length ?? 0,
             sqlExecutionCount: snapshot.sessions?.length ?? 0,
             hasWorkspace: Boolean(target.connectionId),
@@ -105,9 +109,8 @@ export default async function AgentRunsPage({
                 connectionHttpPort: connection?.httpPort ?? null,
                 databaseName: connection?.database ?? null,
             },
-            statusLabel: getAgentRunStatusLabel(work.status),
-            statusVariant: getAgentRunStatusVariant(work.status),
-            lastActiveLabel: formatDate(work.lastActiveAt),
+            status: work.status,
+            lastActiveLabel: formatDate(work.lastActiveAt, t('Common.Never')),
             detailHref,
             workspaceHref,
         };
@@ -120,10 +123,10 @@ export default async function AgentRunsPage({
                     <div>
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <Bot className="h-4 w-4" />
-                            MCP activity
+                            {t('List.Eyebrow')}
                         </div>
-                        <h1 className="mt-2 text-2xl font-semibold tracking-normal">Agent Runs</h1>
-                        <p className="mt-1 text-sm text-muted-foreground">Database work created by external agents through Dory MCP.</p>
+                        <h1 className="mt-2 text-2xl font-semibold tracking-normal">{t('List.Title')}</h1>
+                        <p className="mt-1 text-sm text-muted-foreground">{t('List.Description')}</p>
                     </div>
                 </header>
 

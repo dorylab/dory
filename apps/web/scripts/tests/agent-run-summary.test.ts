@@ -13,7 +13,7 @@ import {
 } from '@/lib/agent-runs/summary';
 
 test('Agent Run status labels map internal storage to product labels', () => {
-    assert.equal(getAgentRunStatusLabel('active'), 'Active');
+    assert.equal(getAgentRunStatusLabel('active'), 'Loading');
     assert.equal(getAgentRunStatusLabel('completed'), 'Completed');
     assert.equal(getAgentRunStatusLabel('error'), 'Failed');
     assert.equal(getAgentRunStatusLabel('archived'), 'Archived');
@@ -37,7 +37,7 @@ test('Agent Run stats derive counts from snapshot data', () => {
     assert.equal(stats.dataSource, 'play');
     assert.equal(stats.tabCount, 2);
     assert.equal(stats.sqlExecutionCount, 2);
-    assert.equal(stats.statusLabel, 'Active');
+    assert.equal(stats.statusLabel, 'Loading');
 });
 
 test('Agent Run summary accepts only persisted agent summary metadata', () => {
