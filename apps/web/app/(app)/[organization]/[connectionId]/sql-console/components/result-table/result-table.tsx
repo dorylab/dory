@@ -826,7 +826,8 @@ export function ResultTable() {
 
     function renderResult() {
         if (noSessionId) {
-            return <div className="h-full flex items-center justify-center text-sm bg-card text-muted-foreground">{t('Results.RunQueryFirst')}</div>;
+            const emptyResultMessage = workspaceScope.workspaceMode === 'agent' ? t('Results.AgentRunQueryFirst') : t('Results.RunQueryFirst');
+            return <div className="h-full flex items-center justify-center px-4 text-center text-sm bg-card text-muted-foreground">{emptyResultMessage}</div>;
         }
         if (runningTabs[tabId] === 'running') {
             return (

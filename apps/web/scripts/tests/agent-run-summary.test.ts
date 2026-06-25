@@ -82,7 +82,7 @@ test('Agent Run timeline renders SQL activity with tab, rows, duration, and raw 
 
     assert.equal(timeline.length, 1);
     assert.equal(timeline[0]?.title, 'Ran SQL in "HN hot posts - overview"');
-    assert.deepEqual(timeline[0]?.meta, ['20 rows', '1.4s', 'success']);
+    assert.deepEqual(timeline[0]?.meta, ['20 rows', '1.4s', 'success', 'result not saved']);
     assert.equal(timeline[0]?.sessionId, 'session-1');
     assert.equal(timeline[0]?.tabId, 'tab-1');
     assert.equal(timeline[0]?.sqlLength, 21);

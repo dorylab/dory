@@ -1444,6 +1444,7 @@
         "Results": {
             "SelectTab": "请选择标签查看结果",
             "RunQueryFirst": "请先运行查询",
+            "AgentRunQueryFirst": "这个 Agent 生成的查询没有保存结果。运行查询以查看最新数据。",
             "NoResults": "无结果",
             "Overview": "概览",
             "Table": "表格",

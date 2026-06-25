@@ -167,7 +167,7 @@ function sqlExecutionMeta(session: AgentRunSessionLike | undefined, event: Agent
     const firstSet = session?.queryResultSets?.[0];
     const rows = numberValue(event.outputSummary?.rowCount) ?? firstSet?.rowCount ?? null;
     const duration = event.durationMs ?? session?.session?.durationMs ?? firstSet?.durationMs ?? null;
-    return [formatRows(rows), formatDuration(duration), event.status ?? session?.session?.status ?? null].filter((item): item is string => Boolean(item));
+    return [formatRows(rows), formatDuration(duration), event.status ?? session?.session?.status ?? null, 'result not saved'].filter((item): item is string => Boolean(item));
 }
 
 function userWorkspaceSaveMeta(event: AgentRunEventLike) {

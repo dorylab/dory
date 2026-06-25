@@ -1440,6 +1440,7 @@
         "Results": {
             "SelectTab": "Select a tab to see results",
             "RunQueryFirst": "Run the query first",
+            "AgentRunQueryFirst": "This Agent-generated query has no saved result. Run it to view the latest data.",
             "NoResults": "No results",
             "Overview": "Overview",
             "Table": "Table",
