@@ -3245,6 +3245,9 @@
     "AppSidebar": {
         "DataSources": "Data Sources",
         "NoDataSourceSelected": "No data source selected",
+        "WorkspaceTitle": "Workspace",
+        "WorkspaceDataSourcesCount": "{count} data source",
+        "WorkspaceDataSourcesCountPlural": "{count} data sources",
         "AgentRuns": "Agent Runs",
         "SQLConsole": "SQL Console",
         "Explorer": "Explorer",

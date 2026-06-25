@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { IconFileAi, IconHelp, IconUsers } from '@tabler/icons-react';
 import { IconBrandGithub } from '@tabler/icons-react';
@@ -23,6 +24,7 @@ import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { cn } from '@dory/web-utils';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
+import { useConnections } from '../../connections/hooks/use-connections';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     initialUser?: User | null;
@@ -63,17 +65,18 @@ function getExplorerDefaultDatabase(connection?: ConnectionListItem['connection'
     return null;
 }
 
-function GlobalConnectionPlaceholder({ href, label }: { href: string; label: string }) {
+function GlobalWorkspacePlaceholder({ href, title, description }: { href: string; title: string; description: string }) {
     return (
         <SidebarMenu>
             <SidebarMenuItem>
                 <SidebarMenuButton asChild size="lg">
                     <Link href={href} prefetch={false}>
-                        <div className="flex aspect-square size-8 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent/60 text-muted-foreground">
-                            <Database className="size-4" />
+                        <div className="flex aspect-square size-8 items-center justify-center">
+                            <Image src="/logo.png" alt="" width={24} height={24} className="size-6 object-contain" aria-hidden="true" />
                         </div>
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <span className="truncate text-sm font-semibold text-muted-foreground">{label}</span>
+                        <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
+                            <span className="truncate font-semibold">{title}</span>
+                            <span className="truncate text-xs text-muted-foreground">{description}</span>
                         </div>
                     </Link>
                 </SidebarMenuButton>
@@ -89,6 +92,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const organization = params.organization;
     const connectionId = params.connectionId;
     const currentConnection = useAtomValue(currentConnectionAtom);
+    const connectionsQuery = useConnections();
     const currentConnectionRecord = currentConnection?.connection;
     const currentRouteConnection = currentConnectionRecord && currentConnectionRecord.id === connectionId ? currentConnectionRecord : null;
     const defaultDatabase = currentRouteConnection ? getExplorerDefaultDatabase(currentRouteConnection) : null;
@@ -101,6 +105,9 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
               ? buildExplorerBasePath({ organization, connectionId })
               : `/${organization}/connections`;
     const dataSourcesUrl = `/${organization}/connections`;
+    const totalConnections = connectionsQuery.data?.length ?? 0;
+    const workspaceDataSourcesCount =
+        totalConnections === 1 ? t('WorkspaceDataSourcesCount', { count: String(totalConnections) }) : t('WorkspaceDataSourcesCountPlural', { count: String(totalConnections) });
     const sqlConsoleUrl = connectionId ? `/${organization}/${connectionId}/sql-console` : `/${organization}/connections`;
     const chatbotUrl = connectionId ? `/${organization}/${connectionId}/chatbot` : `/${organization}/chatbot`;
     const [updaterState, setUpdaterState] = React.useState<{ readyToInstall: boolean; version: string | null }>({
@@ -233,7 +240,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     return (
         <Sidebar {...props}>
             <SidebarHeader className="pb-2">
-                {connectionId ? <ConnectionSwitcher /> : <GlobalConnectionPlaceholder href={dataSourcesUrl} label={t('NoDataSourceSelected')} />}
+                {connectionId ? <ConnectionSwitcher /> : <GlobalWorkspacePlaceholder href={dataSourcesUrl} title={t('WorkspaceTitle')} description={workspaceDataSourcesCount} />}
             </SidebarHeader>
 
             <SidebarContent>
