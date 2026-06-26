@@ -819,7 +819,7 @@ export default function VTable({
                     key={key}
                     style={{ ...style, display: 'flex', alignItems: 'center' }}
                     className={cn(
-                        'px-2 text-sm border-b border-r select-none cursor-pointer font-medium text-muted-foreground outline-none',
+                        'px-2 text-sm border-b border-r bg-card select-none cursor-pointer font-medium text-muted-foreground outline-none',
                         isRowSelected && PRIMARY_SELECTION_CLASS,
                         'focus:ring-2 focus:ring-primary/40',
                     )}
@@ -886,7 +886,7 @@ export default function VTable({
                 data-cell={`${r}-${colKeyName}`}
                 style={{ ...style, display: 'flex', alignItems: 'center', boxShadow: selectionEdgeShadow }}
                 className={cn(
-                    'px-2 text-sm border-b border-r cursor-pointer outline-none select-none',
+                    'px-2 text-sm border-b border-r bg-card cursor-pointer outline-none select-none',
                     'min-w-0 overflow-hidden',
                     isRowSelected && PRIMARY_SELECTION_SUBTLE_CLASS,
                     isCellSelected && PRIMARY_SELECTION_CLASS,
@@ -962,7 +962,7 @@ export default function VTable({
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <div className="w-full h-full border overflow-hidden flex flex-col">
+                <div className="w-full h-full border overflow-hidden flex flex-col bg-card">
                     {showFiltersBar && (
                         <VTableFilters
                             activeFilters={activeFilters}
@@ -1007,8 +1007,8 @@ export default function VTable({
                                     cellRenderer={cellRenderer as MultiGridProps['cellRenderer']}
                                     classNameTopLeftGrid="bg-muted"
                                     classNameTopRightGrid="bg-muted"
-                                    classNameBottomLeftGrid=""
-                                    classNameBottomRightGrid=""
+                                    classNameBottomLeftGrid="bg-card"
+                                    classNameBottomRightGrid="bg-card"
                                     hideTopRightGridScrollbar
                                     hideBottomLeftGridScrollbar
                                     styleTopRightGrid={{ overflowX: 'hidden', overflowY: 'hidden' }}

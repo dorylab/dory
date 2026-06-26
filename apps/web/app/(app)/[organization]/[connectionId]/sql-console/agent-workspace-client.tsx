@@ -743,8 +743,13 @@ export default function AgentWorkspaceClient({
                     defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
                     onLayoutChanged={handleLayoutChange}
                 >
-                    <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`} className="min-w-0 overflow-hidden">
-                        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card">
+                    <Panel
+                        id="left-panel"
+                        minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`}
+                        maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
+                        className="min-w-0 overflow-hidden"
+                    >
+                        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-background">
                             <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
                                 <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
                                     <TabsTrigger value="tables" className="min-w-0 flex-1">
