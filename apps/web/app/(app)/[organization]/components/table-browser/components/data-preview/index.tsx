@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { RotateCw } from 'lucide-react';
+import { FileText, RotateCw } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { ResultRow } from '@dory/shared/types/sql-console';
 import { SQLTab } from '@dory/shared/types/tabs';
@@ -463,13 +464,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     const rowsSummaryValue = previewData?.totalRows ?? metadataTotalRowEstimate;
     const rowsSummaryTotal = previewData?.unfilteredTotalRows ?? metadataTotalRowEstimate ?? rowsSummaryValue;
-    const rowsSummaryLabel =
-        rowsSummaryValue != null && rowsSummaryTotal != null
-            ? t('Pagination.FilteredRows', {
-                  filtered: rowsSummaryValue.toLocaleString(),
-                  total: rowsSummaryTotal.toLocaleString(),
-              })
-            : null;
+    const totalRowsLabel = rowsSummaryTotal != null ? t('Pagination.TotalLabel', { total: rowsSummaryTotal.toLocaleString() }) : null;
+    const rowsLabel = rowsSummaryValue != null ? t('Pagination.RowsLabel', { rows: rowsSummaryValue.toLocaleString() }) : null;
 
     const previewControls = (
         <div className="flex items-center justify-between w-full gap-3 flex-none">
@@ -481,15 +477,24 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     onClearQuery={handleClearQuery}
                     onSearchSubmit={handleSearchSubmit}
                 />
-                {rowsSummaryLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{rowsSummaryLabel}</div>}
+                {totalRowsLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{totalRowsLabel}</div>}
             </div>
             <div className="flex min-w-0 items-center gap-2">
+                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
+                    <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    {t('Refresh')}
+                </Button>
                 <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                            {t('Current SQL')}
-                        </Button>
-                    </PopoverTrigger>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon-sm" aria-label={t('Current SQL')}>
+                                    <FileText />
+                                </Button>
+                            </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('Current SQL')}</TooltipContent>
+                    </Tooltip>
                     <PopoverContent align="end" className="w-[420px] p-0">
                         <div className="space-y-4 p-4">
                             <div className="space-y-1">
@@ -499,10 +504,6 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                         </div>
                     </PopoverContent>
                 </Popover>
-                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
-                    <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                    {t('Refresh')}
-                </Button>
             </div>
         </div>
     );
@@ -553,6 +554,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     pageSize={pageSize}
                     totalRowEstimate={totalRowEstimate}
                     currentPageRowCount={rows.length}
+                    rowsLabel={rowsLabel}
                     loading={refreshing}
                     onPageChange={handlePageChange}
                     onPageSizeChange={handlePageSizeChange}
@@ -590,6 +592,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 pageSize={pageSize}
                 totalRowEstimate={totalRowEstimate}
                 currentPageRowCount={rows.length}
+                rowsLabel={rowsLabel}
                 loading={refreshing}
                 onPageChange={handlePageChange}
                 onPageSizeChange={handlePageSizeChange}

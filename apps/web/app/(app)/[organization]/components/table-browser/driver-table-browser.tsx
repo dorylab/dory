@@ -67,7 +67,7 @@ export function DriverTableBrowser({
 
     if (!isPostgresFamilyConnectionType(driver)) {
         return (
-            <div className="h-full flex flex-col px-6 pb-4 pt-3">
+            <div className="h-full flex flex-col px-6 pb-2 pt-3">
                 <TableViewTabs
                     connectionId={connectionId}
                     databaseName={databaseName}
@@ -82,7 +82,7 @@ export function DriverTableBrowser({
     }
 
     return (
-        <div className="h-full flex flex-col px-6 pb-4 pt-3">
+        <div className="h-full flex flex-col px-6 pb-2 pt-3">
             <Tabs value={currentTab} onValueChange={handleTabChange} className="flex h-full flex-col gap-1" key={resetKey}>
                 <TabsList className="h-9 justify-start">
                     {POSTGRES_SUB_TABS.map(tab => (

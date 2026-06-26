@@ -467,15 +467,22 @@
         "Current SQL": "現在の SQL",
         "Failed to load data preview": "データプレビューの読み込みに失敗しました",
         "Pagination": {
+            "First": "最初のページ",
             "Previous": "前へ",
             "Next": "次へ",
+            "Last": "最後のページ",
             "PageOf": "ページ {current} / {total}",
             "PageOfExact": "ページ {current} / {total}",
             "PageUnknown": "ページ {current}",
+            "GoTo": "移動先",
+            "GoToPage": "{page} ページへ移動",
+            "PageOption": "{page} ページ",
             "RowsPerPage": "表示件数",
             "ShowingRange": "{start}–{end} / {total}",
             "ShowingRangeExact": "{start}–{end} / {total}",
             "ShowingCount": "{count} 行",
+            "TotalLabel": "合計：{total}",
+            "RowsLabel": "行数：{rows}",
             "TotalRows": "rows: {total}",
             "FilteredRows": "rows: {filtered}/{total}"
         },
@@ -2842,6 +2849,9 @@
             "Previous": "前のページ",
             "Next": "次のページ",
             "Last": "最後のページ",
+            "GoTo": "移動先",
+            "GoToPage": "{page} ページへ移動",
+            "PageOption": "{page} ページ",
             "PageStatus": "{current} / {total} ページ"
         },
         "PageHeader": {

@@ -467,15 +467,22 @@
         "Current SQL": "SQL actual",
         "Failed to load data preview": "No se pudo cargar la vista previa de los datos",
         "Pagination": {
+            "First": "Primera página",
             "Previous": "Anterior",
             "Next": "Siguiente",
+            "Last": "Última página",
             "PageOf": "Página {current} de {total}",
             "PageOfExact": "Página {current} de {total}",
             "PageUnknown": "Página {current}",
+            "GoTo": "Ir a",
+            "GoToPage": "Ir a la página {page}",
+            "PageOption": "Página {page}",
             "RowsPerPage": "Filas por página",
             "ShowingRange": "{start}–{end} de {total}",
             "ShowingRangeExact": "{start}–{end} de {total}",
             "ShowingCount": "{count} filas",
+            "TotalLabel": "total: {total}",
+            "RowsLabel": "filas: {rows}",
             "TotalRows": "rows: {total}",
             "FilteredRows": "rows: {filtered}/{total}"
         },
@@ -2842,6 +2849,9 @@
             "Previous": "Página anterior",
             "Next": "Página siguiente",
             "Last": "Última página",
+            "GoTo": "Ir a",
+            "GoToPage": "Ir a la página {page}",
+            "PageOption": "Página {page}",
             "PageStatus": "Página {current} / {total}"
         },
         "PageHeader": {

@@ -471,15 +471,22 @@
         "Current SQL": "当前 SQL",
         "Failed to load data preview": "加载数据预览失败",
         "Pagination": {
+            "First": "第一页",
             "Previous": "上一页",
             "Next": "下一页",
+            "Last": "最后一页",
             "PageOf": "第 {current} 页，共 {total} 页",
             "PageOfExact": "第 {current} 页，共 {total} 页",
             "PageUnknown": "第 {current} 页",
+            "GoTo": "跳转到",
+            "GoToPage": "跳转到第 {page} 页",
+            "PageOption": "第 {page} 页",
             "RowsPerPage": "每页行数",
             "ShowingRange": "{start}–{end} / {total}",
             "ShowingRangeExact": "{start}–{end} / {total}",
             "ShowingCount": "{count} 行",
+            "TotalLabel": "总计：{total}",
+            "RowsLabel": "行数：{rows}",
             "TotalRows": "rows: {total}",
             "FilteredRows": "rows: {filtered}/{total}"
         },
@@ -2848,6 +2855,9 @@
             "Previous": "上一页",
             "Next": "下一页",
             "Last": "最后一页",
+            "GoTo": "跳转到",
+            "GoToPage": "跳转到第 {page} 页",
+            "PageOption": "第 {page} 页",
             "PageStatus": "第 {current} / {total} 页"
         },
         "PageHeader": {
