@@ -3262,6 +3262,7 @@
         "DismissStarNotification": "Dismiss GitHub star prompt",
         "Organization": "Organization",
         "OrganizationSetting": "Organization settings",
+        "QueryAudit": "Query Audit",
         "LogOut": "Log out",
         "Update": "Update",
         "Updating": "Updating...",

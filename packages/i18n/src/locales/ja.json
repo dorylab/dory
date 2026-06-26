@@ -3243,6 +3243,9 @@
     "AppSidebar": {
         "DataSources": "データソース",
         "NoDataSourceSelected": "データソース未選択",
+        "WorkspaceTitle": "ワークスペース",
+        "WorkspaceDataSourcesCount": "{count} 件のデータソース",
+        "WorkspaceDataSourcesCountPlural": "{count} 件のデータソース",
         "AgentRuns": "Agent Runs",
         "SQLConsole": "SQL コンソール",
         "Explorer": "エクスプローラー",
@@ -3257,6 +3260,7 @@
         "DismissStarNotification": "GitHub スター案内を閉じる",
         "Organization": "組織",
         "OrganizationSetting": "組織設定",
+        "QueryAudit": "クエリ監査",
         "LogOut": "ログアウト",
         "Update": "更新",
         "Updating": "更新中...",

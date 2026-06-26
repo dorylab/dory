@@ -71,8 +71,8 @@ function GlobalWorkspacePlaceholder({ href, title, description }: { href: string
             <SidebarMenuItem>
                 <SidebarMenuButton asChild size="lg">
                     <Link href={href} prefetch={false}>
-                        <div className="flex aspect-square size-8 items-center justify-center">
-                            <Image src="/logo.png" alt="" width={24} height={24} className="size-6 object-contain" aria-hidden="true" />
+                        <div className="flex aspect-square size-10 items-center justify-center">
+                            <Image src="/dory.png" alt="" width={512} height={512} className="size-9 object-contain" aria-hidden="true" />
                         </div>
                         <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
                             <span className="truncate font-semibold">{title}</span>

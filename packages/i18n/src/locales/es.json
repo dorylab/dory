@@ -3243,6 +3243,9 @@
     "AppSidebar": {
         "DataSources": "Fuentes de datos",
         "NoDataSourceSelected": "Sin fuente de datos seleccionada",
+        "WorkspaceTitle": "Espacio de trabajo",
+        "WorkspaceDataSourcesCount": "{count} fuente de datos",
+        "WorkspaceDataSourcesCountPlural": "{count} fuentes de datos",
         "AgentRuns": "Ejecuciones de agente",
         "SQLConsole": "Consola SQL",
         "Explorer": "Explorador",
@@ -3257,6 +3260,7 @@
         "DismissStarNotification": "Cerrar aviso de estrella de GitHub",
         "Organization": "Organización",
         "OrganizationSetting": "Configuración de la organización",
+        "QueryAudit": "Auditoría de consultas",
         "LogOut": "Cerrar sesión",
         "Update": "Actualizar",
         "Updating": "Actualizando...",
