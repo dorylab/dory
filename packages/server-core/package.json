@@ -1,0 +1,56 @@
+{
+    "name": "@dory/server-core",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./src/index.ts",
+    "exports": {
+        ".": {
+            "types": "./src/index.ts",
+            "default": "./dist/index.js"
+        },
+        "./mcp": {
+            "types": "./src/mcp/index.ts",
+            "default": "./dist/index.js"
+        },
+        "./runtime": {
+            "types": "./src/runtime/index.ts",
+            "default": "./dist/index.js"
+        },
+        "./storage": {
+            "types": "./src/storage/index.ts",
+            "default": "./dist/index.js"
+        },
+        "./tokens": {
+            "types": "./src/tokens/index.ts",
+            "default": "./dist/index.js"
+        },
+        "./http": {
+            "types": "./src/http/index.ts",
+            "default": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "rm -rf dist && esbuild src/index.ts --bundle --platform=node --format=esm --log-level=error --alias:@=../../apps/web --alias:server-only=./src/compat/server-only.ts --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=dist/index.js --external:@electric-sql/pglite --external:@electric-sql/pglite-legacy --external:oracledb --external:mysql2 --external:mariadb --external:better-sqlite3 --external:@duckdb/node-api --external:cpu-features --external:ssh2-no-cpu-features --external:pg-native",
+        "typecheck": "tsc --noEmit",
+        "test": "node --import tsx --test \"src/**/*.test.ts\""
+    },
+    "dependencies": {
+        "@dory/actions": "0.1.0",
+        "@dory/analysis": "0.1.0",
+        "@dory/database": "0.1.0",
+        "@dory/drivers": "0.1.0",
+        "@dory/i18n": "0.1.0",
+        "@dory/shared": "0.1.0",
+        "@modelcontextprotocol/sdk": "^1.29.0",
+        "drizzle-orm": "^0.45.2",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@types/node": "^25.5.2",
+        "esbuild": "^0.27.7",
+        "tsx": "^4.21.0",
+        "typescript": "^6.0.2"
+    }
+}

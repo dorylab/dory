@@ -9,17 +9,29 @@ export const tabSaveAction = defineWebAction({
     domain: 'tab',
     kind: 'command',
     risk: 'low',
-    inputSchema: z.object({ connectionId: z.string().min(1).optional(), tabId: z.string().min(1), state: z.any(), resultMeta: z.any().optional().nullable() }),
+    inputSchema: z.object({
+        connectionId: z.string().min(1).optional(),
+        workId: z.string().min(1).nullable().optional(),
+        tabId: z.string().min(1),
+        state: z.any(),
+        resultMeta: z.any().optional().nullable(),
+    }),
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['tabs:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_save_tab',
+        title: 'Save Dory tab',
+        description: 'Save SQL console tab state for a Dory connection.',
+    },
     handler: async (ctx, input) => {
         const isTable = input.state.tabType === 'table';
         await ctx.services.db.tabState.saveTabState({
             tabId: input.tabId,
             userId: ctx.userId,
             connectionId: resolveConnectionId(ctx, input),
+            workId: input.workId ?? input.state.workId ?? null,
             state: {
                 content: isTable ? '' : input.state.content || null,
                 databaseName: isTable ? input.state.databaseName : (input.state.databaseName ?? null),
@@ -37,6 +49,7 @@ export const tabSaveAction = defineWebAction({
                 tabId: input.tabId,
                 userId: ctx.userId,
                 connectionId: resolveConnectionId(ctx, input),
+                workId: input.workId ?? input.state.workId ?? null,
                 newName: input.state.tabName,
             });
         }

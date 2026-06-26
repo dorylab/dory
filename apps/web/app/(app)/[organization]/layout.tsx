@@ -7,7 +7,15 @@ import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { getRuntimeForServer, isBillingManagementAvailableForServer, isDesktopBillingHandoffRuntimeForServer, isEnterpriseLicenseForServer } from '@dory/shared/runtime';
 import { OrganizationAppShell } from './components/organization-app-shell';
 
-export default async function TeamLayout({ children, params }: { children: React.ReactNode; params: Promise<{ organization: string }> }) {
+export default async function TeamLayout({
+    children,
+    workspaceDrawer,
+    params,
+}: {
+    children: React.ReactNode;
+    workspaceDrawer: React.ReactNode;
+    params: Promise<{ organization: string }>;
+}) {
     const cookieStore = await cookies();
     const defaultOpen = cookieStore.get('sidebar_state')?.value !== 'false';
     const teamParam = (await params)?.organization;
@@ -62,6 +70,7 @@ export default async function TeamLayout({ children, params }: { children: React
             enterpriseLicense={isEnterpriseLicenseForServer()}
         >
             {children}
+            {workspaceDrawer}
         </OrganizationAppShell>
     );
 }

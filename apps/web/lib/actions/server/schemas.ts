@@ -34,28 +34,30 @@ export const unknownOutputSchema = z.unknown();
 export const connectionListOutputSchema = z.object({
     connections: z.array(z.unknown()),
 });
-export const connectionListToolOutputSchema = z.object({
-    connections: z.array(
+export const connectionToolSchema = z.object({
+    id: z.string(),
+    name: z.string().nullable().optional(),
+    type: z.string().nullable().optional(),
+    engine: z.string().nullable().optional(),
+    database: z.string().nullable().optional(),
+    status: z.string().nullable().optional(),
+    environment: z.string().nullable().optional(),
+    lastCheckStatus: z.string().nullable().optional(),
+    identities: z.array(
         z.object({
             id: z.string(),
             name: z.string().nullable().optional(),
-            type: z.string().nullable().optional(),
-            engine: z.string().nullable().optional(),
+            username: z.string().nullable().optional(),
+            isDefault: z.boolean(),
             database: z.string().nullable().optional(),
-            status: z.string().nullable().optional(),
-            environment: z.string().nullable().optional(),
-            lastCheckStatus: z.string().nullable().optional(),
-            identities: z.array(
-                z.object({
-                    id: z.string(),
-                    name: z.string().nullable().optional(),
-                    username: z.string().nullable().optional(),
-                    isDefault: z.boolean(),
-                    database: z.string().nullable().optional(),
-                }),
-            ),
         }),
     ),
+});
+export const connectionListToolOutputSchema = z.object({
+    connections: z.array(connectionToolSchema),
+});
+export const connectionGetToolOutputSchema = z.object({
+    connection: connectionToolSchema,
 });
 export const queryExecutionOutputSchema = z
     .object({

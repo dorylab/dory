@@ -14,7 +14,12 @@ export const tableGetStatsAction = defineWebAction<any, any>({
     outputSchema: unknownOutputSchema,
     permissions: readConnection,
     scopes: ['schema:read'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_get_table_stats',
+        title: 'Get table stats',
+        description: 'Get statistics for a table in a Dory connection.',
+    },
     handler: async (ctx, input) => {
         const profile = await getTableProfileOperation(actionOperationContext(ctx, actorAuditSource(ctx, 'dory_schema_metadata')), input);
         return { stats: (profile as any).stats ?? null };

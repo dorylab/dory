@@ -467,15 +467,22 @@
         "Current SQL": "現在の SQL",
         "Failed to load data preview": "データプレビューの読み込みに失敗しました",
         "Pagination": {
+            "First": "最初のページ",
             "Previous": "前へ",
             "Next": "次へ",
+            "Last": "最後のページ",
             "PageOf": "ページ {current} / {total}",
             "PageOfExact": "ページ {current} / {total}",
             "PageUnknown": "ページ {current}",
+            "GoTo": "移動先",
+            "GoToPage": "{page} ページへ移動",
+            "PageOption": "{page} ページ",
             "RowsPerPage": "表示件数",
             "ShowingRange": "{start}–{end} / {total}",
             "ShowingRangeExact": "{start}–{end} / {total}",
             "ShowingCount": "{count} 行",
+            "TotalLabel": "合計：{total}",
+            "RowsLabel": "行数：{rows}",
             "TotalRows": "rows: {total}",
             "FilteredRows": "rows: {filtered}/{total}"
         },
@@ -2842,6 +2849,9 @@
             "Previous": "前のページ",
             "Next": "次のページ",
             "Last": "最後のページ",
+            "GoTo": "移動先",
+            "GoToPage": "{page} ページへ移動",
+            "PageOption": "{page} ページ",
             "PageStatus": "{current} / {total} ページ"
         },
         "PageHeader": {
@@ -3241,6 +3251,12 @@
         "Unknown": "不明なエラー"
     },
     "AppSidebar": {
+        "DataSources": "データソース",
+        "NoDataSourceSelected": "データソース未選択",
+        "WorkspaceTitle": "ワークスペース",
+        "WorkspaceDataSourcesCount": "{count} 件のデータソース",
+        "WorkspaceDataSourcesCountPlural": "{count} 件のデータソース",
+        "AgentRuns": "Agent Runs",
         "SQLConsole": "SQL コンソール",
         "Explorer": "エクスプローラー",
         "Schema": "スキーマ",
@@ -3254,6 +3270,7 @@
         "DismissStarNotification": "GitHub スター案内を閉じる",
         "Organization": "組織",
         "OrganizationSetting": "組織設定",
+        "QueryAudit": "クエリ監査",
         "LogOut": "ログアウト",
         "Update": "更新",
         "Updating": "更新中...",
@@ -3271,6 +3288,180 @@
             "Confirm": "ワークスペースを削除",
             "Cancel": "ワークスペースを保持",
             "DeleteFailed": "ゲストセッションの削除に失敗しました。もう一度お試しください。"
+        }
+    },
+    "AgentRuns": {
+        "Common": {
+            "AgentRun": "Agent Run",
+            "None": "なし",
+            "Never": "なし",
+            "UnknownTime": "不明な時刻"
+        },
+        "List": {
+            "Eyebrow": "MCP アクティビティ",
+            "Title": "Agent Runs",
+            "Description": "Dory MCP 経由で外部 Agent が作成したデータベース作業です。"
+        },
+        "Actions": {
+            "OpenWorkspace": "ワークスペースを開く",
+            "ViewDetails": "詳細を表示",
+            "CopyRunId": "Run ID をコピー",
+            "Delete": "削除",
+            "Cancel": "キャンセル",
+            "Expand": "展開",
+            "Collapse": "折りたたむ"
+        },
+        "Table": {
+            "Run": "Run",
+            "DataSource": "データソース",
+            "Status": "ステータス",
+            "LastActive": "最終アクティブ",
+            "Actions": "操作",
+            "Empty": "Agent Runs はまだありません。"
+        },
+        "Accessibility": {
+            "OpenRun": "Agent Run {title} を開く",
+            "ActionsForRun": "{title} の操作"
+        },
+        "Toasts": {
+            "Deleted": "Agent Run を削除しました。",
+            "DeleteFailed": "Agent Run の削除に失敗しました。",
+            "RunIdCopied": "Run ID をコピーしました。"
+        },
+        "DeleteDialog": {
+            "Title": "Agent Run を削除しますか？",
+            "DefaultRunTitle": "この Agent Run",
+            "Description": "<strong>{title}</strong> を Agent Runs から削除します。既存のワークスペースデータはアーカイブされ、この一覧では非表示になります。"
+        },
+        "Status": {
+            "Loading": "実行中",
+            "Completed": "完了",
+            "Failed": "失敗",
+            "Archived": "アーカイブ済み",
+            "Active": "アクティブ"
+        },
+        "Counts": {
+            "SqlRuns": "{count} 件の SQL 実行",
+            "TabsCreated": "{count} 個のタブを作成",
+            "Tabs": "{count} 個のタブ",
+            "Rows": "{count} 行"
+        },
+        "Output": {
+            "Running": "実行中 · {output}",
+            "Generated": "{output} を生成"
+        },
+        "Metrics": {
+            "DataSource": "データソース",
+            "TabsCreated": "作成されたタブ",
+            "SqlRuns": "SQL 実行",
+            "LastActive": "最終アクティブ"
+        },
+        "Detail": {
+            "WorkspaceDescription": "この run は{tabs}と{sqlRuns}を含むワークスペースを生成しました。ワークスペースを開いて、生成された SQL 分析を確認、編集、継続できます。"
+        },
+        "Summary": {
+            "Title": "Run サマリー",
+            "Description": "Agent の発見事項と実行手順を読みやすくまとめたものです。",
+            "Findings": "発見事項",
+            "Steps": "手順",
+            "NoPreview": "サマリーはまだ生成されていません。",
+            "NoFindings": "発見事項はまだ生成されていません。",
+            "NoSteps": "実行手順はまだ記録されていません。",
+            "Empty": "この run のサマリーはまだ生成されていません。ワークスペースを開いて、生成された SQL と結果を確認してください。"
+        },
+        "Activity": {
+            "Title": "アクティビティ",
+            "Summary": "{sqlRuns} · {tabsCreated} · {status}",
+            "Status": {
+                "active": "実行中",
+                "completed": "完了",
+                "failed": "失敗",
+                "archived": "アーカイブ済み"
+            },
+            "StatusWithDuration": "{status}（{duration}）",
+            "NoActivity": "アクティビティはまだ記録されていません。"
+        },
+        "Timeline": {
+            "FallbackSqlTab": "SQL タブ",
+            "ResultNotSaved": "結果は保存されていません",
+            "ShowRawDetails": "生データの詳細を表示",
+            "SqlLength": "SQL 長: {length}",
+            "Titles": {
+                "created": "Agent Run を作成",
+                "finished": "Agent Run を完了",
+                "listedDataSources": "データソースを一覧表示",
+                "exploredSchema": "スキーマを調査",
+                "updatedWorkspaceTab": "ワークスペースタブ「{tabName}」を更新",
+                "updatedWorkspaceTabs": "ワークスペースタブを更新",
+                "actorSavedWorkspaceChanges": "{actorName} がワークスペースの変更を保存",
+                "savedWorkspaceChanges": "ワークスペースの変更を保存",
+                "managedSavedQueries": "保存済みクエリを管理",
+                "ranSqlInTab": "「{tabName}」で SQL を実行",
+                "ranSql": "SQL を実行",
+                "ranTool": "{toolName} を実行",
+                "recordedActivity": "アクティビティを記録"
+            }
+        },
+        "EventStatus": {
+            "success": "成功",
+            "error": "エラー",
+            "failed": "失敗",
+            "completed": "完了"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Agent Run ワークスペース",
+            "Description": "この Agent Run の SQL ワークスペースです。"
+        },
+        "WorkspacePanel": {
+            "LoadFailed": "Agent Run の読み込みに失敗しました。",
+            "Actions": {
+                "WorkspaceActions": "ワークスペース操作",
+                "SaveWorkspace": "ワークスペースを保存",
+                "CloseWorkspace": "ワークスペースを閉じる",
+                "CopyTask": "外部 Agent 用のタスクをコピー"
+            },
+            "Continue": {
+                "Title": "外部 Agent で続行",
+                "Description": "このワークスペースのコンテキストを含むタスクをコピーし、Claude、Codex、または別の外部 Agent に貼り付けて、この Agent Run から続行します。"
+            },
+            "GeneratedTabs": {
+                "Title": "生成されたタブ",
+                "Expand": "生成されたタブを展開",
+                "Collapse": "生成されたタブを折りたたむ",
+                "FallbackName": "タブ {index}",
+                "OpenTab": "タブ {name} を開く"
+            },
+            "Status": {
+                "SavedDescription": "保存済みです。コピーしたタスクはこの Agent Run と生成されたワークスペースを参照します。",
+                "UnsavedDescription": "未保存の変更があります。コピーしたタスクはこの Agent Run と生成されたワークスペースを参照します。",
+                "CopiedSavedDescription": "保存済みです。コピーしたタスクはこの Agent Run と生成されたワークスペースを参照します。"
+            },
+            "Toasts": {
+                "WorkspaceSaved": "ワークスペースを保存しました。",
+                "WorkspaceSaveFailed": "ワークスペースの保存に失敗しました。",
+                "TaskCopied": "外部 Agent 用のタスクをコピーしました。",
+                "TaskCopyFailed": "外部 Agent 用のタスクをコピーできませんでした。"
+            },
+            "Rail": {
+                "Open": "Agent Run パネルを開く",
+                "Close": "Agent Run パネルを閉じる"
+            }
+        },
+        "WorkspaceTour": {
+            "CopyTask": {
+                "Title": "外部 Agent で続行",
+                "Description": "このワークスペースのコンテキストをコピーし、Claude、Codex、または別の外部 Agent に貼り付けると、ここから作業を続けられます。"
+            },
+            "Back": {
+                "Title": "Agent Runs に戻る",
+                "Description": "このボタンで Agent Runs 一覧に戻り、この run や過去の run を確認できます。"
+            },
+            "Actions": {
+                "Next": "次へ",
+                "Finish": "完了",
+                "Skip": "スキップ",
+                "Close": "ツアーを閉じる"
+            }
         }
     },
     "OrganizationSettings": {
@@ -3301,7 +3492,7 @@
             },
             "Errors": {
                 "SlugRequired": "スラッグは必須です",
-                "SlugInvalid": "スラッグには小文字、数字、ハイフンのみ使用できます"
+                "SlugInvalid": "スラッグには英字、数字、ハイフンのみ使用できます"
             }
         },
         "Members": {

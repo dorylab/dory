@@ -34,6 +34,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { useVTableFilters, VTableFilters } from './vtable/VTableFilters';
 import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import type { ColumnFilter } from './vtable/type';
+import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
 import type { ResultSetViewState } from '@/lib/client/type';
 /* =================================== constants =================================== */
 
@@ -122,7 +123,8 @@ export function ResultTable() {
     // Atoms
     const tabId = useAtomValue(activeTabIdAtom);
     const sessionIdFromAtom = useAtomValue(activeSessionIdAtom);
-    const sessionId = sessionIdFromAtom ?? (typeof window !== 'undefined' ? (localStorage.getItem(`sqlconsole:sessionId:${tabId}`) ?? undefined) : undefined);
+    const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
+    const sessionId = sessionIdFromAtom ?? (typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
 
     const { dbReady, listResultSetIndices, listResultSetsMeta, getResultRows, clearResults, dataVersion, getSession, updateResultSetViewState } = useDB();
 
@@ -824,7 +826,8 @@ export function ResultTable() {
 
     function renderResult() {
         if (noSessionId) {
-            return <div className="h-full flex items-center justify-center text-sm bg-card text-muted-foreground">{t('Results.RunQueryFirst')}</div>;
+            const emptyResultMessage = workspaceScope.workspaceMode === 'agent' ? t('Results.AgentRunQueryFirst') : t('Results.RunQueryFirst');
+            return <div className="h-full flex items-center justify-center px-4 text-center text-sm bg-card text-muted-foreground">{emptyResultMessage}</div>;
         }
         if (runningTabs[tabId] === 'running') {
             return (

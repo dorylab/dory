@@ -188,7 +188,7 @@
     },
     "Connections": {
         "Connections": "Data sources",
-        "All Connections": "All data sources",
+        "All Connections": "Manage data sources",
         "about": "about",
         "MoreActions": "More actions",
         "Search": {
@@ -467,15 +467,22 @@
         "Current SQL": "Current SQL",
         "Failed to load data preview": "Failed to load data preview",
         "Pagination": {
+            "First": "First page",
             "Previous": "Previous",
             "Next": "Next",
+            "Last": "Last page",
             "PageOf": "Page {current} of {total}",
             "PageOfExact": "Page {current} of {total}",
             "PageUnknown": "Page {current}",
+            "GoTo": "Go to",
+            "GoToPage": "Go to page {page}",
+            "PageOption": "Page {page}",
             "RowsPerPage": "Rows per page",
             "ShowingRange": "{start}–{end} of {total}",
             "ShowingRangeExact": "{start}–{end} of {total}",
             "ShowingCount": "{count} rows",
+            "TotalLabel": "total: {total}",
+            "RowsLabel": "rows: {rows}",
             "TotalRows": "rows: {total}",
             "FilteredRows": "rows: {filtered}/{total}"
         },
@@ -1440,6 +1447,7 @@
         "Results": {
             "SelectTab": "Select a tab to see results",
             "RunQueryFirst": "Run the query first",
+            "AgentRunQueryFirst": "This Agent-generated query has no saved result. Run it to view the latest data.",
             "NoResults": "No results",
             "Overview": "Overview",
             "Table": "Table",
@@ -2843,6 +2851,9 @@
             "Previous": "Previous page",
             "Next": "Next page",
             "Last": "Last page",
+            "GoTo": "Go to",
+            "GoToPage": "Go to page {page}",
+            "PageOption": "Page {page}",
             "PageStatus": "Page {current} / {total}"
         },
         "PageHeader": {
@@ -3242,6 +3253,12 @@
         "Unknown": "Unknown error"
     },
     "AppSidebar": {
+        "DataSources": "Data Sources",
+        "NoDataSourceSelected": "No data source selected",
+        "WorkspaceTitle": "Workspace",
+        "WorkspaceDataSourcesCount": "{count} data source",
+        "WorkspaceDataSourcesCountPlural": "{count} data sources",
+        "AgentRuns": "Agent Runs",
         "SQLConsole": "SQL Console",
         "Explorer": "Explorer",
         "Schema": "Schema",
@@ -3255,6 +3272,7 @@
         "DismissStarNotification": "Dismiss GitHub star prompt",
         "Organization": "Organization",
         "OrganizationSetting": "Organization settings",
+        "QueryAudit": "Query Audit",
         "LogOut": "Log out",
         "Update": "Update",
         "Updating": "Updating...",
@@ -3272,6 +3290,180 @@
             "Confirm": "Delete workspace",
             "Cancel": "Keep workspace",
             "DeleteFailed": "Failed to delete guest session. Please try again."
+        }
+    },
+    "AgentRuns": {
+        "Common": {
+            "AgentRun": "Agent Run",
+            "None": "None",
+            "Never": "Never",
+            "UnknownTime": "Unknown time"
+        },
+        "List": {
+            "Eyebrow": "MCP activity",
+            "Title": "Agent Runs",
+            "Description": "Database work created by external agents through Dory MCP."
+        },
+        "Actions": {
+            "OpenWorkspace": "Open Workspace",
+            "ViewDetails": "View Details",
+            "CopyRunId": "Copy Run ID",
+            "Delete": "Delete",
+            "Cancel": "Cancel",
+            "Expand": "Expand",
+            "Collapse": "Collapse"
+        },
+        "Table": {
+            "Run": "Run",
+            "DataSource": "Data source",
+            "Status": "Status",
+            "LastActive": "Last active",
+            "Actions": "Actions",
+            "Empty": "No Agent Runs yet."
+        },
+        "Accessibility": {
+            "OpenRun": "Open Agent Run {title}",
+            "ActionsForRun": "Actions for {title}"
+        },
+        "Toasts": {
+            "Deleted": "Agent Run deleted.",
+            "DeleteFailed": "Failed to delete Agent Run.",
+            "RunIdCopied": "Run ID copied."
+        },
+        "DeleteDialog": {
+            "Title": "Delete Agent Run?",
+            "DefaultRunTitle": "this Agent Run",
+            "Description": "This removes <strong>{title}</strong> from Agent Runs. Existing workspace data is archived and hidden from this list."
+        },
+        "Status": {
+            "Loading": "Loading",
+            "Completed": "Completed",
+            "Failed": "Failed",
+            "Archived": "Archived",
+            "Active": "Active"
+        },
+        "Counts": {
+            "SqlRuns": "{count, plural, one {# SQL run} other {# SQL runs}}",
+            "TabsCreated": "{count, plural, one {# tab created} other {# tabs created}}",
+            "Tabs": "{count, plural, one {# tab} other {# tabs}}",
+            "Rows": "{count, plural, one {# row} other {# rows}}"
+        },
+        "Output": {
+            "Running": "Running · {output}",
+            "Generated": "Generated {output}"
+        },
+        "Metrics": {
+            "DataSource": "Data source",
+            "TabsCreated": "Tabs created",
+            "SqlRuns": "SQL runs",
+            "LastActive": "Last active"
+        },
+        "Detail": {
+            "WorkspaceDescription": "This run generated a workspace with {tabs} and {sqlRuns}. Open the workspace to inspect, edit, and continue the generated SQL analysis."
+        },
+        "Summary": {
+            "Title": "Run summary",
+            "Description": "A readable summary of the agent's findings and execution steps.",
+            "Findings": "Findings",
+            "Steps": "Steps",
+            "NoPreview": "No summary generated yet.",
+            "NoFindings": "No findings generated yet.",
+            "NoSteps": "No execution steps recorded yet.",
+            "Empty": "No summary generated for this run. Open the workspace to inspect generated SQL and results."
+        },
+        "Activity": {
+            "Title": "Activity",
+            "Summary": "{sqlRuns} · {tabsCreated} · {status}",
+            "Status": {
+                "active": "active",
+                "completed": "completed",
+                "failed": "failed",
+                "archived": "archived"
+            },
+            "StatusWithDuration": "{status} in {duration}",
+            "NoActivity": "No activity recorded yet."
+        },
+        "Timeline": {
+            "FallbackSqlTab": "SQL tab",
+            "ResultNotSaved": "result not saved",
+            "ShowRawDetails": "Show raw details",
+            "SqlLength": "SQL length: {length}",
+            "Titles": {
+                "created": "Created Agent Run",
+                "finished": "Finished Agent Run",
+                "listedDataSources": "Listed data sources",
+                "exploredSchema": "Explored schema",
+                "updatedWorkspaceTab": "Updated workspace tab \"{tabName}\"",
+                "updatedWorkspaceTabs": "Updated workspace tabs",
+                "actorSavedWorkspaceChanges": "{actorName} saved workspace changes",
+                "savedWorkspaceChanges": "Saved workspace changes",
+                "managedSavedQueries": "Managed saved queries",
+                "ranSqlInTab": "Ran SQL in \"{tabName}\"",
+                "ranSql": "Ran SQL",
+                "ranTool": "Ran {toolName}",
+                "recordedActivity": "Recorded activity"
+            }
+        },
+        "EventStatus": {
+            "success": "success",
+            "error": "error",
+            "failed": "failed",
+            "completed": "completed"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Agent Run workspace",
+            "Description": "SQL workspace for this Agent Run."
+        },
+        "WorkspacePanel": {
+            "LoadFailed": "Failed to load Agent Run.",
+            "Actions": {
+                "WorkspaceActions": "Workspace actions",
+                "SaveWorkspace": "Save workspace",
+                "CloseWorkspace": "Close workspace",
+                "CopyTask": "Copy task for external Agent"
+            },
+            "Continue": {
+                "Title": "Continue with external Agent",
+                "Description": "Copy a task with this workspace context, then paste it into Claude, Codex, or another external agent to continue from this Agent Run."
+            },
+            "GeneratedTabs": {
+                "Title": "Generated tabs",
+                "Expand": "Expand generated tabs",
+                "Collapse": "Collapse generated tabs",
+                "FallbackName": "Tab {index}",
+                "OpenTab": "Open tab {name}"
+            },
+            "Status": {
+                "SavedDescription": "Saved. The copied task will reference this Agent Run and its generated workspace.",
+                "UnsavedDescription": "Unsaved changes. The copied task will reference this Agent Run and its generated workspace.",
+                "CopiedSavedDescription": "Saved. The copied task will reference this Agent Run and its generated workspace."
+            },
+            "Toasts": {
+                "WorkspaceSaved": "Workspace saved.",
+                "WorkspaceSaveFailed": "Failed to save workspace.",
+                "TaskCopied": "Task for external Agent copied.",
+                "TaskCopyFailed": "Failed to copy task for external Agent."
+            },
+            "Rail": {
+                "Open": "Open Agent Run panel",
+                "Close": "Close Agent Run panel"
+            }
+        },
+        "WorkspaceTour": {
+            "CopyTask": {
+                "Title": "Continue with an external Agent",
+                "Description": "Copy this workspace context and paste it into Claude, Codex, or another external Agent to keep working from here."
+            },
+            "Back": {
+                "Title": "Return to Agent Runs",
+                "Description": "Use this button to go back to the Agent Runs list and review this run or earlier runs."
+            },
+            "Actions": {
+                "Next": "Next",
+                "Finish": "Finish",
+                "Skip": "Skip",
+                "Close": "Close tour"
+            }
         }
     },
     "OrganizationSettings": {
@@ -3302,7 +3494,7 @@
             },
             "Errors": {
                 "SlugRequired": "Slug is required",
-                "SlugInvalid": "Slug can only contain lowercase letters, numbers, and hyphens"
+                "SlugInvalid": "Slug can only contain letters, numbers, and hyphens"
             }
         },
         "Members": {

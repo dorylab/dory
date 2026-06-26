@@ -90,6 +90,11 @@ export const aiTableSummaryAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['analysis:run'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_generate_table_summary',
+        title: 'Generate table summary',
+        description: 'Generate an AI summary for a database table from metadata and column context.',
+    },
     handler: runTableSummaryAction,
 });

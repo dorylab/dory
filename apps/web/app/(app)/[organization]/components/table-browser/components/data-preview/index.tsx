@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { RotateCw } from 'lucide-react';
+import { FileText, RotateCw } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
+import { createParser, parseAsIndex, useQueryStates } from 'nuqs';
 
 import { fetchTablePreview } from '../../lib/fetch-table-preview';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { ResultRow } from '@dory/shared/types/sql-console';
 import { SQLTab } from '@dory/shared/types/tabs';
@@ -81,6 +83,24 @@ const PREVIEW_STALE_TIME = 1000 * 60 * 5;
 const PREVIEW_GC_TIME = PREVIEW_STALE_TIME * 2;
 const EMPTY_ROWS: ResultRow[] = [];
 const EMPTY_SEARCH_COLUMNS: string[] = [];
+const parseAsNonNegativeIndex = createParser({
+    parse: value => {
+        const parsed = parseAsIndex.parse(value);
+        return parsed != null && parsed >= 0 ? parsed : null;
+    },
+    serialize: value => parseAsIndex.serialize(value),
+});
+const parseAsPositiveInteger = createParser({
+    parse: value => {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    },
+    serialize: value => String(value),
+});
+const dataPreviewPaginationParsers = {
+    pageIndex: parseAsNonNegativeIndex.withDefault(0),
+    pageSize: parseAsPositiveInteger.withDefault(DEFAULT_TABLE_PREVIEW_LIMIT),
+};
 
 function normalizeParam(value?: string | string[]) {
     if (!value) return undefined;
@@ -279,8 +299,15 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
-    const [pageIndex, setPageIndex] = useState(0);
-    const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PREVIEW_LIMIT);
+    const [{ pageIndex, pageSize }, setPagination] = useQueryStates(dataPreviewPaginationParsers, {
+        history: 'replace',
+        shallow: true,
+        scroll: false,
+        urlKeys: {
+            pageIndex: 'previewPage',
+            pageSize: 'previewPageSize',
+        },
+    });
     const [activeFilters, setActiveFilters] = useState<ColumnFilter[]>([]);
     const [sortState, setSortState] = useState<TablePreviewSort | null>(null);
     const [hasUserRequestedPreviewUpdate, setHasUserRequestedPreviewUpdate] = useState(false);
@@ -407,53 +434,67 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             return;
         }
         setQuery(nextQuery);
-        setPageIndex(0);
-    }, [previewQuery, query, searchInput]);
+        void setPagination({ pageIndex: 0 });
+    }, [previewQuery, query, searchInput, setPagination]);
 
     const handleClearQuery = useCallback(() => {
         setHasUserRequestedPreviewUpdate(true);
         setSearchInput('');
         setQuery('');
-        setPageIndex(0);
-    }, []);
+        void setPagination({ pageIndex: 0 });
+    }, [setPagination]);
 
-    const handleUpsertFilter = useCallback((filter: ColumnFilter) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setActiveFilters(prev => {
-            const others = prev.filter(item => item.col !== filter.col);
-            return [...others, filter];
-        });
-        setPageIndex(0);
-    }, []);
+    const handleUpsertFilter = useCallback(
+        (filter: ColumnFilter) => {
+            setHasUserRequestedPreviewUpdate(true);
+            setActiveFilters(prev => {
+                const others = prev.filter(item => item.col !== filter.col);
+                return [...others, filter];
+            });
+            void setPagination({ pageIndex: 0 });
+        },
+        [setPagination],
+    );
 
-    const handleRemoveFilter = useCallback((column: string) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setActiveFilters(prev => prev.filter(filter => filter.col !== column));
-        setPageIndex(0);
-    }, []);
+    const handleRemoveFilter = useCallback(
+        (column: string) => {
+            setHasUserRequestedPreviewUpdate(true);
+            setActiveFilters(prev => prev.filter(filter => filter.col !== column));
+            void setPagination({ pageIndex: 0 });
+        },
+        [setPagination],
+    );
 
     const handleClearAllFilters = useCallback(() => {
         setHasUserRequestedPreviewUpdate(true);
         setActiveFilters([]);
-        setPageIndex(0);
-    }, []);
+        void setPagination({ pageIndex: 0 });
+    }, [setPagination]);
 
-    const handleSortChange = useCallback((nextSort: TablePreviewSort | null) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setSortState(nextSort);
-        setPageIndex(0);
-    }, []);
+    const handleSortChange = useCallback(
+        (nextSort: TablePreviewSort | null) => {
+            setHasUserRequestedPreviewUpdate(true);
+            setSortState(nextSort);
+            void setPagination({ pageIndex: 0 });
+        },
+        [setPagination],
+    );
 
-    const handlePageChange = useCallback((newPageIndex: number) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setPageIndex(newPageIndex);
-    }, []);
+    const handlePageChange = useCallback(
+        (newPageIndex: number) => {
+            setHasUserRequestedPreviewUpdate(true);
+            void setPagination({ pageIndex: newPageIndex });
+        },
+        [setPagination],
+    );
 
-    const handlePageSizeChange = useCallback((newPageSize: number) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setPageSize(newPageSize);
-        setPageIndex(0);
-    }, []);
+    const handlePageSizeChange = useCallback(
+        (newPageSize: number) => {
+            setHasUserRequestedPreviewUpdate(true);
+            void setPagination({ pageIndex: 0, pageSize: newPageSize });
+        },
+        [setPagination],
+    );
 
     const handleRefresh = useCallback(() => {
         if (refreshing) return;
@@ -463,13 +504,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     const rowsSummaryValue = previewData?.totalRows ?? metadataTotalRowEstimate;
     const rowsSummaryTotal = previewData?.unfilteredTotalRows ?? metadataTotalRowEstimate ?? rowsSummaryValue;
-    const rowsSummaryLabel =
-        rowsSummaryValue != null && rowsSummaryTotal != null
-            ? t('Pagination.FilteredRows', {
-                  filtered: rowsSummaryValue.toLocaleString(),
-                  total: rowsSummaryTotal.toLocaleString(),
-              })
-            : null;
+    const totalRowsLabel = rowsSummaryTotal != null ? t('Pagination.TotalLabel', { total: rowsSummaryTotal.toLocaleString() }) : null;
+    const rowsLabel = rowsSummaryValue != null ? t('Pagination.RowsLabel', { rows: rowsSummaryValue.toLocaleString() }) : null;
 
     const previewControls = (
         <div className="flex items-center justify-between w-full gap-3 flex-none">
@@ -481,15 +517,24 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     onClearQuery={handleClearQuery}
                     onSearchSubmit={handleSearchSubmit}
                 />
-                {rowsSummaryLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{rowsSummaryLabel}</div>}
+                {totalRowsLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{totalRowsLabel}</div>}
             </div>
             <div className="flex min-w-0 items-center gap-2">
+                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
+                    <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                    {t('Refresh')}
+                </Button>
                 <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                            {t('Current SQL')}
-                        </Button>
-                    </PopoverTrigger>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon-sm" aria-label={t('Current SQL')}>
+                                    <FileText />
+                                </Button>
+                            </PopoverTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('Current SQL')}</TooltipContent>
+                    </Tooltip>
                     <PopoverContent align="end" className="w-[420px] p-0">
                         <div className="space-y-4 p-4">
                             <div className="space-y-1">
@@ -499,10 +544,6 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                         </div>
                     </PopoverContent>
                 </Popover>
-                <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
-                    <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                    {t('Refresh')}
-                </Button>
             </div>
         </div>
     );
@@ -553,6 +594,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     pageSize={pageSize}
                     totalRowEstimate={totalRowEstimate}
                     currentPageRowCount={rows.length}
+                    rowsLabel={rowsLabel}
                     loading={refreshing}
                     onPageChange={handlePageChange}
                     onPageSizeChange={handlePageSizeChange}
@@ -590,6 +632,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 pageSize={pageSize}
                 totalRowEstimate={totalRowEstimate}
                 currentPageRowCount={rows.length}
+                rowsLabel={rowsLabel}
                 loading={refreshing}
                 onPageChange={handlePageChange}
                 onPageSizeChange={handlePageSizeChange}

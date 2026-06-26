@@ -14,7 +14,12 @@ export const schemaListFunctionsAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readConnection,
     scopes: ['schema:read'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_list_functions',
+        title: 'List database functions',
+        description: 'List functions in a database for a Dory connection.',
+    },
     handler: async (ctx, input) => {
         const connectionId = resolveConnectionId(ctx, input);
         const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);

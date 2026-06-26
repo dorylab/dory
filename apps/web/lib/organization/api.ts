@@ -157,6 +157,10 @@ export function slugifyOrganizationName(name: string) {
         .replace(/^-+|-+$/g, '');
 }
 
+export function isValidOrganizationSlug(slug: string) {
+    return /^[a-z0-9-]+$/i.test(slug.trim());
+}
+
 export async function listOrganizations() {
     return authOrganizationRequest<OrganizationSummary[]>('/organization/list');
 }

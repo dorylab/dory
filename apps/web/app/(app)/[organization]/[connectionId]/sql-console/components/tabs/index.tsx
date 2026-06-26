@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/registry/new-york-v4/ui/context-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Plus, Loader2, FileText, X, Sparkles, Pencil, CircleOff, Table as TableIcon } from 'lucide-react';
 import { ScrollArea, ScrollBar } from '@/registry/new-york-v4/ui/scroll-area';
 import { SQLTab } from '@dory/shared/types/tabs';
+import { OverflowTooltip } from '@/components/overflow-tooltip';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { useTranslations } from 'next-intl';
@@ -22,9 +23,22 @@ interface SQLTabsProps {
     reorderTabs: (sourceId: string, targetId: string, options?: { persist?: boolean }) => void;
     onRequestAITitle: (tab: SQLTab) => Promise<void> | void;
     onHeightChange?: (height: number) => void;
+    headerAccessory?: ReactNode;
 }
 
-export function SQLTabs({ tabs, activeTabId, setActiveTabId, addTab, closeTab, closeOtherTabs, updateTab, reorderTabs, onRequestAITitle, onHeightChange }: SQLTabsProps) {
+export function SQLTabs({
+    tabs,
+    activeTabId,
+    setActiveTabId,
+    addTab,
+    closeTab,
+    closeOtherTabs,
+    updateTab,
+    reorderTabs,
+    onRequestAITitle,
+    onHeightChange,
+    headerAccessory,
+}: SQLTabsProps) {
     const headerRef = useRef<HTMLDivElement | null>(null);
     const t = useTranslations('SqlConsole');
 
@@ -231,8 +245,14 @@ export function SQLTabs({ tabs, activeTabId, setActiveTabId, addTab, closeTab, c
                                             }}
                                             draggable
                                             role="tab"
+                                            tabIndex={0}
                                             aria-selected={isActive}
                                             onClick={() => {
+                                                setActiveTabId(tab.tabId);
+                                            }}
+                                            onKeyDown={e => {
+                                                if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                e.preventDefault();
                                                 setActiveTabId(tab.tabId);
                                             }}
                                             onContextMenu={() => {
@@ -264,9 +284,9 @@ export function SQLTabs({ tabs, activeTabId, setActiveTabId, addTab, closeTab, c
                                                         : ['bg-muted/60 text-muted-foreground', 'hover:text-foreground hover:bg-muted'].join(' ')
                                                 }`}
                                         >
-                                            <div className="absolute inset-0 flex items-center justify-center px-6 pointer-events-none">
+                                            <div className="absolute inset-0 flex items-center justify-center px-6">
                                                 {tab.tabType === 'table' ? <TableIcon className="w-4 h-4 mr-2 shrink-0" /> : <FileText className="w-4 h-4 mr-2 shrink-0" />}
-                                                <span className="text-sm truncate text-center">{tab.tabName}</span>
+                                                <OverflowTooltip text={tab.tabName} className="block min-w-0 flex-1 truncate text-center text-sm" />
                                             </div>
 
                                             <button
@@ -293,6 +313,8 @@ export function SQLTabs({ tabs, activeTabId, setActiveTabId, addTab, closeTab, c
 
                     <ScrollBar orientation="horizontal" className="h-2" />
                 </ScrollArea>
+
+                {headerAccessory ? <div className="flex h-9 flex-none items-center border-l border-border bg-card px-2">{headerAccessory}</div> : null}
 
                 <div className="flex-none w-10 h-9 self-start grid place-items-center border-l border-border bg-card px-1">
                     <TooltipProvider delayDuration={250}>

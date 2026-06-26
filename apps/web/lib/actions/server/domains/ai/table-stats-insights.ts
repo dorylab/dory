@@ -68,6 +68,11 @@ export const aiTableStatsInsightsAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['analysis:run'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_analyze_table_stats',
+        title: 'Analyze table stats',
+        description: 'Generate Dory AI insights from table statistics and table context.',
+    },
     handler: (ctx, input) => runTableStatsInsightsAction(ctx, input as any),
 });

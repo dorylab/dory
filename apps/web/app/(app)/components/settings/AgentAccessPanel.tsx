@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4
 import { authFetch } from '@/lib/client/auth-fetch';
 import { authClient } from '@/lib/auth-client';
 import { useDelayedLoading } from '@/hooks/useDelayedLoading';
-import { isDesktopRuntime } from '@dory/shared/runtime';
+import { hasDesktopBrowserBridge, runtime as doryRuntime } from '@dory/shared/runtime';
 import { SettingsRow } from './SettingsRow';
 
 type McpSettingsPayload = {
@@ -106,7 +106,10 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
     const params = useParams<{ organization?: string }>();
     const userId = session?.user?.id ?? initialUserId;
     const organizationSlugOrId = currentOrganizationId ?? params.organization;
-    const isDesktop = isDesktopRuntime();
+    const runtimeIsDesktop = doryRuntime === 'desktop';
+    const [desktopBridgeAvailable, setDesktopBridgeAvailable] = useState(runtimeIsDesktop);
+    const [desktopBridgeChecked, setDesktopBridgeChecked] = useState(runtimeIsDesktop);
+    const isDesktop = desktopBridgeAvailable;
     const effectiveEndpoint = isDesktop ? (mcpProxy?.endpoint ?? settings?.endpoint) : settings?.endpoint;
     const [deletingTokenId, setDeletingTokenId] = useState<string | null>(null);
 
@@ -203,6 +206,8 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
     }, [isDesktop, userId]);
 
     const loadSettings = useCallback(async () => {
+        if (!desktopBridgeChecked) return;
+
         setLoading(!isDesktop);
         setMessage(null);
         try {
@@ -232,7 +237,14 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
         } finally {
             setLoading(false);
         }
-    }, [isDesktop, loadMcpProxyState, t]);
+    }, [desktopBridgeChecked, isDesktop, loadMcpProxyState, t]);
+
+    useEffect(() => {
+        if (runtimeIsDesktop) return;
+
+        setDesktopBridgeAvailable(hasDesktopBrowserBridge());
+        setDesktopBridgeChecked(true);
+    }, [runtimeIsDesktop]);
 
     useEffect(() => {
         void loadSettings();

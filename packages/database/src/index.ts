@@ -14,6 +14,7 @@ import { PostgresMcpRepository } from './postgres/impl/mcp';
 import { PostgresLocalFilesRepository } from './postgres/impl/local-files';
 import { PostgresOrganizationAiProvidersRepository } from './postgres/impl/organization-ai-providers';
 import { PostgresActionAuditRepository } from './postgres/impl/action-audit';
+import { PostgresWorksRepository } from './postgres/impl/works';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -37,6 +38,7 @@ export type PostgresDBService = {
     mcp: PostgresMcpRepository;
     localFiles: PostgresLocalFilesRepository;
     organizationAiProviders: PostgresOrganizationAiProvidersRepository;
+    works: PostgresWorksRepository;
 };
 
 /**
@@ -100,6 +102,9 @@ export async function getDBService(): Promise<DBService> {
             const actionAuditRepo = new PostgresActionAuditRepository();
             await actionAuditRepo.init();
 
+            const worksRepo = new PostgresWorksRepository();
+            await worksRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
@@ -116,6 +121,7 @@ export async function getDBService(): Promise<DBService> {
                 mcp: mcpRepo,
                 localFiles: localFilesRepo,
                 organizationAiProviders: organizationAiProvidersRepo,
+                works: worksRepo,
             };
             break;
         }

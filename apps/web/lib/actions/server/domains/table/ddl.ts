@@ -14,7 +14,12 @@ export const tableGetDdlAction = defineWebAction<any, any>({
     outputSchema: unknownOutputSchema,
     permissions: readConnection,
     scopes: ['schema:read'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_get_table_ddl',
+        title: 'Get table DDL',
+        description: 'Get DDL for a table in a Dory connection.',
+    },
     handler: async (ctx, input) => {
         const profile = await getTableProfileOperation(actionOperationContext(ctx, actorAuditSource(ctx, 'dory_schema_metadata')), input);
         return { ddl: (profile as any).ddl ?? null };

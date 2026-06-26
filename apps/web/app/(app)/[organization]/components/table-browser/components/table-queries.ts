@@ -5,6 +5,7 @@ import { useLocale } from 'next-intl';
 import { useColumns } from '@/hooks/use-columns';
 import { executeActionClient } from '@/lib/actions/client';
 import { generateColumnInsights } from '@/lib/schema/column-insights';
+import type { TableColumn } from '@/app/(app)/[organization]/components/sql-console-sidebar/types';
 import type { ColumnInsights } from '@/lib/schema/column-insights';
 import type { TableStats, TablePropertiesRow } from '@dory/shared/types/table-info';
 import type { TableProperties } from './structure/properties-section';
@@ -25,8 +26,20 @@ export const tableQueryKeys = {
     aiStatsInsights: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-stats-insights', connectionId, databaseName, tableName] as const,
 };
 
-function normalizeColumns(raw: any[]): ColumnInfo[] {
-    const normalized = (raw ?? []).map((col: any) => ({
+type RawTableColumn = Partial<
+    TableColumn & {
+        name: string;
+        type: string;
+        isNullable: boolean;
+        nullable: boolean;
+        defaultValue: string | null;
+        default: string | null;
+        comment: string | null;
+    }
+>;
+
+function normalizeColumns(raw: RawTableColumn[]): ColumnInfo[] {
+    const normalized = (raw ?? []).map(col => ({
         name: col.columnName ?? col.name ?? '',
         type: col.columnType ?? col.type ?? '',
         nullable: col.isNullable ?? col.nullable ?? true,
@@ -43,7 +56,7 @@ async function fetchBaseColumns({
 }: {
     databaseName: string;
     tableName: string;
-    fetchColumns: (database: string, table: string) => Promise<any[] | undefined>;
+    fetchColumns: (database: string, table: string) => Promise<RawTableColumn[] | undefined>;
 }) {
     const raw = await fetchColumns(databaseName, tableName);
     return normalizeColumns(raw ?? []);
@@ -290,10 +303,7 @@ export function useTableStatsQuery({ databaseName, tableName, connectionId }: { 
                 },
             );
 
-            if (res.stats) {
-                return res.stats;
-            }
-            throw new Error('Failed to load table stats');
+            return res.stats ?? null;
         },
     });
 }

@@ -1,9 +1,20 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 import type { McpAccessTokenRecord, McpAuthorizationRequestRecord } from '@dory/database/postgres/impl/mcp';
 import { resolveMcpAuthorizationPollState } from '@dory/database/postgres/impl/mcp';
 import type { OrganizationAccess } from '../../lib/server/authz';
-import {
+
+const require = createRequire(import.meta.url);
+const serverOnlyPath = require.resolve('server-only');
+require.cache[serverOnlyPath] = {
+    id: serverOnlyPath,
+    filename: serverOnlyPath,
+    loaded: true,
+    exports: {},
+} as NodeJS.Module;
+
+const {
     authenticateMcpRequest,
     buildMcpAuthContextForDesktopGrant,
     buildMcpAuthContextForToken,
@@ -15,12 +26,12 @@ import {
     MCP_DEFAULT_SCOPES,
     MCP_TOKEN_PREFIX,
     verifyMcpDesktopGrant,
-} from '../../lib/server/mcp/auth';
-import { getReadonlyMcpStatements } from '../../lib/server/mcp/sql-safety';
-import { resolveMcpDesktopGrantOrganizationId } from '../../lib/server/mcp/desktop-grant';
-import { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } from '../../lib/server/mcp/tools';
-import { getMcpLinkExpiresAt, getMcpLinkScopes, hashMcpLinkVerifier, mcpLinkPollSchema, mcpLinkStartSchema, MCP_LINK_TTL_MS } from '../../lib/server/mcp/link';
-import { createExternalRequestUrl } from '../../lib/server/request-origin';
+} = await import('../../lib/server/mcp/auth');
+const { getReadonlyMcpStatements } = await import('../../lib/server/mcp/sql-safety');
+const { resolveMcpDesktopGrantOrganizationId } = await import('../../lib/server/mcp/desktop-grant');
+const { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } = await import('../../lib/server/mcp/tools');
+const { getMcpLinkExpiresAt, getMcpLinkScopes, hashMcpLinkVerifier, mcpLinkPollSchema, mcpLinkStartSchema, MCP_LINK_TTL_MS } = await import('../../lib/server/mcp/link');
+const { createExternalRequestUrl } = await import('../../lib/server/request-origin');
 
 function createAccess(overrides: Partial<OrganizationAccess> = {}): OrganizationAccess {
     return {
@@ -115,7 +126,17 @@ test('generateMcpToken returns one-time token metadata without storing the raw t
 test('default MCP scopes cover v1 read and analysis capabilities', () => {
     assert.deepEqual(
         [...MCP_DEFAULT_SCOPES],
-        ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'monitoring:read'],
+        [
+            'connections:read',
+            'query:read',
+            'analysis:run',
+            'schema:read',
+            'tabs:read',
+            'tabs:write',
+            'saved_queries:read',
+            'saved_queries:write',
+            'monitoring:read',
+        ],
     );
 });
 
@@ -511,5 +532,21 @@ test('matchSchemaSearch matches table and column metadata', () => {
             'invoice',
         ),
         false,
+    );
+
+    assert.equal(
+        matchSchemaSearch(
+            {
+                kind: 'column',
+                database: 'default',
+                table: 'hn_stories',
+                name: 'comment_count',
+                type: 'integer',
+                comment: 'number of comments',
+                isPrimaryKey: null,
+            },
+            'hacknews hacker news hn posts stories score comments',
+        ),
+        true,
     );
 });

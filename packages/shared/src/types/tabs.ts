@@ -1,6 +1,5 @@
 import { QueryResult, SessionStatus } from './sql-console';
 
-
 export type TabType = 'sql' | 'table';
 
 export interface BaseTabPayload {
@@ -9,6 +8,8 @@ export interface BaseTabPayload {
     userId: string;
 
     connectionId: string;
+
+    workId?: string | null;
 
     tabType: TabType;
 
@@ -48,11 +49,9 @@ export interface TableTabPayload extends BaseTabPayload {
     };
 }
 
-
 export type TabPayload = SqlTabPayload | TableTabPayload;
 
 export type TabStatePayload = TabPayload;
-
 
 export type TabResultMetaPayload = {
     rows?: number;

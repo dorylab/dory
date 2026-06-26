@@ -13,7 +13,12 @@ export const savedQueryDeleteAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['saved_queries:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_delete_saved_query',
+        title: 'Delete saved query',
+        description: 'Delete a saved SQL query in Dory for a connection.',
+    },
     handler: async (ctx, input) => {
         await ctx.services.db.savedQueries.delete({ organizationId: ctx.organizationId, userId: ctx.userId, id: input.id, connectionId: resolveConnectionId(ctx, input) });
         return { deleted: [input.id] };

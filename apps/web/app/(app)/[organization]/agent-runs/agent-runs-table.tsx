@@ -1,0 +1,240 @@
+'use client';
+
+import { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useMutation } from '@tanstack/react-query';
+import { Copy, Info, Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
+
+import { DataTablePagination } from '@/components/@dory/ui/data-table-pagination';
+import { AgentRunStatusBadge } from '@/components/agent-runs/agent-run-status-badge';
+import { DataSourceCell, type DataSourceCellInfo } from '@/components/data-source/data-source-cell';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
+import { Button } from '@/registry/new-york-v4/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
+
+export type AgentRunListItem = {
+    workId: string;
+    shortWorkId: string;
+    title: string;
+    outputLabel: string;
+    summaryPreview: string;
+    tabCount: number;
+    sqlExecutionCount: number;
+    hasWorkspace: boolean;
+    dataSource: DataSourceCellInfo;
+    status: string | null;
+    lastActiveLabel: string;
+    detailHref: string;
+    workspaceHref: string;
+};
+
+async function deleteAgentRun(workId: string) {
+    const response = await fetch(`/api/works/${encodeURIComponent(workId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || payload?.code !== 0) {
+        throw new Error(payload?.message || 'DELETE_AGENT_RUN_FAILED');
+    }
+}
+
+async function copyText(content: string) {
+    await navigator.clipboard.writeText(content);
+}
+
+export function AgentRunsTable({
+    runs,
+    total,
+    pageIndex,
+    pageSize,
+    pageSizeOptions,
+    baseHref,
+}: {
+    runs: AgentRunListItem[];
+    total: number;
+    pageIndex: number;
+    pageSize: number;
+    pageSizeOptions: number[];
+    baseHref: string;
+}) {
+    const t = useTranslations('AgentRuns');
+    const router = useRouter();
+    const [pendingDelete, setPendingDelete] = useState<AgentRunListItem | null>(null);
+    const deleteMutation = useMutation({
+        mutationFn: deleteAgentRun,
+        onSuccess: () => {
+            toast.success(t('Toasts.Deleted'));
+            setPendingDelete(null);
+            router.refresh();
+        },
+        onError: error => {
+            const message = error instanceof Error && error.message !== 'DELETE_AGENT_RUN_FAILED' ? error.message : t('Toasts.DeleteFailed');
+            toast.error(message);
+        },
+    });
+
+    const pushPage = (nextPageIndex: number, nextPageSize = pageSize) => {
+        const query = new URLSearchParams();
+        query.set('page', String(nextPageIndex + 1));
+        query.set('pageSize', String(nextPageSize));
+        router.push(`${baseHref}?${query.toString()}`, { scroll: false });
+    };
+
+    return (
+        <>
+            <Table className="[&_td]:px-4 [&_th]:px-4 [&_td:first-child]:pl-6 [&_th:first-child]:pl-6 [&_td:last-child]:pr-6 [&_th:last-child]:pr-6">
+                <TableHeader>
+                    <TableRow>
+                        <TableHead>{t('Table.Run')}</TableHead>
+                        <TableHead>{t('Table.DataSource')}</TableHead>
+                        <TableHead>{t('Table.Status')}</TableHead>
+                        <TableHead>{t('Table.LastActive')}</TableHead>
+                        <TableHead className="text-right">{t('Table.Actions')}</TableHead>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {runs.length ? (
+                        runs.map(run => (
+                            <TableRow
+                                key={run.workId}
+                                role="link"
+                                tabIndex={0}
+                                className="group cursor-pointer"
+                                onClick={() => router.push(run.detailHref)}
+                                onKeyDown={event => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        router.push(run.detailHref);
+                                    }
+                                }}
+                                aria-label={t('Accessibility.OpenRun', { title: run.title })}
+                            >
+                                <TableCell className="min-w-[320px] max-w-[520px]">
+                                    <div className="line-clamp-2 font-medium group-hover:underline" title={run.title}>
+                                        {run.title}
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                                        <span className="font-mono">{run.shortWorkId}</span>
+                                        <span>{run.outputLabel}</span>
+                                    </div>
+                                    <div className="mt-1 line-clamp-1 max-w-[480px] text-sm text-muted-foreground">{run.summaryPreview}</div>
+                                </TableCell>
+                                <TableCell>
+                                    <DataSourceCell dataSource={run.dataSource} emptyLabel={t('Common.None')} />
+                                </TableCell>
+                                <TableCell>
+                                    <AgentRunStatusBadge status={run.status} />
+                                </TableCell>
+                                <TableCell>{run.lastActiveLabel}</TableCell>
+                                <TableCell className="text-right" onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+                                    <div className="flex items-center justify-end gap-2">
+                                        {run.hasWorkspace ? (
+                                            <Button asChild size="sm" variant="outline">
+                                                <Link href={run.workspaceHref}>{t('Actions.OpenWorkspace')}</Link>
+                                            </Button>
+                                        ) : (
+                                            <Button size="sm" variant="outline" disabled>
+                                                {t('Actions.OpenWorkspace')}
+                                            </Button>
+                                        )}
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" aria-label={t('Accessibility.ActionsForRun', { title: run.title })}>
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-44">
+                                                <DropdownMenuItem asChild>
+                                                    <Link href={run.detailHref}>
+                                                        <Info className="h-4 w-4" />
+                                                        {t('Actions.ViewDetails')}
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onSelect={() => {
+                                                        void copyText(run.workId).then(() => toast.success(t('Toasts.RunIdCopied')));
+                                                    }}
+                                                >
+                                                    <Copy className="h-4 w-4" />
+                                                    {t('Actions.CopyRunId')}
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem
+                                                    variant="destructive"
+                                                    onSelect={event => {
+                                                        event.preventDefault();
+                                                        setPendingDelete(run);
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    {t('Actions.Delete')}
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </div>
+                                </TableCell>
+                            </TableRow>
+                        ))
+                    ) : (
+                        <TableRow>
+                            <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                                {t('Table.Empty')}
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+            <DataTablePagination
+                total={total}
+                pageIndex={pageIndex}
+                pageSize={pageSize}
+                pageSizeOptions={pageSizeOptions}
+                onPageChange={nextPageIndex => pushPage(nextPageIndex)}
+                onPageSizeChange={nextPageSize => pushPage(0, nextPageSize)}
+                className="border-t px-6"
+            />
+            <AlertDialog open={Boolean(pendingDelete)} onOpenChange={open => !open && !deleteMutation.isPending && setPendingDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('DeleteDialog.Title')}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {t.rich('DeleteDialog.Description', {
+                                title: pendingDelete?.title ?? t('DeleteDialog.DefaultRunTitle'),
+                                strong: chunks => <span className="font-medium text-foreground">{chunks}</span>,
+                            })}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>{t('Actions.Cancel')}</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={!pendingDelete || deleteMutation.isPending}
+                            onClick={event => {
+                                event.preventDefault();
+                                if (!pendingDelete) return;
+                                deleteMutation.mutate(pendingDelete.workId);
+                            }}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            {t('Actions.Delete')}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
+    );
+}

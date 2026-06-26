@@ -1,0 +1,34 @@
+{
+    "compilerOptions": {
+        "target": "ES2022",
+        "lib": ["ES2022", "DOM"],
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "isolatedModules": true,
+        "types": ["node"],
+        "paths": {
+            "@/*": ["../../apps/web/*"],
+            "@/www/*": ["../../apps/www/*"],
+            "@dory/actions": ["../actions/src/index.ts"],
+            "@dory/actions/*": ["../actions/src/*"],
+            "@dory/analysis": ["../analysis/src/index.ts"],
+            "@dory/analysis/*": ["../analysis/src/*"],
+            "@dory/database": ["../database/src/index.ts"],
+            "@dory/database/*": ["../database/src/*"],
+            "@dory/drivers": ["../drivers/src/index.ts"],
+            "@dory/drivers/*": ["../drivers/src/*"],
+            "@dory/i18n": ["../i18n/src/index.ts"],
+            "@dory/i18n/*": ["../i18n/src/*"],
+            "@dory/server-core": ["../server-core/src/index.ts"],
+            "@dory/server-core/*": ["../server-core/src/*"],
+            "@dory/shared": ["../shared/src/index.ts"],
+            "@dory/shared/*": ["../shared/src/*"]
+        }
+    },
+    "include": ["src/**/*.ts", "../server-core/src/**/*.d.ts", "../drivers/src/**/*.d.ts"],
+    "exclude": ["node_modules", "dist"]
+}

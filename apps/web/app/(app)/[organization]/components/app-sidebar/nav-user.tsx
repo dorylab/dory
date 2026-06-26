@@ -135,7 +135,7 @@ export function NavUser({ user, organizationId, enterpriseLicense }: { user: Use
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleOpenQueryAudit}>
                         <ClipboardList />
-                        Query Audit
+                        {t('QueryAudit')}
                     </DropdownMenuItem>
                 </>
             ) : null}

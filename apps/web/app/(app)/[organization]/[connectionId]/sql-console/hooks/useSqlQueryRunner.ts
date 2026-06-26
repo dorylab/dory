@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
-import { useAtom, useAtomValue } from 'jotai';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useDB } from '@/lib/client/use-pglite';
 import { useQuery } from '@/hooks/use-query';
 import { executeActionClient } from '@/lib/actions/client';
@@ -10,11 +10,16 @@ import { SQLTab } from '@dory/shared/types/tabs';
 import { runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
 import { SQLEditorHandle } from '../components/sql-editor';
 import { useTranslations } from 'next-intl';
-import { currentConnectionAtom } from '@/shared/stores/app.store';
+import { columnsCacheAtom, currentConnectionAtom, schemaMetadataRefreshAtom } from '@/shared/stores/app.store';
 import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
 import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
+import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 
 type RequestAITabTitle = (tab: SQLTab, options?: { force?: boolean; sqlTextOverride?: string }) => Promise<void> | void;
+type QueryResultSetSummary = {
+    sqlOp?: unknown;
+    status?: unknown;
+};
 
 function genSessionId() {
     // @ts-ignore
@@ -43,25 +48,37 @@ function applyLimitToSql(sqlText: string, limit: number | undefined, dialect: Se
     return statements.map(statement => applyLimitToStatement(statement, limit, dialect)).join(';\n');
 }
 
+function hasSuccessfulSchemaChange(payload: unknown) {
+    const queryResultSets = payload && typeof payload === 'object' && 'queryResultSets' in payload ? (payload as { queryResultSets?: unknown }).queryResultSets : null;
+    const resultSets = Array.isArray(queryResultSets) ? (queryResultSets as QueryResultSetSummary[]) : [];
+    return resultSets.some(resultSet => resultSet?.status === 'success' && resultSet?.sqlOp === 'DDL');
+}
+
 export function useSqlQueryRunner({
     activeDatabase,
     activeTab,
     tabs,
     userId,
     requestAITabTitle,
+    workspaceScope,
 }: {
     activeDatabase: string | null | undefined;
     activeTab: SQLTab | undefined;
     tabs: SQLTab[];
     userId: string | undefined;
     requestAITabTitle: RequestAITabTitle;
+    workspaceScope?: SqlWorkspaceScope;
 }) {
     const { run: query } = useQuery();
     const { dbReady, setUserId, createQuerySession, finishQuerySession, applyServerResult } = useDB();
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const limitDialect: SelectLimitDialect = currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
+    const setSchemaMetadataRefresh = useSetAtom(schemaMetadataRefreshAtom);
+    const setColumnsCache = useSetAtom(columnsCacheAtom);
+    const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
+    const limitDialect: SelectLimitDialect =
+        currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
 
     const editorRef = useRef<SQLEditorHandle | null>(null);
     const abortControllersRef = useRef<Record<string, AbortController | undefined>>({});
@@ -106,7 +123,10 @@ export function useSqlQueryRunner({
             const sessionId = genSessionId();
             setSessionIdMap(p => ({ ...p, [tabId]: sessionId }));
             try {
-                localStorage.setItem(`sqlconsole:sessionId:${tabId}`, sessionId);
+                localStorage.setItem(
+                    getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null }),
+                    sessionId,
+                );
             } catch {
                 // ignore
             }
@@ -153,6 +173,15 @@ export function useSqlQueryRunner({
                     throw new Error(t('Errors.InvalidSessionData'));
                 }
                 await applyServerResult(payload);
+
+                if (tab.tabType === 'sql' && hasSuccessfulSchemaChange(payload)) {
+                    setSchemaMetadataRefresh(prev => ({
+                        connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null,
+                        database,
+                        version: prev.version + 1,
+                    }));
+                    setColumnsCache({});
+                }
 
                 const totalMs = Math.round(performance.now() - t0);
                 await finishQuerySession(sessionId, {
@@ -214,10 +243,13 @@ export function useSqlQueryRunner({
             finishQuerySession,
             setRunningTabs,
             setSessionIdMap,
+            setSchemaMetadataRefresh,
+            setColumnsCache,
             userId,
             tabs,
             requestAITabTitle,
             t,
+            currentConnection?.connection?.id,
         ],
     );
 
@@ -234,7 +266,10 @@ export function useSqlQueryRunner({
             let sessionId = sessionIdMap[tabId];
             if (!sessionId) {
                 try {
-                    sessionId = (localStorage.getItem(`sqlconsole:sessionId:${tabId}`) as string) ?? undefined;
+                    sessionId =
+                        (localStorage.getItem(
+                            getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null }),
+                        ) as string) ?? undefined;
                 } catch {
                     // ignore
                 }
@@ -248,7 +283,7 @@ export function useSqlQueryRunner({
                 console.error('[SQLConsoleClient.cancelQuery] cancel API failed', error);
             });
         },
-        [sessionIdMap],
+        [currentConnection?.connection?.id, normalizedWorkspaceScope, sessionIdMap],
     );
 
     return {

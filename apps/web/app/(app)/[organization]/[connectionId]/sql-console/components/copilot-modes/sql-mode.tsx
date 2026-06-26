@@ -18,7 +18,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/registry/new-york-v4/ui/dropdown-menu';
-import { DEFAULT_INLINE_SQL_ASK_STATE, editorSelectionByTabAtom, inlineSqlAskByTabAtom } from '../../sql-console.store';
+import { DEFAULT_INLINE_SQL_ASK_STATE, editorSelectionByTabAtom, inlineSqlAskByTabAtom, sqlEditorResultLayoutByScopeAtom } from '../../sql-console.store';
 
 import { ResultTable } from '../result-table/result-table';
 import SQLEditor from '../sql-editor';
@@ -58,6 +58,37 @@ const buildInlineAskSqlComment = (prompt: string) => {
     const commentText = prompt.replace(/\s+/g, ' ').replace(/--/g, '-').trim();
     return commentText ? `-- ${commentText}` : '';
 };
+
+const DEFAULT_EDITOR_RESULT_LAYOUT = [45, 55] as const;
+const LEGACY_DEFAULT_EDITOR_RESULT_LAYOUT = [25, 75] as const;
+const MIN_EDITOR_PANEL_SIZE = 15;
+const MIN_RESULT_PANEL_SIZE = 20;
+
+function normalizeEditorResultLayout(layout: readonly number[] | undefined): [number, number] {
+    if (!Array.isArray(layout) || layout.length < 2) return [...DEFAULT_EDITOR_RESULT_LAYOUT];
+
+    const editor = Number(layout[0]);
+    const result = Number(layout[1]);
+    const total = editor + result;
+    if (!Number.isFinite(editor) || !Number.isFinite(result) || total <= 0) {
+        return [...DEFAULT_EDITOR_RESULT_LAYOUT];
+    }
+
+    const normalizedEditor = (editor / total) * 100;
+    if (Math.abs(normalizedEditor - LEGACY_DEFAULT_EDITOR_RESULT_LAYOUT[0]) < 0.5) {
+        return [...DEFAULT_EDITOR_RESULT_LAYOUT];
+    }
+
+    const clampedEditor = Math.max(MIN_EDITOR_PANEL_SIZE, Math.min(100 - MIN_RESULT_PANEL_SIZE, normalizedEditor));
+    return [clampedEditor, 100 - clampedEditor];
+}
+
+function buildEditorResultLayoutScopeKey(params: { tabId?: string | null; connectionId?: string | null; workId?: string | null }) {
+    if (params.workId && params.tabId) return `work:${params.workId}:tab:${params.tabId}`;
+    if (params.tabId) return `tab:${params.tabId}`;
+    if (params.connectionId) return `connection:${params.connectionId}`;
+    return 'global';
+}
 
 const normalizeTableMetaName = (table: any) => {
     return String(table?.value ?? table?.label ?? table?.name ?? table?.tableName ?? table?.table ?? '').trim();
@@ -129,6 +160,7 @@ export function SqlMode({
     chatWidth,
     setChatWidth,
     onCloseChatbot,
+    reserveRightRail = true,
 }: SqlModeProps) {
     const t = useTranslations('SqlConsole');
     const pathname = usePathname();
@@ -139,6 +171,7 @@ export function SqlMode({
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const activeSchema = useAtomValue(activeSchemaAtom);
     const [editorSettings, setEditorSettings] = useAtom(sqlEditorSettingsAtom);
+    const [editorResultLayouts, setEditorResultLayouts] = useAtom(sqlEditorResultLayoutByScopeAtom);
     const [inlineAskByTab, setInlineAskByTab] = useAtom(inlineSqlAskByTabAtom);
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [authSheetOpen, setAuthSheetOpen] = useState(false);
@@ -155,6 +188,32 @@ export function SqlMode({
     const currentRouteConnection = currentConnection?.connection?.id === connectionId ? currentConnection.connection : null;
     const limitDialect: SelectLimitDialect = currentRouteConnection?.type === 'sqlserver' ? 'sqlserver' : currentRouteConnection?.type === 'oracle' ? 'oracle' : 'default';
     const generateSqlFromPrompt = useSqlInlineAskAI();
+    const editorResultLayoutScopeKey = useMemo(
+        () =>
+            buildEditorResultLayoutScopeKey({
+                tabId: activeTab?.tabType === 'sql' ? activeTab.tabId : activeTabId,
+                connectionId,
+                workId: activeTab?.workId ?? null,
+            }),
+        [activeTab, activeTabId, connectionId],
+    );
+    const editorResultLayout = useMemo(() => normalizeEditorResultLayout(editorResultLayouts[editorResultLayoutScopeKey]), [editorResultLayoutScopeKey, editorResultLayouts]);
+    const handleEditorResultLayoutChange = useCallback(
+        (layout: Layout) => {
+            const next = normalizeEditorResultLayout([layout['editor-panel'], layout['result-panel']]);
+            setEditorResultLayouts(prev => {
+                const current = prev[editorResultLayoutScopeKey];
+                if (current && Math.abs(current[0] - next[0]) < 0.1 && Math.abs(current[1] - next[1]) < 0.1) {
+                    return prev;
+                }
+                return {
+                    ...prev,
+                    [editorResultLayoutScopeKey]: next,
+                };
+            });
+        },
+        [editorResultLayoutScopeKey, setEditorResultLayouts],
+    );
     const handleRunQuery = () => {
         if (!activeTab || isRunning) return;
         const options = limitDialect === 'sqlserver' || limitDialect === 'oracle' || !hasSqlLimit ? { limit: queryLimit } : undefined;
@@ -370,7 +429,7 @@ export function SqlMode({
     ]);
 
     return (
-        <div className="flex flex-1 flex-col min-h-0 mr-10">
+        <div className={['flex flex-1 flex-col min-h-0', reserveRightRail ? 'mr-10' : ''].join(' ')}>
             <Group
                 key={showChatbot ? 'sql-with-copilot' : 'sql-without-copilot'}
                 orientation="horizontal"
@@ -458,8 +517,8 @@ export function SqlMode({
                             )}
                         </div>
 
-                        <Group orientation="vertical" className="h-full min-h-0">
-                            <Panel id="editor-panel" defaultSize="25%" minSize="15%" className="min-h-0">
+                        <Group key={editorResultLayoutScopeKey} orientation="vertical" className="h-full min-h-0" onLayoutChange={handleEditorResultLayoutChange}>
+                            <Panel id="editor-panel" defaultSize={`${editorResultLayout[0]}%`} minSize={`${MIN_EDITOR_PANEL_SIZE}%`} className="min-h-0">
                                 <div className="flex flex-col h-full border-b min-h-0">
                                     <SQLEditor
                                         ref={editorRef}
@@ -486,7 +545,7 @@ export function SqlMode({
 
                             <Separator className="h-1.5 bg-border transition-colors" />
 
-                            <Panel id="result-panel" minSize="25%" className="min-h-0">
+                            <Panel id="result-panel" defaultSize={`${editorResultLayout[1]}%`} minSize={`${MIN_RESULT_PANEL_SIZE}%`} className="min-h-0">
                                 <div className="flex h-full flex-col min-h-0">
                                     <ResultTable />
                                 </div>

@@ -1,4 +1,4 @@
-export type DoryRuntime = 'desktop' | 'web' | 'docker';
+export type DoryRuntime = 'desktop' | 'web' | 'docker' | 'headless';
 export type DoryLicense = 'oss' | 'enterprise';
 
 export function normalizeRuntime(value: string | null | undefined): DoryRuntime | null {
@@ -6,6 +6,7 @@ export function normalizeRuntime(value: string | null | undefined): DoryRuntime 
     if (!runtime) return null;
     if (runtime === 'desktop') return 'desktop';
     if (runtime === 'docker') return 'docker';
+    if (runtime === 'headless') return 'headless';
     if (runtime === 'web') return 'web';
     return null;
 }
@@ -19,6 +20,31 @@ function readRawRuntime(): string {
 }
 
 export const runtime: DoryRuntime = normalizeRuntime(readRawRuntime()) ?? 'web';
+
+type BrowserBridgeRuntimeGlobal = typeof globalThis & {
+    window?: {
+        authBridge?: unknown;
+        localeBridge?: unknown;
+        themeBridge?: unknown;
+        updateBridge?: unknown;
+        mcpBridge?: unknown;
+        electron?: unknown;
+    };
+};
+
+export function hasDesktopBrowserBridge(): boolean {
+    const maybeWindow = (globalThis as BrowserBridgeRuntimeGlobal).window;
+    if (!maybeWindow) return false;
+
+    return Boolean(
+        maybeWindow.authBridge ||
+            maybeWindow.localeBridge ||
+            maybeWindow.themeBridge ||
+            maybeWindow.updateBridge ||
+            maybeWindow.mcpBridge ||
+            maybeWindow.electron,
+    );
+}
 
 export function normalizeLicense(value: string | null | undefined): DoryLicense | null {
     const license = value?.trim().toLowerCase();

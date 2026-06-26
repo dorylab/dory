@@ -10,13 +10,17 @@ import { useSqlLayout } from './useSqlLayout';
 import { useSqlAiTabTitle } from './useSqlAiTabTitle';
 import { useSqlQueryRunner } from './useSqlQueryRunner';
 import { useSqlChatHandoff } from './useSqlChatHandoff';
+import { useWorkHydration } from './useWorkHydration';
+import { normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 
-export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
+export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspaceScope?: SqlWorkspaceScope) {
     const { normalizedLayout, onLayout } = useSqlLayout(defaultLayout);
+    const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const { data: session } = authClient.useSession();
     const userId = session?.user?.id;
 
-    const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs } = useSQLTabs();
+    const { tabs, activeTabId, setActiveTabId, isLoading, updateTab, addTab, addTableTab, closeTab, closeOtherTabs, reorderTabs, saveWorkspaceNow } =
+        useSQLTabs(normalizedWorkspaceScope);
     const activeTab = useMemo(() => tabs.find(t => t.tabId === activeTabId), [tabs, activeTabId]);
     const [activeDatabase, setActiveDatabase] = useAtom(activeDatabaseAtom);
 
@@ -36,6 +40,7 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
         tabs,
         userId,
         requestAITabTitle,
+        workspaceScope: normalizedWorkspaceScope,
     });
 
     const { handleOpenTableTab, handleCloseTab, handleCloseOthers } = useDataPreviewManager({
@@ -56,6 +61,13 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
         setActiveTabId,
         setActiveDatabase,
         isLoading,
+    });
+
+    useWorkHydration({
+        tabs,
+        isLoading,
+        setActiveTabId,
+        workspaceScope: normalizedWorkspaceScope,
     });
 
     return {
@@ -79,5 +91,6 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined) {
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
+        saveWorkspaceNow,
     };
 }

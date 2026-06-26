@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -6,13 +7,25 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ActionActorType, ActionContext } from '@dory/actions';
 import { z } from 'zod';
-import { actionToAgentTool } from '@/lib/actions/server/adapters/agent';
-import { actionToMcpTool, structuredMcpActionResult } from '@/lib/actions/server/adapters/mcp';
-import { executeUiAction } from '@/lib/actions/server/adapters/ui';
-import { defineWebAction } from '@/lib/actions/server/define-web-action';
 import type { WebActionServices } from '@/lib/actions/server/types';
-import { webActionRegistry } from '@/lib/actions/server/registry';
 import { getOrganizationPermissionMap } from '@/lib/auth/organization-ac';
+
+const require = createRequire(import.meta.url);
+const serverOnlyPath = require.resolve('server-only');
+require.cache[serverOnlyPath] = {
+    id: serverOnlyPath,
+    filename: serverOnlyPath,
+    loaded: true,
+    exports: {},
+} as NodeJS.Module;
+
+const [{ actionToAgentTool }, { actionToMcpTool, structuredMcpActionResult }, { executeUiAction }, { defineWebAction }, { webActionRegistry }] = await Promise.all([
+    import('@/lib/actions/server/adapters/agent'),
+    import('@/lib/actions/server/adapters/mcp'),
+    import('@/lib/actions/server/adapters/ui'),
+    import('@/lib/actions/server/define-web-action'),
+    import('@/lib/actions/server/registry'),
+]);
 
 const tabCreateAction = webActionRegistry.get('tab.create');
 assert.ok(tabCreateAction, 'Expected tab.create to be registered.');
@@ -42,15 +55,21 @@ function createServices() {
     return { services, savedTabs };
 }
 
-function createContext(actorType: ActionActorType, scopes: string[], services: WebActionServices, auditEvents: unknown[] = []): ActionContext<WebActionServices> {
+function createContext(
+    actorType: ActionActorType,
+    scopes: string[],
+    services: WebActionServices,
+    auditEvents: unknown[] = [],
+    role: 'viewer' | 'member' | 'admin' | 'owner' = 'member',
+): ActionContext<WebActionServices> {
     return {
         organizationId: 'org-1',
         userId: 'user-1',
         currentConnectionId: 'conn-1',
         access: {
             isMember: true,
-            role: 'member',
-            permissions: getOrganizationPermissionMap('member'),
+            role,
+            permissions: getOrganizationPermissionMap(role),
         },
         actor: {
             type: actorType,
@@ -130,7 +149,70 @@ test('tab.create uses the same tabs:write gate through UI, Agent, and MCP adapte
 
     const mcp = createServices();
     const mcpTool = actionToMcpTool(tabCreateAction, () => createContext('mcp', [], mcp.services));
-    await assert.rejects(() => mcpTool.execute(tabCreateInput), /Missing action scope "tabs:write"/);
+    const mcpOutput = await mcpTool.execute(tabCreateInput);
+    assert.equal(mcpOutput.isError, true);
+    assert.equal((mcpOutput.structuredContent as any).ok, false);
+    assert.equal((mcpOutput.structuredContent as any).error.code, 'ACTION_SCOPE_MISSING');
+});
+
+test('tab list/save/delete actions forward workspace scope to the tab repository', async () => {
+    const calls: Array<{ method: string; args: any[]; payload?: any }> = [];
+    const services = {
+        db: {
+            tabState: {
+                loadAllTab: async (...args: any[]) => {
+                    calls.push({ method: 'loadAllTab', args });
+                    return [];
+                },
+                saveTabState: async (payload: any) => {
+                    calls.push({ method: 'saveTabState', args: [], payload });
+                },
+                updateTabName: async (payload: any) => {
+                    calls.push({ method: 'updateTabName', args: [], payload });
+                },
+                deleteTabState: async (...args: any[]) => {
+                    calls.push({ method: 'deleteTabState', args });
+                },
+            },
+        },
+    } as unknown as WebActionServices;
+
+    await executeUiAction(createContext('user', ['tabs:read'], services), 'tab.list', { connectionId: 'conn-1' });
+    await executeUiAction(createContext('user', ['tabs:read'], services), 'tab.list', { connectionId: 'conn-1', workId: 'work-1' });
+    await executeUiAction(createContext('user', ['tabs:write'], services), 'tab.save', {
+        connectionId: 'conn-1',
+        workId: 'work-1',
+        tabId: 'tab-1',
+        state: {
+            tabType: 'sql',
+            tabName: 'Scoped',
+            content: 'select 1',
+            orderIndex: 0,
+        },
+    });
+    await executeUiAction(createContext('user', ['tabs:write'], services), 'tab.delete', { connectionId: 'conn-1', workId: 'work-1', tabId: 'tab-1' });
+
+    assert.deepEqual(calls[0], { method: 'loadAllTab', args: ['user-1', 'conn-1', null] });
+    assert.deepEqual(calls[1], { method: 'loadAllTab', args: ['user-1', 'conn-1', 'work-1'] });
+    assert.equal(calls[2]?.method, 'saveTabState');
+    assert.equal(calls[2]?.payload.workId, 'work-1');
+    assert.equal(calls[3]?.method, 'updateTabName');
+    assert.equal(calls[3]?.payload.workId, 'work-1');
+    assert.deepEqual(calls[4], { method: 'deleteTabState', args: ['tab-1', 'user-1', 'conn-1', 'work-1'] });
+});
+
+test('MCP adapter returns structured tool errors for invalid input and permission denials', async () => {
+    const invalid = createServices();
+    const invalidTool = actionToMcpTool(tabCreateAction, () => createContext('mcp', ['tabs:write'], invalid.services));
+    const invalidOutput = await invalidTool.execute({ tabType: 'not-a-tab' });
+    assert.equal(invalidOutput.isError, true);
+    assert.equal((invalidOutput.structuredContent as any).error.code, 'ACTION_INPUT_INVALID');
+
+    const denied = createServices();
+    const deniedTool = actionToMcpTool(tabCreateAction, () => createContext('mcp', ['tabs:write'], denied.services, [], 'viewer'));
+    const deniedOutput = await deniedTool.execute(tabCreateInput);
+    assert.equal(deniedOutput.isError, true);
+    assert.equal((deniedOutput.structuredContent as any).error.code, 'ACTION_FORBIDDEN');
 });
 
 test('MCP adapter omits non-object output schemas so SDK output validation does not crash', async () => {
@@ -166,6 +248,7 @@ test('MCP adapter omits non-object output schemas so SDK output validation does 
             description: mcpTool.description,
             inputSchema: mcpTool.inputSchema as any,
             outputSchema: mcpTool.outputSchema as any,
+            annotations: mcpTool.annotations,
         },
         async () => structuredMcpActionResult({ ok: true }),
     );

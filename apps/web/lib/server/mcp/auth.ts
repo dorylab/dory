@@ -4,10 +4,21 @@ import { hasActionScope } from '@dory/actions';
 import type { OrganizationAccess } from '@/lib/server/authz';
 import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 import { isDesktopRuntime } from '@dory/shared/runtime';
+import { getExternalRequestOrigin } from '@/lib/server/request-origin';
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 export const MCP_DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
-export const MCP_DEFAULT_SCOPES = ['connections:read', 'query:read', 'analysis:run', 'schema:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'monitoring:read'] as const;
+export const MCP_DEFAULT_SCOPES = [
+    'connections:read',
+    'query:read',
+    'analysis:run',
+    'schema:read',
+    'tabs:read',
+    'tabs:write',
+    'saved_queries:read',
+    'saved_queries:write',
+    'monitoring:read',
+] as const;
 
 const MCP_DESKTOP_GRANT_TYPE = 'dory_mcp_desktop_grant';
 const MCP_DESKTOP_GRANT_TTL_MS = 12 * 60 * 60 * 1000;
@@ -18,6 +29,7 @@ export type McpAuthContext = {
     userId: string;
     scopes: string[];
     access: OrganizationAccess;
+    requestOrigin?: string | null;
 };
 
 export type McpAuthResult =
@@ -302,7 +314,11 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
     const token = extractBearerToken(req);
     if (!token || !token.startsWith(MCP_TOKEN_PREFIX)) {
         if (isDesktopRuntime()) {
-            return buildMcpAuthContextForDesktopGrant(req.headers.get(MCP_DESKTOP_GRANT_HEADER));
+            const result = await buildMcpAuthContextForDesktopGrant(req.headers.get(MCP_DESKTOP_GRANT_HEADER));
+            if (result.ok) {
+                result.context.requestOrigin = getExternalRequestOrigin(req);
+            }
+            return result;
         }
 
         return {
@@ -326,6 +342,8 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
     if (!context.ok) return context;
 
     await db.mcp.markTokenUsed(record.id);
+
+    context.context.requestOrigin = getExternalRequestOrigin(req);
 
     return context;
 }

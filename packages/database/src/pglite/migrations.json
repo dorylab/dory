@@ -260,5 +260,29 @@
     "bps": true,
     "folderMillis": 1780476000000,
     "hash": "1ffeaa419ab449b7ff9abc52f792beeb3c38a942ab8283862f87e2d2a85c6bb3"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"tabs\" ADD COLUMN IF NOT EXISTS \"work_id\" text;",
+      "\n\nCREATE TABLE \"works\" (\n    \"work_id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"token_id\" text,\n    \"connection_id\" text,\n    \"external_session_id\" text,\n    \"title\" text DEFAULT 'Agent Run' NOT NULL,\n    \"status\" text DEFAULT 'active' NOT NULL,\n    \"metadata\" jsonb,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"last_active_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"archived_at\" timestamp with time zone\n);",
+      "\n\nCREATE INDEX \"idx_works_org_user_active\" ON \"works\" USING btree (\"organization_id\",\"user_id\",\"last_active_at\");",
+      "\nCREATE INDEX \"idx_works_external_session\" ON \"works\" USING btree (\"organization_id\",\"user_id\",\"token_id\",\"connection_id\",\"external_session_id\");",
+      "\nCREATE INDEX \"idx_works_connection_active\" ON \"works\" USING btree (\"organization_id\",\"connection_id\",\"last_active_at\");",
+      "\n\nCREATE TABLE \"work_events\" (\n    \"event_id\" text PRIMARY KEY NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"token_id\" text,\n    \"connection_id\" text,\n    \"tool_name\" text NOT NULL,\n    \"action_id\" text,\n    \"status\" text NOT NULL,\n    \"input_summary\" jsonb,\n    \"output_summary\" jsonb,\n    \"error_code\" text,\n    \"error_message\" text,\n    \"duration_ms\" integer DEFAULT 0 NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);",
+      "\n\nCREATE INDEX \"idx_work_events_work_created\" ON \"work_events\" USING btree (\"work_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_work_events_org_created\" ON \"work_events\" USING btree (\"organization_id\",\"created_at\");",
+      "\n\nCREATE TABLE \"work_query_sessions\" (\n    \"work_id\" text NOT NULL,\n    \"session_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"tab_id\" text NOT NULL,\n    \"connection_id\" text,\n    \"database\" text,\n    \"sql_text\" text NOT NULL,\n    \"status\" text DEFAULT 'success' NOT NULL,\n    \"error_message\" text,\n    \"started_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"finished_at\" timestamp with time zone,\n    \"elapsed_ms\" integer,\n    \"result_set_count\" integer DEFAULT 0 NOT NULL,\n    \"stop_on_error\" boolean DEFAULT false NOT NULL,\n    \"source\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_work_query_sessions\" PRIMARY KEY(\"work_id\",\"session_id\")\n);",
+      "\n\nCREATE INDEX \"idx_work_query_sessions_work\" ON \"work_query_sessions\" USING btree (\"work_id\",\"started_at\");",
+      "\nCREATE INDEX \"idx_work_query_sessions_tab\" ON \"work_query_sessions\" USING btree (\"tab_id\");",
+      "\n\nCREATE TABLE \"work_query_result_sets\" (\n    \"work_id\" text NOT NULL,\n    \"session_id\" text NOT NULL,\n    \"set_index\" integer NOT NULL,\n    \"sql_text\" text NOT NULL,\n    \"sql_op\" text,\n    \"title\" text,\n    \"columns\" jsonb,\n    \"stats\" jsonb,\n    \"view_state\" jsonb,\n    \"ai_profile_version\" integer DEFAULT 1 NOT NULL,\n    \"row_count\" integer,\n    \"limited\" boolean DEFAULT false NOT NULL,\n    \"limit\" integer,\n    \"affected_rows\" integer,\n    \"status\" text DEFAULT 'success' NOT NULL,\n    \"error_message\" text,\n    \"error_code\" text,\n    \"error_sql_state\" text,\n    \"error_meta\" jsonb,\n    \"warnings\" jsonb,\n    \"started_at\" timestamp with time zone,\n    \"finished_at\" timestamp with time zone,\n    \"duration_ms\" integer,\n    CONSTRAINT \"pk_work_query_result_sets\" PRIMARY KEY(\"work_id\",\"session_id\",\"set_index\")\n);",
+      "\n\nCREATE INDEX \"idx_work_qrs_session\" ON \"work_query_result_sets\" USING btree (\"work_id\",\"session_id\",\"set_index\");",
+      "\n\nCREATE TABLE \"work_query_result_pages\" (\n    \"work_id\" text NOT NULL,\n    \"session_id\" text NOT NULL,\n    \"set_index\" integer NOT NULL,\n    \"page_no\" integer NOT NULL,\n    \"first_row_index\" integer NOT NULL,\n    \"row_count\" integer NOT NULL,\n    \"rows_data\" bytea NOT NULL,\n    \"is_gzip\" boolean DEFAULT false NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_work_query_result_pages\" PRIMARY KEY(\"work_id\",\"session_id\",\"set_index\",\"page_no\")\n);",
+      "\n\nCREATE INDEX \"idx_work_qrp_read\" ON \"work_query_result_pages\" USING btree (\"work_id\",\"session_id\",\"set_index\",\"page_no\");",
+      "\n\nCREATE TABLE \"work_chart_states\" (\n    \"work_id\" text NOT NULL,\n    \"session_id\" text NOT NULL,\n    \"set_index\" integer NOT NULL,\n    \"state_key\" text NOT NULL,\n    \"chart_state\" jsonb NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_work_chart_states\" PRIMARY KEY(\"work_id\",\"session_id\",\"set_index\",\"state_key\")\n);",
+      "\n\nCREATE INDEX \"idx_work_chart_states_work\" ON \"work_chart_states\" USING btree (\"work_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1781712000000,
+    "hash": "4340ca19e2f47eb697ec4a3958defed9a2ee62ed5931a20e554243561ea0f4aa"
   }
 ]

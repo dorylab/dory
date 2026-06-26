@@ -16,6 +16,7 @@ import type { AnalysisResultRef, AnalysisSession, AnalysisStep, AnalysisSuggesti
 import { analysisWorkspaceKeyFor, analysisWorkspaceStateAtom, copilotAnalysisRequestAtom, sessionIdByTabAtom, upsertAnalysisWorkspaceAtom } from '../../sql-console.store';
 import { currentSessionMetaAtom } from '../result-table/stores/result-table.atoms';
 import { makeActiveSetAtom, upsertActiveSetAtom } from '../result-table/stores/active-set.atoms';
+import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
 
 type AnalysisRow = Record<string, unknown>;
 
@@ -280,6 +281,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
     const activeSessionId = tabId ? sessionIdByTab[tabId] : undefined;
     const activeSet = useAtomValue(useMemo(() => makeActiveSetAtom(tabId, activeSessionId), [activeSessionId, tabId]));
     const setSessionIdByTab = useSetAtom(sessionIdByTabAtom);
+    const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
     const setExplicitActiveSet = useSetAtom(upsertActiveSetAtom);
     const analysisRequest = useAtomValue(copilotAnalysisRequestAtom);
     const setAnalysisRequest = useSetAtom(copilotAnalysisRequestAtom);
@@ -531,7 +533,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
                 [tabId]: selectedSourceResultRef.sessionId,
             }));
             try {
-                localStorage.setItem(`sqlconsole:sessionId:${tabId}`, selectedSourceResultRef.sessionId);
+                localStorage.setItem(getSessionStorageKey(tabId, workspaceScope), selectedSourceResultRef.sessionId);
             } catch {
                 // ignore local storage failures
             }
@@ -562,7 +564,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             [tabId]: ref.sessionId,
         }));
         try {
-            localStorage.setItem(`sqlconsole:sessionId:${tabId}`, ref.sessionId);
+            localStorage.setItem(getSessionStorageKey(tabId, workspaceScope), ref.sessionId);
         } catch {
             // ignore local storage failures
         }

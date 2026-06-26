@@ -13,7 +13,12 @@ export const savedQueryListFoldersAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['saved_queries:read'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_list_saved_query_folders',
+        title: 'List saved query folders',
+        description: 'List saved query folders for a Dory connection.',
+    },
     handler: (ctx, input) => ctx.services.db.savedQueryFolders.list({ organizationId: ctx.organizationId, userId: ctx.userId, connectionId: resolveConnectionId(ctx, input) }),
 });
 
@@ -26,7 +31,12 @@ export const savedQueryCreateFolderAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['saved_queries:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_create_saved_query_folder',
+        title: 'Create saved query folder',
+        description: 'Create a saved query folder for a Dory connection.',
+    },
     handler: (ctx, input) =>
         ctx.services.db.savedQueryFolders.create({
             organizationId: ctx.organizationId,
@@ -45,7 +55,12 @@ export const savedQueryUpdateFolderAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['saved_queries:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_update_saved_query_folder',
+        title: 'Update saved query folder',
+        description: 'Update a saved query folder for a Dory connection.',
+    },
     handler: (ctx, input) =>
         ctx.services.db.savedQueryFolders.update({
             id: input.id,
@@ -65,7 +80,12 @@ export const savedQueryDeleteFolderAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['saved_queries:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_delete_saved_query_folder',
+        title: 'Delete saved query folder',
+        description: 'Delete a saved query folder for a Dory connection.',
+    },
     handler: async (ctx, input) => {
         await ctx.services.db.savedQueryFolders.delete({ id: input.id, organizationId: ctx.organizationId, userId: ctx.userId, connectionId: resolveConnectionId(ctx, input) });
         return { deleted: [input.id] };

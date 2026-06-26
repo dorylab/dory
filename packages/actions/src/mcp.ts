@@ -1,6 +1,7 @@
-import type { ActionActorType, ActionDefinition } from './types';
+import type { ActionAccess, ActionActorType, ActionDefinition, ActionPermissionRequirement, ActionScope } from './types';
 import { DEFAULT_ACTION_PROJECTION_BY_ACTOR } from './types';
 import type { ActionRegistry } from './registry';
+import { hasActionScope } from './permissions';
 
 export type McpActionTool = {
     action: ActionDefinition<any, any, any>;
@@ -11,13 +12,45 @@ export type McpActionTool = {
     outputSchema: ActionDefinition<any, any, any>['outputSchema'];
 };
 
-export function listMcpActions(registry: ActionRegistry<any>, actorType: ActionActorType = 'mcp'): McpActionTool[] {
+export type ListMcpActionsOptions = {
+    scopes?: readonly ActionScope[] | null;
+    access?: ActionAccess | null;
+};
+
+function hasPermission(access: ActionAccess, requirement: ActionPermissionRequirement): boolean {
+    const resource = access.permissions[requirement.resource] as Record<string, boolean> | undefined;
+    return Boolean(access.isMember && resource?.[requirement.action]);
+}
+
+function isActionVisibleToActor(action: ActionDefinition<any, any, any>, actorType: ActionActorType, options: ListMcpActionsOptions) {
+    if (action.exposure.mcp?.exposed === false) return false;
+    if (!action.exposure.mcp) return false;
+    if (!action.exposure.actors.includes(actorType)) return false;
+    if (action.risk === 'destructive') return false;
+
+    if (options.scopes) {
+        for (const scope of action.permission.scopes ?? []) {
+            if (!hasActionScope(options.scopes, scope, action.permission.scopeAliases)) {
+                return false;
+            }
+        }
+    }
+
+    if (options.access) {
+        for (const requirement of action.permission.organization ?? []) {
+            if (!hasPermission(options.access, requirement)) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+export function listMcpActions(registry: ActionRegistry<any>, actorType: ActionActorType = 'mcp', options: ListMcpActionsOptions = {}): McpActionTool[] {
     return registry
         .list()
-        .filter(action => action.exposure.mcp?.exposed !== false)
-        .filter(action => Boolean(action.exposure.mcp))
-        .filter(action => action.exposure.actors.includes(actorType))
-        .filter(action => action.risk !== 'destructive')
+        .filter(action => isActionVisibleToActor(action, actorType, options))
         .map(action => ({
             action,
             name: action.exposure.mcp!.name,

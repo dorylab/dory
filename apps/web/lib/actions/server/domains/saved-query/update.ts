@@ -13,7 +13,12 @@ export const savedQueryUpdateAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: writeWorkspace,
     scopes: ['saved_queries:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_update_saved_query',
+        title: 'Update saved query',
+        description: 'Update a saved SQL query in Dory for a connection.',
+    },
     handler: (ctx, input) =>
         ctx.services.db.savedQueries.update({
             organizationId: ctx.organizationId,

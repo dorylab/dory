@@ -1,5 +1,5 @@
 import type { Locale } from '@dory/i18n/routing';
-import type { ActionContext } from '@dory/actions';
+import { listMcpActions, type ActionContext } from '@dory/actions';
 import { randomUUID } from 'node:crypto';
 import { webActionRegistry } from '@/lib/actions/server/registry';
 import type { WebActionServices } from '@/lib/actions/server/types';
@@ -16,7 +16,7 @@ type CreateDoryChatToolsOptions = {
     locale?: Locale;
 };
 
-const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:write', 'saved_queries:read', 'analysis:run', 'monitoring:read'];
+const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run', 'monitoring:read'];
 
 async function createActionContext(options: CreateDoryChatToolsOptions): Promise<ActionContext<WebActionServices>> {
     const access = await resolveOrganizationAccess(options.organizationId, options.userId);
@@ -47,10 +47,7 @@ async function createActionContext(options: CreateDoryChatToolsOptions): Promise
 }
 
 export function createDoryChatTools(options: CreateDoryChatToolsOptions) {
-    const entries = webActionRegistry
-        .list()
-        .filter(action => action.exposure.actors.includes('agent'))
-        .filter(action => action.risk !== 'destructive');
+    const entries = listMcpActions(webActionRegistry as any, 'agent');
 
-    return Object.fromEntries(entries.map(action => [toAgentToolName(action.id), actionToAgentTool(action, () => createActionContext(options))]));
+    return Object.fromEntries(entries.map(tool => [toAgentToolName(tool.action.id), actionToAgentTool(tool.action, () => createActionContext(options))]));
 }

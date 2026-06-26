@@ -2386,6 +2386,26 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/server-core@npm:0.1.0, @dory/server-core@workspace:packages/server-core":
+  version: 0.0.0-use.local
+  resolution: "@dory/server-core@workspace:packages/server-core"
+  dependencies:
+    "@dory/actions": "npm:0.1.0"
+    "@dory/analysis": "npm:0.1.0"
+    "@dory/database": "npm:0.1.0"
+    "@dory/drivers": "npm:0.1.0"
+    "@dory/i18n": "npm:0.1.0"
+    "@dory/shared": "npm:0.1.0"
+    "@modelcontextprotocol/sdk": "npm:^1.29.0"
+    "@types/node": "npm:^25.5.2"
+    drizzle-orm: "npm:^0.45.2"
+    esbuild: "npm:^0.27.7"
+    tsx: "npm:^4.21.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  languageName: unknown
+  linkType: soft
+
 "@dory/shared@npm:0.1.0, @dory/shared@workspace:packages/shared":
   version: 0.0.0-use.local
   resolution: "@dory/shared@workspace:packages/shared"
@@ -3684,6 +3704,31 @@ __metadata:
   checksum: 10c0/885b02c8b0d75b2d215da25f3b639158c4fbe8fefe0d79163304534b9a6d0710db4b7699f7cd3cc1a730792bff04cbe19f4850a62d3e105a663eaeec88f38332
   languageName: node
   linkType: hard
+
+"@getdory/cli@workspace:packages/cli":
+  version: 0.0.0-use.local
+  resolution: "@getdory/cli@workspace:packages/cli"
+  dependencies:
+    "@dory/server-core": "npm:0.1.0"
+    "@duckdb/node-api": "npm:^1.5.2-r.1"
+    "@electric-sql/pglite": "npm:^0.4.3"
+    "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
+    "@modelcontextprotocol/sdk": "npm:^1.29.0"
+    "@types/node": "npm:^25.5.2"
+    "@types/pg": "npm:^8.20.0"
+    better-sqlite3: "npm:^12.8.0"
+    esbuild: "npm:^0.27.7"
+    mysql2: "npm:^3.20.0"
+    oracledb: "npm:^6.10.0"
+    pg: "npm:^8.20.0"
+    ssh2-no-cpu-features: "npm:^2.0.0"
+    tsx: "npm:^4.21.0"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  bin:
+    dory: ./dist/cli.js
+  languageName: unknown
+  linkType: soft
 
 "@getdory/mcp@workspace:packages/mcp":
   version: 0.0.0-use.local
@@ -7812,6 +7857,13 @@ __metadata:
   version: 1.0.1
   resolution: "@stablelib/base64@npm:1.0.1"
   checksum: 10c0/6330720f021819d19cecfe274111b79a256caa81df478d6b0ae7effc8842b96915b6aeed85926ff05b4d48ec1fc78ad043d928b730ee4e6cc6e8cba6aa097bed
+  languageName: node
+  linkType: hard
+
+"@standard-schema/spec@npm:1.0.0":
+  version: 1.0.0
+  resolution: "@standard-schema/spec@npm:1.0.0"
+  checksum: 10c0/a1ab9a8bdc09b5b47aa8365d0e0ec40cc2df6437be02853696a0e377321653b0d3ac6f079a8c67d5ddbe9821025584b1fb71d9cc041a6666a96f1fadf2ece15f
   languageName: node
   linkType: hard
 
@@ -13011,7 +13063,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@npm:~0.27.0":
+"esbuild@npm:^0.27.7, esbuild@npm:~0.27.0":
   version: 0.27.7
   resolution: "esbuild@npm:0.27.7"
   dependencies:
@@ -18360,6 +18412,33 @@ __metadata:
   languageName: node
   linkType: hard
 
+"nuqs@npm:^2.8.9":
+  version: 2.8.9
+  resolution: "nuqs@npm:2.8.9"
+  dependencies:
+    "@standard-schema/spec": "npm:1.0.0"
+  peerDependencies:
+    "@remix-run/react": ">=2"
+    "@tanstack/react-router": ^1
+    next: ">=14.2.0"
+    react: ">=18.2.0 || ^19.0.0-0"
+    react-router: ^5 || ^6 || ^7
+    react-router-dom: ^5 || ^6 || ^7
+  peerDependenciesMeta:
+    "@remix-run/react":
+      optional: true
+    "@tanstack/react-router":
+      optional: true
+    next:
+      optional: true
+    react-router:
+      optional: true
+    react-router-dom:
+      optional: true
+  checksum: 10c0/1de53ba6cca7af326b17cd6c92501c6cfcd0abbe7e399319b228b07644b24e57bf3bba63fbf1cabaa27f77e40bcf15d5a3792e7767c800161903ef2e09b3ad85
+  languageName: node
+  linkType: hard
+
 "object-assign@npm:^4, object-assign@npm:^4.1.1":
   version: 4.1.1
   resolution: "object-assign@npm:4.1.1"
@@ -22814,6 +22893,7 @@ __metadata:
     "@dory/ee": "npm:0.1.0"
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
+    "@dory/server-core": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@dory/ui": "npm:0.1.0"
     "@dory/web-utils": "npm:0.1.0"
@@ -22931,6 +23011,7 @@ __metadata:
     next-runtime-env: "npm:^3.3.0"
     next-themes: "npm:^0.4.6"
     npm: "npm:^11.12.1"
+    nuqs: "npm:^2.8.9"
     pako: "npm:^2.1.0"
     pg: "npm:^8.20.0"
     pino: "npm:^10.3.1"

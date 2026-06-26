@@ -101,6 +101,11 @@ export const aiTabTitleAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: readWorkspace,
     scopes: ['analysis:run'],
-    actors: ['user', 'agent', 'automation'],
+    actors: ['user', 'agent', 'mcp', 'automation'],
+    mcp: {
+        name: 'dory_generate_tab_title',
+        title: 'Generate tab title',
+        description: 'Generate a short SQL console tab title from SQL and database context.',
+    },
     handler: runTabTitleAction,
 });

@@ -26,7 +26,17 @@ export const TRUSTED_USER_SCOPES = [
     'action:destructive',
 ];
 
-export const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:write', 'saved_queries:read', 'analysis:run', 'monitoring:read'];
+export const AGENT_SCOPES = [
+    'connections:read',
+    'schema:read',
+    'query:read',
+    'tabs:read',
+    'tabs:write',
+    'saved_queries:read',
+    'saved_queries:write',
+    'analysis:run',
+    'monitoring:read',
+];
 
 export type ActionRequestBody = {
     actionId?: string;
@@ -62,8 +72,7 @@ export async function createUserActionContext(options: {
     const actorType: ActionActorType = 'user';
     const db = await getDBService();
     const locale = await getApiLocale();
-    const currentConnectionId =
-        options.body.currentConnectionId ?? options.req.headers.get(X_CONNECTION_ID_KEY) ?? options.req.headers.get(X_CONNECTION_ID_KEY.toLowerCase());
+    const currentConnectionId = options.body.currentConnectionId ?? options.req.headers.get(X_CONNECTION_ID_KEY) ?? options.req.headers.get(X_CONNECTION_ID_KEY.toLowerCase());
 
     return {
         organizationId: options.organizationId,
@@ -99,6 +108,6 @@ export async function createMcpActionContextFromAuth(context: McpAuthContext): P
         currentConnectionId: null,
         requestId: randomUUID(),
         audit: createWebActionAuditSink(db),
-        services: { db },
+        services: { db, requestOrigin: context.requestOrigin ?? null },
     };
 }

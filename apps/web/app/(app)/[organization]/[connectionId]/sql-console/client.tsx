@@ -34,6 +34,7 @@ import type { SQLEditorHandle } from './components/sql-editor';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
+import { humanSqlWorkspaceScope, sqlWorkspaceScopeAtom } from './workspace-scope';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -98,8 +99,9 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
-    } = useSqlConsoleClient(defaultLayout);
+    } = useSqlConsoleClient(defaultLayout, humanSqlWorkspaceScope);
     const t = useTranslations('SqlConsole');
+    const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
 
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);
     const [showChatbot, setShowChatbot] = useAtom(copilotPanelOpenAtom);
@@ -115,6 +117,10 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     const [tabHeaderHeight, setTabHeaderHeight] = useState<number>(INITIAL_LAYOUT.tabs.defaultHeaderHeight); // measured from SQLTabs
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
+
+    useEffect(() => {
+        setWorkspaceScope(humanSqlWorkspaceScope);
+    }, [setWorkspaceScope]);
 
     const sqlTabIds = useMemo(() => tabs.filter(tab => tab.tabType === 'sql').map(tab => tab.tabId), [tabs]);
     const sqlTabIdKey = sqlTabIds.join('\0');
@@ -379,7 +385,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     );
 
     return (
-        <main className="relative h-full w-full">
+        <main className="relative h-full w-full min-w-0 max-w-full overflow-hidden">
             <Group
                 orientation="horizontal"
                 id="sql-console-horizontal"
@@ -387,19 +393,24 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                 onLayoutChanged={handleLayoutChange}
             >
                 {/* Left */}
-                <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}>
-                    <div className="flex flex-col h-full min-h-0 bg-card">
-                        <Tabs defaultValue="tables" className="flex-1 min-h-0">
-                            <TabsList className="w-full rounded-none px-2">
-                                <TabsTrigger value="tables" className="flex-1">
+                <Panel
+                    id="left-panel"
+                    minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`}
+                    maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
+                    className="min-w-0 overflow-hidden"
+                >
+                    <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-background">
+                        <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
+                            <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
+                                <TabsTrigger value="tables" className="min-w-0 flex-1">
                                     {t('Sidebar.Tables')}
                                 </TabsTrigger>
-                                <TabsTrigger value="saved" className="flex-1">
+                                <TabsTrigger value="saved" className="min-w-0 flex-1">
                                     {t('Sidebar.Queries')}
                                 </TabsTrigger>
                             </TabsList>
                             {/* <Separator /> */}
-                            <TabsContent value="tables" className="flex-1 min-h-0">
+                            <TabsContent value="tables" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
                                 <SQLConsoleSidebar
                                     onOpenTableTab={handleOpenTableTab}
                                     onOpenQueryConsole={handleOpenQueryConsole}
@@ -409,7 +420,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                                     selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
                                 />
                             </TabsContent>
-                            <TabsContent value="saved" className="flex-1 min-h-0">
+                            <TabsContent value="saved" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
                                 <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />
                             </TabsContent>
                         </Tabs>
