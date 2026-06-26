@@ -6,6 +6,7 @@ import { FileText, RotateCw } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
+import { createParser, parseAsIndex, useQueryStates } from 'nuqs';
 
 import { fetchTablePreview } from '../../lib/fetch-table-preview';
 import { isSuccess } from '@/lib/result';
@@ -82,6 +83,24 @@ const PREVIEW_STALE_TIME = 1000 * 60 * 5;
 const PREVIEW_GC_TIME = PREVIEW_STALE_TIME * 2;
 const EMPTY_ROWS: ResultRow[] = [];
 const EMPTY_SEARCH_COLUMNS: string[] = [];
+const parseAsNonNegativeIndex = createParser({
+    parse: value => {
+        const parsed = parseAsIndex.parse(value);
+        return parsed != null && parsed >= 0 ? parsed : null;
+    },
+    serialize: value => parseAsIndex.serialize(value),
+});
+const parseAsPositiveInteger = createParser({
+    parse: value => {
+        const parsed = Number(value);
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+    },
+    serialize: value => String(value),
+});
+const dataPreviewPaginationParsers = {
+    pageIndex: parseAsNonNegativeIndex.withDefault(0),
+    pageSize: parseAsPositiveInteger.withDefault(DEFAULT_TABLE_PREVIEW_LIMIT),
+};
 
 function normalizeParam(value?: string | string[]) {
     if (!value) return undefined;
@@ -280,8 +299,15 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
-    const [pageIndex, setPageIndex] = useState(0);
-    const [pageSize, setPageSize] = useState(DEFAULT_TABLE_PREVIEW_LIMIT);
+    const [{ pageIndex, pageSize }, setPagination] = useQueryStates(dataPreviewPaginationParsers, {
+        history: 'replace',
+        shallow: true,
+        scroll: false,
+        urlKeys: {
+            pageIndex: 'previewPage',
+            pageSize: 'previewPageSize',
+        },
+    });
     const [activeFilters, setActiveFilters] = useState<ColumnFilter[]>([]);
     const [sortState, setSortState] = useState<TablePreviewSort | null>(null);
     const [hasUserRequestedPreviewUpdate, setHasUserRequestedPreviewUpdate] = useState(false);
@@ -408,53 +434,67 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             return;
         }
         setQuery(nextQuery);
-        setPageIndex(0);
-    }, [previewQuery, query, searchInput]);
+        void setPagination({ pageIndex: 0 });
+    }, [previewQuery, query, searchInput, setPagination]);
 
     const handleClearQuery = useCallback(() => {
         setHasUserRequestedPreviewUpdate(true);
         setSearchInput('');
         setQuery('');
-        setPageIndex(0);
-    }, []);
+        void setPagination({ pageIndex: 0 });
+    }, [setPagination]);
 
-    const handleUpsertFilter = useCallback((filter: ColumnFilter) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setActiveFilters(prev => {
-            const others = prev.filter(item => item.col !== filter.col);
-            return [...others, filter];
-        });
-        setPageIndex(0);
-    }, []);
+    const handleUpsertFilter = useCallback(
+        (filter: ColumnFilter) => {
+            setHasUserRequestedPreviewUpdate(true);
+            setActiveFilters(prev => {
+                const others = prev.filter(item => item.col !== filter.col);
+                return [...others, filter];
+            });
+            void setPagination({ pageIndex: 0 });
+        },
+        [setPagination],
+    );
 
-    const handleRemoveFilter = useCallback((column: string) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setActiveFilters(prev => prev.filter(filter => filter.col !== column));
-        setPageIndex(0);
-    }, []);
+    const handleRemoveFilter = useCallback(
+        (column: string) => {
+            setHasUserRequestedPreviewUpdate(true);
+            setActiveFilters(prev => prev.filter(filter => filter.col !== column));
+            void setPagination({ pageIndex: 0 });
+        },
+        [setPagination],
+    );
 
     const handleClearAllFilters = useCallback(() => {
         setHasUserRequestedPreviewUpdate(true);
         setActiveFilters([]);
-        setPageIndex(0);
-    }, []);
+        void setPagination({ pageIndex: 0 });
+    }, [setPagination]);
 
-    const handleSortChange = useCallback((nextSort: TablePreviewSort | null) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setSortState(nextSort);
-        setPageIndex(0);
-    }, []);
+    const handleSortChange = useCallback(
+        (nextSort: TablePreviewSort | null) => {
+            setHasUserRequestedPreviewUpdate(true);
+            setSortState(nextSort);
+            void setPagination({ pageIndex: 0 });
+        },
+        [setPagination],
+    );
 
-    const handlePageChange = useCallback((newPageIndex: number) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setPageIndex(newPageIndex);
-    }, []);
+    const handlePageChange = useCallback(
+        (newPageIndex: number) => {
+            setHasUserRequestedPreviewUpdate(true);
+            void setPagination({ pageIndex: newPageIndex });
+        },
+        [setPagination],
+    );
 
-    const handlePageSizeChange = useCallback((newPageSize: number) => {
-        setHasUserRequestedPreviewUpdate(true);
-        setPageSize(newPageSize);
-        setPageIndex(0);
-    }, []);
+    const handlePageSizeChange = useCallback(
+        (newPageSize: number) => {
+            setHasUserRequestedPreviewUpdate(true);
+            void setPagination({ pageIndex: 0, pageSize: newPageSize });
+        },
+        [setPagination],
+    );
 
     const handleRefresh = useCallback(() => {
         if (refreshing) return;

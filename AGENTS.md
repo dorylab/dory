@@ -93,6 +93,7 @@ Useful workspace commands:
 - Use strict TypeScript patterns; do not weaken types to force builds through
 - In `apps/web`, prefer the existing `@/*` alias where helpful
 - For client-side HTTP requests, cacheable server state, loading/error state, invalidation, polling, refresh, or request de-duplication, prefer `@tanstack/react-query` over hand-rolled `useEffect` fetch logic, local component caches, or module-level `Map` caches
+- For URL-backed client state in `apps/web`, use `nuqs` (`useQueryState` / `useQueryStates` and shared parsers) instead of hand-rolled `URLSearchParams`, `useSearchParams`, or manual `router.push/replace` query updates.
 - UI work must use the existing theme system and component styling conventions
 - Do not create one-off visual systems, isolated color tokens, or theme logic that bypasses the current theme infrastructure
 - Reuse the existing theme providers, theme tokens, and themed components in `apps/web/app/themes.css`, `apps/web/app/globals.css`, and `apps/web/components/*` when building UI

@@ -20,6 +20,7 @@ import { ElectronThemeSync } from '@/components/electron-theme-sync';
 import { siteConfig } from './config/site';
 import { JotaiProvider } from '@/lib/providers/jotai-provider';
 import { PublicEnvProvider, PublicEnvScript } from 'next-runtime-env';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
 const META_THEME_COLORS = {
     light: '#ffffff',
@@ -124,13 +125,15 @@ export default async function RootLayout({
                     <NextIntlClientProvider locale={locale} messages={messages}>
                         <JotaiProvider>
                             <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange enableColorScheme>
-                                <ElectronLocaleSync />
-                                <ElectronThemeSync />
-                                <ActiveThemeProvider initialTheme={activeThemeValue}>
-                                    {children}
-                                    <Toaster />
-                                    <Analytics />
-                                </ActiveThemeProvider>
+                                <NuqsAdapter>
+                                    <ElectronLocaleSync />
+                                    <ElectronThemeSync />
+                                    <ActiveThemeProvider initialTheme={activeThemeValue}>
+                                        {children}
+                                        <Toaster />
+                                        <Analytics />
+                                    </ActiveThemeProvider>
+                                </NuqsAdapter>
                             </ThemeProvider>
                         </JotaiProvider>
                     </NextIntlClientProvider>
