@@ -735,7 +735,7 @@ export default function AgentWorkspaceClient({
     );
 
     return (
-        <main className="relative h-full w-full" style={workspaceStyle}>
+        <main className="relative h-full w-full min-w-0 max-w-full overflow-hidden" style={workspaceStyle}>
             <div className="absolute inset-y-0 left-0 right-[var(--workspace-rail-width)] transition-[right] duration-200 ease-out xl:right-[var(--workspace-reserved-right-width)]">
                 <Group
                     orientation="horizontal"
@@ -743,18 +743,18 @@ export default function AgentWorkspaceClient({
                     defaultLayout={{ 'left-panel': horizontalLayout[0], 'middle-panel': horizontalLayout[1] }}
                     onLayoutChanged={handleLayoutChange}
                 >
-                    <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}>
-                        <div className="flex flex-col h-full min-h-0 bg-card">
-                            <Tabs defaultValue="tables" className="flex-1 min-h-0">
-                                <TabsList className="w-full rounded-none px-2">
-                                    <TabsTrigger value="tables" className="flex-1">
+                    <Panel id="left-panel" minSize={`${INITIAL_LAYOUT.horizontal.leftPanel.min}%`} maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`} className="min-w-0 overflow-hidden">
+                        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card">
+                            <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
+                                <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
+                                    <TabsTrigger value="tables" className="min-w-0 flex-1">
                                         {t('Sidebar.Tables')}
                                     </TabsTrigger>
-                                    <TabsTrigger value="saved" className="flex-1">
+                                    <TabsTrigger value="saved" className="min-w-0 flex-1">
                                         {t('Sidebar.Queries')}
                                     </TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="tables" className="flex-1 min-h-0">
+                                <TabsContent value="tables" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
                                     <SQLConsoleSidebar
                                         onOpenTableTab={handleOpenTableTab}
                                         onOpenQueryConsole={handleOpenQueryConsole}
@@ -764,7 +764,7 @@ export default function AgentWorkspaceClient({
                                         selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
                                     />
                                 </TabsContent>
-                                <TabsContent value="saved" className="flex-1 min-h-0">
+                                <TabsContent value="saved" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
                                     <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />
                                 </TabsContent>
                             </Tabs>

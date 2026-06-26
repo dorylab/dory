@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
-import { Copy, ExternalLink, Info, Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Copy, Info, Loader2, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -144,14 +144,10 @@ export function AgentRunsTable({
                                     <div className="flex items-center justify-end gap-2">
                                         {run.hasWorkspace ? (
                                             <Button asChild size="sm" variant="outline">
-                                                <Link href={run.workspaceHref}>
-                                                    <ExternalLink className="h-4 w-4" />
-                                                    {t('Actions.OpenWorkspace')}
-                                                </Link>
+                                                <Link href={run.workspaceHref}>{t('Actions.OpenWorkspace')}</Link>
                                             </Button>
                                         ) : (
                                             <Button size="sm" variant="outline" disabled>
-                                                <ExternalLink className="h-4 w-4" />
                                                 {t('Actions.OpenWorkspace')}
                                             </Button>
                                         )}

@@ -44,7 +44,7 @@ export function AppContentShell({ children }: { children: ReactNode }) {
     }, [connectionSwitching, setConnectionSwitching, transitionReady]);
 
     return (
-        <div className="relative flex-1 flex flex-col min-h-0 overflow-auto">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-auto">
             {children}
             {connectionSwitching ? (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/95 text-foreground">

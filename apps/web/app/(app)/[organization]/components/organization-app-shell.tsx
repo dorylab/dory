@@ -66,7 +66,7 @@ export function OrganizationAppShell({
                         organizationId={organizationId}
                         enterpriseLicense={enterpriseLicense}
                     />
-                    <SidebarInset className="flex min-h-0 flex-col" style={{ height: 'calc(100% - 1rem)' }}>
+                    <SidebarInset className="flex min-h-0 min-w-0 flex-col" style={{ height: 'calc(100% - 1rem)' }}>
                         <CollapsedSidebarTrigger />
                         <AppContentShell>{children}</AppContentShell>
                     </SidebarInset>

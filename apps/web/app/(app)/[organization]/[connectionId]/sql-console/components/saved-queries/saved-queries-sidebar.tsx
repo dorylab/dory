@@ -81,6 +81,15 @@ type SavedQueriesSidebarProps = {
     onSelect?: (item: SavedQueryItem) => void;
 };
 
+type SortableDragProps = {
+    listeners: NonNullable<ReturnType<typeof useSortable>['listeners']>;
+    attributes: ReturnType<typeof useSortable>['attributes'];
+};
+
+type SortableRenderProps = SortableDragProps & {
+    isDragging: boolean;
+};
+
 type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'sql_text' | 'status' | 'duration_ms' | 'error_message'>;
 
 function summarizeSql(sqlText: string) {
@@ -133,7 +142,7 @@ function SortableFolderWrapper({
     children,
 }: {
     id: string;
-    children: (props: { listeners: Record<string, Function>; attributes: Record<string, any>; isDragging: boolean }) => React.ReactNode;
+    children: (props: SortableRenderProps) => React.ReactNode;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: getFolderDndId(id),
@@ -157,7 +166,7 @@ function SortableQueryWrapper({
 }: {
     id: string;
     folderId: string | null;
-    children: (props: { listeners: Record<string, Function>; attributes: Record<string, any>; isDragging: boolean }) => React.ReactNode;
+    children: (props: SortableRenderProps) => React.ReactNode;
 }) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: getQueryDndId(id),
@@ -834,7 +843,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                 void fetchList(limit, { silent: true });
             }
         },
-        [applyQueryOrder, fetchList, folders, getScopeItems, items, limit, notifySavedQueriesUpdated, persistQueryMove, t],
+        [applyQueryOrder, connectionId, fetchList, folders, getScopeItems, items, limit, notifySavedQueriesUpdated, persistQueryMove, t],
     );
 
     const handleDragCancel = useCallback(() => {
@@ -853,7 +862,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
         return <AccountRequiredSheet compact title={t('SavedQueries.AccountRequiredTitle')} />;
     }
 
-    const renderQueryItem = (item: SavedQueryItem, dragProps?: { listeners: Record<string, Function>; attributes: Record<string, any> }) => {
+    const renderQueryItem = (item: SavedQueryItem, dragProps?: SortableDragProps) => {
         const summary = summarizeSql(item.sqlText ?? '');
         const displaySql = item.sqlText ?? '';
         const isMenuOpen = menuOpenId === item.id;
@@ -990,10 +999,10 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
     };
 
     return (
-        <div className="flex h-full flex-col min-h-0 gap-2 px-2 pb-3 pt-1">
-            <div className="px-1">
+        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col gap-2 overflow-hidden px-2 pb-3 pt-1">
+            <div className="w-full min-w-0 max-w-full px-1">
                 <Select value={queryView} onValueChange={value => setQueryView(value as SavedQueriesView)}>
-                    <SelectTrigger size="sm" className="w-full justify-between bg-background">
+                    <SelectTrigger size="sm" className="w-full min-w-0 max-w-full justify-between bg-background">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="start" className="w-[var(--radix-select-trigger-width)]">
@@ -1004,7 +1013,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
             </div>
             {isMyQueriesView ? (
                 <>
-                    <div className="flex items-center gap-1.5 px-1">
+                    <div className="flex w-full min-w-0 max-w-full items-center gap-1.5 px-1">
                         <Input
                             value={searchValue}
                             onChange={event => setSearchValue(event.target.value)}
