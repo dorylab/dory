@@ -1,13 +1,11 @@
 'use client';
 
-import Link from 'next/link';
-import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { IconFileAi, IconHelp, IconUsers } from '@tabler/icons-react';
 import { IconBrandGithub } from '@tabler/icons-react';
 import React from 'react';
 import { useTranslations } from 'next-intl';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/registry/new-york-v4/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
 import { ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, SquareCode, Star, X } from 'lucide-react';
@@ -24,7 +22,6 @@ import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { cn } from '@dory/web-utils';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
-import { useConnections } from '../../connections/hooks/use-connections';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     initialUser?: User | null;
@@ -65,26 +62,6 @@ function getExplorerDefaultDatabase(connection?: ConnectionListItem['connection'
     return null;
 }
 
-function GlobalWorkspacePlaceholder({ href, title, description }: { href: string; title: string; description: string }) {
-    return (
-        <SidebarMenu>
-            <SidebarMenuItem>
-                <SidebarMenuButton asChild size="lg">
-                    <Link href={href} prefetch={false}>
-                        <div className="flex aspect-square size-10 items-center justify-center">
-                            <Image src="/dory.png" alt="" width={512} height={512} className="size-9 object-contain" aria-hidden="true" />
-                        </div>
-                        <div className="grid min-w-0 flex-1 text-left text-sm leading-tight">
-                            <span className="truncate font-semibold">{title}</span>
-                            <span className="truncate text-xs text-muted-foreground">{description}</span>
-                        </div>
-                    </Link>
-                </SidebarMenuButton>
-            </SidebarMenuItem>
-        </SidebarMenu>
-    );
-}
-
 export function AppSidebar({ initialUser = null, organizationId, enterpriseLicense, ...props }: AppSidebarProps) {
     const params = useParams<{ organization: string; connectionId?: string }>();
     const resolvedUser = initialUser ?? null;
@@ -92,7 +69,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const organization = params.organization;
     const connectionId = params.connectionId;
     const currentConnection = useAtomValue(currentConnectionAtom);
-    const connectionsQuery = useConnections();
     const currentConnectionRecord = currentConnection?.connection;
     const currentRouteConnection = currentConnectionRecord && currentConnectionRecord.id === connectionId ? currentConnectionRecord : null;
     const defaultDatabase = currentRouteConnection ? getExplorerDefaultDatabase(currentRouteConnection) : null;
@@ -105,9 +81,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
               ? buildExplorerBasePath({ organization, connectionId })
               : `/${organization}/connections`;
     const dataSourcesUrl = `/${organization}/connections`;
-    const totalConnections = connectionsQuery.data?.length ?? 0;
-    const workspaceDataSourcesCount =
-        totalConnections === 1 ? t('WorkspaceDataSourcesCount', { count: String(totalConnections) }) : t('WorkspaceDataSourcesCountPlural', { count: String(totalConnections) });
     const sqlConsoleUrl = connectionId ? `/${organization}/${connectionId}/sql-console` : `/${organization}/connections`;
     const chatbotUrl = connectionId ? `/${organization}/${connectionId}/chatbot` : `/${organization}/chatbot`;
     const [updaterState, setUpdaterState] = React.useState<{ readyToInstall: boolean; version: string | null }>({
@@ -240,7 +213,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     return (
         <Sidebar {...props}>
             <SidebarHeader className="pb-2">
-                {connectionId ? <ConnectionSwitcher /> : <GlobalWorkspacePlaceholder href={dataSourcesUrl} title={t('WorkspaceTitle')} description={workspaceDataSourcesCount} />}
+                {connectionId ? <ConnectionSwitcher /> : <ConnectionSwitcher displayMode="all-connections" />}
             </SidebarHeader>
 
             <SidebarContent>

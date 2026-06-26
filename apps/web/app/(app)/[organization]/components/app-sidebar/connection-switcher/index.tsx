@@ -100,7 +100,11 @@ function hasConnectionHealthChanged(current: ConnectionListItem | null, next: Co
 
 const SWITCH_CONNECT_TIMEOUT_MS = 12_000;
 
-export function ConnectionSwitcher() {
+type ConnectionSwitcherProps = {
+    displayMode?: 'active-connection' | 'all-connections';
+};
+
+export function ConnectionSwitcher({ displayMode = 'active-connection' }: ConnectionSwitcherProps = {}) {
     const { isMobile } = useSidebar();
     const router = useRouter();
     const t = useTranslations('Connections');
@@ -133,6 +137,7 @@ export function ConnectionSwitcher() {
 
     const connectMutation = useConnectConnection();
 
+    const displayAllConnections = displayMode === 'all-connections';
     const isInitialLoading = isLoading && connections.length === 0;
     const hasActiveConnection = useMemo(() => hasConnections && Object.values(connectLoadings ?? {}).some(Boolean), [connectLoadings, hasConnections]);
     const isSwitcherLoading = isInitialLoading || hasActiveConnection || Boolean(pendingConnection);
@@ -216,6 +221,10 @@ export function ConnectionSwitcher() {
             return;
         }
 
+        if (displayAllConnections) {
+            return;
+        }
+
         if (!currentConnection || connections.every(c => c.connection.id !== currentConnection.connection?.id)) {
             setCurrentConnection(connections[0]);
         }
@@ -223,6 +232,7 @@ export function ConnectionSwitcher() {
         connectionId,
         currentConnection,
         connections,
+        displayAllConnections,
         navigatingConnectionId,
         setConnectLoadings,
         setConnectionError,
@@ -262,9 +272,11 @@ export function ConnectionSwitcher() {
         }
     }, [pendingConnection, pendingIdentity, isInitialLoading, isSwitcherLoading, setLoadingMessage, setConnectionError]);
 
-    const displayedConnection = activeConnection;
-    const displayedIdentity = activeIdentity;
-    const displayedLabel = displayedConnection?.connection?.name ?? (isInitialLoading ? t('Loading connections') : t('No connections yet'));
+    const displayedConnection = displayAllConnections ? null : activeConnection;
+    const displayedIdentity = displayAllConnections ? null : activeIdentity;
+    const displayedLabel = displayAllConnections
+        ? t('All Connections')
+        : displayedConnection?.connection?.name ?? (isInitialLoading ? t('Loading connections') : t('No connections yet'));
 
     const pendingLoadingKey = pendingConnection ? makeLoadingKey(pendingConnection.connection.id, pendingIdentity?.id) : null;
     const activeLoadingKey = displayedConnection ? makeLoadingKey(displayedConnection.connection.id, displayedIdentity?.id) : null;
@@ -397,10 +409,14 @@ export function ConnectionSwitcher() {
                     <DropdownMenuTrigger asChild>
                         <SidebarMenuButton
                             size="lg"
-                            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground disabled:pointer-events-none disabled:cursor-wait disabled:opacity-100 disabled:text-current disabled:bg-transparent"
+                            className="focus-visible:ring-0 data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground disabled:pointer-events-none disabled:cursor-wait disabled:opacity-100 disabled:text-current disabled:bg-transparent"
                         >
                             <div className="flex aspect-square size-8 items-center justify-center">
-                                {displayedConnection ? (
+                                {displayAllConnections ? (
+                                    <div className="flex size-7 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent/60 text-muted-foreground">
+                                        <Grip className="size-4" />
+                                    </div>
+                                ) : displayedConnection ? (
                                     <ConnectionSourceIcon connection={displayedConnection.connection} className="max-h-7 max-w-7" />
                                 ) : (
                                     <div className="flex size-7 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent/60 text-muted-foreground">
@@ -427,7 +443,14 @@ export function ConnectionSwitcher() {
                     </DropdownMenuTrigger>
 
                     <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg" align="start" side={isMobile ? 'bottom' : 'right'} sideOffset={4}>
-                        <DropdownMenuLabel className="text-muted-foreground text-xs">{t('Connections')}</DropdownMenuLabel>
+                        <DropdownMenuItem className={cn('gap-2 p-2', displayAllConnections && 'bg-sidebar-accent text-sidebar-accent-foreground')} onClick={goToConnections}>
+                            <div className="bg-background flex size-6 items-center justify-center rounded-md border">
+                                <Grip className="size-4" />
+                            </div>
+                            <div className="text-muted-foreground font-medium">{t('All Connections')}</div>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuSeparator />
 
                         {connections.length ? (
                             connections.map(connection => {
@@ -442,7 +465,8 @@ export function ConnectionSwitcher() {
                                         <DropdownMenuSubTrigger
                                             className={cn(
                                                 'gap-2 p-2',
-                                                (activeConnection?.connection?.id === connection.connection.id || pendingConnection?.connection?.id === connection.connection.id) &&
+                                                ((!displayAllConnections && activeConnection?.connection?.id === connection.connection.id) ||
+                                                    pendingConnection?.connection?.id === connection.connection.id) &&
                                                     'bg-sidebar-accent text-sidebar-accent-foreground',
                                             )}
                                         >
@@ -471,7 +495,7 @@ export function ConnectionSwitcher() {
                                                 const identityLoading = Boolean(connectLoadings?.[identityKey]);
 
                                                 const isActive =
-                                                    (activeConnection?.connection?.id === connection.connection.id && activeIdentity?.id === identity.id) ||
+                                                    (!displayAllConnections && activeConnection?.connection?.id === connection.connection.id && activeIdentity?.id === identity.id) ||
                                                     (pendingConnection?.connection?.id === connection.connection.id && pendingIdentity?.id === identity.id);
 
                                                 return (
@@ -500,7 +524,8 @@ export function ConnectionSwitcher() {
                                         onClick={() => handleSelect(connection)}
                                         className={cn(
                                             'gap-2 p-2',
-                                            (activeConnection?.connection?.id === connection.connection.id || pendingConnection?.connection?.id === connection.connection.id) &&
+                                            ((!displayAllConnections && activeConnection?.connection?.id === connection.connection.id) ||
+                                                pendingConnection?.connection?.id === connection.connection.id) &&
                                                 'bg-sidebar-accent text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground',
                                         )}
                                     >
@@ -528,14 +553,6 @@ export function ConnectionSwitcher() {
                                 </div>
                             </DropdownMenuItem>
                         )}
-
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="gap-2 p-2" onClick={goToConnections}>
-                            <div className="bg-background flex size-6 items-center justify-center rounded-md border">
-                                <Grip className="size-4" />
-                            </div>
-                            <div className="text-muted-foreground font-medium">{t('All Connections')}</div>
-                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </SidebarMenuItem>
