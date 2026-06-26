@@ -9,7 +9,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { getFullOrganization, getOrganizationAccess, slugifyOrganizationName, updateOrganization } from '@/lib/organization/api';
+import { getFullOrganization, getOrganizationAccess, isValidOrganizationSlug, updateOrganization } from '@/lib/organization/api';
 
 function replaceOrganizationInPath(pathname: string, currentSlug: string, nextSlug: string) {
     const segments = pathname.split('/').filter(Boolean);
@@ -51,12 +51,11 @@ export function OrganizationPanel() {
 
     const updateMutation = useMutation({
         mutationFn: () => {
-            const normalizedSlug = slugifyOrganizationName(slug);
             if (!slug.trim()) {
                 throw new Error(t('Errors.SlugRequired'));
             }
 
-            if (normalizedSlug !== slug.trim()) {
+            if (!isValidOrganizationSlug(slug)) {
                 throw new Error(t('Errors.SlugInvalid'));
             }
 

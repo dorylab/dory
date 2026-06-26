@@ -3492,7 +3492,7 @@
             },
             "Errors": {
                 "SlugRequired": "スラッグは必須です",
-                "SlugInvalid": "スラッグには小文字、数字、ハイフンのみ使用できます"
+                "SlugInvalid": "スラッグには英字、数字、ハイフンのみ使用できます"
             }
         },
         "Members": {

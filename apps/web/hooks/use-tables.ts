@@ -1,13 +1,15 @@
 import { useAtom, useAtomValue } from 'jotai';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { executeActionClient } from '@/lib/actions/client';
-import { currentConnectionAtom, tablesAtom } from '@/shared/stores/app.store';
+import { currentConnectionAtom, schemaMetadataRefreshAtom, tablesAtom } from '@/shared/stores/app.store';
 
 const inflightTableRequests = new Map<string, Promise<void>>();
 
 export function useTables(databases: string) {
     const [tablesState, setTablesState] = useAtom(tablesAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
+    const metadataRefresh = useAtomValue(schemaMetadataRefreshAtom);
+    const lastHandledRefreshVersionRef = useRef(metadataRefresh.version);
     const connectionId = currentConnection?.connection?.id ?? null;
     const requestKey = connectionId && databases ? `${connectionId}::${databases}` : null;
 
@@ -38,6 +40,24 @@ export function useTables(databases: string) {
         void refresh(connectionId, databases);
     }, [connectionId, databases, tablesState.connectionId, tablesState.database, tablesState.items.length, tablesState.loading, setTablesState]);
 
+    useEffect(() => {
+        if (!connectionId || !databases || metadataRefresh.version === 0 || metadataRefresh.connectionId !== connectionId) {
+            return;
+        }
+
+        if (lastHandledRefreshVersionRef.current === metadataRefresh.version) {
+            return;
+        }
+
+        lastHandledRefreshVersionRef.current = metadataRefresh.version;
+
+        if (metadataRefresh.database && metadataRefresh.database !== databases) {
+            return;
+        }
+
+        void refresh(connectionId, databases);
+    }, [connectionId, databases, metadataRefresh.connectionId, metadataRefresh.database, metadataRefresh.version]);
+
     const refresh = async (requestedConnectionId = connectionId ?? undefined, requestedDatabase = databases) => {
         if (!requestedConnectionId || !requestedDatabase) {
             return;
@@ -56,10 +76,7 @@ export function useTables(databases: string) {
                     return prev;
                 }
 
-                return {
-                    ...prev,
-                    loading: true,
-                };
+                return prev.items.length ? prev : { ...prev, loading: true };
             });
 
             try {

@@ -3494,7 +3494,7 @@
             },
             "Errors": {
                 "SlugRequired": "Slug is required",
-                "SlugInvalid": "Slug can only contain lowercase letters, numbers, and hyphens"
+                "SlugInvalid": "Slug can only contain letters, numbers, and hyphens"
             }
         },
         "Members": {

@@ -3498,7 +3498,7 @@
             },
             "Errors": {
                 "SlugRequired": "Slug 不能为空",
-                "SlugInvalid": "Slug 只能包含小写字母、数字和连字符"
+                "SlugInvalid": "Slug 只能包含字母、数字和连字符"
             }
         },
         "Members": {

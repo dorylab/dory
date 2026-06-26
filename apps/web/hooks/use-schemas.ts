@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { useParams } from 'next/navigation';
 import { executeActionClient } from '@/lib/actions/client';
-import { currentConnectionAtom } from '@/shared/stores/app.store';
+import { currentConnectionAtom, schemaMetadataRefreshAtom } from '@/shared/stores/app.store';
 
 type SchemaOption = {
     value: string;
@@ -18,6 +18,8 @@ function resolveConnectionParam(value?: string | string[]) {
 export function useSchemas(database?: string, enabled = true) {
     const [schemas, setSchemas] = useState<SchemaOption[]>([]);
     const currentConnection = useAtomValue(currentConnectionAtom);
+    const metadataRefresh = useAtomValue(schemaMetadataRefreshAtom);
+    const lastHandledRefreshVersionRef = useRef(metadataRefresh.version);
     const params = useParams<{ connectionId?: string | string[]; connection?: string | string[] }>();
     const routeConnectionId = resolveConnectionParam(params?.connectionId ?? params?.connection);
 
@@ -29,6 +31,25 @@ export function useSchemas(database?: string, enabled = true) {
 
         void refresh();
     }, [database, enabled, routeConnectionId]);
+
+    useEffect(() => {
+        const connectionId = routeConnectionId ?? currentConnection?.connection?.id;
+        if (!enabled || !database || !connectionId || metadataRefresh.version === 0 || metadataRefresh.connectionId !== connectionId) {
+            return;
+        }
+
+        if (lastHandledRefreshVersionRef.current === metadataRefresh.version) {
+            return;
+        }
+
+        lastHandledRefreshVersionRef.current = metadataRefresh.version;
+
+        if (metadataRefresh.database && metadataRefresh.database !== database) {
+            return;
+        }
+
+        void refresh();
+    }, [currentConnection?.connection?.id, database, enabled, metadataRefresh.connectionId, metadataRefresh.database, metadataRefresh.version, routeConnectionId]);
 
     const refresh = async () => {
         if (!enabled || !database) {

@@ -3492,7 +3492,7 @@
             },
             "Errors": {
                 "SlugRequired": "El slug es obligatorio",
-                "SlugInvalid": "El slug solo puede contener letras minúsculas, números y guiones"
+                "SlugInvalid": "El slug solo puede contener letras, números y guiones"
             }
         },
         "Members": {

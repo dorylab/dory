@@ -27,6 +27,12 @@ export type TablesState = {
     loading: boolean;
 };
 
+export type SchemaMetadataRefreshState = {
+    connectionId: string | null;
+    database: string | null;
+    version: number;
+};
+
 export const databasesAtom = atom<DatabasesState>({
     connectionId: null,
     items: [],
@@ -38,6 +44,11 @@ export const tablesAtom = atom<TablesState>({
     database: null,
     items: [],
     loading: false,
+});
+export const schemaMetadataRefreshAtom = atom<SchemaMetadataRefreshState>({
+    connectionId: null,
+    database: null,
+    version: 0,
 });
 export const columnsAtom = atom<TableColumn[]>([]);
 export type ColumnsCacheEntry = { columns: TableColumn[]; updatedAt: number };

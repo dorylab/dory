@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAtom, useAtomValue } from 'jotai';
-import { currentConnectionAtom, databasesAtom } from '@/shared/stores/app.store';
-import { useEffect } from 'react';
+import { currentConnectionAtom, databasesAtom, schemaMetadataRefreshAtom } from '@/shared/stores/app.store';
+import { useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { executeActionClient } from '@/lib/actions/client';
 
@@ -10,6 +10,8 @@ type DatabaseOption = { label: string; value: string };
 export function useDatabases() {
     const [databasesState, setDatabasesState] = useAtom(databasesAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
+    const metadataRefresh = useAtomValue(schemaMetadataRefreshAtom);
+    const lastHandledRefreshVersionRef = useRef(metadataRefresh.version);
     const params = useParams<{ connectionId?: string | string[]; connection?: string | string[] }>();
     const routeConnectionParam = params?.connectionId ?? params?.connection;
     const routeConnectionId = Array.isArray(routeConnectionParam) ? routeConnectionParam[0] : routeConnectionParam;
@@ -56,6 +58,19 @@ export function useDatabases() {
             error: query.error instanceof Error ? query.error.message : null,
         });
     }, [connectionContextReady, connectionId, query.data, query.error, query.isFetching, query.isPending, setDatabasesState]);
+
+    useEffect(() => {
+        if (!connectionId || !connectionContextReady || metadataRefresh.connectionId !== connectionId || metadataRefresh.version === 0) {
+            return;
+        }
+
+        if (lastHandledRefreshVersionRef.current === metadataRefresh.version) {
+            return;
+        }
+
+        lastHandledRefreshVersionRef.current = metadataRefresh.version;
+        void query.refetch();
+    }, [connectionContextReady, connectionId, metadataRefresh.connectionId, metadataRefresh.version, query.refetch]);
 
     return {
         databases: databasesState.connectionId === connectionId ? databasesState.items : [],

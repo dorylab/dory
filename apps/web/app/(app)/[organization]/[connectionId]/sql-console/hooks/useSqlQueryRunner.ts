@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useDB } from '@/lib/client/use-pglite';
 import { useQuery } from '@/hooks/use-query';
 import { executeActionClient } from '@/lib/actions/client';
@@ -10,12 +10,16 @@ import { SQLTab } from '@dory/shared/types/tabs';
 import { runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
 import { SQLEditorHandle } from '../components/sql-editor';
 import { useTranslations } from 'next-intl';
-import { currentConnectionAtom } from '@/shared/stores/app.store';
+import { columnsCacheAtom, currentConnectionAtom, schemaMetadataRefreshAtom } from '@/shared/stores/app.store';
 import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
 import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 
 type RequestAITabTitle = (tab: SQLTab, options?: { force?: boolean; sqlTextOverride?: string }) => Promise<void> | void;
+type QueryResultSetSummary = {
+    sqlOp?: unknown;
+    status?: unknown;
+};
 
 function genSessionId() {
     // @ts-ignore
@@ -44,6 +48,12 @@ function applyLimitToSql(sqlText: string, limit: number | undefined, dialect: Se
     return statements.map(statement => applyLimitToStatement(statement, limit, dialect)).join(';\n');
 }
 
+function hasSuccessfulSchemaChange(payload: unknown) {
+    const queryResultSets = payload && typeof payload === 'object' && 'queryResultSets' in payload ? (payload as { queryResultSets?: unknown }).queryResultSets : null;
+    const resultSets = Array.isArray(queryResultSets) ? (queryResultSets as QueryResultSetSummary[]) : [];
+    return resultSets.some(resultSet => resultSet?.status === 'success' && resultSet?.sqlOp === 'DDL');
+}
+
 export function useSqlQueryRunner({
     activeDatabase,
     activeTab,
@@ -64,6 +74,8 @@ export function useSqlQueryRunner({
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
     const currentConnection = useAtomValue(currentConnectionAtom);
+    const setSchemaMetadataRefresh = useSetAtom(schemaMetadataRefreshAtom);
+    const setColumnsCache = useSetAtom(columnsCacheAtom);
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const limitDialect: SelectLimitDialect =
         currentConnection?.connection?.type === 'sqlserver' ? 'sqlserver' : currentConnection?.connection?.type === 'oracle' ? 'oracle' : 'default';
@@ -162,6 +174,15 @@ export function useSqlQueryRunner({
                 }
                 await applyServerResult(payload);
 
+                if (tab.tabType === 'sql' && hasSuccessfulSchemaChange(payload)) {
+                    setSchemaMetadataRefresh(prev => ({
+                        connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null,
+                        database,
+                        version: prev.version + 1,
+                    }));
+                    setColumnsCache({});
+                }
+
                 const totalMs = Math.round(performance.now() - t0);
                 await finishQuerySession(sessionId, {
                     status: payload.session.status ?? 'success',
@@ -222,10 +243,13 @@ export function useSqlQueryRunner({
             finishQuerySession,
             setRunningTabs,
             setSessionIdMap,
+            setSchemaMetadataRefresh,
+            setColumnsCache,
             userId,
             tabs,
             requestAITabTitle,
             t,
+            currentConnection?.connection?.id,
         ],
     );
 
