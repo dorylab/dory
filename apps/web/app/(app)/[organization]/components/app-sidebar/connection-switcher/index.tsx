@@ -452,22 +452,82 @@ export function ConnectionSwitcher({ displayMode = 'active-connection' }: Connec
 
                         <DropdownMenuSeparator />
 
-                        {connections.length ? (
-                            connections.map(connection => {
-                                const currentIdentity = getActiveIdentity(connection);
-                                const connectionLoadingKey = makeLoadingKey(connection.connection.id, currentIdentity?.id);
-                                const connectionLoading = Boolean(connectLoadings?.[connectionLoadingKey]);
+                        <div className="max-h-[640px] overflow-y-auto overscroll-contain pr-1">
+                            {connections.length ? (
+                                connections.map(connection => {
+                                    const currentIdentity = getActiveIdentity(connection);
+                                    const connectionLoadingKey = makeLoadingKey(connection.connection.id, currentIdentity?.id);
+                                    const connectionLoading = Boolean(connectLoadings?.[connectionLoadingKey]);
 
-                                const host = getConnectionLocationLabel(connection.connection) ?? t('Unknown host');
+                                    const host = getConnectionLocationLabel(connection.connection) ?? t('Unknown host');
 
-                                return connection.identities?.length > 1 ? (
-                                    <DropdownMenuSub key={connection.connection.id}>
-                                        <DropdownMenuSubTrigger
+                                    return connection.identities?.length > 1 ? (
+                                        <DropdownMenuSub key={connection.connection.id}>
+                                            <DropdownMenuSubTrigger
+                                                className={cn(
+                                                    'min-h-16 gap-2 p-2',
+                                                    ((!displayAllConnections && activeConnection?.connection?.id === connection.connection.id) ||
+                                                        pendingConnection?.connection?.id === connection.connection.id) &&
+                                                        'bg-sidebar-accent text-sidebar-accent-foreground',
+                                                )}
+                                            >
+                                                <div className="flex size-6 shrink-0 items-center justify-center">
+                                                    <ConnectionSourceIcon connection={connection.connection} className="max-h-5 max-w-5" />
+                                                </div>
+                                                <div className="flex flex-col min-w-0 max-w-[220px]">
+                                                    <div className="flex items-center gap-2">
+                                                        {connectionLoading ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : renderHealth(connection.connection)}
+                                                        <span className="truncate text-sm font-medium">{connection.connection.name ?? t('Unnamed connection')}</span>
+                                                    </div>
+                                                    <span className="truncate text-xs text-muted-foreground">{host}</span>
+                                                    {currentIdentity && (
+                                                        <span className="truncate text-[11px] text-muted-foreground/80 flex items-center gap-1">
+                                                            <User className="size-3" />
+                                                            {currentIdentity.username}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </DropdownMenuSubTrigger>
+
+                                            <DropdownMenuSubContent className="min-w-44 rounded-lg">
+                                                <DropdownMenuLabel className="text-xs text-muted-foreground">{t('Identities')}</DropdownMenuLabel>
+                                                {connection.identities.map(identity => {
+                                                    const identityKey = makeLoadingKey(connection.connection.id, identity.id);
+                                                    const identityLoading = Boolean(connectLoadings?.[identityKey]);
+
+                                                    const isActive =
+                                                        (!displayAllConnections && activeConnection?.connection?.id === connection.connection.id && activeIdentity?.id === identity.id) ||
+                                                        (pendingConnection?.connection?.id === connection.connection.id && pendingIdentity?.id === identity.id);
+
+                                                    return (
+                                                        <DropdownMenuItem
+                                                            key={identity.id}
+                                                            onClick={() => handleSelect(connection, identity as any)}
+                                                            className={cn('gap-2 p-2', isActive && 'bg-sidebar-accent text-sidebar-accent-foreground')}
+                                                        >
+                                                            {identityLoading ? (
+                                                                <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                                                            ) : (
+                                                                <User className="size-3 text-muted-foreground" />
+                                                            )}
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="truncate text-sm font-medium">{identity.name}</span>
+                                                                {identity.isDefault && <span className="text-[10px] text-muted-foreground/80">{t('Default Identity')}</span>}
+                                                            </div>
+                                                        </DropdownMenuItem>
+                                                    );
+                                                })}
+                                            </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+                                    ) : (
+                                        <DropdownMenuItem
+                                            key={connection.connection.id}
+                                            onClick={() => handleSelect(connection)}
                                             className={cn(
-                                                'gap-2 p-2',
+                                                'min-h-16 gap-2 p-2',
                                                 ((!displayAllConnections && activeConnection?.connection?.id === connection.connection.id) ||
                                                     pendingConnection?.connection?.id === connection.connection.id) &&
-                                                    'bg-sidebar-accent text-sidebar-accent-foreground',
+                                                    'bg-sidebar-accent text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground',
                                             )}
                                         >
                                             <div className="flex size-6 shrink-0 items-center justify-center">
@@ -479,80 +539,22 @@ export function ConnectionSwitcher({ displayMode = 'active-connection' }: Connec
                                                     <span className="truncate text-sm font-medium">{connection.connection.name ?? t('Unnamed connection')}</span>
                                                 </div>
                                                 <span className="truncate text-xs text-muted-foreground">{host}</span>
-                                                {currentIdentity && (
-                                                    <span className="truncate text-[11px] text-muted-foreground/80 flex items-center gap-1">
-                                                        <User className="size-3" />
-                                                        {currentIdentity.username}
-                                                    </span>
-                                                )}
                                             </div>
-                                        </DropdownMenuSubTrigger>
-
-                                        <DropdownMenuSubContent className="min-w-44 rounded-lg">
-                                            <DropdownMenuLabel className="text-xs text-muted-foreground">{t('Identities')}</DropdownMenuLabel>
-                                            {connection.identities.map(identity => {
-                                                const identityKey = makeLoadingKey(connection.connection.id, identity.id);
-                                                const identityLoading = Boolean(connectLoadings?.[identityKey]);
-
-                                                const isActive =
-                                                    (!displayAllConnections && activeConnection?.connection?.id === connection.connection.id && activeIdentity?.id === identity.id) ||
-                                                    (pendingConnection?.connection?.id === connection.connection.id && pendingIdentity?.id === identity.id);
-
-                                                return (
-                                                    <DropdownMenuItem
-                                                        key={identity.id}
-                                                        onClick={() => handleSelect(connection, identity as any)}
-                                                        className={cn('gap-2 p-2', isActive && 'bg-sidebar-accent text-sidebar-accent-foreground')}
-                                                    >
-                                                        {identityLoading ? (
-                                                            <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                                                        ) : (
-                                                            <User className="size-3 text-muted-foreground" />
-                                                        )}
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span className="truncate text-sm font-medium">{identity.name}</span>
-                                                            {identity.isDefault && <span className="text-[10px] text-muted-foreground/80">{t('Default Identity')}</span>}
-                                                        </div>
-                                                    </DropdownMenuItem>
-                                                );
-                                            })}
-                                        </DropdownMenuSubContent>
-                                    </DropdownMenuSub>
-                                ) : (
-                                    <DropdownMenuItem
-                                        key={connection.connection.id}
-                                        onClick={() => handleSelect(connection)}
-                                        className={cn(
-                                            'gap-2 p-2',
-                                            ((!displayAllConnections && activeConnection?.connection?.id === connection.connection.id) ||
-                                                pendingConnection?.connection?.id === connection.connection.id) &&
-                                                'bg-sidebar-accent text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground',
-                                        )}
-                                    >
-                                        <div className="flex size-6 shrink-0 items-center justify-center">
-                                            <ConnectionSourceIcon connection={connection.connection} className="max-h-5 max-w-5" />
-                                        </div>
-                                        <div className="flex flex-col min-w-0 max-w-[220px]">
-                                            <div className="flex items-center gap-2">
-                                                {connectionLoading ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : renderHealth(connection.connection)}
-                                                <span className="truncate text-sm font-medium">{connection.connection.name ?? t('Unnamed connection')}</span>
-                                            </div>
-                                            <span className="truncate text-xs text-muted-foreground">{host}</span>
-                                        </div>
-                                    </DropdownMenuItem>
-                                );
-                            })
-                        ) : (
-                            <DropdownMenuItem className="gap-2 p-2" onClick={openCreateDialog}>
-                                <div className="bg-background flex size-6 items-center justify-center rounded-md border">
-                                    <Plus className="size-4" />
-                                </div>
-                                <div>
-                                    <span className="text-sm font-medium">{t('Add Connection')}</span>
-                                    {/* <span className="text-xs text-muted-foreground">{t('Add connection to get started')}</span> */}
-                                </div>
-                            </DropdownMenuItem>
-                        )}
+                                        </DropdownMenuItem>
+                                    );
+                                })
+                            ) : (
+                                <DropdownMenuItem className="min-h-16 gap-2 p-2" onClick={openCreateDialog}>
+                                    <div className="bg-background flex size-6 items-center justify-center rounded-md border">
+                                        <Plus className="size-4" />
+                                    </div>
+                                    <div>
+                                        <span className="text-sm font-medium">{t('Add Connection')}</span>
+                                        {/* <span className="text-xs text-muted-foreground">{t('Add connection to get started')}</span> */}
+                                    </div>
+                                </DropdownMenuItem>
+                            )}
+                        </div>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </SidebarMenuItem>
