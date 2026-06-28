@@ -125,7 +125,7 @@ function createAuth() {
                                   action: 'challenge',
                               },
                               suspiciousIpBlocking: {
-                                  action: 'challenge',
+                                  action: 'log',
                               },
                               velocity: {
                                   enabled: true,
