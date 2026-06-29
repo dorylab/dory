@@ -2,11 +2,35 @@
 
 `@getdory/cli` runs Dory without the desktop client. It is the standalone entrypoint for MCP servers, automation, and direct Dory Action execution.
 
+## Requirements
+
+- Node.js 20 or newer.
+- Linux, macOS, or Windows with npm available.
+- Network access during install for native database driver packages.
+
+This beta ships the full Dory database driver set. Install can compile or download native packages for PGlite, DuckDB, SQLite, Oracle, MySQL, and Postgres support. If install fails, confirm your Node version first, then check whether your platform has the build tools required by the failing native package.
+
+## Install
+
+Run without installing globally:
+
+```sh
+npx -y @getdory/cli --help
+```
+
+Install globally when running Dory as a long-lived server:
+
+```sh
+npm install -g @getdory/cli
+dory --help
+```
+
 ## Quick Start
 
 Standalone mode stores Dory state under `~/.dory` and is the default mode for Linux servers, CI, and shared automation hosts.
 
 ```sh
+npx -y @getdory/cli init --data standalone
 npx -y @getdory/cli doctor --data standalone
 npx -y @getdory/cli mcp token create --data standalone --name "server"
 npx -y @getdory/cli mcp serve --stdio --data standalone
@@ -35,6 +59,12 @@ npx -y @getdory/cli action connection.list --data standalone --projection mcp --
 - `desktop`: read Dory Desktop local data without opening Electron. Do not use it while the desktop app is running unless concurrent PGlite access has been validated.
 - `self-hosted`: use a self-hosted Dory Web Postgres app database.
 
+Use `doctor` before serving MCP to confirm the selected storage path, secrets, migrations, identity, token count, and connection count:
+
+```sh
+npx -y @getdory/cli doctor --data standalone
+```
+
 Self-hosted mode must use the same secrets as the Web deployment:
 
 ```sh
@@ -45,6 +75,8 @@ npx -y @getdory/cli mcp serve \
   --data self-hosted \
   --database-url "$DATABASE_URL"
 ```
+
+If `DS_SECRET_KEY` or `BETTER_AUTH_SECRET` do not match the Web deployment, encrypted connection secrets and auth-backed data will not be readable.
 
 ## HTTP Security
 
@@ -147,6 +179,48 @@ Use Desktop data only when you want the CLI to read connections, tabs, saved que
 npx -y @getdory/cli doctor --data desktop
 npx -y @getdory/cli mcp serve --stdio --data desktop
 ```
+
+Desktop mode points at the Dory Desktop PGlite database. Avoid running Desktop and the CLI against the same PGlite data directory at the same time until concurrent access has been validated for your deployment.
+
+## Hosted Dory Bridge
+
+For hosted Dory Web MCP endpoints, the CLI includes the bridge commands previously covered by `@getdory/mcp`:
+
+```sh
+npx -y @getdory/cli mcp login --url https://your-dory-host
+npx -y @getdory/cli mcp status --url https://your-dory-host
+npx -y @getdory/cli mcp bridge --url https://your-dory-host
+```
+
+`@getdory/mcp` remains available as the legacy `dory-mcp` compatibility package. New installations should prefer `@getdory/cli`.
+
+## Update and Uninstall
+
+Update a global install:
+
+```sh
+npm install -g @getdory/cli@latest
+```
+
+Uninstall a global install:
+
+```sh
+npm uninstall -g @getdory/cli
+```
+
+Remove standalone data only when you no longer need local Dory state:
+
+```sh
+rm -rf ~/.dory
+```
+
+## Troubleshooting
+
+- `Unsupported engine`: install Node.js 20 or newer.
+- `crypto is not defined`: the process is running on an unsupported Node.js version. Upgrade to Node.js 20 or newer.
+- Native package install failure: install platform build tools, upgrade Node.js, or retry on Node.js 22.
+- `--data self-hosted requires DS_SECRET_KEY`: export the same `DS_SECRET_KEY` and `BETTER_AUTH_SECRET` used by your Dory Web deployment.
+- `No desktop auth snapshot`: open Dory Desktop once, or pass `--user-data-dir` for the active Desktop profile.
 
 ## Release Smoke
 

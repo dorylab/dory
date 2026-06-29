@@ -1,0 +1,68 @@
+name: Dory CLI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/cli.yml"
+      - "apps/web/lib/actions/**"
+      - "package.json"
+      - "packages/actions/**"
+      - "packages/analysis/**"
+      - "packages/cli/**"
+      - "packages/database/**"
+      - "packages/drivers/**"
+      - "packages/i18n/**"
+      - "packages/server-core/**"
+      - "packages/shared/**"
+      - "yarn.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-${{ github.event.pull_request.number || github.ref }}-${{ matrix.node-version }}
+  cancel-in-progress: true
+
+jobs:
+  release-check:
+    name: Release check / Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - "20.x"
+          - "22.x"
+
+    env:
+      YARN_ENABLE_STRICT_ENGINES: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run CLI tests
+        run: yarn workspace @getdory/cli test
+
+      - name: Typecheck CLI
+        run: yarn workspace @getdory/cli typecheck
+
+      - name: Run server-core storage tests
+        run: yarn workspace @dory/server-core test
+
+      - name: Run package smoke test
+        run: yarn workspace @getdory/cli pack:smoke
