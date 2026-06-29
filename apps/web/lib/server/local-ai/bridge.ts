@@ -69,7 +69,7 @@ export async function assertLocalAiBridgeAvailable(db: DBService, organizationId
         throw new Error('Local AI bridge was not found.');
     }
     if (!isLocalAiBridgeOnline(bridge.lastSeenAt)) {
-        throw new Error('Local AI bridge is offline. Start `npx -y @getdory/cli agent codex --url <dory-url>` on this device.');
+        throw new Error('Local AI bridge is offline. Run `npx -y @getdory/cli agent codex install --url <dory-url>` on this device.');
     }
     return bridge;
 }
@@ -81,7 +81,7 @@ export async function authenticateLocalAiBridgeRequest(req: Request) {
         return {
             ok: false as const,
             status: 403,
-            message: 'MCP token does not have local AI bridge scope. Run `npx -y @getdory/cli agent codex --url <dory-url>` to authorize it.',
+            message: 'MCP token does not have local AI bridge scope. Run `npx -y @getdory/cli agent codex install --url <dory-url>` to authorize it.',
         };
     }
     return auth;

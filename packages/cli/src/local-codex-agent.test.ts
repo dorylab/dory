@@ -127,8 +127,8 @@ test('Codex Agent bridge runs claimed jobs with Dory MCP config', async () => {
     assert.equal(complete.body.text, 'done');
 });
 
-test('Codex Agent bridge reauthorizes when existing token lacks local AI scope', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'dory-cli-codex-agent-reauth-test-'));
+async function assertCodexAgentReauthorizes(firstRegisterStatus: number) {
+    const dir = await mkdtemp(join(tmpdir(), `dory-cli-codex-agent-reauth-${firstRegisterStatus}-`));
     const configPath = join(dir, 'mcp.json');
     await writeFile(
         configPath,
@@ -155,7 +155,7 @@ test('Codex Agent bridge reauthorizes when existing token lacks local AI scope',
         if (parsed.pathname === '/api/mcp/local-ai/bridges/register') {
             registerCount += 1;
             if (registerCount === 1) {
-                return jsonResponse({ message: 'missing scope' }, 403);
+                return jsonResponse({ message: 'reauthorization required' }, firstRegisterStatus);
             }
             assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer new_token');
             return jsonResponse({ bridge: { id: 'bridge-reauth', provider: 'codex-agent', name: 'Test Bridge' } });
@@ -210,4 +210,12 @@ test('Codex Agent bridge reauthorizes when existing token lacks local AI scope',
     assert.equal(registerCount, 2);
     assert.equal(pollCount, 1);
     assert.ok(requestedScopes[0].includes('local_ai:run'));
+}
+
+test('Codex Agent bridge reauthorizes when existing token lacks local AI scope', async () => {
+    await assertCodexAgentReauthorizes(403);
+});
+
+test('Codex Agent bridge reauthorizes when existing token is invalid or revoked', async () => {
+    await assertCodexAgentReauthorizes(401);
 });

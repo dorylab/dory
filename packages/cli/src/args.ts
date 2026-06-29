@@ -26,7 +26,10 @@ export type ActionOptions = ProfileOptions & {
     yes: boolean;
 };
 
+export type AgentCodexAction = 'install' | 'run' | 'status' | 'restart' | 'stop' | 'uninstall';
+
 export type AgentCodexOptions = {
+    action: AgentCodexAction;
     url?: string;
     name?: string;
     configPath?: string;
@@ -136,9 +139,14 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     if (first === 'agent') {
         if (second === 'codex') {
+            const action = third && !third.startsWith('-') ? third : null;
+            if (action !== 'install' && action !== 'run' && action !== 'status' && action !== 'restart' && action !== 'stop' && action !== 'uninstall') {
+                return { command: 'help' };
+            }
             return {
                 command: 'agent-codex',
                 options: {
+                    action,
                     url: readOption(argv, '--url') ?? readOption(argv, '-u'),
                     name: readOption(argv, '--name') ?? readOption(argv, '--client-name'),
                     configPath,

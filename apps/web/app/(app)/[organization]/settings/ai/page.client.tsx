@@ -502,7 +502,6 @@ function LocalAgentCard({
     onEnable,
     onOpenSetup,
     onSetDefault,
-    onDelete,
     t,
 }: {
     agent: LocalAiAgentStatus;
@@ -515,7 +514,6 @@ function LocalAgentCard({
     onEnable: (agent: LocalAiAgentStatus) => void;
     onOpenSetup: (agent: LocalAiAgentStatus) => void;
     onSetDefault: (row: AiProviderRow) => void;
-    onDelete: (row: AiProviderRow) => void;
     t: ReturnType<typeof useTranslations>;
 }) {
     const title = agent.id === 'codex-agent' ? 'Codex Agent' : 'Claude Code';
@@ -530,6 +528,7 @@ function LocalAgentCard({
     const configured = Boolean(row) && (isDesktopRuntime ? agent.available : Boolean(bridge?.online));
     const detected = isDesktopRuntime ? agent.available : Boolean(bridge?.online);
     const ready = detected && !bridgeNeedsUpdate;
+    const canShowConnectAction = isDesktopRuntime || agent.id === 'codex-agent';
 
     return (
         <div
@@ -585,20 +584,18 @@ function LocalAgentCard({
                             {t('Actions.SetAsDefault')}
                         </Button>
                     ) : null}
-                    {row ? (
-                        <Button variant="ghost" size="icon" onClick={() => onDelete(row)} disabled={!canManageProviders || isSaving} aria-label={t('Actions.Delete')}>
-                            <Trash2 className="size-4" />
-                        </Button>
-                    ) : (
+                    {!row && canShowConnectAction ? (
                         <Button
+                            variant="outline"
                             size="sm"
+                            className="h-8 px-2.5 font-normal"
                             onClick={() => (ready ? onEnable(agent) : onOpenSetup(agent))}
-                            disabled={!canManageProviders || isSaving || (!isDesktopRuntime && agent.id !== 'codex-agent')}
+                            disabled={!canManageProviders || isSaving}
                         >
-                            <Plus className="size-4" />
+                            <Plus className="size-3.5" />
                             {actionLabel}
                         </Button>
-                    )}
+                    ) : null}
                 </div>
             </div>
         </div>
@@ -654,7 +651,6 @@ function LocalAiProviderSection({
     onEnableAgent,
     onOpenSetup,
     onSetDefault,
-    onDelete,
     onConnectModelService,
     t,
 }: {
@@ -667,7 +663,6 @@ function LocalAiProviderSection({
     onEnableAgent: (agent: LocalAiAgentStatus) => void;
     onOpenSetup: (agent: LocalAiAgentStatus) => void;
     onSetDefault: (row: AiProviderRow) => void;
-    onDelete: (row: AiProviderRow) => void;
     onConnectModelService: (service: LocalAiModelServiceStatus) => void;
     t: ReturnType<typeof useTranslations>;
 }) {
@@ -735,7 +730,6 @@ function LocalAiProviderSection({
                             onEnable={onEnableAgent}
                             onOpenSetup={onOpenSetup}
                             onSetDefault={onSetDefault}
-                            onDelete={onDelete}
                             t={t}
                         />
                     ))}
@@ -1091,7 +1085,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
               : t('Fields.ApiKeyOptionalPlaceholder');
     const upgradeActionLabel = upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise');
     const doryOrigin = typeof window === 'undefined' ? '' : window.location.origin;
-    const localAiBridgeCommand = `npx -y @getdory/cli agent codex --url ${doryOrigin}`;
+    const localAiBridgeCommand = `npx -y @getdory/cli agent codex install --url ${doryOrigin}`;
 
     function renderProviderRow(row: AiProviderRow) {
         const providerDescription = row.source === 'organization' && row.isDefault ? t('OrganizationProvider.ActiveDescription') : t('OrganizationProvider.Description');
@@ -1182,7 +1176,6 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                     onEnableAgent={agent => void enableLocalAgent(agent)}
                     onOpenSetup={setLocalAiSetupAgent}
                     onSetDefault={setDefault}
-                    onDelete={setProviderToDelete}
                     onConnectModelService={openLocalModelForm}
                     t={t}
                 />

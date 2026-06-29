@@ -229,6 +229,17 @@ export async function runCodexAgent(modelId: string, prompt: string, doryMcpConf
     }
 }
 
+export async function prepareCodexAgentBridge(options: CodexAgentOptions = {}) {
+    if (!options.runCodexAgentFn) {
+        await findExecutable('codex').then(path => {
+            if (!path) throw new Error('codex CLI was not found on this device.');
+        });
+    }
+
+    const name = options.name?.trim() || 'Dory Codex Agent';
+    return ensureRegisteredBridge(options, name);
+}
+
 async function postAuthorized<T>(credential: Credential, path: string, body: unknown, fetchFn?: FetchLike) {
     return postJson<T>(new URL(path, credential.origin).toString(), body, fetchFn ?? fetch, {
         authorization: `Bearer ${credential.token}`,
@@ -283,7 +294,7 @@ async function ensureRegisteredBridge(options: CodexAgentOptions, name: string):
         const registered = await registerBridge(credential, name, options.fetchFn);
         return { credential, bridgeId: registered.bridge.id };
     } catch (error: any) {
-        if (error?.status !== 403) throw error;
+        if (error?.status !== 401 && error?.status !== 403) throw error;
     }
 
     await login({
@@ -330,14 +341,8 @@ async function completeJob(credential: Credential, bridgeId: string, jobId: stri
 }
 
 export async function startCodexAgentBridge(options: CodexAgentOptions = {}) {
-    if (!options.runCodexAgentFn) {
-        await findExecutable('codex').then(path => {
-            if (!path) throw new Error('codex CLI was not found on this device.');
-        });
-    }
-
     const name = options.name?.trim() || 'Dory Codex Agent';
-    const { credential, bridgeId } = await ensureRegisteredBridge(options, name);
+    const { credential, bridgeId } = await prepareCodexAgentBridge(options);
     const runCodex = options.runCodexAgentFn ?? runCodexAgent;
     const doryMcpConfig: CodexDoryMcpConfig = {
         endpoint: credential.endpoint,

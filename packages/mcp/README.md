@@ -25,5 +25,5 @@ npx -y @getdory/cli mcp serve --stdio --data standalone
 For local Codex Agent access from Dory Web, use:
 
 ```sh
-npx -y @getdory/cli agent codex --url https://your-dory-host
+npx -y @getdory/cli agent codex install --url https://your-dory-host
 ```

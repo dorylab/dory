@@ -55,13 +55,28 @@ npx -y @getdory/cli action connection.list --data standalone --projection mcp --
 
 ## Connect Local Codex Agent
 
-Dory Web can run Codex on this device through the CLI. Run this on the device where Codex CLI is installed:
+Dory Web can run Codex on this device through the CLI. Run this once on the device where Codex CLI is installed:
 
 ```sh
-npx -y @getdory/cli agent codex --url https://your-dory-host
+npx -y @getdory/cli agent codex install --url https://your-dory-host
 ```
 
-The command authorizes Dory, registers this device as a Codex Agent bridge, and keeps a local worker running. When Dory sends a job to the bridge, the CLI runs `codex exec` with Dory MCP tools enabled.
+The command authorizes Dory, installs a background Dory Codex Agent service, and starts it. When Dory sends a job to the service, it runs `codex exec` with Dory MCP tools enabled.
+
+Manage the background service:
+
+```sh
+dory agent codex status
+dory agent codex restart
+dory agent codex stop
+dory agent codex uninstall
+```
+
+For troubleshooting, run the worker in the foreground:
+
+```sh
+dory agent codex run --url https://your-dory-host
+```
 
 The Dory MCP bearer token is passed through an environment variable and is not written into the Codex command arguments.
 
