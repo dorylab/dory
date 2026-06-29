@@ -7,6 +7,7 @@ import { resolveAiRouteExecution, isLocalMissingAiEnvError } from '@/lib/ai/exec
 import { buildDoryAgentContext, type DoryAgentSchemaTableRef } from '@/lib/ai/agents/context';
 import { resolveDoryAgentModel } from '@/lib/ai/agents/model';
 import { buildDoryChatAgent } from '@/lib/ai/agents/chat-agent';
+import { DORY_CODEX_CHAT_ID_HEADER, DORY_CODEX_CONNECTION_ID_HEADER, DORY_CODEX_MCP_ENDPOINT_HEADER, DORY_CODEX_REQUEST_ID_HEADER } from '@/lib/ai/model/providers/local-agent';
 import { buildCloudflareAiGatewayHeaders, assertAiQuotaAllowed, isAiQuotaExceededError, resolveAiEntitlements, toAiQuotaExceededResponse } from '@/lib/ai/usage-quota';
 import { createAiRequestId, recordAiUsage } from '@/lib/ai/gateway';
 import { createSqlRunnerTool } from './tools/sql-runner';
@@ -17,9 +18,12 @@ import { getSessionFromRequest } from '@/lib/auth/session';
 import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { getDBService } from '@dory/database';
 import { newEntityId } from '@dory/shared/id';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 import { MAX_HISTORY_MESSAGES } from '@/lib/ai/prompts';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '../utils/with-organization-handler';
+import { createExternalRequestUrl, getExternalRequestOrigin } from '@/lib/server/request-origin';
+import { issueMcpDesktopGrant, MCP_DESKTOP_GRANT_HEADER } from '@/lib/server/mcp/auth';
 import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
 import type { ConnectionType } from '@dory/shared/types/connections';
@@ -55,6 +59,45 @@ function mergeHeaders(headers: Record<string, string | undefined> | undefined, e
 function buildCurrentTurnExecutionInstruction(sqlToolEnabled: boolean, locale: Locale): string | null {
     if (!sqlToolEnabled) return null;
     return translateApi('Api.Chat.Prompt.ExecutionIntent.Policy', undefined, locale);
+}
+
+function buildLocalCodexHeaders(options: {
+    req: Request;
+    providerKey?: string | null;
+    transport?: string | null;
+    organizationId?: string | null;
+    userId?: string | null;
+    connectionId?: string | null;
+    requestId: string;
+    chatId?: string | null;
+}): Record<string, string> | null {
+    if (options.providerKey !== 'codex-agent' || options.transport !== 'local') return null;
+
+    const headers: Record<string, string> = {
+        [DORY_CODEX_MCP_ENDPOINT_HEADER]: createExternalRequestUrl(options.req, '/api/mcp'),
+        [DORY_CODEX_REQUEST_ID_HEADER]: options.requestId,
+    };
+
+    if (options.connectionId) {
+        headers[DORY_CODEX_CONNECTION_ID_HEADER] = options.connectionId;
+    }
+    if (options.chatId) {
+        headers[DORY_CODEX_CHAT_ID_HEADER] = options.chatId;
+    }
+
+    if (isDesktopRuntime() && options.userId && options.organizationId) {
+        try {
+            const { grant } = issueMcpDesktopGrant({
+                userId: options.userId,
+                organizationId: options.organizationId,
+            });
+            headers[MCP_DESKTOP_GRANT_HEADER] = grant;
+        } catch (error) {
+            console.error('[chat] failed to issue local Codex MCP desktop grant', error);
+        }
+    }
+
+    return headers;
 }
 
 export const POST = withUserAndOrganizationHandler(async ({ req }) => {
@@ -322,7 +365,17 @@ async function handleChatRequest(req: Request) {
         },
         execution.gateway,
     );
-    const headers = mergeHeaders(undefined, gatewayHeaders);
+    const localCodexHeaders = buildLocalCodexHeaders({
+        req,
+        providerKey: execution.providerKey,
+        transport: execution.transport,
+        organizationId,
+        userId,
+        connectionId,
+        requestId,
+        chatId,
+    });
+    const headers = mergeHeaders(mergeHeaders(undefined, gatewayHeaders), localCodexHeaders);
 
     const agent = buildDoryChatAgent({
         model,
@@ -342,6 +395,10 @@ async function handleChatRequest(req: Request) {
             connectionId,
             gateway: execution.gateway,
             provider: execution.providerKey,
+        },
+        experimentalContext: {
+            requestOrigin: getExternalRequestOrigin(req),
+            chatId,
         },
         requestId,
         startedAt,

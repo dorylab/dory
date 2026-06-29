@@ -33,6 +33,8 @@ export type LocalAiOptions = {
     name?: string | null;
     configPath?: string;
     fetchFn?: FetchLike;
+    runCodexAgentFn?: RunCodexAgent;
+    maxJobs?: number;
 };
 
 type Credential = NonNullable<Awaited<ReturnType<typeof resolveCredential>>>;
@@ -60,6 +62,60 @@ type CommandResult = {
     stderr: string;
 };
 
+export type CodexDoryMcpConfig = {
+    endpoint: string;
+    auth: { type: 'bearer-env'; envVar: string; token: string };
+    enabledTools: string[];
+    toolTimeoutSec: number;
+};
+
+type RunCodexAgent = (modelId: string, prompt: string, config: CodexDoryMcpConfig) => Promise<CommandResult>;
+
+export const DORY_CODEX_MCP_TOKEN_ENV = 'DORY_MCP_TOKEN';
+export const DORY_CODEX_MCP_ENABLED_TOOLS = [
+    'dory_create_work',
+    'dory_finish_work',
+    'dory_list_connections',
+    'dory_explore_schema',
+    'dory_run_readonly_sql',
+    'dory_workspace_tabs',
+    'dory_saved_queries',
+];
+export const DORY_CODEX_MCP_TOOL_TIMEOUT_SEC = 90;
+
+function toTomlString(value: string) {
+    return JSON.stringify(value);
+}
+
+function toTomlStringArray(values: string[]) {
+    return `[${values.map(toTomlString).join(', ')}]`;
+}
+
+export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
+    return [
+        '-c',
+        `mcp_servers.dory.url=${toTomlString(config.endpoint)}`,
+        '-c',
+        'mcp_servers.dory.enabled=true',
+        '-c',
+        'mcp_servers.dory.required=true',
+        '-c',
+        'mcp_servers.dory.default_tools_approval_mode="approve"',
+        '-c',
+        `mcp_servers.dory.tool_timeout_sec=${config.toolTimeoutSec}`,
+        '-c',
+        `mcp_servers.dory.enabled_tools=${toTomlStringArray(config.enabledTools)}`,
+        '-c',
+        `mcp_servers.dory.bearer_token_env_var=${toTomlString(config.auth.envVar)}`,
+    ];
+}
+
+export function buildCodexDoryMcpEnv(config: CodexDoryMcpConfig): Record<string, string> {
+    return {
+        [config.auth.envVar]: config.auth.token,
+    };
+}
+
 function candidatePaths(command: string): string[] {
     const paths = new Set<string>();
     for (const entry of (process.env.PATH ?? '').split(delimiter)) {
@@ -85,14 +141,15 @@ async function findExecutable(command: string): Promise<string | null> {
     return null;
 }
 
-function runProcess(command: string, args: string[], input: string, cwd: string): Promise<{ stdout: string; stderr: string }> {
+function runProcess(command: string, args: string[], input: string, options: { cwd: string; env?: Record<string, string> }): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
         const child = spawn(command, args, {
-            cwd,
+            cwd: options.cwd,
             stdio: ['pipe', 'pipe', 'pipe'],
             windowsHide: true,
             env: {
                 ...process.env,
+                ...(options.env ?? {}),
                 NO_COLOR: '1',
             },
         });
@@ -136,7 +193,7 @@ function runProcess(command: string, args: string[], input: string, cwd: string)
     });
 }
 
-async function runCodexAgent(modelId: string, prompt: string): Promise<CommandResult> {
+export async function runCodexAgent(modelId: string, prompt: string, doryMcpConfig: CodexDoryMcpConfig): Promise<CommandResult> {
     const codex = await findExecutable('codex');
     if (!codex) {
         throw new Error('codex CLI was not found on this device.');
@@ -148,6 +205,7 @@ async function runCodexAgent(modelId: string, prompt: string): Promise<CommandRe
         'exec',
         '--skip-git-repo-check',
         '--ephemeral',
+        '--ignore-user-config',
         '--ignore-rules',
         '--sandbox',
         'read-only',
@@ -157,10 +215,14 @@ async function runCodexAgent(modelId: string, prompt: string): Promise<CommandRe
         outputPath,
     ];
     if (modelId && modelId !== 'default') args.push('--model', modelId);
+    args.push(...buildCodexDoryMcpArgs(doryMcpConfig));
     args.push('-');
 
     try {
-        const result = await runProcess(codex, args, prompt, cwd);
+        const result = await runProcess(codex, args, prompt, {
+            cwd,
+            env: buildCodexDoryMcpEnv(doryMcpConfig),
+        });
         const text = (await readFile(outputPath, 'utf8').catch(() => result.stdout)).trim();
         return { ...result, text };
     } finally {
@@ -183,6 +245,8 @@ async function registerBridge(credential: Credential, provider: LocalAiProvider,
             name,
             capabilities: {
                 providers: [provider],
+                doryMcpTools: true,
+                localAiBridgeProtocol: 2,
                 pid: process.pid,
                 platform: process.platform,
             },
@@ -266,15 +330,29 @@ export async function startLocalAiBridge(options: LocalAiOptions = {}) {
         throw new Error('Only codex-agent is supported by dory-mcp local-ai today.');
     }
 
-    await findExecutable('codex').then(path => {
-        if (!path) throw new Error('codex CLI was not found on this device.');
-    });
+    if (!options.runCodexAgentFn) {
+        await findExecutable('codex').then(path => {
+            if (!path) throw new Error('codex CLI was not found on this device.');
+        });
+    }
 
     const name = options.name?.trim() || 'Dory Local AI';
     const { credential, bridgeId } = await ensureRegisteredBridge(options, provider, name);
+    const runCodex = options.runCodexAgentFn ?? runCodexAgent;
+    const doryMcpConfig: CodexDoryMcpConfig = {
+        endpoint: credential.endpoint,
+        auth: {
+            type: 'bearer-env',
+            envVar: DORY_CODEX_MCP_TOKEN_ENV,
+            token: credential.token,
+        },
+        enabledTools: DORY_CODEX_MCP_ENABLED_TOOLS,
+        toolTimeoutSec: DORY_CODEX_MCP_TOOL_TIMEOUT_SEC,
+    };
     process.stderr.write(`Dory local AI bridge connected: ${name} (${bridgeId})\n`);
 
     let stopping = false;
+    let completedJobs = 0;
     const stop = () => {
         stopping = true;
     };
@@ -297,10 +375,15 @@ export async function startLocalAiBridge(options: LocalAiOptions = {}) {
         }
 
         try {
-            const result = await runCodexAgent(claimed.job.model, claimed.job.prompt);
+            const result = await runCodex(claimed.job.model, claimed.job.prompt, doryMcpConfig);
             await completeJob(credential, bridgeId, claimed.job.id, result, options.fetchFn);
         } catch (error) {
             await completeJob(credential, bridgeId, claimed.job.id, error instanceof Error ? error : new Error(String(error)), options.fetchFn);
+        }
+
+        completedJobs += 1;
+        if (options.maxJobs && completedJobs >= options.maxJobs) {
+            break;
         }
 
         await sleep(50);

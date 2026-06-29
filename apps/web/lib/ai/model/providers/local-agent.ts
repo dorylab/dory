@@ -15,7 +15,8 @@ import type {
 } from '@ai-sdk/provider';
 import { getDBService } from '@dory/database';
 import { assertLocalAiAgentAvailable } from '@/lib/server/local-ai/detection';
-import { createAndWaitForLocalAiBridgeJob, parseLocalAiBridgeTarget } from '@/lib/server/local-ai/bridge';
+import { createAndWaitForLocalAiBridgeJob, localAiBridgeSupportsDoryMcpTools, parseLocalAiBridgeTarget } from '@/lib/server/local-ai/bridge';
+import { MCP_DESKTOP_GRANT_HEADER } from '@/lib/server/mcp/auth';
 import type { LocalAiAgentProvider } from '@dory/ee/ai/provider-options';
 
 export type LocalAgentProviderOptions = {
@@ -30,8 +31,154 @@ type LocalAgentCommandResult = {
     stderr: string;
 };
 
+export type CodexDoryMcpConfig = {
+    endpoint: string;
+    auth: { type: 'bearer-env'; envVar: string; token: string } | { type: 'desktop-grant-header'; envVar: string; grant: string };
+    enabledTools: string[];
+    toolTimeoutSec: number;
+};
+
+type LocalAgentDoryContext = {
+    doryMcpAvailable: boolean;
+    doryMcpConfig?: CodexDoryMcpConfig | null;
+    bridgeMissingDoryMcpTools?: boolean;
+    connectionId?: string | null;
+    requestId?: string | null;
+    chatId?: string | null;
+};
+
 const LOCAL_AGENT_TIMEOUT_MS = 120_000;
 const LOCAL_AGENT_MAX_BUFFER = 2 * 1024 * 1024;
+export const DORY_CODEX_MCP_TOKEN_ENV = 'DORY_MCP_TOKEN';
+export const DORY_CODEX_MCP_DESKTOP_GRANT_ENV = 'DORY_MCP_DESKTOP_GRANT';
+export const DORY_CODEX_MCP_ENDPOINT_HEADER = 'x-dory-local-agent-mcp-endpoint';
+export const DORY_CODEX_CONNECTION_ID_HEADER = 'x-dory-local-agent-connection-id';
+export const DORY_CODEX_REQUEST_ID_HEADER = 'x-dory-local-agent-request-id';
+export const DORY_CODEX_CHAT_ID_HEADER = 'x-dory-local-agent-chat-id';
+export const DORY_CODEX_MCP_ENABLED_TOOLS = [
+    'dory_create_work',
+    'dory_finish_work',
+    'dory_list_connections',
+    'dory_explore_schema',
+    'dory_run_readonly_sql',
+    'dory_workspace_tabs',
+    'dory_saved_queries',
+];
+export const DORY_CODEX_MCP_TOOL_TIMEOUT_SEC = 90;
+
+function toTomlString(value: string) {
+    return JSON.stringify(value);
+}
+
+function toTomlStringArray(values: string[]) {
+    return `[${values.map(toTomlString).join(', ')}]`;
+}
+
+function toTomlInlineStringMap(values: Record<string, string>) {
+    return `{ ${Object.entries(values)
+        .map(([key, value]) => `${toTomlString(key)} = ${toTomlString(value)}`)
+        .join(', ')} }`;
+}
+
+export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
+    const args = [
+        '-c',
+        `mcp_servers.dory.url=${toTomlString(config.endpoint)}`,
+        '-c',
+        'mcp_servers.dory.enabled=true',
+        '-c',
+        'mcp_servers.dory.required=true',
+        '-c',
+        'mcp_servers.dory.default_tools_approval_mode="approve"',
+        '-c',
+        `mcp_servers.dory.tool_timeout_sec=${config.toolTimeoutSec}`,
+        '-c',
+        `mcp_servers.dory.enabled_tools=${toTomlStringArray(config.enabledTools)}`,
+    ];
+
+    if (config.auth.type === 'bearer-env') {
+        args.push('-c', `mcp_servers.dory.bearer_token_env_var=${toTomlString(config.auth.envVar)}`);
+    } else {
+        args.push('-c', `mcp_servers.dory.env_http_headers=${toTomlInlineStringMap({ [MCP_DESKTOP_GRANT_HEADER]: config.auth.envVar })}`);
+    }
+
+    return args;
+}
+
+export function buildCodexDoryMcpEnv(config: CodexDoryMcpConfig): Record<string, string> {
+    if (config.auth.type === 'bearer-env') {
+        return { [config.auth.envVar]: config.auth.token };
+    }
+    return { [config.auth.envVar]: config.auth.grant };
+}
+
+function getHeader(headers: Record<string, string | undefined> | undefined, name: string): string | null {
+    const exact = headers?.[name];
+    if (typeof exact === 'string' && exact.trim()) return exact.trim();
+
+    const lowerName = name.toLowerCase();
+    const entry = Object.entries(headers ?? {}).find(([key, value]) => key.toLowerCase() === lowerName && typeof value === 'string' && value.trim());
+    return typeof entry?.[1] === 'string' ? entry[1].trim() : null;
+}
+
+function resolveLocalAgentDoryContext(
+    providerKey: LocalAiAgentProvider,
+    target: string | null | undefined,
+    options: LanguageModelV3CallOptions,
+    bridgeSupportsDoryMcpTools = false,
+): LocalAgentDoryContext {
+    const headers = options.headers;
+    const connectionId = getHeader(headers, DORY_CODEX_CONNECTION_ID_HEADER);
+    const requestId = getHeader(headers, DORY_CODEX_REQUEST_ID_HEADER);
+    const chatId = getHeader(headers, DORY_CODEX_CHAT_ID_HEADER);
+
+    if (providerKey !== 'codex-agent') {
+        return {
+            doryMcpAvailable: false,
+            connectionId,
+            requestId,
+            chatId,
+        };
+    }
+
+    if (shouldUseBridge(target)) {
+        return {
+            doryMcpAvailable: bridgeSupportsDoryMcpTools,
+            bridgeMissingDoryMcpTools: !bridgeSupportsDoryMcpTools,
+            connectionId,
+            requestId,
+            chatId,
+        };
+    }
+
+    const endpoint = getHeader(headers, DORY_CODEX_MCP_ENDPOINT_HEADER);
+    const grant = getHeader(headers, MCP_DESKTOP_GRANT_HEADER);
+    if (!endpoint || !grant) {
+        return {
+            doryMcpAvailable: false,
+            connectionId,
+            requestId,
+            chatId,
+        };
+    }
+
+    return {
+        doryMcpAvailable: true,
+        doryMcpConfig: {
+            endpoint,
+            auth: {
+                type: 'desktop-grant-header',
+                envVar: DORY_CODEX_MCP_DESKTOP_GRANT_ENV,
+                grant,
+            },
+            enabledTools: DORY_CODEX_MCP_ENABLED_TOOLS,
+            toolTimeoutSec: DORY_CODEX_MCP_TOOL_TIMEOUT_SEC,
+        },
+        connectionId,
+        requestId,
+        chatId,
+    };
+}
 
 function usageFromText(input: string, output: string): LanguageModelV3Usage {
     return {
@@ -82,7 +229,32 @@ function promptToText(prompt: LanguageModelV3Prompt): string {
     return parts.join('\n\n');
 }
 
-function toolInstructions(options: LanguageModelV3CallOptions): string[] {
+function toolInstructions(options: LanguageModelV3CallOptions, context: LocalAgentDoryContext): string[] {
+    if (context.doryMcpAvailable) {
+        const contextLines = [
+            context.connectionId ? `- Current Dory connectionId: ${context.connectionId}` : null,
+            context.chatId ? `- Current Dory chat/session id: ${context.chatId}` : null,
+            context.requestId ? `- Current Dory request id: ${context.requestId}` : null,
+        ].filter(Boolean);
+
+        return [
+            'Dory MCP tools are available to Codex for this request.',
+            'For database questions, call dory_create_work once first, then pass the returned work.workId to later Dory tool calls.',
+            'When the user asks for query results, write read-only SQL and call dory_run_readonly_sql. Answer from the tool result; do not claim a query was run without tool output.',
+            'If the schema is unclear, call dory_explore_schema before writing SQL.',
+            ...(contextLines.length ? [`Dory request context:\n${contextLines.join('\n')}`] : []),
+        ];
+    }
+
+    if (context.bridgeMissingDoryMcpTools) {
+        return [
+            'The connected Dory local AI bridge is online but does not advertise Dory MCP tool support.',
+            'Do not claim that database tools or SQL queries have run.',
+            'Tell the user to restart the Dory local AI bridge with an updated @getdory/mcp package before database query execution can work.',
+            'If useful, provide the SQL as a manual fallback only after clearly saying the query was not executed.',
+        ];
+    }
+
     if (!options.tools?.length) return [];
 
     const toolLines = options.tools.map(tool => {
@@ -100,12 +272,12 @@ function toolInstructions(options: LanguageModelV3CallOptions): string[] {
     ];
 }
 
-function buildInstruction(options: LanguageModelV3CallOptions): string {
+export function buildInstruction(options: LanguageModelV3CallOptions, context: LocalAgentDoryContext = { doryMcpAvailable: false }): string {
     const parts = [
         'You are acting as a local AI provider for Dory.',
         'Return only the final answer for the user request.',
         'Do not modify files, run commands, or perform external side effects.',
-        ...toolInstructions(options),
+        ...toolInstructions(options, context),
     ];
 
     if (options.responseFormat?.type === 'json') {
@@ -124,6 +296,7 @@ function runProcess(
     input: string,
     options: {
         cwd: string;
+        env?: Record<string, string>;
         signal?: AbortSignal;
     },
 ): Promise<{ stdout: string; stderr: string }> {
@@ -134,6 +307,7 @@ function runProcess(
             windowsHide: true,
             env: {
                 ...process.env,
+                ...(options.env ?? {}),
                 NO_COLOR: '1',
             },
         });
@@ -192,7 +366,7 @@ function runProcess(
     });
 }
 
-async function runCodexAgent(modelId: string, prompt: string, signal?: AbortSignal): Promise<LocalAgentCommandResult> {
+async function runCodexAgent(modelId: string, prompt: string, signal?: AbortSignal, doryMcpConfig?: CodexDoryMcpConfig | null): Promise<LocalAgentCommandResult> {
     const status = await assertLocalAiAgentAvailable('codex-agent');
     if (!('path' in status) || !status.path) {
         throw new Error('codex CLI was not found on this device.');
@@ -203,6 +377,7 @@ async function runCodexAgent(modelId: string, prompt: string, signal?: AbortSign
         'exec',
         '--skip-git-repo-check',
         '--ephemeral',
+        '--ignore-user-config',
         '--ignore-rules',
         '--sandbox',
         'read-only',
@@ -216,10 +391,18 @@ async function runCodexAgent(modelId: string, prompt: string, signal?: AbortSign
         args.push('--model', modelId);
     }
 
+    if (doryMcpConfig) {
+        args.push(...buildCodexDoryMcpArgs(doryMcpConfig));
+    }
+
     args.push('-');
 
     try {
-        const result = await runProcess(status.path, args, prompt, { cwd, signal });
+        const result = await runProcess(status.path, args, prompt, {
+            cwd,
+            signal,
+            env: doryMcpConfig ? buildCodexDoryMcpEnv(doryMcpConfig) : undefined,
+        });
         const text = (await readFile(outputPath, 'utf8').catch(() => result.stdout)).trim();
         return { ...result, text };
     } finally {
@@ -247,24 +430,42 @@ async function runClaudeCodeAgent(modelId: string, prompt: string, signal?: Abor
     }
 }
 
-async function runLocalAgent(providerKey: LocalAiAgentProvider, modelId: string, options: LanguageModelV3CallOptions): Promise<LocalAgentCommandResult> {
-    const prompt = buildInstruction(options);
+async function runLocalAgent(
+    providerKey: LocalAiAgentProvider,
+    modelId: string,
+    options: LanguageModelV3CallOptions,
+    context: LocalAgentDoryContext,
+): Promise<LocalAgentCommandResult> {
+    const prompt = buildInstruction(options, context);
     if (providerKey === 'codex-agent') {
-        return runCodexAgent(modelId, prompt, options.abortSignal);
+        return runCodexAgent(modelId, prompt, options.abortSignal, context.doryMcpConfig);
     }
 
     return runClaudeCodeAgent(modelId, prompt, options.abortSignal);
 }
 
-async function runLocalAgentViaBridge(providerKey: LocalAiAgentProvider, modelId: string, target: string, organizationId: string | null | undefined, options: LanguageModelV3CallOptions): Promise<LocalAgentCommandResult> {
+async function runLocalAgentViaBridge(
+    providerKey: LocalAiAgentProvider,
+    modelId: string,
+    target: string,
+    organizationId: string | null | undefined,
+    options: LanguageModelV3CallOptions,
+    context: LocalAgentDoryContext,
+): Promise<LocalAgentCommandResult> {
     const bridgeId = parseLocalAiBridgeTarget(target);
     if (!bridgeId || !organizationId) {
         throw new Error('Local AI bridge target is incomplete.');
     }
 
-    const prompt = buildInstruction(options);
+    const db = await getDBService();
+    const bridge = await db.mcp.getLocalAiBridge(organizationId, bridgeId);
+    const bridgeSupportsDoryMcpTools = localAiBridgeSupportsDoryMcpTools(bridge?.capabilities);
+    context.doryMcpAvailable = bridgeSupportsDoryMcpTools;
+    context.bridgeMissingDoryMcpTools = !bridgeSupportsDoryMcpTools;
+
+    const prompt = buildInstruction(options, context);
     const result = await createAndWaitForLocalAiBridgeJob({
-        db: await getDBService(),
+        db,
         organizationId,
         provider: providerKey,
         bridgeId,
@@ -341,17 +542,19 @@ export function createLocalAgentProvider(options: LocalAgentProviderOptions) {
                 modelId,
                 supportedUrls: {},
                 async doGenerate(callOptions) {
-                    const prompt = buildInstruction(callOptions);
+                    const context = resolveLocalAgentDoryContext(options.providerKey, options.target, callOptions);
                     const commandResult = shouldUseBridge(options.target)
-                        ? await runLocalAgentViaBridge(options.providerKey, modelId, options.target!, options.organizationId, callOptions)
-                        : await runLocalAgent(options.providerKey, modelId, callOptions);
+                        ? await runLocalAgentViaBridge(options.providerKey, modelId, options.target!, options.organizationId, callOptions, context)
+                        : await runLocalAgent(options.providerKey, modelId, callOptions, context);
+                    const prompt = buildInstruction(callOptions, context);
                     return toGenerateResult(commandResult, prompt);
                 },
                 async doStream(callOptions) {
-                    const prompt = buildInstruction(callOptions);
+                    const context = resolveLocalAgentDoryContext(options.providerKey, options.target, callOptions);
                     const commandResult = shouldUseBridge(options.target)
-                        ? await runLocalAgentViaBridge(options.providerKey, modelId, options.target!, options.organizationId, callOptions)
-                        : await runLocalAgent(options.providerKey, modelId, callOptions);
+                        ? await runLocalAgentViaBridge(options.providerKey, modelId, options.target!, options.organizationId, callOptions, context)
+                        : await runLocalAgent(options.providerKey, modelId, callOptions, context);
+                    const prompt = buildInstruction(callOptions, context);
                     return toStreamResult(commandResult, prompt);
                 },
             };

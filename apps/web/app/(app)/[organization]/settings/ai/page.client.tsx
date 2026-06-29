@@ -104,6 +104,7 @@ type LocalAiBridgeStatus = {
     provider: 'codex-agent' | 'claude-code-agent';
     name: string;
     online: boolean;
+    supportsDoryMcpTools: boolean;
     lastSeenAt: string | null;
     createdAt: string | null;
 };
@@ -516,10 +517,17 @@ function LocalAgentCard({
     t: ReturnType<typeof useTranslations>;
 }) {
     const title = agent.id === 'codex-agent' ? 'Codex Agent' : 'Claude Code';
-    const actionLabel = !isDesktopRuntime && agent.id === 'codex-agent' && !bridge?.online ? t('LocalAi.ConnectCodex') : agent.id === 'codex-agent' ? t('LocalAi.EnableCodex') : t('LocalAi.EnableClaudeCode');
+    const actionLabel =
+        !isDesktopRuntime && agent.id === 'codex-agent' && !bridge?.online
+            ? t('LocalAi.ConnectCodex')
+            : agent.id === 'codex-agent'
+              ? t('LocalAi.EnableCodex')
+              : t('LocalAi.EnableClaudeCode');
     const active = Boolean(row?.isDefault);
+    const bridgeNeedsUpdate = !isDesktopRuntime && agent.id === 'codex-agent' && Boolean(bridge?.online) && bridge?.supportsDoryMcpTools !== true;
     const configured = Boolean(row) && (isDesktopRuntime ? agent.available : Boolean(bridge?.online));
     const detected = isDesktopRuntime ? agent.available : Boolean(bridge?.online);
+    const ready = detected && !bridgeNeedsUpdate;
 
     return (
         <div className={cn('rounded-lg border px-4 py-4 transition-colors', active ? 'border-primary/25 bg-primary/[0.03]' : 'bg-background')}>
@@ -543,24 +551,29 @@ function LocalAgentCard({
                                     {t('LocalAi.NotDetected')}
                                 </Badge>
                             ) : null}
+                            {bridgeNeedsUpdate ? <Badge variant="outline">{t('LocalAi.BridgeNeedsUpdate')}</Badge> : null}
                         </div>
                         <p className="mt-2 text-sm text-muted-foreground">
                             {isDesktopRuntime
                                 ? agent.available
                                     ? t('LocalAi.AgentDetectedDescription', { command: agent.command })
                                     : t('LocalAi.AgentMissingDescription', { command: agent.command })
-                                : bridge?.online
-                                  ? t('LocalAi.BridgeDetectedDescription', { name: bridge.name })
-                                  : t('LocalAi.BridgeMissingDescription')}
+                                : bridgeNeedsUpdate
+                                  ? t('LocalAi.BridgeNeedsUpdateDescription')
+                                  : bridge?.online
+                                    ? t('LocalAi.BridgeDetectedDescription', { name: bridge.name })
+                                    : t('LocalAi.BridgeMissingDescription')}
                         </p>
                         {agent.version ? <div className="mt-2 text-xs text-muted-foreground">{agent.version}</div> : null}
-                        {!isDesktopRuntime && bridge?.lastSeenAt ? <div className="mt-2 text-xs text-muted-foreground">{t('LocalAi.LastSeen', { time: bridge.lastSeenAt })}</div> : null}
+                        {!isDesktopRuntime && bridge?.lastSeenAt ? (
+                            <div className="mt-2 text-xs text-muted-foreground">{t('LocalAi.LastSeen', { time: bridge.lastSeenAt })}</div>
+                        ) : null}
                     </div>
                 </div>
 
                 <div className="flex flex-wrap gap-2 lg:justify-end">
                     {row && !row.isDefault ? (
-                        <Button variant="outline" size="sm" onClick={() => onSetDefault(row)} disabled={!canManageProviders || isSaving || !detected}>
+                        <Button variant="outline" size="sm" onClick={() => onSetDefault(row)} disabled={!canManageProviders || isSaving || !ready}>
                             <CircleCheck className="size-4" />
                             {t('Actions.SetAsDefault')}
                         </Button>
@@ -570,7 +583,11 @@ function LocalAgentCard({
                             <Trash2 className="size-4" />
                         </Button>
                     ) : (
-                        <Button size="sm" onClick={() => (detected ? onEnable(agent) : onOpenSetup(agent))} disabled={!canManageProviders || isSaving || (!isDesktopRuntime && agent.id !== 'codex-agent')}>
+                        <Button
+                            size="sm"
+                            onClick={() => (ready ? onEnable(agent) : onOpenSetup(agent))}
+                            disabled={!canManageProviders || isSaving || (!isDesktopRuntime && agent.id !== 'codex-agent')}
+                        >
                             <Plus className="size-4" />
                             {actionLabel}
                         </Button>
@@ -871,7 +888,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
         if (!isLocalAiAgentProvider(agent.id)) return;
         const bridge = localAiStatus?.bridges?.find(candidate => candidate.provider === agent.id && candidate.online) ?? null;
         const baseUrl = isDesktopRuntime ? '' : bridge ? `bridge:${bridge.id}` : '';
-        if (!isDesktopRuntime && !bridge) {
+        if (!isDesktopRuntime && (!bridge || (agent.id === 'codex-agent' && bridge.supportsDoryMcpTools !== true))) {
             setLocalAiSetupAgent(agent);
             return;
         }
@@ -958,7 +975,10 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
 
     function setDefault(row: AiProviderRow) {
         if (!isDesktopRuntime && isLocalAiAgentProvider(row.provider) && !row.baseUrl?.startsWith('bridge:')) {
-            const bridge = localAiStatus?.bridges?.find(candidate => candidate.provider === row.provider && candidate.online) ?? null;
+            const bridge =
+                localAiStatus?.bridges?.find(
+                    candidate => candidate.provider === row.provider && candidate.online && (row.provider !== 'codex-agent' || candidate.supportsDoryMcpTools === true),
+                ) ?? null;
             if (!bridge) {
                 setLocalAiSetupAgent({
                     id: row.provider,

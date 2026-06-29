@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { isLocalAiAgentProvider, type LocalAiAgentProvider } from '@dory/ee/ai/provider-options';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import type { DBService } from '@dory/database';
-import { assertLocalAiBridgeAvailable, listLocalAiBridgeSummaries, parseLocalAiBridgeTarget, type LocalAiBridgeSummary } from './bridge';
+import { assertLocalAiBridgeAvailable, listLocalAiBridgeSummaries, localAiBridgeSupportsDoryMcpTools, parseLocalAiBridgeTarget, type LocalAiBridgeSummary } from './bridge';
 
 const execFileAsync = promisify(execFile);
 const DETECTION_TIMEOUT_MS = 2500;
@@ -208,7 +208,10 @@ export async function getLocalAiStatus(options: { db?: DBService; organizationId
     };
 }
 
-export async function assertLocalAiAgentAvailable(provider: LocalAiAgentProvider, options: { db?: DBService; organizationId?: string; target?: string | null } = {}): Promise<LocalAiAgentStatus | LocalAiBridgeSummary> {
+export async function assertLocalAiAgentAvailable(
+    provider: LocalAiAgentProvider,
+    options: { db?: DBService; organizationId?: string; target?: string | null } = {},
+): Promise<LocalAiAgentStatus | LocalAiBridgeSummary> {
     if (!isLocalAiAgentProvider(provider)) {
         throw new Error('Unsupported local AI agent provider.');
     }
@@ -225,6 +228,7 @@ export async function assertLocalAiAgentAvailable(provider: LocalAiAgentProvider
             provider: bridge.provider as LocalAiAgentProvider,
             name: bridge.name,
             online: true,
+            supportsDoryMcpTools: localAiBridgeSupportsDoryMcpTools(bridge.capabilities),
             lastSeenAt: bridge.lastSeenAt ? bridge.lastSeenAt.toISOString() : null,
             createdAt: bridge.createdAt ? bridge.createdAt.toISOString() : null,
         };

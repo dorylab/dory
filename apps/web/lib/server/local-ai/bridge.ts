@@ -17,6 +17,7 @@ export type LocalAiBridgeSummary = {
     provider: LocalAiAgentProvider;
     name: string;
     online: boolean;
+    supportsDoryMcpTools: boolean;
     lastSeenAt: string | null;
     createdAt: string | null;
 };
@@ -41,6 +42,11 @@ export function isLocalAiBridgeOnline(lastSeenAt: Date | string | null | undefin
     return Number.isFinite(value) && now - value <= LOCAL_AI_BRIDGE_ONLINE_WINDOW_MS;
 }
 
+export function localAiBridgeSupportsDoryMcpTools(capabilities: unknown): boolean {
+    if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) return false;
+    return (capabilities as Record<string, unknown>).doryMcpTools === true;
+}
+
 export async function listLocalAiBridgeSummaries(db: DBService, organizationId: string): Promise<LocalAiBridgeSummary[]> {
     const now = Date.now();
     const bridges = await db.mcp.listLocalAiBridges(organizationId);
@@ -51,6 +57,7 @@ export async function listLocalAiBridgeSummaries(db: DBService, organizationId: 
             provider: bridge.provider as LocalAiAgentProvider,
             name: bridge.name,
             online: isLocalAiBridgeOnline(bridge.lastSeenAt, now),
+            supportsDoryMcpTools: localAiBridgeSupportsDoryMcpTools(bridge.capabilities),
             lastSeenAt: bridge.lastSeenAt ? bridge.lastSeenAt.toISOString() : null,
             createdAt: bridge.createdAt ? bridge.createdAt.toISOString() : null,
         }));
@@ -84,7 +91,11 @@ export function assertLocalAiBridgePayloadSize(input: { prompt?: string | null; 
     if ((input.prompt?.length ?? 0) > LOCAL_AI_MAX_PROMPT_CHARS) {
         throw new Error('Local AI prompt exceeded the maximum size.');
     }
-    if ((input.text?.length ?? 0) > LOCAL_AI_MAX_RESULT_CHARS || (input.stdout?.length ?? 0) > LOCAL_AI_MAX_RESULT_CHARS || (input.stderr?.length ?? 0) > LOCAL_AI_MAX_RESULT_CHARS) {
+    if (
+        (input.text?.length ?? 0) > LOCAL_AI_MAX_RESULT_CHARS ||
+        (input.stdout?.length ?? 0) > LOCAL_AI_MAX_RESULT_CHARS ||
+        (input.stderr?.length ?? 0) > LOCAL_AI_MAX_RESULT_CHARS
+    ) {
         throw new Error('Local AI result exceeded the maximum size.');
     }
 }
