@@ -57,7 +57,7 @@ test('serializing organization AI providers exposes only key hints', () => {
     assert.equal('apiKey' in serialized, false);
 });
 
-test('organization provider override is controlled by Enterprise or Pro', () => {
+test('organization provider override is available to all plans during temporary access period', () => {
     assert.equal(normalizeLicense('oss'), 'oss');
     assert.equal(normalizeLicense('Enterprise'), 'enterprise');
     assert.equal(normalizeLicense('unknown'), null);
@@ -92,19 +92,19 @@ test('organization provider override is controlled by Enterprise or Pro', () => 
         reason: 'enabled_by_pro',
     });
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'cloud-plan', license: 'oss', billingPlan: 'hobby' }), {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     });
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'self-hosted-license', license: 'oss', billingPlan: 'pro' }), {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     });
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'cloud-plan', license: 'enterprise', billingPlan: 'hobby' }), {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     });
 });
 
@@ -272,18 +272,18 @@ test('provider resolution keeps system active in OSS', () => {
 
     assert.equal(resolution.currentSource, 'system');
     assert.equal(resolution.activeProvider.displayName, 'Qwen · qwen-plus');
-    assert.equal(resolution.managementMode, 'global_readonly');
+    assert.equal(resolution.managementMode, 'organization_editable');
     assert.deepEqual(
         resolution.scopeRows.map(row => [row.scope, row.status]),
         [
             ['Global', 'active'],
-            ['Organization', 'enterprise'],
+            ['Organization', 'available'],
             ['User', 'coming_soon'],
         ],
     );
 });
 
-test('AI providers view model marks only the effective default in OSS', () => {
+test('AI providers view model uses organization default in OSS', () => {
     const viewModel = buildAiProvidersViewModel({
         organizationProviders: [
             {
@@ -304,17 +304,17 @@ test('AI providers view model marks only the effective default in OSS', () => {
         env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen-plus', DORY_AI_API_KEY: 'sk-test' },
     });
 
-    assert.equal(viewModel.defaultProviderId, 'system');
+    assert.equal(viewModel.defaultProviderId, 'provider_openai');
     assert.deepEqual(
         viewModel.providers.map(provider => [provider.id, provider.status, provider.isDefault]),
         [
-            ['system', 'active', true],
-            ['provider_openai', 'enabled', false],
+            ['provider_openai', 'active', true],
+            ['system', 'enabled', false],
         ],
     );
 });
 
-test('AI providers view model hides organization providers in Docker OSS', () => {
+test('AI providers view model uses organization providers in Docker OSS', () => {
     const viewModel = buildAiProvidersViewModel({
         organizationProviders: [
             {
@@ -338,11 +338,14 @@ test('AI providers view model hides organization providers in Docker OSS', () =>
         env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen-plus', DORY_AI_API_KEY: 'sk-test' },
     });
 
-    assert.equal(viewModel.organizationProviderCapability.enabled, false);
-    assert.equal(viewModel.defaultProviderId, 'system');
+    assert.equal(viewModel.organizationProviderCapability.enabled, true);
+    assert.equal(viewModel.defaultProviderId, 'provider_openai');
     assert.deepEqual(
         viewModel.providers.map(provider => [provider.id, provider.source, provider.status, provider.isDefault]),
-        [['system', 'system', 'active', true]],
+        [
+            ['provider_openai', 'organization', 'active', true],
+            ['system', 'system', 'enabled', false],
+        ],
     );
 });
 
@@ -560,7 +563,10 @@ test('local agent defaults remain available without custom cloud provider entitl
     });
 
     assert.equal(viewModel.defaultProviderId, 'provider_local');
-    assert.equal(viewModel.providers.some(provider => provider.provider === 'codex-agent'), true);
+    assert.equal(
+        viewModel.providers.some(provider => provider.provider === 'codex-agent'),
+        true,
+    );
 });
 
 test('AI providers view model lists system plus organization providers with default state', () => {

@@ -773,7 +773,6 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
     const upgradeTarget = providersQuery.data?.upgradeTarget ?? 'enterprise';
     const resolvedRuntime = providersQuery.data?.runtime ?? initialRuntime;
     const isDesktopRuntime = resolvedRuntime === 'desktop';
-    const isDockerRuntime = resolvedRuntime === 'docker';
     const systemProviders = providers.filter(provider => provider.source === 'system');
     const organizationProviders = providers.filter(provider => provider.source === 'organization');
     const localAgentProviders = organizationProviders.filter(provider => isLocalAiAgentProvider(provider.provider));
@@ -1176,62 +1175,60 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                     t={t}
                 />
 
-                {!isDockerRuntime ? (
-                    <section className="space-y-3">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="flex items-start gap-3">
-                                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                                    <KeyRound className="size-4" />
-                                </span>
-                                <div>
-                                    <h3 className="font-semibold">{t('Groups.OrganizationTitle')}</h3>
-                                    <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationDescription')}</p>
-                                </div>
+                <section className="space-y-3">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                                <KeyRound className="size-4" />
+                            </span>
+                            <div>
+                                <h3 className="font-semibold">{t('Groups.OrganizationTitle')}</h3>
+                                <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationDescription')}</p>
                             </div>
-                            {canManageProviders ? (
-                                <Button size="sm" onClick={() => openAddForm()} disabled={isSaving || Boolean(formMode)}>
-                                    <Plus className="size-4" />
-                                    {t('Actions.AddProvider')}
-                                </Button>
-                            ) : null}
                         </div>
-
-                        {organizationProvidersAvailable && !canManageProviders ? (
-                            <div className="rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">{t('ReadOnlyHint')}</div>
+                        {canManageProviders ? (
+                            <Button size="sm" onClick={() => openAddForm()} disabled={isSaving || Boolean(formMode)}>
+                                <Plus className="size-4" />
+                                {t('Actions.AddProvider')}
+                            </Button>
                         ) : null}
+                    </div>
 
-                        {providersQuery.isLoading ? (
-                            <DefaultAiProviderSkeleton />
-                        ) : !organizationProvidersAvailable ? (
-                            <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
-                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="flex items-start gap-3">
-                                        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground">
-                                            <LockKeyhole className="size-4" />
-                                        </span>
-                                        <div>
-                                            <div className="text-sm font-medium">
-                                                {upgradeTarget === 'pro' ? t('Groups.OrganizationLockedProTitle') : t('Groups.OrganizationLockedEnterpriseTitle')}
-                                            </div>
-                                            <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationLockedDescription')}</p>
+                    {organizationProvidersAvailable && !canManageProviders ? (
+                        <div className="rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">{t('ReadOnlyHint')}</div>
+                    ) : null}
+
+                    {providersQuery.isLoading ? (
+                        <DefaultAiProviderSkeleton />
+                    ) : !organizationProvidersAvailable ? (
+                        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex items-start gap-3">
+                                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border bg-background text-muted-foreground">
+                                        <LockKeyhole className="size-4" />
+                                    </span>
+                                    <div>
+                                        <div className="text-sm font-medium">
+                                            {upgradeTarget === 'pro' ? t('Groups.OrganizationLockedProTitle') : t('Groups.OrganizationLockedEnterpriseTitle')}
                                         </div>
+                                        <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationLockedDescription')}</p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={openUpgrade} className="w-full sm:w-auto">
-                                        <ExternalLink className="size-4" />
-                                        {upgradeActionLabel}
-                                    </Button>
                                 </div>
+                                <Button variant="outline" size="sm" onClick={openUpgrade} className="w-full sm:w-auto">
+                                    <ExternalLink className="size-4" />
+                                    {upgradeActionLabel}
+                                </Button>
                             </div>
-                        ) : customOrganizationProviders.length > 0 ? (
-                            <div className="space-y-3">{customOrganizationProviders.map(renderProviderRow)}</div>
-                        ) : (
-                            <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
-                                <div className="text-sm font-medium">{t('Groups.OrganizationEmptyTitle')}</div>
-                                <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationEmptyDescription')}</p>
-                            </div>
-                        )}
-                    </section>
-                ) : null}
+                        </div>
+                    ) : customOrganizationProviders.length > 0 ? (
+                        <div className="space-y-3">{customOrganizationProviders.map(renderProviderRow)}</div>
+                    ) : (
+                        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
+                            <div className="text-sm font-medium">{t('Groups.OrganizationEmptyTitle')}</div>
+                            <p className="mt-1 text-sm text-muted-foreground">{t('Groups.OrganizationEmptyDescription')}</p>
+                        </div>
+                    )}
+                </section>
             </div>
 
             <Dialog open={Boolean(formMode)} onOpenChange={open => !open && !isFormBusy && setFormMode(null)}>

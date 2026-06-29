@@ -5,8 +5,8 @@ import { isAiProviderApiKeyRequired, isAiProviderBaseUrlRequired, isLocalAiAgent
 
 export type OrganizationPlan = 'hobby' | 'pro';
 export type OrganizationAiProviderEntitlementMode = 'cloud-plan' | 'self-hosted-license';
-export type OrganizationAiProviderCapabilitySource = 'cloud-plan' | 'ee-license' | 'none';
-export type OrganizationAiProviderCapabilityReason = 'enabled_by_pro' | 'enabled_by_enterprise' | 'requires_upgrade';
+export type OrganizationAiProviderCapabilitySource = 'cloud-plan' | 'ee-license' | 'temporary' | 'none';
+export type OrganizationAiProviderCapabilityReason = 'enabled_by_pro' | 'enabled_by_enterprise' | 'temporarily_open' | 'requires_upgrade';
 
 export type OrganizationAiProviderCapability = {
     enabled: boolean;
@@ -47,9 +47,9 @@ export function resolveOrganizationAiProviderCapability(options: {
     }
 
     return {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     };
 }
 
@@ -381,25 +381,15 @@ export function buildAiProvidersViewModel(options: {
         billingPlan: isDockerRuntime ? null : options.billingPlan,
     });
     const hasOrganizationDefault = resolution.activeProvider.source === 'organization';
-    const organizationRows = isDockerRuntime
-        ? options.organizationProviders.filter(provider => isLocalAiAgentProvider(provider.provider)).map(provider => {
-              const row = buildOrganizationProviderRow(provider);
-              const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
-              return {
-                  ...row,
-                  isDefault: isEffectiveDefault,
-                  status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
-              };
-          })
-        : options.organizationProviders.map(provider => {
-              const row = buildOrganizationProviderRow(provider);
-              const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
-              return {
-                  ...row,
-                  isDefault: isEffectiveDefault,
-                  status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
-              };
-          });
+    const organizationRows = options.organizationProviders.map(provider => {
+        const row = buildOrganizationProviderRow(provider);
+        const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
+        return {
+            ...row,
+            isDefault: isEffectiveDefault,
+            status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
+        };
+    });
     const defaultProviderId = organizationRows.find(row => row.isDefault && row.status !== 'disabled')?.id ?? 'system';
     const rows = [buildSystemProviderRow(resolution.globalProvider, !hasOrganizationDefault), ...organizationRows];
     const providers = [...rows].sort((left, right) => {
