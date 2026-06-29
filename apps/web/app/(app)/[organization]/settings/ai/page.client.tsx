@@ -1091,8 +1091,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
               : t('Fields.ApiKeyOptionalPlaceholder');
     const upgradeActionLabel = upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise');
     const doryOrigin = typeof window === 'undefined' ? '' : window.location.origin;
-    const localAiLoginCommand = `npx -y @getdory/mcp login --url ${doryOrigin} --local-ai`;
-    const localAiBridgeCommand = `npx -y @getdory/mcp local-ai --url ${doryOrigin}`;
+    const localAiBridgeCommand = `npx -y @getdory/cli agent codex --url ${doryOrigin}`;
 
     function renderProviderRow(row: AiProviderRow) {
         const providerDescription = row.source === 'organization' && row.isDefault ? t('OrganizationProvider.ActiveDescription') : t('OrganizationProvider.Description');
@@ -1342,12 +1341,6 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                         <DialogDescription>{t('LocalAi.SetupDescription')}</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>{t('LocalAi.LoginCommand')}</Label>
-                            <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                                <code>{localAiLoginCommand}</code>
-                            </pre>
-                        </div>
                         <div className="space-y-2">
                             <Label>{t('LocalAi.BridgeCommand')}</Label>
                             <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">

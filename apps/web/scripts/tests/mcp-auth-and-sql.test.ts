@@ -123,7 +123,7 @@ test('generateMcpToken returns one-time token metadata without storing the raw t
     assert.equal(generated.tokenHash.length, 64);
 });
 
-test('default MCP scopes cover v1 read and analysis capabilities', () => {
+test('default MCP scopes cover v1 read, analysis, and local agent capabilities', () => {
     assert.deepEqual(
         [...MCP_DEFAULT_SCOPES],
         [
@@ -136,6 +136,7 @@ test('default MCP scopes cover v1 read and analysis capabilities', () => {
             'saved_queries:read',
             'saved_queries:write',
             'monitoring:read',
+            'local_ai:run',
         ],
     );
 });

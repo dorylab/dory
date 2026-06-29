@@ -124,22 +124,22 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
                     mcpServers: {
                         dory: {
                             command: 'npx',
-                            args: ['-y', '@getdory/mcp', '--url', target],
+                            args: ['-y', '@getdory/cli', 'mcp', 'bridge', '--url', target],
                         },
                     },
                 },
                 null,
                 2,
             );
-            const codexCli = [`npx -y @getdory/mcp login --url ${target}`, `codex mcp add dory -- npx -y @getdory/mcp --url ${target}`, 'codex mcp list'].join('\n');
-            const codexToml = [`[mcp_servers.dory]`, `command = "npx"`, `args = ["-y", "@getdory/mcp", "--url", "${target}"]`].join('\n');
-            const claudeCli = [`npx -y @getdory/mcp login --url ${target}`, `claude mcp add dory -- npx -y @getdory/mcp --url ${target}`, 'claude mcp list'].join('\n');
+            const codexCli = [`npx -y @getdory/cli mcp login --url ${target}`, `codex mcp add dory -- npx -y @getdory/cli mcp bridge --url ${target}`, 'codex mcp list'].join('\n');
+            const codexToml = [`[mcp_servers.dory]`, `command = "npx"`, `args = ["-y", "@getdory/cli", "mcp", "bridge", "--url", "${target}"]`].join('\n');
+            const claudeCli = [`npx -y @getdory/cli mcp login --url ${target}`, `claude mcp add dory -- npx -y @getdory/cli mcp bridge --url ${target}`, 'claude mcp list'].join('\n');
             const claudeJson = JSON.stringify(
                 {
                     mcpServers: {
                         dory: {
                             command: 'npx',
-                            args: ['-y', '@getdory/mcp', '--url', target],
+                            args: ['-y', '@getdory/cli', 'mcp', 'bridge', '--url', target],
                         },
                     },
                 },
@@ -148,7 +148,7 @@ export function AgentAccessPanel({ currentOrganizationId = null, initialUserId =
             );
             return {
                 target,
-                loginCli: `npx -y @getdory/mcp login --url ${target}`,
+                loginCli: `npx -y @getdory/cli mcp login --url ${target}`,
                 genericJson,
                 codexCli,
                 codexToml,

@@ -11,6 +11,7 @@ import { getBridgeConfigPath, removeCredential, resolveCredential } from './brid
 import { createRemoteMcpClient } from './bridge-remote.js';
 import { normalizeDoryTarget } from './bridge-url.js';
 import { startBridge } from './bridge.js';
+import { LOCAL_AI_SCOPES, startCodexAgentBridge } from './local-codex-agent.js';
 
 function printHelp() {
     console.log(`Dory CLI / Dory Headless Runtime
@@ -22,6 +23,8 @@ Usage:
 
   dory doctor --data standalone|desktop|self-hosted
   dory init --data standalone|desktop|self-hosted
+
+  dory agent codex --url <dory-origin>
 
   dory storage detect --data standalone|desktop|self-hosted
   dory storage doctor --data standalone|desktop|self-hosted
@@ -44,6 +47,10 @@ Hosted Dory bridge compatibility:
   dory mcp login --url <dory-origin>
   dory mcp status --url <dory-origin>
   dory mcp logout --url <dory-origin>
+
+Local Codex Agent:
+  dory agent codex --url <dory-origin>
+  Starts the local Codex Agent bridge so Dory Web can run Codex on this device.
 
 Data modes:
   --data standalone    Use independent ~/.dory app storage
@@ -145,7 +152,7 @@ async function runDoctor(args: ProfileOptions) {
     const data = dataMode(args);
     checks.push(doctorCheck('product', 'pass', 'Dory CLI / Dory Headless Runtime'));
     checks.push(doctorCheck('platform', 'pass', `${process.platform} ${process.arch}`));
-    checks.push(nodeMajor() >= 18 ? doctorCheck('node', 'pass', process.version) : doctorCheck('node', 'fail', `Node >=18 is required, found ${process.version}`));
+    checks.push(nodeMajor() >= 20 ? doctorCheck('node', 'pass', process.version) : doctorCheck('node', 'fail', `Node >=20 is required, found ${process.version}`));
     checks.push(doctorCheck('data_mode', 'pass', data));
 
     if (data === 'self-hosted') {
@@ -236,6 +243,7 @@ async function runHostedBridgeCommand(args: Extract<ReturnType<typeof parseArgs>
                 url: args.url,
                 clientName: args.clientName,
                 configPath,
+                scopes: LOCAL_AI_SCOPES,
             }),
         );
         return;
@@ -399,6 +407,15 @@ async function run() {
 
     if (args.command === 'action-list' || args.command === 'action-describe' || args.command === 'action-run') {
         await runActionCommand(args);
+        return;
+    }
+
+    if (args.command === 'agent-codex') {
+        await startCodexAgentBridge({
+            url: args.options.url,
+            name: args.options.name,
+            configPath: args.options.configPath,
+        });
         return;
     }
 

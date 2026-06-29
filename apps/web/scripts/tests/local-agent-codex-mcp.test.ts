@@ -65,7 +65,7 @@ test('local Codex prompt warns when Web bridge is too old for Dory tools', () =>
     );
 
     assert.ok(instruction.includes('does not advertise Dory MCP tool support'));
-    assert.ok(instruction.includes('restart the Dory local AI bridge'));
+    assert.ok(instruction.includes('restart the Dory Codex Agent'));
     assert.ok(instruction.includes('Do not claim that database tools or SQL queries have run'));
 });
 

@@ -250,7 +250,7 @@ function toolInstructions(options: LanguageModelV3CallOptions, context: LocalAge
         return [
             'The connected Dory local AI bridge is online but does not advertise Dory MCP tool support.',
             'Do not claim that database tools or SQL queries have run.',
-            'Tell the user to restart the Dory local AI bridge with an updated @getdory/mcp package before database query execution can work.',
+            'Tell the user to restart the Dory Codex Agent with an updated @getdory/cli package before database query execution can work.',
             'If useful, provide the SQL as a manual fallback only after clearly saying the query was not executed.',
         ];
     }

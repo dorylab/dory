@@ -111,3 +111,24 @@ test('parses self-hosted data mode', () => {
         databaseUrl: 'postgresql://postgres:postgres@localhost/postgres',
     });
 });
+
+test('parses local Codex Agent command', () => {
+    assert.deepEqual(parseArgs(['agent', 'codex', '--url', 'https://dory.test', '--name', 'Work Mac', '--config', '/tmp/dory-mcp.json']), {
+        command: 'agent-codex',
+        options: {
+            url: 'https://dory.test',
+            name: 'Work Mac',
+            configPath: '/tmp/dory-mcp.json',
+        },
+    });
+});
+
+test('parses local AI bridge login scope flag', () => {
+    assert.deepEqual(parseArgs(['mcp', 'login', '--url', 'https://dory.test', '--local-ai']), {
+        command: 'mcp-login',
+        url: 'https://dory.test',
+        clientName: undefined,
+        configPath: undefined,
+        localAi: true,
+    });
+});

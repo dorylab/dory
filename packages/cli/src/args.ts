@@ -26,6 +26,12 @@ export type ActionOptions = ProfileOptions & {
     yes: boolean;
 };
 
+export type AgentCodexOptions = {
+    url?: string;
+    name?: string;
+    configPath?: string;
+};
+
 export type ParsedArgs =
     | { command: 'help' }
     | ({ command: 'doctor' } & ProfileOptions)
@@ -34,9 +40,10 @@ export type ParsedArgs =
     | ({ command: 'action-list' } & ProfileOptions)
     | ({ command: 'action-describe'; actionId: string } & ProfileOptions)
     | { command: 'action-run'; options: ActionOptions }
+    | { command: 'agent-codex'; options: AgentCodexOptions }
     | { command: 'mcp-serve'; options: ServeOptions }
     | ({ command: 'mcp-token'; action: 'create' | 'revoke' | 'list'; id?: string; name?: string } & ProfileOptions)
-    | { command: 'mcp-bridge' | 'mcp-login' | 'mcp-logout' | 'mcp-status'; url?: string; clientName?: string; configPath?: string };
+    | { command: 'mcp-bridge' | 'mcp-login' | 'mcp-logout' | 'mcp-status'; url?: string; clientName?: string; configPath?: string; localAi?: boolean };
 
 export function readOption(args: string[], name: string) {
     const index = args.indexOf(name);
@@ -127,6 +134,20 @@ export function parseArgs(argv: string[]): ParsedArgs {
         };
     }
 
+    if (first === 'agent') {
+        if (second === 'codex') {
+            return {
+                command: 'agent-codex',
+                options: {
+                    url: readOption(argv, '--url') ?? readOption(argv, '-u'),
+                    name: readOption(argv, '--name') ?? readOption(argv, '--client-name'),
+                    configPath,
+                },
+            };
+        }
+        return { command: 'help' };
+    }
+
     if (first === 'mcp') {
         if (second === 'serve') {
             return {
@@ -160,6 +181,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
                 url: readOption(argv, '--url') ?? readOption(argv, '-u'),
                 clientName: readOption(argv, '--client-name'),
                 configPath,
+                localAi: hasFlag(argv, '--local-ai'),
             } as ParsedArgs;
         }
     }

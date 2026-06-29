@@ -10,9 +10,9 @@ import {
     DORY_CODEX_MCP_ENABLED_TOOLS,
     DORY_CODEX_MCP_TOKEN_ENV,
     DORY_CODEX_MCP_TOOL_TIMEOUT_SEC,
-    startLocalAiBridge,
+    startCodexAgentBridge,
     type CodexDoryMcpConfig,
-} from './local-ai.js';
+} from './local-codex-agent.js';
 
 function jsonResponse(data: unknown, status = 200) {
     return new Response(JSON.stringify({ code: 0, data }), {
@@ -50,8 +50,8 @@ test('Codex MCP args enable Dory tools without exposing bearer token', () => {
     });
 });
 
-test('local AI bridge runs claimed Codex jobs with Dory MCP config', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'dory-mcp-local-ai-test-'));
+test('Codex Agent bridge runs claimed jobs with Dory MCP config', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dory-cli-codex-agent-test-'));
     const configPath = join(dir, 'mcp.json');
     await writeFile(
         configPath,
@@ -91,7 +91,7 @@ test('local AI bridge runs claimed Codex jobs with Dory MCP config', async () =>
         throw new Error(`Unexpected URL: ${url}`);
     };
 
-    await startLocalAiBridge({
+    await startCodexAgentBridge({
         url: 'https://dory.test',
         name: 'Test Bridge',
         configPath,
@@ -125,4 +125,89 @@ test('local AI bridge runs claimed Codex jobs with Dory MCP config', async () =>
     assert.equal(complete.authorization, 'Bearer dory_mcp_secret_token');
     assert.equal(complete.body.ok, true);
     assert.equal(complete.body.text, 'done');
+});
+
+test('Codex Agent bridge reauthorizes when existing token lacks local AI scope', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'dory-cli-codex-agent-reauth-test-'));
+    const configPath = join(dir, 'mcp.json');
+    await writeFile(
+        configPath,
+        JSON.stringify({
+            version: 1,
+            credentials: {
+                'https://dory.test': {
+                    endpoint: 'https://dory.test/api/mcp',
+                    token: 'old_token',
+                    tokenPrefix: 'old_token',
+                    createdAt: '2026-01-01T00:00:00.000Z',
+                },
+            },
+        }),
+    );
+
+    let registerCount = 0;
+    let pollCount = 0;
+    const requestedScopes: string[][] = [];
+    const fetchFn = async (url: string | URL, init?: RequestInit) => {
+        const parsed = new URL(String(url));
+        const body = JSON.parse(String(init?.body ?? '{}'));
+
+        if (parsed.pathname === '/api/mcp/local-ai/bridges/register') {
+            registerCount += 1;
+            if (registerCount === 1) {
+                return jsonResponse({ message: 'missing scope' }, 403);
+            }
+            assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer new_token');
+            return jsonResponse({ bridge: { id: 'bridge-reauth', provider: 'codex-agent', name: 'Test Bridge' } });
+        }
+
+        if (parsed.pathname === '/api/mcp/link/start') {
+            requestedScopes.push(body.scopes);
+            return jsonResponse({
+                requestId: 'request-reauth',
+                authorizeUrl: 'https://dory.test/mcp/authorize?requestId=request-reauth',
+                expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            });
+        }
+
+        if (parsed.pathname === '/api/mcp/link/poll') {
+            pollCount += 1;
+            return jsonResponse({
+                status: 'approved',
+                token: 'new_token',
+                record: { tokenPrefix: 'new_token' },
+            });
+        }
+
+        if (parsed.pathname === '/api/mcp/local-ai/jobs/claim') {
+            return jsonResponse({ job: { id: 'job-reauth', provider: 'codex-agent', model: 'default', prompt: 'hello' } });
+        }
+
+        if (parsed.pathname === '/api/mcp/local-ai/jobs/job-reauth/complete') {
+            return jsonResponse({ ok: true });
+        }
+
+        throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    await startCodexAgentBridge({
+        url: 'https://dory.test',
+        name: 'Test Bridge',
+        configPath,
+        fetchFn,
+        openUrl: () => undefined,
+        pollIntervalMs: 0,
+        maxJobs: 1,
+        runCodexAgentFn: async () => {
+            return {
+                text: 'done',
+                stdout: '',
+                stderr: '',
+            };
+        },
+    });
+
+    assert.equal(registerCount, 2);
+    assert.equal(pollCount, 1);
+    assert.ok(requestedScopes[0].includes('local_ai:run'));
 });

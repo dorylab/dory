@@ -18,6 +18,7 @@ export const MCP_DEFAULT_SCOPES = [
     'saved_queries:read',
     'saved_queries:write',
     'monitoring:read',
+    'local_ai:run',
 ] as const;
 
 export type DoryOrganizationAccess = {
