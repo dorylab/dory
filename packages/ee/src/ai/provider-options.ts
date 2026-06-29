@@ -35,8 +35,8 @@ export const AI_PROVIDER_ICON_SRCS: Partial<Record<OrganizationAiProviderType, s
     xai: '/images/logos/ai-providers/xai.svg',
     meta: '/images/logos/ai-providers/meta.svg',
     'openai-compatible': '/images/logos/ai-providers/openai-compatible.svg',
-    'codex-agent': '/images/logos/ai-providers/openai-compatible.svg',
-    'claude-code-agent': '/images/logos/ai-providers/anthropic.svg',
+    'codex-agent': '/images/logos/ai-providers/codex-agent.svg',
+    'claude-code-agent': '/images/logos/ai-providers/claude-code-agent.svg',
     cloudflare: '/images/logos/ai-providers/cloudflare.svg',
     'cloudflare-gateway': '/images/logos/ai-providers/cloudflare-gateway.svg',
 };

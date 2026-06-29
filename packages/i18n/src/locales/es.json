@@ -3662,6 +3662,12 @@
                 "LoginCommand": "Autorizar Dory MCP",
                 "BridgeCommand": "Iniciar bridge de IA local",
                 "SetupRefreshHint": "Cuando el bridge esté en ejecución, actualiza este panel y habilita Codex Agent.",
+                "ViewSetup": "Ver comandos de conexión",
+                "UsageSetupHint": "Inicia el bridge de IA local de Dory MCP en la terminal de este dispositivo y luego actualiza este panel para habilitar Codex Agent desde la app web.",
+                "UsageBridgeReadyHint": "El bridge de Dory MCP está conectado. Habilita Codex Agent y configúralo como modelo predeterminado.",
+                "UsageEnabledHint": "La IA local está habilitada. Configúrala como modelo predeterminado para ejecutar las solicitudes del asistente mediante el agente de este dispositivo.",
+                "UsageDefaultHint": "La IA local es el modelo predeterminado. Mantén el bridge o el agente en ejecución en este dispositivo mientras usas el asistente de chat.",
+                "UsageDesktopHint": "En Desktop, Dory detecta Codex o Claude Code CLI en este dispositivo. Cuando se detecte, habilítalo y configúralo como modelo predeterminado.",
                 "ModelServiceDescription": "Usa el endpoint local compatible con OpenAI en {endpoint}."
             }
         },

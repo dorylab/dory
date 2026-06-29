@@ -258,7 +258,8 @@ test('AI provider options expose local icons', () => {
 
     assert.equal(getAiProviderIconSrc('qwen'), '/images/logos/ai-providers/qwen.svg');
     assert.equal(getAiProviderIconSrc('openai-compatible'), '/images/logos/ai-providers/openai-compatible.svg');
-    assert.equal(getAiProviderIconSrc('codex-agent'), '/images/logos/ai-providers/openai-compatible.svg');
+    assert.equal(getAiProviderIconSrc('codex-agent'), '/images/logos/ai-providers/codex-agent.svg');
+    assert.equal(getAiProviderIconSrc('claude-code-agent'), '/images/logos/ai-providers/claude-code-agent.svg');
     assert.equal(getAiProviderIconSrc('cloudflare-gateway'), '/images/logos/ai-providers/cloudflare-gateway.svg');
 });
 

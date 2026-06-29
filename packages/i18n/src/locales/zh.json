@@ -3668,6 +3668,12 @@
                 "LoginCommand": "授权 Dory MCP",
                 "BridgeCommand": "启动本机 AI bridge",
                 "SetupRefreshHint": "Bridge 运行后，刷新此面板并启用 Codex Agent。",
+                "ViewSetup": "查看连接命令",
+                "UsageSetupHint": "在这台设备的终端启动 Dory MCP 本机 AI bridge，刷新此面板后即可从 Web 应用启用 Codex Agent。",
+                "UsageBridgeReadyHint": "Dory MCP bridge 已连接。下一步启用 Codex Agent，并将它设为默认模型。",
+                "UsageEnabledHint": "本机 AI 已启用。设为默认后，聊天助手会通过这台设备上的 Agent 运行。",
+                "UsageDefaultHint": "本机 AI 已是默认模型。使用聊天助手时，请保持这台设备上的 bridge 或 Agent 运行。",
+                "UsageDesktopHint": "桌面版会检测这台设备上的 Codex 或 Claude Code CLI；检测到后即可启用并设为默认模型。",
                 "ModelServiceDescription": "使用本机 OpenAI-compatible endpoint：{endpoint}。"
             }
         },

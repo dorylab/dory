@@ -344,7 +344,7 @@ function DefaultAiProviderCard({
                         <div className="min-w-0">
                             <div className="text-sm font-medium">{row.providerLabel}</div>
                             <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <h3 className="min-w-0 font-semibold">{row.displayName}</h3>
+                                <h3 className="min-w-0 font-semibold">{row.modelLabel}</h3>
                                 <DefaultAiProviderBadges row={row} ownerLabel={ownerLabel} t={t} />
                             </div>
                             <p className="mt-2 text-sm text-muted-foreground">{row.configured ? description : unavailableDescription}</p>
@@ -539,7 +539,7 @@ function LocalAgentCard({
                             active ? 'border-primary/30 bg-background text-primary' : 'bg-background',
                         )}
                     >
-                        <Bot className="size-4" />
+                        <ProviderIcon provider={agent.id} label={title} className="size-5" />
                     </span>
                     <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
@@ -672,6 +672,20 @@ function LocalAiProviderSection({
         { id: 'lmstudio' as const, available: false, label: 'LM Studio', baseUrl: 'http://127.0.0.1:1234/v1', error: null },
     ];
     const bridges = status?.bridges ?? [];
+    const codexAgent = agents.find(agent => agent.id === 'codex-agent') ?? agents[0];
+    const codexBridge = bridges.find(bridge => bridge.provider === 'codex-agent' && bridge.online) ?? bridges.find(bridge => bridge.provider === 'codex-agent') ?? null;
+    const hasLocalAgentDefault = localAgentProviders.some(provider => provider.isDefault);
+    const hasLocalAgentEnabled = localAgentProviders.some(provider => provider.configured);
+    const codexBridgeNeedsUpdate = !isDesktopRuntime && Boolean(codexBridge?.online) && codexBridge?.supportsDoryMcpTools !== true;
+    const usageHint = hasLocalAgentDefault
+        ? t('LocalAi.UsageDefaultHint')
+        : hasLocalAgentEnabled
+          ? t('LocalAi.UsageEnabledHint')
+          : isDesktopRuntime
+            ? t('LocalAi.UsageDesktopHint')
+            : codexBridge?.online && !codexBridgeNeedsUpdate
+              ? t('LocalAi.UsageBridgeReadyHint')
+              : t('LocalAi.UsageSetupHint');
 
     return (
         <section className="space-y-3">
@@ -684,6 +698,18 @@ function LocalAiProviderSection({
                     <p className="mt-1 text-sm text-muted-foreground">{status?.available ? t('LocalAi.Description') : t('LocalAi.DesktopOnlyDescription')}</p>
                 </div>
             </div>
+
+            <Alert className="items-center border-muted-foreground/15 bg-muted/30 [&>svg]:translate-y-0">
+                <CircleHelp className="size-4 self-center" />
+                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <span>{usageHint}</span>
+                    {!isDesktopRuntime && codexAgent ? (
+                        <Button variant="outline" size="sm" onClick={() => onOpenSetup(codexAgent)} className="w-full shrink-0 sm:w-auto">
+                            {t('LocalAi.ViewSetup')}
+                        </Button>
+                    ) : null}
+                </AlertDescription>
+            </Alert>
 
             <div className="space-y-3">
                 {agents.map(agent => (
