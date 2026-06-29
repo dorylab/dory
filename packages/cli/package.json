@@ -6,7 +6,7 @@
     "type": "module",
     "repository": {
         "type": "git",
-        "url": "https://github.com/dorylab/dory.git",
+        "url": "git+https://github.com/dorylab/dory.git",
         "directory": "packages/cli"
     },
     "bugs": {
@@ -23,7 +23,7 @@
         "headless"
     ],
     "bin": {
-        "dory": "./dist/cli.js"
+        "dory": "dist/cli.js"
     },
     "files": [
         "dist",
