@@ -217,9 +217,6 @@ function createAuth() {
 
         const auth = betterAuth({
             appName: 'Dory',
-            experimental: {
-                joins: true,
-            },
             database: drizzleAdapter(db, { provider, schema }),
             plugins: [
                 ...authPlugins,
