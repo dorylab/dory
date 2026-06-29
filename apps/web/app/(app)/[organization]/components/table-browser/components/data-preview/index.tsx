@@ -312,6 +312,10 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const [sortState, setSortState] = useState<TablePreviewSort | null>(null);
     const [hasUserRequestedPreviewUpdate, setHasUserRequestedPreviewUpdate] = useState(false);
 
+    useEffect(() => {
+        void setPagination({ pageIndex: 0 });
+    }, [connectionId, databaseName, source, storageKey, tableName, setPagination]);
+
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
     const { data: tableStats } = useTableStatsQuery({ connectionId, databaseName, tableName });
     const { data: tableColumns } = useTableStructureColumnsQuery({ connectionId, databaseName, tableName });
