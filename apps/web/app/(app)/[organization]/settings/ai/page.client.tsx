@@ -495,6 +495,7 @@ function LocalAgentCard({
     agent,
     row,
     bridge,
+    grouped = false,
     isDesktopRuntime,
     canManageProviders,
     isSaving,
@@ -507,6 +508,7 @@ function LocalAgentCard({
     agent: LocalAiAgentStatus;
     row?: AiProviderRow | null;
     bridge?: LocalAiBridgeStatus | null;
+    grouped?: boolean;
     isDesktopRuntime: boolean;
     canManageProviders: boolean;
     isSaving: boolean;
@@ -530,7 +532,12 @@ function LocalAgentCard({
     const ready = detected && !bridgeNeedsUpdate;
 
     return (
-        <div className={cn('rounded-lg border px-4 py-4 transition-colors', active ? 'border-primary/25 bg-primary/[0.03]' : 'bg-background')}>
+        <div
+            className={cn(
+                grouped ? 'px-4 py-4 transition-colors' : 'rounded-lg border px-4 py-4 transition-colors',
+                active ? (grouped ? 'bg-primary/[0.03]' : 'border-primary/25 bg-primary/[0.03]') : 'bg-background',
+            )}
+        >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
                     <span
@@ -600,19 +607,21 @@ function LocalAgentCard({
 
 function LocalModelServiceCard({
     service,
+    grouped = false,
     canManageProviders,
     isSaving,
     onConnect,
     t,
 }: {
     service: LocalAiModelServiceStatus;
+    grouped?: boolean;
     canManageProviders: boolean;
     isSaving: boolean;
     onConnect: (service: LocalAiModelServiceStatus) => void;
     t: ReturnType<typeof useTranslations>;
 }) {
     return (
-        <div className="rounded-lg border bg-background px-4 py-4">
+        <div className={cn(grouped ? 'bg-background px-4 py-4' : 'rounded-lg border bg-background px-4 py-4')}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
                     <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border bg-background">
@@ -699,45 +708,49 @@ function LocalAiProviderSection({
                 </div>
             </div>
 
-            <Alert className="items-center border-muted-foreground/15 bg-muted/30 [&>svg]:translate-y-0">
-                <CircleHelp className="size-4 self-center" />
-                <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <span>{usageHint}</span>
-                    {!isDesktopRuntime && codexAgent ? (
-                        <Button variant="outline" size="sm" onClick={() => onOpenSetup(codexAgent)} className="w-full shrink-0 sm:w-auto">
-                            {t('LocalAi.ViewSetup')}
-                        </Button>
-                    ) : null}
-                </AlertDescription>
-            </Alert>
+            <div className="overflow-hidden rounded-lg border bg-background">
+                <Alert className="items-center rounded-none border-0 bg-muted/30 [&>svg]:translate-y-0">
+                    <CircleHelp className="size-4 self-center" />
+                    <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <span>{usageHint}</span>
+                        {!isDesktopRuntime && codexAgent ? (
+                            <Button variant="outline" size="sm" onClick={() => onOpenSetup(codexAgent)} className="w-full shrink-0 sm:w-auto">
+                                {t('LocalAi.ViewSetup')}
+                            </Button>
+                        ) : null}
+                    </AlertDescription>
+                </Alert>
 
-            <div className="space-y-3">
-                {agents.map(agent => (
-                    <LocalAgentCard
-                        key={agent.id}
-                        agent={agent}
-                        row={localAgentProviders.find(provider => provider.provider === agent.id)}
-                        bridge={bridges.find(bridge => bridge.provider === agent.id && bridge.online) ?? bridges.find(bridge => bridge.provider === agent.id) ?? null}
-                        isDesktopRuntime={isDesktopRuntime}
-                        canManageProviders={canManageProviders && (isDesktopRuntime ? Boolean(status?.available) : true)}
-                        isSaving={isSaving}
-                        onEnable={onEnableAgent}
-                        onOpenSetup={onOpenSetup}
-                        onSetDefault={onSetDefault}
-                        onDelete={onDelete}
-                        t={t}
-                    />
-                ))}
-                {modelServices.map(service => (
-                    <LocalModelServiceCard
-                        key={service.id}
-                        service={service}
-                        canManageProviders={canManageModelServices && Boolean(status?.available)}
-                        isSaving={isSaving}
-                        onConnect={onConnectModelService}
-                        t={t}
-                    />
-                ))}
+                <div className="divide-y">
+                    {agents.map(agent => (
+                        <LocalAgentCard
+                            key={agent.id}
+                            agent={agent}
+                            row={localAgentProviders.find(provider => provider.provider === agent.id)}
+                            bridge={bridges.find(bridge => bridge.provider === agent.id && bridge.online) ?? bridges.find(bridge => bridge.provider === agent.id) ?? null}
+                            grouped
+                            isDesktopRuntime={isDesktopRuntime}
+                            canManageProviders={canManageProviders && (isDesktopRuntime ? Boolean(status?.available) : true)}
+                            isSaving={isSaving}
+                            onEnable={onEnableAgent}
+                            onOpenSetup={onOpenSetup}
+                            onSetDefault={onSetDefault}
+                            onDelete={onDelete}
+                            t={t}
+                        />
+                    ))}
+                    {modelServices.map(service => (
+                        <LocalModelServiceCard
+                            key={service.id}
+                            service={service}
+                            grouped
+                            canManageProviders={canManageModelServices && Boolean(status?.available)}
+                            isSaving={isSaving}
+                            onConnect={onConnectModelService}
+                            t={t}
+                        />
+                    ))}
+                </div>
             </div>
         </section>
     );
