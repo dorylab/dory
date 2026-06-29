@@ -5,6 +5,7 @@ import { buildOrganizationAiProvidersPayload } from '@dory/ee/ai/organization-ai
 import { getGlobalAiProviderStatusFromEnv, type AiProviderSummary, type OrganizationAiProviderEntitlementMode, type OrganizationPlan } from '@dory/ee/ai/organization-ai-providers';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 import { fetchDesktopCloud } from '@/lib/server/desktop-cloud';
+import { getLocalAiStatus } from '@/lib/server/local-ai/detection';
 
 const CLOUD_SYSTEM_PROVIDER_STATUS_PATH = '/api/organization/ai-providers/system-status';
 const CLOUD_AI_PROVIDERS_PATH = '/api/organization/ai-providers';
@@ -121,11 +122,18 @@ export async function resolveGlobalAiProviderForRequest(): Promise<AiProviderSum
 
 export async function buildOrganizationAiProvidersPayloadForRequest(options: BuildPayloadOptions) {
     const globalProvider = options.globalProvider ?? (await resolveGlobalAiProviderForRequest());
-
-    return buildOrganizationAiProvidersPayload({
+    const payload = await buildOrganizationAiProvidersPayload({
         ...options,
         globalProvider,
     });
+
+    return {
+        ...payload,
+        localAiStatus: await getLocalAiStatus({
+            db: options.db,
+            organizationId: options.organizationId,
+        }),
+    };
 }
 
 export function getLocalSystemAiProviderStatus(): AiProviderSummary {

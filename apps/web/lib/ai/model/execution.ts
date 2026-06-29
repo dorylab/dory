@@ -78,6 +78,7 @@ function createOrganizationModel(
         modelName: policy.modelName,
         apiKey: provider.apiKey,
         baseURL: provider.baseUrl,
+        organizationId: provider.organizationId,
     });
 }
 

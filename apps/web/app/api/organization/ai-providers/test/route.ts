@@ -4,8 +4,9 @@ import { z } from 'zod';
 import { withManagedOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { testOrganizationAiProviderConfig, getOrganizationAiProviderTestErrorMessage } from '@/lib/server/organization-ai-providers/test-provider';
-import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed } from '@dory/ee/ai/provider-options';
+import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed, isLocalAiAgentProvider } from '@dory/ee/ai/provider-options';
 import { resolveOrganizationAiProviderEntitlementForRequest } from '@/lib/server/organization-ai-providers/entitlement';
+import { assertLocalAiAgentAvailable } from '@/lib/server/local-ai/detection';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
 import { ORGANIZATION_AI_PROVIDERS } from '@dory/database/postgres/impl/organization-ai-providers';
@@ -34,7 +35,7 @@ export const POST = withManagedOrganizationHandler(async ({ req, db, organizatio
     }
 
     const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
-    if (!entitlement.capability.enabled) {
+    if (!entitlement.capability.enabled && !isLocalAiAgentProvider(parsed.data.provider)) {
         return NextResponse.json(
             ResponseUtil.error({
                 code: ErrorCodes.FORBIDDEN,
@@ -84,12 +85,31 @@ export const POST = withManagedOrganizationHandler(async ({ req, db, organizatio
         );
     }
 
+    if (isLocalAiAgentProvider(parsed.data.provider)) {
+        try {
+            await assertLocalAiAgentAvailable(parsed.data.provider, {
+                db,
+                organizationId,
+                target: parsed.data.baseUrl,
+            });
+        } catch (error) {
+            return NextResponse.json(
+                ResponseUtil.error({
+                    code: ErrorCodes.VALIDATION_ERROR,
+                    message: error instanceof Error ? error.message : translateApi('Api.OrganizationAiProviders.LocalAgentUnavailable', undefined, locale),
+                }),
+                { status: 400 },
+            );
+        }
+    }
+
     try {
         await testOrganizationAiProviderConfig({
             provider: parsed.data.provider,
             model: parsed.data.model,
             baseUrl: parsed.data.baseUrl,
             apiKey: parsed.data.apiKey,
+            organizationId,
         });
 
         return NextResponse.json(ResponseUtil.success({ ok: true }));

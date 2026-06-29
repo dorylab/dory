@@ -1,15 +1,18 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
-import { mcpAccessTokens, mcpAuthorizationRequests, organizations } from '@dory/database/schema';
+import { localAiBridges, localAiJobs, mcpAccessTokens, mcpAuthorizationRequests, organizations } from '@dory/database/schema';
 import { translateDatabase } from '@dory/database/i18n';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
 
 export type McpAccessTokenRecord = typeof mcpAccessTokens.$inferSelect;
 export type McpAuthorizationRequestRecord = typeof mcpAuthorizationRequests.$inferSelect;
+export type LocalAiBridgeRecord = typeof localAiBridges.$inferSelect;
+export type LocalAiJobRecord = typeof localAiJobs.$inferSelect;
 export type McpAuthorizationRequestStatus = 'pending' | 'approved' | 'denied';
 export type McpAuthorizationPollStatus = 'not_found' | 'pending' | 'approved' | 'denied' | 'expired' | 'consumed' | 'verifier_mismatch';
+export type LocalAiJobStatus = 'pending' | 'claimed' | 'completed' | 'failed' | 'expired';
 
 export type McpAccessTokenCreateInput = {
     organizationId: string;
@@ -24,6 +27,24 @@ export type McpAuthorizationRequestCreateInput = {
     clientName: string;
     verifierHash: string;
     scopes: string[];
+    expiresAt: Date;
+};
+
+export type LocalAiBridgeRegisterInput = {
+    organizationId: string;
+    userId: string;
+    mcpTokenId: string;
+    provider: string;
+    name: string;
+    capabilities?: Record<string, unknown> | null;
+};
+
+export type LocalAiJobCreateInput = {
+    organizationId: string;
+    bridgeId: string;
+    provider: string;
+    model: string;
+    prompt: string;
     expiresAt: Date;
 };
 
@@ -82,6 +103,11 @@ function parseOrganizationMetadata(raw?: string | null): OrganizationMetadata {
 
 function serializeOrganizationMetadata(metadata: OrganizationMetadata) {
     return JSON.stringify(metadata);
+}
+
+function normalizeName(value?: string | null) {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed.slice(0, 80) : 'Dory MCP';
 }
 
 export function resolveMcpAuthorizationPollState(
@@ -373,5 +399,205 @@ export class PostgresMcpRepository {
             .returning({ id: mcpAccessTokens.id });
 
         return rows.length > 0;
+    }
+
+    async registerLocalAiBridge(input: LocalAiBridgeRegisterInput): Promise<LocalAiBridgeRecord> {
+        const now = new Date();
+        const name = normalizeName(input.name);
+        const existing = await this.db
+            .select()
+            .from(localAiBridges)
+            .where(
+                and(
+                    eq(localAiBridges.mcpTokenId, input.mcpTokenId),
+                    eq(localAiBridges.provider, input.provider),
+                    eq(localAiBridges.name, name),
+                    isNull(localAiBridges.revokedAt),
+                ),
+            )
+            .orderBy(desc(localAiBridges.updatedAt))
+            .limit(1);
+
+        if (existing[0]) {
+            const [updated] = await this.db
+                .update(localAiBridges)
+                .set({
+                    organizationId: input.organizationId,
+                    userId: input.userId,
+                    capabilities: input.capabilities ?? null,
+                    lastSeenAt: now,
+                    updatedAt: now,
+                })
+                .where(eq(localAiBridges.id, existing[0].id))
+                .returning();
+
+            if (!updated) {
+                throw new DatabaseError('Failed to update local AI bridge', 500);
+            }
+
+            return updated;
+        }
+
+        const [created] = await this.db
+            .insert(localAiBridges)
+            .values({
+                organizationId: input.organizationId,
+                userId: input.userId,
+                mcpTokenId: input.mcpTokenId,
+                provider: input.provider,
+                name,
+                capabilities: input.capabilities ?? null,
+                lastSeenAt: now,
+                updatedAt: now,
+            })
+            .returning();
+
+        if (!created) {
+            throw new DatabaseError('Failed to create local AI bridge', 500);
+        }
+
+        return created;
+    }
+
+    async listLocalAiBridges(organizationId: string): Promise<LocalAiBridgeRecord[]> {
+        return this.db
+            .select()
+            .from(localAiBridges)
+            .where(and(eq(localAiBridges.organizationId, organizationId), isNull(localAiBridges.revokedAt)))
+            .orderBy(desc(localAiBridges.lastSeenAt), desc(localAiBridges.updatedAt));
+    }
+
+    async getLocalAiBridge(organizationId: string, id: string): Promise<LocalAiBridgeRecord | null> {
+        const rows = await this.db
+            .select()
+            .from(localAiBridges)
+            .where(and(eq(localAiBridges.organizationId, organizationId), eq(localAiBridges.id, id), isNull(localAiBridges.revokedAt)))
+            .limit(1);
+
+        return rows[0] ?? null;
+    }
+
+    async touchLocalAiBridge(input: { organizationId: string; id: string; mcpTokenId: string; now?: Date }): Promise<LocalAiBridgeRecord | null> {
+        const now = input.now ?? new Date();
+        const [updated] = await this.db
+            .update(localAiBridges)
+            .set({
+                lastSeenAt: now,
+                updatedAt: now,
+            })
+            .where(and(eq(localAiBridges.organizationId, input.organizationId), eq(localAiBridges.id, input.id), eq(localAiBridges.mcpTokenId, input.mcpTokenId), isNull(localAiBridges.revokedAt)))
+            .returning();
+
+        return updated ?? null;
+    }
+
+    async createLocalAiJob(input: LocalAiJobCreateInput): Promise<LocalAiJobRecord> {
+        const [created] = await this.db
+            .insert(localAiJobs)
+            .values({
+                organizationId: input.organizationId,
+                bridgeId: input.bridgeId,
+                provider: input.provider,
+                model: input.model,
+                prompt: input.prompt,
+                status: 'pending',
+                expiresAt: input.expiresAt,
+                updatedAt: new Date(),
+            })
+            .returning();
+
+        if (!created) {
+            throw new DatabaseError('Failed to create local AI job', 500);
+        }
+
+        return created;
+    }
+
+    async getLocalAiJob(organizationId: string, id: string): Promise<LocalAiJobRecord | null> {
+        const rows = await this.db.select().from(localAiJobs).where(and(eq(localAiJobs.organizationId, organizationId), eq(localAiJobs.id, id))).limit(1);
+        return rows[0] ?? null;
+    }
+
+    async claimLocalAiJob(input: { organizationId: string; bridgeId: string; mcpTokenId: string; now?: Date }): Promise<LocalAiJobRecord | null> {
+        const now = input.now ?? new Date();
+        const bridge = await this.touchLocalAiBridge({
+            organizationId: input.organizationId,
+            id: input.bridgeId,
+            mcpTokenId: input.mcpTokenId,
+            now,
+        });
+        if (!bridge) return null;
+
+        await this.db
+            .update(localAiJobs)
+            .set({
+                status: 'expired',
+                errorMessage: 'Local AI job expired before it was claimed.',
+                completedAt: now,
+                updatedAt: now,
+            })
+            .where(and(eq(localAiJobs.organizationId, input.organizationId), eq(localAiJobs.bridgeId, input.bridgeId), eq(localAiJobs.status, 'pending'), lte(localAiJobs.expiresAt, now)));
+
+        return this.db.transaction(async tx => {
+            const [job] = await tx
+                .select()
+                .from(localAiJobs)
+                .where(and(eq(localAiJobs.organizationId, input.organizationId), eq(localAiJobs.bridgeId, input.bridgeId), eq(localAiJobs.status, 'pending')))
+                .orderBy(asc(localAiJobs.createdAt))
+                .limit(1);
+
+            if (!job) return null;
+
+            const [claimed] = await tx
+                .update(localAiJobs)
+                .set({
+                    status: 'claimed',
+                    attempts: job.attempts + 1,
+                    claimedAt: now,
+                    updatedAt: now,
+                })
+                .where(and(eq(localAiJobs.id, job.id), eq(localAiJobs.status, 'pending')))
+                .returning();
+
+            return claimed ?? null;
+        });
+    }
+
+    async completeLocalAiJob(input: {
+        organizationId: string;
+        bridgeId: string;
+        mcpTokenId: string;
+        id: string;
+        ok: boolean;
+        text?: string | null;
+        stdout?: string | null;
+        stderr?: string | null;
+        errorMessage?: string | null;
+        now?: Date;
+    }): Promise<LocalAiJobRecord | null> {
+        const now = input.now ?? new Date();
+        const bridge = await this.touchLocalAiBridge({
+            organizationId: input.organizationId,
+            id: input.bridgeId,
+            mcpTokenId: input.mcpTokenId,
+            now,
+        });
+        if (!bridge) return null;
+
+        const [updated] = await this.db
+            .update(localAiJobs)
+            .set({
+                status: input.ok ? 'completed' : 'failed',
+                resultText: input.ok ? (input.text ?? '') : null,
+                stdout: input.stdout ?? null,
+                stderr: input.stderr ?? null,
+                errorMessage: input.ok ? null : (input.errorMessage ?? 'Local AI job failed.'),
+                completedAt: now,
+                updatedAt: now,
+            })
+            .where(and(eq(localAiJobs.organizationId, input.organizationId), eq(localAiJobs.bridgeId, input.bridgeId), eq(localAiJobs.id, input.id), eq(localAiJobs.status, 'claimed')))
+            .returning();
+
+        return updated ?? null;
     }
 }

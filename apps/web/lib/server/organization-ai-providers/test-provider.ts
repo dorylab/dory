@@ -8,6 +8,7 @@ export type OrganizationAiProviderTestInput = {
     model: string;
     baseUrl?: string | null;
     apiKey?: string | null;
+    organizationId?: string | null;
 };
 
 export async function testOrganizationAiProviderConfig(input: OrganizationAiProviderTestInput): Promise<void> {
@@ -16,6 +17,7 @@ export async function testOrganizationAiProviderConfig(input: OrganizationAiProv
         modelName: input.model,
         apiKey: input.apiKey,
         baseURL: input.baseUrl,
+        organizationId: input.organizationId,
     });
 
     await generateText({

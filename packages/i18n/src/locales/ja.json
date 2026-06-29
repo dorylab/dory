@@ -2660,7 +2660,8 @@
             "ProviderNotFound": "カスタム AI が見つかりません。",
             "DisabledProviderCannotBeDefault": "デフォルトに設定する前に、この AI サービスを有効化してください。",
             "SystemProviderUnavailable": "Dory AI は利用できません。",
-            "TestFailed": "AI サービスのテストに失敗しました: {reason}"
+            "TestFailed": "AI サービスのテストに失敗しました: {reason}",
+            "LocalAgentUnavailable": "このローカル AI Agent はこのデバイスで利用できません。"
         }
     },
     "McpAuthorize": {
@@ -3610,7 +3611,9 @@
                 "ViewDocs": "ドキュメントを見る",
                 "TestProvider": "テスト",
                 "Cancel": "キャンセル",
-                "SaveChanges": "変更を保存"
+                "SaveChanges": "変更を保存",
+                "Refresh": "更新",
+                "Done": "完了"
             },
             "Toasts": {
                 "ProviderAdded": "カスタム AI を追加しました",
@@ -3635,6 +3638,29 @@
                 "ModelDescription": "システム管理者が提供するデフォルトの AI モデルです。",
                 "ActiveModelDescription": "この組織が現在使用しているデフォルトモデルです。",
                 "UnavailableDescription": "システム管理者に AI 設定の完了を依頼してください。"
+            },
+            "LocalAi": {
+                "Title": "ローカル AI",
+                "Description": "このデバイスで動作する Agent やローカルモデルサービスを接続します。",
+                "DesktopOnlyDescription": "Dory MCP を使って Web アプリからローカル AI に接続します。",
+                "EnableCodex": "Codex Agent を有効化",
+                "EnableClaudeCode": "Claude Code を有効化",
+                "ConnectCodex": "ローカル Codex に接続",
+                "ConnectLocalModel": "ローカルモデルを接続",
+                "NotDetected": "未検出",
+                "Running": "実行中",
+                "NotRunning": "停止中",
+                "AgentDetectedDescription": "{command} がこのデバイスで検出されました。AI Provider として使用できます。",
+                "AgentMissingDescription": "{command} がこのデバイスで見つかりません。",
+                "BridgeDetectedDescription": "{name} は Dory MCP 経由で接続されており、このデバイスで Codex を実行できます。",
+                "BridgeMissingDescription": "このデバイスで Dory MCP local AI bridge を実行すると、Web アプリから Codex に接続できます。",
+                "LastSeen": "最終接続: {time}",
+                "SetupTitle": "ローカル Codex に接続",
+                "SetupDescription": "Codex CLI がインストールされているデバイスのターミナルで、次のコマンドを実行してください。",
+                "LoginCommand": "Dory MCP を認可",
+                "BridgeCommand": "local AI bridge を起動",
+                "SetupRefreshHint": "bridge の起動後、このパネルを更新して Codex Agent を有効化してください。",
+                "ModelServiceDescription": "ローカル OpenAI-compatible endpoint {endpoint} を使用します。"
             }
         },
         "Billing": {

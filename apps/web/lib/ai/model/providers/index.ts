@@ -1,3 +1,4 @@
+import type { LanguageModelV3 } from '@ai-sdk/provider';
 import { createAnthropicProvider } from './anthropic';
 import { createQwenProvider } from './qwen';
 import { createGoogleProvider } from './google';
@@ -6,15 +7,17 @@ import { createOpenAICompatibleProvider } from './openai-compatible';
 import { createOpenAIProvider } from './openai';
 import { createXaiProvider } from './xai';
 import { createCloudflareGatewayProvider } from './cloudflare';
+import { createLocalAgentProvider } from './local-agent';
 
 type ChatProvider = {
-    chatModel: (modelName: string) => any;
+    chatModel: (modelName: string) => LanguageModelV3;
 };
 
 type ProviderFactoryOptions = {
     apiKey?: string | null;
     baseURL?: string | null;
     name?: string;
+    organizationId?: string | null;
 };
 
 function withRequiredKeyOptions(options?: ProviderFactoryOptions) {
@@ -35,6 +38,8 @@ const providerFactories: Record<string, (options?: ProviderFactoryOptions) => Ch
     'azure-openai': options => createOpenAICompatibleProvider(withRequiredKeyOptions(options)),
     openrouter: options => createOpenAICompatibleProvider(withRequiredKeyOptions(options)),
     'openai-compatible': options => createOpenAICompatibleProvider(options),
+    'codex-agent': options => createLocalAgentProvider({ providerKey: 'codex-agent', target: options?.baseURL, organizationId: options?.organizationId }),
+    'claude-code-agent': options => createLocalAgentProvider({ providerKey: 'claude-code-agent', target: options?.baseURL, organizationId: options?.organizationId }),
     cloudflare: options => createCloudflareGatewayProvider(withRequiredKeyOptions(options)),
     'cloudflare-gateway': options => createCloudflareGatewayProvider(withRequiredKeyOptions(options)),
 };
@@ -86,7 +91,7 @@ export function getChatModel(modelName: string) {
     return provider.chatModel(model);
 }
 
-export function getChatModelForProviderConfig(options: { providerKey: string; modelName: string; apiKey?: string | null; baseURL?: string | null }) {
+export function getChatModelForProviderConfig(options: { providerKey: string; modelName: string; apiKey?: string | null; baseURL?: string | null; organizationId?: string | null }) {
     const providerKey = options.providerKey.trim().toLowerCase();
     const factory = providerFactories[providerKey];
     if (!factory) {
@@ -100,6 +105,7 @@ export function getChatModelForProviderConfig(options: { providerKey: string; mo
         apiKey: options.apiKey,
         baseURL: options.baseURL,
         name: providerKey,
+        organizationId: options.organizationId,
     });
 
     return provider.chatModel(model);

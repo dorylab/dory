@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { CircleCheck, CircleHelp, ExternalLink, FlaskConical, KeyRound, Loader2, LockKeyhole, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, CircleCheck, CircleHelp, Cpu, ExternalLink, FlaskConical, KeyRound, Loader2, LockKeyhole, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import {
     AlertDialog,
@@ -35,6 +35,7 @@ import {
     getDefaultAiProviderModel,
     isAiProviderApiKeyRequired,
     isAiProviderAvailable,
+    isLocalAiAgentProvider,
     isAiProviderModelAllowed,
     isAiProviderModelManual,
 } from '@dory/ee/ai/provider-options';
@@ -71,12 +72,48 @@ type OrganizationProviderCapability = {
 };
 
 type AiProvidersPayload = {
+    canManage: boolean;
     providers: AiProviderRow[];
     defaultProviderId: 'system' | string;
     runtime: string | null;
     organizationProviderCapability: OrganizationProviderCapability;
     upgradeTarget: 'enterprise' | 'pro';
     providerResolution: AiProviderResolution;
+    localAiStatus?: LocalAiStatus | null;
+};
+
+type LocalAiAgentStatus = {
+    id: 'codex-agent' | 'claude-code-agent';
+    available: boolean;
+    command: string;
+    path: string | null;
+    version: string | null;
+    error: string | null;
+};
+
+type LocalAiModelServiceStatus = {
+    id: 'ollama' | 'lmstudio';
+    available: boolean;
+    label: string;
+    baseUrl: string;
+    error: string | null;
+};
+
+type LocalAiBridgeStatus = {
+    id: string;
+    provider: 'codex-agent' | 'claude-code-agent';
+    name: string;
+    online: boolean;
+    lastSeenAt: string | null;
+    createdAt: string | null;
+};
+
+type LocalAiStatus = {
+    runtime: string | null;
+    available: boolean;
+    agents: LocalAiAgentStatus[];
+    modelServices: LocalAiModelServiceStatus[];
+    bridges?: LocalAiBridgeStatus[];
 };
 
 type ProviderFormMode = { type: 'add' } | { type: 'edit'; providerId: string };
@@ -89,6 +126,7 @@ type ProviderFormInput = {
 };
 
 const ENTERPRISE_INFO_URL = 'https://getdory.dev';
+const CUSTOM_AI_PROVIDER_OPTIONS = AI_PROVIDER_OPTIONS.filter(option => !isLocalAiAgentProvider(option.value));
 
 async function parseAppResponse<T>(response: Response): Promise<T> {
     const payload = await response.json().catch(() => null);
@@ -452,6 +490,216 @@ function AdminProvidedAiProviderSection({
     );
 }
 
+function LocalAgentCard({
+    agent,
+    row,
+    bridge,
+    isDesktopRuntime,
+    canManageProviders,
+    isSaving,
+    onEnable,
+    onOpenSetup,
+    onSetDefault,
+    onDelete,
+    t,
+}: {
+    agent: LocalAiAgentStatus;
+    row?: AiProviderRow | null;
+    bridge?: LocalAiBridgeStatus | null;
+    isDesktopRuntime: boolean;
+    canManageProviders: boolean;
+    isSaving: boolean;
+    onEnable: (agent: LocalAiAgentStatus) => void;
+    onOpenSetup: (agent: LocalAiAgentStatus) => void;
+    onSetDefault: (row: AiProviderRow) => void;
+    onDelete: (row: AiProviderRow) => void;
+    t: ReturnType<typeof useTranslations>;
+}) {
+    const title = agent.id === 'codex-agent' ? 'Codex Agent' : 'Claude Code';
+    const actionLabel = !isDesktopRuntime && agent.id === 'codex-agent' && !bridge?.online ? t('LocalAi.ConnectCodex') : agent.id === 'codex-agent' ? t('LocalAi.EnableCodex') : t('LocalAi.EnableClaudeCode');
+    const active = Boolean(row?.isDefault);
+    const configured = Boolean(row) && (isDesktopRuntime ? agent.available : Boolean(bridge?.online));
+    const detected = isDesktopRuntime ? agent.available : Boolean(bridge?.online);
+
+    return (
+        <div className={cn('rounded-lg border px-4 py-4 transition-colors', active ? 'border-primary/25 bg-primary/[0.03]' : 'bg-background')}>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                    <span
+                        className={cn(
+                            'mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border',
+                            active ? 'border-primary/30 bg-background text-primary' : 'bg-background',
+                        )}
+                    >
+                        <Bot className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="min-w-0 font-semibold">{title}</h3>
+                            {active ? <Badge>{t('Badges.Default')}</Badge> : null}
+                            {configured ? <Badge variant="secondary">{t('Badges.Enabled')}</Badge> : null}
+                            {!detected ? (
+                                <Badge variant="outline" className="text-muted-foreground">
+                                    {t('LocalAi.NotDetected')}
+                                </Badge>
+                            ) : null}
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                            {isDesktopRuntime
+                                ? agent.available
+                                    ? t('LocalAi.AgentDetectedDescription', { command: agent.command })
+                                    : t('LocalAi.AgentMissingDescription', { command: agent.command })
+                                : bridge?.online
+                                  ? t('LocalAi.BridgeDetectedDescription', { name: bridge.name })
+                                  : t('LocalAi.BridgeMissingDescription')}
+                        </p>
+                        {agent.version ? <div className="mt-2 text-xs text-muted-foreground">{agent.version}</div> : null}
+                        {!isDesktopRuntime && bridge?.lastSeenAt ? <div className="mt-2 text-xs text-muted-foreground">{t('LocalAi.LastSeen', { time: bridge.lastSeenAt })}</div> : null}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {row && !row.isDefault ? (
+                        <Button variant="outline" size="sm" onClick={() => onSetDefault(row)} disabled={!canManageProviders || isSaving || !detected}>
+                            <CircleCheck className="size-4" />
+                            {t('Actions.SetAsDefault')}
+                        </Button>
+                    ) : null}
+                    {row ? (
+                        <Button variant="ghost" size="icon" onClick={() => onDelete(row)} disabled={!canManageProviders || isSaving} aria-label={t('Actions.Delete')}>
+                            <Trash2 className="size-4" />
+                        </Button>
+                    ) : (
+                        <Button size="sm" onClick={() => (detected ? onEnable(agent) : onOpenSetup(agent))} disabled={!canManageProviders || isSaving || (!isDesktopRuntime && agent.id !== 'codex-agent')}>
+                            <Plus className="size-4" />
+                            {actionLabel}
+                        </Button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function LocalModelServiceCard({
+    service,
+    canManageProviders,
+    isSaving,
+    onConnect,
+    t,
+}: {
+    service: LocalAiModelServiceStatus;
+    canManageProviders: boolean;
+    isSaving: boolean;
+    onConnect: (service: LocalAiModelServiceStatus) => void;
+    t: ReturnType<typeof useTranslations>;
+}) {
+    return (
+        <div className="rounded-lg border bg-background px-4 py-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                    <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border bg-background">
+                        <Cpu className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="min-w-0 font-semibold">{service.label}</h3>
+                            {service.available ? <Badge variant="secondary">{t('LocalAi.Running')}</Badge> : <Badge variant="outline">{t('LocalAi.NotRunning')}</Badge>}
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">{t('LocalAi.ModelServiceDescription', { endpoint: service.baseUrl })}</p>
+                    </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => onConnect(service)} disabled={!canManageProviders || isSaving || !service.available}>
+                    <Plus className="size-4" />
+                    {t('LocalAi.ConnectLocalModel')}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+function LocalAiProviderSection({
+    localAiStatus,
+    localAgentProviders,
+    isDesktopRuntime,
+    canManageProviders,
+    canManageModelServices,
+    isSaving,
+    onEnableAgent,
+    onOpenSetup,
+    onSetDefault,
+    onDelete,
+    onConnectModelService,
+    t,
+}: {
+    localAiStatus: LocalAiStatus | null | undefined;
+    localAgentProviders: AiProviderRow[];
+    isDesktopRuntime: boolean;
+    canManageProviders: boolean;
+    canManageModelServices: boolean;
+    isSaving: boolean;
+    onEnableAgent: (agent: LocalAiAgentStatus) => void;
+    onOpenSetup: (agent: LocalAiAgentStatus) => void;
+    onSetDefault: (row: AiProviderRow) => void;
+    onDelete: (row: AiProviderRow) => void;
+    onConnectModelService: (service: LocalAiModelServiceStatus) => void;
+    t: ReturnType<typeof useTranslations>;
+}) {
+    const status = localAiStatus ?? null;
+    const agents = status?.agents ?? [
+        { id: 'codex-agent' as const, available: false, command: 'codex', path: null, version: null, error: null },
+        { id: 'claude-code-agent' as const, available: false, command: 'claude', path: null, version: null, error: null },
+    ];
+    const modelServices = status?.modelServices ?? [
+        { id: 'ollama' as const, available: false, label: 'Ollama', baseUrl: 'http://127.0.0.1:11434/v1', error: null },
+        { id: 'lmstudio' as const, available: false, label: 'LM Studio', baseUrl: 'http://127.0.0.1:1234/v1', error: null },
+    ];
+    const bridges = status?.bridges ?? [];
+
+    return (
+        <section className="space-y-3">
+            <div className="flex items-start gap-3">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Bot className="size-4" />
+                </span>
+                <div>
+                    <h3 className="font-semibold">{t('LocalAi.Title')}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{status?.available ? t('LocalAi.Description') : t('LocalAi.DesktopOnlyDescription')}</p>
+                </div>
+            </div>
+
+            <div className="space-y-3">
+                {agents.map(agent => (
+                    <LocalAgentCard
+                        key={agent.id}
+                        agent={agent}
+                        row={localAgentProviders.find(provider => provider.provider === agent.id)}
+                        bridge={bridges.find(bridge => bridge.provider === agent.id && bridge.online) ?? bridges.find(bridge => bridge.provider === agent.id) ?? null}
+                        isDesktopRuntime={isDesktopRuntime}
+                        canManageProviders={canManageProviders && (isDesktopRuntime ? Boolean(status?.available) : true)}
+                        isSaving={isSaving}
+                        onEnable={onEnableAgent}
+                        onOpenSetup={onOpenSetup}
+                        onSetDefault={onSetDefault}
+                        onDelete={onDelete}
+                        t={t}
+                    />
+                ))}
+                {modelServices.map(service => (
+                    <LocalModelServiceCard
+                        key={service.id}
+                        service={service}
+                        canManageProviders={canManageModelServices && Boolean(status?.available)}
+                        isSaving={isSaving}
+                        onConnect={onConnectModelService}
+                        t={t}
+                    />
+                ))}
+            </div>
+        </section>
+    );
+}
+
 export type AISettingsPageClientProps = {
     initialRuntime?: string | null;
     onOpenBillingSettings?: () => void;
@@ -466,6 +714,8 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
     const [formMode, setFormMode] = useState<ProviderFormMode | null>(null);
     const [form, setForm] = useState<ProviderFormInput>(() => createDefaultForm());
     const [providerToDelete, setProviderToDelete] = useState<AiProviderRow | null>(null);
+    const [localAgentActionId, setLocalAgentActionId] = useState<string | null>(null);
+    const [localAiSetupAgent, setLocalAiSetupAgent] = useState<LocalAiAgentStatus | null>(null);
 
     const providersQuery = useQuery({
         queryKey: providersQueryKey,
@@ -473,8 +723,9 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
         retry: false,
     });
 
-    const providers = providersQuery.data?.providers ?? [];
-    const canManageProviders = providersQuery.data?.organizationProviderCapability?.enabled === true;
+    const providers = useMemo(() => providersQuery.data?.providers ?? [], [providersQuery.data?.providers]);
+    const canManageAiSettings = providersQuery.data?.canManage === true;
+    const canManageProviders = canManageAiSettings && providersQuery.data?.organizationProviderCapability?.enabled === true;
     const organizationProvidersAvailable = providersQuery.data?.providerResolution?.managementMode === 'organization_editable';
     const upgradeTarget = providersQuery.data?.upgradeTarget ?? 'enterprise';
     const resolvedRuntime = providersQuery.data?.runtime ?? initialRuntime;
@@ -482,6 +733,9 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
     const isDockerRuntime = resolvedRuntime === 'docker';
     const systemProviders = providers.filter(provider => provider.source === 'system');
     const organizationProviders = providers.filter(provider => provider.source === 'organization');
+    const localAgentProviders = organizationProviders.filter(provider => isLocalAiAgentProvider(provider.provider));
+    const customOrganizationProviders = organizationProviders.filter(provider => !isLocalAiAgentProvider(provider.provider));
+    const localAiStatus = providersQuery.data?.localAiStatus ?? null;
     const editingProvider = useMemo(() => {
         if (formMode?.type !== 'edit') return null;
         return providers.find(provider => provider.id === formMode.providerId) ?? null;
@@ -600,7 +854,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
         },
     });
 
-    const isSaving = createMutation.isPending || patchMutation.isPending || deleteMutation.isPending || formIsSaving;
+    const isSaving = createMutation.isPending || patchMutation.isPending || deleteMutation.isPending || Boolean(localAgentActionId) || formIsSaving;
     const isTestingProvider = testMutation.isPending;
     const isFormBusy = isSaving || isTestingProvider;
 
@@ -613,9 +867,50 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
         });
     }
 
-    function openAddForm() {
+    async function enableLocalAgent(agent: LocalAiAgentStatus) {
+        if (!isLocalAiAgentProvider(agent.id)) return;
+        const bridge = localAiStatus?.bridges?.find(candidate => candidate.provider === agent.id && candidate.online) ?? null;
+        const baseUrl = isDesktopRuntime ? '' : bridge ? `bridge:${bridge.id}` : '';
+        if (!isDesktopRuntime && !bridge) {
+            setLocalAiSetupAgent(agent);
+            return;
+        }
+
+        setLocalAgentActionId(agent.id);
+        try {
+            const createdPayload = await createOrganizationProvider({
+                provider: agent.id,
+                model: 'default',
+                baseUrl,
+                apiKey: '',
+            });
+            const createdProvider = createdPayload.providers.find(provider => provider.source === 'organization' && provider.provider === agent.id);
+            const nextPayload = createdProvider ? await patchProvider(createdProvider.id, { action: 'set_default' }) : createdPayload;
+            queryClient.setQueryData(providersQueryKey, nextPayload);
+            void queryClient.invalidateQueries({ queryKey: providersQueryKey });
+            toast.success(t('Toasts.ProviderAdded'));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t('Toasts.SaveFailed'));
+        } finally {
+            setLocalAgentActionId(null);
+        }
+    }
+
+    function openAddForm(input?: Partial<ProviderFormInput>) {
         setFormMode({ type: 'add' });
-        setForm(createDefaultForm());
+        setForm({
+            ...createDefaultForm(),
+            ...input,
+        });
+    }
+
+    function openLocalModelForm(service: LocalAiModelServiceStatus) {
+        openAddForm({
+            provider: 'openai-compatible',
+            model: service.id === 'ollama' ? 'llama3.1' : 'local-model',
+            baseUrl: service.baseUrl,
+            apiKey: '',
+        });
     }
 
     function openEditForm(row: AiProviderRow) {
@@ -662,6 +957,43 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
     }
 
     function setDefault(row: AiProviderRow) {
+        if (!isDesktopRuntime && isLocalAiAgentProvider(row.provider) && !row.baseUrl?.startsWith('bridge:')) {
+            const bridge = localAiStatus?.bridges?.find(candidate => candidate.provider === row.provider && candidate.online) ?? null;
+            if (!bridge) {
+                setLocalAiSetupAgent({
+                    id: row.provider,
+                    available: false,
+                    command: row.provider === 'codex-agent' ? 'codex' : 'claude',
+                    path: null,
+                    version: null,
+                    error: null,
+                });
+                return;
+            }
+
+            setLocalAgentActionId(row.provider);
+            void (async () => {
+                try {
+                    await patchProvider(row.id, {
+                        action: 'update',
+                        provider: row.provider,
+                        model: row.model || 'default',
+                        baseUrl: `bridge:${bridge.id}`,
+                        apiKey: null,
+                    });
+                    const nextPayload = await patchProvider(row.id, { action: 'set_default' });
+                    queryClient.setQueryData(providersQueryKey, nextPayload);
+                    void queryClient.invalidateQueries({ queryKey: providersQueryKey });
+                    toast.success(t('Toasts.DefaultUpdated'));
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : t('Toasts.SaveFailed'));
+                } finally {
+                    setLocalAgentActionId(null);
+                }
+            })();
+            return;
+        }
+
         patchMutation.mutate({
             providerId: row.id,
             body: { action: 'set_default' },
@@ -700,6 +1032,9 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
               ? t('Fields.ApiKeyPlaceholder')
               : t('Fields.ApiKeyOptionalPlaceholder');
     const upgradeActionLabel = upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise');
+    const doryOrigin = typeof window === 'undefined' ? '' : window.location.origin;
+    const localAiLoginCommand = `npx -y @getdory/mcp login --url ${doryOrigin} --local-ai`;
+    const localAiBridgeCommand = `npx -y @getdory/mcp local-ai --url ${doryOrigin}`;
 
     function renderProviderRow(row: AiProviderRow) {
         const providerDescription = row.source === 'organization' && row.isDefault ? t('OrganizationProvider.ActiveDescription') : t('OrganizationProvider.Description');
@@ -763,7 +1098,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                 {isDesktopRuntime ? (
                     <DoryAiProviderSection
                         providers={systemProviders}
-                        canManageProviders={canManageProviders}
+                        canManageProviders={canManageAiSettings}
                         isSaving={isSaving}
                         isLoading={providersQuery.isLoading}
                         onSetDefault={setDefault}
@@ -772,13 +1107,28 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                 ) : (
                     <AdminProvidedAiProviderSection
                         providers={systemProviders}
-                        canManageProviders={canManageProviders}
+                        canManageProviders={canManageAiSettings}
                         isSaving={isSaving}
                         isLoading={providersQuery.isLoading}
                         onSetDefault={setDefault}
                         t={t}
                     />
                 )}
+
+                <LocalAiProviderSection
+                    localAiStatus={localAiStatus}
+                    localAgentProviders={localAgentProviders}
+                    isDesktopRuntime={isDesktopRuntime}
+                    canManageProviders={canManageAiSettings}
+                    canManageModelServices={canManageProviders}
+                    isSaving={isSaving}
+                    onEnableAgent={agent => void enableLocalAgent(agent)}
+                    onOpenSetup={setLocalAiSetupAgent}
+                    onSetDefault={setDefault}
+                    onDelete={setProviderToDelete}
+                    onConnectModelService={openLocalModelForm}
+                    t={t}
+                />
 
                 {!isDockerRuntime ? (
                     <section className="space-y-3">
@@ -793,7 +1143,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                                 </div>
                             </div>
                             {canManageProviders ? (
-                                <Button size="sm" onClick={openAddForm} disabled={isSaving || Boolean(formMode)}>
+                                <Button size="sm" onClick={() => openAddForm()} disabled={isSaving || Boolean(formMode)}>
                                     <Plus className="size-4" />
                                     {t('Actions.AddProvider')}
                                 </Button>
@@ -826,8 +1176,8 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                                     </Button>
                                 </div>
                             </div>
-                        ) : organizationProviders.length > 0 ? (
-                            <div className="space-y-3">{organizationProviders.map(renderProviderRow)}</div>
+                        ) : customOrganizationProviders.length > 0 ? (
+                            <div className="space-y-3">{customOrganizationProviders.map(renderProviderRow)}</div>
                         ) : (
                             <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-5">
                                 <div className="text-sm font-medium">{t('Groups.OrganizationEmptyTitle')}</div>
@@ -857,7 +1207,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                                     <ProviderOptionLabel provider={form.provider} label={formProviderLabel} />
                                 </SelectTrigger>
                                 <SelectContent className="z-[70]" position="popper">
-                                    {AI_PROVIDER_OPTIONS.map(option => (
+                                    {CUSTOM_AI_PROVIDER_OPTIONS.map(option => (
                                         <SelectItem key={option.value} value={option.value} textValue={option.label}>
                                             <ProviderOptionLabel provider={option.value} label={option.label} />
                                         </SelectItem>
@@ -925,6 +1275,36 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                                 {isSaving ? t('Saving') : formMode?.type === 'edit' ? t('Actions.SaveChanges') : t('Actions.AddProvider')}
                             </Button>
                         </div>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={Boolean(localAiSetupAgent)} onOpenChange={open => !open && setLocalAiSetupAgent(null)}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>{t('LocalAi.SetupTitle')}</DialogTitle>
+                        <DialogDescription>{t('LocalAi.SetupDescription')}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>{t('LocalAi.LoginCommand')}</Label>
+                            <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                <code>{localAiLoginCommand}</code>
+                            </pre>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>{t('LocalAi.BridgeCommand')}</Label>
+                            <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                <code>{localAiBridgeCommand}</code>
+                            </pre>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{t('LocalAi.SetupRefreshHint')}</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => void queryClient.invalidateQueries({ queryKey: providersQueryKey })}>
+                            {t('Actions.Refresh')}
+                        </Button>
+                        <Button onClick={() => setLocalAiSetupAgent(null)}>{t('Actions.Done')}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

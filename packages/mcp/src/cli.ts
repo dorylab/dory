@@ -6,12 +6,16 @@ import { getConfigPath, removeCredential, resolveCredential } from './config.js'
 import { createRemoteMcpClient } from './remote.js';
 import { normalizeDoryTarget } from './url.js';
 import { startBridge } from './bridge.js';
+import { startLocalAiBridge } from './local-ai.js';
 
 type ParsedArgs = {
-    command: 'bridge' | 'login' | 'logout' | 'status' | 'help';
+    command: 'bridge' | 'login' | 'logout' | 'status' | 'local-ai' | 'help';
     url?: string;
     clientName?: string;
+    provider?: string;
+    name?: string;
     configPath?: string;
+    localAi?: boolean;
 };
 
 function readOption(args: string[], name: string) {
@@ -22,12 +26,16 @@ function readOption(args: string[], name: string) {
 
 function parseArgs(argv: string[]): ParsedArgs {
     const commandArg = argv.find(arg => !arg.startsWith('-'));
-    const command = commandArg === 'login' || commandArg === 'logout' || commandArg === 'status' ? commandArg : argv.includes('--help') || argv.includes('-h') ? 'help' : 'bridge';
+    const command =
+        commandArg === 'login' || commandArg === 'logout' || commandArg === 'status' || commandArg === 'local-ai' ? commandArg : argv.includes('--help') || argv.includes('-h') ? 'help' : 'bridge';
     return {
         command,
         url: readOption(argv, '--url') ?? readOption(argv, '-u'),
         clientName: readOption(argv, '--client-name'),
+        provider: readOption(argv, '--provider'),
+        name: readOption(argv, '--name') ?? readOption(argv, '--client-name'),
         configPath: readOption(argv, '--config'),
+        localAi: argv.includes('--local-ai'),
     };
 }
 
@@ -37,8 +45,10 @@ function printHelp() {
 Usage:
   dory-mcp --url <dory-origin>
   dory-mcp login --url <dory-origin>
+  dory-mcp login --url <dory-origin> --local-ai
   dory-mcp status --url <dory-origin>
   dory-mcp logout --url <dory-origin>
+  dory-mcp local-ai --url <dory-origin>
 
 Environment:
   DORY_MCP_URL      Default Dory origin or /api/mcp endpoint
@@ -78,6 +88,20 @@ async function run() {
             url: args.url,
             clientName: args.clientName,
             configPath,
+            scopes: args.localAi
+                ? [
+                      'connections:read',
+                      'query:read',
+                      'analysis:run',
+                      'schema:read',
+                      'tabs:read',
+                      'tabs:write',
+                      'saved_queries:read',
+                      'saved_queries:write',
+                      'monitoring:read',
+                      'local_ai:run',
+                  ]
+                : undefined,
         });
         console.log(JSON.stringify({ ok: true, ...result }, null, 2));
         return;
@@ -86,6 +110,16 @@ async function run() {
     if (args.command === 'logout') {
         await removeCredential(target.origin, configPath);
         console.log(JSON.stringify({ ok: true, origin: target.origin }, null, 2));
+        return;
+    }
+
+    if (args.command === 'local-ai') {
+        await startLocalAiBridge({
+            url: args.url,
+            provider: args.provider,
+            name: args.name,
+            configPath,
+        });
         return;
     }
 

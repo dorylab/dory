@@ -16,6 +16,8 @@ const PROVIDER_PRESETS: Record<string, Record<ModelRole, Preset>> = {
     xai: xAI_MODEL_PRESETS,
     meta: META_MODEL_PRESETS,
     'openai-compatible': COMPATIBLE_MODEL_PRESETS,
+    'codex-agent': OPENAI_MODEL_PRESETS,
+    'claude-code-agent': OPENAI_MODEL_PRESETS,
 };
 
 const PROVIDER_FAST_MODELS: Record<string, string | undefined> = {
@@ -26,6 +28,8 @@ const PROVIDER_FAST_MODELS: Record<string, string | undefined> = {
     xai: 'grok-2-mini',
     meta: 'llama-3.1-8b-instruct',
     'openai-compatible': process.env.DORY_AI_MODEL ?? 'gpt-4o-mini',
+    'codex-agent': 'default',
+    'claude-code-agent': 'default',
 };
 
 function getProviderKey(providerKey?: string) {
@@ -37,10 +41,7 @@ export function getProviderModelPresets(providerKey?: string) {
     return PROVIDER_PRESETS[key] ?? OPENAI_MODEL_PRESETS;
 }
 
-export function resolveModelName(
-    role: ModelRole,
-    options?: { providerKey?: string; variant?: 'default' | 'fast' },
-) {
+export function resolveModelName(role: ModelRole, options?: { providerKey?: string; variant?: 'default' | 'fast' }) {
     const envModel = process.env.DORY_AI_MODEL;
     if (envModel) {
         return envModel;

@@ -1,6 +1,6 @@
 import type { OrganizationAiProviderResolved } from '@dory/database/postgres/impl/organization-ai-providers';
 import type { OrganizationAiProviderCapability } from '@dory/ee/ai/organization-ai-providers';
-import { isAiProviderApiKeyRequired, isAiProviderBaseUrlRequired } from '@dory/ee/ai/provider-options';
+import { isAiProviderApiKeyRequired, isAiProviderBaseUrlRequired, isLocalAiAgentProvider } from '@dory/ee/ai/provider-options';
 
 export type AiExecutionSource = 'global' | 'organization';
 
@@ -48,7 +48,9 @@ export function isOrganizationProviderReadyForExecution(provider?: OrganizationA
 
 export function resolveAiExecutionPolicy(input: AiExecutionPolicyInput): AiExecutionPolicy {
     const organizationProvider =
-        input.organizationCapability?.enabled && isOrganizationProviderReadyForExecution(input.organizationProvider) ? input.organizationProvider : null;
+        (input.organizationCapability?.enabled || isLocalAiAgentProvider(input.organizationProvider?.provider)) && isOrganizationProviderReadyForExecution(input.organizationProvider)
+            ? input.organizationProvider
+            : null;
 
     if (organizationProvider) {
         const providerKey = organizationProvider.provider.trim().toLowerCase();

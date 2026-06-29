@@ -31,11 +31,12 @@ export const POST = withOrganizationHandler(async ({ req, db, organizationId, us
         );
     }
 
+    const request = await db.mcp.getAuthorizationRequest(parsed.data.requestId);
     const result = await db.mcp.approveAuthorizationRequest({
         id: parsed.data.requestId,
         organizationId,
         userId: userId!,
-        scopes: getMcpLinkScopes(parsed.data.scopes),
+        scopes: getMcpLinkScopes(parsed.data.scopes ?? request?.scopes),
     });
 
     const status = resultStatus(result.status);

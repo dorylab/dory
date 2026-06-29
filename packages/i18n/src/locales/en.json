@@ -2662,7 +2662,8 @@
             "ProviderNotFound": "Custom AI not found.",
             "DisabledProviderCannotBeDefault": "Enable this AI service before setting it as default.",
             "SystemProviderUnavailable": "Dory AI is not available.",
-            "TestFailed": "AI service test failed: {reason}"
+            "TestFailed": "AI service test failed: {reason}",
+            "LocalAgentUnavailable": "This local AI agent is not available on this device."
         }
     },
     "McpAuthorize": {
@@ -3612,7 +3613,9 @@
                 "ViewDocs": "View docs",
                 "TestProvider": "Test",
                 "Cancel": "Cancel",
-                "SaveChanges": "Save changes"
+                "SaveChanges": "Save changes",
+                "Refresh": "Refresh",
+                "Done": "Done"
             },
             "Toasts": {
                 "ProviderAdded": "Custom AI added",
@@ -3637,6 +3640,29 @@
                 "ModelDescription": "Default AI model provided by the system administrator.",
                 "ActiveModelDescription": "Default model currently used by this organization.",
                 "UnavailableDescription": "Ask the system administrator to finish AI configuration."
+            },
+            "LocalAi": {
+                "Title": "Local AI",
+                "Description": "Connect agents and local model services running on this device.",
+                "DesktopOnlyDescription": "Use Dory MCP to connect local AI from the Web app.",
+                "EnableCodex": "Enable Codex Agent",
+                "EnableClaudeCode": "Enable Claude Code",
+                "ConnectCodex": "Connect local Codex",
+                "ConnectLocalModel": "Connect local model",
+                "NotDetected": "Not detected",
+                "Running": "Running",
+                "NotRunning": "Not running",
+                "AgentDetectedDescription": "{command} is installed on this device and can be used as an AI provider.",
+                "AgentMissingDescription": "{command} was not found on this device.",
+                "BridgeDetectedDescription": "{name} is connected through Dory MCP and can run Codex on this device.",
+                "BridgeMissingDescription": "Run the Dory MCP local AI bridge on this device to connect Codex from the Web app.",
+                "LastSeen": "Last seen: {time}",
+                "SetupTitle": "Connect local Codex",
+                "SetupDescription": "Run these commands in a terminal on the device where Codex CLI is installed.",
+                "LoginCommand": "Authorize Dory MCP",
+                "BridgeCommand": "Start local AI bridge",
+                "SetupRefreshHint": "After the bridge is running, refresh this panel and enable Codex Agent.",
+                "ModelServiceDescription": "Use the local OpenAI-compatible endpoint at {endpoint}."
             }
         },
         "Billing": {
