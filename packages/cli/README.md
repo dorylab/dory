@@ -53,6 +53,33 @@ npx -y @getdory/cli action list --data standalone
 npx -y @getdory/cli action connection.list --data standalone --projection mcp --json '{}'
 ```
 
+## Connect Local Codex Agent
+
+Dory Web can run Codex on this device through the CLI. Run this once on the device where Codex CLI is installed:
+
+```sh
+npx -y @getdory/cli agent codex install --url https://your-dory-host
+```
+
+The command authorizes Dory, installs a background Dory Codex Agent service, and starts it. When Dory sends a job to the service, it runs `codex exec` with Dory MCP tools enabled.
+
+Manage the background service:
+
+```sh
+dory agent codex status
+dory agent codex restart
+dory agent codex stop
+dory agent codex uninstall
+```
+
+For troubleshooting, run the worker in the foreground:
+
+```sh
+dory agent codex run --url https://your-dory-host
+```
+
+The Dory MCP bearer token is passed through an environment variable and is not written into the Codex command arguments.
+
 ## Data Modes
 
 - `standalone`: independent Dory app storage under `~/.dory`. This is the recommended headless server mode.
@@ -184,15 +211,13 @@ Desktop mode points at the Dory Desktop PGlite database. Avoid running Desktop a
 
 ## Hosted Dory Bridge
 
-For hosted Dory Web MCP endpoints, the CLI includes the bridge commands previously covered by `@getdory/mcp`:
+For hosted Dory Web MCP endpoints, use:
 
 ```sh
 npx -y @getdory/cli mcp login --url https://your-dory-host
 npx -y @getdory/cli mcp status --url https://your-dory-host
 npx -y @getdory/cli mcp bridge --url https://your-dory-host
 ```
-
-`@getdory/mcp` remains available as the legacy `dory-mcp` compatibility package. New installations should prefer `@getdory/cli`.
 
 ## Update and Uninstall
 

@@ -111,3 +111,52 @@ test('parses self-hosted data mode', () => {
         databaseUrl: 'postgresql://postgres:postgres@localhost/postgres',
     });
 });
+
+test('rejects bare local Codex Agent command', () => {
+    assert.deepEqual(parseArgs(['agent', 'codex', '--url', 'https://dory.test', '--name', 'Work Mac', '--config', '/tmp/dory-mcp.json']), {
+        command: 'help',
+    });
+});
+
+test('parses local Codex Agent service commands', () => {
+    assert.deepEqual(parseArgs(['agent', 'codex', 'install', '--url', 'https://dory.test']), {
+        command: 'agent-codex',
+        options: {
+            action: 'install',
+            url: 'https://dory.test',
+            name: undefined,
+            configPath: undefined,
+        },
+    });
+    assert.deepEqual(parseArgs(['agent', 'codex', 'run', '--url', 'https://dory.test']), {
+        command: 'agent-codex',
+        options: {
+            action: 'run',
+            url: 'https://dory.test',
+            name: undefined,
+            configPath: undefined,
+        },
+    });
+    assert.deepEqual(parseArgs(['agent', 'codex', 'status']), {
+        command: 'agent-codex',
+        options: {
+            action: 'status',
+            url: undefined,
+            name: undefined,
+            configPath: undefined,
+        },
+    });
+    assert.deepEqual(parseArgs(['agent', 'codex', 'restart']).command, 'agent-codex');
+    assert.deepEqual(parseArgs(['agent', 'codex', 'stop']).command, 'agent-codex');
+    assert.deepEqual(parseArgs(['agent', 'codex', 'uninstall']).command, 'agent-codex');
+});
+
+test('parses local AI bridge login scope flag', () => {
+    assert.deepEqual(parseArgs(['mcp', 'login', '--url', 'https://dory.test', '--local-ai']), {
+        command: 'mcp-login',
+        url: 'https://dory.test',
+        clientName: undefined,
+        configPath: undefined,
+        localAi: true,
+    });
+});

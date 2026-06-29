@@ -18,12 +18,13 @@ export class DoryMcpApiError extends Error {
     }
 }
 
-export async function postJson<T>(url: string, body: unknown, fetchFn: FetchLike = fetch): Promise<T> {
+export async function postJson<T>(url: string, body: unknown, fetchFn: FetchLike = fetch, headers: Record<string, string> = {}): Promise<T> {
     const response = await fetchFn(url, {
         method: 'POST',
         headers: {
             'content-type': 'application/json',
             accept: 'application/json',
+            ...headers,
         },
         body: JSON.stringify(body),
     });

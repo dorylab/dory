@@ -6,7 +6,7 @@ import { getConfigPath, removeCredential, resolveCredential } from './config.js'
 import { createRemoteMcpClient } from './remote.js';
 import { normalizeDoryTarget } from './url.js';
 import { startBridge } from './bridge.js';
-import { startLocalAiBridge } from './local-ai.js';
+import { buildDoryCliForwardArgs } from './cli-forward.js';
 
 type ParsedArgs = {
     command: 'bridge' | 'login' | 'logout' | 'status' | 'local-ai' | 'help';
@@ -45,7 +45,6 @@ function printHelp() {
 Usage:
   dory-mcp --url <dory-origin>
   dory-mcp login --url <dory-origin>
-  dory-mcp login --url <dory-origin> --local-ai
   dory-mcp status --url <dory-origin>
   dory-mcp logout --url <dory-origin>
   dory-mcp local-ai --url <dory-origin>
@@ -59,9 +58,10 @@ Environment:
 
 async function run() {
     const argv = process.argv.slice(2);
-    if (argv[0] === 'serve' || argv[0] === 'token' || argv[0] === 'init') {
+    const forwardArgs = buildDoryCliForwardArgs(argv);
+    if (forwardArgs) {
         await new Promise<void>((resolve, reject) => {
-            const child = spawn('npx', ['-y', '@getdory/cli', ...(argv[0] === 'init' ? argv : ['mcp', ...argv])], {
+            const child = spawn('npx', ['-y', '@getdory/cli', ...forwardArgs], {
                 stdio: 'inherit',
                 env: process.env,
             });
@@ -110,16 +110,6 @@ async function run() {
     if (args.command === 'logout') {
         await removeCredential(target.origin, configPath);
         console.log(JSON.stringify({ ok: true, origin: target.origin }, null, 2));
-        return;
-    }
-
-    if (args.command === 'local-ai') {
-        await startLocalAiBridge({
-            url: args.url,
-            provider: args.provider,
-            name: args.name,
-            configPath,
-        });
         return;
     }
 

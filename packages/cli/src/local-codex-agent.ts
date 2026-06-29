@@ -1,13 +1,13 @@
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { delimiter, join } from 'node:path';
 import { homedir, tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { postJson, type FetchLike } from './api.js';
-import { login } from './auth.js';
-import { getConfigPath, resolveCredential } from './config.js';
+import { postJson, type FetchLike } from './bridge-api.js';
+import { login } from './bridge-auth.js';
+import { getBridgeConfigPath, resolveCredential } from './bridge-config.js';
 
 const DEFAULT_MCP_SCOPES = [
     'connections:read',
@@ -19,20 +19,19 @@ const DEFAULT_MCP_SCOPES = [
     'saved_queries:read',
     'saved_queries:write',
     'monitoring:read',
+    'local_ai:run',
 ];
-const LOCAL_AI_SCOPE = 'local_ai:run';
-const LOCAL_AI_SCOPES = [...DEFAULT_MCP_SCOPES, LOCAL_AI_SCOPE];
-const LOCAL_AI_TIMEOUT_MS = 120_000;
-const LOCAL_AI_MAX_BUFFER = 2 * 1024 * 1024;
+export const LOCAL_AI_SCOPES = [...DEFAULT_MCP_SCOPES];
+const LOCAL_AGENT_TIMEOUT_MS = 120_000;
+const LOCAL_AGENT_MAX_BUFFER = 2 * 1024 * 1024;
 
-export type LocalAiProvider = 'codex-agent';
-
-export type LocalAiOptions = {
+export type CodexAgentOptions = {
     url?: string | null;
-    provider?: string | null;
     name?: string | null;
     configPath?: string;
     fetchFn?: FetchLike;
+    openUrl?: (url: string) => Promise<void> | void;
+    pollIntervalMs?: number;
     runCodexAgentFn?: RunCodexAgent;
     maxJobs?: number;
 };
@@ -159,8 +158,8 @@ function runProcess(command: string, args: string[], input: string, options: { c
 
         const timeout = setTimeout(() => {
             child.kill('SIGTERM');
-            finish(new Error('Local AI agent timed out.'));
-        }, LOCAL_AI_TIMEOUT_MS);
+            finish(new Error('Local Codex agent timed out.'));
+        }, LOCAL_AGENT_TIMEOUT_MS);
 
         const finish = (error?: Error) => {
             if (settled) return;
@@ -172,22 +171,22 @@ function runProcess(command: string, args: string[], input: string, options: { c
 
         child.stdout.on('data', chunk => {
             stdout += String(chunk);
-            if (stdout.length > LOCAL_AI_MAX_BUFFER) {
+            if (stdout.length > LOCAL_AGENT_MAX_BUFFER) {
                 child.kill('SIGTERM');
-                finish(new Error('Local AI agent output exceeded the maximum size.'));
+                finish(new Error('Local Codex agent output exceeded the maximum size.'));
             }
         });
         child.stderr.on('data', chunk => {
             stderr += String(chunk);
-            if (stderr.length > LOCAL_AI_MAX_BUFFER) {
+            if (stderr.length > LOCAL_AGENT_MAX_BUFFER) {
                 child.kill('SIGTERM');
-                finish(new Error('Local AI agent error output exceeded the maximum size.'));
+                finish(new Error('Local Codex agent error output exceeded the maximum size.'));
             }
         });
         child.on('error', finish);
         child.on('close', code => {
             if (code === 0) finish();
-            else finish(new Error(stderr.trim() || `Local AI agent exited with code ${code ?? 'unknown'}.`));
+            else finish(new Error(stderr.trim() || `Local Codex agent exited with code ${code ?? 'unknown'}.`));
         });
         child.stdin.end(input);
     });
@@ -199,7 +198,7 @@ export async function runCodexAgent(modelId: string, prompt: string, doryMcpConf
         throw new Error('codex CLI was not found on this device.');
     }
 
-    const cwd = await mkdtemp(join(tmpdir(), 'dory-mcp-codex-agent-'));
+    const cwd = await mkdtemp(join(tmpdir(), 'dory-codex-agent-'));
     const outputPath = join(cwd, 'last-message.txt');
     const args = [
         'exec',
@@ -230,21 +229,32 @@ export async function runCodexAgent(modelId: string, prompt: string, doryMcpConf
     }
 }
 
+export async function prepareCodexAgentBridge(options: CodexAgentOptions = {}) {
+    if (!options.runCodexAgentFn) {
+        await findExecutable('codex').then(path => {
+            if (!path) throw new Error('codex CLI was not found on this device.');
+        });
+    }
+
+    const name = options.name?.trim() || 'Dory Codex Agent';
+    return ensureRegisteredBridge(options, name);
+}
+
 async function postAuthorized<T>(credential: Credential, path: string, body: unknown, fetchFn?: FetchLike) {
     return postJson<T>(new URL(path, credential.origin).toString(), body, fetchFn ?? fetch, {
         authorization: `Bearer ${credential.token}`,
     });
 }
 
-async function registerBridge(credential: Credential, provider: LocalAiProvider, name: string, fetchFn?: FetchLike) {
+async function registerBridge(credential: Credential, name: string, fetchFn?: FetchLike) {
     return postAuthorized<RegisterResponse>(
         credential,
         '/api/mcp/local-ai/bridges/register',
         {
-            provider,
+            provider: 'codex-agent',
             name,
             capabilities: {
-                providers: [provider],
+                providers: ['codex-agent'],
                 doryMcpTools: true,
                 localAiBridgeProtocol: 2,
                 pid: process.pid,
@@ -255,16 +265,19 @@ async function registerBridge(credential: Credential, provider: LocalAiProvider,
     );
 }
 
-async function resolveLocalAiCredential(options: LocalAiOptions): Promise<Credential> {
-    const configPath = options.configPath ?? getConfigPath();
+async function resolveCodexAgentCredential(options: CodexAgentOptions): Promise<Credential> {
+    const configPath = options.configPath ?? getBridgeConfigPath();
     const existing = await resolveCredential(options.url, process.env, configPath);
     if (existing) return existing;
 
     await login({
         url: options.url,
-        clientName: options.name?.trim() || 'Dory Local AI',
+        clientName: options.name?.trim() || 'Dory Codex Agent',
         configPath,
         scopes: LOCAL_AI_SCOPES,
+        fetchFn: options.fetchFn,
+        openUrl: options.openUrl,
+        pollIntervalMs: options.pollIntervalMs,
     });
 
     const credential = await resolveCredential(options.url, process.env, configPath);
@@ -274,24 +287,27 @@ async function resolveLocalAiCredential(options: LocalAiOptions): Promise<Creden
     return credential;
 }
 
-async function ensureRegisteredBridge(options: LocalAiOptions, provider: LocalAiProvider, name: string): Promise<{ credential: Credential; bridgeId: string }> {
-    let credential = await resolveLocalAiCredential(options);
+async function ensureRegisteredBridge(options: CodexAgentOptions, name: string): Promise<{ credential: Credential; bridgeId: string }> {
+    let credential = await resolveCodexAgentCredential(options);
 
     try {
-        const registered = await registerBridge(credential, provider, name, options.fetchFn);
+        const registered = await registerBridge(credential, name, options.fetchFn);
         return { credential, bridgeId: registered.bridge.id };
     } catch (error: any) {
-        if (error?.status !== 403) throw error;
+        if (error?.status !== 401 && error?.status !== 403) throw error;
     }
 
     await login({
         url: options.url,
         clientName: name,
-        configPath: options.configPath ?? getConfigPath(),
+        configPath: options.configPath ?? getBridgeConfigPath(),
         scopes: LOCAL_AI_SCOPES,
+        fetchFn: options.fetchFn,
+        openUrl: options.openUrl,
+        pollIntervalMs: options.pollIntervalMs,
     });
-    credential = await resolveLocalAiCredential(options);
-    const registered = await registerBridge(credential, provider, name, options.fetchFn);
+    credential = await resolveCodexAgentCredential(options);
+    const registered = await registerBridge(credential, name, options.fetchFn);
     return { credential, bridgeId: registered.bridge.id };
 }
 
@@ -324,20 +340,9 @@ async function completeJob(credential: Credential, bridgeId: string, jobId: stri
     );
 }
 
-export async function startLocalAiBridge(options: LocalAiOptions = {}) {
-    const provider = (options.provider?.trim() || 'codex-agent') as LocalAiProvider;
-    if (provider !== 'codex-agent') {
-        throw new Error('Only codex-agent is supported by dory-mcp local-ai today.');
-    }
-
-    if (!options.runCodexAgentFn) {
-        await findExecutable('codex').then(path => {
-            if (!path) throw new Error('codex CLI was not found on this device.');
-        });
-    }
-
-    const name = options.name?.trim() || 'Dory Local AI';
-    const { credential, bridgeId } = await ensureRegisteredBridge(options, provider, name);
+export async function startCodexAgentBridge(options: CodexAgentOptions = {}) {
+    const name = options.name?.trim() || 'Dory Codex Agent';
+    const { credential, bridgeId } = await prepareCodexAgentBridge(options);
     const runCodex = options.runCodexAgentFn ?? runCodexAgent;
     const doryMcpConfig: CodexDoryMcpConfig = {
         endpoint: credential.endpoint,
@@ -349,7 +354,7 @@ export async function startLocalAiBridge(options: LocalAiOptions = {}) {
         enabledTools: DORY_CODEX_MCP_ENABLED_TOOLS,
         toolTimeoutSec: DORY_CODEX_MCP_TOOL_TIMEOUT_SEC,
     };
-    process.stderr.write(`Dory local AI bridge connected: ${name} (${bridgeId})\n`);
+    process.stderr.write(`Dory Codex Agent connected: ${name} (${bridgeId})\n`);
 
     let stopping = false;
     let completedJobs = 0;
