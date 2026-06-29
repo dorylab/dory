@@ -2666,7 +2666,8 @@
             "ProviderNotFound": "未找到自定义 AI。",
             "DisabledProviderCannotBeDefault": "请先启用这个 AI 服务，再设为默认。",
             "SystemProviderUnavailable": "Dory AI 暂不可用。",
-            "TestFailed": "AI 服务测试失败：{reason}"
+            "TestFailed": "AI 服务测试失败：{reason}",
+            "LocalAgentUnavailable": "这台设备上暂不可用这个本机 AI Agent。"
         }
     },
     "McpAuthorize": {
@@ -3616,7 +3617,9 @@
                 "ViewDocs": "查看文档",
                 "TestProvider": "测试",
                 "Cancel": "取消",
-                "SaveChanges": "保存更改"
+                "SaveChanges": "保存更改",
+                "Refresh": "刷新",
+                "Done": "完成"
             },
             "Toasts": {
                 "ProviderAdded": "自定义 AI 已添加",
@@ -3641,6 +3644,37 @@
                 "ModelDescription": "由系统管理员提供的默认 AI 模型。",
                 "ActiveModelDescription": "当前组织正在使用的默认模型。",
                 "UnavailableDescription": "请联系系统管理员完成 AI 配置。"
+            },
+            "LocalAi": {
+                "Title": "本机 AI",
+                "Description": "连接这台设备上的 Agent 或本地模型服务。",
+                "DesktopOnlyDescription": "通过 Dory MCP 在 Web 应用中连接本机 AI。",
+                "EnableCodex": "启用 Codex Agent",
+                "EnableClaudeCode": "启用 Claude Code",
+                "ConnectCodex": "连接本机 Codex",
+                "ConnectLocalModel": "连接本地模型",
+                "NotDetected": "未检测到",
+                "BridgeNeedsUpdate": "需要更新",
+                "Running": "运行中",
+                "NotRunning": "未运行",
+                "AgentDetectedDescription": "已在这台设备上检测到 {command}，可作为 AI Provider 使用。",
+                "AgentMissingDescription": "未在这台设备上找到 {command}。",
+                "BridgeDetectedDescription": "{name} 已通过 Dory MCP 连接，可在这台设备上运行 Codex。",
+                "BridgeNeedsUpdateDescription": "请使用更新后的 @getdory/mcp package 重启本机 AI bridge，以启用 Dory MCP tools 和 SQL 执行。",
+                "BridgeMissingDescription": "在这台设备上运行 Dory MCP 本机 AI bridge 后，即可从 Web 应用连接 Codex。",
+                "LastSeen": "最后连接：{time}",
+                "SetupTitle": "连接本机 Codex",
+                "SetupDescription": "请在安装了 Codex CLI 的这台设备终端里运行以下命令。",
+                "LoginCommand": "授权 Dory MCP",
+                "BridgeCommand": "启动本机 AI bridge",
+                "SetupRefreshHint": "Bridge 运行后，刷新此面板并启用 Codex Agent。",
+                "ViewSetup": "查看连接命令",
+                "UsageSetupHint": "在这台设备的终端启动 Dory MCP 本机 AI bridge，刷新此面板后即可从 Web 应用启用 Codex Agent。",
+                "UsageBridgeReadyHint": "Dory MCP bridge 已连接。下一步启用 Codex Agent，并将它设为默认模型。",
+                "UsageEnabledHint": "本机 AI 已启用。设为默认后，聊天助手会通过这台设备上的 Agent 运行。",
+                "UsageDefaultHint": "本机 AI 已是默认模型。使用聊天助手时，请保持这台设备上的 bridge 或 Agent 运行。",
+                "UsageDesktopHint": "桌面版会检测这台设备上的 Codex 或 Claude Code CLI；检测到后即可启用并设为默认模型。",
+                "ModelServiceDescription": "使用本机 OpenAI-compatible endpoint：{endpoint}。"
             }
         },
         "Billing": {

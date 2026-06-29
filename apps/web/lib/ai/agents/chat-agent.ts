@@ -12,6 +12,7 @@ type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     maxSteps?: number;
     headers?: Record<string, string | undefined> | null;
     context: AiGatewayContext;
+    experimentalContext?: Record<string, unknown> | null;
     requestId: string;
     startedAt?: number;
     debugInput?: AiDebugInput;
@@ -52,6 +53,7 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
             organizationId: options.context.organizationId ?? null,
             userId: options.context.userId ?? null,
             connectionId: options.context.connectionId ?? null,
+            ...(options.experimentalContext ?? {}),
         },
         prepareCall: callOptions => ({
             ...callOptions,

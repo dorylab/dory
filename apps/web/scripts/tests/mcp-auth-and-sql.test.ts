@@ -295,7 +295,7 @@ test('web MCP link schemas validate start and poll payloads', () => {
         mcpLinkStartSchema.safeParse({
             clientName: 'Codex',
             verifierHash: 'a'.repeat(64),
-            scopes: ['connections:read'],
+            scopes: ['connections:read', 'local_ai:run'],
         }).success,
         true,
     );

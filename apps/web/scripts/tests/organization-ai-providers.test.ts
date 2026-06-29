@@ -13,6 +13,7 @@ const {
     getDefaultAiProviderBaseUrl,
     getDefaultAiProviderModel,
     isAiProviderApiKeyRequired,
+    isLocalAiAgentProvider,
     isAiProviderModelAllowed,
     isAiProviderAvailable,
 } = await import('@dory/ee/ai/provider-options');
@@ -56,7 +57,7 @@ test('serializing organization AI providers exposes only key hints', () => {
     assert.equal('apiKey' in serialized, false);
 });
 
-test('organization provider override is controlled by Enterprise or Pro', () => {
+test('organization provider override is available to all plans during temporary access period', () => {
     assert.equal(normalizeLicense('oss'), 'oss');
     assert.equal(normalizeLicense('Enterprise'), 'enterprise');
     assert.equal(normalizeLicense('unknown'), null);
@@ -91,19 +92,19 @@ test('organization provider override is controlled by Enterprise or Pro', () => 
         reason: 'enabled_by_pro',
     });
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'cloud-plan', license: 'oss', billingPlan: 'hobby' }), {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     });
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'self-hosted-license', license: 'oss', billingPlan: 'pro' }), {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     });
     assert.deepEqual(resolveOrganizationAiProviderCapability({ entitlementMode: 'cloud-plan', license: 'enterprise', billingPlan: 'hobby' }), {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     });
 });
 
@@ -228,13 +229,19 @@ test('AI provider model options are provider scoped', () => {
     assert.equal(isAiProviderModelAllowed('qwen', 'gpt-4o-mini'), false);
     assert.equal(isAiProviderModelAllowed('openai', 'gpt-5.4-mini'), true);
     assert.equal(getDefaultAiProviderModel('openai-compatible'), '');
+    assert.equal(getDefaultAiProviderModel('codex-agent'), 'default');
     assert.equal(getDefaultAiProviderModel('azure-openai'), '');
     assert.equal(isAiProviderModelAllowed('openai-compatible', 'custom-model-id'), true);
+    assert.equal(isAiProviderModelAllowed('codex-agent', 'gpt-5.4-mini'), true);
     assert.equal(isAiProviderModelAllowed('openrouter', 'anthropic/claude-sonnet-4'), true);
+    assert.equal(isAiProviderAvailable('codex-agent'), true);
+    assert.equal(isLocalAiAgentProvider('codex-agent'), true);
+    assert.equal(isLocalAiAgentProvider('claude-code-agent'), true);
     assert.equal(isAiProviderAvailable('cloudflare-gateway'), false);
     assert.equal(isAiProviderAvailable('azure-openai'), true);
     assert.equal(isAiProviderAvailable('openrouter'), true);
     assert.equal(isAiProviderAvailable('self-hosted' as never), false);
+    assert.equal(isAiProviderApiKeyRequired('codex-agent'), false);
     assert.equal(isAiProviderApiKeyRequired('openai-compatible'), false);
     assert.equal(isAiProviderApiKeyRequired('openai'), true);
     assert.equal(getDefaultAiProviderBaseUrl('openai'), 'https://api.openai.com/v1');
@@ -251,6 +258,8 @@ test('AI provider options expose local icons', () => {
 
     assert.equal(getAiProviderIconSrc('qwen'), '/images/logos/ai-providers/qwen.svg');
     assert.equal(getAiProviderIconSrc('openai-compatible'), '/images/logos/ai-providers/openai-compatible.svg');
+    assert.equal(getAiProviderIconSrc('codex-agent'), '/images/logos/ai-providers/codex-agent.svg');
+    assert.equal(getAiProviderIconSrc('claude-code-agent'), '/images/logos/ai-providers/claude-code-agent.svg');
     assert.equal(getAiProviderIconSrc('cloudflare-gateway'), '/images/logos/ai-providers/cloudflare-gateway.svg');
 });
 
@@ -263,18 +272,18 @@ test('provider resolution keeps system active in OSS', () => {
 
     assert.equal(resolution.currentSource, 'system');
     assert.equal(resolution.activeProvider.displayName, 'Qwen · qwen-plus');
-    assert.equal(resolution.managementMode, 'global_readonly');
+    assert.equal(resolution.managementMode, 'organization_editable');
     assert.deepEqual(
         resolution.scopeRows.map(row => [row.scope, row.status]),
         [
             ['Global', 'active'],
-            ['Organization', 'enterprise'],
+            ['Organization', 'available'],
             ['User', 'coming_soon'],
         ],
     );
 });
 
-test('AI providers view model marks only the effective default in OSS', () => {
+test('AI providers view model uses organization default in OSS', () => {
     const viewModel = buildAiProvidersViewModel({
         organizationProviders: [
             {
@@ -295,17 +304,17 @@ test('AI providers view model marks only the effective default in OSS', () => {
         env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen-plus', DORY_AI_API_KEY: 'sk-test' },
     });
 
-    assert.equal(viewModel.defaultProviderId, 'system');
+    assert.equal(viewModel.defaultProviderId, 'provider_openai');
     assert.deepEqual(
         viewModel.providers.map(provider => [provider.id, provider.status, provider.isDefault]),
         [
-            ['system', 'active', true],
-            ['provider_openai', 'enabled', false],
+            ['provider_openai', 'active', true],
+            ['system', 'enabled', false],
         ],
     );
 });
 
-test('AI providers view model hides organization providers in Docker OSS', () => {
+test('AI providers view model uses organization providers in Docker OSS', () => {
     const viewModel = buildAiProvidersViewModel({
         organizationProviders: [
             {
@@ -329,11 +338,14 @@ test('AI providers view model hides organization providers in Docker OSS', () =>
         env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen-plus', DORY_AI_API_KEY: 'sk-test' },
     });
 
-    assert.equal(viewModel.organizationProviderCapability.enabled, false);
-    assert.equal(viewModel.defaultProviderId, 'system');
+    assert.equal(viewModel.organizationProviderCapability.enabled, true);
+    assert.equal(viewModel.defaultProviderId, 'provider_openai');
     assert.deepEqual(
         viewModel.providers.map(provider => [provider.id, provider.source, provider.status, provider.isDefault]),
-        [['system', 'system', 'active', true]],
+        [
+            ['provider_openai', 'organization', 'active', true],
+            ['system', 'system', 'enabled', false],
+        ],
     );
 });
 
@@ -486,6 +498,75 @@ test('OpenAI-compatible organization providers can use local endpoints without A
     assert.equal(viewModel.providerResolution.currentSource, 'organization');
     assert.equal(viewModel.providers[0]?.status, 'active');
     assert.equal(viewModel.providers[0]?.configured, true);
+});
+
+test('local agent organization providers can be defaults without API keys or endpoints', () => {
+    const viewModel = buildAiProvidersViewModel({
+        organizationProviders: [
+            {
+                id: 'provider_codex',
+                organizationId: 'org_123',
+                provider: 'codex-agent' as const,
+                model: 'default',
+                baseUrl: null,
+                enabled: true,
+                isDefault: true,
+                hasKey: false,
+                keyHint: null,
+                createdAt: '2026-05-20T00:00:00.000Z',
+                updatedAt: '2026-05-20T00:00:00.000Z',
+            },
+        ],
+        license: 'enterprise',
+        runtime: 'desktop',
+        env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_MODEL: 'qwen-plus', DORY_AI_API_KEY: 'sk-test' },
+    });
+
+    assert.equal(viewModel.defaultProviderId, 'provider_codex');
+    assert.equal(viewModel.providerResolution.currentSource, 'organization');
+    assert.equal(viewModel.providerResolution.activeProvider.displayName, 'Codex Agent · default');
+    assert.equal(viewModel.providers[0]?.status, 'active');
+    assert.equal(viewModel.providers[0]?.configured, true);
+});
+
+test('local agent defaults remain available without custom cloud provider entitlement', () => {
+    const localProvider = {
+        id: 'provider_local',
+        organizationId: 'org_123',
+        provider: 'codex-agent' as const,
+        model: 'default',
+        baseUrl: 'bridge:bridge_123',
+        enabled: true,
+        isDefault: true,
+        hasKey: false,
+        keyHint: null,
+        createdAt: null,
+        updatedAt: null,
+    };
+
+    const resolution = getAiProviderResolution({
+        organizationProviders: [localProvider],
+        entitlementMode: 'self-hosted-license',
+        license: 'oss',
+        env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_API_KEY: 'sk-test' },
+    });
+
+    assert.equal(resolution.activeProvider.provider, 'codex-agent');
+    assert.equal(resolution.currentSource, 'organization');
+
+    const viewModel = buildAiProvidersViewModel({
+        organizationProviders: [localProvider],
+        entitlementMode: 'self-hosted-license',
+        license: 'oss',
+        runtime: 'docker',
+        env: { DORY_AI_PROVIDER: 'qwen', DORY_AI_API_KEY: 'sk-test' },
+    });
+
+    assert.equal(viewModel.defaultProviderId, 'provider_local');
+    assert.equal(
+        viewModel.providers.some(provider => provider.provider === 'codex-agent'),
+        true,
+    );
 });
 
 test('AI providers view model lists system plus organization providers with default state', () => {

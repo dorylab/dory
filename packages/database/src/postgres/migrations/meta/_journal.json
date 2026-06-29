@@ -120,6 +120,13 @@
       "when": 1781712000000,
       "tag": "0016_works",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782748800000,
+      "tag": "0017_local_ai_bridge",
+      "breakpoints": true
     }
   ]
 }

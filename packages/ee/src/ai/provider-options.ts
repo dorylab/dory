@@ -22,6 +22,9 @@ export const AI_PROVIDER_DEFAULT_BASE_URLS: Partial<Record<OrganizationAiProvide
     openrouter: 'https://openrouter.ai/api/v1',
 };
 
+export const LOCAL_AI_AGENT_PROVIDERS = ['codex-agent', 'claude-code-agent'] as const satisfies OrganizationAiProviderType[];
+export type LocalAiAgentProvider = (typeof LOCAL_AI_AGENT_PROVIDERS)[number];
+
 export const AI_PROVIDER_ICON_SRCS: Partial<Record<OrganizationAiProviderType, string>> = {
     openai: '/images/logos/ai-providers/openai.svg',
     anthropic: '/images/logos/ai-providers/anthropic.svg',
@@ -32,6 +35,8 @@ export const AI_PROVIDER_ICON_SRCS: Partial<Record<OrganizationAiProviderType, s
     xai: '/images/logos/ai-providers/xai.svg',
     meta: '/images/logos/ai-providers/meta.svg',
     'openai-compatible': '/images/logos/ai-providers/openai-compatible.svg',
+    'codex-agent': '/images/logos/ai-providers/codex-agent.svg',
+    'claude-code-agent': '/images/logos/ai-providers/claude-code-agent.svg',
     cloudflare: '/images/logos/ai-providers/cloudflare.svg',
     'cloudflare-gateway': '/images/logos/ai-providers/cloudflare-gateway.svg',
 };
@@ -46,6 +51,8 @@ export const AI_PROVIDER_OPTIONS: AiProviderOption[] = [
     { value: 'xai', label: 'xAI', iconSrc: AI_PROVIDER_ICON_SRCS.xai! },
     { value: 'meta', label: 'Meta', iconSrc: AI_PROVIDER_ICON_SRCS.meta! },
     { value: 'openai-compatible', label: 'OpenAI Compatible', iconSrc: AI_PROVIDER_ICON_SRCS['openai-compatible']! },
+    { value: 'codex-agent', label: 'Codex Agent', iconSrc: AI_PROVIDER_ICON_SRCS['codex-agent']! },
+    { value: 'claude-code-agent', label: 'Claude Code', iconSrc: AI_PROVIDER_ICON_SRCS['claude-code-agent']! },
 ];
 
 export const AI_PROVIDER_MODEL_OPTIONS: Partial<Record<OrganizationAiProviderType, AiProviderModelOption[]>> = {
@@ -131,6 +138,8 @@ export const AI_PROVIDER_MODEL_OPTIONS: Partial<Record<OrganizationAiProviderTyp
         { value: 'llama-3.1-70b-instruct', label: 'Llama 3.1 70B Instruct' },
         { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
     ],
+    'codex-agent': [{ value: 'default', label: 'Default' }],
+    'claude-code-agent': [{ value: 'default', label: 'Default' }],
 };
 
 export function getAiProviderModelOptions(provider: OrganizationAiProviderType): AiProviderModelOption[] {
@@ -138,6 +147,7 @@ export function getAiProviderModelOptions(provider: OrganizationAiProviderType):
 }
 
 export function getDefaultAiProviderModel(provider: OrganizationAiProviderType): string {
+    if (isLocalAiAgentProvider(provider)) return 'default';
     if (isAiProviderModelManual(provider)) return '';
     return getAiProviderModelOptions(provider)[0]?.value ?? 'gpt-4o-mini';
 }
@@ -157,7 +167,7 @@ export function isAiProviderAvailable(provider: OrganizationAiProviderType): boo
 }
 
 export function isAiProviderModelManual(provider: OrganizationAiProviderType): boolean {
-    return provider === 'azure-openai' || provider === 'openrouter' || provider === 'openai-compatible';
+    return provider === 'azure-openai' || provider === 'openrouter' || provider === 'openai-compatible' || isLocalAiAgentProvider(provider);
 }
 
 export function isAiProviderModelAllowed(provider: OrganizationAiProviderType, model: string): boolean {
@@ -167,9 +177,13 @@ export function isAiProviderModelAllowed(provider: OrganizationAiProviderType, m
 }
 
 export function isAiProviderApiKeyRequired(provider: OrganizationAiProviderType): boolean {
-    return provider !== 'openai-compatible';
+    return provider !== 'openai-compatible' && !isLocalAiAgentProvider(provider);
 }
 
 export function isAiProviderBaseUrlRequired(provider: OrganizationAiProviderType): boolean {
     return provider === 'azure-openai' || provider === 'openrouter' || provider === 'openai-compatible';
+}
+
+export function isLocalAiAgentProvider(provider: OrganizationAiProviderType | string | null | undefined): provider is LocalAiAgentProvider {
+    return LOCAL_AI_AGENT_PROVIDERS.includes(provider as LocalAiAgentProvider);
 }

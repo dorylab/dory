@@ -1,12 +1,12 @@
 import type { OrganizationAiProviderPublic } from '@dory/database/postgres/impl/organization-ai-providers';
 import type { DBService } from '@dory/database';
 import { getLicenseForServer, isBillingEnabledForServer, isDesktopBillingHandoffAvailableForServer, type DoryLicense } from '@dory/shared/runtime';
-import { isAiProviderApiKeyRequired, isAiProviderBaseUrlRequired } from './provider-options';
+import { isAiProviderApiKeyRequired, isAiProviderBaseUrlRequired, isLocalAiAgentProvider } from './provider-options';
 
 export type OrganizationPlan = 'hobby' | 'pro';
 export type OrganizationAiProviderEntitlementMode = 'cloud-plan' | 'self-hosted-license';
-export type OrganizationAiProviderCapabilitySource = 'cloud-plan' | 'ee-license' | 'none';
-export type OrganizationAiProviderCapabilityReason = 'enabled_by_pro' | 'enabled_by_enterprise' | 'requires_upgrade';
+export type OrganizationAiProviderCapabilitySource = 'cloud-plan' | 'ee-license' | 'temporary' | 'none';
+export type OrganizationAiProviderCapabilityReason = 'enabled_by_pro' | 'enabled_by_enterprise' | 'temporarily_open' | 'requires_upgrade';
 
 export type OrganizationAiProviderCapability = {
     enabled: boolean;
@@ -47,9 +47,9 @@ export function resolveOrganizationAiProviderCapability(options: {
     }
 
     return {
-        enabled: false,
-        source: 'none',
-        reason: 'requires_upgrade',
+        enabled: true,
+        source: 'temporary',
+        reason: 'temporarily_open',
     };
 }
 
@@ -65,6 +65,8 @@ const GLOBAL_AI_PROVIDER_LABELS: Record<string, string> = {
     xai: 'xAI',
     meta: 'Meta',
     'openai-compatible': 'OpenAI Compatible',
+    'codex-agent': 'Codex Agent',
+    'claude-code-agent': 'Claude Code',
     cloudflare: 'Cloudflare Gateway',
     'cloudflare-gateway': 'Cloudflare Gateway',
 };
@@ -79,6 +81,8 @@ const GLOBAL_AI_PROVIDER_DEFAULT_MODELS: Record<string, string> = {
     xai: 'grok-2-mini',
     meta: 'llama-3.1-8b-instruct',
     'openai-compatible': 'gpt-4o-mini',
+    'codex-agent': 'default',
+    'claude-code-agent': 'default',
     cloudflare: 'gpt-4o-mini',
     'cloudflare-gateway': 'gpt-4o-mini',
 };
@@ -327,7 +331,8 @@ export function getAiProviderResolution(options: {
     });
     const canUseOrganizationProviders = organizationCapability.enabled;
     const defaultOrganizationProvider = options.organizationProviders?.find(provider => provider.enabled && provider.isDefault) ?? null;
-    const organizationProvider = canUseOrganizationProviders && defaultOrganizationProvider ? buildOrganizationProviderSummary(defaultOrganizationProvider) : null;
+    const canUseDefaultOrganizationProvider = canUseOrganizationProviders || Boolean(defaultOrganizationProvider && isLocalAiAgentProvider(defaultOrganizationProvider.provider));
+    const organizationProvider = canUseDefaultOrganizationProvider && defaultOrganizationProvider ? buildOrganizationProviderSummary(defaultOrganizationProvider) : null;
     const activeProvider = organizationProvider ?? globalProvider;
     const organizationStatus: AiProviderScopeStatus = canUseOrganizationProviders ? (organizationProvider ? 'active' : 'available') : 'enterprise';
 
@@ -376,17 +381,15 @@ export function buildAiProvidersViewModel(options: {
         billingPlan: isDockerRuntime ? null : options.billingPlan,
     });
     const hasOrganizationDefault = resolution.activeProvider.source === 'organization';
-    const organizationRows = isDockerRuntime
-        ? []
-        : options.organizationProviders.map(provider => {
-              const row = buildOrganizationProviderRow(provider);
-              const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
-              return {
-                  ...row,
-                  isDefault: isEffectiveDefault,
-                  status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
-              };
-          });
+    const organizationRows = options.organizationProviders.map(provider => {
+        const row = buildOrganizationProviderRow(provider);
+        const isEffectiveDefault = hasOrganizationDefault && row.isDefault;
+        return {
+            ...row,
+            isDefault: isEffectiveDefault,
+            status: row.status === 'active' && !isEffectiveDefault ? 'enabled' : row.status,
+        };
+    });
     const defaultProviderId = organizationRows.find(row => row.isDefault && row.status !== 'disabled')?.id ?? 'system';
     const rows = [buildSystemProviderRow(resolution.globalProvider, !hasOrganizationDefault), ...organizationRows];
     const providers = [...rows].sort((left, right) => {
@@ -424,6 +427,7 @@ export async function resolveOrganizationAiProviderCapabilityForOrganization(
 export async function shouldUseOrganizationProviderOverride(db: DBService, organizationId: string): Promise<boolean> {
     const provider = await db.organizationAiProviders.getDefault(organizationId);
     if (!provider || !provider.enabled || !isOrganizationAiProviderConfigured(provider)) return false;
+    if (isLocalAiAgentProvider(provider.provider)) return true;
 
     const capability = await resolveOrganizationAiProviderCapabilityForOrganization(db, organizationId, getOrganizationAiProviderEntitlementModeForServer());
     return capability.enabled;

@@ -36,6 +36,7 @@ test('login opens browser authorization, polls, and stores returned token once a
                 if (parsed.pathname === '/api/mcp/link/start') {
                     assert.equal(body.clientName, 'Dory MCP');
                     assert.match(body.verifierHash, /^[a-f0-9]{64}$/);
+                    assert.equal(body.scopes, undefined);
                     return jsonResponse({
                         code: 0,
                         data: {
@@ -71,6 +72,53 @@ test('login opens browser authorization, polls, and stores returned token once a
         assert.deepEqual(openedUrls, ['https://dory.example.com/mcp/authorize?requestId=request-1']);
         assert.equal(result.origin, 'https://dory.example.com');
         assert.equal(config.credentials['https://dory.example.com']?.token, 'dory_mcp_returned_token');
+    } finally {
+        await rm(dir, { recursive: true, force: true });
+    }
+});
+
+test('login can request local AI scopes', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-mcp-login-scopes-'));
+    const configPath = path.join(dir, 'mcp.json');
+    const requestedScopes = ['connections:read', 'local_ai:run'];
+
+    try {
+        await login({
+            url: 'https://dory.example.com',
+            configPath,
+            scopes: requestedScopes,
+            pollIntervalMs: 0,
+            openUrl: () => undefined,
+            fetchFn: async (url, init) => {
+                const parsed = new URL(String(url));
+                const body = JSON.parse(String(init?.body ?? '{}'));
+
+                if (parsed.pathname === '/api/mcp/link/start') {
+                    assert.deepEqual(body.scopes, requestedScopes);
+                    return jsonResponse({
+                        code: 0,
+                        data: {
+                            requestId: 'request-scoped',
+                            authorizeUrl: 'https://dory.example.com/mcp/authorize?requestId=request-scoped',
+                            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+                        },
+                    });
+                }
+
+                if (parsed.pathname === '/api/mcp/link/poll') {
+                    return jsonResponse({
+                        code: 0,
+                        data: {
+                            status: 'approved',
+                            token: 'dory_mcp_scoped_token',
+                            record: { tokenPrefix: 'dory_mcp_scoped' },
+                        },
+                    });
+                }
+
+                return jsonResponse({ code: 'NOT_FOUND', message: 'not found' }, 404);
+            },
+        });
     } finally {
         await rm(dir, { recursive: true, force: true });
     }

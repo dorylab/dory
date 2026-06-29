@@ -23,6 +23,7 @@ export type LoginOptions = {
     url?: string | null;
     clientName?: string;
     configPath?: string;
+    scopes?: string[];
     fetchFn?: FetchLike;
     openUrl?: (url: string) => Promise<void> | void;
     pollIntervalMs?: number;
@@ -58,6 +59,7 @@ export async function login(options: LoginOptions = {}) {
         {
             clientName,
             verifierHash,
+            ...(options.scopes?.length ? { scopes: options.scopes } : {}),
         },
         fetchFn,
     );

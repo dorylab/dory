@@ -17,6 +17,8 @@ export const ORGANIZATION_AI_PROVIDERS = [
     'azure-openai',
     'openrouter',
     'openai-compatible',
+    'codex-agent',
+    'claude-code-agent',
     'cloudflare',
     'cloudflare-gateway',
 ] as const;

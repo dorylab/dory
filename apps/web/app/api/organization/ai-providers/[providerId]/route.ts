@@ -4,9 +4,10 @@ import { z } from 'zod';
 import { withManagedOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { isGlobalAiProviderConfiguredFromEnv, isOrganizationAiProviderConfigured } from '@dory/ee/ai/organization-ai-providers';
-import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed } from '@dory/ee/ai/provider-options';
+import { isAiProviderApiKeyRequired, isAiProviderAvailable, isAiProviderBaseUrlRequired, isAiProviderModelAllowed, isLocalAiAgentProvider } from '@dory/ee/ai/provider-options';
 import { buildOrganizationAiProvidersPayloadForRequest, resolveGlobalAiProviderForRequest } from '@/lib/server/organization-ai-providers/cloud-system-provider';
 import { resolveOrganizationAiProviderEntitlementForRequest } from '@/lib/server/organization-ai-providers/entitlement';
+import { assertLocalAiAgentAvailable } from '@/lib/server/local-ai/detection';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
 import { ORGANIZATION_AI_PROVIDERS } from '@dory/database/postgres/impl/organization-ai-providers';
@@ -51,15 +52,14 @@ export function PATCH(req: NextRequest, context: RouteContext) {
         }
 
         const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
-        if (!entitlement.capability.enabled) {
-            return NextResponse.json(
+        const organizationProviderUnavailableResponse = () =>
+            NextResponse.json(
                 ResponseUtil.error({
                     code: ErrorCodes.FORBIDDEN,
                     message: translateApi('Api.OrganizationAiProviders.OrganizationProviderUnavailableInOss', undefined, locale),
                 }),
                 { status: 403 },
             );
-        }
 
         let globalProvider: Awaited<ReturnType<typeof resolveGlobalAiProviderForRequest>> | undefined;
         if (providerId === 'system') {
@@ -99,6 +99,10 @@ export function PATCH(req: NextRequest, context: RouteContext) {
             }
 
             if (parsed.data.action === 'set_default') {
+                if (!entitlement.capability.enabled && !isLocalAiAgentProvider(provider.provider)) {
+                    return organizationProviderUnavailableResponse();
+                }
+
                 if (!isOrganizationAiProviderConfigured(provider)) {
                     return NextResponse.json(
                         ResponseUtil.error({
@@ -107,6 +111,24 @@ export function PATCH(req: NextRequest, context: RouteContext) {
                         }),
                         { status: 400 },
                     );
+                }
+
+                if (isLocalAiAgentProvider(provider.provider)) {
+                    try {
+                        await assertLocalAiAgentAvailable(provider.provider, {
+                            db,
+                            organizationId,
+                            target: provider.baseUrl,
+                        });
+                    } catch (error) {
+                        return NextResponse.json(
+                            ResponseUtil.error({
+                                code: ErrorCodes.VALIDATION_ERROR,
+                                message: error instanceof Error ? error.message : translateApi('Api.OrganizationAiProviders.LocalAgentUnavailable', undefined, locale),
+                            }),
+                            { status: 400 },
+                        );
+                    }
                 }
 
                 await db.organizationAiProviders.update({
@@ -119,6 +141,10 @@ export function PATCH(req: NextRequest, context: RouteContext) {
             }
 
             if (parsed.data.action === 'set_enabled') {
+                if (!entitlement.capability.enabled && !isLocalAiAgentProvider(provider.provider)) {
+                    return organizationProviderUnavailableResponse();
+                }
+
                 await db.organizationAiProviders.update({
                     organizationId,
                     id: providerId,
@@ -128,6 +154,10 @@ export function PATCH(req: NextRequest, context: RouteContext) {
             }
 
             if (parsed.data.action === 'update') {
+                if (!entitlement.capability.enabled && !isLocalAiAgentProvider(parsed.data.provider)) {
+                    return organizationProviderUnavailableResponse();
+                }
+
                 if (!isAiProviderAvailable(parsed.data.provider)) {
                     return NextResponse.json(
                         ResponseUtil.error({
@@ -170,6 +200,24 @@ export function PATCH(req: NextRequest, context: RouteContext) {
                     );
                 }
 
+                if (isLocalAiAgentProvider(parsed.data.provider)) {
+                    try {
+                        await assertLocalAiAgentAvailable(parsed.data.provider, {
+                            db,
+                            organizationId,
+                            target: parsed.data.baseUrl,
+                        });
+                    } catch (error) {
+                        return NextResponse.json(
+                            ResponseUtil.error({
+                                code: ErrorCodes.VALIDATION_ERROR,
+                                message: error instanceof Error ? error.message : translateApi('Api.OrganizationAiProviders.LocalAgentUnavailable', undefined, locale),
+                            }),
+                            { status: 400 },
+                        );
+                    }
+                }
+
                 await db.organizationAiProviders.update({
                     organizationId,
                     id: providerId,
@@ -202,15 +250,6 @@ export function DELETE(req: NextRequest, context: RouteContext) {
         const locale = await getApiLocale();
         const { providerId } = await context.params;
         const entitlement = await resolveOrganizationAiProviderEntitlementForRequest(db, organizationId);
-        if (!entitlement.capability.enabled) {
-            return NextResponse.json(
-                ResponseUtil.error({
-                    code: ErrorCodes.FORBIDDEN,
-                    message: translateApi('Api.OrganizationAiProviders.OrganizationProviderUnavailableInOss', undefined, locale),
-                }),
-                { status: 403 },
-            );
-        }
 
         if (providerId === 'system') {
             return NextResponse.json(
@@ -219,6 +258,27 @@ export function DELETE(req: NextRequest, context: RouteContext) {
                     message: translateApi('Api.OrganizationAiProviders.SystemProviderReadOnly', undefined, locale),
                 }),
                 { status: 400 },
+            );
+        }
+
+        const provider = await db.organizationAiProviders.get(organizationId, providerId);
+        if (!provider) {
+            return NextResponse.json(
+                ResponseUtil.error({
+                    code: ErrorCodes.NOT_FOUND,
+                    message: translateApi('Api.OrganizationAiProviders.ProviderNotFound', undefined, locale),
+                }),
+                { status: 404 },
+            );
+        }
+
+        if (!entitlement.capability.enabled && !isLocalAiAgentProvider(provider.provider)) {
+            return NextResponse.json(
+                ResponseUtil.error({
+                    code: ErrorCodes.FORBIDDEN,
+                    message: translateApi('Api.OrganizationAiProviders.OrganizationProviderUnavailableInOss', undefined, locale),
+                }),
+                { status: 403 },
             );
         }
 

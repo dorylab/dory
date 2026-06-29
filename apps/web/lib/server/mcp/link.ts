@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { MCP_DEFAULT_SCOPES } from './auth';
+import { MCP_DEFAULT_SCOPES, MCP_LINK_SCOPES } from './auth';
 
 export const MCP_LINK_TTL_MS = 10 * 60 * 1000;
 
 export const mcpLinkStartSchema = z.object({
     clientName: z.string().trim().min(1).max(80),
     verifierHash: z.string().regex(/^[a-f0-9]{64}$/i),
-    scopes: z.array(z.enum(MCP_DEFAULT_SCOPES)).optional(),
+    scopes: z.array(z.enum(MCP_LINK_SCOPES)).optional(),
 });
 
 export const mcpLinkPollSchema = z.object({
@@ -17,7 +17,7 @@ export const mcpLinkPollSchema = z.object({
 
 export const mcpLinkDecisionSchema = z.object({
     requestId: z.string().trim().min(1),
-    scopes: z.array(z.enum(MCP_DEFAULT_SCOPES)).optional(),
+    scopes: z.array(z.enum(MCP_LINK_SCOPES)).optional(),
 });
 
 export function hashMcpLinkVerifier(verifier: string) {

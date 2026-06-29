@@ -2660,7 +2660,8 @@
             "ProviderNotFound": "No se encontró la IA personalizada.",
             "DisabledProviderCannotBeDefault": "Habilita este servicio de IA antes de establecerlo como predeterminado.",
             "SystemProviderUnavailable": "Dory AI no está disponible.",
-            "TestFailed": "Error al probar el servicio de IA: {reason}"
+            "TestFailed": "Error al probar el servicio de IA: {reason}",
+            "LocalAgentUnavailable": "Este agente de IA local no está disponible en este dispositivo."
         }
     },
     "McpAuthorize": {
@@ -3610,7 +3611,9 @@
                 "ViewDocs": "Ver documentación",
                 "TestProvider": "Probar",
                 "Cancel": "Cancelar",
-                "SaveChanges": "Guardar cambios"
+                "SaveChanges": "Guardar cambios",
+                "Refresh": "Actualizar",
+                "Done": "Listo"
             },
             "Toasts": {
                 "ProviderAdded": "IA personalizada añadida",
@@ -3635,6 +3638,37 @@
                 "ModelDescription": "Modelo de IA predeterminado proporcionado por el administrador del sistema.",
                 "ActiveModelDescription": "Modelo predeterminado que usa actualmente esta organización.",
                 "UnavailableDescription": "Pide al administrador del sistema que complete la configuración de IA."
+            },
+            "LocalAi": {
+                "Title": "IA local",
+                "Description": "Conecta agentes y servicios de modelos locales que se ejecutan en este dispositivo.",
+                "DesktopOnlyDescription": "Usa Dory MCP para conectar IA local desde la app web.",
+                "EnableCodex": "Habilitar Codex Agent",
+                "EnableClaudeCode": "Habilitar Claude Code",
+                "ConnectCodex": "Conectar Codex local",
+                "ConnectLocalModel": "Conectar modelo local",
+                "NotDetected": "No detectado",
+                "BridgeNeedsUpdate": "Actualización requerida",
+                "Running": "En ejecución",
+                "NotRunning": "No está en ejecución",
+                "AgentDetectedDescription": "{command} está instalado en este dispositivo y puede usarse como proveedor de IA.",
+                "AgentMissingDescription": "No se encontró {command} en este dispositivo.",
+                "BridgeDetectedDescription": "{name} está conectado mediante Dory MCP y puede ejecutar Codex en este dispositivo.",
+                "BridgeNeedsUpdateDescription": "Reinicia el bridge de IA local con un paquete @getdory/mcp actualizado para habilitar Dory MCP tools y la ejecución SQL.",
+                "BridgeMissingDescription": "Ejecuta el bridge de IA local de Dory MCP en este dispositivo para conectar Codex desde la app web.",
+                "LastSeen": "Última conexión: {time}",
+                "SetupTitle": "Conectar Codex local",
+                "SetupDescription": "Ejecuta estos comandos en una terminal del dispositivo donde está instalado Codex CLI.",
+                "LoginCommand": "Autorizar Dory MCP",
+                "BridgeCommand": "Iniciar bridge de IA local",
+                "SetupRefreshHint": "Cuando el bridge esté en ejecución, actualiza este panel y habilita Codex Agent.",
+                "ViewSetup": "Ver comandos de conexión",
+                "UsageSetupHint": "Inicia el bridge de IA local de Dory MCP en la terminal de este dispositivo y luego actualiza este panel para habilitar Codex Agent desde la app web.",
+                "UsageBridgeReadyHint": "El bridge de Dory MCP está conectado. Habilita Codex Agent y configúralo como modelo predeterminado.",
+                "UsageEnabledHint": "La IA local está habilitada. Configúrala como modelo predeterminado para ejecutar las solicitudes del asistente mediante el agente de este dispositivo.",
+                "UsageDefaultHint": "La IA local es el modelo predeterminado. Mantén el bridge o el agente en ejecución en este dispositivo mientras usas el asistente de chat.",
+                "UsageDesktopHint": "En Desktop, Dory detecta Codex o Claude Code CLI en este dispositivo. Cuando se detecte, habilítalo y configúralo como modelo predeterminado.",
+                "ModelServiceDescription": "Usa el endpoint local compatible con OpenAI en {endpoint}."
             }
         },
         "Billing": {
