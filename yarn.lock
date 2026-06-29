@@ -3726,7 +3726,7 @@ __metadata:
     typescript: "npm:^6.0.2"
     zod: "npm:^4.3.6"
   bin:
-    dory: ./dist/cli.js
+    dory: dist/cli.js
   languageName: unknown
   linkType: soft
 
@@ -3740,7 +3740,7 @@ __metadata:
     typescript: "npm:^6.0.2"
     zod: "npm:^4.3.6"
   bin:
-    dory-mcp: ./dist/cli.js
+    dory-mcp: dist/cli.js
   languageName: unknown
   linkType: soft
 
