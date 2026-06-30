@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { config as loadEnv } from 'dotenv';
 import { generateText } from 'ai';
-import { getChatModel } from '../../lib/ai/model/providers';
+import { getReleaseNotesChatModel } from './model';
 
 type CliOptions = {
     from?: string;
@@ -249,7 +249,7 @@ async function generateReleaseNotes(args: {
     toRef: string;
     modelName: string;
 }) {
-    const model = getChatModel(args.modelName);
+    const model = getReleaseNotesChatModel(args.modelName);
     const prompt = buildPrompt(args);
 
     const { text } = await generateText({
