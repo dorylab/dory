@@ -114,7 +114,9 @@ async function ensureHeadlessIdentity(profile: DoryStorageProfile): Promise<Dory
     if (existing) return existing;
 
     if (profile.profile === 'desktop') {
-        throw new Error(`No desktop auth snapshot or local organization found in ${profile.userDataDir}. Open Dory Desktop once or pass --user-data-dir to the active desktop profile.`);
+        throw new Error(
+            `No desktop auth snapshot or local organization found in ${profile.userDataDir}. Open Dory Desktop once or pass --user-data-dir to the active desktop profile.`,
+        );
     }
 
     const client = await getClient();
@@ -177,6 +179,7 @@ export function createHeadlessActionContext(input: {
     db: DBService;
     auth: DoryMcpAuthContext;
     requestOrigin?: string | null;
+    workspaceOrigin?: string | null;
 }): ActionContext<WebActionServices> {
     return {
         organizationId: input.auth.organizationId,
@@ -195,6 +198,7 @@ export function createHeadlessActionContext(input: {
         services: {
             db: input.db,
             requestOrigin: input.requestOrigin ?? input.auth.requestOrigin ?? null,
+            workspaceOrigin: input.workspaceOrigin ?? input.auth.workspaceOrigin ?? null,
         },
     };
 }
@@ -245,6 +249,7 @@ export function createMcpActionContextFromAuth(input: {
     db: DBService;
     auth: DoryMcpAuthContext;
     requestOrigin?: string | null;
+    workspaceOrigin?: string | null;
 }): ActionContext<WebActionServices> {
     return createHeadlessActionContext(input);
 }
@@ -287,7 +292,10 @@ function toDoryActionMetadata(action: ActionDefinition<any, any, WebActionServic
 }
 
 export function listDoryActions(): DoryActionMetadata[] {
-    return webActionRegistry.list().map(toDoryActionMetadata).sort((a, b) => a.id.localeCompare(b.id));
+    return webActionRegistry
+        .list()
+        .map(toDoryActionMetadata)
+        .sort((a, b) => a.id.localeCompare(b.id));
 }
 
 export function getDoryAction(actionId: string): DoryActionMetadata | null {
@@ -295,12 +303,7 @@ export function getDoryAction(actionId: string): DoryActionMetadata | null {
     return action ? toDoryActionMetadata(action) : null;
 }
 
-export function executeDoryAction<TOutput = unknown>(
-    ctx: ActionContext<WebActionServices>,
-    actionId: ActionId,
-    input: unknown,
-    options?: ExecuteActionOptions,
-) {
+export function executeDoryAction<TOutput = unknown>(ctx: ActionContext<WebActionServices>, actionId: ActionId, input: unknown, options?: ExecuteActionOptions) {
     return executeRegisteredAction<TOutput, WebActionServices>(webActionRegistry, ctx, actionId, input, options);
 }
 

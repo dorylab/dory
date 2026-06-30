@@ -1,5 +1,6 @@
 export type DoryRuntime = 'desktop' | 'web' | 'docker' | 'headless';
 export type DoryLicense = 'oss' | 'enterprise';
+export type DoryDistribution = 'stable' | 'beta';
 
 export function normalizeRuntime(value: string | null | undefined): DoryRuntime | null {
     const runtime = value?.trim().toLowerCase();
@@ -9,6 +10,24 @@ export function normalizeRuntime(value: string | null | undefined): DoryRuntime 
     if (runtime === 'headless') return 'headless';
     if (runtime === 'web') return 'web';
     return null;
+}
+
+export function normalizeDistribution(value: string | null | undefined): DoryDistribution {
+    return value?.trim().toLowerCase() === 'beta' ? 'beta' : 'stable';
+}
+
+export function resolveDesktopProtocolScheme(options: { protocolScheme?: string | null; distribution?: string | null } = {}): string {
+    const explicit = options.protocolScheme?.trim();
+    if (explicit) return explicit;
+
+    return normalizeDistribution(options.distribution) === 'beta' ? 'dory-beta' : 'dory';
+}
+
+export function getDesktopProtocolSchemeForServer(): string {
+    return resolveDesktopProtocolScheme({
+        protocolScheme: process.env.DORY_PROTOCOL_SCHEME,
+        distribution: process.env.DORY_DISTRIBUTION,
+    });
 }
 
 function readRawRuntime(): string {
@@ -36,14 +55,7 @@ export function hasDesktopBrowserBridge(): boolean {
     const maybeWindow = (globalThis as BrowserBridgeRuntimeGlobal).window;
     if (!maybeWindow) return false;
 
-    return Boolean(
-        maybeWindow.authBridge ||
-            maybeWindow.localeBridge ||
-            maybeWindow.themeBridge ||
-            maybeWindow.updateBridge ||
-            maybeWindow.mcpBridge ||
-            maybeWindow.electron,
-    );
+    return Boolean(maybeWindow.authBridge || maybeWindow.localeBridge || maybeWindow.themeBridge || maybeWindow.updateBridge || maybeWindow.mcpBridge || maybeWindow.electron);
 }
 
 export function normalizeLicense(value: string | null | undefined): DoryLicense | null {
@@ -81,11 +93,7 @@ export function isBillingEnabledForServer(): boolean {
 
     return (
         isBillingAvailableRuntimeValue(resolvedRuntime) &&
-        Boolean(
-            process.env.STRIPE_SECRET_KEY?.trim() &&
-                process.env.STRIPE_WEBHOOK_SECRET?.trim() &&
-                process.env.STRIPE_PRO_MONTHLY_PRICE_ID?.trim(),
-        )
+        Boolean(process.env.STRIPE_SECRET_KEY?.trim() && process.env.STRIPE_WEBHOOK_SECRET?.trim() && process.env.STRIPE_PRO_MONTHLY_PRICE_ID?.trim())
     );
 }
 
@@ -94,10 +102,7 @@ export function isDesktopBillingHandoffRuntimeForServer(): boolean {
 }
 
 export function isDesktopBillingHandoffAvailableForServer(): boolean {
-    return (
-        isDesktopBillingHandoffRuntimeForServer() &&
-        Boolean((process.env.DORY_CLOUD_API_URL ?? process.env.NEXT_PUBLIC_DORY_CLOUD_API_URL ?? '').trim())
-    );
+    return isDesktopBillingHandoffRuntimeForServer() && Boolean((process.env.DORY_CLOUD_API_URL ?? process.env.NEXT_PUBLIC_DORY_CLOUD_API_URL ?? '').trim());
 }
 
 export function isBillingSettingsVisibleForServer(): boolean {

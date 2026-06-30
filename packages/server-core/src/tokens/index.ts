@@ -42,6 +42,7 @@ export type DoryMcpAuthContext = {
     scopes: string[];
     access: DoryOrganizationAccess;
     requestOrigin?: string | null;
+    workspaceOrigin?: string | null;
 };
 
 const ROLE_PERMISSIONS: Record<OrganizationRole, OrganizationPermissionMap> = {
@@ -207,12 +208,7 @@ export function generateMcpToken() {
     return `${MCP_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
 }
 
-export async function createDoryMcpToken(input: {
-    db: DBService;
-    organizationId: string;
-    userId: string;
-    name?: string | null;
-}) {
+export async function createDoryMcpToken(input: { db: DBService; organizationId: string; userId: string; name?: string | null }) {
     const token = generateMcpToken();
     const record = await input.db.mcp.createToken({
         organizationId: input.organizationId,
@@ -229,7 +225,7 @@ export async function createDoryMcpToken(input: {
 export async function buildDoryMcpAuthContextForTokenRecord(
     db: DBService,
     record: McpAccessTokenRecord,
-    options: { requestOrigin?: string | null } = {},
+    options: { requestOrigin?: string | null; workspaceOrigin?: string | null } = {},
 ): Promise<DoryMcpAuthContext> {
     const access = await resolveDoryOrganizationAccess(db, record.organizationId, record.createdByUserId);
     if (!access.permissions.workspace.read || !access.permissions.connection.read) {
@@ -246,13 +242,14 @@ export async function buildDoryMcpAuthContextForTokenRecord(
         scopes: Array.isArray(record.scopes) ? record.scopes : [],
         access,
         requestOrigin: options.requestOrigin ?? null,
+        workspaceOrigin: options.workspaceOrigin ?? null,
     };
 }
 
 export async function authenticateDoryMcpToken(
     db: DBService,
     token: string,
-    options: { requestOrigin?: string | null } = {},
+    options: { requestOrigin?: string | null; workspaceOrigin?: string | null } = {},
 ): Promise<{ auth: DoryMcpAuthContext; record: McpAccessTokenRecord }> {
     const normalized = token.trim();
     if (!normalized.startsWith(MCP_TOKEN_PREFIX)) {

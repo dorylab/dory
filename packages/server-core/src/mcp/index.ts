@@ -13,6 +13,7 @@ export type DoryMcpServerContext = {
     db: DBService;
     auth: DoryMcpAuthContext;
     requestOrigin?: string | null;
+    workspaceOrigin?: string | null;
 };
 
 export function createDoryMcpServer(context: DoryMcpServerContext) {
@@ -38,6 +39,7 @@ export function createDoryMcpServer(context: DoryMcpServerContext) {
                         db: context.db,
                         auth: context.auth,
                         requestOrigin: context.requestOrigin ?? null,
+                        workspaceOrigin: context.workspaceOrigin ?? null,
                     });
                     return structuredMcpFacadeResult(await tool.execute(ctx, input ?? {}));
                 } catch (error) {
@@ -73,4 +75,3 @@ export async function serveDoryMcpStdio(context: DoryMcpServerContext) {
     const transport = new StdioServerTransport();
     await server.connect(transport);
 }
-

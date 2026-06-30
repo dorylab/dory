@@ -9,6 +9,7 @@ import { getMainLogFilePath, setupMainLogger } from './main/logger.js';
 import { createMcpProxyManager } from './main/mcp-proxy.js';
 import { registerProtocolClient } from './main/protocol.js';
 import { createStandaloneServerManager } from './main/server.js';
+import { parseDoryDeepLink } from './main/deep-link.js';
 import { setUpdaterLocale, setupUpdater } from './main/updater.js';
 import type { UpdateChannel } from './main/updater/types.js';
 import {
@@ -58,6 +59,7 @@ const mcpProxyManager = createMcpProxyManager({
 });
 let launchPromise: Promise<void> | null = null;
 let launchDockBounceId: number | null = null;
+let pendingWorkspacePath: string | null = null;
 
 registerThemeIpc();
 applyTheme(getStoredTheme());
@@ -245,7 +247,11 @@ function createLocalizedMenuLabels() {
   };
 }
 
-async function launch() {
+async function launch(workspacePath?: string | null) {
+  if (workspacePath) {
+    pendingWorkspacePath = workspacePath;
+  }
+
   if (launchPromise) {
     log('[electron] launch already in progress');
     return launchPromise;
@@ -254,7 +260,10 @@ async function launch() {
   launchPromise = (async () => {
     try {
       startLaunchDockBounce();
-      const targetUrl = await serverManager.getAppUrl();
+      const baseUrl = await serverManager.getAppUrl();
+      const targetPath = pendingWorkspacePath;
+      pendingWorkspacePath = null;
+      const targetUrl = targetPath ? new URL(targetPath, baseUrl).toString() : baseUrl;
       log('[electron] launch targetUrl:', targetUrl);
       if (!hasMainWindow()) {
         createMainWindow({
@@ -273,10 +282,33 @@ async function launch() {
       app.quit();
     } finally {
       launchPromise = null;
+      if (pendingWorkspacePath) {
+        void launch();
+      }
     }
   })();
 
   return launchPromise;
+}
+
+function handleDoryDeepLink(url: string) {
+  const parsed = parseDoryDeepLink(url, PROTOCOL);
+  if (!parsed) {
+    logWarn('[electron] ignored invalid deep link:', url);
+    return;
+  }
+
+  if (parsed.type === 'open') {
+    if (!app.isReady()) {
+      pendingWorkspacePath = parsed.path;
+      return;
+    }
+    void launch(parsed.path);
+    return;
+  }
+
+  sendAuthCallback(parsed.url, logWarn);
+  focusMainWindow();
 }
 
 const gotLock = app.requestSingleInstanceLock();
@@ -289,15 +321,18 @@ if (!gotLock) {
   app.on('second-instance', (_event, argv) => {
     log('[electron] second-instance argv:', argv);
     const deepLinkArg = argv.find(arg => arg.startsWith(`${PROTOCOL}://`));
-    if (deepLinkArg) sendAuthCallback(deepLinkArg, logWarn);
-    focusMainWindow();
+    if (deepLinkArg) {
+      handleDoryDeepLink(deepLinkArg);
+    } else {
+      focusMainWindow();
+    }
   });
 
   app.on('will-finish-launching', () => {
     app.on('open-url', (event, url) => {
       event.preventDefault();
       log('[electron] open-url:', url);
-      sendAuthCallback(url, logWarn);
+      handleDoryDeepLink(url);
     });
   });
 
@@ -336,12 +371,20 @@ if (!gotLock) {
     });
 
     const deepLinkArg = process.argv.find(arg => arg.startsWith(`${PROTOCOL}://`));
+    let startupWorkspacePath: string | null = null;
     if (deepLinkArg) {
       log('[electron] pending deep link on ready:', deepLinkArg);
-      setPendingAuthCallback(deepLinkArg);
+      const parsed = parseDoryDeepLink(deepLinkArg, PROTOCOL);
+      if (parsed?.type === 'open') {
+        startupWorkspacePath = parsed.path;
+      } else if (parsed?.type === 'auth') {
+        setPendingAuthCallback(parsed.url);
+      } else {
+        logWarn('[electron] ignored invalid startup deep link:', deepLinkArg);
+      }
     }
 
-    launch();
+    launch(startupWorkspacePath);
     updater.startAutoUpdateChecks();
   });
 
