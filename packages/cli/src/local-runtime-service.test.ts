@@ -7,13 +7,13 @@ import test from 'node:test';
 import {
     buildLinuxSystemdUnit,
     buildMacLaunchAgentPlist,
-    getCodexAgentServiceStatus,
-    installCodexAgentService,
-    restartCodexAgentService,
-    stopCodexAgentService,
-    uninstallCodexAgentService,
+    getLocalRuntimeServiceStatus,
+    installLocalRuntimeService,
+    restartLocalRuntimeService,
+    stopLocalRuntimeService,
+    uninstallLocalRuntimeService,
     type RunCommand,
-} from './local-codex-service.js';
+} from './local-runtime-service.js';
 
 function jsonResponse(data: unknown, status = 200) {
     return new Response(JSON.stringify({ code: 0, data }), {
@@ -22,21 +22,11 @@ function jsonResponse(data: unknown, status = 200) {
     });
 }
 
-function serviceConfig() {
-    return {
-        version: 1 as const,
-        origin: 'https://dory.test',
-        name: 'Dory Codex Agent',
-        mcpConfigPath: '/tmp/dory-mcp.json',
-        installedAt: '2026-01-01T00:00:00.000Z',
-    };
-}
-
 test('service templates do not include bearer tokens', () => {
-    const config = serviceConfig();
+    const configPath = '/Users/test/.dory/runtime/config.json';
     const plist = buildMacLaunchAgentPlist({
         doryBinPath: '/Users/test/.dory/runtime/runtime/node_modules/.bin/dory',
-        config,
+        configPath,
         stdoutPath: '/Users/test/.dory/runtime/logs/stdout.log',
         stderrPath: '/Users/test/.dory/runtime/logs/stderr.log',
         env: {
@@ -47,7 +37,7 @@ test('service templates do not include bearer tokens', () => {
     });
     const unit = buildLinuxSystemdUnit({
         doryBinPath: '/home/test/.dory/runtime/runtime/node_modules/.bin/dory',
-        config,
+        configPath: '/home/test/.dory/runtime/config.json',
         serviceDir: '/home/test/.dory/runtime',
         stdoutPath: '/home/test/.dory/runtime/logs/stdout.log',
         stderrPath: '/home/test/.dory/runtime/logs/stderr.log',
@@ -61,8 +51,13 @@ test('service templates do not include bearer tokens', () => {
     assert.ok(plist.includes('com.getdory.runtime'));
     assert.ok(plist.includes('runtime'));
     assert.ok(plist.includes('run'));
+    assert.ok(plist.includes('--config'));
+    assert.ok(plist.includes(configPath));
     assert.ok(unit.includes('dory-runtime.service') === false);
     assert.ok(unit.includes('ExecStart='));
+    assert.ok(unit.includes('runtime'));
+    assert.ok(unit.includes('run'));
+    assert.ok(unit.includes('--config'));
     assert.equal(plist.includes('secret-token'), false);
     assert.equal(unit.includes('secret-token'), false);
 });
@@ -106,13 +101,18 @@ test('install writes macOS service files, installs runtime, and starts LaunchAge
     };
 
     try {
-        const result = await installCodexAgentService({
+        const result = await installLocalRuntimeService({
             platform: 'darwin',
             homeDir: dir,
             uid: 501,
+            codexAgent: true,
             url: 'https://dory.test',
             name: 'Mac Agent',
-            configPath: join(dir, 'mcp.json'),
+            codexConfigPath: join(dir, 'mcp.json'),
+            mcpHttp: true,
+            host: '127.0.0.1',
+            port: 3318,
+            token: 'dory_mcp_token',
             packageVersion: '0.1.0',
             runCommand,
             fetchFn,
@@ -132,7 +132,28 @@ test('install writes macOS service files, installs runtime, and starts LaunchAge
         assert.ok(plist.includes('<string>com.getdory.runtime</string>'));
         assert.ok(plist.includes('<string>runtime</string>'));
         assert.ok(plist.includes('<string>run</string>'));
+        assert.ok(plist.includes('<string>--config</string>'));
         assert.equal(plist.includes('dory_mcp_token'), false);
+        const configPath = join(dir, '.dory', 'runtime', 'config.json');
+        const config = JSON.parse(await readFile(configPath, 'utf8')) as {
+            capabilities: {
+                codexAgent?: { origin: string; name: string; mcpConfigPath: string };
+                mcpHttp?: { host: string; port: number; token: string };
+            };
+        };
+        assert.deepEqual(config.capabilities.codexAgent, {
+            enabled: true,
+            origin: 'https://dory.test',
+            name: 'Mac Agent',
+            mcpConfigPath: join(dir, 'mcp.json'),
+        });
+        assert.deepEqual(config.capabilities.mcpHttp, {
+            enabled: true,
+            host: '127.0.0.1',
+            port: 3318,
+            token: 'dory_mcp_token',
+        });
+        assert.equal((await stat(configPath)).mode & 0o777, 0o600);
     } finally {
         process.env.PATH = previousPath;
     }
@@ -150,13 +171,13 @@ test('linux service management uses systemctl user service', async () => {
         return { stdout: '', stderr: '' };
     };
 
-    const status = await getCodexAgentServiceStatus({ platform: 'linux', homeDir, runCommand });
+    const status = await getLocalRuntimeServiceStatus({ platform: 'linux', homeDir, runCommand });
     assert.equal(status.installed, true);
     assert.equal(status.running, true);
 
-    await restartCodexAgentService({ platform: 'linux', homeDir, runCommand });
-    await stopCodexAgentService({ platform: 'linux', homeDir, runCommand });
-    await uninstallCodexAgentService({ platform: 'linux', homeDir, runCommand });
+    await restartLocalRuntimeService({ platform: 'linux', homeDir, runCommand });
+    await stopLocalRuntimeService({ platform: 'linux', homeDir, runCommand });
+    await uninstallLocalRuntimeService({ platform: 'linux', homeDir, runCommand });
 
     assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user restart dory-runtime.service'));
     assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user stop dory-runtime.service'));
@@ -165,5 +186,9 @@ test('linux service management uses systemctl user service', async () => {
 });
 
 test('windows service install is explicitly unsupported', async () => {
-    await assert.rejects(() => installCodexAgentService({ platform: 'win32' }), /Dory Local Runtime/);
+    await assert.rejects(() => installLocalRuntimeService({ platform: 'win32' }), /Dory Local Runtime/);
+});
+
+test('remote MCP HTTP service install requires explicit token', async () => {
+    await assert.rejects(() => installLocalRuntimeService({ platform: 'linux', mcpHttp: true, host: '0.0.0.0', allowRemote: true }), /--token/);
 });

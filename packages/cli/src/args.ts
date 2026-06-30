@@ -26,23 +26,21 @@ export type ActionOptions = ProfileOptions & {
     yes: boolean;
 };
 
-export type AgentCodexAction = 'install' | 'run' | 'status' | 'restart' | 'stop' | 'uninstall';
-export type RuntimeAction = 'run' | 'status' | 'restart' | 'stop' | 'uninstall';
-
-export type AgentCodexOptions = {
-    action: AgentCodexAction;
-    url?: string;
-    name?: string;
-    configPath?: string;
-};
+export type RuntimeAction = 'install' | 'run' | 'status' | 'restart' | 'stop' | 'uninstall';
 
 export type RuntimeOptions = ProfileOptions & {
     action: RuntimeAction;
+    serviceConfigPath?: string;
+    codexAgent?: boolean;
     url?: string;
     name?: string;
-    configPath?: string;
+    codexConfigPath?: string;
+    mcpHttp?: boolean;
     host: string;
     port?: number;
+    origin?: string;
+    token?: string;
+    allowRemote?: boolean;
 };
 
 export type ParsedArgs =
@@ -54,7 +52,6 @@ export type ParsedArgs =
     | ({ command: 'action-describe'; actionId: string } & ProfileOptions)
     | { command: 'action-run'; options: ActionOptions }
     | { command: 'runtime'; options: RuntimeOptions }
-    | { command: 'agent-codex'; options: AgentCodexOptions }
     | { command: 'mcp-serve'; options: ServeOptions }
     | ({ command: 'mcp-token'; action: 'create' | 'revoke' | 'list'; id?: string; name?: string } & ProfileOptions)
     | { command: 'mcp-bridge' | 'mcp-login' | 'mcp-logout' | 'mcp-status'; url?: string; clientName?: string; configPath?: string; localAi?: boolean };
@@ -149,38 +146,29 @@ export function parseArgs(argv: string[]): ParsedArgs {
     }
 
     if (first === 'agent') {
-        if (second === 'codex') {
-            const action = third && !third.startsWith('-') ? third : null;
-            if (action !== 'install' && action !== 'run' && action !== 'status' && action !== 'restart' && action !== 'stop' && action !== 'uninstall') {
-                return { command: 'help' };
-            }
-            return {
-                command: 'agent-codex',
-                options: {
-                    action,
-                    url: readOption(argv, '--url') ?? readOption(argv, '-u'),
-                    name: readOption(argv, '--name') ?? readOption(argv, '--client-name'),
-                    configPath,
-                },
-            };
-        }
         return { command: 'help' };
     }
 
     if (first === 'runtime') {
         const action = second && !second.startsWith('-') ? second : null;
-        if (action !== 'run' && action !== 'status' && action !== 'restart' && action !== 'stop' && action !== 'uninstall') {
+        if (action !== 'install' && action !== 'run' && action !== 'status' && action !== 'restart' && action !== 'stop' && action !== 'uninstall') {
             return { command: 'help' };
         }
         return {
             command: 'runtime',
             options: {
                 action,
+                serviceConfigPath: configPath,
+                codexAgent: hasFlag(argv, '--codex-agent'),
                 url: readOption(argv, '--url') ?? readOption(argv, '-u'),
                 name: readOption(argv, '--name') ?? readOption(argv, '--client-name'),
-                configPath,
+                codexConfigPath: readOption(argv, '--codex-config'),
+                mcpHttp: hasFlag(argv, '--mcp-http'),
                 host: readOption(argv, '--host') ?? '127.0.0.1',
                 port: readOption(argv, '--port') ? readPort(argv) : undefined,
+                origin: readOption(argv, '--origin'),
+                token: readOption(argv, '--token'),
+                allowRemote: hasFlag(argv, '--allow-remote'),
                 ...profileOptions,
             },
         };

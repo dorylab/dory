@@ -5,6 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 
+import type { DataMode } from './args.js';
 import { getBridgeConfigPath } from './bridge-config.js';
 import { normalizeDoryTarget } from './bridge-url.js';
 import { prepareCodexAgentBridge, type CodexAgentOptions } from './local-codex-agent.js';
@@ -20,16 +21,30 @@ type CommandResult = {
 
 export type RunCommand = (command: string, args: string[], options?: { cwd?: string; env?: NodeJS.ProcessEnv; rejectOnError?: boolean }) => Promise<CommandResult>;
 
-export type CodexAgentServiceOptions = CodexAgentOptions & {
+export type RuntimeServiceOptions = {
+    codexAgent?: boolean;
+    url?: string;
+    name?: string;
+    codexConfigPath?: string;
+    mcpHttp?: boolean;
+    host?: string;
+    port?: number;
+    origin?: string;
+    token?: string;
+    allowRemote?: boolean;
+    data?: DataMode;
+    userDataDir?: string;
+    pglitePath?: string;
+    databaseUrl?: string;
     platform?: NodeJS.Platform;
     homeDir?: string;
     env?: NodeJS.ProcessEnv;
     uid?: number;
     runCommand?: RunCommand;
     packageVersion?: string;
-};
+} & Pick<CodexAgentOptions, 'fetchFn' | 'openUrl' | 'pollIntervalMs'>;
 
-type CodexAgentServicePaths = {
+type RuntimeServicePaths = {
     serviceDir: string;
     runtimeDir: string;
     configPath: string;
@@ -41,13 +56,52 @@ type CodexAgentServicePaths = {
     systemdUnitPath: string;
 };
 
-type ServiceConfig = {
+export type RuntimeServiceConfig = {
     version: 1;
-    origin: string;
-    name: string;
-    mcpConfigPath: string;
     installedAt: string;
+    data?: DataMode;
+    userDataDir?: string;
+    pglitePath?: string;
+    databaseUrl?: string;
+    capabilities: {
+        codexAgent?: {
+            enabled: true;
+            origin: string;
+            name: string;
+            mcpConfigPath: string;
+        };
+        mcpHttp?: {
+            enabled: true;
+            host: string;
+            port: number;
+            origin?: string;
+            token?: string;
+            allowRemote?: boolean;
+        };
+    };
 };
+
+export async function readLocalRuntimeServiceConfig(configPath: string): Promise<RuntimeServiceConfig> {
+    const parsed = JSON.parse(await readFile(configPath, 'utf8')) as Partial<RuntimeServiceConfig>;
+    if (parsed.version !== SERVICE_CONFIG_VERSION || !parsed.capabilities) {
+        throw new Error(`Invalid Dory Local Runtime service config: ${configPath}`);
+    }
+    return parsed as RuntimeServiceConfig;
+}
+
+export async function writeLocalRuntimeServiceConfig(configPath: string, config: RuntimeServiceConfig) {
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
+export async function updateLocalRuntimeServiceMcpHttpToken(configPath: string, token: string) {
+    const config = await readLocalRuntimeServiceConfig(configPath);
+    if (!config.capabilities.mcpHttp) {
+        throw new Error(`Dory Local Runtime service config does not enable HTTP MCP: ${configPath}`);
+    }
+    config.capabilities.mcpHttp.token = token;
+    await writeLocalRuntimeServiceConfig(configPath, config);
+    return config;
+}
 
 function defaultRunCommand(command: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv; rejectOnError?: boolean } = {}): Promise<CommandResult> {
     return new Promise((resolveCommand, rejectCommand) => {
@@ -87,19 +141,19 @@ function systemdQuote(value: string) {
     return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\$/g, '\\$')}"`;
 }
 
-function serviceEnv(options: CodexAgentServiceOptions) {
+function serviceEnv(options: RuntimeServiceOptions) {
     return options.env ?? process.env;
 }
 
-function servicePlatform(options: CodexAgentServiceOptions) {
+function servicePlatform(options: RuntimeServiceOptions) {
     return options.platform ?? process.platform;
 }
 
-function serviceHomeDir(options: CodexAgentServiceOptions) {
+function serviceHomeDir(options: RuntimeServiceOptions) {
     return options.homeDir ?? homedir();
 }
 
-function serviceUid(options: CodexAgentServiceOptions) {
+function serviceUid(options: RuntimeServiceOptions) {
     const uid = options.uid ?? process.getuid?.();
     if (typeof uid !== 'number') {
         throw new Error('Dory Local Runtime service installation requires a POSIX user id.');
@@ -107,7 +161,7 @@ function serviceUid(options: CodexAgentServiceOptions) {
     return uid;
 }
 
-export function getCodexAgentServicePaths(options: CodexAgentServiceOptions = {}): CodexAgentServicePaths {
+export function getLocalRuntimeServicePaths(options: RuntimeServiceOptions = {}): RuntimeServicePaths {
     const home = serviceHomeDir(options);
     const serviceDir = join(home, '.dory', 'runtime');
     const runtimeDir = join(serviceDir, 'runtime');
@@ -125,13 +179,13 @@ export function getCodexAgentServicePaths(options: CodexAgentServiceOptions = {}
     };
 }
 
-function buildServiceArgs(config: ServiceConfig) {
-    return ['runtime', 'run', '--url', config.origin, '--name', config.name, '--config', config.mcpConfigPath];
+function buildServiceArgs(input: { configPath: string }) {
+    return ['runtime', 'run', '--config', input.configPath];
 }
 
-export function buildMacLaunchAgentPlist(input: { doryBinPath: string; config: ServiceConfig; stdoutPath: string; stderrPath: string; env?: NodeJS.ProcessEnv }) {
+export function buildMacLaunchAgentPlist(input: { doryBinPath: string; configPath: string; stdoutPath: string; stderrPath: string; env?: NodeJS.ProcessEnv }) {
     const env = input.env ?? process.env;
-    const programArguments = [input.doryBinPath, ...buildServiceArgs(input.config)];
+    const programArguments = [input.doryBinPath, ...buildServiceArgs({ configPath: input.configPath })];
     const envVars = {
         HOME: env.HOME ?? homedir(),
         PATH: env.PATH ?? '/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin',
@@ -166,9 +220,9 @@ ${Object.entries(envVars)
 `;
 }
 
-export function buildLinuxSystemdUnit(input: { doryBinPath: string; config: ServiceConfig; serviceDir: string; stdoutPath: string; stderrPath: string; env?: NodeJS.ProcessEnv }) {
+export function buildLinuxSystemdUnit(input: { doryBinPath: string; configPath: string; serviceDir: string; stdoutPath: string; stderrPath: string; env?: NodeJS.ProcessEnv }) {
     const env = input.env ?? process.env;
-    const execStart = [input.doryBinPath, ...buildServiceArgs(input.config)].map(systemdQuote).join(' ');
+    const execStart = [input.doryBinPath, ...buildServiceArgs({ configPath: input.configPath })].map(systemdQuote).join(' ');
     return `[Unit]
 Description=Dory Local Runtime
 After=network-online.target
@@ -197,7 +251,7 @@ async function readCliPackageVersion() {
     return parsed.version;
 }
 
-async function installRuntime(paths: CodexAgentServicePaths, options: CodexAgentServiceOptions) {
+async function installRuntime(paths: RuntimeServicePaths, options: RuntimeServiceOptions) {
     const runCommand = options.runCommand ?? defaultRunCommand;
     const version = options.packageVersion ?? (await readCliPackageVersion());
     await mkdir(paths.runtimeDir, { recursive: true, mode: 0o700 });
@@ -206,11 +260,11 @@ async function installRuntime(paths: CodexAgentServicePaths, options: CodexAgent
     });
 }
 
-async function writeServiceFiles(paths: CodexAgentServicePaths, config: ServiceConfig, options: CodexAgentServiceOptions) {
+async function writeServiceFiles(paths: RuntimeServicePaths, config: RuntimeServiceConfig, options: RuntimeServiceOptions) {
     const platform = servicePlatform(options);
     await mkdir(paths.serviceDir, { recursive: true, mode: 0o700 });
     await mkdir(paths.logDir, { recursive: true, mode: 0o700 });
-    await writeFile(paths.configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+    await writeLocalRuntimeServiceConfig(paths.configPath, config);
 
     if (platform === 'darwin') {
         await mkdir(dirname(paths.launchAgentPath), { recursive: true, mode: 0o700 });
@@ -218,7 +272,7 @@ async function writeServiceFiles(paths: CodexAgentServicePaths, config: ServiceC
             paths.launchAgentPath,
             buildMacLaunchAgentPlist({
                 doryBinPath: paths.doryBinPath,
-                config,
+                configPath: paths.configPath,
                 stdoutPath: paths.stdoutPath,
                 stderrPath: paths.stderrPath,
                 env: serviceEnv(options),
@@ -234,7 +288,7 @@ async function writeServiceFiles(paths: CodexAgentServicePaths, config: ServiceC
             paths.systemdUnitPath,
             buildLinuxSystemdUnit({
                 doryBinPath: paths.doryBinPath,
-                config,
+                configPath: paths.configPath,
                 serviceDir: paths.serviceDir,
                 stdoutPath: paths.stdoutPath,
                 stderrPath: paths.stderrPath,
@@ -248,7 +302,7 @@ async function writeServiceFiles(paths: CodexAgentServicePaths, config: ServiceC
     throw new Error('Dory Local Runtime background service install is supported on macOS and Linux.');
 }
 
-async function startService(paths: CodexAgentServicePaths, options: CodexAgentServiceOptions) {
+async function startService(paths: RuntimeServicePaths, options: RuntimeServiceOptions) {
     const platform = servicePlatform(options);
     const runCommand = options.runCommand ?? defaultRunCommand;
     if (platform === 'darwin') {
@@ -268,30 +322,64 @@ async function startService(paths: CodexAgentServicePaths, options: CodexAgentSe
     throw new Error('Dory Local Runtime background service install is supported on macOS and Linux.');
 }
 
-export async function installCodexAgentService(options: CodexAgentServiceOptions = {}) {
+function assertRemoteMcpHttpOptions(options: RuntimeServiceOptions) {
+    if (!options.mcpHttp) return;
+    if (options.host === '0.0.0.0' && !options.allowRemote) {
+        throw new Error('Refusing to bind 0.0.0.0 without --allow-remote.');
+    }
+    if (options.host === '0.0.0.0' && !options.token?.trim()) {
+        throw new Error('HTTP remote bind requires --token <existing-token>. Create one with dory mcp token create first.');
+    }
+}
+
+export async function installLocalRuntimeService(options: RuntimeServiceOptions = {}) {
     const platform = servicePlatform(options);
     if (platform !== 'darwin' && platform !== 'linux') {
         throw new Error('Dory Local Runtime background service install is supported on macOS and Linux.');
     }
 
-    const target = normalizeDoryTarget(options.url);
-    const mcpConfigPath = resolve(options.configPath ?? getBridgeConfigPath());
-    const name = options.name?.trim() || 'Dory Codex Agent';
-    await prepareCodexAgentBridge({
-        ...options,
-        url: target.origin,
-        name,
-        configPath: mcpConfigPath,
-    });
+    assertRemoteMcpHttpOptions(options);
+    const capabilities: RuntimeServiceConfig['capabilities'] = {};
 
-    const paths = getCodexAgentServicePaths(options);
+    if (options.codexAgent) {
+        const target = normalizeDoryTarget(options.url);
+        const mcpConfigPath = resolve(options.codexConfigPath ?? getBridgeConfigPath());
+        const name = options.name?.trim() || 'Dory Codex Agent';
+        await prepareCodexAgentBridge({
+            ...options,
+            url: target.origin,
+            name,
+            configPath: mcpConfigPath,
+        });
+        capabilities.codexAgent = {
+            enabled: true,
+            origin: target.origin,
+            name,
+            mcpConfigPath,
+        };
+    }
+
+    if (options.mcpHttp) {
+        capabilities.mcpHttp = {
+            enabled: true,
+            host: options.host ?? '127.0.0.1',
+            port: options.port ?? 3318,
+            origin: options.origin,
+            token: options.token,
+            allowRemote: options.allowRemote,
+        };
+    }
+
+    const paths = getLocalRuntimeServicePaths(options);
     await installRuntime(paths, options);
-    const config: ServiceConfig = {
+    const config: RuntimeServiceConfig = {
         version: SERVICE_CONFIG_VERSION,
-        origin: target.origin,
-        name,
-        mcpConfigPath,
         installedAt: new Date().toISOString(),
+        data: options.data,
+        userDataDir: options.userDataDir,
+        pglitePath: options.pglitePath,
+        databaseUrl: options.databaseUrl,
+        capabilities,
     };
     await writeServiceFiles(paths, config, options);
     await startService(paths, options);
@@ -299,9 +387,9 @@ export async function installCodexAgentService(options: CodexAgentServiceOptions
     return {
         ok: true,
         platform,
-        origin: target.origin,
         serviceDir: paths.serviceDir,
         configPath: paths.configPath,
+        capabilities,
         logs: {
             stdout: paths.stdoutPath,
             stderr: paths.stderrPath,
@@ -309,9 +397,9 @@ export async function installCodexAgentService(options: CodexAgentServiceOptions
     };
 }
 
-export async function getCodexAgentServiceStatus(options: CodexAgentServiceOptions = {}) {
+export async function getLocalRuntimeServiceStatus(options: RuntimeServiceOptions = {}) {
     const platform = servicePlatform(options);
-    const paths = getCodexAgentServicePaths(options);
+    const paths = getLocalRuntimeServicePaths(options);
     const runCommand = options.runCommand ?? defaultRunCommand;
     const installed = platform === 'darwin' ? existsSync(paths.launchAgentPath) : platform === 'linux' ? existsSync(paths.systemdUnitPath) : false;
     let running = false;
@@ -339,47 +427,47 @@ export async function getCodexAgentServiceStatus(options: CodexAgentServiceOptio
     };
 }
 
-export async function stopCodexAgentService(options: CodexAgentServiceOptions = {}) {
+export async function stopLocalRuntimeService(options: RuntimeServiceOptions = {}) {
     const platform = servicePlatform(options);
-    const paths = getCodexAgentServicePaths(options);
+    const paths = getLocalRuntimeServicePaths(options);
     const runCommand = options.runCommand ?? defaultRunCommand;
 
     if (platform === 'darwin') {
         await runCommand('launchctl', ['bootout', `gui/${serviceUid(options)}`, paths.launchAgentPath], { rejectOnError: false });
-        return getCodexAgentServiceStatus(options);
+        return getLocalRuntimeServiceStatus(options);
     }
 
     if (platform === 'linux') {
         await runCommand('systemctl', ['--user', 'stop', SYSTEMD_SERVICE_NAME], { rejectOnError: false });
-        return getCodexAgentServiceStatus(options);
+        return getLocalRuntimeServiceStatus(options);
     }
 
     throw new Error('Dory Local Runtime background service is supported on macOS and Linux.');
 }
 
-export async function restartCodexAgentService(options: CodexAgentServiceOptions = {}) {
+export async function restartLocalRuntimeService(options: RuntimeServiceOptions = {}) {
     const platform = servicePlatform(options);
-    const paths = getCodexAgentServicePaths(options);
+    const paths = getLocalRuntimeServicePaths(options);
     const runCommand = options.runCommand ?? defaultRunCommand;
 
     if (platform === 'darwin') {
         await runCommand('launchctl', ['bootout', `gui/${serviceUid(options)}`, paths.launchAgentPath], { rejectOnError: false });
         await runCommand('launchctl', ['bootstrap', `gui/${serviceUid(options)}`, paths.launchAgentPath]);
         await runCommand('launchctl', ['kickstart', '-k', `gui/${serviceUid(options)}/${SERVICE_LABEL}`]);
-        return getCodexAgentServiceStatus(options);
+        return getLocalRuntimeServiceStatus(options);
     }
 
     if (platform === 'linux') {
         await runCommand('systemctl', ['--user', 'restart', SYSTEMD_SERVICE_NAME]);
-        return getCodexAgentServiceStatus(options);
+        return getLocalRuntimeServiceStatus(options);
     }
 
     throw new Error('Dory Local Runtime background service is supported on macOS and Linux.');
 }
 
-export async function uninstallCodexAgentService(options: CodexAgentServiceOptions = {}) {
+export async function uninstallLocalRuntimeService(options: RuntimeServiceOptions = {}) {
     const platform = servicePlatform(options);
-    const paths = getCodexAgentServicePaths(options);
+    const paths = getLocalRuntimeServicePaths(options);
     const runCommand = options.runCommand ?? defaultRunCommand;
 
     if (platform === 'darwin') {
@@ -402,9 +490,3 @@ export async function uninstallCodexAgentService(options: CodexAgentServiceOptio
         serviceDir: paths.serviceDir,
     };
 }
-
-export const installLocalRuntimeService = installCodexAgentService;
-export const getLocalRuntimeServiceStatus = getCodexAgentServiceStatus;
-export const stopLocalRuntimeService = stopCodexAgentService;
-export const restartLocalRuntimeService = restartCodexAgentService;
-export const uninstallLocalRuntimeService = uninstallCodexAgentService;

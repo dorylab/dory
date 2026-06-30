@@ -7,20 +7,23 @@ import { inspect } from 'node:util';
 import * as serverCore from '@dory/server-core';
 
 import { readActionInput } from './action-input.js';
-import { parseArgs, type ProfileOptions } from './args.js';
+import { parseArgs, type ProfileOptions, type RuntimeOptions } from './args.js';
 import { login } from './bridge-auth.js';
 import { getBridgeConfigPath, removeCredential, resolveCredential } from './bridge-config.js';
 import { createRemoteMcpClient } from './bridge-remote.js';
 import { normalizeDoryTarget } from './bridge-url.js';
 import { startBridge } from './bridge.js';
 import { LOCAL_AI_SCOPES, startCodexAgentBridge } from './local-codex-agent.js';
+import { startLocalRuntimeMcpHttpProxy } from './local-runtime-mcp-proxy.js';
 import {
     getLocalRuntimeServiceStatus,
     installLocalRuntimeService,
+    readLocalRuntimeServiceConfig,
     restartLocalRuntimeService,
     stopLocalRuntimeService,
     uninstallLocalRuntimeService,
-} from './local-codex-service.js';
+    updateLocalRuntimeServiceMcpHttpToken,
+} from './local-runtime-service.js';
 
 function printHelp() {
     console.log(`Dory CLI / Dory Headless Runtime
@@ -33,10 +36,15 @@ Usage:
   dory doctor --data standalone|desktop|self-hosted
   dory init --data standalone|desktop|self-hosted
 
-  dory agent codex install --url <dory-origin>
+  dory runtime install
+  dory runtime install --codex-agent --url <dory-origin>
+  dory runtime install --mcp-http --host 127.0.0.1 --port 3318
+  dory runtime install --codex-agent --url <dory-origin> --mcp-http --host 0.0.0.0 --allow-remote --token <existing-token>
   dory runtime run
   dory runtime status
   dory runtime restart
+  dory runtime stop
+  dory runtime uninstall
 
   dory storage detect --data standalone|desktop|self-hosted
   dory storage doctor --data standalone|desktop|self-hosted
@@ -60,13 +68,14 @@ Hosted Dory bridge compatibility:
   dory mcp status --url <dory-origin>
   dory mcp logout --url <dory-origin>
 
-Local Codex Agent:
-  dory agent codex install --url <dory-origin>
-  dory agent codex status
-  dory agent codex restart
-  dory agent codex stop
-  dory agent codex uninstall
-  dory agent codex run --url <dory-origin>    Debug foreground worker.
+Local Runtime capabilities:
+  dory runtime install --codex-agent --url <dory-origin>
+  dory runtime install --mcp-http --host 127.0.0.1 --port 3318
+  dory runtime status
+  dory runtime restart
+  dory runtime stop
+  dory runtime uninstall
+  dory runtime run --codex-agent --url <dory-origin>    Debug foreground runtime with Codex worker.
 
 Data modes:
   --data standalone    Use independent ~/.dory app storage
@@ -179,17 +188,95 @@ async function localRuntimeRequest<T>(args: ProfileOptions, path: string, option
 }
 
 async function ensureLocalRuntimeMcpCredential(args: ProfileOptions) {
+    return createLocalRuntimeMcpCredential(args, 'Dory Local Runtime CLI');
+}
+
+async function createLocalRuntimeMcpCredential(args: ProfileOptions, name: string) {
     const state = await ensureLocalRuntime(args);
     const created = await serverCore.callDoryLocalRuntime<{
         ok: true;
         token: string;
         tokenRecord: { tokenPrefix?: string | null };
-    }>(state, '/api/runtime/mcp-token/create', { method: 'POST', body: { name: 'Dory Local Runtime CLI' } });
+    }>(state, '/api/runtime/mcp-token/create', { method: 'POST', body: { name } });
     return {
         endpoint: `${state.baseUrl}/api/mcp`,
+        runtimeBaseUrl: state.baseUrl,
         token: created.token,
         tokenPrefix: created.tokenRecord.tokenPrefix ?? created.token.slice(0, 17),
     };
+}
+
+type RuntimeRunConfig = {
+    profile: ProfileOptions;
+    codexAgent?: {
+        origin: string;
+        name: string;
+        mcpConfigPath: string;
+    };
+    mcpHttp?: {
+        host: string;
+        port: number;
+        origin?: string;
+        token?: string;
+        allowRemote?: boolean;
+    };
+};
+
+async function resolveRuntimeRunConfig(options: RuntimeOptions): Promise<RuntimeRunConfig> {
+    const serviceConfig = options.serviceConfigPath ? await readLocalRuntimeServiceConfig(options.serviceConfigPath) : null;
+    const codexAgent =
+        serviceConfig?.capabilities.codexAgent && !options.codexAgent
+            ? {
+                  origin: serviceConfig.capabilities.codexAgent.origin,
+                  name: serviceConfig.capabilities.codexAgent.name,
+                  mcpConfigPath: serviceConfig.capabilities.codexAgent.mcpConfigPath,
+              }
+            : options.codexAgent
+              ? {
+                    origin: normalizeDoryTarget(options.url).origin,
+                    name: options.name?.trim() || 'Dory Codex Agent',
+                    mcpConfigPath: options.codexConfigPath ?? getBridgeConfigPath(),
+                }
+              : undefined;
+    const mcpHttp =
+        serviceConfig?.capabilities.mcpHttp && !options.mcpHttp
+            ? {
+                  host: serviceConfig.capabilities.mcpHttp.host,
+                  port: serviceConfig.capabilities.mcpHttp.port,
+                  origin: serviceConfig.capabilities.mcpHttp.origin,
+                  token: serviceConfig.capabilities.mcpHttp.token,
+                  allowRemote: serviceConfig.capabilities.mcpHttp.allowRemote,
+              }
+            : options.mcpHttp
+              ? {
+                    host: options.host,
+                    port: options.port ?? 3318,
+                    origin: options.origin,
+                    token: options.token,
+                    allowRemote: options.allowRemote,
+                }
+              : undefined;
+
+    return {
+        profile: {
+            data: options.data ?? serviceConfig?.data,
+            userDataDir: options.userDataDir ?? serviceConfig?.userDataDir,
+            pglitePath: options.pglitePath ?? serviceConfig?.pglitePath,
+            databaseUrl: options.databaseUrl ?? serviceConfig?.databaseUrl,
+        },
+        codexAgent,
+        mcpHttp,
+    };
+}
+
+async function ensureRuntimeMcpHttpToken(state: Awaited<ReturnType<typeof serverCore.startDoryLocalRuntimeServer>>['state'], token?: string | null) {
+    if (token?.trim()) return token.trim();
+    const created = await serverCore.callDoryLocalRuntime<{
+        ok: true;
+        token: string;
+    }>(state, '/api/runtime/mcp-token/create', { method: 'POST', body: { name: 'Dory Local Runtime HTTP MCP' } });
+    process.stderr.write(`Created local Dory MCP token for HTTP clients:\n${created.token}\n\n`);
+    return created.token;
 }
 
 type DoctorCheck = {
@@ -525,24 +612,62 @@ async function run() {
 
     if (args.command === 'runtime') {
         if (args.options.action === 'run') {
-            await serverCore.startDoryLocalRuntimeServer({
-                ...bootstrapOptions(args.options),
-                host: args.options.host,
-                port: args.options.port,
+            const runConfig = await resolveRuntimeRunConfig(args.options);
+            const runtime = await serverCore.startDoryLocalRuntimeServer({
+                ...bootstrapOptions(runConfig.profile),
                 onReady: state => {
                     process.stderr.write(`Dory Local Runtime listening at ${state.baseUrl}\n`);
                 },
             });
-            if (args.options.url || args.options.configPath) {
+            if (runConfig.codexAgent) {
                 void startCodexAgentBridge({
-                    url: args.options.url,
-                    name: args.options.name,
-                    configPath: args.options.configPath,
+                    url: runConfig.codexAgent.origin,
+                    name: runConfig.codexAgent.name,
+                    configPath: runConfig.codexAgent.mcpConfigPath,
                 }).catch(error => {
                     process.stderr.write(`Dory Codex Agent capability failed: ${error instanceof Error ? error.message : String(error)}\n`);
                 });
             }
+            if (runConfig.mcpHttp) {
+                if (runConfig.mcpHttp.host === '0.0.0.0' && !runConfig.mcpHttp.token?.trim()) {
+                    throw new Error('HTTP remote bind requires --token <existing-token>. Create one with dory mcp token create first.');
+                }
+                const token = runConfig.mcpHttp.host === '0.0.0.0' ? runConfig.mcpHttp.token : await ensureRuntimeMcpHttpToken(runtime.state, runConfig.mcpHttp.token);
+                await startLocalRuntimeMcpHttpProxy({
+                    host: runConfig.mcpHttp.host,
+                    port: runConfig.mcpHttp.port,
+                    origin: runConfig.mcpHttp.origin,
+                    allowRemote: runConfig.mcpHttp.allowRemote,
+                    runtimeBaseUrl: runtime.state.baseUrl,
+                    token,
+                });
+            }
             await new Promise<void>(() => {});
+            return;
+        }
+        if (args.options.action === 'install') {
+            if (!isLocalRuntimeDataMode(args.options)) {
+                throw new Error('Dory Local Runtime service install only supports local PGlite data modes.');
+            }
+            let token = args.options.token;
+            if (args.options.mcpHttp && args.options.host === '0.0.0.0' && !token?.trim()) {
+                throw new Error('HTTP remote bind requires --token <existing-token>. Create one with dory mcp token create first.');
+            }
+            const installResult = await installLocalRuntimeService({
+                ...args.options,
+                token,
+            });
+            if (args.options.mcpHttp && args.options.host !== '0.0.0.0' && !token?.trim()) {
+                const state = await waitForLocalRuntime(args.options);
+                const created = await serverCore.callDoryLocalRuntime<{
+                    ok: true;
+                    token: string;
+                    tokenRecord: { tokenPrefix?: string | null };
+                }>(state, '/api/runtime/mcp-token/create', { method: 'POST', body: { name: 'Dory Local Runtime HTTP MCP' } });
+                await updateLocalRuntimeServiceMcpHttpToken(installResult.configPath, created.token);
+                process.stderr.write(`Created local Dory MCP token for HTTP clients:\n${created.token}\n\n`);
+            }
+            printJson(installResult);
             return;
         }
         if (args.options.action === 'status') {
@@ -562,38 +687,6 @@ async function run() {
                           pid: null,
                       },
             });
-            return;
-        }
-        if (args.options.action === 'restart') {
-            printJson(await restartLocalRuntimeService(args.options));
-            return;
-        }
-        if (args.options.action === 'stop') {
-            printJson(await stopLocalRuntimeService(args.options));
-            return;
-        }
-        if (args.options.action === 'uninstall') {
-            printJson(await uninstallLocalRuntimeService(args.options));
-            return;
-        }
-        return;
-    }
-
-    if (args.command === 'agent-codex') {
-        if (args.options.action === 'run') {
-            await startCodexAgentBridge({
-                url: args.options.url,
-                name: args.options.name,
-                configPath: args.options.configPath,
-            });
-            return;
-        }
-        if (args.options.action === 'install') {
-            printJson(await installLocalRuntimeService(args.options));
-            return;
-        }
-        if (args.options.action === 'status') {
-            printJson(await getLocalRuntimeServiceStatus(args.options));
             return;
         }
         if (args.options.action === 'restart') {
@@ -667,11 +760,24 @@ async function run() {
     if (args.command === 'mcp-serve') {
         if (isLocalRuntimeDataMode(args.options)) {
             if (args.options.transport === 'http') {
-                const credential = await ensureLocalRuntimeMcpCredential(args.options);
-                printJson({
-                    ok: true,
-                    endpoint: credential.endpoint,
-                    tokenPrefix: credential.tokenPrefix,
+                const state = await ensureLocalRuntime(args.options);
+                const token = args.options.token?.trim() || null;
+                let proxyToken = token;
+                if (!proxyToken && args.options.host === '0.0.0.0') {
+                    throw new Error('HTTP remote bind requires --token <existing-token>. Create one with dory mcp token create first.');
+                }
+                if (!proxyToken) {
+                    const credential = await createLocalRuntimeMcpCredential(args.options, 'Dory Local Runtime HTTP MCP');
+                    proxyToken = credential.token;
+                    process.stderr.write(`Created local Dory MCP token for HTTP clients:\n${credential.token}\n\n`);
+                }
+                await startLocalRuntimeMcpHttpProxy({
+                    host: args.options.host,
+                    port: args.options.port,
+                    origin: args.options.origin,
+                    allowRemote: args.options.allowRemote,
+                    runtimeBaseUrl: state.baseUrl,
+                    token: proxyToken,
                 });
                 return;
             }

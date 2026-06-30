@@ -58,24 +58,24 @@ npx -y @getdory/cli action connection.list --data standalone --projection mcp --
 Dory Web can run Codex on this device through the CLI. Run this once on the device where Codex CLI is installed:
 
 ```sh
-npx -y @getdory/cli agent codex install --url https://your-dory-host
+npx -y @getdory/cli runtime install --codex-agent --url https://your-dory-host
 ```
 
-The command authorizes Dory, installs a background Dory Codex Agent service, and starts it. When Dory sends a job to the service, it runs `codex exec` with Dory MCP tools enabled.
+The command authorizes Dory, installs one background Dory Local Runtime service, and enables the Codex agent capability inside it. When Dory sends a job to the runtime, it runs `codex exec` with Dory MCP tools enabled.
 
 Manage the background service:
 
 ```sh
-dory agent codex status
-dory agent codex restart
-dory agent codex stop
-dory agent codex uninstall
+dory runtime status
+dory runtime restart
+dory runtime stop
+dory runtime uninstall
 ```
 
 For troubleshooting, run the worker in the foreground:
 
 ```sh
-dory agent codex run --url https://your-dory-host
+dory runtime run --codex-agent --url https://your-dory-host
 ```
 
 The Dory MCP bearer token is passed through an environment variable and is not written into the Codex command arguments.
@@ -83,7 +83,7 @@ The Dory MCP bearer token is passed through an environment variable and is not w
 ## Data Modes
 
 - `standalone`: independent Dory app storage under `~/.dory`. This is the recommended headless server mode.
-- `desktop`: read Dory Desktop local data without opening Electron. Do not use it while the desktop app is running unless concurrent PGlite access has been validated.
+- `desktop`: use Dory Desktop local data through the Dory Local Runtime. If Desktop is already running, the CLI connects to it; otherwise the CLI starts a local runtime.
 - `self-hosted`: use a self-hosted Dory Web Postgres app database.
 
 Use `doctor` before serving MCP to confirm the selected storage path, secrets, migrations, identity, token count, and connection count:
@@ -107,7 +107,9 @@ If `DS_SECRET_KEY` or `BETTER_AUTH_SECRET` do not match the Web deployment, encr
 
 ## HTTP Security
 
-HTTP MCP listens on `127.0.0.1` by default and requires bearer token authentication. Create a token first:
+HTTP MCP listens on `127.0.0.1` by default and requires bearer token authentication. In local PGlite modes, the CLI starts a small HTTP proxy that forwards MCP traffic to the Dory Local Runtime, so PGlite is still only opened by one process.
+
+For local-only testing you can omit `--token`; the CLI will create one and print it to stderr. For shared or remote endpoints, create a token first:
 
 ```sh
 npx -y @getdory/cli mcp token create --data standalone --name "mcp-http"
@@ -126,6 +128,32 @@ npx -y @getdory/cli mcp serve \
 ```
 
 Do not expose the plain HTTP server directly to the public internet. Put it behind TLS.
+
+Install the same HTTP endpoint as the background runtime service:
+
+```sh
+dory runtime install \
+  --mcp-http \
+  --host 0.0.0.0 \
+  --port 3318 \
+  --allow-remote \
+  --token "$DORY_MCP_TOKEN" \
+  --data standalone
+```
+
+Codex agent and HTTP MCP can be enabled together on the same service:
+
+```sh
+dory runtime install \
+  --codex-agent \
+  --url https://your-dory-host \
+  --mcp-http \
+  --host 0.0.0.0 \
+  --port 3318 \
+  --allow-remote \
+  --token "$DORY_MCP_TOKEN" \
+  --data standalone
+```
 
 Nginx example:
 
@@ -207,7 +235,7 @@ npx -y @getdory/cli doctor --data desktop
 npx -y @getdory/cli mcp serve --stdio --data desktop
 ```
 
-Desktop mode points at the Dory Desktop PGlite database. Avoid running Desktop and the CLI against the same PGlite data directory at the same time until concurrent access has been validated for your deployment.
+Desktop mode connects through the Dory Local Runtime, so Desktop, CLI, MCP, and runtime capabilities reuse the same local PGlite owner instead of opening the PGlite directory independently.
 
 ## Hosted Dory Bridge
 
