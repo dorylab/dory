@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { inspect } from 'node:util';
 
 import * as serverCore from '@dory/server-core';
@@ -12,7 +14,13 @@ import { createRemoteMcpClient } from './bridge-remote.js';
 import { normalizeDoryTarget } from './bridge-url.js';
 import { startBridge } from './bridge.js';
 import { LOCAL_AI_SCOPES, startCodexAgentBridge } from './local-codex-agent.js';
-import { getCodexAgentServiceStatus, installCodexAgentService, restartCodexAgentService, stopCodexAgentService, uninstallCodexAgentService } from './local-codex-service.js';
+import {
+    getLocalRuntimeServiceStatus,
+    installLocalRuntimeService,
+    restartLocalRuntimeService,
+    stopLocalRuntimeService,
+    uninstallLocalRuntimeService,
+} from './local-codex-service.js';
 
 function printHelp() {
     console.log(`Dory CLI / Dory Headless Runtime
@@ -26,6 +34,9 @@ Usage:
   dory init --data standalone|desktop|self-hosted
 
   dory agent codex install --url <dory-origin>
+  dory runtime run
+  dory runtime status
+  dory runtime restart
 
   dory storage detect --data standalone|desktop|self-hosted
   dory storage doctor --data standalone|desktop|self-hosted
@@ -125,6 +136,62 @@ function bootstrapOptions(args: ProfileOptions) {
     };
 }
 
+function isLocalRuntimeDataMode(args: ProfileOptions) {
+    return dataMode(args) !== 'self-hosted';
+}
+
+function runtimeCliDataArgs(args: ProfileOptions) {
+    const out: string[] = ['--data', dataMode(args)];
+    if (args.userDataDir) out.push('--user-data-dir', args.userDataDir);
+    if (args.pglitePath) out.push('--pglite-path', args.pglitePath);
+    return out;
+}
+
+async function waitForLocalRuntime(args: ProfileOptions) {
+    for (let attempt = 0; attempt < 75; attempt += 1) {
+        const state = await serverCore.readDoryLocalRuntimeState(bootstrapOptions(args));
+        if (state && (await serverCore.probeDoryLocalRuntime(state))) {
+            return state;
+        }
+        await sleep(200);
+    }
+    throw new Error('Timed out waiting for Dory Local Runtime to start.');
+}
+
+async function ensureLocalRuntime(args: ProfileOptions) {
+    const existing = await serverCore.readDoryLocalRuntimeState(bootstrapOptions(args));
+    if (existing && (await serverCore.probeDoryLocalRuntime(existing))) {
+        return existing;
+    }
+
+    const child = spawn(process.execPath, [process.argv[1]!, 'runtime', 'run', ...runtimeCliDataArgs(args)], {
+        detached: true,
+        stdio: 'ignore',
+        env: process.env,
+    });
+    child.unref();
+    return waitForLocalRuntime(args);
+}
+
+async function localRuntimeRequest<T>(args: ProfileOptions, path: string, options: { method?: string; body?: unknown } = {}) {
+    const state = await ensureLocalRuntime(args);
+    return serverCore.callDoryLocalRuntime<T>(state, path, options);
+}
+
+async function ensureLocalRuntimeMcpCredential(args: ProfileOptions) {
+    const state = await ensureLocalRuntime(args);
+    const created = await serverCore.callDoryLocalRuntime<{
+        ok: true;
+        token: string;
+        tokenRecord: { tokenPrefix?: string | null };
+    }>(state, '/api/runtime/mcp-token/create', { method: 'POST', body: { name: 'Dory Local Runtime CLI' } });
+    return {
+        endpoint: `${state.baseUrl}/api/mcp`,
+        token: created.token,
+        tokenPrefix: created.tokenRecord.tokenPrefix ?? created.token.slice(0, 17),
+    };
+}
+
 type DoctorCheck = {
     name: string;
     status: 'pass' | 'warn' | 'fail';
@@ -203,7 +270,20 @@ async function runDoctor(args: ProfileOptions) {
         }
     }
 
-    if (canBootstrap) {
+    if (canBootstrap && isLocalRuntimeDataMode(args)) {
+        try {
+            const state = await ensureLocalRuntime(args);
+            const info = await serverCore.callDoryLocalRuntime<{
+                ok: true;
+                identity: Awaited<ReturnType<typeof serverCore.bootstrapDoryRuntime>>['identity'];
+            }>(state, '/api/runtime/info');
+            identity = info.identity;
+            checks.push(doctorCheck('local_runtime', 'pass', `Dory Local Runtime is running at ${state.baseUrl}`, { pid: state.pid }));
+            checks.push(doctorCheck('identity', 'pass', 'Active identity resolved', identity));
+        } catch (error) {
+            checks.push(doctorCheck('local_runtime', 'fail', error instanceof Error ? error.message : String(error)));
+        }
+    } else if (canBootstrap) {
         try {
             const runtime = await serverCore.bootstrapDoryRuntime(bootstrapOptions(args));
             try {
@@ -332,6 +412,20 @@ async function runActionCommand(args: Extract<ReturnType<typeof parseArgs>, { co
         }
 
         const input = await readActionInput({ json: args.options.json, input: args.options.input });
+        if (isLocalRuntimeDataMode(args.options)) {
+            const result = await localRuntimeRequest(args.options, '/api/runtime/action', {
+                method: 'POST',
+                body: {
+                    actionId: action.id,
+                    input,
+                    projection: args.options.projection,
+                    confirmationToken: args.options.yes ? 'cli-confirmed' : null,
+                },
+            });
+            printJson(result);
+            return;
+        }
+
         const runtime = await serverCore.bootstrapDoryRuntime(bootstrapOptions(args.options));
         try {
             const actionCtx = await serverCore.createHeadlessUserActionContext({
@@ -382,6 +476,20 @@ async function run() {
     }
 
     if (args.command === 'init') {
+        if (isLocalRuntimeDataMode(args)) {
+            const info = await localRuntimeRequest(args, '/api/runtime/info');
+            const created = await localRuntimeRequest(args, '/api/runtime/mcp-token/create', {
+                method: 'POST',
+                body: { name: 'Dory Headless MCP' },
+            });
+            printJson({
+                ok: true,
+                runtime: info,
+                token: created,
+            });
+            return;
+        }
+
         const runtime = await serverCore.bootstrapDoryRuntime(bootstrapOptions(args));
         const activeToken = await serverCore.getFirstActiveDoryMcpToken(runtime.db, runtime.identity.organizationId, runtime.identity.userId);
         const created =
@@ -415,6 +523,62 @@ async function run() {
         return;
     }
 
+    if (args.command === 'runtime') {
+        if (args.options.action === 'run') {
+            await serverCore.startDoryLocalRuntimeServer({
+                ...bootstrapOptions(args.options),
+                host: args.options.host,
+                port: args.options.port,
+                onReady: state => {
+                    process.stderr.write(`Dory Local Runtime listening at ${state.baseUrl}\n`);
+                },
+            });
+            if (args.options.url || args.options.configPath) {
+                void startCodexAgentBridge({
+                    url: args.options.url,
+                    name: args.options.name,
+                    configPath: args.options.configPath,
+                }).catch(error => {
+                    process.stderr.write(`Dory Codex Agent capability failed: ${error instanceof Error ? error.message : String(error)}\n`);
+                });
+            }
+            await new Promise<void>(() => {});
+            return;
+        }
+        if (args.options.action === 'status') {
+            const service = await getLocalRuntimeServiceStatus(args.options);
+            const state = await serverCore.readDoryLocalRuntimeState(bootstrapOptions(args.options));
+            printJson({
+                ...service,
+                runtime: state
+                    ? {
+                          running: await serverCore.probeDoryLocalRuntime(state),
+                          endpoint: state.baseUrl,
+                          pid: state.pid,
+                      }
+                    : {
+                          running: false,
+                          endpoint: null,
+                          pid: null,
+                      },
+            });
+            return;
+        }
+        if (args.options.action === 'restart') {
+            printJson(await restartLocalRuntimeService(args.options));
+            return;
+        }
+        if (args.options.action === 'stop') {
+            printJson(await stopLocalRuntimeService(args.options));
+            return;
+        }
+        if (args.options.action === 'uninstall') {
+            printJson(await uninstallLocalRuntimeService(args.options));
+            return;
+        }
+        return;
+    }
+
     if (args.command === 'agent-codex') {
         if (args.options.action === 'run') {
             await startCodexAgentBridge({
@@ -425,29 +589,47 @@ async function run() {
             return;
         }
         if (args.options.action === 'install') {
-            printJson(await installCodexAgentService(args.options));
+            printJson(await installLocalRuntimeService(args.options));
             return;
         }
         if (args.options.action === 'status') {
-            printJson(await getCodexAgentServiceStatus(args.options));
+            printJson(await getLocalRuntimeServiceStatus(args.options));
             return;
         }
         if (args.options.action === 'restart') {
-            printJson(await restartCodexAgentService(args.options));
+            printJson(await restartLocalRuntimeService(args.options));
             return;
         }
         if (args.options.action === 'stop') {
-            printJson(await stopCodexAgentService(args.options));
+            printJson(await stopLocalRuntimeService(args.options));
             return;
         }
         if (args.options.action === 'uninstall') {
-            printJson(await uninstallCodexAgentService(args.options));
+            printJson(await uninstallLocalRuntimeService(args.options));
             return;
         }
         return;
     }
 
     if (args.command === 'mcp-token') {
+        if (isLocalRuntimeDataMode(args)) {
+            if (args.action === 'create') {
+                const created = await localRuntimeRequest(args, '/api/runtime/mcp-token/create', {
+                    method: 'POST',
+                    body: { name: args.name ?? 'Dory MCP' },
+                });
+                printJson(created);
+                return;
+            }
+            if (args.action === 'revoke') {
+                if (!args.id) throw new Error('Missing token id.');
+                printJson(await localRuntimeRequest(args, '/api/runtime/mcp-token/revoke', { method: 'POST', body: { id: args.id } }));
+                return;
+            }
+            printJson(await localRuntimeRequest(args, '/api/runtime/mcp-token/list'));
+            return;
+        }
+
         const runtime = await serverCore.bootstrapDoryRuntime(bootstrapOptions(args));
         if (args.action === 'create') {
             const created = await serverCore.createDoryMcpToken({
@@ -483,6 +665,25 @@ async function run() {
     }
 
     if (args.command === 'mcp-serve') {
+        if (isLocalRuntimeDataMode(args.options)) {
+            if (args.options.transport === 'http') {
+                const credential = await ensureLocalRuntimeMcpCredential(args.options);
+                printJson({
+                    ok: true,
+                    endpoint: credential.endpoint,
+                    tokenPrefix: credential.tokenPrefix,
+                });
+                return;
+            }
+
+            const credential = await ensureLocalRuntimeMcpCredential(args.options);
+            await startBridge({
+                endpoint: credential.endpoint,
+                token: credential.token,
+            });
+            return;
+        }
+
         const runtime = await serverCore.bootstrapDoryRuntime(bootstrapOptions(args.options));
         try {
             const auth = await ensureServeAuth(runtime, args.options.token ?? null);

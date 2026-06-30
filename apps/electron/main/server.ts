@@ -23,6 +23,7 @@ type DesktopServerEnvOptions = {
     databasePath: string;
     hostname: string;
     port: number;
+    localRuntimeSecret?: string;
     logWarn: LogFn;
 };
 
@@ -38,11 +39,29 @@ type DesktopServerPortSelection = {
 
 const DESKTOP_SECRETS_FILE_NAME = 'desktop-secrets.json';
 const DESKTOP_SERVER_CONFIG_FILE_NAME = 'desktop-server.json';
+const LOCAL_RUNTIME_STATE_FILE_NAME = 'local-runtime.json';
+const LOCAL_RUNTIME_LOCK_FILE_NAME = 'local-runtime.lock';
+const LOCAL_RUNTIME_SECRET_HEADER = 'x-dory-runtime-secret';
+const LOCAL_RUNTIME_PROTOCOL_VERSION = 1;
+
+type LocalRuntimeState = {
+    version: 1;
+    protocolVersion: number;
+    pid: number;
+    baseUrl: string;
+    secret: string;
+    profile: 'desktop';
+    dbType: 'pglite';
+    userDataDir: string;
+    pglitePath: string;
+    startedAt: string;
+};
 
 export function createStandaloneServerManager({ isDev, userDataPath, databasePath, log, logWarn, logError }: CreateStandaloneServerManagerOptions) {
     let cachedServerUrl: string | null = null;
     let pendingServerUrlPromise: Promise<string> | null = null;
     let nextProc: ChildProcess | null = null;
+    let localRuntimeCleanup: (() => void) | null = null;
 
     function getStandaloneDir() {
         // Matches electron-builder extraResources: { to: "standalone" }
@@ -59,6 +78,8 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
             logError('[electron] stop Next error:', error);
         } finally {
             nextProc = null;
+            localRuntimeCleanup?.();
+            localRuntimeCleanup = null;
         }
     }
 
@@ -86,6 +107,12 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
             );
         }
 
+        const existingRuntimeUrl = await findExistingLocalRuntime(userDataPath, logWarn);
+        if (existingRuntimeUrl) {
+            log('[electron] connected to existing Dory Local Runtime:', existingRuntimeUrl);
+            return existingRuntimeUrl;
+        }
+
         stopStandaloneServer();
 
         const hostname = '127.0.0.1';
@@ -96,6 +123,14 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
             logWarn,
         });
         const port = portSelection.port;
+        const localRuntimeSecret = randomBytes(32).toString('base64url');
+        localRuntimeCleanup = acquireLocalRuntimeOwnership({
+            userDataPath,
+            databasePath,
+            baseUrl: `http://${hostname}:${port}`,
+            secret: localRuntimeSecret,
+            logWarn,
+        });
 
         log(`[electron] Starting bootstrap script on port ${port}...`);
 
@@ -110,6 +145,7 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
                     databasePath,
                     hostname,
                     port,
+                    localRuntimeSecret,
                     logWarn,
                 }),
                 stdio: 'pipe',
@@ -165,6 +201,7 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
                 databasePath,
                 hostname,
                 port,
+                localRuntimeSecret,
                 logWarn,
             }),
             stdio: 'pipe',
@@ -186,6 +223,13 @@ export function createStandaloneServerManager({ isDev, userDataPath, databasePat
         }
 
         const url = `http://${hostname}:${port}`;
+        writeLocalRuntimeState({
+            userDataPath,
+            databasePath,
+            baseUrl: url,
+            secret: localRuntimeSecret,
+            logWarn,
+        });
         log('[electron] Next ready:', url);
         return url;
     }
@@ -291,6 +335,8 @@ function createDesktopServerEnv(options: DesktopServerEnvOptions): NodeJS.Proces
         HOSTNAME: options.hostname,
         NODE_ENV: 'production',
         PGLITE_DB_PATH: options.databasePath,
+        DORY_LOCAL_RUNTIME_OWNER: '1',
+        DORY_LOCAL_RUNTIME_SECRET: options.localRuntimeSecret,
         DORY_DESKTOP_USER_DATA_PATH: options.userDataPath,
         DORY_DEMO_RESOURCE_CACHE_DIR: path.join(options.userDataPath, 'demo-resources'),
         BETTER_AUTH_SECRET: desktopSecrets.betterAuthSecret,
@@ -323,6 +369,114 @@ function loadStandaloneEnv(standaloneDir: string): NodeJS.ProcessEnv {
     }
 
     return loaded;
+}
+
+function getLocalRuntimeStatePath(userDataPath: string) {
+    return path.join(userDataPath, LOCAL_RUNTIME_STATE_FILE_NAME);
+}
+
+function getLocalRuntimeLockPath(userDataPath: string) {
+    return path.join(userDataPath, LOCAL_RUNTIME_LOCK_FILE_NAME);
+}
+
+function readLocalRuntimeState(userDataPath: string, logWarn: LogFn): LocalRuntimeState | null {
+    const statePath = getLocalRuntimeStatePath(userDataPath);
+    if (!fs.existsSync(statePath)) return null;
+
+    try {
+        const parsed = JSON.parse(fs.readFileSync(statePath, 'utf8')) as Partial<LocalRuntimeState>;
+        if (parsed.version !== 1 || typeof parsed.baseUrl !== 'string' || typeof parsed.secret !== 'string' || typeof parsed.pid !== 'number') {
+            return null;
+        }
+        return parsed as LocalRuntimeState;
+    } catch (error) {
+        logWarn('[electron] failed to read local runtime state:', error);
+        return null;
+    }
+}
+
+async function isLocalRuntimeHealthy(state: LocalRuntimeState): Promise<boolean> {
+    try {
+        const response = await fetch(`${state.baseUrl}/api/health`, {
+            headers: {
+                [LOCAL_RUNTIME_SECRET_HEADER]: state.secret,
+            },
+        });
+        if (!response.ok) return false;
+        const payload = (await response.json()) as { ok?: unknown; protocolVersion?: unknown };
+        return payload.ok === true && payload.protocolVersion === LOCAL_RUNTIME_PROTOCOL_VERSION;
+    } catch {
+        return false;
+    }
+}
+
+async function findExistingLocalRuntime(userDataPath: string, logWarn: LogFn): Promise<string | null> {
+    const state = readLocalRuntimeState(userDataPath, logWarn);
+    if (!state) return null;
+    if (await isLocalRuntimeHealthy(state)) {
+        return state.baseUrl;
+    }
+
+    try {
+        fs.rmSync(getLocalRuntimeStatePath(userDataPath), { force: true });
+        fs.rmSync(getLocalRuntimeLockPath(userDataPath), { force: true });
+    } catch (error) {
+        logWarn('[electron] failed to remove stale local runtime state:', error);
+    }
+    return null;
+}
+
+function writeLocalRuntimeState(input: { userDataPath: string; databasePath: string; baseUrl: string; secret: string; logWarn: LogFn }) {
+    const state: LocalRuntimeState = {
+        version: 1,
+        protocolVersion: LOCAL_RUNTIME_PROTOCOL_VERSION,
+        pid: process.pid,
+        baseUrl: input.baseUrl,
+        secret: input.secret,
+        profile: 'desktop',
+        dbType: 'pglite',
+        userDataDir: input.userDataPath,
+        pglitePath: input.databasePath,
+        startedAt: new Date().toISOString(),
+    };
+
+    try {
+        fs.mkdirSync(input.userDataPath, { recursive: true });
+        fs.writeFileSync(getLocalRuntimeStatePath(input.userDataPath), JSON.stringify(state, null, 2), { mode: 0o600 });
+    } catch (error) {
+        input.logWarn('[electron] failed to write local runtime state:', error);
+    }
+}
+
+function acquireLocalRuntimeOwnership(input: { userDataPath: string; databasePath: string; baseUrl: string; secret: string; logWarn: LogFn }) {
+    const lockPath = getLocalRuntimeLockPath(input.userDataPath);
+    const statePath = getLocalRuntimeStatePath(input.userDataPath);
+    fs.mkdirSync(input.userDataPath, { recursive: true });
+
+    let fd: number | null = null;
+    try {
+        fd = fs.openSync(lockPath, 'wx', 0o600);
+        fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }));
+    } catch (error) {
+        throw new Error(`Dory Local Runtime lock is already held: ${lockPath}`);
+    }
+
+    return () => {
+        if (fd !== null) {
+            try {
+                fs.closeSync(fd);
+            } catch {
+                // Ignore cleanup failures during shutdown.
+            }
+            fd = null;
+        }
+        try {
+            fs.rmSync(lockPath, { force: true });
+            fs.rmSync(statePath, { force: true });
+        } catch (error) {
+            input.logWarn('[electron] failed to clean local runtime state:', error);
+        }
+    };
 }
 
 function parsePortValue(value: unknown): number | null {

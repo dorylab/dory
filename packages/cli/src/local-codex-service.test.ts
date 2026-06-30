@@ -35,10 +35,10 @@ function serviceConfig() {
 test('service templates do not include bearer tokens', () => {
     const config = serviceConfig();
     const plist = buildMacLaunchAgentPlist({
-        doryBinPath: '/Users/test/.dory/agent/codex/runtime/node_modules/.bin/dory',
+        doryBinPath: '/Users/test/.dory/runtime/runtime/node_modules/.bin/dory',
         config,
-        stdoutPath: '/Users/test/.dory/agent/codex/logs/stdout.log',
-        stderrPath: '/Users/test/.dory/agent/codex/logs/stderr.log',
+        stdoutPath: '/Users/test/.dory/runtime/logs/stdout.log',
+        stderrPath: '/Users/test/.dory/runtime/logs/stderr.log',
         env: {
             HOME: '/Users/test',
             PATH: '/usr/local/bin:/usr/bin',
@@ -46,11 +46,11 @@ test('service templates do not include bearer tokens', () => {
         },
     });
     const unit = buildLinuxSystemdUnit({
-        doryBinPath: '/home/test/.dory/agent/codex/runtime/node_modules/.bin/dory',
+        doryBinPath: '/home/test/.dory/runtime/runtime/node_modules/.bin/dory',
         config,
-        serviceDir: '/home/test/.dory/agent/codex',
-        stdoutPath: '/home/test/.dory/agent/codex/logs/stdout.log',
-        stderrPath: '/home/test/.dory/agent/codex/logs/stderr.log',
+        serviceDir: '/home/test/.dory/runtime',
+        stdoutPath: '/home/test/.dory/runtime/logs/stdout.log',
+        stderrPath: '/home/test/.dory/runtime/logs/stderr.log',
         env: {
             HOME: '/home/test',
             PATH: '/usr/local/bin:/usr/bin',
@@ -58,9 +58,10 @@ test('service templates do not include bearer tokens', () => {
         },
     });
 
-    assert.ok(plist.includes('agent'));
-    assert.ok(plist.includes('codex'));
+    assert.ok(plist.includes('com.getdory.runtime'));
+    assert.ok(plist.includes('runtime'));
     assert.ok(plist.includes('run'));
+    assert.ok(unit.includes('dory-runtime.service') === false);
     assert.ok(unit.includes('ExecStart='));
     assert.equal(plist.includes('secret-token'), false);
     assert.equal(unit.includes('secret-token'), false);
@@ -127,7 +128,9 @@ test('install writes macOS service files, installs runtime, and starts LaunchAge
         assert.ok(commands.some(command => command.command === 'npm' && command.args.includes('@getdory/cli@0.1.0')));
         assert.ok(commands.some(command => command.command === 'launchctl' && command.args[0] === 'bootstrap'));
         assert.ok(commands.some(command => command.command === 'launchctl' && command.args[0] === 'kickstart'));
-        const plist = await readFile(join(dir, 'Library', 'LaunchAgents', 'com.getdory.codex-agent.plist'), 'utf8');
+        const plist = await readFile(join(dir, 'Library', 'LaunchAgents', 'com.getdory.runtime.plist'), 'utf8');
+        assert.ok(plist.includes('<string>com.getdory.runtime</string>'));
+        assert.ok(plist.includes('<string>runtime</string>'));
         assert.ok(plist.includes('<string>run</string>'));
         assert.equal(plist.includes('dory_mcp_token'), false);
     } finally {
@@ -138,7 +141,7 @@ test('install writes macOS service files, installs runtime, and starts LaunchAge
 test('linux service management uses systemctl user service', async () => {
     const homeDir = join(tmpdir(), `dory-codex-service-linux-${Date.now()}`);
     await mkdir(join(homeDir, '.config', 'systemd', 'user'), { recursive: true });
-    await writeFile(join(homeDir, '.config', 'systemd', 'user', 'dory-codex-agent.service'), '[Unit]\n');
+    await writeFile(join(homeDir, '.config', 'systemd', 'user', 'dory-runtime.service'), '[Unit]\n');
 
     const commands: Array<{ command: string; args: string[] }> = [];
     const runCommand: RunCommand = async (command, args) => {
@@ -155,12 +158,12 @@ test('linux service management uses systemctl user service', async () => {
     await stopCodexAgentService({ platform: 'linux', homeDir, runCommand });
     await uninstallCodexAgentService({ platform: 'linux', homeDir, runCommand });
 
-    assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user restart dory-codex-agent.service'));
-    assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user stop dory-codex-agent.service'));
-    assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user disable --now dory-codex-agent.service'));
-    await assert.rejects(() => stat(join(homeDir, '.dory', 'agent', 'codex')));
+    assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user restart dory-runtime.service'));
+    assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user stop dory-runtime.service'));
+    assert.ok(commands.some(command => command.command === 'systemctl' && command.args.join(' ') === '--user disable --now dory-runtime.service'));
+    await assert.rejects(() => stat(join(homeDir, '.dory', 'runtime')));
 });
 
 test('windows service install is explicitly unsupported', async () => {
-    await assert.rejects(() => installCodexAgentService({ platform: 'win32' }), /macOS and Linux/);
+    await assert.rejects(() => installCodexAgentService({ platform: 'win32' }), /Dory Local Runtime/);
 });

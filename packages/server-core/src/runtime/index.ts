@@ -27,6 +27,7 @@ export type BootstrapDoryRuntimeOptions = {
     databaseUrl?: string;
     trustedOrigins?: string[];
     skipMigrate?: boolean;
+    direct?: boolean;
 };
 
 export type DoryRuntimeIdentity = {
@@ -155,6 +156,10 @@ async function ensureHeadlessIdentity(profile: DoryStorageProfile): Promise<Dory
     });
 
     return { userId, organizationId };
+}
+
+export async function resolveDoryRuntimeIdentity(profile: DoryStorageProfile): Promise<DoryRuntimeIdentity> {
+    return ensureHeadlessIdentity(profile);
 }
 
 export async function bootstrapDoryRuntime(options: BootstrapDoryRuntimeOptions = {}): Promise<BootstrappedDoryRuntime> {

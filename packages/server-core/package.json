@@ -29,6 +29,10 @@
         "./http": {
             "types": "./src/http/index.ts",
             "default": "./dist/index.js"
+        },
+        "./local-runtime": {
+            "types": "./src/local-runtime/index.ts",
+            "default": "./dist/index.js"
         }
     },
     "scripts": {
