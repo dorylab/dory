@@ -151,6 +151,28 @@ test('parses local Codex Agent service commands', () => {
     assert.deepEqual(parseArgs(['agent', 'codex', 'uninstall']).command, 'agent-codex');
 });
 
+test('parses local runtime commands', () => {
+    assert.deepEqual(parseArgs(['runtime', 'run', '--data', 'standalone', '--host', '127.0.0.1', '--port', '4321']), {
+        command: 'runtime',
+        options: {
+            action: 'run',
+            url: undefined,
+            name: undefined,
+            configPath: undefined,
+            host: '127.0.0.1',
+            port: 4321,
+            data: 'standalone',
+            userDataDir: undefined,
+            pglitePath: undefined,
+            databaseUrl: undefined,
+        },
+    });
+    assert.deepEqual(parseArgs(['runtime', 'status']).command, 'runtime');
+    assert.deepEqual(parseArgs(['runtime', 'restart']).command, 'runtime');
+    assert.deepEqual(parseArgs(['runtime', 'stop']).command, 'runtime');
+    assert.deepEqual(parseArgs(['runtime', 'uninstall']).command, 'runtime');
+});
+
 test('parses local AI bridge login scope flag', () => {
     assert.deepEqual(parseArgs(['mcp', 'login', '--url', 'https://dory.test', '--local-ai']), {
         command: 'mcp-login',

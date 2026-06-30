@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { ActionContext } from '@dory/actions';
 import { toActionError } from '@dory/actions';
+import { getDesktopProtocolSchemeForServer } from '@dory/shared/runtime';
 import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { executeAction } from '@/lib/actions/server/execute';
@@ -124,16 +125,8 @@ const finishWorkInputSchema = z
         workId: z.string().min(1),
         status: z.enum(['active', 'completed', 'error']),
         summaryTitle: z.string().min(1).max(1000).optional(),
-        findings: z
-            .array(z.string().min(1).max(500))
-            .min(1)
-            .max(20)
-            .describe('User-facing analytical conclusions from this Agent Run. These appear under Findings.'),
-        steps: z
-            .array(z.string().min(1).max(500))
-            .min(1)
-            .max(20)
-            .describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
+        findings: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing analytical conclusions from this Agent Run. These appear under Findings.'),
+        steps: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
     })
     .passthrough();
 
@@ -355,7 +348,13 @@ function buildWorkspaceUrl(
         tabId: options.tabId,
         sessionId: options.sessionId,
     });
-    return new URL(path, ctx.services.requestOrigin ?? 'http://localhost:3000').toString();
+    if (ctx.runtime === 'desktop') {
+        const url = new URL(`${getDesktopProtocolSchemeForServer()}://open`);
+        url.searchParams.set('path', path);
+        return url.toString();
+    }
+
+    return new URL(path, ctx.services.workspaceOrigin ?? ctx.services.requestOrigin ?? 'http://localhost:3000').toString();
 }
 
 function withWork(data: unknown, work: ResolvedMcpWork): Record<string, unknown> & { work: { workId: string; workspaceUrl: string }; workspaceUrl: string } {

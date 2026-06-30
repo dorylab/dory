@@ -7,5 +7,6 @@ export async function handleDoryMcpRequest(req: Request, context: McpAuthContext
         db: await getDBService(),
         auth: context,
         requestOrigin: context.requestOrigin ?? null,
+        workspaceOrigin: context.workspaceOrigin ?? null,
     });
 }

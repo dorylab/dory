@@ -4,7 +4,7 @@ import { hasActionScope } from '@dory/actions';
 import type { OrganizationAccess } from '@/lib/server/authz';
 import type { McpAccessTokenRecord } from '@dory/database/postgres/impl/mcp';
 import { isDesktopRuntime } from '@dory/shared/runtime';
-import { getExternalRequestOrigin } from '@/lib/server/request-origin';
+import { getExternalRequestOrigin, getWorkspaceRequestOrigin } from '@/lib/server/request-origin';
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 export const MCP_DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
@@ -33,6 +33,7 @@ export type McpAuthContext = {
     scopes: string[];
     access: OrganizationAccess;
     requestOrigin?: string | null;
+    workspaceOrigin?: string | null;
 };
 
 export type McpAuthResult =
@@ -320,6 +321,7 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
             const result = await buildMcpAuthContextForDesktopGrant(req.headers.get(MCP_DESKTOP_GRANT_HEADER));
             if (result.ok) {
                 result.context.requestOrigin = getExternalRequestOrigin(req);
+                result.context.workspaceOrigin = getWorkspaceRequestOrigin(req);
             }
             return result;
         }
@@ -347,6 +349,7 @@ export async function authenticateMcpRequest(req: Request): Promise<McpAuthResul
     await db.mcp.markTokenUsed(record.id);
 
     context.context.requestOrigin = getExternalRequestOrigin(req);
+    context.context.workspaceOrigin = getWorkspaceRequestOrigin(req);
 
     return context;
 }

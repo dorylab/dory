@@ -27,12 +27,22 @@ export type ActionOptions = ProfileOptions & {
 };
 
 export type AgentCodexAction = 'install' | 'run' | 'status' | 'restart' | 'stop' | 'uninstall';
+export type RuntimeAction = 'run' | 'status' | 'restart' | 'stop' | 'uninstall';
 
 export type AgentCodexOptions = {
     action: AgentCodexAction;
     url?: string;
     name?: string;
     configPath?: string;
+};
+
+export type RuntimeOptions = ProfileOptions & {
+    action: RuntimeAction;
+    url?: string;
+    name?: string;
+    configPath?: string;
+    host: string;
+    port?: number;
 };
 
 export type ParsedArgs =
@@ -43,6 +53,7 @@ export type ParsedArgs =
     | ({ command: 'action-list' } & ProfileOptions)
     | ({ command: 'action-describe'; actionId: string } & ProfileOptions)
     | { command: 'action-run'; options: ActionOptions }
+    | { command: 'runtime'; options: RuntimeOptions }
     | { command: 'agent-codex'; options: AgentCodexOptions }
     | { command: 'mcp-serve'; options: ServeOptions }
     | ({ command: 'mcp-token'; action: 'create' | 'revoke' | 'list'; id?: string; name?: string } & ProfileOptions)
@@ -154,6 +165,25 @@ export function parseArgs(argv: string[]): ParsedArgs {
             };
         }
         return { command: 'help' };
+    }
+
+    if (first === 'runtime') {
+        const action = second && !second.startsWith('-') ? second : null;
+        if (action !== 'run' && action !== 'status' && action !== 'restart' && action !== 'stop' && action !== 'uninstall') {
+            return { command: 'help' };
+        }
+        return {
+            command: 'runtime',
+            options: {
+                action,
+                url: readOption(argv, '--url') ?? readOption(argv, '-u'),
+                name: readOption(argv, '--name') ?? readOption(argv, '--client-name'),
+                configPath,
+                host: readOption(argv, '--host') ?? '127.0.0.1',
+                port: readOption(argv, '--port') ? readPort(argv) : undefined,
+                ...profileOptions,
+            },
+        };
     }
 
     if (first === 'mcp') {

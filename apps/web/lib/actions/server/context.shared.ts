@@ -108,6 +108,6 @@ export async function createMcpActionContextFromAuth(context: McpAuthContext): P
         currentConnectionId: null,
         requestId: randomUUID(),
         audit: createWebActionAuditSink(db),
-        services: { db, requestOrigin: context.requestOrigin ?? null },
+        services: { db, requestOrigin: context.requestOrigin ?? null, workspaceOrigin: context.workspaceOrigin ?? null },
     };
 }

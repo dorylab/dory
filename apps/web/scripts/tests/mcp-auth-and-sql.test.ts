@@ -31,7 +31,7 @@ const { getReadonlyMcpStatements } = await import('../../lib/server/mcp/sql-safe
 const { resolveMcpDesktopGrantOrganizationId } = await import('../../lib/server/mcp/desktop-grant');
 const { clampMcpLimit, matchSchemaSearch, normalizeMonitoringFilters } = await import('../../lib/server/mcp/tools');
 const { getMcpLinkExpiresAt, getMcpLinkScopes, hashMcpLinkVerifier, mcpLinkPollSchema, mcpLinkStartSchema, MCP_LINK_TTL_MS } = await import('../../lib/server/mcp/link');
-const { createExternalRequestUrl } = await import('../../lib/server/request-origin');
+const { createExternalRequestUrl, createWorkspaceRequestUrl, getWorkspaceRequestOrigin } = await import('../../lib/server/request-origin');
 
 function createAccess(overrides: Partial<OrganizationAccess> = {}): OrganizationAccess {
     return {
@@ -359,6 +359,31 @@ test('web MCP link URLs prefer BETTER_AUTH_URL when configured', () => {
 
     withBetterAuthUrl('dory.example.com', () => {
         assert.equal(createExternalRequestUrl(new Request('http://0.0.0.0:3000/api/mcp/link/start'), '/mcp/authorize'), 'https://dory.example.com/mcp/authorize');
+    });
+});
+
+test('workspace request URLs ignore BETTER_AUTH_URL and use the running host', () => {
+    withBetterAuthUrl('https://app.getdory.dev', () => {
+        const req = new Request('http://0.0.0.0:3000/api/mcp', {
+            headers: {
+                host: 'localhost:3000',
+            },
+        });
+
+        assert.equal(createExternalRequestUrl(req, '/mcp/authorize'), 'https://app.getdory.dev/mcp/authorize');
+        assert.equal(getWorkspaceRequestOrigin(req), 'http://localhost:3000');
+        assert.equal(createWorkspaceRequestUrl(req, '/org/agent-runs/work-1'), 'http://localhost:3000/org/agent-runs/work-1');
+    });
+
+    withBetterAuthUrl('https://app.getdory.dev', () => {
+        const req = new Request('http://0.0.0.0:3000/api/mcp', {
+            headers: {
+                'x-forwarded-host': 'selfhost.example.com',
+                'x-forwarded-proto': 'https',
+            },
+        });
+
+        assert.equal(getWorkspaceRequestOrigin(req), 'https://selfhost.example.com');
     });
 });
 

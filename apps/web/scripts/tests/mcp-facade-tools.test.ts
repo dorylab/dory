@@ -45,20 +45,20 @@ function createWorksMock() {
         const sections = Array.isArray(record.sections)
             ? record.sections
                   .map(section => {
-                  if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
-                  const sectionRecord = section as Record<string, unknown>;
-                  const findings = cleanSummaryItems(sectionRecord.findings);
-                  const steps = cleanSummaryItems(sectionRecord.steps);
-                  const finishedAt = typeof sectionRecord.finishedAt === 'string' && sectionRecord.finishedAt.trim() ? sectionRecord.finishedAt : null;
-                  if ((!findings.length && !steps.length) || !finishedAt) return null;
+                      if (!section || typeof section !== 'object' || Array.isArray(section)) return null;
+                      const sectionRecord = section as Record<string, unknown>;
+                      const findings = cleanSummaryItems(sectionRecord.findings);
+                      const steps = cleanSummaryItems(sectionRecord.steps);
+                      const finishedAt = typeof sectionRecord.finishedAt === 'string' && sectionRecord.finishedAt.trim() ? sectionRecord.finishedAt : null;
+                      if ((!findings.length && !steps.length) || !finishedAt) return null;
 
-                  return {
-                      summaryTitle: typeof sectionRecord.summaryTitle === 'string' && sectionRecord.summaryTitle.trim() ? sectionRecord.summaryTitle.trim() : null,
-                      findings,
-                      steps,
-                      finishedAt,
-                  };
-              })
+                      return {
+                          summaryTitle: typeof sectionRecord.summaryTitle === 'string' && sectionRecord.summaryTitle.trim() ? sectionRecord.summaryTitle.trim() : null,
+                          findings,
+                          steps,
+                          finishedAt,
+                      };
+                  })
                   .filter((section): section is { summaryTitle: string | null; findings: string[]; steps: string[]; finishedAt: string } => Boolean(section))
             : [];
 
@@ -211,6 +211,7 @@ async function assertRejectsCode(run: () => Promise<unknown>, code: string) {
 function createContext(
     services: WebActionServices,
     scopes: string[] = ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write'],
+    overrides: Partial<ActionContext<WebActionServices>> = {},
 ): ActionContext<WebActionServices> {
     return {
         organizationId: 'org-1',
@@ -225,12 +226,51 @@ function createContext(
             scopes,
             id: 'token-1',
         },
+        runtime: 'web',
         requestId: 'request-1',
         services: {
             requestOrigin: 'https://dory.test',
             ...services,
         },
+        ...overrides,
     };
+}
+
+async function withDesktopProtocolEnv<T>(env: { DORY_PROTOCOL_SCHEME?: string; DORY_DISTRIBUTION?: string }, fn: () => Promise<T>) {
+    const previousProtocol = process.env.DORY_PROTOCOL_SCHEME;
+    const previousDistribution = process.env.DORY_DISTRIBUTION;
+    if (env.DORY_PROTOCOL_SCHEME === undefined) {
+        delete process.env.DORY_PROTOCOL_SCHEME;
+    } else {
+        process.env.DORY_PROTOCOL_SCHEME = env.DORY_PROTOCOL_SCHEME;
+    }
+    if (env.DORY_DISTRIBUTION === undefined) {
+        delete process.env.DORY_DISTRIBUTION;
+    } else {
+        process.env.DORY_DISTRIBUTION = env.DORY_DISTRIBUTION;
+    }
+
+    try {
+        return await fn();
+    } finally {
+        if (previousProtocol === undefined) {
+            delete process.env.DORY_PROTOCOL_SCHEME;
+        } else {
+            process.env.DORY_PROTOCOL_SCHEME = previousProtocol;
+        }
+        if (previousDistribution === undefined) {
+            delete process.env.DORY_DISTRIBUTION;
+        } else {
+            process.env.DORY_DISTRIBUTION = previousDistribution;
+        }
+    }
+}
+
+function assertDesktopWorkspaceUrl(value: string, protocol: string, expectedPath: string) {
+    const url = new URL(value);
+    assert.equal(url.protocol, `${protocol}:`);
+    assert.equal(url.hostname, 'open');
+    assert.equal(url.searchParams.get('path'), expectedPath);
 }
 
 test('public Dory MCP catalog is limited to high-level facade tools', () => {
@@ -255,6 +295,76 @@ test('dory_create_work returns a workspace URL', async () => {
     assert.equal(output.title, 'Revenue check');
     assert.equal(output.workspaceUrl, 'https://dory.test/org-1/agent-runs/work-1/workspace/conn-1');
     assert.equal(output.work.workId, 'work-1');
+});
+
+test('dory_create_work uses workspace origin before auth request origin', async () => {
+    const ctx = createContext({
+        db: {
+            works: createWorksMock(),
+        },
+        requestOrigin: 'https://app.getdory.dev',
+        workspaceOrigin: 'http://localhost:3000',
+    } as unknown as WebActionServices);
+
+    const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Local workspace' })) as any;
+
+    assert.equal(output.workspaceUrl, 'http://localhost:3000/org-1/agent-runs/work-1/workspace/conn-1');
+});
+
+test('dory_create_work returns a desktop deep link in desktop runtime', async () => {
+    await withDesktopProtocolEnv({ DORY_PROTOCOL_SCHEME: undefined, DORY_DISTRIBUTION: undefined }, async () => {
+        const ctx = createContext(
+            {
+                db: {
+                    works: createWorksMock(),
+                },
+                requestOrigin: 'https://app.getdory.dev',
+                workspaceOrigin: 'http://127.0.0.1:49415',
+            } as unknown as WebActionServices,
+            undefined,
+            { runtime: 'desktop' },
+        );
+
+        const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Desktop workspace' })) as any;
+
+        assertDesktopWorkspaceUrl(output.workspaceUrl, 'dory', '/org-1/agent-runs/work-1/workspace/conn-1');
+    });
+});
+
+test('dory_create_work returns a beta desktop deep link when configured', async () => {
+    await withDesktopProtocolEnv({ DORY_PROTOCOL_SCHEME: undefined, DORY_DISTRIBUTION: 'beta' }, async () => {
+        const ctx = createContext(
+            {
+                db: {
+                    works: createWorksMock(),
+                },
+            } as unknown as WebActionServices,
+            undefined,
+            { runtime: 'desktop' },
+        );
+
+        const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Beta workspace' })) as any;
+
+        assertDesktopWorkspaceUrl(output.workspaceUrl, 'dory-beta', '/org-1/agent-runs/work-1/workspace/conn-1');
+    });
+});
+
+test('dory_create_work respects explicit desktop protocol override', async () => {
+    await withDesktopProtocolEnv({ DORY_PROTOCOL_SCHEME: 'dory-dev', DORY_DISTRIBUTION: 'beta' }, async () => {
+        const ctx = createContext(
+            {
+                db: {
+                    works: createWorksMock(),
+                },
+            } as unknown as WebActionServices,
+            undefined,
+            { runtime: 'desktop' },
+        );
+
+        const output = (await getTool('dory_create_work').execute(ctx, { connectionId: 'conn-1', title: 'Dev workspace' })) as any;
+
+        assertDesktopWorkspaceUrl(output.workspaceUrl, 'dory-dev', '/org-1/agent-runs/work-1/workspace/conn-1');
+    });
 });
 
 test('dory_create_work derives a short Agent Run title from the user question', async () => {

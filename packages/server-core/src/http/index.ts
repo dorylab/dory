@@ -161,6 +161,7 @@ export async function startDoryMcpHttpServer(options: DoryMcpHttpOptions) {
                     db: options.context.db,
                     auth: auth.auth,
                     requestOrigin: baseUrl,
+                    workspaceOrigin: baseUrl,
                 }),
             );
         })().catch(async error => {
@@ -184,4 +185,3 @@ export async function startDoryMcpHttpServer(options: DoryMcpHttpOptions) {
     process.once('SIGINT', () => void close().finally(() => process.exit(0)));
     process.once('SIGTERM', () => void close().finally(() => process.exit(0)));
 }
-

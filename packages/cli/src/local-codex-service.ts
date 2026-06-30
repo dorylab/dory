@@ -9,8 +9,8 @@ import { getBridgeConfigPath } from './bridge-config.js';
 import { normalizeDoryTarget } from './bridge-url.js';
 import { prepareCodexAgentBridge, type CodexAgentOptions } from './local-codex-agent.js';
 
-const SERVICE_LABEL = 'com.getdory.codex-agent';
-const SYSTEMD_SERVICE_NAME = 'dory-codex-agent.service';
+const SERVICE_LABEL = 'com.getdory.runtime';
+const SYSTEMD_SERVICE_NAME = 'dory-runtime.service';
 const SERVICE_CONFIG_VERSION = 1;
 
 type CommandResult = {
@@ -102,14 +102,14 @@ function serviceHomeDir(options: CodexAgentServiceOptions) {
 function serviceUid(options: CodexAgentServiceOptions) {
     const uid = options.uid ?? process.getuid?.();
     if (typeof uid !== 'number') {
-        throw new Error('Dory Codex Agent service installation requires a POSIX user id.');
+        throw new Error('Dory Local Runtime service installation requires a POSIX user id.');
     }
     return uid;
 }
 
 export function getCodexAgentServicePaths(options: CodexAgentServiceOptions = {}): CodexAgentServicePaths {
     const home = serviceHomeDir(options);
-    const serviceDir = join(home, '.dory', 'agent', 'codex');
+    const serviceDir = join(home, '.dory', 'runtime');
     const runtimeDir = join(serviceDir, 'runtime');
     const logDir = join(serviceDir, 'logs');
     return {
@@ -126,7 +126,7 @@ export function getCodexAgentServicePaths(options: CodexAgentServiceOptions = {}
 }
 
 function buildServiceArgs(config: ServiceConfig) {
-    return ['agent', 'codex', 'run', '--url', config.origin, '--name', config.name, '--config', config.mcpConfigPath];
+    return ['runtime', 'run', '--url', config.origin, '--name', config.name, '--config', config.mcpConfigPath];
 }
 
 export function buildMacLaunchAgentPlist(input: { doryBinPath: string; config: ServiceConfig; stdoutPath: string; stderrPath: string; env?: NodeJS.ProcessEnv }) {
@@ -170,7 +170,7 @@ export function buildLinuxSystemdUnit(input: { doryBinPath: string; config: Serv
     const env = input.env ?? process.env;
     const execStart = [input.doryBinPath, ...buildServiceArgs(input.config)].map(systemdQuote).join(' ');
     return `[Unit]
-Description=Dory Codex Agent
+Description=Dory Local Runtime
 After=network-online.target
 Wants=network-online.target
 
@@ -245,7 +245,7 @@ async function writeServiceFiles(paths: CodexAgentServicePaths, config: ServiceC
         return;
     }
 
-    throw new Error('Dory Codex Agent background service install is supported on macOS and Linux.');
+    throw new Error('Dory Local Runtime background service install is supported on macOS and Linux.');
 }
 
 async function startService(paths: CodexAgentServicePaths, options: CodexAgentServiceOptions) {
@@ -265,13 +265,13 @@ async function startService(paths: CodexAgentServicePaths, options: CodexAgentSe
         return;
     }
 
-    throw new Error('Dory Codex Agent background service install is supported on macOS and Linux.');
+    throw new Error('Dory Local Runtime background service install is supported on macOS and Linux.');
 }
 
 export async function installCodexAgentService(options: CodexAgentServiceOptions = {}) {
     const platform = servicePlatform(options);
     if (platform !== 'darwin' && platform !== 'linux') {
-        throw new Error('Dory Codex Agent background service install is supported on macOS and Linux.');
+        throw new Error('Dory Local Runtime background service install is supported on macOS and Linux.');
     }
 
     const target = normalizeDoryTarget(options.url);
@@ -354,7 +354,7 @@ export async function stopCodexAgentService(options: CodexAgentServiceOptions = 
         return getCodexAgentServiceStatus(options);
     }
 
-    throw new Error('Dory Codex Agent background service is supported on macOS and Linux.');
+    throw new Error('Dory Local Runtime background service is supported on macOS and Linux.');
 }
 
 export async function restartCodexAgentService(options: CodexAgentServiceOptions = {}) {
@@ -374,7 +374,7 @@ export async function restartCodexAgentService(options: CodexAgentServiceOptions
         return getCodexAgentServiceStatus(options);
     }
 
-    throw new Error('Dory Codex Agent background service is supported on macOS and Linux.');
+    throw new Error('Dory Local Runtime background service is supported on macOS and Linux.');
 }
 
 export async function uninstallCodexAgentService(options: CodexAgentServiceOptions = {}) {
@@ -390,7 +390,7 @@ export async function uninstallCodexAgentService(options: CodexAgentServiceOptio
         await rm(paths.systemdUnitPath, { force: true });
         await runCommand('systemctl', ['--user', 'daemon-reload'], { rejectOnError: false });
     } else {
-        throw new Error('Dory Codex Agent background service is supported on macOS and Linux.');
+        throw new Error('Dory Local Runtime background service is supported on macOS and Linux.');
     }
 
     await rm(paths.serviceDir, { recursive: true, force: true });
@@ -402,3 +402,9 @@ export async function uninstallCodexAgentService(options: CodexAgentServiceOptio
         serviceDir: paths.serviceDir,
     };
 }
+
+export const installLocalRuntimeService = installCodexAgentService;
+export const getLocalRuntimeServiceStatus = getCodexAgentServiceStatus;
+export const stopLocalRuntimeService = stopCodexAgentService;
+export const restartLocalRuntimeService = restartCodexAgentService;
+export const uninstallLocalRuntimeService = uninstallCodexAgentService;

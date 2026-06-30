@@ -46,11 +46,6 @@ export { resolvePgliteDataDir };
 
 async function initPglite(): Promise<PostgresDBClient> {
     const dataDir = await resolvePgliteDataDir();
-    console.error('[pglite] init start', {
-        cwd: process.cwd(),
-        envPath: process.env.PGLITE_DB_PATH ?? null,
-        resolvedDataDir: dataDir,
-    });
 
     try {
         const client = globalForPglite.__pgliteClient ?? new PGlite({ dataDir });
@@ -58,10 +53,6 @@ async function initPglite(): Promise<PostgresDBClient> {
 
         const db = drizzle({ client, schema: schemas }) as unknown as PostgresDBClient;
         (db as any).$client = client;
-
-        console.error('[pglite] init success', {
-            resolvedDataDir: dataDir,
-        });
 
         return db;
     } catch (error) {
@@ -88,10 +79,10 @@ export function getPgliteClient(): Promise<PostgresDBClient> {
 export async function resetPgliteClient() {
     const client = globalForPglite.__pgliteClient;
 
+    globalForPglite.__pgliteClient = undefined;
+    globalForPglite.__pgliteDbPromise = undefined;
+
     if (client && typeof (client as PGlite & { close?: () => Promise<void> }).close === 'function') {
         await (client as PGlite & { close: () => Promise<void> }).close();
     }
-
-    globalForPglite.__pgliteClient = undefined;
-    globalForPglite.__pgliteDbPromise = undefined;
 }
