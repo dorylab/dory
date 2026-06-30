@@ -182,6 +182,28 @@ async function ensureLocalRuntime(args: ProfileOptions) {
     return waitForLocalRuntime(args);
 }
 
+async function startOrConnectLocalRuntime(args: ProfileOptions, onReady?: (state: Awaited<ReturnType<typeof waitForLocalRuntime>>) => void) {
+    const existing = await serverCore.readDoryLocalRuntimeState(bootstrapOptions(args));
+    if (existing && (await serverCore.probeDoryLocalRuntime(existing))) {
+        onReady?.(existing);
+        return { state: existing, close: null };
+    }
+
+    try {
+        return await serverCore.startDoryLocalRuntimeServer({
+            ...bootstrapOptions(args),
+            onReady,
+        });
+    } catch (error) {
+        if (error instanceof Error && error.message.includes('Dory Local Runtime is already running')) {
+            const state = await waitForLocalRuntime(args);
+            onReady?.(state);
+            return { state, close: null };
+        }
+        throw error;
+    }
+}
+
 async function localRuntimeRequest<T>(args: ProfileOptions, path: string, options: { method?: string; body?: unknown } = {}) {
     const state = await ensureLocalRuntime(args);
     return serverCore.callDoryLocalRuntime<T>(state, path, options);
@@ -613,11 +635,12 @@ async function run() {
     if (args.command === 'runtime') {
         if (args.options.action === 'run') {
             const runConfig = await resolveRuntimeRunConfig(args.options);
-            const runtime = await serverCore.startDoryLocalRuntimeServer({
-                ...bootstrapOptions(runConfig.profile),
-                onReady: state => {
+            const runtime = await startOrConnectLocalRuntime(runConfig.profile, state => {
+                if (state.pid === process.pid) {
                     process.stderr.write(`Dory Local Runtime listening at ${state.baseUrl}\n`);
-                },
+                    return;
+                }
+                process.stderr.write(`Dory Local Runtime already running at ${state.baseUrl}\n`);
             });
             if (runConfig.codexAgent) {
                 void startCodexAgentBridge({
