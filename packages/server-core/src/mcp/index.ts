@@ -1,3 +1,4 @@
+import type { Readable, Writable } from 'node:stream';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
@@ -6,6 +7,7 @@ import type { DBService } from '@dory/database';
 import { getPublicDoryMcpTools, structuredMcpFacadeError, structuredMcpFacadeResult } from '../../../../apps/web/lib/server/mcp/facade-tools';
 import type { DoryMcpAuthContext } from '../tokens';
 import { createHeadlessActionContext } from '../runtime';
+import { waitForInputClose } from './stdio-lifecycle';
 
 const SERVER_VERSION = '0.12.2';
 
@@ -14,6 +16,11 @@ export type DoryMcpServerContext = {
     auth: DoryMcpAuthContext;
     requestOrigin?: string | null;
     workspaceOrigin?: string | null;
+};
+
+type DoryMcpStdioOptions = {
+    stdin?: Readable;
+    stdout?: Writable;
 };
 
 export function createDoryMcpServer(context: DoryMcpServerContext) {
@@ -70,8 +77,16 @@ export async function handleDoryMcpHttpRequest(req: Request, context: DoryMcpSer
     return handleDoryMcpRequest(req, context);
 }
 
-export async function serveDoryMcpStdio(context: DoryMcpServerContext) {
+export async function serveDoryMcpStdio(context: DoryMcpServerContext, options: DoryMcpStdioOptions = {}) {
     const server = createDoryMcpServer(context);
-    const transport = new StdioServerTransport();
+    const stdin = options.stdin ?? process.stdin;
+    const stdout = options.stdout ?? process.stdout;
+    const transport = new StdioServerTransport(stdin, stdout);
     await server.connect(transport);
+
+    try {
+        await waitForInputClose(stdin);
+    } finally {
+        await server.close().catch(() => undefined);
+    }
 }

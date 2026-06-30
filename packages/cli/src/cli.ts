@@ -484,36 +484,42 @@ async function run() {
 
     if (args.command === 'mcp-serve') {
         const runtime = await serverCore.bootstrapDoryRuntime(bootstrapOptions(args.options));
-        const auth = await ensureServeAuth(runtime, args.options.token ?? null);
+        try {
+            const auth = await ensureServeAuth(runtime, args.options.token ?? null);
 
-        if (args.options.transport === 'http') {
-            if (args.options.host === '0.0.0.0' && !args.options.token) {
-                throw new Error('HTTP remote bind requires --token <existing-token>. Create one with dory mcp token create first.');
+            if (args.options.transport === 'http') {
+                if (args.options.host === '0.0.0.0' && !args.options.token) {
+                    throw new Error('HTTP remote bind requires --token <existing-token>. Create one with dory mcp token create first.');
+                }
+                await serverCore.startDoryMcpHttpServer({
+                    host: args.options.host,
+                    port: args.options.port,
+                    origin: args.options.origin,
+                    allowRemote: args.options.allowRemote,
+                    allowedOrigins: [
+                        ...(process.env.TRUSTED_ORIGINS ?? '')
+                            .split(',')
+                            .map(item => item.trim())
+                            .filter(Boolean),
+                    ],
+                    context: {
+                        db: runtime.db,
+                        tokenAuthFallback: auth,
+                    },
+                });
+                return;
             }
-            await serverCore.startDoryMcpHttpServer({
-                host: args.options.host,
-                port: args.options.port,
-                origin: args.options.origin,
-                allowRemote: args.options.allowRemote,
-                allowedOrigins: [
-                    ...(process.env.TRUSTED_ORIGINS ?? '')
-                        .split(',')
-                        .map(item => item.trim())
-                        .filter(Boolean),
-                ],
-                context: {
-                    db: runtime.db,
-                    tokenAuthFallback: auth,
-                },
-            });
-            return;
-        }
 
-        await serverCore.serveDoryMcpStdio({
-            db: runtime.db,
-            auth,
-            requestOrigin: args.options.origin ?? null,
-        });
+            await serverCore.serveDoryMcpStdio({
+                db: runtime.db,
+                auth,
+                requestOrigin: args.options.origin ?? null,
+            });
+        } finally {
+            if (args.options.transport === 'stdio') {
+                await serverCore.shutdownDoryRuntime();
+            }
+        }
         return;
     }
 
