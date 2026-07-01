@@ -43,6 +43,30 @@ function normalizeIdentities(payload: UnknownRecord, connection: UnknownRecord) 
     return inlineIdentity ? [inlineIdentity] : [];
 }
 
+function isSqliteConnection(connection: UnknownRecord) {
+    const type = typeof connection.type === 'string' ? connection.type.toLowerCase() : null;
+    const engine = typeof connection.engine === 'string' ? connection.engine.toLowerCase() : null;
+    return type === 'sqlite' || engine === 'sqlite';
+}
+
+function createSqliteDefaultIdentity(connection: UnknownRecord) {
+    const database = typeof connection.database === 'string' && connection.database.trim() ? connection.database.trim() : 'main';
+    return {
+        name: 'Default',
+        username: 'sqlite',
+        password: null,
+        isDefault: true,
+        database,
+        enabled: true,
+    };
+}
+
+function normalizeCreateIdentities(payload: UnknownRecord, connection: UnknownRecord) {
+    const identities = normalizeIdentities(payload, connection);
+    if (identities.length > 0 || !isSqliteConnection(connection)) return identities;
+    return [createSqliteDefaultIdentity(connection)];
+}
+
 function pickTestIdentity(payload: UnknownRecord, connection: UnknownRecord) {
     if (isRecord(payload.identity)) return payload.identity;
     if (Array.isArray(payload.identities)) {
@@ -60,10 +84,11 @@ function normalizedConnectionFromPayload(payload: UnknownRecord) {
 export function normalizeConnectionCreatePayload(value: unknown) {
     const payload = isRecord(value) ? value : {};
     const connection = normalizedConnectionFromPayload(payload);
+    const rawConnection = isRecord(payload.connection) ? payload.connection : payload;
     return {
         ...payload,
         connection,
-        identities: normalizeIdentities(payload, isRecord(payload.connection) ? payload.connection : payload),
+        identities: normalizeCreateIdentities(payload, rawConnection),
         ssh: payload.ssh ?? null,
         tls: payload.tls ?? null,
     };
@@ -84,14 +109,17 @@ export function normalizeConnectionTestPayload(value: unknown) {
 
 export function normalizeConnectionUpdatePatch(value: unknown) {
     const patch = isRecord(value) ? value : {};
-    if (isRecord(patch.connection)) {
-        return {
-            ...patch,
-            connection: stripConnectionSidecars(patch.connection),
-            identities: normalizeIdentities(patch, patch.connection),
-        };
-    }
-    return normalizeConnectionCreatePayload(patch);
+    const rawConnection = isRecord(patch.connection) ? patch.connection : patch;
+    const normalized: UnknownRecord = {
+        ...patch,
+        connection: stripConnectionSidecars(rawConnection),
+        identities: normalizeIdentities(patch, rawConnection),
+    };
+
+    if ('ssh' in patch) normalized.ssh = patch.ssh ?? null;
+    if ('tls' in patch) normalized.tls = patch.tls ?? null;
+
+    return normalized;
 }
 
 const connectionFieldsSchema = z
@@ -143,7 +171,7 @@ export const connectionCreatePayloadSchema = z
     })
     .passthrough()
     .describe(
-        'Dory connection creation payload. Canonical shape is { connection: { type, engine, name, host, port, database }, identities: [{ name, username, password, isDefault, database, enabled }], ssh: null, tls: null }. Convenience flat fields like username/password are accepted and normalized.',
+        'Dory connection creation payload. Canonical shape is { connection: { type, engine, name, host, port, database }, identities: [{ name, username, password, isDefault, database, enabled }], ssh: null, tls: null }. Convenience flat fields like username/password are accepted and normalized. SQLite connections may omit identities; Dory creates a default sqlite identity for query execution.',
     );
 
 export const connectionTestPayloadSchema = z

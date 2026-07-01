@@ -439,6 +439,145 @@ test('dory_write runs connection.create through the action executor without work
     assert.equal(syncPayloads[0].entityId, 'conn-1');
 });
 
+test('dory_write adds a default identity when creating a sqlite connection without identities', async () => {
+    type CapturedCreatePayload = {
+        connection: { name?: string };
+        identities: Array<{
+            name?: string;
+            username?: string;
+            password?: string | null;
+            isDefault?: boolean;
+            database?: string | null;
+            enabled?: boolean;
+        }>;
+    };
+
+    const createdPayloads: CapturedCreatePayload[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    create: async (_userId: string, _organizationId: string, payload: CapturedCreatePayload) => {
+                        createdPayloads.push(payload);
+                        return { connection: { id: 'sqlite-1', name: payload.connection.name } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.create',
+        input: {
+            payload: {
+                connection: {
+                    name: 'Photos.sqlite',
+                    type: 'sqlite',
+                    engine: 'sqlite',
+                    path: '/Users/example/Desktop/Photos.sqlite',
+                    database: 'main',
+                },
+            },
+        },
+        projection: 'mcp',
+    })) as { ok: boolean; data: { connection: { id: string } } };
+
+    assert.equal(output.ok, true);
+    assert.equal(output.data.connection.id, 'sqlite-1');
+    assert.equal(createdPayloads[0].connection.name, 'Photos.sqlite');
+    assert.deepEqual(createdPayloads[0].identities, [
+        {
+            name: 'Default',
+            username: 'sqlite',
+            password: null,
+            isDefault: true,
+            database: 'main',
+            enabled: true,
+        },
+    ]);
+});
+
+test('dory_write passes identity-only connection.update patches through for repository upsert handling', async () => {
+    type CapturedUpdatePayload = {
+        connection: Record<string, never>;
+        identities: Array<{
+            id?: string;
+            name?: string;
+            username?: string;
+            password?: string | null;
+            isDefault?: boolean;
+            database?: string | null;
+            enabled?: boolean;
+        }>;
+    };
+
+    const updatedPayloads: CapturedUpdatePayload[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    update: async (_organizationId: string, connectionId: string, payload: CapturedUpdatePayload) => {
+                        updatedPayloads.push(payload);
+                        return { connection: { id: connectionId, name: 'Photos.sqlite' } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.update',
+        input: {
+            id: 'sqlite-1',
+            patch: {
+                identities: [
+                    {
+                        name: 'Default',
+                        username: 'sqlite',
+                        password: null,
+                        isDefault: true,
+                        database: 'main',
+                        enabled: true,
+                    },
+                ],
+            },
+        },
+        projection: 'mcp',
+    })) as { ok: boolean; data: { connection: { id: string } } };
+
+    assert.equal(output.ok, true);
+    assert.equal(output.data.connection.id, 'sqlite-1');
+    assert.deepEqual(updatedPayloads[0].connection, {});
+    assert.equal('ssh' in updatedPayloads[0], false);
+    assert.equal('tls' in updatedPayloads[0], false);
+    assert.equal(updatedPayloads[0].identities[0].id, undefined);
+    assert.equal(updatedPayloads[0].identities[0].username, 'sqlite');
+});
+
 test('dory_write runs connection.delete without work context and with MCP-client approval', async () => {
     const deletedIds: string[] = [];
     const syncPayloads: any[] = [];
