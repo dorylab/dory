@@ -48,6 +48,7 @@ test('local Codex prompt uses Dory MCP tools instead of AI SDK tool fallback', (
     assert.equal(instruction.includes('Do not emit tool calls'), false);
     assert.ok(instruction.includes('Dory MCP tools are available'));
     assert.ok(instruction.includes('dory_create_work'));
+    assert.ok(instruction.includes('dory_action'));
     assert.ok(instruction.includes('dory_run_readonly_sql'));
     assert.ok(instruction.includes('conn-1'));
 });
@@ -110,6 +111,7 @@ test('Codex MCP bearer config keeps token out of args', () => {
     const joined = args.join('\n');
 
     assert.ok(joined.includes('mcp_servers.dory.bearer_token_env_var="DORY_MCP_TOKEN"'));
+    assert.ok(joined.includes('"dory_action"'));
     assert.ok(joined.includes('"dory_run_readonly_sql"'));
     assert.equal(joined.includes(token), false);
     assert.deepEqual(buildCodexDoryMcpEnv(config), {

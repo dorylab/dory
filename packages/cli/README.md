@@ -53,6 +53,36 @@ npx -y @getdory/cli action list --data standalone
 npx -y @getdory/cli action connection.list --data standalone --projection mcp --json '{}'
 ```
 
+Create or update local state through the same Action layer. For example, create a connection in headless mode:
+
+```sh
+npx -y @getdory/cli action connection.create \
+  --data standalone \
+  --yes \
+  --json '{
+    "payload": {
+      "connection": {
+        "type": "postgres",
+        "engine": "postgres",
+        "name": "Local Postgres",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "postgres"
+      },
+      "identities": [
+        {
+          "name": "Default",
+          "username": "postgres",
+          "password": "postgres",
+          "isDefault": true,
+          "database": "postgres",
+          "enabled": true
+        }
+      ]
+    }
+  }'
+```
+
 ## Connect Local Codex Agent
 
 Dory Web can run Codex on this device through the CLI. Run this once on the device where Codex CLI is installed:
@@ -113,6 +143,18 @@ For local-only testing you can omit `--token`; the CLI will create one and print
 
 ```sh
 npx -y @getdory/cli mcp token create --data standalone --name "mcp-http"
+```
+
+To let a remote MCP client run write Actions such as `connection.create`, create a token with explicit write scopes:
+
+```sh
+npx -y @getdory/cli mcp token create \
+  --data standalone \
+  --name "mcp-action-writer" \
+  --scope connections:read \
+  --scope connections:write \
+  --scope schema:read \
+  --scope query:read
 ```
 
 Remote binds require an existing token and an explicit opt-in:

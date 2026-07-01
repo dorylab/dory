@@ -294,11 +294,13 @@ async function handleRuntimeApi(req: Request, ctx: RuntimeHttpContext): Promise<
     if (url.pathname === '/api/runtime/mcp-token/create' && req.method === 'POST') {
         if (!requireRuntimeSecret(req, ctx.secret)) return unauthorized();
         const body = (await readJson(req)) ?? {};
+        const scopes = Array.isArray(body.scopes) ? body.scopes.filter((scope): scope is string => typeof scope === 'string' && scope.trim().length > 0) : undefined;
         const created = await createDoryMcpToken({
             db: ctx.runtime.db,
             organizationId: ctx.runtime.identity.organizationId,
             userId: ctx.runtime.identity.userId,
             name: typeof body.name === 'string' ? body.name : undefined,
+            scopes,
         });
         return json(200, { ok: true, token: created.token, tokenRecord: created.record });
     }

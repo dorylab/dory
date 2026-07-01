@@ -278,7 +278,120 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
         getPublicDoryMcpTools()
             .map((tool: any) => tool.name)
             .sort(),
-        ['dory_create_work', 'dory_explore_schema', 'dory_finish_work', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs'],
+        ['dory_action', 'dory_create_work', 'dory_explore_schema', 'dory_finish_work', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs'],
+    );
+});
+
+test('dory_action lists and describes MCP-runnable actions without adding domain-specific tools', async () => {
+    const ctx = createContext(
+        {
+            db: {},
+        } as unknown as WebActionServices,
+        ['connections:read', 'connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const listOutput = (await getTool('dory_action').execute(ctx, { operation: 'list' })) as any;
+    const actionIds = listOutput.actions.map((action: any) => action.id);
+
+    assert.ok(actionIds.includes('connection.create'));
+    assert.ok(actionIds.includes('connection.test'));
+    assert.equal(getPublicDoryMcpTools().some((tool: any) => tool.name === 'dory_create_connection'), false);
+
+    const describeOutput = (await getTool('dory_action').execute(ctx, { operation: 'describe', actionId: 'connection.create' })) as any;
+    assert.equal(describeOutput.action.id, 'connection.create');
+    assert.equal(describeOutput.action.risk, 'write');
+    assert.deepEqual(describeOutput.action.scopes, ['connections:write']);
+    assert.equal(describeOutput.action.inputSchema.properties.payload.type, 'object');
+    assert.match(describeOutput.action.inputSchema.properties.payload.description, /Dory connection payload/);
+});
+
+test('dory_action runs connection.create through the action executor', async () => {
+    const createdPayloads: any[] = [];
+    const syncPayloads: any[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    create: async (_userId: string, _organizationId: string, payload: any) => {
+                        createdPayloads.push(payload);
+                        return { connection: { id: 'conn-1', name: payload.name } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async (payload: any) => {
+                        syncPayloads.push(payload);
+                    },
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:read', 'connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_action').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.create',
+        input: {
+            payload: {
+                name: 'Local Postgres',
+                type: 'postgres',
+                host: '127.0.0.1',
+                database: 'postgres',
+            },
+        },
+        projection: 'mcp',
+    })) as any;
+
+    assert.equal(output.ok, true);
+    assert.equal(output.actionId, 'connection.create');
+    assert.equal(output.data.connection.id, 'conn-1');
+    assert.equal(createdPayloads[0].name, 'Local Postgres');
+    assert.equal(syncPayloads[0].entityId, 'conn-1');
+});
+
+test('dory_action run preserves action scope errors', async () => {
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    create: async () => ({ connection: { id: 'conn-1' } }),
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:read'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    await assertRejectsCode(
+        () =>
+            getTool('dory_action').execute(ctx, {
+                operation: 'run',
+                actionId: 'connection.create',
+                input: { payload: { name: 'No scope' } },
+            }),
+        'ACTION_SCOPE_MISSING',
     );
 });
 

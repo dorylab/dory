@@ -53,7 +53,7 @@ export type ParsedArgs =
     | { command: 'action-run'; options: ActionOptions }
     | { command: 'runtime'; options: RuntimeOptions }
     | { command: 'mcp-serve'; options: ServeOptions }
-    | ({ command: 'mcp-token'; action: 'create' | 'revoke' | 'list'; id?: string; name?: string } & ProfileOptions)
+    | ({ command: 'mcp-token'; action: 'create' | 'revoke' | 'list'; id?: string; name?: string; scopes?: string[] } & ProfileOptions)
     | { command: 'mcp-bridge' | 'mcp-login' | 'mcp-logout' | 'mcp-status'; url?: string; clientName?: string; configPath?: string; localAi?: boolean };
 
 export function readOption(args: string[], name: string) {
@@ -61,6 +61,16 @@ export function readOption(args: string[], name: string) {
     if (index === -1) return undefined;
     const value = args[index + 1];
     return value && !value.startsWith('-') ? value : undefined;
+}
+
+export function readOptions(args: string[], name: string) {
+    const values: string[] = [];
+    for (let index = 0; index < args.length; index += 1) {
+        if (args[index] !== name) continue;
+        const value = args[index + 1];
+        if (value && !value.startsWith('-')) values.push(value);
+    }
+    return values;
 }
 
 export function hasFlag(args: string[], name: string) {
@@ -195,8 +205,12 @@ export function parseArgs(argv: string[]): ParsedArgs {
             return {
                 command: 'mcp-token',
                 action,
-                id: readOption(argv, '--id') ?? argv[3],
+                id: readOption(argv, '--id') ?? (action === 'revoke' && argv[3] && !argv[3].startsWith('-') ? argv[3] : undefined),
                 name: readOption(argv, '--name'),
+                scopes: readOptions(argv, '--scope')
+                    .flatMap(value => value.split(','))
+                    .map(value => value.trim())
+                    .filter(Boolean),
                 ...profileOptions,
             };
         }

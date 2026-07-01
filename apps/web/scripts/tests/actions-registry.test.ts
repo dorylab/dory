@@ -495,7 +495,16 @@ test('MCP public catalog exposes only high-level facade tools', () => {
         .map((tool: any) => tool.name)
         .sort();
 
-    assert.deepEqual(publicTools, ['dory_explore_schema', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs']);
+    assert.deepEqual(publicTools, [
+        'dory_action',
+        'dory_create_work',
+        'dory_explore_schema',
+        'dory_finish_work',
+        'dory_list_connections',
+        'dory_run_readonly_sql',
+        'dory_saved_queries',
+        'dory_workspace_tabs',
+    ]);
     assert.equal(publicTools.includes('dory_create_tab'), false);
     assert.equal(publicTools.includes('dory_save_tab'), false);
     assert.equal(publicTools.includes('dory_create_saved_query'), false);
@@ -554,6 +563,9 @@ test('web registry enforces role and actor permission matrix', async () => {
 
     await assertDenied('query.execute', roleContext('member', 'agent', ['query:write']), /Actor type "agent" is not allowed/, { sql: 'select 1' });
     await assertDenied('query.execute', roleContext('member', 'mcp', ['query:write']), /Actor type "mcp" is not allowed/, { sql: 'select 1' });
+    await assertAllowed('connection.create', roleContext('owner', 'mcp', ['connections:write']), { payload: {} });
+    await assertDenied('connection.create', roleContext('member', 'mcp', ['connections:write']), /Missing permission connection:create/, { payload: {} });
+    await assertDenied('connection.create', roleContext('owner', 'mcp', ['connections:read']), /Missing action scope "connections:write"/, { payload: {} });
     await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['connections:read']), { query: 'users' });
     await assertDenied('tab.create', roleContext('viewer', 'user', ['tabs:write']), /Missing permission workspace:write/, { connectionId: 'conn', tabType: 'sql' });
     await assertAllowed('tab.create', roleContext('member', 'user', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });

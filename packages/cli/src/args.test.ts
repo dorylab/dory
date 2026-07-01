@@ -206,6 +206,20 @@ test('parses local runtime install capabilities', () => {
     });
 });
 
+test('parses MCP token create scopes', () => {
+    assert.deepEqual(parseArgs(['mcp', 'token', 'create', '--name', 'writer', '--scope', 'connections:read,connections:write', '--scope', 'schema:read', '--data', 'standalone']), {
+        command: 'mcp-token',
+        action: 'create',
+        id: undefined,
+        name: 'writer',
+        scopes: ['connections:read', 'connections:write', 'schema:read'],
+        data: 'standalone',
+        userDataDir: undefined,
+        pglitePath: undefined,
+        databaseUrl: undefined,
+    });
+});
+
 test('rejects MCP service command', () => {
     assert.deepEqual(parseArgs(['mcp', 'service', 'install']), {
         command: 'help',

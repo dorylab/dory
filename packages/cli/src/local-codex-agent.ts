@@ -11,6 +11,7 @@ import { getBridgeConfigPath, resolveCredential } from './bridge-config.js';
 
 const DEFAULT_MCP_SCOPES = [
     'connections:read',
+    'connections:write',
     'query:read',
     'analysis:run',
     'schema:read',
@@ -74,6 +75,7 @@ export const DORY_CODEX_MCP_TOKEN_ENV = 'DORY_MCP_TOKEN';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
+    'dory_action',
     'dory_list_connections',
     'dory_explore_schema',
     'dory_run_readonly_sql',

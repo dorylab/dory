@@ -4,16 +4,24 @@ import { createConnection } from '../../policies';
 import { unknownOutputSchema } from '../../schemas';
 import { sanitizeConnectionSyncPayload } from './sanitize';
 
+const connectionPayloadSchema = z
+    .record(z.string(), z.unknown())
+    .describe(
+        'Dory connection payload. Common fields include name, type/engine, host, port, database, username, password, ssl, environment, identities, and ssh depending on the driver.',
+    );
+
 export const connectionCreateAction = defineWebAction({
     id: 'connection.create',
     domain: 'connection',
     kind: 'command',
     risk: 'write',
-    inputSchema: z.object({ payload: z.record(z.string(), z.unknown()) }),
+    inputSchema: z.object({
+        payload: connectionPayloadSchema,
+    }),
     outputSchema: unknownOutputSchema,
     permissions: createConnection,
     scopes: ['connections:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'mcp', 'automation'],
     requiresConfirmation: false,
     handler: async (ctx, input) => {
         const created = await ctx.services.db.connections.create(ctx.userId, ctx.organizationId, input.payload as any);

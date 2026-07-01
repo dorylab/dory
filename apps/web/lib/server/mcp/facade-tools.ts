@@ -1,10 +1,11 @@
 import { z } from 'zod';
-import type { ActionContext } from '@dory/actions';
-import { toActionError } from '@dory/actions';
+import type { ActionContext, ActionDefinition, ActionId, ActionProjection } from '@dory/actions';
+import { DEFAULT_ACTION_PROJECTION_BY_ACTOR, hasActionScope, toActionError } from '@dory/actions';
 import { getDesktopProtocolSchemeForServer } from '@dory/shared/runtime';
 import { getAgentRunSummary } from '@/lib/agent-runs/summary';
 import { buildAgentWorkspacePath } from '@/lib/agent-runs/workspace-url';
 import { executeAction } from '@/lib/actions/server/execute';
+import { webActionRegistry } from '@/lib/actions/server/registry';
 import type { WebActionServices } from '@/lib/actions/server/types';
 import type { WorkSqlSnapshotPayload } from '@dory/database/postgres/impl/works';
 
@@ -130,6 +131,17 @@ const finishWorkInputSchema = z
     })
     .passthrough();
 
+const actionTransportInputSchema = z
+    .object({
+        operation: z.enum(['list', 'describe', 'run']),
+        actionId: z.string().min(1).optional(),
+        input: z.unknown().optional(),
+        projection: z.enum(['canonical', 'ui', 'agent', 'mcp', 'automation']).optional(),
+        confirmationToken: z.string().min(1).nullable().optional(),
+        reason: z.string().nullable().optional(),
+    })
+    .passthrough();
+
 const mcpErrorShape = {
     ok: z.literal(false).optional(),
     error: z
@@ -247,6 +259,68 @@ function isRecord(value: unknown): value is UnknownRecord {
 
 function toRecord(value: unknown): UnknownRecord {
     return isRecord(value) ? value : {};
+}
+
+function hasOrganizationPermission(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>) {
+    for (const requirement of action.permission.organization ?? []) {
+        const resource = ctx.access.permissions[requirement.resource] as Record<string, boolean> | undefined;
+        if (!ctx.access.isMember || !resource?.[requirement.action]) return false;
+    }
+    return true;
+}
+
+function hasRequiredScopes(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>) {
+    for (const scope of action.permission.scopes ?? []) {
+        if (!hasActionScope(ctx.actor.scopes, scope, action.permission.scopeAliases)) return false;
+    }
+    return true;
+}
+
+function isActionVisibleInMcpCatalog(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>) {
+    return action.exposure.actors.includes('mcp') && action.risk !== 'destructive' && hasRequiredScopes(ctx, action) && hasOrganizationPermission(ctx, action);
+}
+
+function assertActionRunnableByMcp(action: ActionDefinition<any, any, WebActionServices>) {
+    if (!action.exposure.actors.includes('mcp')) {
+        throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Action "${action.id}" is not available to MCP.`, { status: 403, details: { actionId: action.id } });
+    }
+    if (action.risk === 'destructive') {
+        throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Destructive action "${action.id}" is not available through dory_action.`, {
+            status: 403,
+            details: { actionId: action.id },
+        });
+    }
+}
+
+function actionSchemaToJsonSchema(schema: z.ZodTypeAny) {
+    try {
+        return z.toJSONSchema(schema);
+    } catch {
+        return null;
+    }
+}
+
+function actionProjectionSchema(action: ActionDefinition<any, any, WebActionServices>, projection: ActionProjection = DEFAULT_ACTION_PROJECTION_BY_ACTOR.mcp) {
+    return action.exposure.projections?.[projection]?.schema ?? action.outputSchema;
+}
+
+function actionMetadata(action: ActionDefinition<any, any, WebActionServices>, projection: ActionProjection = DEFAULT_ACTION_PROJECTION_BY_ACTOR.mcp) {
+    return {
+        id: action.id,
+        version: action.version,
+        domain: action.domain,
+        kind: action.kind,
+        risk: action.risk,
+        effects: action.effects ?? [],
+        actors: action.exposure.actors,
+        defaultProjection: action.exposure.defaultProjection ?? {},
+        scopes: action.permission.scopes ?? [],
+        organizationPermissions: action.permission.organization ?? [],
+        requiresConfirmation:
+            action.permission.confirmation?.required ?? (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false) ?? false,
+        inputSchema: actionSchemaToJsonSchema(action.inputSchema),
+        outputSchema: actionSchemaToJsonSchema(actionProjectionSchema(action, projection)),
+    };
 }
 
 function getString(value: unknown): string | null {
@@ -900,6 +974,45 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     };
 }
 
+async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
+    const input = actionTransportInputSchema.parse(rawInput);
+
+    if (input.operation === 'list') {
+        const actions = webActionRegistry
+            .list()
+            .filter(action => isActionVisibleInMcpCatalog(ctx, action))
+            .map(action => actionMetadata(action))
+            .sort((a, b) => a.id.localeCompare(b.id));
+        return { actions };
+    }
+
+    const actionId = requireString(input.actionId, 'actionId') as ActionId;
+    const action = webActionRegistry.get(actionId);
+    if (!action) {
+        throw new McpFacadeError('ACTION_NOT_FOUND', `Unknown action: ${actionId}`, { status: 404, details: { actionId } });
+    }
+
+    if (input.operation === 'describe') {
+        if (!isActionVisibleInMcpCatalog(ctx, action)) {
+            throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Action "${action.id}" is not available to this MCP token.`, { status: 403, details: { actionId: action.id } });
+        }
+        return { action: actionMetadata(action, input.projection) };
+    }
+
+    assertActionRunnableByMcp(action);
+    const result = await executeAction(ctx, action.id, input.input ?? {}, {
+        projection: input.projection,
+        confirmationToken: input.confirmationToken,
+        reason: input.reason,
+    });
+    return {
+        ok: true,
+        actionId: action.id,
+        data: result.data,
+        execution: result.execution,
+    };
+}
+
 async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = finishWorkInputSchema.parse(rawInput);
     const updated = await ctx.services.db.works.finishWithSummary({
@@ -994,6 +1107,20 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 openWorldHint: true,
             },
             execute: (ctx, input) => executeWithWork(ctx, 'dory_finish_work', input, (parsed, work) => finishWorkFacade(ctx, parsed, work)),
+        },
+        {
+            name: 'dory_action',
+            title: 'Run Dory Action',
+            description:
+                'List, describe, or run Dory Actions by actionId. Use this for capabilities such as connection.create, connection.test, and connection.update instead of expecting separate MCP tools for every action.',
+            inputSchema: actionTransportInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                openWorldHint: true,
+            },
+            execute: actionTransportFacade,
         },
         {
             name: 'dory_list_connections',

@@ -58,7 +58,7 @@ Usage:
   dory mcp serve --http --host 127.0.0.1 --port 3318 --data desktop|standalone|self-hosted
   dory mcp serve --http --host 0.0.0.0 --allow-remote --token <existing-token> --data standalone
 
-  dory mcp token create [--name <name>] --data desktop|standalone|self-hosted
+  dory mcp token create [--name <name>] [--scope <scope>] --data desktop|standalone|self-hosted
   dory mcp token list --data desktop|standalone|self-hosted
   dory mcp token revoke --id <token-id> --data desktop|standalone|self-hosted
 
@@ -732,7 +732,7 @@ async function run() {
             if (args.action === 'create') {
                 const created = await localRuntimeRequest(args, '/api/runtime/mcp-token/create', {
                     method: 'POST',
-                    body: { name: args.name ?? 'Dory MCP' },
+                    body: { name: args.name ?? 'Dory MCP', scopes: args.scopes?.length ? args.scopes : undefined },
                 });
                 printJson(created);
                 return;
@@ -753,6 +753,7 @@ async function run() {
                 organizationId: runtime.identity.organizationId,
                 userId: runtime.identity.userId,
                 name: args.name ?? 'Dory MCP',
+                scopes: args.scopes?.length ? args.scopes : undefined,
             });
             printJson({ ok: true, token: created.token, tokenRecord: created.record });
             await serverCore.shutdownDoryRuntime();
