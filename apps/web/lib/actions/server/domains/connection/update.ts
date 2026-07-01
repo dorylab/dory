@@ -2,11 +2,8 @@ import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
 import { updateConnection } from '../../policies';
 import { unknownOutputSchema } from '../../schemas';
+import { connectionPatchSchema, normalizeConnectionUpdatePatch } from './payload';
 import { sanitizeConnectionSyncPayload } from './sanitize';
-
-const connectionPatchSchema = z
-    .record(z.string(), z.unknown())
-    .describe('Partial Dory connection payload. Include only fields to update, such as name, host, port, database, username, password, ssl, environment, identities, or ssh.');
 
 export const connectionUpdateAction = defineWebAction({
     id: 'connection.update',
@@ -23,8 +20,9 @@ export const connectionUpdateAction = defineWebAction({
     actors: ['user', 'mcp', 'automation'],
     requiresConfirmation: false,
     handler: async (ctx, input) => {
-        const updated = await ctx.services.db.connections.update(ctx.organizationId, input.id, input.patch as any);
-        const syncPayload = sanitizeConnectionSyncPayload(input.patch);
+        const patch = normalizeConnectionUpdatePatch(input.patch);
+        const updated = await ctx.services.db.connections.update(ctx.organizationId, input.id, patch as any);
+        const syncPayload = sanitizeConnectionSyncPayload(patch);
         await ctx.services.db.syncOperations.enqueue({
             organizationId: ctx.organizationId,
             entityType: 'connection',

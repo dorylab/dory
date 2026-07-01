@@ -12,30 +12,13 @@ import { createWebActionAuditSink } from './action-audit';
 import type { WebActionServices } from './types';
 
 export const TRUSTED_USER_SCOPES = [
-    'connections:read',
-    'connections:write',
-    'schema:read',
-    'query:read',
-    'query:write',
-    'tabs:read',
-    'tabs:write',
-    'saved_queries:read',
-    'saved_queries:write',
-    'analysis:run',
-    'monitoring:read',
-    'action:destructive',
+    'read',
+    'write',
 ];
 
 export const AGENT_SCOPES = [
-    'connections:read',
-    'schema:read',
-    'query:read',
-    'tabs:read',
-    'tabs:write',
-    'saved_queries:read',
-    'saved_queries:write',
-    'analysis:run',
-    'monitoring:read',
+    'read',
+    'write',
 ];
 
 export type ActionRequestBody = {

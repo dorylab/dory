@@ -12,7 +12,7 @@ export const connectionDeleteAction = defineWebAction({
     outputSchema: unknownOutputSchema,
     permissions: deleteConnection,
     scopes: ['connections:write'],
-    actors: ['user'],
+    actors: ['user', 'mcp', 'automation'],
     handler: async (ctx, input) => {
         await ctx.services.db.connections.delete(ctx.organizationId, input.id);
         await ctx.services.db.syncOperations.enqueue({

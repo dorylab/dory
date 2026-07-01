@@ -88,20 +88,7 @@ async function run() {
             url: args.url,
             clientName: args.clientName,
             configPath,
-            scopes: args.localAi
-                ? [
-                      'connections:read',
-                      'query:read',
-                      'analysis:run',
-                      'schema:read',
-                      'tabs:read',
-                      'tabs:write',
-                      'saved_queries:read',
-                      'saved_queries:write',
-                      'monitoring:read',
-                      'local_ai:run',
-                  ]
-                : undefined,
+            scopes: args.localAi ? ['read', 'write', 'local_ai:run'] : undefined,
         });
         console.log(JSON.stringify({ ok: true, ...result }, null, 2));
         return;

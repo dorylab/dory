@@ -32,26 +32,14 @@ Standalone mode stores Dory state under `~/.dory` and is the default mode for Li
 ```sh
 npx -y @getdory/cli init --data standalone
 npx -y @getdory/cli doctor --data standalone
-npx -y @getdory/cli mcp token create \
-  --data standalone \
-  --name "server" \
-  --scope connections:read \
-  --scope connections:write \
-  --scope schema:read \
-  --scope query:read
+npx -y @getdory/cli mcp token create --data standalone --name "server"
 npx -y @getdory/cli mcp serve --stdio --data standalone
 ```
 
 Run a local HTTP MCP endpoint:
 
 ```sh
-npx -y @getdory/cli mcp token create \
-  --data standalone \
-  --name "local-http" \
-  --scope connections:read \
-  --scope connections:write \
-  --scope schema:read \
-  --scope query:read
+npx -y @getdory/cli mcp token create --data standalone --name "local-http"
 
 export DORY_MCP_TOKEN="dory_mcp_..."
 
@@ -70,6 +58,27 @@ http://127.0.0.1:3318/api/mcp
 ```
 
 `mcp token create` prints JSON. Copy the `token` value into `DORY_MCP_TOKEN`.
+When `--scope` is omitted, Dory creates a local token with `read`, `write`, and `local_ai:run`. Use `--scope read` for read-only clients.
+
+Add the HTTP endpoint to Codex CLI:
+
+```sh
+export DORY_MCP_TOKEN="dory_mcp_..."
+
+codex mcp add \
+  --url http://127.0.0.1:3318/api/mcp \
+  --bearer-token-env-var DORY_MCP_TOKEN \
+  dory
+
+codex mcp list
+```
+
+For local stdio instead of HTTP:
+
+```sh
+codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
+codex mcp list
+```
 
 Run Dory Actions directly:
 
@@ -111,7 +120,7 @@ npx -y @getdory/cli action connection.create \
 
 ## MCP Tools and Actions
 
-Dory MCP exposes a small set of high-level tools for data work, plus one generic Action transport:
+Dory MCP exposes a small set of high-level tools for data work, plus read/write Action transports:
 
 - `dory_list_connections`
 - `dory_explore_schema`
@@ -120,9 +129,12 @@ Dory MCP exposes a small set of high-level tools for data work, plus one generic
 - `dory_workspace_tabs`
 - `dory_create_work`
 - `dory_finish_work`
-- `dory_action`
+- `dory_read`
+- `dory_write`
 
-Use `dory_action` for operations that are part of Dory's Action registry instead of expecting one MCP tool per business operation. For example, connection setup goes through `connection.create`, `connection.update`, and `connection.test`:
+Use `dory_read` for read-only or low-risk Actions such as `connection.list`, `connection.test`, and schema exploration. Use `dory_write` for create, update, or delete Actions such as `connection.create`, `connection.update`, and `connection.delete`. Do not expect one MCP tool per business operation.
+
+For example, connection setup goes through `dory_write`:
 
 ```json
 {
@@ -150,8 +162,7 @@ Use `dory_action` for operations that are part of Dory's Action registry instead
       ]
     }
   },
-  "projection": "mcp",
-  "confirmationToken": "cli-confirmed"
+  "projection": "mcp"
 }
 ```
 
@@ -164,7 +175,7 @@ Before running an Action from an agent, ask Dory to describe it:
 }
 ```
 
-Only Actions that are exposed to the `mcp` actor and allowed by the token scopes are available through `dory_action`. Write Actions such as `connection.create` require a token with `connections:write`.
+Only Actions that are exposed to the `mcp` actor and allowed by the token scopes are available through `dory_read` or `dory_write`. Most users only need `read` and `write`; `write` covers create, update, and delete operations, while write tokens can also call read operations through `dory_read`. MCP client approval is treated as confirmation for destructive Dory Actions.
 
 ## Connect Local Codex Agent
 
@@ -228,21 +239,16 @@ For local-only testing you can omit `--token`; the CLI will create one and print
 npx -y @getdory/cli mcp token create \
   --data standalone \
   --name "mcp-http" \
-  --scope connections:read \
-  --scope schema:read \
-  --scope query:read
+  --scope read
 ```
 
-To let a remote MCP client run write Actions such as `connection.create`, create a token with explicit write scopes:
+To let a remote MCP client run write Actions such as `connection.create`, create a token with the user-facing `write` scope:
 
 ```sh
 npx -y @getdory/cli mcp token create \
   --data standalone \
   --name "mcp-action-writer" \
-  --scope connections:read \
-  --scope connections:write \
-  --scope schema:read \
-  --scope query:read
+  --scope write
 ```
 
 Remote binds require an existing token and an explicit opt-in:
@@ -324,10 +330,7 @@ npm install -g @getdory/cli@latest
 dory mcp token create \
   --data standalone \
   --name "server-http" \
-  --scope connections:read \
-  --scope connections:write \
-  --scope schema:read \
-  --scope query:read
+  --scope write
 
 export DORY_MCP_TOKEN="dory_mcp_..."
 
@@ -396,6 +399,13 @@ For hosted Dory Web MCP endpoints, use:
 npx -y @getdory/cli mcp login --url https://your-dory-host
 npx -y @getdory/cli mcp status --url https://your-dory-host
 npx -y @getdory/cli mcp bridge --url https://your-dory-host
+```
+
+Add the hosted bridge to Codex CLI as a stdio MCP server:
+
+```sh
+codex mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+codex mcp list
 ```
 
 ## Update and Uninstall

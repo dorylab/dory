@@ -9,15 +9,8 @@ import type { OrganizationPermissionMap, OrganizationRole } from '@dory/shared/t
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 
 export const MCP_DEFAULT_SCOPES = [
-    'connections:read',
-    'query:read',
-    'analysis:run',
-    'schema:read',
-    'tabs:read',
-    'tabs:write',
-    'saved_queries:read',
-    'saved_queries:write',
-    'monitoring:read',
+    'read',
+    'write',
     'local_ai:run',
 ] as const;
 

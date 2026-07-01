@@ -137,10 +137,12 @@ const actionTransportInputSchema = z
         actionId: z.string().min(1).optional(),
         input: z.unknown().optional(),
         projection: z.enum(['canonical', 'ui', 'agent', 'mcp', 'automation']).optional(),
-        confirmationToken: z.string().min(1).nullable().optional(),
         reason: z.string().nullable().optional(),
     })
     .passthrough();
+
+type ActionTransportAccess = 'read' | 'write';
+const MCP_CLIENT_APPROVED_CONFIRMATION_TOKEN = 'mcp-client-approved';
 
 const mcpErrorShape = {
     ok: z.literal(false).optional(),
@@ -276,18 +278,49 @@ function hasRequiredScopes(ctx: ActionContext<WebActionServices>, action: Action
     return true;
 }
 
-function isActionVisibleInMcpCatalog(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>) {
-    return action.exposure.actors.includes('mcp') && action.risk !== 'destructive' && hasRequiredScopes(ctx, action) && hasOrganizationPermission(ctx, action);
+function missingRequiredScopes(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>) {
+    return (action.permission.scopes ?? []).filter(scope => !hasActionScope(ctx.actor.scopes, scope, action.permission.scopeAliases));
 }
 
-function assertActionRunnableByMcp(action: ActionDefinition<any, any, WebActionServices>) {
+function missingOrganizationPermissions(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>) {
+    return (action.permission.organization ?? []).filter(requirement => {
+        const resource = ctx.access.permissions[requirement.resource] as Record<string, boolean> | undefined;
+        return !ctx.access.isMember || !resource?.[requirement.action];
+    });
+}
+
+function isReadAction(action: ActionDefinition<any, any, WebActionServices>) {
+    return action.risk === 'read' || action.risk === 'low';
+}
+
+function isWriteAction(action: ActionDefinition<any, any, WebActionServices>) {
+    return action.risk === 'write' || action.risk === 'destructive';
+}
+
+function isActionForTransport(action: ActionDefinition<any, any, WebActionServices>, access: ActionTransportAccess) {
+    return access === 'read' ? isReadAction(action) : isWriteAction(action);
+}
+
+function actionRequiresConfirmation(action: ActionDefinition<any, any, WebActionServices>) {
+    return action.permission.confirmation?.required ?? (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false) ?? false;
+}
+
+function isActionVisibleInMcpCatalog(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>, access: ActionTransportAccess) {
+    return action.exposure.actors.includes('mcp') && isActionForTransport(action, access) && hasRequiredScopes(ctx, action) && hasOrganizationPermission(ctx, action);
+}
+
+function isActionDescribableInMcpCatalog(action: ActionDefinition<any, any, WebActionServices>, access: ActionTransportAccess) {
+    return action.exposure.actors.includes('mcp') && isActionForTransport(action, access);
+}
+
+function assertActionRunnableByMcp(action: ActionDefinition<any, any, WebActionServices>, access: ActionTransportAccess) {
     if (!action.exposure.actors.includes('mcp')) {
         throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Action "${action.id}" is not available to MCP.`, { status: 403, details: { actionId: action.id } });
     }
-    if (action.risk === 'destructive') {
-        throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Destructive action "${action.id}" is not available through dory_action.`, {
+    if (!isActionForTransport(action, access)) {
+        throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Action "${action.id}" is not available through dory_${access}.`, {
             status: 403,
-            details: { actionId: action.id },
+            details: { actionId: action.id, access },
         });
     }
 }
@@ -320,6 +353,16 @@ function actionMetadata(action: ActionDefinition<any, any, WebActionServices>, p
             action.permission.confirmation?.required ?? (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false) ?? false,
         inputSchema: actionSchemaToJsonSchema(action.inputSchema),
         outputSchema: actionSchemaToJsonSchema(actionProjectionSchema(action, projection)),
+    };
+}
+
+function actionAvailability(ctx: ActionContext<WebActionServices>, action: ActionDefinition<any, any, WebActionServices>) {
+    const missingScopes = missingRequiredScopes(ctx, action);
+    const missingPermissions = missingOrganizationPermissions(ctx, action);
+    return {
+        runnable: action.exposure.actors.includes('mcp') && missingScopes.length === 0 && missingPermissions.length === 0,
+        missingScopes,
+        missingOrganizationPermissions: missingPermissions,
     };
 }
 
@@ -974,13 +1017,13 @@ async function createWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
     };
 }
 
-async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown) {
+async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, access: ActionTransportAccess) {
     const input = actionTransportInputSchema.parse(rawInput);
 
     if (input.operation === 'list') {
         const actions = webActionRegistry
             .list()
-            .filter(action => isActionVisibleInMcpCatalog(ctx, action))
+            .filter(action => isActionVisibleInMcpCatalog(ctx, action, access))
             .map(action => actionMetadata(action))
             .sort((a, b) => a.id.localeCompare(b.id));
         return { actions };
@@ -993,16 +1036,19 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
     }
 
     if (input.operation === 'describe') {
-        if (!isActionVisibleInMcpCatalog(ctx, action)) {
-            throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Action "${action.id}" is not available to this MCP token.`, { status: 403, details: { actionId: action.id } });
+        if (!isActionDescribableInMcpCatalog(action, access)) {
+            throw new McpFacadeError('ACTION_NOT_AVAILABLE', `Action "${action.id}" is not available through dory_${access}.`, {
+                status: 403,
+                details: { actionId: action.id, access },
+            });
         }
-        return { action: actionMetadata(action, input.projection) };
+        return { action: actionMetadata(action, input.projection), availability: actionAvailability(ctx, action) };
     }
 
-    assertActionRunnableByMcp(action);
+    assertActionRunnableByMcp(action, access);
     const result = await executeAction(ctx, action.id, input.input ?? {}, {
         projection: input.projection,
-        confirmationToken: input.confirmationToken,
+        confirmationToken: access === 'write' && actionRequiresConfirmation(action) ? MCP_CLIENT_APPROVED_CONFIRMATION_TOKEN : null,
         reason: input.reason,
     });
     return {
@@ -1109,18 +1155,32 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             execute: (ctx, input) => executeWithWork(ctx, 'dory_finish_work', input, (parsed, work) => finishWorkFacade(ctx, parsed, work)),
         },
         {
-            name: 'dory_action',
-            title: 'Run Dory Action',
+            name: 'dory_read',
+            title: 'Read Dory Actions',
             description:
-                'List, describe, or run Dory Actions by actionId. Use this for capabilities such as connection.create, connection.test, and connection.update instead of expecting separate MCP tools for every action.',
+                'List, describe, or run read-only or low-risk Dory Actions by actionId. Use this for Action registry capabilities such as connection.list, connection.test, schema exploration, and other read operations.',
+            inputSchema: actionTransportInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                destructiveHint: false,
+                openWorldHint: true,
+            },
+            execute: (ctx, input) => actionTransportFacade(ctx, input, 'read'),
+        },
+        {
+            name: 'dory_write',
+            title: 'Write Dory Actions',
+            description:
+                'List, describe, or run write-capable Dory Actions by actionId. Use this for Action registry capabilities such as connection.create, connection.update, and connection.delete. This tool call is treated as MCP-client-approved for destructive Action confirmation.',
             inputSchema: actionTransportInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
                 readOnlyHint: false,
-                destructiveHint: false,
+                destructiveHint: true,
                 openWorldHint: true,
             },
-            execute: actionTransportFacade,
+            execute: (ctx, input) => actionTransportFacade(ctx, input, 'write'),
         },
         {
             name: 'dory_list_connections',

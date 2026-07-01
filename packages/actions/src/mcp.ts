@@ -26,7 +26,6 @@ function isActionVisibleToActor(action: ActionDefinition<any, any, any>, actorTy
     if (action.exposure.mcp?.exposed === false) return false;
     if (!action.exposure.mcp) return false;
     if (!action.exposure.actors.includes(actorType)) return false;
-    if (action.risk === 'destructive') return false;
 
     if (options.scopes) {
         for (const scope of action.permission.scopes ?? []) {

@@ -10,16 +10,8 @@ import { login } from './bridge-auth.js';
 import { getBridgeConfigPath, resolveCredential } from './bridge-config.js';
 
 const DEFAULT_MCP_SCOPES = [
-    'connections:read',
-    'connections:write',
-    'query:read',
-    'analysis:run',
-    'schema:read',
-    'tabs:read',
-    'tabs:write',
-    'saved_queries:read',
-    'saved_queries:write',
-    'monitoring:read',
+    'read',
+    'write',
     'local_ai:run',
 ];
 export const LOCAL_AI_SCOPES = [...DEFAULT_MCP_SCOPES];
@@ -75,7 +67,8 @@ export const DORY_CODEX_MCP_TOKEN_ENV = 'DORY_MCP_TOKEN';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
-    'dory_action',
+    'dory_read',
+    'dory_write',
     'dory_list_connections',
     'dory_explore_schema',
     'dory_run_readonly_sql',

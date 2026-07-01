@@ -84,6 +84,7 @@ Data modes:
 
 HTTP MCP:
   HTTP listens on 127.0.0.1 by default and requires bearer auth.
+  MCP token scopes are user-facing: read and write. write includes read but not destructive actions.
   Remote binds require --host 0.0.0.0 --allow-remote --token <existing-token>.
   Put public deployments behind a TLS reverse proxy.
 
