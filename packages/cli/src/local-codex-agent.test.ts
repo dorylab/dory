@@ -42,6 +42,8 @@ test('Codex MCP args enable Dory tools without exposing bearer token', () => {
     assert.ok(joined.includes('mcp_servers.dory.url="https://dory.test/api/mcp"'));
     assert.ok(joined.includes('mcp_servers.dory.required=true'));
     assert.ok(joined.includes('mcp_servers.dory.default_tools_approval_mode="approve"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_create_work.approval_mode="never_ask"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_finish_work.approval_mode="never_ask"'));
     assert.ok(joined.includes('mcp_servers.dory.bearer_token_env_var="DORY_MCP_TOKEN"'));
     assert.ok(joined.includes('"dory_read"'));
     assert.ok(joined.includes('"dory_write"'));

@@ -67,6 +67,7 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_saved_queries',
 ];
 export const DORY_CODEX_MCP_TOOL_TIMEOUT_SEC = 90;
+const DORY_CODEX_MCP_AUTO_APPROVED_TOOLS = ['dory_create_work', 'dory_finish_work'];
 
 function toTomlString(value: string) {
     return JSON.stringify(value);
@@ -92,6 +93,7 @@ export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
         'mcp_servers.dory.required=true',
         '-c',
         'mcp_servers.dory.default_tools_approval_mode="approve"',
+        ...DORY_CODEX_MCP_AUTO_APPROVED_TOOLS.flatMap(tool => ['-c', `mcp_servers.dory.tools.${tool}.approval_mode=${toTomlString('never_ask')}`]),
         '-c',
         `mcp_servers.dory.tool_timeout_sec=${config.toolTimeoutSec}`,
         '-c',

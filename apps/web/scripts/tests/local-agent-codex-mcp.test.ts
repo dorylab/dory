@@ -87,6 +87,9 @@ test('Codex MCP desktop grant config keeps grant out of args', () => {
     const joined = args.join('\n');
 
     assert.ok(joined.includes('mcp_servers.dory.url="http://localhost:3000/api/mcp"'));
+    assert.ok(joined.includes('mcp_servers.dory.default_tools_approval_mode="approve"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_create_work.approval_mode="never_ask"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_finish_work.approval_mode="never_ask"'));
     assert.ok(joined.includes('mcp_servers.dory.env_http_headers'));
     assert.ok(joined.includes('"x-dory-mcp-desktop-grant"'));
     assert.ok(joined.includes(DORY_CODEX_MCP_DESKTOP_GRANT_ENV));
@@ -112,6 +115,8 @@ test('Codex MCP bearer config keeps token out of args', () => {
     const joined = args.join('\n');
 
     assert.ok(joined.includes('mcp_servers.dory.bearer_token_env_var="DORY_MCP_TOKEN"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_create_work.approval_mode="never_ask"'));
+    assert.ok(joined.includes('mcp_servers.dory.tools.dory_finish_work.approval_mode="never_ask"'));
     assert.ok(joined.includes('"dory_read"'));
     assert.ok(joined.includes('"dory_write"'));
     assert.ok(joined.includes('"dory_run_readonly_sql"'));
