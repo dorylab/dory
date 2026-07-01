@@ -320,6 +320,64 @@ dory-mcp.example.com {
 }
 ```
 
+## Docker Headless Runtime
+
+Use `dorylab/dory-headless` when you want the CLI/MCP runtime without the Dory Web UI. It exposes MCP over HTTP at `/api/mcp`.
+
+The headless image is for agents and automation only. If you need the browser UI, run the `dorylab/dory` Web image and use `dorylab/dory-headless` only as an MCP/runtime companion.
+
+Published tags are `latest`, `vX.Y.Z`, `sha-<shortsha>`, and `test`.
+
+Create a standalone token once, using the same persisted volume that the container will use:
+
+```sh
+docker run --rm \
+  -v dory-headless-data:/data/.dory \
+  dorylab/dory-headless:latest \
+  dory mcp token create --data standalone --name docker
+```
+
+Then run the HTTP endpoint:
+
+```sh
+export DORY_MCP_TOKEN="dory_mcp_..."
+
+docker run --rm \
+  -p 3318:3318 \
+  -v dory-headless-data:/data/.dory \
+  -e DORY_MCP_TOKEN="$DORY_MCP_TOKEN" \
+  dorylab/dory-headless:latest
+```
+
+The endpoint is:
+
+```text
+http://127.0.0.1:3318/api/mcp
+```
+
+To share a self-hosted Dory Web Postgres database instead of standalone `/data/.dory` storage:
+
+```sh
+docker run --rm \
+  -p 3318:3318 \
+  -e DORY_DATA=self-hosted \
+  -e DORY_MCP_TOKEN="$DORY_MCP_TOKEN" \
+  -e DATABASE_URL="$DATABASE_URL" \
+  -e DS_SECRET_KEY="$DS_SECRET_KEY" \
+  -e BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+  dorylab/dory-headless:latest
+```
+
+Runtime environment:
+
+- `DORY_MCP_TOKEN` is required.
+- `DORY_DATA` defaults to `standalone`; set `self-hosted` to share Web Postgres storage.
+- `DORY_HOST` defaults to `0.0.0.0`.
+- `DORY_PORT` defaults to `3318`.
+- `DATABASE_URL`, `DS_SECRET_KEY`, and `BETTER_AUTH_SECRET` are required when `DORY_DATA=self-hosted`.
+
+For public deployments, terminate TLS in front of the container instead of exposing cleartext HTTP directly.
+
 ## Linux Server Deployment
 
 Use the built-in runtime service installer for long-running Linux hosts. It creates the `dory-runtime.service` user service and runs one Dory Local Runtime process:
@@ -355,28 +413,6 @@ dory runtime install \
   --token "$DORY_MCP_TOKEN" \
   --data standalone
 ```
-
-Docker example:
-
-```Dockerfile
-FROM node:22-bookworm-slim
-ENV HOME=/data
-ENV DORY_MCP_TOKEN=replace-with-an-existing-token
-VOLUME ["/data/.dory"]
-EXPOSE 3318
-CMD ["sh", "-lc", "npx -y @getdory/cli mcp serve --http --data standalone --host 0.0.0.0 --port 3318 --allow-remote --token \"$DORY_MCP_TOKEN\""]
-```
-
-Run it:
-
-```sh
-docker build -t dory-headless .
-docker run --rm -v dory-data:/data/.dory -e HOME=/data node:22-bookworm-slim \
-  npx -y @getdory/cli mcp token create --data standalone --name docker
-docker run --rm -p 3318:3318 -v dory-data:/data/.dory -e DORY_MCP_TOKEN="$DORY_MCP_TOKEN" dory-headless
-```
-
-For public Docker deployments, terminate TLS in front of the container instead of exposing cleartext HTTP directly.
 
 ## Desktop Data Source
 

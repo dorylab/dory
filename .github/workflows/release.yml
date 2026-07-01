@@ -156,3 +156,8 @@ jobs:
             --ref "${{ github.ref_name }}" \
             -f release_channel=stable \
             -f release_tag="$TAG"
+
+          gh workflow run ".github/workflows/headless-docker-release.yml" \
+            --ref "${{ github.ref_name }}" \
+            -f release_channel=stable \
+            -f release_tag="$TAG"
