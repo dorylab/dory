@@ -13,7 +13,7 @@ const DEFAULT_APPEND_SEPARATOR = '\n\n';
 const DEFAULT_WORK_TITLE = 'Agent Run';
 const MAX_WORK_TITLE_LENGTH = 240;
 const MAX_SHORT_WORK_TITLE_LENGTH = 64;
-const WORK_CONTEXT_INSTRUCTION = 'Call dory_create_work once for this Codex task, then pass the returned work.workId as workId to every later Dory tool call.';
+const WORK_CONTEXT_INSTRUCTION = 'Call dory_create_work before query, schema exploration, SQL, workspace tab, or saved query tools, then pass the returned work.workId as workId.';
 
 const workResolutionInputSchema = z.object({
     workId: z.string().min(1).optional(),
@@ -1130,7 +1130,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_create_work',
             title: 'Create Dory Work',
             description:
-                'Create or reuse one Dory Agent Run work context for the current Codex task. Call this once first with title set to the user question, then pass the returned work.workId as workId to every later Dory tool call.',
+                'Create or reuse one Dory Agent Run work context for query, analysis, SQL, schema exploration, workspace tab, or saved query tools. Use a short title based on the user question, then pass the returned work.workId as workId to those work-scoped tools.',
             inputSchema: createWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -1172,7 +1172,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_write',
             title: 'Write Dory Actions',
             description:
-                'List, describe, or run write-capable Dory Actions by actionId. Use this for Action registry capabilities such as connection.create, connection.update, and connection.delete. This tool call is treated as MCP-client-approved for destructive Action confirmation.',
+                'List, describe, or run write-capable Dory Actions by actionId. Use this for configuration actions such as connection.create, connection.update, and connection.delete; these connection management actions do not require workId. This tool call is treated as MCP-client-approved for destructive Action confirmation.',
             inputSchema: actionTransportInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

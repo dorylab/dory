@@ -282,6 +282,20 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
     );
 });
 
+test('public Dory MCP descriptions scope work context to query and workspace tools', () => {
+    const createWork = getTool('dory_create_work');
+    const write = getTool('dory_write');
+    const listConnections = getTool('dory_list_connections');
+
+    assert.match(createWork.description, /query, analysis, SQL, schema exploration, workspace tab, or saved query tools/);
+    assert.doesNotMatch(createWork.description, /every later Dory tool call/);
+    assert.match(write.description, /connection\.create, connection\.update, and connection\.delete/);
+    assert.match(write.description, /do not require workId/);
+    assert.doesNotMatch(write.description, /Call dory_create_work/);
+    assert.match(listConnections.description, /Requires an existing workId/);
+    assert.match(listConnections.description, /Call dory_create_work before query/);
+});
+
 test('dory_read and dory_write split MCP-runnable actions without adding domain-specific tools', async () => {
     const ctx = createContext(
         {
@@ -363,7 +377,7 @@ test('dory_read cannot describe write actions', async () => {
     await assertRejectsCode(() => getTool('dory_read').execute(ctx, { operation: 'describe', actionId: 'connection.create' }), 'ACTION_NOT_AVAILABLE');
 });
 
-test('dory_write runs connection.create through the action executor', async () => {
+test('dory_write runs connection.create through the action executor without work context', async () => {
     const createdPayloads: any[] = [];
     const syncPayloads: any[] = [];
     const ctx = createContext(
@@ -425,7 +439,7 @@ test('dory_write runs connection.create through the action executor', async () =
     assert.equal(syncPayloads[0].entityId, 'conn-1');
 });
 
-test('dory_write runs connection.delete through the action executor with MCP-client approval', async () => {
+test('dory_write runs connection.delete without work context and with MCP-client approval', async () => {
     const deletedIds: string[] = [];
     const syncPayloads: any[] = [];
     const ctx = createContext(
