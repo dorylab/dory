@@ -18,7 +18,7 @@ function jsonResponse(body: unknown, status = 200) {
 test('login can request local AI scopes', async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-cli-login-scopes-'));
     const configPath = path.join(dir, 'mcp.json');
-    const requestedScopes = ['connections:read', 'local_ai:run'];
+    const requestedScopes = ['read', 'local_ai:run'];
 
     try {
         await login({

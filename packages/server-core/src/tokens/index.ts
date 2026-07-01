@@ -9,15 +9,8 @@ import type { OrganizationPermissionMap, OrganizationRole } from '@dory/shared/t
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 
 export const MCP_DEFAULT_SCOPES = [
-    'connections:read',
-    'query:read',
-    'analysis:run',
-    'schema:read',
-    'tabs:read',
-    'tabs:write',
-    'saved_queries:read',
-    'saved_queries:write',
-    'monitoring:read',
+    'read',
+    'write',
     'local_ai:run',
 ] as const;
 
@@ -208,13 +201,13 @@ export function generateMcpToken() {
     return `${MCP_TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
 }
 
-export async function createDoryMcpToken(input: { db: DBService; organizationId: string; userId: string; name?: string | null }) {
+export async function createDoryMcpToken(input: { db: DBService; organizationId: string; userId: string; name?: string | null; scopes?: string[] | null }) {
     const token = generateMcpToken();
     const record = await input.db.mcp.createToken({
         organizationId: input.organizationId,
         createdByUserId: input.userId,
         name: input.name?.trim() || 'Dory MCP',
-        scopes: [...MCP_DEFAULT_SCOPES],
+        scopes: input.scopes?.length ? input.scopes : [...MCP_DEFAULT_SCOPES],
         tokenHash: hashMcpToken(token),
         tokenPrefix: token.slice(0, MCP_TOKEN_PREFIX.length + 8),
     });

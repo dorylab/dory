@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { defineWebAction } from '../../define-web-action';
 import { createConnection } from '../../policies';
 import { unknownOutputSchema } from '../../schemas';
+import { connectionCreatePayloadSchema, normalizeConnectionCreatePayload } from './payload';
 import { sanitizeConnectionSyncPayload } from './sanitize';
 
 export const connectionCreateAction = defineWebAction({
@@ -9,15 +10,18 @@ export const connectionCreateAction = defineWebAction({
     domain: 'connection',
     kind: 'command',
     risk: 'write',
-    inputSchema: z.object({ payload: z.record(z.string(), z.unknown()) }),
+    inputSchema: z.object({
+        payload: connectionCreatePayloadSchema,
+    }),
     outputSchema: unknownOutputSchema,
     permissions: createConnection,
     scopes: ['connections:write'],
-    actors: ['user', 'automation'],
+    actors: ['user', 'mcp', 'automation'],
     requiresConfirmation: false,
     handler: async (ctx, input) => {
-        const created = await ctx.services.db.connections.create(ctx.userId, ctx.organizationId, input.payload as any);
-        const syncPayload = sanitizeConnectionSyncPayload(input.payload);
+        const payload = normalizeConnectionCreatePayload(input.payload);
+        const created = await ctx.services.db.connections.create(ctx.userId, ctx.organizationId, payload as any);
+        const syncPayload = sanitizeConnectionSyncPayload(payload);
         await ctx.services.db.syncOperations.enqueue({
             organizationId: ctx.organizationId,
             entityType: 'connection',

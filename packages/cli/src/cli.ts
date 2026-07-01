@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { inspect } from 'node:util';
@@ -58,7 +58,7 @@ Usage:
   dory mcp serve --http --host 127.0.0.1 --port 3318 --data desktop|standalone|self-hosted
   dory mcp serve --http --host 0.0.0.0 --allow-remote --token <existing-token> --data standalone
 
-  dory mcp token create [--name <name>] --data desktop|standalone|self-hosted
+  dory mcp token create [--name <name>] [--scope <scope>] --data desktop|standalone|self-hosted
   dory mcp token list --data desktop|standalone|self-hosted
   dory mcp token revoke --id <token-id> --data desktop|standalone|self-hosted
 
@@ -84,6 +84,7 @@ Data modes:
 
 HTTP MCP:
   HTTP listens on 127.0.0.1 by default and requires bearer auth.
+  MCP token scopes are user-facing: read and write. write includes create, update, and delete operations.
   Remote binds require --host 0.0.0.0 --allow-remote --token <existing-token>.
   Put public deployments behind a TLS reverse proxy.
 
@@ -96,6 +97,16 @@ Storage overrides:
 
 function printJson(value: unknown) {
     console.log(JSON.stringify(value, null, 2));
+}
+
+function getCliVersion() {
+    try {
+        const packageJsonUrl = new URL('../package.json', import.meta.url);
+        const parsed = JSON.parse(readFileSync(packageJsonUrl, 'utf8')) as { version?: string };
+        return parsed.version ?? 'unknown';
+    } catch {
+        return 'unknown';
+    }
 }
 
 function publicProfile(profile: ReturnType<typeof serverCore.resolveDoryStorageProfile>) {
@@ -564,6 +575,11 @@ async function run() {
         return;
     }
 
+    if (args.command === 'version') {
+        console.log(getCliVersion());
+        return;
+    }
+
     if (args.command === 'mcp-bridge' || args.command === 'mcp-login' || args.command === 'mcp-logout' || args.command === 'mcp-status') {
         await runHostedBridgeCommand(args);
         return;
@@ -732,7 +748,7 @@ async function run() {
             if (args.action === 'create') {
                 const created = await localRuntimeRequest(args, '/api/runtime/mcp-token/create', {
                     method: 'POST',
-                    body: { name: args.name ?? 'Dory MCP' },
+                    body: { name: args.name ?? 'Dory MCP', scopes: args.scopes?.length ? args.scopes : undefined },
                 });
                 printJson(created);
                 return;
@@ -753,6 +769,7 @@ async function run() {
                 organizationId: runtime.identity.organizationId,
                 userId: runtime.identity.userId,
                 name: args.name ?? 'Dory MCP',
+                scopes: args.scopes?.length ? args.scopes : undefined,
             });
             printJson({ ok: true, token: created.token, tokenRecord: created.record });
             await serverCore.shutdownDoryRuntime();

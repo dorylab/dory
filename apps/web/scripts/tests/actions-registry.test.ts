@@ -356,7 +356,7 @@ test('executeAction writes invalid and error audit metadata', async () => {
     assert.ok(Date.parse((events[1] as any).createdAt));
 });
 
-test('destructive actions require destructive scope and confirmation', async () => {
+test('destructive actions require write scope and confirmation', async () => {
     const registry = new ActionRegistry();
     registry.register(
         defineAction({
@@ -379,10 +379,10 @@ test('destructive actions require destructive scope and confirmation', async () 
         }),
     );
 
-    await assert.rejects(() => executeAction(registry, context(['connections:write']), 'connection.delete', { id: 'conn' }), /action:destructive/);
-    await assert.rejects(() => executeAction(registry, context(['connections:write', 'action:destructive']), 'connection.delete', { id: 'conn' }), /requires confirmation/);
+    await assert.rejects(() => executeAction(registry, context(['read']), 'connection.delete', { id: 'conn' }), /Missing action scope "connections:write"/);
+    await assert.rejects(() => executeAction(registry, context(['write']), 'connection.delete', { id: 'conn' }), /requires confirmation/);
     assert.deepEqual(
-        (await executeAction(registry, context(['connections:write', 'action:destructive']), 'connection.delete', { id: 'conn' }, { confirmationToken: 'confirm' })).data,
+        (await executeAction(registry, context(['write']), 'connection.delete', { id: 'conn' }, { confirmationToken: 'confirm' })).data,
         {
             ok: true,
         },
@@ -443,7 +443,7 @@ test('write actions honor explicit confirmation policy', async () => {
     });
 });
 
-test('MCP action listing hides destructive actions', () => {
+test('MCP action listing includes destructive actions when explicitly exposed', () => {
     const registry = new ActionRegistry();
     registry.register(
         defineAction({
@@ -486,7 +486,7 @@ test('MCP action listing hides destructive actions', () => {
         listMcpActions(registry)
             .map(item => item.name)
             .sort(),
-        ['dory_list_connections'],
+        ['dory_delete_connection', 'dory_list_connections'],
     );
 });
 
@@ -495,7 +495,17 @@ test('MCP public catalog exposes only high-level facade tools', () => {
         .map((tool: any) => tool.name)
         .sort();
 
-    assert.deepEqual(publicTools, ['dory_explore_schema', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs']);
+    assert.deepEqual(publicTools, [
+        'dory_create_work',
+        'dory_explore_schema',
+        'dory_finish_work',
+        'dory_list_connections',
+        'dory_read',
+        'dory_run_readonly_sql',
+        'dory_saved_queries',
+        'dory_workspace_tabs',
+        'dory_write',
+    ]);
     assert.equal(publicTools.includes('dory_create_tab'), false);
     assert.equal(publicTools.includes('dory_save_tab'), false);
     assert.equal(publicTools.includes('dory_create_saved_query'), false);
@@ -554,7 +564,17 @@ test('web registry enforces role and actor permission matrix', async () => {
 
     await assertDenied('query.execute', roleContext('member', 'agent', ['query:write']), /Actor type "agent" is not allowed/, { sql: 'select 1' });
     await assertDenied('query.execute', roleContext('member', 'mcp', ['query:write']), /Actor type "mcp" is not allowed/, { sql: 'select 1' });
+    await assertAllowed('connection.create', roleContext('owner', 'mcp', ['connections:write']), { payload: {} });
+    await assertAllowed('connection.create', roleContext('owner', 'mcp', ['write']), { payload: {} });
+    await assertDenied('connection.create', roleContext('member', 'mcp', ['connections:write']), /Missing permission connection:create/, { payload: {} });
+    await assertDenied('connection.create', roleContext('owner', 'mcp', ['read']), /Missing action scope "connections:write"/, { payload: {} });
+    await assertDenied('connection.create', roleContext('owner', 'mcp', ['connections:read']), /Missing action scope "connections:write"/, { payload: {} });
     await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['connections:read']), { query: 'users' });
+    await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['read']), { query: 'users' });
+    await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['write']), { query: 'users' });
+    await assertAllowed('connection.delete', roleContext('owner', 'user', ['write']), { id: 'conn' });
+    await assertAllowed('connection.delete', roleContext('owner', 'mcp', ['write']), { id: 'conn' });
+    await assertDenied('connection.delete', roleContext('owner', 'mcp', ['read']), /Missing action scope "connections:write"/, { id: 'conn' });
     await assertDenied('tab.create', roleContext('viewer', 'user', ['tabs:write']), /Missing permission workspace:write/, { connectionId: 'conn', tabType: 'sql' });
     await assertAllowed('tab.create', roleContext('member', 'user', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });
     await assertAllowed('tab.create', roleContext('member', 'agent', ['tabs:write']), { connectionId: 'conn', tabType: 'sql' });

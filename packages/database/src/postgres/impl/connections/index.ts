@@ -459,7 +459,7 @@ export class PostgresConnectionsRepository {
     }
 
     async update(organizationId: string, connectionId: string, payload: ConnectionPayload): Promise<ConnectionListItem> {
-        const connectionPayload = { ...payload.connection } as any;
+        const connectionPayload = { ...(payload.connection ?? {}) } as any;
         // Avoid writing id back
         if ('id' in connectionPayload) {
             delete connectionPayload.id;
@@ -469,11 +469,18 @@ export class PostgresConnectionsRepository {
             connectionPayload.engine = getDBEngineViaType(connectionPayload.type);
         }
 
-        const [updatedConnection] = await this.db
-            .update(connections)
-            .set(connectionPayload)
-            .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
-            .returning();
+        const hasConnectionUpdates = Object.keys(connectionPayload).length > 0;
+        const [updatedConnection] = hasConnectionUpdates
+            ? await this.db
+                  .update(connections)
+                  .set(connectionPayload)
+                  .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
+                  .returning()
+            : await this.db
+                  .select()
+                  .from(connections)
+                  .where(and(eq(connections.id, connectionId), eq(connections.organizationId, organizationId), isNull(connections.deletedAt)))
+                  .limit(1);
 
         if (!updatedConnection) {
             throw new ConnectionNotFoundError();
@@ -490,10 +497,6 @@ export class PostgresConnectionsRepository {
 
         if (payload.identities && payload.identities.length > 0) {
             for (const identity of payload.identities as any) {
-                if (!identity.id) {
-                    throw new ConnectionIdentityValidationError(translateDatabase('Database.Errors.ConnectionIdentityUpdateRequiresId'));
-                }
-
                 const { password, ...restIdentity } = identity;
                 const secret =
                     typeof password === 'undefined' || (typeof password === 'string' && password.trim() === '')
@@ -502,11 +505,18 @@ export class PostgresConnectionsRepository {
                           ? null
                           : { passwordEncrypted: await encrypt(password) };
 
-                await this.updateIdentityWithSecret(this.db, organizationId, connectionId, {
-                    ...restIdentity,
-                    id: identity.id,
-                    secret,
-                } as any);
+                if (identity.id) {
+                    await this.updateIdentityWithSecret(this.db, organizationId, connectionId, {
+                        ...restIdentity,
+                        id: identity.id,
+                        secret,
+                    } as any);
+                } else {
+                    await this.createIdentityWithSecret(this.db, null, organizationId, connectionId, {
+                        ...restIdentity,
+                        secret: secret ?? undefined,
+                    } as any);
+                }
             }
         }
         return this.toConnectionListItem(this.db, organizationId, updatedConnection);

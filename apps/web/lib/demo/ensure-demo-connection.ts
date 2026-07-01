@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import type { DBService } from '@dory/database';
+import { createCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
 import { DEMO_SQLITE_CONNECTION_PATH } from './connection-path';
 import { getDemoSqlitePath } from './paths';
 
@@ -7,15 +8,24 @@ const DEMO_CONNECTION_NAME = 'Demo Database';
 type DemoConnectionService = Pick<DBService, 'connections'>;
 export type EnsureDemoConnectionResult = 'created' | 'updated' | 'exists' | 'skipped';
 
+function createDemoSqliteIdentity(organizationId: string) {
+    const identity = createCredentiallessDefaultIdentity({ type: 'sqlite', engine: 'sqlite', database: 'main' });
+    return {
+        ...identity,
+        connectionId: '',
+        organizationId,
+        role: undefined,
+        database: 'main',
+        password: undefined,
+        options: '{}',
+    };
+}
+
 /**
  * Ensure a "Demo Database" SQLite connection exists for the given organization.
  * Idempotent: skips if the connection already exists or if the demo.sqlite file is not available.
  */
-export async function ensureDemoConnection(
-    db: DemoConnectionService,
-    userId: string,
-    organizationId: string,
-): Promise<EnsureDemoConnectionResult> {
+export async function ensureDemoConnection(db: DemoConnectionService, userId: string, organizationId: string): Promise<EnsureDemoConnectionResult> {
     const demoPath = getDemoSqlitePath();
     if (!demoPath || !fs.existsSync(demoPath)) {
         console.log('[demo] demo.sqlite not found, skipping demo connection creation');
@@ -26,24 +36,25 @@ export async function ensureDemoConnection(
     const existingDemoConnection = existing.find(item => item.connection.name === DEMO_CONNECTION_NAME);
     if (existingDemoConnection) {
         if (existingDemoConnection.connection.path !== DEMO_SQLITE_CONNECTION_PATH) {
+            const connection = {
+                organizationId,
+                type: 'sqlite' as const,
+                engine: 'sqlite',
+                name: existingDemoConnection.connection.name,
+                description: existingDemoConnection.connection.description ?? undefined,
+                host: existingDemoConnection.connection.host,
+                port: existingDemoConnection.connection.port,
+                httpPort: existingDemoConnection.connection.httpPort ?? undefined,
+                database: existingDemoConnection.connection.database ?? undefined,
+                options: existingDemoConnection.connection.options,
+                status: existingDemoConnection.connection.status,
+                environment: existingDemoConnection.connection.environment,
+                tags: existingDemoConnection.connection.tags,
+                path: DEMO_SQLITE_CONNECTION_PATH,
+            };
             await db.connections.update(organizationId, existingDemoConnection.connection.id, {
-                connection: {
-                    organizationId,
-                    type: 'sqlite',
-                    engine: 'sqlite',
-                    name: existingDemoConnection.connection.name,
-                    description: existingDemoConnection.connection.description ?? undefined,
-                    host: existingDemoConnection.connection.host,
-                    port: existingDemoConnection.connection.port,
-                    httpPort: existingDemoConnection.connection.httpPort ?? undefined,
-                    database: existingDemoConnection.connection.database ?? undefined,
-                    options: existingDemoConnection.connection.options,
-                    status: existingDemoConnection.connection.status,
-                    environment: existingDemoConnection.connection.environment,
-                    tags: existingDemoConnection.connection.tags,
-                    path: DEMO_SQLITE_CONNECTION_PATH,
-                },
-                identities: [],
+                connection,
+                identities: existingDemoConnection.identities.length ? [] : [createDemoSqliteIdentity(organizationId)],
             });
             return 'updated';
         }
@@ -64,25 +75,7 @@ export async function ensureDemoConnection(
             database: 'main',
             path: DEMO_SQLITE_CONNECTION_PATH,
         },
-        identities: [
-            {
-                id: '',
-                connectionId: '',
-                organizationId,
-                name: 'Default',
-                username: 'sqlite',
-                role: undefined,
-                options: '{}',
-                isDefault: true,
-                database: 'main',
-                enabled: true,
-                status: 'active',
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                deletedAt: null,
-                password: undefined,
-            },
-        ],
+        identities: [createDemoSqliteIdentity(organizationId)],
     });
 
     console.log(`[demo] "${DEMO_CONNECTION_NAME}" connection created`);

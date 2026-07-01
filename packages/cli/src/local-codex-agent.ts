@@ -9,18 +9,7 @@ import { postJson, type FetchLike } from './bridge-api.js';
 import { login } from './bridge-auth.js';
 import { getBridgeConfigPath, resolveCredential } from './bridge-config.js';
 
-const DEFAULT_MCP_SCOPES = [
-    'connections:read',
-    'query:read',
-    'analysis:run',
-    'schema:read',
-    'tabs:read',
-    'tabs:write',
-    'saved_queries:read',
-    'saved_queries:write',
-    'monitoring:read',
-    'local_ai:run',
-];
+const DEFAULT_MCP_SCOPES = ['read', 'write', 'local_ai:run'];
 export const LOCAL_AI_SCOPES = [...DEFAULT_MCP_SCOPES];
 const LOCAL_AGENT_TIMEOUT_MS = 120_000;
 const LOCAL_AGENT_MAX_BUFFER = 2 * 1024 * 1024;
@@ -74,6 +63,8 @@ export const DORY_CODEX_MCP_TOKEN_ENV = 'DORY_MCP_TOKEN';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
+    'dory_read',
+    'dory_write',
     'dory_list_connections',
     'dory_explore_schema',
     'dory_run_readonly_sql',
@@ -81,6 +72,7 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_saved_queries',
 ];
 export const DORY_CODEX_MCP_TOOL_TIMEOUT_SEC = 90;
+const DORY_CODEX_MCP_AUTO_APPROVED_TOOLS = ['dory_create_work', 'dory_finish_work'];
 
 function toTomlString(value: string) {
     return JSON.stringify(value);
@@ -100,6 +92,7 @@ export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
         'mcp_servers.dory.required=true',
         '-c',
         'mcp_servers.dory.default_tools_approval_mode="approve"',
+        ...DORY_CODEX_MCP_AUTO_APPROVED_TOOLS.flatMap(tool => ['-c', `mcp_servers.dory.tools.${tool}.approval_mode=${toTomlString('never_ask')}`]),
         '-c',
         `mcp_servers.dory.tool_timeout_sec=${config.toolTimeoutSec}`,
         '-c',

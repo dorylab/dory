@@ -1,0 +1,158 @@
+name: headless-docker-release
+
+on:
+  release:
+    types:
+      - published
+      - prereleased
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional version tag to publish (e.g. v0.2.0 or v0.2.0-rc.1)."
+        required: false
+        type: string
+      release_channel:
+        description: "Image channel to publish."
+        required: false
+        default: test
+        type: choice
+        options:
+          - test
+          - stable
+
+env:
+  IMAGE_NAME: dorylab/dory-headless
+
+concurrency:
+  group: headless-docker-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Resolve release tag
+        id: release
+        run: |
+          CHANNEL=""
+          DEFAULT_SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+          INPUT_CHANNEL="${{ inputs.release_channel }}"
+          TAG=""
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+              CHANNEL="test"
+            else
+              CHANNEL="stable"
+            fi
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            CHANNEL="${INPUT_CHANNEL:-test}"
+            TAG="${{ inputs.release_tag }}"
+          fi
+
+          if [ "$CHANNEL" = "stable" ]; then
+            if [ -z "$TAG" ]; then
+              echo "Stable releases require release_tag (for workflow_dispatch) or a GitHub release tag." >&2
+              exit 1
+            fi
+            if ! echo "$TAG" | grep -Eq '^v[0-9]'; then
+              echo "Invalid stable release tag: $TAG. Expected v-prefixed semver." >&2
+              exit 1
+            fi
+            PRIMARY_TAG="$TAG"
+            FLOATING_TAG="latest"
+          else
+            if [ -n "$TAG" ] && ! echo "$TAG" | grep -Eq '^v[0-9]'; then
+              echo "Invalid test release tag: $TAG. Expected v-prefixed semver when provided." >&2
+              exit 1
+            fi
+            PRIMARY_TAG="${TAG:-test-${DEFAULT_SHORT_SHA}}"
+            FLOATING_TAG="test"
+          fi
+
+          echo "Resolved channel: $CHANNEL"
+          echo "Resolved release tag: ${TAG:-<empty>}"
+          echo "Primary image tag: $PRIMARY_TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "primary_tag=$PRIMARY_TAG" >> "$GITHUB_OUTPUT"
+          echo "floating_tag=$FLOATING_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout requested tag
+        if: ${{ github.event_name == 'workflow_dispatch' && steps.release.outputs.tag != '' }}
+        run: |
+          git rev-parse --verify "refs/tags/${{ steps.release.outputs.tag }}" >/dev/null 2>&1
+          git checkout --detach "refs/tags/${{ steps.release.outputs.tag }}"
+
+      - name: Resolve image sha and CLI version
+        id: meta-input
+        run: |
+          FULL_SHA="$(git rev-parse HEAD)"
+          SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+          PACKAGE_CLI_VERSION="$(node -p "require('./packages/cli/package.json').version")"
+          if [ "${{ steps.release.outputs.channel }}" = "test" ] && [ -z "${{ steps.release.outputs.tag }}" ]; then
+            CLI_VERSION="latest"
+          else
+            CLI_VERSION="$PACKAGE_CLI_VERSION"
+          fi
+          echo "full_sha=$FULL_SHA" >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "cli_version=$CLI_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved CLI version: $CLI_VERSION"
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
+          tags: |
+            type=raw,value=${{ steps.release.outputs.primary_tag }}
+            type=raw,value=${{ steps.release.outputs.floating_tag }}
+            type=raw,value=sha-${{ steps.meta-input.outputs.short_sha }}
+          labels: |
+            org.opencontainers.image.title=dory-headless
+            org.opencontainers.image.description=Dory headless MCP runtime for agents and automation.
+            org.opencontainers.image.url=https://github.com/dorylab/dory/tree/main/packages/cli
+            org.opencontainers.image.source=https://github.com/dorylab/dory
+            org.opencontainers.image.version=${{ steps.release.outputs.tag || steps.release.outputs.primary_tag }}
+            org.opencontainers.image.created=${{ github.event.release.published_at || github.event.head_commit.timestamp || github.run_id }}
+            org.opencontainers.image.revision=${{ steps.meta-input.outputs.full_sha }}
+            org.opencontainers.image.vendor=Dory Lab
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.headless
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME }}:buildcache,mode=max
+          build-args: |
+            DORY_CLI_VERSION=${{ steps.meta-input.outputs.cli_version }}

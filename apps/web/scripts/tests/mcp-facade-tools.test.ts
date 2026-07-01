@@ -278,7 +278,477 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
         getPublicDoryMcpTools()
             .map((tool: any) => tool.name)
             .sort(),
-        ['dory_create_work', 'dory_explore_schema', 'dory_finish_work', 'dory_list_connections', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs'],
+        [
+            'dory_create_work',
+            'dory_explore_schema',
+            'dory_finish_work',
+            'dory_list_connections',
+            'dory_read',
+            'dory_run_readonly_sql',
+            'dory_saved_queries',
+            'dory_workspace_tabs',
+            'dory_write',
+        ],
+    );
+});
+
+test('public Dory MCP descriptions scope work context to query and workspace tools', () => {
+    const createWork = getTool('dory_create_work');
+    const write = getTool('dory_write');
+    const listConnections = getTool('dory_list_connections');
+
+    assert.match(createWork.description, /query, analysis, SQL, schema exploration, workspace tab, or saved query tools/);
+    assert.doesNotMatch(createWork.description, /every later Dory tool call/);
+    assert.match(write.description, /connection\.create, connection\.update, and connection\.delete/);
+    assert.match(write.description, /do not require workId/);
+    assert.doesNotMatch(write.description, /Call dory_create_work/);
+    assert.match(listConnections.description, /Requires an existing workId/);
+    assert.match(listConnections.description, /Call dory_create_work before query/);
+});
+
+test('dory_read and dory_write split MCP-runnable actions without adding domain-specific tools', async () => {
+    const ctx = createContext(
+        {
+            db: {},
+        } as unknown as WebActionServices,
+        ['read', 'write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const readListOutput = (await getTool('dory_read').execute(ctx, { operation: 'list' })) as any;
+    const readActionIds = readListOutput.actions.map((action: any) => action.id);
+    const writeListOutput = (await getTool('dory_write').execute(ctx, { operation: 'list' })) as any;
+    const writeActionIds = writeListOutput.actions.map((action: any) => action.id);
+
+    assert.ok(readActionIds.includes('connection.test'));
+    assert.equal(readActionIds.includes('connection.create'), false);
+    assert.equal(readActionIds.includes('connection.delete'), false);
+    assert.ok(writeActionIds.includes('connection.create'));
+    assert.ok(writeActionIds.includes('connection.update'));
+    assert.ok(writeActionIds.includes('connection.delete'));
+    assert.equal(writeActionIds.includes('connection.test'), false);
+    assert.equal(
+        getPublicDoryMcpTools().some((tool: any) => tool.name === 'dory_create_connection'),
+        false,
+    );
+    assert.equal(
+        getPublicDoryMcpTools().some((tool: any) => tool.name === 'dory_delete_connection'),
+        false,
+    );
+
+    const describeOutput = (await getTool('dory_write').execute(ctx, { operation: 'describe', actionId: 'connection.create' })) as any;
+    assert.equal(describeOutput.action.id, 'connection.create');
+    assert.equal(describeOutput.action.risk, 'write');
+    assert.deepEqual(describeOutput.action.scopes, ['connections:write']);
+    assert.equal(describeOutput.action.inputSchema.properties.payload.type, 'object');
+    assert.match(describeOutput.action.inputSchema.properties.payload.description, /Dory connection creation payload/);
+    assert.equal(describeOutput.availability.runnable, true);
+    assert.deepEqual(describeOutput.availability.missingScopes, []);
+});
+
+test('dory_write describe returns schemas even when the token cannot run the action', async () => {
+    const ctx = createContext(
+        {
+            db: {},
+        } as unknown as WebActionServices,
+        ['connections:read'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const describeOutput = (await getTool('dory_write').execute(ctx, { operation: 'describe', actionId: 'connection.create' })) as any;
+
+    assert.equal(describeOutput.action.id, 'connection.create');
+    assert.equal(describeOutput.action.inputSchema.properties.payload.type, 'object');
+    assert.equal(describeOutput.availability.runnable, false);
+    assert.deepEqual(describeOutput.availability.missingScopes, ['connections:write']);
+});
+
+test('dory_read cannot describe write actions', async () => {
+    const ctx = createContext(
+        {
+            db: {},
+        } as unknown as WebActionServices,
+        ['read', 'write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    await assertRejectsCode(() => getTool('dory_read').execute(ctx, { operation: 'describe', actionId: 'connection.create' }), 'ACTION_NOT_AVAILABLE');
+});
+
+test('dory_write runs connection.create through the action executor without work context', async () => {
+    const createdPayloads: any[] = [];
+    const syncPayloads: any[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    create: async (_userId: string, _organizationId: string, payload: any) => {
+                        createdPayloads.push(payload);
+                        return { connection: { id: 'conn-1', name: payload.connection.name } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async (payload: any) => {
+                        syncPayloads.push(payload);
+                    },
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:read', 'connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.create',
+        input: {
+            payload: {
+                connection: {
+                    name: 'Local Postgres',
+                    type: 'postgres',
+                    host: '127.0.0.1',
+                    database: 'postgres',
+                },
+                identities: [
+                    {
+                        name: 'Default',
+                        username: 'postgres',
+                        password: 'postgres',
+                        isDefault: true,
+                        database: 'postgres',
+                    },
+                ],
+            },
+        },
+        projection: 'mcp',
+    })) as any;
+
+    assert.equal(output.ok, true);
+    assert.equal(output.actionId, 'connection.create');
+    assert.equal(output.data.connection.id, 'conn-1');
+    assert.equal(createdPayloads[0].connection.name, 'Local Postgres');
+    assert.equal(createdPayloads[0].identities[0].username, 'postgres');
+    assert.equal(syncPayloads[0].entityId, 'conn-1');
+});
+
+test('dory_write adds a default identity when creating a sqlite connection without identities', async () => {
+    type CapturedCreatePayload = {
+        connection: { name?: string };
+        identities: Array<{
+            id?: string;
+            name?: string;
+            username?: string;
+            role?: string | null;
+            password?: string | null;
+            isDefault?: boolean;
+            database?: string | null;
+            enabled?: boolean;
+            status?: string | null;
+        }>;
+    };
+
+    const createdPayloads: CapturedCreatePayload[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    create: async (_userId: string, _organizationId: string, payload: CapturedCreatePayload) => {
+                        createdPayloads.push(payload);
+                        return { connection: { id: 'sqlite-1', name: payload.connection.name } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.create',
+        input: {
+            payload: {
+                connection: {
+                    name: 'Photos.sqlite',
+                    type: 'sqlite',
+                    engine: 'sqlite',
+                    path: '/Users/example/Desktop/Photos.sqlite',
+                    database: 'main',
+                },
+            },
+        },
+        projection: 'mcp',
+    })) as { ok: boolean; data: { connection: { id: string } } };
+
+    assert.equal(output.ok, true);
+    assert.equal(output.data.connection.id, 'sqlite-1');
+    assert.equal(createdPayloads[0].connection.name, 'Photos.sqlite');
+    assert.deepEqual(createdPayloads[0].identities, [
+        {
+            id: '',
+            name: 'Default',
+            username: 'sqlite',
+            role: null,
+            password: null,
+            isDefault: true,
+            database: 'main',
+            enabled: true,
+            status: 'active',
+        },
+    ]);
+});
+
+test('dory_write adds a default identity when updating a sqlite connection without identities', async () => {
+    type CapturedUpdatePayload = {
+        connection: { name?: string; type?: string; engine?: string; path?: string; database?: string };
+        identities: Array<{
+            id?: string;
+            name?: string;
+            username?: string;
+            role?: string | null;
+            password?: string | null;
+            isDefault?: boolean;
+            database?: string | null;
+            enabled?: boolean;
+            status?: string | null;
+        }>;
+    };
+
+    const updatedPayloads: CapturedUpdatePayload[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    update: async (_organizationId: string, connectionId: string, payload: CapturedUpdatePayload) => {
+                        updatedPayloads.push(payload);
+                        return { connection: { id: connectionId, name: payload.connection.name } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.update',
+        input: {
+            id: 'sqlite-1',
+            patch: {
+                connection: {
+                    name: 'Photos.sqlite',
+                    type: 'sqlite',
+                    engine: 'sqlite',
+                    path: '/Users/example/Desktop/Photos.sqlite',
+                    database: 'main',
+                },
+            },
+        },
+        projection: 'mcp',
+    })) as { ok: boolean; data: { connection: { id: string } } };
+
+    assert.equal(output.ok, true);
+    assert.equal(output.data.connection.id, 'sqlite-1');
+    assert.equal(updatedPayloads[0].connection.type, 'sqlite');
+    assert.deepEqual(updatedPayloads[0].identities, [
+        {
+            id: '',
+            name: 'Default',
+            username: 'sqlite',
+            role: null,
+            password: null,
+            isDefault: true,
+            database: 'main',
+            enabled: true,
+            status: 'active',
+        },
+    ]);
+});
+
+test('dory_write passes identity-only connection.update patches through for repository upsert handling', async () => {
+    type CapturedUpdatePayload = {
+        connection: Record<string, never>;
+        identities: Array<{
+            id?: string;
+            name?: string;
+            username?: string;
+            password?: string | null;
+            isDefault?: boolean;
+            database?: string | null;
+            enabled?: boolean;
+        }>;
+    };
+
+    const updatedPayloads: CapturedUpdatePayload[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    update: async (_organizationId: string, connectionId: string, payload: CapturedUpdatePayload) => {
+                        updatedPayloads.push(payload);
+                        return { connection: { id: connectionId, name: 'Photos.sqlite' } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.update',
+        input: {
+            id: 'sqlite-1',
+            patch: {
+                identities: [
+                    {
+                        name: 'Default',
+                        username: 'sqlite',
+                        password: null,
+                        isDefault: true,
+                        database: 'main',
+                        enabled: true,
+                    },
+                ],
+            },
+        },
+        projection: 'mcp',
+    })) as { ok: boolean; data: { connection: { id: string } } };
+
+    assert.equal(output.ok, true);
+    assert.equal(output.data.connection.id, 'sqlite-1');
+    assert.deepEqual(updatedPayloads[0].connection, {});
+    assert.equal('ssh' in updatedPayloads[0], false);
+    assert.equal('tls' in updatedPayloads[0], false);
+    assert.equal(updatedPayloads[0].identities[0].id, undefined);
+    assert.equal(updatedPayloads[0].identities[0].username, 'sqlite');
+});
+
+test('dory_write runs connection.delete without work context and with MCP-client approval', async () => {
+    const deletedIds: string[] = [];
+    const syncPayloads: any[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    delete: async (_organizationId: string, id: string) => {
+                        deletedIds.push(id);
+                    },
+                },
+                syncOperations: {
+                    enqueue: async (payload: any) => {
+                        syncPayloads.push(payload);
+                    },
+                },
+            },
+        } as unknown as WebActionServices,
+        ['write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.delete',
+        input: { id: 'conn-1' },
+        projection: 'mcp',
+    })) as any;
+
+    assert.equal(output.ok, true);
+    assert.equal(output.actionId, 'connection.delete');
+    assert.deepEqual(output.data.deleted, ['conn-1']);
+    assert.deepEqual(deletedIds, ['conn-1']);
+    assert.equal(syncPayloads[0].operation, 'delete');
+});
+
+test('dory_write run preserves action scope errors', async () => {
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    create: async () => ({ connection: { id: 'conn-1' } }),
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:read'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    await assertRejectsCode(
+        () =>
+            getTool('dory_write').execute(ctx, {
+                operation: 'run',
+                actionId: 'connection.create',
+                input: { payload: { name: 'No scope' } },
+            }),
+        'ACTION_SCOPE_MISSING',
     );
 });
 

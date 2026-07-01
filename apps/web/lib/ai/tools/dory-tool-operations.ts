@@ -7,6 +7,7 @@ import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, TableColumnInfo, TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
+import { withCredentiallessDefaultIdentities } from '@/lib/connection/credentialless-identity';
 import { buildTablePreviewPayload } from '@/lib/connection/table-preview';
 import { runAnalysis } from '@/lib/server/analysis/run-analysis';
 import { getReadonlyMcpStatements } from '@/lib/server/mcp/sql-safety';
@@ -182,7 +183,7 @@ function getConnectionEngine(value?: string | null): DatabaseSummaryEngine {
 
 export async function listConnectionsOperation(context: DoryToolOperationContext) {
     const db = await getDBService();
-    const records = await db.connections.list(context.organizationId);
+    const records = withCredentiallessDefaultIdentities(await db.connections.list(context.organizationId));
     return {
         connections: records.map(item => ({
             id: item.connection.id,

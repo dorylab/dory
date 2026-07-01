@@ -1,0 +1,28 @@
+FROM node:22-bookworm-slim
+
+ARG DORY_CLI_VERSION=latest
+
+ENV HOME=/data \
+    NODE_ENV=production \
+    DORY_DATA=standalone \
+    DORY_HOST=0.0.0.0 \
+    DORY_PORT=3318
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && npm install -g "@getdory/cli@${DORY_CLI_VERSION}"
+
+COPY --chown=node:node packages/cli/docker/entrypoint.sh /usr/local/bin/dory-headless-entrypoint
+
+RUN chmod 0755 /usr/local/bin/dory-headless-entrypoint \
+ && mkdir -p /data/.dory \
+ && chown -R node:node /data
+
+USER node
+WORKDIR /data
+
+VOLUME ["/data/.dory"]
+EXPOSE 3318
+
+ENTRYPOINT ["dory-headless-entrypoint"]

@@ -2,7 +2,18 @@ import type { ActionContext, ActionDefinition, ActionPermissionRequirement, Acti
 import { ActionError } from './errors';
 
 const DEFAULT_SCOPE_ALIASES: Partial<Record<ActionScope, ActionScope[]>> = {
-    'schema:read': ['connections:read'],
+    'connections:read': ['read', 'write'],
+    'query:read': ['read', 'write'],
+    'schema:read': ['read', 'write', 'connections:read'],
+    'tabs:read': ['read', 'write'],
+    'saved_queries:read': ['read', 'write'],
+    'monitoring:read': ['read', 'write'],
+    'analysis:run': ['read', 'write'],
+    'connections:write': ['write'],
+    'query:write': ['write'],
+    'tabs:write': ['write'],
+    'saved_queries:write': ['write'],
+    'action:destructive': ['write', 'connections:write'],
 };
 
 export type ActionPermissionEvaluationOptions = {

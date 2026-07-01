@@ -9,8 +9,15 @@ import { getExternalRequestOrigin, getWorkspaceRequestOrigin } from '@/lib/serve
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 export const MCP_DESKTOP_GRANT_HEADER = 'x-dory-mcp-desktop-grant';
 export const MCP_DEFAULT_SCOPES = [
+    'read',
+    'write',
+    'local_ai:run',
+] as const;
+export const MCP_LEGACY_FINE_SCOPES = [
     'connections:read',
+    'connections:write',
     'query:read',
+    'query:write',
     'analysis:run',
     'schema:read',
     'tabs:read',
@@ -18,10 +25,10 @@ export const MCP_DEFAULT_SCOPES = [
     'saved_queries:read',
     'saved_queries:write',
     'monitoring:read',
-    'local_ai:run',
 ] as const;
 export const MCP_LOCAL_AI_SCOPE = 'local_ai:run';
-export const MCP_LINK_SCOPES = [...MCP_DEFAULT_SCOPES] as const;
+export const MCP_ALLOWED_SCOPES = [...MCP_DEFAULT_SCOPES, ...MCP_LEGACY_FINE_SCOPES] as const;
+export const MCP_LINK_SCOPES = [...MCP_ALLOWED_SCOPES] as const;
 
 const MCP_DESKTOP_GRANT_TYPE = 'dory_mcp_desktop_grant';
 const MCP_DESKTOP_GRANT_TTL_MS = 12 * 60 * 60 * 1000;

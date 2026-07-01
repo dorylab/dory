@@ -80,7 +80,7 @@ test('login opens browser authorization, polls, and stores returned token once a
 test('login can request local AI scopes', async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-mcp-login-scopes-'));
     const configPath = path.join(dir, 'mcp.json');
-    const requestedScopes = ['connections:read', 'local_ai:run'];
+    const requestedScopes = ['read', 'local_ai:run'];
 
     try {
         await login({

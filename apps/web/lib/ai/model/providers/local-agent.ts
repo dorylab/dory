@@ -58,6 +58,8 @@ export const DORY_CODEX_CHAT_ID_HEADER = 'x-dory-local-agent-chat-id';
 export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_create_work',
     'dory_finish_work',
+    'dory_read',
+    'dory_write',
     'dory_list_connections',
     'dory_explore_schema',
     'dory_run_readonly_sql',
@@ -65,6 +67,7 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_saved_queries',
 ];
 export const DORY_CODEX_MCP_TOOL_TIMEOUT_SEC = 90;
+const DORY_CODEX_MCP_AUTO_APPROVED_TOOLS = ['dory_create_work', 'dory_finish_work'];
 
 function toTomlString(value: string) {
     return JSON.stringify(value);
@@ -90,6 +93,7 @@ export function buildCodexDoryMcpArgs(config: CodexDoryMcpConfig): string[] {
         'mcp_servers.dory.required=true',
         '-c',
         'mcp_servers.dory.default_tools_approval_mode="approve"',
+        ...DORY_CODEX_MCP_AUTO_APPROVED_TOOLS.flatMap(tool => ['-c', `mcp_servers.dory.tools.${tool}.approval_mode=${toTomlString('never_ask')}`]),
         '-c',
         `mcp_servers.dory.tool_timeout_sec=${config.toolTimeoutSec}`,
         '-c',
@@ -240,6 +244,7 @@ function toolInstructions(options: LanguageModelV3CallOptions, context: LocalAge
         return [
             'Dory MCP tools are available to Codex for this request.',
             'For database questions, call dory_create_work once first, then pass the returned work.workId to later Dory tool calls.',
+            'For non-query Dory read operations, use dory_read with the actionId. For create, update, or delete operations such as connection.create, use dory_write with the actionId instead of expecting a separate tool for every action.',
             'When the user asks for query results, write read-only SQL and call dory_run_readonly_sql. Answer from the tool result; do not claim a query was run without tool output.',
             'If the schema is unclear, call dory_explore_schema before writing SQL.',
             ...(contextLines.length ? [`Dory request context:\n${contextLines.join('\n')}`] : []),

@@ -5,6 +5,7 @@ import { withConnectionTimeout } from '@dory/drivers/core';
 import { createDriver } from '@dory/drivers/core';
 import { getDBService } from '@dory/database';
 import { TestConnectionPayload } from '@dory/shared/types/connections';
+import { createCredentiallessDefaultIdentity, isCredentiallessConnection } from '@/lib/connection/credentialless-identity';
 import { CONNECTION_ERROR_CODES, type ConnectionErrorCode, createConnectionError } from '@/lib/connection/utils';
 import { buildTestConnectionConfig } from '@/lib/connection/config';
 import { resolveTestIdentityPassword } from '@/lib/connection/secrets';
@@ -43,7 +44,8 @@ export async function testConnectService(organizationId: string, payload: TestCo
     const db = await getDBService();
     const connectionId = payload.connection?.id;
     const startedAt = Date.now();
-    const plainPassword = await db.connections.getIdentityPlainPassword(organizationId, payload.identity.id);
+    const identity = payload.identity ?? (isCredentiallessConnection(payload.connection) ? createCredentiallessDefaultIdentity(payload.connection) : undefined);
+    const plainPassword = identity?.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
 
     const recordLastCheck = async (status: 'ok' | 'error', error?: string | null, tookMs?: number | null) => {
         if (!connectionId) return;
@@ -59,11 +61,13 @@ export async function testConnectService(organizationId: string, payload: TestCo
         }
     };
 
-    const testPassword = resolveTestIdentityPassword(payload?.identity?.password, plainPassword);
+    const resolvedIdentity = identity ?? {};
+    const testPassword = resolveTestIdentityPassword(identity?.password, plainPassword);
     const resolvedSsh = await resolveSshSecrets(organizationId, payload, db);
     const resolvedTls = await resolveTlsSecrets(organizationId, payload, db);
-    const config = buildTestConnectionConfig({ ...payload, identity: { ...payload.identity, password: testPassword }, ssh: resolvedSsh, tls: resolvedTls }, code =>
-        createConnectionError(code as ConnectionErrorCode),
+    const config = buildTestConnectionConfig(
+        { ...payload, identity: { ...resolvedIdentity, password: testPassword }, ssh: resolvedSsh, tls: resolvedTls } as TestConnectionPayload,
+        code => createConnectionError(code as ConnectionErrorCode),
     );
     let provider = null as Awaited<ReturnType<typeof createDriver>> | null;
 

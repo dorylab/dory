@@ -123,25 +123,33 @@ test('generateMcpToken returns one-time token metadata without storing the raw t
     assert.equal(generated.tokenHash.length, 64);
 });
 
-test('default MCP scopes cover v1 read, analysis, and local agent capabilities', () => {
-    assert.deepEqual(
-        [...MCP_DEFAULT_SCOPES],
-        [
-            'connections:read',
-            'query:read',
-            'analysis:run',
-            'schema:read',
-            'tabs:read',
-            'tabs:write',
-            'saved_queries:read',
-            'saved_queries:write',
-            'monitoring:read',
-            'local_ai:run',
-        ],
-    );
+test('default MCP scopes use coarse read/write scopes plus local agent capability', () => {
+    assert.deepEqual([...MCP_DEFAULT_SCOPES], ['read', 'write', 'local_ai:run']);
 });
 
-test('connections:read remains compatible with schema read tools', () => {
+test('coarse read/write scopes cover existing fine-grained action scopes', () => {
+    const readContext = {
+        tokenId: 'token',
+        organizationId: 'org',
+        userId: 'user',
+        scopes: ['read'],
+        access: createAccess({ userId: 'user' }),
+    };
+    const writeContext = {
+        ...readContext,
+        scopes: ['write'],
+    };
+
+    assert.equal(hasMcpScope(readContext, 'connections:read'), true);
+    assert.equal(hasMcpScope(readContext, 'schema:read'), true);
+    assert.equal(hasMcpScope(readContext, 'saved_queries:read'), true);
+    assert.equal(hasMcpScope(readContext, 'connections:write'), false);
+    assert.equal(hasMcpScope(writeContext, 'connections:read'), true);
+    assert.equal(hasMcpScope(writeContext, 'connections:write'), true);
+    assert.equal(hasMcpScope(writeContext, 'action:destructive'), true);
+});
+
+test('legacy connections:read remains compatible with schema read tools', () => {
     const context = {
         tokenId: 'token',
         organizationId: 'org',
@@ -296,7 +304,15 @@ test('web MCP link schemas validate start and poll payloads', () => {
         mcpLinkStartSchema.safeParse({
             clientName: 'Codex',
             verifierHash: 'a'.repeat(64),
-            scopes: ['connections:read', 'local_ai:run'],
+            scopes: ['read', 'local_ai:run'],
+        }).success,
+        true,
+    );
+    assert.equal(
+        mcpLinkStartSchema.safeParse({
+            clientName: 'Codex',
+            verifierHash: 'a'.repeat(64),
+            scopes: ['connections:read', 'schema:read'],
         }).success,
         true,
     );

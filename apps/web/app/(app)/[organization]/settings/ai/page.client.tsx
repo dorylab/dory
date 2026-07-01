@@ -1085,7 +1085,7 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
               : t('Fields.ApiKeyOptionalPlaceholder');
     const upgradeActionLabel = upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise');
     const doryOrigin = typeof window === 'undefined' ? '' : window.location.origin;
-    const localAiBridgeCommand = `npx -y @getdory/cli agent codex install --url ${doryOrigin}`;
+    const localAiBridgeCommand = `npx -y @getdory/cli runtime install --codex-agent --url ${doryOrigin}`;
 
     function renderProviderRow(row: AiProviderRow) {
         const providerDescription = row.source === 'organization' && row.isDefault ? t('OrganizationProvider.ActiveDescription') : t('OrganizationProvider.Description');

@@ -4,14 +4,14 @@ import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 import { ResponseUtil } from '@/lib/result';
 import { ErrorCodes } from '@dory/shared/errors';
-import { generateMcpToken, MCP_DEFAULT_SCOPES } from '@/lib/server/mcp/auth';
+import { generateMcpToken, MCP_ALLOWED_SCOPES, MCP_DEFAULT_SCOPES } from '@/lib/server/mcp/auth';
 import { serializeMcpToken } from '@/lib/server/mcp/settings';
 
 export const runtime = 'nodejs';
 
 const bodySchema = z.object({
     name: z.string().trim().min(1).max(80).optional(),
-    scopes: z.array(z.enum(MCP_DEFAULT_SCOPES)).optional(),
+    scopes: z.array(z.enum(MCP_ALLOWED_SCOPES)).optional(),
 });
 
 export const POST = withOrganizationHandler(async ({ req, db, organizationId, userId }) => {

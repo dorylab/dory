@@ -3,6 +3,15 @@ import { test } from 'node:test';
 
 import { parseArgs } from './args.js';
 
+test('parses version command', () => {
+    assert.deepEqual(parseArgs(['--version']), {
+        command: 'version',
+    });
+    assert.deepEqual(parseArgs(['-v']), {
+        command: 'version',
+    });
+});
+
 test('parses doctor command', () => {
     assert.deepEqual(parseArgs(['doctor', '--data', 'standalone']), {
         command: 'doctor',
@@ -203,6 +212,20 @@ test('parses local runtime install capabilities', () => {
             pglitePath: undefined,
             databaseUrl: undefined,
         },
+    });
+});
+
+test('parses MCP token create scopes', () => {
+    assert.deepEqual(parseArgs(['mcp', 'token', 'create', '--name', 'writer', '--scope', 'read,write', '--data', 'standalone']), {
+        command: 'mcp-token',
+        action: 'create',
+        id: undefined,
+        name: 'writer',
+        scopes: ['read', 'write'],
+        data: 'standalone',
+        userDataDir: undefined,
+        pglitePath: undefined,
+        databaseUrl: undefined,
     });
 });
 
