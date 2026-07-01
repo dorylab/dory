@@ -32,24 +32,50 @@ Standalone mode stores Dory state under `~/.dory` and is the default mode for Li
 ```sh
 npx -y @getdory/cli init --data standalone
 npx -y @getdory/cli doctor --data standalone
-npx -y @getdory/cli mcp token create --data standalone --name "server"
+npx -y @getdory/cli mcp token create \
+  --data standalone \
+  --name "server" \
+  --scope connections:read \
+  --scope connections:write \
+  --scope schema:read \
+  --scope query:read
 npx -y @getdory/cli mcp serve --stdio --data standalone
 ```
 
 Run a local HTTP MCP endpoint:
 
 ```sh
+npx -y @getdory/cli mcp token create \
+  --data standalone \
+  --name "local-http" \
+  --scope connections:read \
+  --scope connections:write \
+  --scope schema:read \
+  --scope query:read
+
+export DORY_MCP_TOKEN="dory_mcp_..."
+
 npx -y @getdory/cli mcp serve \
   --http \
   --host 127.0.0.1 \
   --port 3318 \
+  --token "$DORY_MCP_TOKEN" \
   --data standalone
 ```
+
+The HTTP endpoint is:
+
+```text
+http://127.0.0.1:3318/api/mcp
+```
+
+`mcp token create` prints JSON. Copy the `token` value into `DORY_MCP_TOKEN`.
 
 Run Dory Actions directly:
 
 ```sh
 npx -y @getdory/cli action list --data standalone
+npx -y @getdory/cli action describe connection.create --data standalone
 npx -y @getdory/cli action connection.list --data standalone --projection mcp --json '{}'
 ```
 
@@ -82,6 +108,63 @@ npx -y @getdory/cli action connection.create \
     }
   }'
 ```
+
+## MCP Tools and Actions
+
+Dory MCP exposes a small set of high-level tools for data work, plus one generic Action transport:
+
+- `dory_list_connections`
+- `dory_explore_schema`
+- `dory_run_readonly_sql`
+- `dory_saved_queries`
+- `dory_workspace_tabs`
+- `dory_create_work`
+- `dory_finish_work`
+- `dory_action`
+
+Use `dory_action` for operations that are part of Dory's Action registry instead of expecting one MCP tool per business operation. For example, connection setup goes through `connection.create`, `connection.update`, and `connection.test`:
+
+```json
+{
+  "operation": "run",
+  "actionId": "connection.create",
+  "input": {
+    "payload": {
+      "connection": {
+        "type": "postgres",
+        "engine": "postgres",
+        "name": "Local Postgres",
+        "host": "127.0.0.1",
+        "port": 5432,
+        "database": "postgres"
+      },
+      "identities": [
+        {
+          "name": "Default",
+          "username": "postgres",
+          "password": "postgres",
+          "isDefault": true,
+          "database": "postgres",
+          "enabled": true
+        }
+      ]
+    }
+  },
+  "projection": "mcp",
+  "confirmationToken": "cli-confirmed"
+}
+```
+
+Before running an Action from an agent, ask Dory to describe it:
+
+```json
+{
+  "operation": "describe",
+  "actionId": "connection.create"
+}
+```
+
+Only Actions that are exposed to the `mcp` actor and allowed by the token scopes are available through `dory_action`. Write Actions such as `connection.create` require a token with `connections:write`.
 
 ## Connect Local Codex Agent
 
@@ -139,10 +222,15 @@ If `DS_SECRET_KEY` or `BETTER_AUTH_SECRET` do not match the Web deployment, encr
 
 HTTP MCP listens on `127.0.0.1` by default and requires bearer token authentication. In local PGlite modes, the CLI starts a small HTTP proxy that forwards MCP traffic to the Dory Local Runtime, so PGlite is still only opened by one process.
 
-For local-only testing you can omit `--token`; the CLI will create one and print it to stderr. For shared or remote endpoints, create a token first:
+For local-only testing you can omit `--token`; the CLI will create one and print it to stderr. For repeatable setup, shared endpoints, or remote endpoints, create a token first:
 
 ```sh
-npx -y @getdory/cli mcp token create --data standalone --name "mcp-http"
+npx -y @getdory/cli mcp token create \
+  --data standalone \
+  --name "mcp-http" \
+  --scope connections:read \
+  --scope schema:read \
+  --scope query:read
 ```
 
 To let a remote MCP client run write Actions such as `connection.create`, create a token with explicit write scopes:
@@ -182,6 +270,8 @@ dory runtime install \
   --token "$DORY_MCP_TOKEN" \
   --data standalone
 ```
+
+The token is stored in the runtime service config with file mode `0600`; it is not placed in the launchd plist, systemd unit, or process command line.
 
 Codex agent and HTTP MCP can be enabled together on the same service:
 
@@ -226,24 +316,41 @@ dory-mcp.example.com {
 
 ## Linux Server Deployment
 
-systemd example:
+Use the built-in runtime service installer for long-running Linux hosts. It creates the `dory-runtime.service` user service and runs one Dory Local Runtime process:
 
-```ini
-[Unit]
-Description=Dory Headless MCP Runtime
-After=network-online.target
-Wants=network-online.target
+```sh
+npm install -g @getdory/cli@latest
 
-[Service]
-Type=simple
-User=dory
-Environment=HOME=/var/lib/dory
-ExecStart=/usr/bin/env npx -y @getdory/cli mcp serve --http --data standalone --host 127.0.0.1 --port 3318
-Restart=always
-RestartSec=5
+dory mcp token create \
+  --data standalone \
+  --name "server-http" \
+  --scope connections:read \
+  --scope connections:write \
+  --scope schema:read \
+  --scope query:read
 
-[Install]
-WantedBy=multi-user.target
+export DORY_MCP_TOKEN="dory_mcp_..."
+
+dory runtime install \
+  --mcp-http \
+  --host 127.0.0.1 \
+  --port 3318 \
+  --token "$DORY_MCP_TOKEN" \
+  --data standalone
+
+dory runtime status --data standalone
+```
+
+For a remote endpoint, bind to `0.0.0.0` only with an explicit token and `--allow-remote`, then put TLS in front of it:
+
+```sh
+dory runtime install \
+  --mcp-http \
+  --host 0.0.0.0 \
+  --port 3318 \
+  --allow-remote \
+  --token "$DORY_MCP_TOKEN" \
+  --data standalone
 ```
 
 Docker example:
@@ -278,6 +385,8 @@ npx -y @getdory/cli mcp serve --stdio --data desktop
 ```
 
 Desktop mode connects through the Dory Local Runtime, so Desktop, CLI, MCP, and runtime capabilities reuse the same local PGlite owner instead of opening the PGlite directory independently.
+
+When the Dory Desktop app is open, CLI commands connect to the existing Desktop runtime. When it is closed, CLI commands can start or use the local runtime directly, so stdio MCP and Action commands can still work against Desktop data.
 
 ## Hosted Dory Bridge
 
