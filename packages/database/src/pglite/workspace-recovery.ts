@@ -1,5 +1,7 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import type { PostgresDBClient } from '@dory/shared';
 import {
     account,
@@ -179,6 +181,7 @@ const RECOVERY_TABLES: RecoveryTableSpec[] = [
             { target: 'port', required: true },
             { target: 'httpPort', sources: ['http_port'] },
             { target: 'database' },
+            { target: 'path' },
             { target: 'options', required: true },
             { target: 'status', required: true },
             { target: 'configVersion', sources: ['config_version'] },
@@ -437,6 +440,139 @@ function toSnakeCase(value: string) {
 
 function compactRow(row: Record<string, unknown>) {
     return Object.fromEntries(Object.entries(row).filter(([, value]) => value !== undefined));
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> {
+    if (!value) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>;
+    if (typeof value !== 'string') return {};
+
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    } catch {
+        return {};
+    }
+}
+
+function isMotherDuckConnection(value: { type: unknown; options: unknown }) {
+    if (value.type !== 'duckdb') return false;
+    return parseJsonObject(value.options).mode === 'motherduck';
+}
+
+function archiveTimestamp(name: string) {
+    return name.match(/(?:broken|pg\d+-upgrade)-(\d{8}-\d{6})$/)?.[1] ?? '';
+}
+
+async function findPgliteArchiveDataDirs(dataDir: string) {
+    const parentDir = path.dirname(dataDir);
+    const baseName = path.basename(dataDir);
+    const entries = await fs.readdir(parentDir, { withFileTypes: true });
+
+    return entries
+        .filter(entry => entry.isDirectory())
+        .map(entry => entry.name)
+        .filter(name => name.startsWith(`${baseName}.broken-`) || /^.+\.pg\d+-upgrade-\d{8}-\d{6}$/.test(name))
+        .filter(name => name.startsWith(`${baseName}.`))
+        .sort((left, right) => {
+            const rightTimestamp = archiveTimestamp(right);
+            const leftTimestamp = archiveTimestamp(left);
+            return rightTimestamp.localeCompare(leftTimestamp) || right.localeCompare(left);
+        })
+        .map(name => path.join(parentDir, name));
+}
+
+async function readArchiveFileConnectionPaths(archiveDataDir: string) {
+    const archiveDb = new PGlite({ dataDir: archiveDataDir });
+
+    try {
+        const result = await archiveDb.query<{ id: string; type: string; path: string | null; options: string | null }>(
+            "SELECT id, type, path, options FROM connections WHERE type IN ('sqlite', 'duckdb') AND path IS NOT NULL AND btrim(path) <> ''",
+        );
+
+        return result.rows.filter(row => !isMotherDuckConnection(row));
+    } finally {
+        await archiveDb.close();
+    }
+}
+
+export async function repairMissingFileConnectionPathsFromArchives(dataDir: string, targetDb: PostgresDBClient) {
+    const missingRows = await targetDb
+        .select({
+            id: connections.id,
+            type: connections.type,
+            options: connections.options,
+        })
+        .from(connections)
+        .where(and(inArray(connections.type, ['sqlite', 'duckdb']), or(isNull(connections.path), eq(connections.path, '')), isNull(connections.deletedAt)));
+
+    const missing = new Map(missingRows.filter(row => !isMotherDuckConnection(row)).map(row => [row.id, row]));
+
+    if (missing.size === 0) {
+        return { checkedArchives: 0, repaired: 0 };
+    }
+
+    let checkedArchives = 0;
+    let repaired = 0;
+
+    let archiveDataDirs: string[] = [];
+    try {
+        archiveDataDirs = await findPgliteArchiveDataDirs(dataDir);
+    } catch (error) {
+        console.warn('[PGlite recovery] Failed to list archive directories for connection path repair', {
+            dataDir,
+            error,
+        });
+        return { checkedArchives, repaired };
+    }
+
+    for (const archiveDataDir of archiveDataDirs) {
+        if (missing.size === 0) break;
+        checkedArchives += 1;
+
+        let archiveRows: Array<{ id: string; path: string | null }> = [];
+        try {
+            archiveRows = await readArchiveFileConnectionPaths(archiveDataDir);
+        } catch (error) {
+            console.warn('[PGlite recovery] Failed to read archive connection paths', {
+                archiveDataDir,
+                error,
+            });
+            continue;
+        }
+
+        for (const archiveRow of archiveRows) {
+            if (!missing.has(archiveRow.id) || !archiveRow.path) continue;
+
+            const [updated] = await targetDb
+                .update(connections)
+                .set({ path: archiveRow.path })
+                .where(
+                    and(
+                        eq(connections.id, archiveRow.id),
+                        inArray(connections.type, ['sqlite', 'duckdb']),
+                        or(isNull(connections.path), eq(connections.path, '')),
+                        isNull(connections.deletedAt),
+                    ),
+                )
+                .returning({ id: connections.id });
+
+            if (!updated) continue;
+
+            repaired += 1;
+            missing.delete(archiveRow.id);
+        }
+    }
+
+    if (repaired > 0) {
+        console.warn('[PGlite recovery] Repaired missing file connection paths from archives', {
+            dataDir,
+            checkedArchives,
+            repaired,
+        });
+    }
+
+    return { checkedArchives, repaired };
 }
 
 async function extractTableSnapshot(db: PGlite, spec: RecoveryTableSpec): Promise<RecoveryTableSnapshot> {

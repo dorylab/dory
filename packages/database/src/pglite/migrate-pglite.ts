@@ -4,7 +4,7 @@ import type { MigrationConfig } from 'drizzle-orm/migrator';
 import migrations from './migrations.json';
 import { getPgliteClient, resetPgliteClient, resolvePgliteDataDir } from '../postgres/client/pglite';
 import { translateDatabase } from '../i18n';
-import { exportWorkspaceRecoverySnapshot, importWorkspaceRecoverySnapshot } from './workspace-recovery';
+import { exportWorkspaceRecoverySnapshot, importWorkspaceRecoverySnapshot, repairMissingFileConnectionPathsFromArchives } from './workspace-recovery';
 import { migrateFromPg16IfNeeded } from './pg-version-migration';
 
 async function runDrizzleMigrate(db: any) {
@@ -22,22 +22,11 @@ async function runDrizzleMigrate(db: any) {
 
 function createArchiveSuffix(date = new Date()) {
     const pad = (value: number) => String(value).padStart(2, '0');
-    return [
-        date.getFullYear(),
-        pad(date.getMonth() + 1),
-        pad(date.getDate()),
-        '-',
-        pad(date.getHours()),
-        pad(date.getMinutes()),
-        pad(date.getSeconds()),
-    ].join('');
+    return [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate()), '-', pad(date.getHours()), pad(date.getMinutes()), pad(date.getSeconds())].join('');
 }
 
 async function archivePgliteDataDir(dataDir: string) {
-    const archivedDataDir = path.join(
-        path.dirname(dataDir),
-        `${path.basename(dataDir)}.broken-${createArchiveSuffix()}`,
-    );
+    const archivedDataDir = path.join(path.dirname(dataDir), `${path.basename(dataDir)}.broken-${createArchiveSuffix()}`);
 
     await fs.rename(dataDir, archivedDataDir);
     console.warn('[PGlite migrate] Archived broken data directory', {
@@ -66,10 +55,7 @@ export async function migratePgliteDB() {
             error: err,
             message: err instanceof Error ? err.message : String(err),
             stack: err instanceof Error ? err.stack : undefined,
-            cause:
-                err instanceof Error && 'cause' in err
-                    ? (err as Error & { cause?: unknown }).cause
-                    : undefined,
+            cause: err instanceof Error && 'cause' in err ? (err as Error & { cause?: unknown }).cause : undefined,
         });
 
         // The PGlite WASM instance may be in a crashed state (e.g. RuntimeError: Aborted),
@@ -101,6 +87,7 @@ export async function migratePgliteDB() {
         if (recoverySnapshot) {
             try {
                 await importWorkspaceRecoverySnapshot(freshDb, recoverySnapshot);
+                await repairMissingFileConnectionPathsFromArchives(dataDir, freshDb);
             } catch (recoveryError) {
                 console.warn('[PGlite migrate] Workspace recovery import failed', {
                     snapshotPath,
@@ -114,10 +101,13 @@ export async function migratePgliteDB() {
         return;
     }
 
+    await repairMissingFileConnectionPathsFromArchives(dataDir, db);
+
     // Phase 3: If we just did a PG version upgrade, import the extracted data
     if (upgradeResult.migrated && upgradeResult.snapshot) {
         try {
             await importWorkspaceRecoverySnapshot(db, upgradeResult.snapshot);
+            await repairMissingFileConnectionPathsFromArchives(dataDir, db);
             console.log('[PGlite upgrade] Successfully imported data into new PG 17 database');
         } catch (importError) {
             console.warn('[PGlite upgrade] Failed to import some data into new database', {

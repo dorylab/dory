@@ -1,7 +1,7 @@
 import { app, dialog, ipcMain, shell, Menu, type MenuItemConstructorOptions } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_ID, DISTRIBUTION, PROTOCOL, isBetaDistribution, isDev } from './main/constants.js';
+import { APP_ID, DISTRIBUTION, PROTOCOL, isDev } from './main/constants.js';
 import { ensureDirectoryExists } from './main/filesystem.js';
 import { createMainI18n } from './main/i18n.js';
 import { getStoredLocale, registerLocaleIpc } from './main/locale.js';
@@ -29,10 +29,6 @@ const __dirname = path.dirname(__filename);
 
 if (process.platform === 'win32') {
   app.setAppUserModelId(APP_ID);
-}
-
-if (process.platform === 'win32' || isBetaDistribution) {
-  app.setPath('userData', path.join(app.getPath('appData'), APP_ID));
 }
 
 const databasePath = path.join(getUserDataPath(), 'data/database');

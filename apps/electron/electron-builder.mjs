@@ -31,6 +31,10 @@ const config = {
     productName,
     extraMetadata: {
         main: 'dist-electron/main.js',
+        productName,
+        doryDistribution: distribution,
+        doryElectronAppId: appId,
+        doryProtocolScheme: protocolScheme,
     },
     artifactName: distribution === 'beta' ? betaArtifactName : artifactName,
     publish: [
