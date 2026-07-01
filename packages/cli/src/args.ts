@@ -45,6 +45,7 @@ export type RuntimeOptions = ProfileOptions & {
 
 export type ParsedArgs =
     | { command: 'help' }
+    | { command: 'version' }
     | ({ command: 'doctor' } & ProfileOptions)
     | ({ command: 'init' } & ProfileOptions)
     | ({ command: 'storage'; action: 'detect' | 'doctor' } & ProfileOptions)
@@ -112,6 +113,10 @@ function readProjection(argv: string[]): ActionProjection | undefined {
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
+    if (hasFlag(argv, '--version') || hasFlag(argv, '-v')) {
+        return { command: 'version' };
+    }
+
     if (!argv.length || hasFlag(argv, '--help') || hasFlag(argv, '-h')) {
         return { command: 'help' };
     }

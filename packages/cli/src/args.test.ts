@@ -3,6 +3,15 @@ import { test } from 'node:test';
 
 import { parseArgs } from './args.js';
 
+test('parses version command', () => {
+    assert.deepEqual(parseArgs(['--version']), {
+        command: 'version',
+    });
+    assert.deepEqual(parseArgs(['-v']), {
+        command: 'version',
+    });
+});
+
 test('parses doctor command', () => {
     assert.deepEqual(parseArgs(['doctor', '--data', 'standalone']), {
         command: 'doctor',

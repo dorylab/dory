@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { inspect } from 'node:util';
@@ -84,7 +84,7 @@ Data modes:
 
 HTTP MCP:
   HTTP listens on 127.0.0.1 by default and requires bearer auth.
-  MCP token scopes are user-facing: read and write. write includes read but not destructive actions.
+  MCP token scopes are user-facing: read and write. write includes create, update, and delete operations.
   Remote binds require --host 0.0.0.0 --allow-remote --token <existing-token>.
   Put public deployments behind a TLS reverse proxy.
 
@@ -97,6 +97,16 @@ Storage overrides:
 
 function printJson(value: unknown) {
     console.log(JSON.stringify(value, null, 2));
+}
+
+function getCliVersion() {
+    try {
+        const packageJsonUrl = new URL('../package.json', import.meta.url);
+        const parsed = JSON.parse(readFileSync(packageJsonUrl, 'utf8')) as { version?: string };
+        return parsed.version ?? 'unknown';
+    } catch {
+        return 'unknown';
+    }
 }
 
 function publicProfile(profile: ReturnType<typeof serverCore.resolveDoryStorageProfile>) {
@@ -562,6 +572,11 @@ async function run() {
 
     if (args.command === 'help') {
         printHelp();
+        return;
+    }
+
+    if (args.command === 'version') {
+        console.log(getCliVersion());
         return;
     }
 
