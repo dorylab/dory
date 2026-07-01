@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createCredentiallessDefaultIdentity, isCredentiallessConnection } from '@/lib/connection/credentialless-identity';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -43,28 +44,16 @@ function normalizeIdentities(payload: UnknownRecord, connection: UnknownRecord) 
     return inlineIdentity ? [inlineIdentity] : [];
 }
 
-function isSqliteConnection(connection: UnknownRecord) {
-    const type = typeof connection.type === 'string' ? connection.type.toLowerCase() : null;
-    const engine = typeof connection.engine === 'string' ? connection.engine.toLowerCase() : null;
-    return type === 'sqlite' || engine === 'sqlite';
-}
-
-function createSqliteDefaultIdentity(connection: UnknownRecord) {
-    const database = typeof connection.database === 'string' && connection.database.trim() ? connection.database.trim() : 'main';
-    return {
-        name: 'Default',
-        username: 'sqlite',
-        password: null,
-        isDefault: true,
-        database,
-        enabled: true,
-    };
-}
-
 function normalizeCreateIdentities(payload: UnknownRecord, connection: UnknownRecord) {
     const identities = normalizeIdentities(payload, connection);
-    if (identities.length > 0 || !isSqliteConnection(connection)) return identities;
-    return [createSqliteDefaultIdentity(connection)];
+    if (identities.length > 0 || !isCredentiallessConnection(connection)) return identities;
+    return [createCredentiallessDefaultIdentity(connection)];
+}
+
+function normalizeUpdateIdentities(patch: UnknownRecord, connection: UnknownRecord) {
+    const identities = normalizeIdentities(patch, connection);
+    if (identities.length > 0 || !isCredentiallessConnection(connection)) return identities;
+    return [createCredentiallessDefaultIdentity(connection)];
 }
 
 function pickTestIdentity(payload: UnknownRecord, connection: UnknownRecord) {
@@ -73,7 +62,7 @@ function pickTestIdentity(payload: UnknownRecord, connection: UnknownRecord) {
         const records = payload.identities.filter(isRecord);
         return records.find(identity => identity.isDefault === true) ?? records[0] ?? null;
     }
-    return deriveIdentity(connection);
+    return deriveIdentity(connection) ?? (isCredentiallessConnection(connection) ? createCredentiallessDefaultIdentity(connection) : null);
 }
 
 function normalizedConnectionFromPayload(payload: UnknownRecord) {
@@ -113,7 +102,7 @@ export function normalizeConnectionUpdatePatch(value: unknown) {
     const normalized: UnknownRecord = {
         ...patch,
         connection: stripConnectionSidecars(rawConnection),
-        identities: normalizeIdentities(patch, rawConnection),
+        identities: normalizeUpdateIdentities(patch, rawConnection),
     };
 
     if ('ssh' in patch) normalized.ssh = patch.ssh ?? null;

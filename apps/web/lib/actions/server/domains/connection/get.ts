@@ -3,6 +3,7 @@ import { defineWebAction } from '../../define-web-action';
 import { readConnection } from '../../policies';
 import { projectConnectionGetForTools } from '../../projections';
 import { connectionGetToolOutputSchema, unknownOutputSchema } from '../../schemas';
+import { withCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
 
 export const connectionGetAction = defineWebAction({
     id: 'connection.get',
@@ -32,6 +33,6 @@ export const connectionGetAction = defineWebAction({
     handler: async (ctx, input) => {
         const record = await ctx.services.db.connections.getById(ctx.organizationId, input.id);
         if (!record) throw new Error('Connection not found.');
-        return record;
+        return withCredentiallessDefaultIdentity(record);
     },
 });

@@ -6,6 +6,7 @@ import { BaseConfig } from '@dory/drivers/types';
 import { destroyDriverPool, ensureDriverPool, getDriverPool } from '@dory/drivers/core';
 import { parseConnectionOptions, pickConnectionIdentity } from '@dory/drivers/config';
 import { buildStoredConnectionConfig } from '@/lib/connection/config';
+import { withCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
 import { createSqlAuditConnectionSnapshot, isSqlAuditConnectionSnapshotCurrent, patchDriverPoolForSqlAudit, type SqlAuditConnectionSnapshot } from '@/lib/server/sql-audit';
 
 type SshWithSecrets = ConnectionSsh & { password?: string | null; privateKey?: string | null; passphrase?: string | null };
@@ -136,22 +137,27 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
         throw createConnectionError(CONNECTION_ERROR_CODES.notFound);
     }
 
-    const identity = pickConnectionIdentity(record.identities, identityId ?? null);
+    const resolvedRecord = withCredentiallessDefaultIdentity(record);
+    const identity = pickConnectionIdentity(resolvedRecord.identities, identityId ?? null);
     if (!identity) {
         throw createConnectionError(CONNECTION_ERROR_CODES.missingIdentity);
     }
 
     const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
 
-    const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
-    const sshConfig: SshWithSecrets | null = record.ssh ? { ...record.ssh, ...(sshSecrets ?? {}) } : sshSecrets ? ({ enabled: true, ...sshSecrets } as SshWithSecrets) : null;
-    const tlsSecrets = await db.connections.getTlsPlainSecrets(organizationId, record.connection.id);
-    const tlsConfig: TlsWithSecrets | null = record.tls ? { ...record.tls, ...(tlsSecrets ?? {}) } : null;
+    const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, resolvedRecord.connection.id);
+    const sshConfig: SshWithSecrets | null = resolvedRecord.ssh
+        ? { ...resolvedRecord.ssh, ...(sshSecrets ?? {}) }
+        : sshSecrets
+          ? ({ enabled: true, ...sshSecrets } as SshWithSecrets)
+          : null;
+    const tlsSecrets = await db.connections.getTlsPlainSecrets(organizationId, resolvedRecord.connection.id);
+    const tlsConfig: TlsWithSecrets | null = resolvedRecord.tls ? { ...resolvedRecord.tls, ...(tlsSecrets ?? {}) } : null;
 
-    const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig, tlsConfig, code =>
+    const config = buildStoredConnectionConfig(resolvedRecord.connection, { ...identity, password: plainPassword }, sshConfig, tlsConfig, code =>
         createConnectionError(code as ConnectionErrorCode),
     );
-    const auditSnapshot = createSqlAuditConnectionSnapshot(record, identity);
+    const auditSnapshot = createSqlAuditConnectionSnapshot(resolvedRecord, identity);
     const entry = await ensurePoolWithLatest(config, auditSnapshot);
 
     return { entry: patchDriverPoolForSqlAudit(entry, auditSnapshot), config, identity };

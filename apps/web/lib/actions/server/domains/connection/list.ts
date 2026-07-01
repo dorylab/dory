@@ -3,6 +3,7 @@ import { defineWebAction } from '../../define-web-action';
 import { readConnection } from '../../policies';
 import { projectConnectionListForTools } from '../../projections';
 import { connectionListOutputSchema, connectionListToolOutputSchema } from '../../schemas';
+import { withCredentiallessDefaultIdentities } from '@/lib/connection/credentialless-identity';
 
 export const connectionListAction = defineWebAction({
     id: 'connection.list',
@@ -33,6 +34,6 @@ export const connectionListAction = defineWebAction({
         description: 'List database connections available to this Dory organization without returning secrets.',
     },
     handler: async ctx => ({
-        connections: await ctx.services.db.connections.list(ctx.organizationId),
+        connections: withCredentiallessDefaultIdentities(await ctx.services.db.connections.list(ctx.organizationId)),
     }),
 });

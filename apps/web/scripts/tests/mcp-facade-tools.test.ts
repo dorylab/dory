@@ -278,7 +278,17 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
         getPublicDoryMcpTools()
             .map((tool: any) => tool.name)
             .sort(),
-        ['dory_create_work', 'dory_explore_schema', 'dory_finish_work', 'dory_list_connections', 'dory_read', 'dory_run_readonly_sql', 'dory_saved_queries', 'dory_workspace_tabs', 'dory_write'],
+        [
+            'dory_create_work',
+            'dory_explore_schema',
+            'dory_finish_work',
+            'dory_list_connections',
+            'dory_read',
+            'dory_run_readonly_sql',
+            'dory_saved_queries',
+            'dory_workspace_tabs',
+            'dory_write',
+        ],
     );
 });
 
@@ -323,8 +333,14 @@ test('dory_read and dory_write split MCP-runnable actions without adding domain-
     assert.ok(writeActionIds.includes('connection.update'));
     assert.ok(writeActionIds.includes('connection.delete'));
     assert.equal(writeActionIds.includes('connection.test'), false);
-    assert.equal(getPublicDoryMcpTools().some((tool: any) => tool.name === 'dory_create_connection'), false);
-    assert.equal(getPublicDoryMcpTools().some((tool: any) => tool.name === 'dory_delete_connection'), false);
+    assert.equal(
+        getPublicDoryMcpTools().some((tool: any) => tool.name === 'dory_create_connection'),
+        false,
+    );
+    assert.equal(
+        getPublicDoryMcpTools().some((tool: any) => tool.name === 'dory_delete_connection'),
+        false,
+    );
 
     const describeOutput = (await getTool('dory_write').execute(ctx, { operation: 'describe', actionId: 'connection.create' })) as any;
     assert.equal(describeOutput.action.id, 'connection.create');
@@ -443,12 +459,15 @@ test('dory_write adds a default identity when creating a sqlite connection witho
     type CapturedCreatePayload = {
         connection: { name?: string };
         identities: Array<{
+            id?: string;
             name?: string;
             username?: string;
+            role?: string | null;
             password?: string | null;
             isDefault?: boolean;
             database?: string | null;
             enabled?: boolean;
+            status?: string | null;
         }>;
     };
 
@@ -499,12 +518,92 @@ test('dory_write adds a default identity when creating a sqlite connection witho
     assert.equal(createdPayloads[0].connection.name, 'Photos.sqlite');
     assert.deepEqual(createdPayloads[0].identities, [
         {
+            id: '',
             name: 'Default',
             username: 'sqlite',
+            role: null,
             password: null,
             isDefault: true,
             database: 'main',
             enabled: true,
+            status: 'active',
+        },
+    ]);
+});
+
+test('dory_write adds a default identity when updating a sqlite connection without identities', async () => {
+    type CapturedUpdatePayload = {
+        connection: { name?: string; type?: string; engine?: string; path?: string; database?: string };
+        identities: Array<{
+            id?: string;
+            name?: string;
+            username?: string;
+            role?: string | null;
+            password?: string | null;
+            isDefault?: boolean;
+            database?: string | null;
+            enabled?: boolean;
+            status?: string | null;
+        }>;
+    };
+
+    const updatedPayloads: CapturedUpdatePayload[] = [];
+    const ctx = createContext(
+        {
+            db: {
+                connections: {
+                    update: async (_organizationId: string, connectionId: string, payload: CapturedUpdatePayload) => {
+                        updatedPayloads.push(payload);
+                        return { connection: { id: connectionId, name: payload.connection.name } };
+                    },
+                },
+                syncOperations: {
+                    enqueue: async () => {},
+                },
+            },
+        } as unknown as WebActionServices,
+        ['connections:write'],
+        {
+            access: {
+                isMember: true,
+                role: 'owner',
+                permissions: getOrganizationPermissionMap('owner'),
+            },
+        },
+    );
+
+    const output = (await getTool('dory_write').execute(ctx, {
+        operation: 'run',
+        actionId: 'connection.update',
+        input: {
+            id: 'sqlite-1',
+            patch: {
+                connection: {
+                    name: 'Photos.sqlite',
+                    type: 'sqlite',
+                    engine: 'sqlite',
+                    path: '/Users/example/Desktop/Photos.sqlite',
+                    database: 'main',
+                },
+            },
+        },
+        projection: 'mcp',
+    })) as { ok: boolean; data: { connection: { id: string } } };
+
+    assert.equal(output.ok, true);
+    assert.equal(output.data.connection.id, 'sqlite-1');
+    assert.equal(updatedPayloads[0].connection.type, 'sqlite');
+    assert.deepEqual(updatedPayloads[0].identities, [
+        {
+            id: '',
+            name: 'Default',
+            username: 'sqlite',
+            role: null,
+            password: null,
+            isDefault: true,
+            database: 'main',
+            enabled: true,
+            status: 'active',
         },
     ]);
 });
