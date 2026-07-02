@@ -1,4 +1,5 @@
 import { getDBService } from '@dory/database';
+import { getOrganizationBySlugOrId } from '@/lib/server/organization';
 
 type OrganizationLookupResult = {
     id: string;
@@ -16,7 +17,14 @@ function normalizeOrganizationSlugOrId(value: string | null | undefined) {
     return normalized || null;
 }
 
-async function findOrganizationBySlugOrId(slugOrId: string): Promise<OrganizationLookupResult> {
+async function findOrganizationBySlugOrId(slugOrId: string, userId: string): Promise<OrganizationLookupResult> {
+    const organization = await getOrganizationBySlugOrId(slugOrId, userId);
+    if (organization) {
+        return {
+            id: organization.id,
+        };
+    }
+
     const db = await getDBService();
     return db.organizations.getOrganizationBySlugOrId(slugOrId);
 }
