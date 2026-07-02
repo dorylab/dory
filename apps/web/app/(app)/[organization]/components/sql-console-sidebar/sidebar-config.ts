@@ -61,6 +61,12 @@ const SIDEBAR_CONFIG_BY_DIALECT: Record<ConnectionType, SidebarConfig> = {
         supportsSchemas: false,
         hiddenDatabases: [],
     },
+    snowflake: {
+        dialect: 'snowflake',
+        supportsSchemas: true,
+        defaultSchemaName: 'PUBLIC',
+        hiddenDatabases: ['SNOWFLAKE', 'SNOWFLAKE_SAMPLE_DATA', 'INFORMATION_SCHEMA'],
+    },
     sqlserver: {
         dialect: 'sqlserver',
         supportsSchemas: true,

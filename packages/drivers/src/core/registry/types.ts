@@ -28,6 +28,7 @@ export function isConnectionDriverType(value: unknown): value is ConnectionDrive
         value === 'oracle' ||
         value === 'postgres' ||
         value === 'sqlite' ||
+        value === 'snowflake' ||
         value === 'sqlserver'
     );
 }

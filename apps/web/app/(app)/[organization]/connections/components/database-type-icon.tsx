@@ -22,6 +22,7 @@ export const DATABASE_TYPE_META: Partial<Record<ConnectionType, DatabaseTypeMeta
     oracle: { label: 'Oracle' },
     postgres: { src: '/images/logos/postgresql.svg', label: 'PostgreSQL' },
     sqlite: { src: '/images/logos/sqlite.svg', label: 'SQLite' },
+    snowflake: { label: 'Snowflake' },
     sqlserver: { src: '/images/logos/sqlserver.svg', label: 'SQL Server' },
 };
 

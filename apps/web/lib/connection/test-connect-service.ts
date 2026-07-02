@@ -45,7 +45,9 @@ export async function testConnectService(organizationId: string, payload: TestCo
     const connectionId = payload.connection?.id;
     const startedAt = Date.now();
     const identity = payload.identity ?? (isCredentiallessConnection(payload.connection) ? createCredentiallessDefaultIdentity(payload.connection) : undefined);
-    const plainPassword = identity?.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
+    const identitySecrets = identity?.id
+        ? await db.connections.getIdentityPlainSecrets(organizationId, identity.id)
+        : { password: null, privateKey: null, privateKeyPassphrase: null };
 
     const recordLastCheck = async (status: 'ok' | 'error', error?: string | null, tookMs?: number | null) => {
         if (!connectionId) return;
@@ -62,11 +64,18 @@ export async function testConnectService(organizationId: string, payload: TestCo
     };
 
     const resolvedIdentity = identity ?? {};
-    const testPassword = resolveTestIdentityPassword(identity?.password, plainPassword);
+    const testPassword = resolveTestIdentityPassword(identity?.password, identitySecrets.password);
+    const testPrivateKey = resolveTestIdentityPassword(identity?.privateKey, identitySecrets.privateKey);
+    const testPrivateKeyPassphrase = resolveTestIdentityPassword(identity?.privateKeyPassphrase, identitySecrets.privateKeyPassphrase);
     const resolvedSsh = await resolveSshSecrets(organizationId, payload, db);
     const resolvedTls = await resolveTlsSecrets(organizationId, payload, db);
     const config = buildTestConnectionConfig(
-        { ...payload, identity: { ...resolvedIdentity, password: testPassword }, ssh: resolvedSsh, tls: resolvedTls } as TestConnectionPayload,
+        {
+            ...payload,
+            identity: { ...resolvedIdentity, password: testPassword, privateKey: testPrivateKey, privateKeyPassphrase: testPrivateKeyPassphrase },
+            ssh: resolvedSsh,
+            tls: resolvedTls,
+        } as TestConnectionPayload,
         code => createConnectionError(code as ConnectionErrorCode),
     );
     let provider = null as Awaited<ReturnType<typeof createDriver>> | null;

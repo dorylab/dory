@@ -1,6 +1,19 @@
 export const DEFAULT_EXPLORER_CATALOG = 'default';
 
-export type ExplorerDriver = 'postgres' | 'clickhouse' | 'cloudflare-d1' | 'mariadb' | 'mysql' | 'oracle' | 'doris' | 'duckdb' | 'sqlite' | 'sqlserver' | 'trino' | 'unknown';
+export type ExplorerDriver =
+    | 'postgres'
+    | 'clickhouse'
+    | 'cloudflare-d1'
+    | 'mariadb'
+    | 'mysql'
+    | 'oracle'
+    | 'doris'
+    | 'duckdb'
+    | 'sqlite'
+    | 'snowflake'
+    | 'sqlserver'
+    | 'trino'
+    | 'unknown';
 
 export type ExplorerObjectKind = 'database' | 'schema' | 'table' | 'view' | 'materializedView' | 'function' | 'sequence' | 'dictionary' | 'procedure';
 

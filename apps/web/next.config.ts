@@ -41,7 +41,7 @@ type NextWebpackOptionsShape = {
 const nextConfig = {
     output: 'standalone',
     transpilePackages: ['@dory/actions', '@dory/database', '@dory/i18n', '@dory/shared', '@dory/ui', '@dory/web-utils'],
-    serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron'],
+    serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron', 'snowflake-sdk'],
     outputFileTracingRoot: path.join(__dirname, '../../'),
     outputFileTracingIncludes: {
         '/*': [
@@ -91,7 +91,7 @@ const nextConfig = {
         config.resolve.alias['jotai'] = path.resolve(__dirname, 'node_modules/jotai');
         Object.assign(config.resolve.alias, desktopRuntimeWebpackAliases);
         if (options.isServer) {
-            config.externals.push('ssh2', 'better-sqlite3', '@duckdb/node-api');
+            config.externals.push('ssh2', 'better-sqlite3', '@duckdb/node-api', 'snowflake-sdk');
         }
         if (!options.isServer) {
             config.resolve.fallback = {

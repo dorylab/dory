@@ -26,6 +26,7 @@
         "mysql2": "^3.20.0",
         "oracledb": "^6.10.0",
         "pg": "^8.20.0",
+        "snowflake-sdk": "^3.0.0",
         "ssh2": "^1.17.0",
         "ssh2-no-cpu-features": "^2.0.0"
     },

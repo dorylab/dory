@@ -48,6 +48,8 @@ type ConnectionIdentityFormValues = {
     username?: string | null;
     role?: string | null;
     password?: string | null;
+    privateKey?: string | null;
+    privateKeyPassphrase?: string | null;
     isDefault?: boolean;
     database?: string | null;
 };
@@ -187,9 +189,10 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
     const isNeon = connectionType === 'neon';
     const isDuckDb = connectionType === 'duckdb';
     const isCloudflareD1 = connectionType === 'cloudflare-d1';
+    const isSnowflake = connectionType === 'snowflake';
     const isMotherDuck = isDuckDb && duckDbMode === 'motherduck';
     const hidesIdentityForm = isSqlite || isNeon || isDuckDb || isCloudflareD1;
-    const hidesSshForm = isSqlite || isNeon || isDuckDb || isCloudflareD1;
+    const hidesSshForm = isSqlite || isNeon || isDuckDb || isCloudflareD1 || isSnowflake;
     const hidesTlsForm = !TLS_SUPPORTED_CONNECTION_TYPES.has(connectionType);
 
     const isEditMode = mode === 'Edit' && Boolean(connectionItem?.connection?.id);
@@ -264,19 +267,31 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
 
     const normalizeIdentityPasswordForSubmit = (identityValues: ConnectionIdentityFormValues | null | undefined, intent: 'save' | 'test') => {
         if (!savePassword && identityValues) {
-            if (intent === 'test' && typeof identityValues.password === 'string' && identityValues.password.trim() !== '') {
+            if (
+                intent === 'test' &&
+                ((typeof identityValues.password === 'string' && identityValues.password.trim() !== '') ||
+                    (typeof identityValues.privateKey === 'string' && identityValues.privateKey.trim() !== ''))
+            ) {
                 return identityValues;
             }
-            return { ...identityValues, password: null };
+            return { ...identityValues, password: null, privateKey: null, privateKeyPassphrase: null };
         }
 
-        if (!isEditMode || !identityValues || typeof identityValues.password !== 'string' || identityValues.password.trim() !== '') {
+        if (!isEditMode || !identityValues) {
             return identityValues;
         }
 
-        const identityWithoutPassword = { ...identityValues };
-        delete identityWithoutPassword.password;
-        return identityWithoutPassword;
+        const identityWithoutBlankSecrets = { ...identityValues };
+        if (typeof identityWithoutBlankSecrets.password === 'string' && identityWithoutBlankSecrets.password.trim() === '') {
+            delete identityWithoutBlankSecrets.password;
+        }
+        if (typeof identityWithoutBlankSecrets.privateKey === 'string' && identityWithoutBlankSecrets.privateKey.trim() === '') {
+            delete identityWithoutBlankSecrets.privateKey;
+        }
+        if (typeof identityWithoutBlankSecrets.privateKeyPassphrase === 'string' && identityWithoutBlankSecrets.privateKeyPassphrase.trim() === '') {
+            delete identityWithoutBlankSecrets.privateKeyPassphrase;
+        }
+        return identityWithoutBlankSecrets;
     };
 
     const normalizeConnectionMetadataValues = (connectionValues: Record<string, unknown> | null | undefined): Record<string, unknown> | null | undefined => {

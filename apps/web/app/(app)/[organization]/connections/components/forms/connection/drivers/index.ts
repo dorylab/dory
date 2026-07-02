@@ -33,6 +33,13 @@ import {
     validatePostgresConnection,
 } from './postgres';
 import { createMysqlConnectionDefaults, MysqlConnectionFields, normalizeMysqlConnectionForForm, normalizeMysqlConnectionForSubmit, validateMysqlConnection } from './mysql';
+import {
+    createSnowflakeConnectionDefaults,
+    normalizeSnowflakeConnectionForForm,
+    normalizeSnowflakeConnectionForSubmit,
+    SnowflakeConnectionFields,
+    validateSnowflakeConnection,
+} from './snowflake';
 import { createSqliteConnectionDefaults, normalizeSqliteConnectionForForm, normalizeSqliteConnectionForSubmit, SqliteConnectionFields, validateSqliteConnection } from './sqlite';
 import {
     createSqlServerConnectionDefaults,
@@ -42,7 +49,7 @@ import {
     validateSqlServerConnection,
 } from './sqlserver';
 
-export type SupportedConnectionDriver = 'clickhouse' | 'cloudflare-d1' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
+export type SupportedConnectionDriver = 'clickhouse' | 'cloudflare-d1' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'snowflake' | 'sqlserver';
 
 type DriverDefinition = {
     label: string;
@@ -126,6 +133,14 @@ const DRIVERS: Record<SupportedConnectionDriver, DriverDefinition> = {
         normalizeForSubmit: normalizeSqliteConnectionForSubmit,
         validate: validateSqliteConnection,
     },
+    snowflake: {
+        label: 'Snowflake',
+        FormComponent: SnowflakeConnectionFields,
+        createDefaults: createSnowflakeConnectionDefaults,
+        normalizeForForm: normalizeSnowflakeConnectionForForm,
+        normalizeForSubmit: normalizeSnowflakeConnectionForSubmit,
+        validate: validateSnowflakeConnection,
+    },
     sqlserver: {
         label: 'SQL Server',
         FormComponent: SqlServerConnectionFields,
@@ -165,6 +180,9 @@ export function getConnectionDriver(type?: string): DriverDefinition {
     }
     if (type === 'sqlite') {
         return DRIVERS.sqlite;
+    }
+    if (type === 'snowflake') {
+        return DRIVERS.snowflake;
     }
     if (type === 'sqlserver') {
         return DRIVERS.sqlserver;

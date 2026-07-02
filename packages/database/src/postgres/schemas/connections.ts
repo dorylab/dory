@@ -2,7 +2,19 @@ import { boolean, integer, text, timestamp, pgTable, check, index, uniqueIndex }
 import { sql } from 'drizzle-orm';
 import { newEntityId } from '@dory/shared/id';
 
-export type ConnectionType = 'clickhouse' | 'cloudflare-d1' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
+export type ConnectionType =
+    | 'clickhouse'
+    | 'cloudflare-d1'
+    | 'doris'
+    | 'duckdb'
+    | 'mariadb'
+    | 'mysql'
+    | 'neon'
+    | 'oracle'
+    | 'postgres'
+    | 'sqlite'
+    | 'snowflake'
+    | 'sqlserver';
 export type ConnectionStatus = 'draft' | 'ready' | 'error' | 'disabled';
 export type SyncSource = 'local' | 'cloud';
 export type SyncStatus =
@@ -187,6 +199,8 @@ export const connectionIdentitySecrets = pgTable(
 
         // Encrypted password; app handles encrypt/decrypt
         passwordEncrypted: text('password_encrypted'),
+        privateKeyEncrypted: text('private_key_encrypted'),
+        privateKeyPassphraseEncrypted: text('private_key_passphrase_encrypted'),
 
         // For future KMS/Vault integration, store reference here
         vaultRef: text('vault_ref'),

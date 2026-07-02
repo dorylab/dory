@@ -1,4 +1,16 @@
-export type ConnectionType = 'clickhouse' | 'cloudflare-d1' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
+export type ConnectionType =
+    | 'clickhouse'
+    | 'cloudflare-d1'
+    | 'doris'
+    | 'duckdb'
+    | 'mariadb'
+    | 'mysql'
+    | 'neon'
+    | 'oracle'
+    | 'postgres'
+    | 'sqlite'
+    | 'snowflake'
+    | 'sqlserver';
 export type ConnectionStatus = 'Connected' | 'Error' | 'Disconnected';
 export type ConnectionCheckStatus = 'unknown' | 'ok' | 'error';
 export type ConnectionIdentityStatus = 'active' | 'disabled';
@@ -82,6 +94,8 @@ export interface CreateConnectionIdentity {
 export interface ConnectionIdentitySecret {
     identityId: string;
     passwordEncrypted: string | null;
+    privateKeyEncrypted?: string | null;
+    privateKeyPassphraseEncrypted?: string | null;
     vaultRef: string | null;
     secretRef: string | null;
 
@@ -203,6 +217,8 @@ export interface ConnectionIdentityUpdateInput {
 export interface ConnectionIdentitySecretUpsertInput {
     identityId: string;
     passwordEncrypted?: string | null;
+    privateKeyEncrypted?: string | null;
+    privateKeyPassphraseEncrypted?: string | null;
     vaultRef?: string | null;
     secretRef?: string | null;
 }
@@ -262,7 +278,7 @@ export interface ConnectionListItem {
 
 export interface TestConnectionPayload {
     connection: Connection;
-    identity: ConnectionIdentityUpdateInput & { id?: string; password?: string | null };
+    identity: ConnectionIdentityUpdateInput & { id?: string; password?: string | null; privateKey?: string | null; privateKeyPassphrase?: string | null };
     ssh: ConnectionSsh | null;
     tls?: ConnectionTlsUpsertInput | null;
     timeout?: number;
@@ -307,6 +323,8 @@ export interface ConnectionPayload {
             ConnectionIdentityCreateInput & {
                 id?: string;
                 password?: string | null;
+                privateKey?: string | null;
+                privateKeyPassphrase?: string | null;
             }
     >;
 

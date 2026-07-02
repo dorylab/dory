@@ -47,6 +47,9 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
         form.setValue('connection.path', currentConnection.path ?? nextDefaults.path ?? null, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.accountId', nextDefaults.accountId, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.duckdbMode', nextDefaults.duckdbMode, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.warehouse', nextDefaults.warehouse, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.schema', nextDefaults.schema, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.authMethod', nextDefaults.authMethod, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.ssl', nextDefaults.ssl, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.encrypt', nextDefaults.encrypt, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.trustServerCertificate', nextDefaults.trustServerCertificate, {
@@ -76,6 +79,9 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
             'connection.path',
             'connection.accountId',
             'connection.duckdbMode',
+            'connection.warehouse',
+            'connection.schema',
+            'connection.authMethod',
             'connection.ssl',
         ]);
     };

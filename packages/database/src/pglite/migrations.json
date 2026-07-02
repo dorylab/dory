@@ -288,16 +288,24 @@
   {
     "sql": [
       "CREATE TABLE \"local_ai_bridges\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"user_id\" text NOT NULL,\n    \"mcp_token_id\" text NOT NULL,\n    \"provider\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"capabilities\" jsonb,\n    \"last_seen_at\" timestamp with time zone,\n    \"revoked_at\" timestamp with time zone,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone NOT NULL\n);",
-      "\nCREATE INDEX \"idx_local_ai_bridges_org_provider_seen\" ON \"local_ai_bridges\" USING btree (\"organization_id\",\"provider\",\"last_seen_at\");",
-      "CREATE INDEX \"idx_local_ai_bridges_token\" ON \"local_ai_bridges\" USING btree (\"mcp_token_id\");",
-      "CREATE UNIQUE INDEX \"uidx_local_ai_bridges_token_provider_name\" ON \"local_ai_bridges\" USING btree (\"mcp_token_id\",\"provider\",\"name\") WHERE \"local_ai_bridges\".\"revoked_at\" IS NULL;",
-      "\nCREATE TABLE \"local_ai_jobs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"bridge_id\" text NOT NULL,\n    \"provider\" text NOT NULL,\n    \"model\" text NOT NULL,\n    \"status\" text DEFAULT 'pending' NOT NULL,\n    \"prompt\" text NOT NULL,\n    \"result_text\" text,\n    \"stdout\" text,\n    \"stderr\" text,\n    \"error_message\" text,\n    \"attempts\" integer DEFAULT 0 NOT NULL,\n    \"claimed_at\" timestamp with time zone,\n    \"completed_at\" timestamp with time zone,\n    \"expires_at\" timestamp with time zone NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone NOT NULL\n);",
-      "\nCREATE INDEX \"idx_local_ai_jobs_bridge_status_created\" ON \"local_ai_jobs\" USING btree (\"bridge_id\",\"status\",\"created_at\");",
-      "CREATE INDEX \"idx_local_ai_jobs_org_created\" ON \"local_ai_jobs\" USING btree (\"organization_id\",\"created_at\");",
-      "CREATE INDEX \"idx_local_ai_jobs_expires\" ON \"local_ai_jobs\" USING btree (\"expires_at\");\n"
+      "\n\nCREATE INDEX \"idx_local_ai_bridges_org_provider_seen\" ON \"local_ai_bridges\" USING btree (\"organization_id\",\"provider\",\"last_seen_at\");",
+      "\nCREATE INDEX \"idx_local_ai_bridges_token\" ON \"local_ai_bridges\" USING btree (\"mcp_token_id\");",
+      "\nCREATE UNIQUE INDEX \"uidx_local_ai_bridges_token_provider_name\" ON \"local_ai_bridges\" USING btree (\"mcp_token_id\",\"provider\",\"name\") WHERE \"local_ai_bridges\".\"revoked_at\" IS NULL;",
+      "\n\nCREATE TABLE \"local_ai_jobs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"bridge_id\" text NOT NULL,\n    \"provider\" text NOT NULL,\n    \"model\" text NOT NULL,\n    \"status\" text DEFAULT 'pending' NOT NULL,\n    \"prompt\" text NOT NULL,\n    \"result_text\" text,\n    \"stdout\" text,\n    \"stderr\" text,\n    \"error_message\" text,\n    \"attempts\" integer DEFAULT 0 NOT NULL,\n    \"claimed_at\" timestamp with time zone,\n    \"completed_at\" timestamp with time zone,\n    \"expires_at\" timestamp with time zone NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone NOT NULL\n);",
+      "\n\nCREATE INDEX \"idx_local_ai_jobs_bridge_status_created\" ON \"local_ai_jobs\" USING btree (\"bridge_id\",\"status\",\"created_at\");",
+      "\nCREATE INDEX \"idx_local_ai_jobs_org_created\" ON \"local_ai_jobs\" USING btree (\"organization_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_local_ai_jobs_expires\" ON \"local_ai_jobs\" USING btree (\"expires_at\");\n"
     ],
     "bps": true,
     "folderMillis": 1782748800000,
     "hash": "a6e508faf6d401cf1310cd9a34fd28e022e6cc879debe7bc6cabcd0ab51e062e"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"connection_identity_secrets\" ADD COLUMN \"private_key_encrypted\" text;\nALTER TABLE \"connection_identity_secrets\" ADD COLUMN \"private_key_passphrase_encrypted\" text;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1782986582920,
+    "hash": "7a944bd762f59f4551b6e96668ac7ed00e4bd657d37a1c2652f9c524a8cca38c"
   }
 ]

@@ -5,7 +5,7 @@ import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 
 export type SqlDialectParser = {
     getSuggestionAtCaretPosition?: (sql: string, caretPos: { lineNumber: number; column: number }) => unknown;
-    getAllEntities?: (sql: string, caretPos?: { lineNumber: number; column: number }) => any[] | null;
+    getAllEntities?: (sql: string, caretPos?: { lineNumber: number; column: number }) => unknown[] | null;
 };
 
 type SqlParserKey = 'mysql' | 'postgres';
@@ -48,6 +48,12 @@ const SQL_DIALECT_CONFIGS: Record<ConnectionDialect, SqlDialectConfig> = {
         monacoLanguageId: 'mysql',
         formatterLanguage: 'sqlite',
     },
+    snowflake: {
+        dialect: 'snowflake',
+        parserKey: 'mysql',
+        monacoLanguageId: 'mysql',
+        formatterLanguage: 'snowflake',
+    },
     oracle: {
         dialect: 'oracle',
         parserKey: 'mysql',
@@ -78,6 +84,7 @@ const SQL_DIALECT_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, ConnectionD
     neon: 'postgres',
     postgres: 'postgres',
     sqlite: 'sqlite',
+    snowflake: 'snowflake',
     sqlserver: 'sqlserver',
 };
 
@@ -113,6 +120,8 @@ export const normalizeSqlDialect = (value?: string | null): ConnectionDialect =>
             return 'oracle';
         case 'sqlite':
             return 'sqlite';
+        case 'snowflake':
+            return 'snowflake';
         case 'sqlserver':
         case 'mssql':
         case 'sql server':

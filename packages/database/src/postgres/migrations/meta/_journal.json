@@ -127,6 +127,13 @@
       "when": 1782748800000,
       "tag": "0017_local_ai_bridge",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782986582042,
+      "tag": "0018_calm_jimmy_woo",
+      "breakpoints": true
     }
   ]
 }

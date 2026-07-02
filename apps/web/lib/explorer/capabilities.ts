@@ -75,6 +75,14 @@ export const EXPLORER_CAPABILITIES: Record<ExplorerDriver, DriverCapabilities> =
         listKinds: ['tables', 'views'],
         objectKinds: ['database', 'table', 'view'],
     },
+    snowflake: {
+        driver: 'snowflake',
+        supportsSchema: true,
+        supportsDatabase: true,
+        supportsCatalog: false,
+        listKinds: ['schemas', 'tables', 'views'],
+        objectKinds: ['database', 'schema', 'table', 'view'],
+    },
     sqlserver: {
         driver: 'sqlserver',
         supportsSchema: true,
@@ -135,6 +143,7 @@ export function supportsDatabaseSummary(driver?: string | null): boolean {
         resolvedDriver === 'mariadb' ||
         resolvedDriver === 'clickhouse' ||
         resolvedDriver === 'oracle' ||
+        resolvedDriver === 'snowflake' ||
         resolvedDriver === 'sqlserver'
     );
 }
