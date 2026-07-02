@@ -23,6 +23,13 @@ codex mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-d
 codex mcp list
 ```
 
+Add the hosted bridge to Claude Code:
+
+```sh
+claude mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+claude mcp list
+```
+
 For standalone MCP servers, token management, direct Dory Actions, and self-hosted storage, use `@getdory/cli`:
 
 ```sh
@@ -49,6 +56,29 @@ codex mcp add \
 
 codex mcp list
 ```
+
+Add the standalone HTTP endpoint to Claude Code:
+
+```sh
+export DORY_MCP_TOKEN="dory_mcp_..."
+
+claude mcp add \
+  --transport http \
+  dory \
+  http://127.0.0.1:3318/api/mcp \
+  --header "Authorization: Bearer $DORY_MCP_TOKEN"
+
+claude mcp list
+```
+
+For local stdio instead of HTTP, let the MCP client start the server:
+
+```sh
+codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
+claude mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
+```
+
+Use `--data desktop` instead of `--data standalone` when you want the client to use Dory Desktop local data.
 
 For local Codex Agent access from Dory Web, use:
 
