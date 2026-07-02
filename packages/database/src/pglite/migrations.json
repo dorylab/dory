@@ -302,10 +302,11 @@
   },
   {
     "sql": [
-      "ALTER TABLE \"connection_identity_secrets\" ADD COLUMN \"private_key_encrypted\" text;\nALTER TABLE \"connection_identity_secrets\" ADD COLUMN \"private_key_passphrase_encrypted\" text;\n"
+      "ALTER TABLE \"connection_identity_secrets\" ADD COLUMN IF NOT EXISTS \"private_key_encrypted\" text;\n",
+      "\nALTER TABLE \"connection_identity_secrets\" ADD COLUMN IF NOT EXISTS \"private_key_passphrase_encrypted\" text;\n"
     ],
     "bps": true,
     "folderMillis": 1782986582920,
-    "hash": "7a944bd762f59f4551b6e96668ac7ed00e4bd657d37a1c2652f9c524a8cca38c"
+    "hash": "a4d87cb8a2569fa9a640eff52d02e0054933e38d4f2bc1e1c3a408ea0960d4e7"
   }
 ]

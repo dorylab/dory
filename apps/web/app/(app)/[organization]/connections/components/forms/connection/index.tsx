@@ -22,6 +22,26 @@ const ENVIRONMENT_OPTION_ICONS = {
     shared: Users,
 } satisfies Record<ConnectionEnvironmentValue, typeof CircleOff>;
 
+const BETA_CONNECTION_TYPES = new Set(['snowflake']);
+
+function ConnectionTypeOptionLabel({ value, label }: { value: string; label: string }) {
+    const isBeta = BETA_CONNECTION_TYPES.has(value);
+
+    return (
+        <span className="flex min-w-0 items-center gap-2">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                <DatabaseTypeIcon type={value} className="max-h-4 max-w-4" fallbackClassName="text-[10px]" />
+            </span>
+            <span className="truncate">{label}</span>
+            {isBeta ? (
+                <span aria-label={`${label} beta`} className="rounded-full bg-primary/10 px-1.5 text-[9px] leading-4 font-semibold tracking-[0.02em] text-primary">
+                    BETA
+                </span>
+            ) : null}
+        </span>
+    );
+}
+
 export default function ConnectionForm(props: { form: UseFormReturn<FieldValues> }) {
     const { form } = props;
     const { control } = form;
@@ -124,12 +144,7 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
                                 <SelectContent>
                                     {CONNECTION_TYPE_OPTIONS.map(option => (
                                         <SelectItem key={option.value} value={option.value}>
-                                            <span className="flex min-w-0 items-center gap-2">
-                                                <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-                                                    <DatabaseTypeIcon type={option.value} className="max-h-4 max-w-4" fallbackClassName="text-[10px]" />
-                                                </span>
-                                                <span className="truncate">{option.label}</span>
-                                            </span>
+                                            <ConnectionTypeOptionLabel value={option.value} label={option.label} />
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

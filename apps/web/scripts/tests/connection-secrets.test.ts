@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { resolveTestIdentityPassword } from '@/lib/connection/secrets';
+import { normalizeConnectionCreatePayload } from '@/lib/actions/server/domains/connection/payload';
 import { sanitizeConnectionSyncPayload } from '@/lib/actions/server/domains/connection/sanitize';
 
 test('connection test reuses stored identity password when edit form submits an empty password', () => {
@@ -24,4 +25,41 @@ test('connection sync payload strips identity secrets', () => {
 
     assert.deepEqual(sanitized.identity, { username: 'user' });
     assert.deepEqual(sanitized.identities, [{ username: 'user' }]);
+});
+
+test('connection create payload strips Snowflake form-only connection fields', () => {
+    const normalized = normalizeConnectionCreatePayload({
+        connection: {
+            type: 'snowflake',
+            name: 'Snowflake',
+            host: 'xy12345.us-east-1',
+            database: 'ANALYTICS',
+            warehouse: 'COMPUTE_WH',
+            schema: 'PUBLIC',
+            authMethod: 'password',
+            duckdbMode: 'local',
+            ssl: false,
+            options: JSON.stringify({
+                account: 'xy12345.us-east-1',
+                warehouse: 'COMPUTE_WH',
+                schema: 'PUBLIC',
+                authMethod: 'password',
+            }),
+        },
+        identity: { name: 'default user', username: 'DORY_USER', password: 'secret', isDefault: true },
+    });
+
+    assert.deepEqual(normalized.connection, {
+        type: 'snowflake',
+        name: 'Snowflake',
+        host: 'xy12345.us-east-1',
+        database: 'ANALYTICS',
+        options: JSON.stringify({
+            account: 'xy12345.us-east-1',
+            warehouse: 'COMPUTE_WH',
+            schema: 'PUBLIC',
+            authMethod: 'password',
+        }),
+    });
+    assert.equal(normalized.identities[0]?.username, 'DORY_USER');
 });

@@ -5,6 +5,23 @@ type UnknownRecord = Record<string, unknown>;
 
 const inlineIdentityKeys = new Set(['identity', 'identities', 'username', 'password', 'privateKey', 'privateKeyPassphrase', 'role', 'isDefault', 'enabled']);
 const sidecarKeys = new Set(['ssh', 'tls', 'timeout']);
+const connectionKeys = new Set([
+    'id',
+    'type',
+    'engine',
+    'name',
+    'description',
+    'host',
+    'port',
+    'httpPort',
+    'database',
+    'path',
+    'environment',
+    'tags',
+    'options',
+    'status',
+    'configVersion',
+]);
 
 function isRecord(value: unknown): value is UnknownRecord {
     return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -13,7 +30,7 @@ function isRecord(value: unknown): value is UnknownRecord {
 function stripConnectionSidecars(value: UnknownRecord) {
     const connection: UnknownRecord = {};
     for (const [key, entry] of Object.entries(value)) {
-        if (!inlineIdentityKeys.has(key) && !sidecarKeys.has(key)) {
+        if (connectionKeys.has(key) && !inlineIdentityKeys.has(key) && !sidecarKeys.has(key)) {
             connection[key] = entry;
         }
     }
