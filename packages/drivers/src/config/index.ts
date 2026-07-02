@@ -27,6 +27,8 @@ export type StoredDriverIdentity = {
     enabled?: boolean;
     status?: string | null;
     password?: string | null;
+    privateKey?: string | null;
+    privateKeyPassphrase?: string | null;
 };
 
 export type StoredDriverSsh = {
@@ -182,6 +184,61 @@ function buildOptions(
     return options;
 }
 
+function textOption(options: Record<string, unknown>, key: string): string | undefined {
+    const value = options[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeSnowflakeAuthMethod(options: Record<string, unknown>) {
+    return textOption(options, 'authMethod') === 'key_pair' ? 'key_pair' : 'password';
+}
+
+function buildSnowflakeConfig(
+    id: string,
+    connection: StoredDriverConnection,
+    identity: IdentityWithPassword,
+    options: Record<string, unknown>,
+    createError: ErrorFactory,
+): DriverConfig {
+    const account = textOption(options, 'account') ?? connection.host?.trim();
+    if (!account) {
+        throw createError('missing_account');
+    }
+    if (!identity.username?.trim()) {
+        throw createError('missing_username');
+    }
+
+    const authMethod = normalizeSnowflakeAuthMethod(options);
+    if (authMethod === 'key_pair') {
+        if (!identity.privateKey?.trim()) {
+            throw createError('missing_private_key');
+        }
+    } else if (!identity.password?.trim()) {
+        throw createError('missing_password');
+    }
+
+    return {
+        id,
+        type: 'snowflake',
+        host: account,
+        username: identity.username.trim(),
+        password: authMethod === 'password' ? (identity.password ?? undefined) : undefined,
+        database: identity.database ?? connection.database ?? undefined,
+        options: {
+            ...options,
+            account,
+            authMethod,
+            warehouse: textOption(options, 'warehouse'),
+            schema: textOption(options, 'schema'),
+            role: identity.role?.trim() || textOption(options, 'role'),
+            privateKey: authMethod === 'key_pair' ? (identity.privateKey ?? undefined) : undefined,
+            privateKeyPassphrase: authMethod === 'key_pair' ? (identity.privateKeyPassphrase ?? undefined) : undefined,
+        },
+        configVersion: connection.configVersion ?? undefined,
+        updatedAt: connection.updatedAt instanceof Date ? connection.updatedAt.getTime() : (connection.updatedAt ?? undefined),
+    };
+}
+
 export function buildStoredConnectionConfig(
     connection: StoredDriverConnection,
     identity: IdentityWithPassword,
@@ -243,6 +300,10 @@ export function buildStoredConnectionConfig(
             configVersion: connection.configVersion ?? undefined,
             updatedAt: connection.updatedAt instanceof Date ? connection.updatedAt.getTime() : (connection.updatedAt ?? undefined),
         };
+    }
+
+    if (type === 'snowflake') {
+        return buildSnowflakeConfig(connection.id, connection, identity, parseConnectionOptions(connection.options) ?? {}, createError);
     }
 
     if (!connection?.host) {
@@ -326,6 +387,11 @@ export function buildTestConnectionConfig(
             password: isMotherDuck ? (identity.password ?? undefined) : undefined,
             options,
         };
+    }
+
+    if (type === 'snowflake') {
+        const id = connection.id || connection.name ? `test-${connection.id ?? connection.name}` : `test-${type}`;
+        return buildSnowflakeConfig(id, connection, identity, parseConnectionOptions(connection.options) ?? {}, createError);
     }
 
     if (!connection?.host) {

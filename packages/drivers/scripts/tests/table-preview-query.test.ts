@@ -51,6 +51,17 @@ const clickhouse = buildTablePreviewClauses({
 assert.equal(clickhouse.whereSql, ' WHERE `duration_ms` <= {previewParam1:Float64}');
 assert.deepEqual(clickhouse.params, { previewParam1: 250 });
 
+const snowflake = buildTablePreviewClauses({
+    dialect: 'snowflake',
+    quoteIdentifier: quoteDouble,
+    filters: [{ col: 'email', kind: 'string', op: 'contains', value: 'OPENAI' }],
+    search: 'alice',
+    searchColumns: ['customer_name'],
+});
+
+assert.equal(snowflake.whereSql, ' WHERE LOWER(TO_VARCHAR("email")) LIKE ? AND (LOWER(TO_VARCHAR("customer_name")) LIKE ?)');
+assert.deepEqual(snowflake.params, ['%openai%', '%alice%']);
+
 assert.equal(normalizeTablePreviewLimit(undefined), 200);
 assert.equal(normalizeTablePreviewLimit(25.9), 25);
 assert.equal(normalizeTablePreviewLimit(-1), 200);

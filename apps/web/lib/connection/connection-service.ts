@@ -65,14 +65,16 @@ export async function getOrCreateConnectionPool(organizationId: string, connecti
         return patchDriverPoolForSqlAudit(existing, auditSnapshot);
     }
 
-    const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
+    const identitySecrets = identity.id
+        ? await db.connections.getIdentityPlainSecrets(organizationId, identity.id)
+        : { password: null, privateKey: null, privateKeyPassphrase: null };
 
     const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, record.connection.id);
     const sshConfig: SshWithSecrets | null = record.ssh ? { ...record.ssh, ...(sshSecrets ?? {}) } : sshSecrets ? ({ enabled: true, ...sshSecrets } as SshWithSecrets) : null;
     const tlsSecrets = await db.connections.getTlsPlainSecrets(organizationId, record.connection.id);
     const tlsConfig: TlsWithSecrets | null = record.tls ? { ...record.tls, ...(tlsSecrets ?? {}) } : null;
 
-    const config = buildStoredConnectionConfig(record.connection, { ...identity, password: plainPassword }, sshConfig, tlsConfig);
+    const config = buildStoredConnectionConfig(record.connection, { ...identity, ...identitySecrets }, sshConfig, tlsConfig);
     if (existing) {
         const currentOptions = JSON.stringify(existing.config.options ?? {});
         const nextOptions = JSON.stringify(config.options ?? {});

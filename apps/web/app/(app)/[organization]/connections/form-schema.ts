@@ -46,6 +46,9 @@ export const ConnectionDialogFormSchema = z
             path: z.string().optional().nullable(),
             accountId: z.string().optional().nullable(),
             duckdbMode: z.enum(['local', 'motherduck']).optional(),
+            warehouse: z.string().optional().nullable(),
+            schema: z.string().optional().nullable(),
+            authMethod: z.enum(['password', 'key_pair']).optional(),
             environment: z.string().optional(),
             tags: z.string().optional(),
         }),
@@ -55,6 +58,8 @@ export const ConnectionDialogFormSchema = z
             username: z.string().optional().nullable(),
             role: z.string().optional().nullable(),
             password: z.string().optional().nullable(),
+            privateKey: z.string().optional().nullable(),
+            privateKeyPassphrase: z.string().optional().nullable(),
             isDefault: z.boolean().optional(),
         }),
         ssh: z.object({
@@ -172,6 +177,39 @@ export const ConnectionDialogFormSchema = z
                     code: 'custom',
                     path: ['identity', 'password'],
                     message: 'Please provide a Cloudflare API token',
+                });
+            }
+            return;
+        }
+
+        if (value.connection.type === 'snowflake') {
+            if (!value.connection.host?.trim()) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['connection', 'host'],
+                    message: 'Please provide a Snowflake account identifier',
+                });
+            }
+            if (!value.identity.username?.trim()) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['identity', 'username'],
+                    message: 'Please provide a username',
+                });
+            }
+            if (value.connection.authMethod === 'key_pair') {
+                if (!value.identity.id && !value.identity.privateKey?.trim()) {
+                    ctx.addIssue({
+                        code: 'custom',
+                        path: ['identity', 'privateKey'],
+                        message: 'Please provide a private key',
+                    });
+                }
+            } else if (!value.identity.id && !value.identity.password?.trim()) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['identity', 'password'],
+                    message: 'Please provide a password',
                 });
             }
             return;

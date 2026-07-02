@@ -115,6 +115,8 @@ export const NEW_CONNECTION_DEFAULT_VALUES = {
         username: '',
         role: '',
         password: '',
+        privateKey: '',
+        privateKeyPassphrase: '',
         isDefault: true,
     },
 

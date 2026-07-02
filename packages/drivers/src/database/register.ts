@@ -8,6 +8,7 @@ import { MySqlDatasource } from './mysql/datasource';
 import { OracleDatasource } from './oracle/datasource';
 import { PostgresDatasource } from './postgres/datasource';
 import { SqliteDatasource } from './sqlite/datasource';
+import { SnowflakeDatasource } from './snowflake/datasource';
 import { SqlServerDatasource } from './sqlserver/datasource';
 
 let duckDbDriverCtorPromise: Promise<DriverCtor> | null = null;
@@ -33,6 +34,7 @@ export function registerDatabaseDrivers() {
     registerDriver('oracle', OracleDatasource);
     registerDriver('postgres', PostgresDatasource);
     registerDriver('sqlite', SqliteDatasource);
+    registerDriver('snowflake', SnowflakeDatasource);
     registerDriver('sqlserver', SqlServerDatasource);
     registerDriver('duckdb', loadDuckDbDriver);
 }
@@ -48,6 +50,7 @@ export function isDatabaseDriverType(value: unknown): value is DriverType {
         value === 'oracle' ||
         value === 'postgres' ||
         value === 'sqlite' ||
+        value === 'snowflake' ||
         value === 'sqlserver'
     );
 }

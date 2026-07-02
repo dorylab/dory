@@ -143,7 +143,9 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
         throw createConnectionError(CONNECTION_ERROR_CODES.missingIdentity);
     }
 
-    const plainPassword = identity.id ? await db.connections.getIdentityPlainPassword(organizationId, identity.id) : null;
+    const identitySecrets = identity.id
+        ? await db.connections.getIdentityPlainSecrets(organizationId, identity.id)
+        : { password: null, privateKey: null, privateKeyPassphrase: null };
 
     const sshSecrets = await db.connections.getSshPlainSecrets(organizationId, resolvedRecord.connection.id);
     const sshConfig: SshWithSecrets | null = resolvedRecord.ssh
@@ -154,7 +156,7 @@ export async function ensureConnectionPoolForUser(userId: string, organizationId
     const tlsSecrets = await db.connections.getTlsPlainSecrets(organizationId, resolvedRecord.connection.id);
     const tlsConfig: TlsWithSecrets | null = resolvedRecord.tls ? { ...resolvedRecord.tls, ...(tlsSecrets ?? {}) } : null;
 
-    const config = buildStoredConnectionConfig(resolvedRecord.connection, { ...identity, password: plainPassword }, sshConfig, tlsConfig, code =>
+    const config = buildStoredConnectionConfig(resolvedRecord.connection, { ...identity, ...identitySecrets }, sshConfig, tlsConfig, code =>
         createConnectionError(code as ConnectionErrorCode),
     );
     const auditSnapshot = createSqlAuditConnectionSnapshot(resolvedRecord, identity);

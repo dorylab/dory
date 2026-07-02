@@ -2,7 +2,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@dory/drivers/types';
 import type { TablePreviewFilter, TablePreviewOptions } from '@dory/drivers/types';
 
-type PreviewDialect = 'postgres' | 'mysql' | 'sqlite' | 'duckdb' | 'sqlserver' | 'oracle' | 'clickhouse';
+type PreviewDialect = 'postgres' | 'mysql' | 'sqlite' | 'duckdb' | 'sqlserver' | 'oracle' | 'clickhouse' | 'snowflake';
 
 type PreviewQueryOptions = TablePreviewOptions & {
     dialect: PreviewDialect;
@@ -59,6 +59,7 @@ function lowerExpression(dialect: PreviewDialect, expression: string) {
     if (dialect === 'sqlserver') return `LOWER(CAST(${expression} AS nvarchar(max)))`;
     if (dialect === 'oracle') return `LOWER(TO_CHAR(${expression}))`;
     if (dialect === 'clickhouse') return `lower(toString(${expression}))`;
+    if (dialect === 'snowflake') return `LOWER(TO_VARCHAR(${expression}))`;
     if (dialect === 'mysql') return `LOWER(CAST(${expression} AS CHAR))`;
     return `LOWER(CAST(${expression} AS TEXT))`;
 }
@@ -68,6 +69,7 @@ function textExpression(dialect: PreviewDialect, expression: string) {
     if (dialect === 'sqlserver') return `CAST(${expression} AS nvarchar(max))`;
     if (dialect === 'oracle') return `TO_CHAR(${expression})`;
     if (dialect === 'clickhouse') return `toString(${expression})`;
+    if (dialect === 'snowflake') return `TO_VARCHAR(${expression})`;
     if (dialect === 'mysql') return `CAST(${expression} AS CHAR)`;
     return `CAST(${expression} AS TEXT)`;
 }
@@ -75,6 +77,7 @@ function textExpression(dialect: PreviewDialect, expression: string) {
 function regexExpression(dialect: PreviewDialect, expression: string, valuePlaceholder: string, caseSensitive?: boolean) {
     if (dialect === 'postgres') return `${textExpression(dialect, expression)} ${caseSensitive ? '~' : '~*'} ${valuePlaceholder}`;
     if (dialect === 'mysql') return `${textExpression(dialect, expression)} REGEXP ${valuePlaceholder}`;
+    if (dialect === 'snowflake') return `${caseSensitive ? textExpression(dialect, expression) : lowerExpression(dialect, expression)} REGEXP ${valuePlaceholder}`;
     if (dialect === 'clickhouse') return `match(${caseSensitive ? textExpression(dialect, expression) : lowerExpression(dialect, expression)}, ${valuePlaceholder})`;
     if (dialect === 'duckdb') return `regexp_matches(${caseSensitive ? textExpression(dialect, expression) : lowerExpression(dialect, expression)}, ${valuePlaceholder})`;
     throw new Error(`Table preview regex filters are not supported for ${dialect}`);

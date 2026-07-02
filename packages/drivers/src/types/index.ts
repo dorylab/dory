@@ -9,7 +9,7 @@ export * from './table-info';
 export const DEFAULT_MAX_RESULT_ROWS = 10000;
 export const DEFAULT_TABLE_PREVIEW_LIMIT = 200;
 
-export type DriverType = 'clickhouse' | 'cloudflare-d1' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver';
+export type DriverType = 'clickhouse' | 'cloudflare-d1' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'snowflake' | 'sqlserver';
 export type ConnectionType = DriverType;
 
 export interface DriverConfig {
@@ -190,7 +190,7 @@ export type DatabaseSummaryRecommendation = {
     rowsEstimate: number | null;
 };
 
-export type DatabaseSummaryEngine = 'clickhouse' | 'cloudflare-d1' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'oracle' | 'postgres' | 'sqlite' | 'sqlserver' | 'unknown';
+export type DatabaseSummaryEngine = 'clickhouse' | 'cloudflare-d1' | 'doris' | 'duckdb' | 'mariadb' | 'mysql' | 'oracle' | 'postgres' | 'sqlite' | 'snowflake' | 'sqlserver' | 'unknown';
 
 export type DatabaseSummary = {
     databaseName: string;

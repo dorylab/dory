@@ -190,6 +190,7 @@
         "server-only": "0.0.1",
         "shadcn": "^4.1.2",
         "shiki": "^4.0.2",
+        "snowflake-sdk": "^3.0.0",
         "sonner": "^2.0.7",
         "sql-formatter": "^15.7.3",
         "ssh2": "^1.17.0",

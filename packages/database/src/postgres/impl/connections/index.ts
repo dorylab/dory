@@ -301,15 +301,14 @@ export class PostgresConnectionsRepository {
                 // Default identity (optional)
                 if (identities && identities.length > 0) {
                     for (const identity of identities) {
-                        let passwordEncrypted = null;
-                        if (identity.password) {
-                            passwordEncrypted = await encrypt(identity.password ?? '');
-                        }
+                        const { password, privateKey, privateKeyPassphrase, ...restIdentity } = identity as typeof identity & {
+                            privateKey?: string | null;
+                            privateKeyPassphrase?: string | null;
+                        };
+                        const secret = await this.buildIdentitySecret({ password, privateKey, privateKeyPassphrase });
                         const savedIdentityWithSecret = {
-                            ...identity,
-                            secret: {
-                                passwordEncrypted,
-                            },
+                            ...restIdentity,
+                            secret,
                         };
                         await this.createIdentityWithSecret(tx, userId, created.organizationId, created.id, savedIdentityWithSecret as any);
                     }
@@ -448,6 +447,8 @@ export class PostgresConnectionsRepository {
                     await tx.insert(connectionIdentitySecrets).values({
                         identityId: createdIdentity.id,
                         passwordEncrypted: sourceSecret.passwordEncrypted,
+                        privateKeyEncrypted: sourceSecret.privateKeyEncrypted,
+                        privateKeyPassphraseEncrypted: sourceSecret.privateKeyPassphraseEncrypted,
                         vaultRef: sourceSecret.vaultRef,
                         secretRef: sourceSecret.secretRef,
                     });
@@ -497,13 +498,11 @@ export class PostgresConnectionsRepository {
 
         if (payload.identities && payload.identities.length > 0) {
             for (const identity of payload.identities as any) {
-                const { password, ...restIdentity } = identity;
-                const secret =
-                    typeof password === 'undefined' || (typeof password === 'string' && password.trim() === '')
-                        ? undefined
-                        : password === null
-                          ? null
-                          : { passwordEncrypted: await encrypt(password) };
+                const { password, privateKey, privateKeyPassphrase, ...restIdentity } = identity as typeof identity & {
+                    privateKey?: string | null;
+                    privateKeyPassphrase?: string | null;
+                };
+                const secret = await this.buildIdentitySecret({ password, privateKey, privateKeyPassphrase });
 
                 if (identity.id) {
                     await this.updateIdentityWithSecret(this.db, organizationId, connectionId, {
@@ -819,6 +818,8 @@ export class PostgresConnectionsRepository {
             const secret: ConnectionIdentitySecret = {
                 identityId: identity.id,
                 passwordEncrypted: payload.secret.passwordEncrypted ?? null,
+                privateKeyEncrypted: payload.secret.privateKeyEncrypted ?? null,
+                privateKeyPassphraseEncrypted: payload.secret.privateKeyPassphraseEncrypted ?? null,
                 vaultRef: payload.secret.vaultRef ?? null,
                 secretRef: payload.secret.secretRef ?? null,
             } as any;
@@ -903,28 +904,80 @@ export class PostgresConnectionsRepository {
             await (db as any).delete(connectionIdentitySecrets).where(eq(connectionIdentitySecrets.identityId, identity.id));
             return null;
         }
-        // Has object -> upsert
+        const secretUpdate: Partial<ConnectionIdentitySecret> = {
+            updatedAt: new Date(),
+        } as any;
+        if (typeof payload.secret.passwordEncrypted !== 'undefined') secretUpdate.passwordEncrypted = payload.secret.passwordEncrypted;
+        if (typeof payload.secret.privateKeyEncrypted !== 'undefined') secretUpdate.privateKeyEncrypted = payload.secret.privateKeyEncrypted;
+        if (typeof payload.secret.privateKeyPassphraseEncrypted !== 'undefined') {
+            secretUpdate.privateKeyPassphraseEncrypted = payload.secret.privateKeyPassphraseEncrypted;
+        }
+        if (typeof payload.secret.vaultRef !== 'undefined') secretUpdate.vaultRef = payload.secret.vaultRef ?? null;
+        if (typeof payload.secret.secretRef !== 'undefined') secretUpdate.secretRef = payload.secret.secretRef ?? null;
+
+        if (existing) {
+            return await db.update(connectionIdentitySecrets).set(secretUpdate).where(eq(connectionIdentitySecrets.identityId, identity.id));
+        }
+
         const secret: ConnectionIdentitySecret = {
             identityId: identity.id,
-            passwordEncrypted: payload.secret?.passwordEncrypted ?? null,
+            passwordEncrypted: payload.secret.passwordEncrypted ?? null,
+            privateKeyEncrypted: payload.secret.privateKeyEncrypted ?? null,
+            privateKeyPassphraseEncrypted: payload.secret.privateKeyPassphraseEncrypted ?? null,
             vaultRef: payload.secret.vaultRef ?? null,
             secretRef: payload.secret.secretRef ?? null,
         } as any;
 
-        if (existing) {
-            return await db.update(connectionIdentitySecrets).set(secret).where(eq(connectionIdentitySecrets.identityId, identity.id));
-        }
-
         return await db.insert(connectionIdentitySecrets).values(secret);
     }
 
-    /**
-     * Decrypt plaintext password by identityId (for testConnection)
-     */
-    async getIdentityPlainPassword(organizationId: string, identityId: string): Promise<string | null> {
+    private async buildIdentitySecret(input: {
+        password?: string | null;
+        privateKey?: string | null;
+        privateKeyPassphrase?: string | null;
+    }): Promise<Omit<ConnectionIdentitySecretUpsertInput, 'identityId'> | null | undefined> {
+        const entries: Omit<ConnectionIdentitySecretUpsertInput, 'identityId'> = {};
+        let hasUpdate = false;
+
+        if (typeof input.password !== 'undefined') {
+            hasUpdate = true;
+            if (input.password === null) {
+                entries.passwordEncrypted = null;
+            } else if (input.password.trim()) {
+                entries.passwordEncrypted = await encrypt(input.password);
+            }
+        }
+        if (typeof input.privateKey !== 'undefined') {
+            hasUpdate = true;
+            if (input.privateKey === null) {
+                entries.privateKeyEncrypted = null;
+            } else if (input.privateKey.trim()) {
+                entries.privateKeyEncrypted = await encrypt(input.privateKey);
+            }
+        }
+        if (typeof input.privateKeyPassphrase !== 'undefined') {
+            hasUpdate = true;
+            if (input.privateKeyPassphrase === null) {
+                entries.privateKeyPassphraseEncrypted = null;
+            } else if (input.privateKeyPassphrase.trim()) {
+                entries.privateKeyPassphraseEncrypted = await encrypt(input.privateKeyPassphrase);
+            }
+        }
+
+        if (!hasUpdate) return undefined;
+        if (!Object.keys(entries).length) return undefined;
+        return entries;
+    }
+
+    async getIdentityPlainSecrets(
+        organizationId: string,
+        identityId: string,
+    ): Promise<{ password: string | null; privateKey: string | null; privateKeyPassphrase: string | null }> {
         const [secret] = await this.db
             .select({
                 passwordEncrypted: connectionIdentitySecrets.passwordEncrypted,
+                privateKeyEncrypted: connectionIdentitySecrets.privateKeyEncrypted,
+                privateKeyPassphraseEncrypted: connectionIdentitySecrets.privateKeyPassphraseEncrypted,
             })
             .from(connectionIdentitySecrets)
             .innerJoin(connectionIdentities, eq(connectionIdentitySecrets.identityId, connectionIdentities.id))
@@ -940,14 +993,28 @@ export class PostgresConnectionsRepository {
             )
             .limit(1);
 
-        if (!secret || !secret.passwordEncrypted) return null;
+        const safeDecrypt = async (cipher?: string | null) => {
+            if (!cipher) return null;
+            try {
+                return await decrypt(cipher);
+            } catch (e) {
+                console.error('[connections] decrypt identity secret failed', e);
+                return null;
+            }
+        };
 
-        try {
-            return await decrypt(secret.passwordEncrypted);
-        } catch (e) {
-            console.error('[connections] decrypt identity password failed', e);
-            return null;
-        }
+        return {
+            password: await safeDecrypt(secret?.passwordEncrypted),
+            privateKey: await safeDecrypt(secret?.privateKeyEncrypted),
+            privateKeyPassphrase: await safeDecrypt(secret?.privateKeyPassphraseEncrypted),
+        };
+    }
+
+    /**
+     * Decrypt plaintext password by identityId (for testConnection)
+     */
+    async getIdentityPlainPassword(organizationId: string, identityId: string): Promise<string | null> {
+        return (await this.getIdentityPlainSecrets(organizationId, identityId)).password;
     }
 
     /**

@@ -42,6 +42,10 @@ export const DatasourceTypesWithDBEngine = [
         engine: 'sqlite',
     },
     {
+        type: 'snowflake',
+        engine: 'snowflake',
+    },
+    {
         type: 'sqlserver',
         engine: 'sqlserver',
     },

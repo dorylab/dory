@@ -3,8 +3,25 @@ import { createCredentiallessDefaultIdentity, isCredentiallessConnection } from 
 
 type UnknownRecord = Record<string, unknown>;
 
-const inlineIdentityKeys = new Set(['identity', 'identities', 'username', 'password', 'role', 'isDefault', 'enabled']);
+const inlineIdentityKeys = new Set(['identity', 'identities', 'username', 'password', 'privateKey', 'privateKeyPassphrase', 'role', 'isDefault', 'enabled']);
 const sidecarKeys = new Set(['ssh', 'tls', 'timeout']);
+const connectionKeys = new Set([
+    'id',
+    'type',
+    'engine',
+    'name',
+    'description',
+    'host',
+    'port',
+    'httpPort',
+    'database',
+    'path',
+    'environment',
+    'tags',
+    'options',
+    'status',
+    'configVersion',
+]);
 
 function isRecord(value: unknown): value is UnknownRecord {
     return Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -13,7 +30,7 @@ function isRecord(value: unknown): value is UnknownRecord {
 function stripConnectionSidecars(value: UnknownRecord) {
     const connection: UnknownRecord = {};
     for (const [key, entry] of Object.entries(value)) {
-        if (!inlineIdentityKeys.has(key) && !sidecarKeys.has(key)) {
+        if (connectionKeys.has(key) && !inlineIdentityKeys.has(key) && !sidecarKeys.has(key)) {
             connection[key] = entry;
         }
     }
@@ -23,12 +40,16 @@ function stripConnectionSidecars(value: UnknownRecord) {
 function deriveIdentity(value: UnknownRecord) {
     const username = typeof value.username === 'string' ? value.username.trim() : '';
     const password = typeof value.password === 'string' ? value.password : undefined;
-    if (!username && typeof password === 'undefined') return null;
+    const privateKey = typeof value.privateKey === 'string' ? value.privateKey : undefined;
+    const privateKeyPassphrase = typeof value.privateKeyPassphrase === 'string' ? value.privateKeyPassphrase : undefined;
+    if (!username && typeof password === 'undefined' && typeof privateKey === 'undefined') return null;
 
     return {
         name: typeof value.identityName === 'string' && value.identityName.trim() ? value.identityName.trim() : 'Default',
         username,
         password,
+        privateKey,
+        privateKeyPassphrase,
         role: typeof value.role === 'string' ? value.role : undefined,
         isDefault: typeof value.isDefault === 'boolean' ? value.isDefault : true,
         database: typeof value.database === 'string' ? value.database : null,
@@ -128,6 +149,8 @@ const connectionFieldsSchema = z
         options: z.string().optional().describe('Optional serialized driver options JSON.'),
         username: z.string().optional().describe('Convenience inline identity username. Dory moves this to identities[0].'),
         password: z.string().optional().describe('Convenience inline identity password. Dory stores this as an identity secret.'),
+        privateKey: z.string().optional().describe('Convenience inline identity private key. Dory stores this as an identity secret.'),
+        privateKeyPassphrase: z.string().optional().describe('Convenience inline identity private key passphrase. Dory stores this as an identity secret.'),
     })
     .passthrough()
     .describe('Connection fields. For agents, prefer wrapping these under payload.connection.');
@@ -138,6 +161,8 @@ const connectionIdentitySchema = z
         name: z.string().optional().describe('Identity label, usually Default.'),
         username: z.string().optional().describe('Database username.'),
         password: z.string().nullable().optional().describe('Database password or secret value.'),
+        privateKey: z.string().nullable().optional().describe('Private key PEM for key-pair authentication.'),
+        privateKeyPassphrase: z.string().nullable().optional().describe('Private key passphrase for key-pair authentication.'),
         role: z.string().nullable().optional(),
         database: z.string().nullable().optional().describe('Database for this identity.'),
         isDefault: z.boolean().optional(),

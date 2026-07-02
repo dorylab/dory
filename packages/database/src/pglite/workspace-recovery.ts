@@ -233,6 +233,8 @@ const RECOVERY_TABLES: RecoveryTableSpec[] = [
         columns: [
             { target: 'identityId', sources: ['identity_id'], required: true },
             { target: 'passwordEncrypted', sources: ['password_encrypted'] },
+            { target: 'privateKeyEncrypted', sources: ['private_key_encrypted'] },
+            { target: 'privateKeyPassphraseEncrypted', sources: ['private_key_passphrase_encrypted'] },
             { target: 'vaultRef', sources: ['vault_ref'] },
             { target: 'secretRef', sources: ['secret_ref'] },
             { target: 'createdAt', sources: ['created_at'], required: true },
