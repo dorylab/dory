@@ -80,6 +80,73 @@ codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
 codex mcp list
 ```
 
+## Add to Codex or Claude Code
+
+Use stdio when the MCP client is on the same machine as Dory. The client starts and stops `dory mcp serve --stdio ...` itself, so you do not need to keep a terminal open.
+
+Codex CLI with standalone data:
+
+```sh
+codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
+codex mcp list
+```
+
+Claude Code with standalone data:
+
+```sh
+claude mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
+claude mcp list
+```
+
+Use Desktop data when you want the agent to use connections and local state from Dory Desktop:
+
+```sh
+codex mcp add dory-desktop -- npx -y @getdory/cli mcp serve --stdio --data desktop
+claude mcp add dory-desktop -- npx -y @getdory/cli mcp serve --stdio --data desktop
+```
+
+Use HTTP when you want a long-running endpoint or a shared remote endpoint. First create a token and start the HTTP runtime:
+
+```sh
+export DORY_MCP_TOKEN="$(
+  npx -y @getdory/cli mcp token create \
+    --data standalone \
+    --name "agent-http" \
+    --scope read \
+    --scope write | jq -r '.token'
+)"
+
+npx -y @getdory/cli runtime install \
+  --mcp-http \
+  --data standalone \
+  --host 127.0.0.1 \
+  --port 3318 \
+  --token "$DORY_MCP_TOKEN"
+
+npx -y @getdory/cli runtime restart --data standalone
+```
+
+Codex CLI with HTTP:
+
+```sh
+codex mcp add \
+  --url http://127.0.0.1:3318/api/mcp \
+  --bearer-token-env-var DORY_MCP_TOKEN \
+  dory
+```
+
+Claude Code with HTTP:
+
+```sh
+claude mcp add \
+  --transport http \
+  dory \
+  http://127.0.0.1:3318/api/mcp \
+  --header "Authorization: Bearer $DORY_MCP_TOKEN"
+```
+
+For Claude Code, the HTTP header value is written to its MCP configuration. Use stdio for local-only setups when you do not want to store a bearer token in client config.
+
 Run Dory Actions directly:
 
 ```sh
@@ -442,6 +509,13 @@ Add the hosted bridge to Codex CLI as a stdio MCP server:
 ```sh
 codex mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
 codex mcp list
+```
+
+Add the hosted bridge to Claude Code:
+
+```sh
+claude mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+claude mcp list
 ```
 
 ## Update and Uninstall
