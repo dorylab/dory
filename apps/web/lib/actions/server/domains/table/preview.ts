@@ -34,6 +34,7 @@ export const tablePreviewAction = defineWebAction({
         table: z.string().min(1),
         limit: z.number().int().positive().max(1000).optional(),
         offset: z.number().int().min(0).optional(),
+        countMode: z.enum(['none', 'exact']).optional(),
         sort: tablePreviewSortSchema,
         filters: z.array(tablePreviewFilterSchema).max(20).optional(),
         search: z.string().max(200).nullable().optional(),

@@ -800,43 +800,51 @@ export default function AgentWorkspaceClient({
                                             const isActive = tab.tabId === activeTabId;
                                             const tabEditorRef = tab.tabType === 'sql' ? (ensureEditorRef(tab.tabId) ?? editorRef) : editorRef;
 
+                                            if (tab.tabType === 'table') {
+                                                if (!isActive) {
+                                                    return null;
+                                                }
+
+                                                return (
+                                                    <div key={tab.tabId} className="flex h-full flex-col">
+                                                        <TableMode
+                                                            tabs={tabs}
+                                                            activeTab={tab}
+                                                            activeTabId={tab.tabId}
+                                                            setActiveTabId={setActiveTabId}
+                                                            addTab={addTab}
+                                                            updateTab={updateTab}
+                                                            showChatbot={false}
+                                                            chatWidth={normalizedChatWidth}
+                                                            setChatWidth={setClampedChatWidth}
+                                                            runQuery={runQueryWithRef}
+                                                            onCloseChatbot={closeChatbotPanel}
+                                                            reserveRightRail={false}
+                                                        />
+                                                    </div>
+                                                );
+                                            }
+
                                             return (
                                                 <Activity key={tab.tabId} mode={isActive ? 'visible' : 'hidden'}>
                                                     <div className={cn('flex h-full flex-col', isActive ? '' : 'hidden')}>
-                                                        {tab.tabType === 'table' ? (
-                                                            <TableMode
-                                                                tabs={tabs}
-                                                                activeTab={tab}
-                                                                activeTabId={tab.tabId}
-                                                                setActiveTabId={setActiveTabId}
-                                                                addTab={addTab}
-                                                                updateTab={updateTab}
-                                                                showChatbot={false}
-                                                                chatWidth={normalizedChatWidth}
-                                                                setChatWidth={setClampedChatWidth}
-                                                                runQuery={runQueryWithRef}
-                                                                onCloseChatbot={closeChatbotPanel}
-                                                                reserveRightRail={false}
-                                                            />
-                                                        ) : (
-                                                            <SqlMode
-                                                                tabs={tabs}
-                                                                activeTab={tab}
-                                                                activeTabId={tab.tabId}
-                                                                setActiveTabId={setActiveTabId}
-                                                                addTab={addTab}
-                                                                updateTab={updateTab}
-                                                                editorRef={tabEditorRef}
-                                                                runQuery={runQueryWithRef}
-                                                                cancelQuery={cancelQuery}
-                                                                runningTabs={runningTabs}
-                                                                showChatbot={shouldShowChatbot}
-                                                                chatWidth={normalizedChatWidth}
-                                                                setChatWidth={setClampedChatWidth}
-                                                                onCloseChatbot={closeChatbotPanel}
-                                                                reserveRightRail={false}
-                                                            />
-                                                        )}
+                                                        <SqlMode
+                                                            tabs={tabs}
+                                                            activeTab={tab}
+                                                            activeTabId={tab.tabId}
+                                                            setActiveTabId={setActiveTabId}
+                                                            addTab={addTab}
+                                                            updateTab={updateTab}
+                                                            editorRef={tabEditorRef}
+                                                            runQuery={runQueryWithRef}
+                                                            cancelQuery={cancelQuery}
+                                                            runningTabs={runningTabs}
+                                                            showChatbot={shouldShowChatbot}
+                                                            chatWidth={normalizedChatWidth}
+                                                            setChatWidth={setClampedChatWidth}
+                                                            onCloseChatbot={closeChatbotPanel}
+                                                            reserveRightRail={false}
+                                                        />
                                                     </div>
                                                 </Activity>
                                             );

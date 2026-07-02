@@ -221,16 +221,19 @@ async function getTablePreview(datasource: ClickhouseDatasource, database: strin
         dialect: 'clickhouse',
         quoteIdentifier: quoteClickhouseIdentifier,
     });
-    const countResult = await datasource.queryWithContext<CountRow>(`SELECT count() AS totalRows FROM {db:Identifier}.{tbl:Identifier}${preview.whereSql}`, {
-        database,
-        params: {
-            ...(preview.params as Record<string, unknown>),
-            db: database,
-            tbl: table,
-        },
-    });
+    const shouldCount = options?.countMode !== 'none';
+    const countResult = shouldCount
+        ? await datasource.queryWithContext<CountRow>(`SELECT count() AS totalRows FROM {db:Identifier}.{tbl:Identifier}${preview.whereSql}`, {
+              database,
+              params: {
+                  ...(preview.params as Record<string, unknown>),
+                  db: database,
+                  tbl: table,
+              },
+          })
+        : null;
     const unfilteredCountResult =
-        preview.whereSql.length > 0
+        shouldCount && preview.whereSql.length > 0
             ? await datasource.queryWithContext<CountRow>(`SELECT count() AS totalRows FROM {db:Identifier}.{tbl:Identifier}`, {
                   database,
                   params: {
@@ -255,8 +258,8 @@ async function getTablePreview(datasource: ClickhouseDatasource, database: strin
 
     return {
         ...result,
-        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
-        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
+        totalRows: toNumberOrNull(countResult?.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult?.rows[0]?.totalRows),
         limited: true,
         limit,
     };

@@ -252,6 +252,7 @@ export type TablePreviewFilter = {
 export type TablePreviewOptions = {
     limit?: number;
     offset?: number;
+    countMode?: 'none' | 'exact';
     sort?: TablePreviewSort | null;
     filters?: TablePreviewFilter[];
     search?: string | null;

@@ -322,16 +322,19 @@ export async function previewCloudflareD1Table(
     const normalizedLimit = normalizeTablePreviewLimit(limit);
     const normalizedOffset = normalizeTablePreviewOffset(offset);
     const qualifiedName = buildQualifiedName(database, table);
-    const countResult = await executeCloudflareD1Query<CountRow>(config, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params);
+    const shouldCount = options?.countMode !== 'none';
+    const countResult = shouldCount
+        ? await executeCloudflareD1Query<CountRow>(config, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params)
+        : null;
     const unfilteredCountResult =
-        preview.whereSql.length > 0 ? await executeCloudflareD1Query<CountRow>(config, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
+        shouldCount && preview.whereSql.length > 0 ? await executeCloudflareD1Query<CountRow>(config, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
     const sql = `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`;
     const result = await executeCloudflareD1Query<Record<string, unknown>>(config, sql, [...(preview.params as unknown[]), normalizedLimit, normalizedOffset]);
 
     return {
         ...result,
-        totalRows: Number(countResult.rows[0]?.totalRows ?? 0),
-        unfilteredTotalRows: Number(unfilteredCountResult.rows[0]?.totalRows ?? 0),
+        totalRows: countResult ? Number(countResult.rows[0]?.totalRows ?? 0) : null,
+        unfilteredTotalRows: unfilteredCountResult ? Number(unfilteredCountResult.rows[0]?.totalRows ?? 0) : null,
         limited: true,
         limit: normalizedLimit,
     };

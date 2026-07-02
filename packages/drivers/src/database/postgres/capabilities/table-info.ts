@@ -339,12 +339,15 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
         parameterStart: 1,
     });
     const previewParams = preview.params as unknown[];
-    const countResult = await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}${preview.whereSql}`, {
-        database,
-        params: previewParams,
-    });
+    const shouldCount = options?.countMode !== 'none';
+    const countResult = shouldCount
+        ? await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}${preview.whereSql}`, {
+              database,
+              params: previewParams,
+          })
+        : null;
     const unfilteredCountResult =
-        preview.whereSql.length > 0
+        shouldCount && preview.whereSql.length > 0
             ? await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}`, {
                   database,
                   params: [],
@@ -361,8 +364,8 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
 
     return {
         ...result,
-        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
-        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
+        totalRows: toNumberOrNull(countResult?.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult?.rows[0]?.totalRows),
         limited: true,
         limit,
     };
