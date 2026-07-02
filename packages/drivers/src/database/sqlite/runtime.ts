@@ -228,15 +228,16 @@ export function previewSqliteTable(
     const normalizedLimit = normalizeTablePreviewLimit(limit);
     const normalizedOffset = normalizeTablePreviewOffset(offset);
     const qualifiedName = buildQualifiedName(database, table);
-    const countResult = executeSqliteQuery<CountRow>(db, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params);
-    const unfilteredCountResult = preview.whereSql.length > 0 ? executeSqliteQuery<CountRow>(db, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
+    const shouldCount = options?.countMode !== 'none';
+    const countResult = shouldCount ? executeSqliteQuery<CountRow>(db, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params) : null;
+    const unfilteredCountResult = shouldCount && preview.whereSql.length > 0 ? executeSqliteQuery<CountRow>(db, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
     const sql = `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`;
     const result = executeSqliteQuery<Record<string, unknown>>(db, sql, [...(preview.params as unknown[]), normalizedLimit, normalizedOffset]);
 
     return {
         ...result,
-        totalRows: Number(countResult.rows[0]?.totalRows ?? 0),
-        unfilteredTotalRows: Number(unfilteredCountResult.rows[0]?.totalRows ?? 0),
+        totalRows: countResult ? Number(countResult.rows[0]?.totalRows ?? 0) : null,
+        unfilteredTotalRows: unfilteredCountResult ? Number(unfilteredCountResult.rows[0]?.totalRows ?? 0) : null,
         limited: true,
         limit: normalizedLimit,
     };

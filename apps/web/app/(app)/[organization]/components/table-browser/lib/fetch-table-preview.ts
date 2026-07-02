@@ -8,6 +8,7 @@ type FetchTablePreviewParams = {
     tableName: string;
     limit?: number;
     offset?: number;
+    countMode?: 'none' | 'exact';
     sort?: TablePreviewSort | null;
     filters?: TablePreviewFilter[];
     search?: string | null;
@@ -29,6 +30,7 @@ export async function fetchTablePreview({
     tableName,
     limit,
     offset,
+    countMode,
     sort,
     filters,
     search,
@@ -46,6 +48,7 @@ export async function fetchTablePreview({
             table: tableName,
             limit,
             offset,
+            countMode,
             sort,
             filters,
             search,

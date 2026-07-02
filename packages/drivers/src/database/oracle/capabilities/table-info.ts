@@ -181,12 +181,15 @@ async function getTablePreview(datasource: OracleDatasource, database: string, t
         dialect: 'oracle',
         quoteIdentifier: quoteOracleIdentifier,
     });
-    const countResult = await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}${preview.whereSql}`, {
-        database,
-        params: preview.params,
-    });
+    const shouldCount = options?.countMode !== 'none';
+    const countResult = shouldCount
+        ? await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}${preview.whereSql}`, {
+              database,
+              params: preview.params,
+          })
+        : null;
     const unfilteredCountResult =
-        preview.whereSql.length > 0
+        shouldCount && preview.whereSql.length > 0
             ? await datasource.queryWithContext<CountRow>(`SELECT COUNT(*) AS "totalRows" FROM ${qualifiedName}`, {
                   database,
                   params: {},
@@ -208,8 +211,8 @@ async function getTablePreview(datasource: OracleDatasource, database: string, t
 
     return {
         ...result,
-        totalRows: toNumberOrNull(countResult.rows[0]?.totalRows),
-        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult.rows[0]?.totalRows),
+        totalRows: toNumberOrNull(countResult?.rows[0]?.totalRows),
+        unfilteredTotalRows: toNumberOrNull(unfilteredCountResult?.rows[0]?.totalRows),
         limited: true,
         limit,
     };

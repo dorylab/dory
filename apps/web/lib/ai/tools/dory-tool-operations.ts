@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 
 import { getDBService } from '@dory/database';
 import { buildResultAutoChartProfile } from '@dory/analysis/core/result-chart-profile';
+import type { ResultAutoChartOverrides, ResultAutoChartStatsInput } from '@dory/analysis/core/result-chart-profile';
 import { buildResultContext } from '@dory/analysis/result-context';
+import type { AnalysisTrigger, InsightViewModel, ResultContext, ResultContextStatsInput } from '@dory/analysis/types';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import type { DatabaseObjectRow, DatabaseSummaryEngine, QueryInsightsFilters, TableColumnInfo, TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
@@ -414,6 +416,7 @@ export async function previewTableOperation(
         table: string;
         limit?: number | null;
         offset?: number | null;
+        countMode?: 'none' | 'exact' | null;
         sort?: TablePreviewSort | null;
         filters?: TablePreviewFilter[] | null;
         search?: string | null;
@@ -432,6 +435,7 @@ export async function previewTableOperation(
             table: input.table,
             limit: clampTablePreviewLimit(input.limit),
             offset: input.offset ?? 0,
+            countMode: input.countMode ?? 'exact',
             sort: input.sort ?? null,
             filters: input.filters ?? [],
             search: input.search ?? null,
@@ -559,7 +563,7 @@ export function buildResultContextOperation(input: {
     databaseName?: string | null;
     rowCount?: number | null;
     columns?: Array<Record<string, unknown>> | null;
-    stats?: Record<string, unknown> | null;
+    stats?: ResultContextStatsInput;
 }) {
     return {
         resultContext: buildResultContext({
@@ -569,7 +573,7 @@ export function buildResultContextOperation(input: {
             databaseName: input.databaseName ?? undefined,
             rowCount: input.rowCount ?? undefined,
             columns: input.columns?.map(toResultContextColumn),
-            stats: input.stats as any,
+            stats: input.stats,
         }),
     };
 }
@@ -577,15 +581,15 @@ export function buildResultContextOperation(input: {
 export function buildChartProfileOperation(input: {
     rows: Array<Record<string, unknown>>;
     columns?: unknown;
-    stats?: Record<string, unknown> | null;
-    overrides?: Record<string, unknown>;
+    stats?: ResultAutoChartStatsInput;
+    overrides?: ResultAutoChartOverrides;
 }) {
     return {
         profile: buildResultAutoChartProfile({
             rows: input.rows.slice(0, MAX_DORY_TOOL_RESULT_ROWS),
             columns: input.columns,
-            stats: input.stats as any,
-            overrides: input.overrides as any,
+            stats: input.stats,
+            overrides: input.overrides,
         }),
     };
 }
@@ -624,10 +628,10 @@ export async function runAnalysisOperation(
                         connectionId,
                         databaseName: input.databaseName,
                         resultRef: input.resultRef,
-                        resultContext: input.resultContext as any,
-                        insight: input.insight,
+                        resultContext: input.resultContext as ResultContext,
+                        insight: input.insight as InsightViewModel,
                     },
-                    trigger: input.trigger as any,
+                    trigger: input.trigger as AnalysisTrigger,
                 },
                 connection: entry.instance,
                 connectionId,

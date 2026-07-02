@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import Database from 'better-sqlite3';
+import { previewSqliteTable } from '../../src/database/sqlite/runtime.ts';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../src/database/shared/table-preview-query.ts';
 
 const quoteDouble = (value: string) => `"${value.replace(/"/g, '""')}"`;
@@ -55,5 +57,23 @@ assert.equal(normalizeTablePreviewLimit(-1), 200);
 assert.equal(normalizeTablePreviewOffset(undefined), 0);
 assert.equal(normalizeTablePreviewOffset(40.9), 40);
 assert.equal(normalizeTablePreviewOffset(-5), 0);
+
+const db = new Database(':memory:');
+db.exec(`
+    CREATE TABLE orders (id INTEGER PRIMARY KEY, status TEXT);
+    INSERT INTO orders (status) VALUES ('paid'), ('paid'), ('void');
+`);
+
+const exactPreview = previewSqliteTable(db, 'main', 'orders', 2, 0, {});
+assert.equal(exactPreview.totalRows, 3);
+assert.equal(exactPreview.unfilteredTotalRows, 3);
+assert.equal(exactPreview.rows.length, 2);
+
+const noCountPreview = previewSqliteTable(db, 'main', 'orders', 2, 0, { countMode: 'none' });
+assert.equal(noCountPreview.totalRows, null);
+assert.equal(noCountPreview.unfilteredTotalRows, null);
+assert.equal(noCountPreview.rows.length, 2);
+
+db.close();
 
 console.log('table-preview query tests passed');

@@ -10,6 +10,7 @@ type BuildTablePreviewPayloadParams = {
     table: string;
     limit?: number;
     offset?: number;
+    countMode?: 'none' | 'exact';
     sort?: TablePreviewSort | null;
     filters?: TablePreviewFilter[];
     search?: string | null;
@@ -49,6 +50,7 @@ export async function buildTablePreviewPayload({
     table,
     limit,
     offset,
+    countMode,
     sort,
     filters,
     search,
@@ -66,6 +68,7 @@ export async function buildTablePreviewPayload({
     const result = await connection.previewTable(database, table, {
         limit: normalizedLimit,
         offset: normalizedOffset,
+        countMode,
         sort,
         filters,
         search,

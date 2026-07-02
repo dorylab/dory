@@ -129,6 +129,7 @@ function buildPreviewQueryKey({
     filters,
     sort,
     searchColumns,
+    countMode,
 }: {
     connectionId?: string;
     databaseName?: string;
@@ -141,8 +142,9 @@ function buildPreviewQueryKey({
     filters: ColumnFilter[];
     sort: TablePreviewSort | null;
     searchColumns: string[];
+    countMode: 'none' | 'exact';
 }) {
-    return ['table-preview', source, connectionId, databaseName, tableName, storageKey, pageIndex, pageSize, search, filters, sort, searchColumns] as const;
+    return ['table-preview', source, connectionId, databaseName, tableName, storageKey, pageIndex, pageSize, search, filters, sort, searchColumns, countMode] as const;
 }
 
 function mapPreviewRows(rows: Record<string, unknown>[], rowKeyPrefix: string): ResultRow[] {
@@ -322,6 +324,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const metadataTotalRowEstimate = tableProperties?.totalRows ?? tableStats?.rowCount ?? null;
     const searchColumns = useMemo(() => tableColumns?.columns.map(column => column.name) ?? EMPTY_SEARCH_COLUMNS, [tableColumns?.columns]);
     const effectiveSearchColumns = query.trim() ? searchColumns : EMPTY_SEARCH_COLUMNS;
+    const countMode = query.trim() || activeFilters.length > 0 ? 'exact' : 'none';
 
     const previewQueryKey = useMemo(
         () =>
@@ -337,8 +340,9 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 filters: activeFilters,
                 sort: sortState,
                 searchColumns: effectiveSearchColumns,
+                countMode,
             }),
-        [activeFilters, connectionId, databaseName, effectiveSearchColumns, pageIndex, pageSize, query, sortState, source, storageKey, tableName],
+        [activeFilters, connectionId, countMode, databaseName, effectiveSearchColumns, pageIndex, pageSize, query, sortState, source, storageKey, tableName],
     );
 
     const currentPreviewSql = useMemo(() => {
@@ -375,6 +379,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 tableName,
                 limit: pageSize,
                 offset: pageIndex * pageSize,
+                countMode,
                 sort: sortState,
                 filters: activeFilters as TablePreviewFilter[],
                 search: query,

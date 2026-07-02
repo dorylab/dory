@@ -281,8 +281,10 @@ export async function previewDuckDbTable(
     const normalizedLimit = normalizeTablePreviewLimit(limit);
     const normalizedOffset = normalizeTablePreviewOffset(offset);
     const qualifiedName = buildQualifiedTable(database, tableName, schema);
-    const countResult = await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params);
-    const unfilteredCountResult = preview.whereSql.length > 0 ? await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
+    const shouldCount = options?.countMode !== 'none';
+    const countResult = shouldCount ? await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}${preview.whereSql}`, preview.params) : null;
+    const unfilteredCountResult =
+        shouldCount && preview.whereSql.length > 0 ? await executeDuckDbQuery<CountRow>(handle, `SELECT COUNT(*) AS totalRows FROM ${qualifiedName}`) : countResult;
     const result = await executeDuckDbQuery<Record<string, unknown>>(handle, `SELECT * FROM ${qualifiedName}${preview.whereSql}${preview.orderBySql} LIMIT ? OFFSET ?`, [
         ...(preview.params as unknown[]),
         normalizedLimit,
@@ -291,8 +293,8 @@ export async function previewDuckDbTable(
 
     return {
         ...result,
-        totalRows: Number(countResult.rows[0]?.totalRows ?? 0),
-        unfilteredTotalRows: Number(unfilteredCountResult.rows[0]?.totalRows ?? 0),
+        totalRows: countResult ? Number(countResult.rows[0]?.totalRows ?? 0) : null,
+        unfilteredTotalRows: unfilteredCountResult ? Number(unfilteredCountResult.rows[0]?.totalRows ?? 0) : null,
         limited: true,
         limit: normalizedLimit,
     };

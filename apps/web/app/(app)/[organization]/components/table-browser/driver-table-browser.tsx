@@ -93,19 +93,19 @@ export function DriverTableBrowser({
                 </TabsList>
 
                 <div className="flex-1 min-h-0">
-                    <TabsContent value="overview" className="h-full mt-0 data-[state=inactive]:hidden" forceMount>
+                    <TabsContent value="overview" className="h-full mt-0">
                         <TableOverview databaseName={databaseName} tableName={tableName} />
                     </TabsContent>
-                    <TabsContent value="data" className="h-full mt-0 data-[state=inactive]:hidden" forceMount>
+                    <TabsContent value="data" className="h-full mt-0">
                         <TableDataPreview activeTab={activeTab} connectionId={connectionId} databaseName={databaseName} tableName={tableName} />
                     </TabsContent>
-                    <TabsContent value="structure" className="h-full mt-0 data-[state=inactive]:hidden" forceMount>
+                    <TabsContent value="structure" className="h-full mt-0">
                         <TableStructure databaseName={databaseName} tableName={tableName} />
                     </TabsContent>
-                    <TabsContent value="stats" className="h-full mt-0 data-[state=inactive]:hidden" forceMount>
+                    <TabsContent value="stats" className="h-full mt-0">
                         <TableStats databaseName={databaseName} tableName={tableName} driver={driver} />
                     </TabsContent>
-                    <TabsContent value="indexes" className="h-full mt-0 data-[state=inactive]:hidden" forceMount>
+                    <TabsContent value="indexes" className="h-full mt-0">
                         <TableIndexesTab
                             connectionId={activeTab?.connectionId ?? connectionId}
                             database={databaseName ?? ''}
