@@ -27,7 +27,7 @@ Use Dory as your everyday SQL client, or as the database execution layer for age
 
 **👇 Live Playground: https://app.getdory.dev**
 
-![Dory AI-native SQL workspace](./public/readme-agent-workspace.png)
+![Dory AI-native SQL workspace](./public/actions.png)
 
 ## Why Dory?
 
