@@ -52,6 +52,9 @@ const nextConfig = {
             '../../packages/database/src/postgres/migrations/**/*',
             '../../packages/database/src/pglite/migrations/**/*',
             '../../packages/i18n/src/locales/*.json',
+            '../../node_modules/async-function/**/*',
+            '../../node_modules/async-generator-function/**/*',
+            '../../node_modules/generator-function/**/*',
         ],
     },
     logging: {
