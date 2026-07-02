@@ -268,7 +268,7 @@ test('desktop MCP grant auth context rejects invalid grants', async () => {
     assert.equal(result.status, 401);
 });
 
-test('desktop MCP grant organization resolution can use the requested route organization', async () => {
+test('desktop MCP grant organization resolution can resolve the requested route organization slug', async () => {
     const organizationId = await resolveMcpDesktopGrantOrganizationId({
         userId: 'owner-user',
         sessionOrganizationId: null,
