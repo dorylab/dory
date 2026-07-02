@@ -198,7 +198,14 @@ export function SqlMode({
         [activeTab, activeTabId, connectionId],
     );
     const editorResultLayout = useMemo(() => normalizeEditorResultLayout(editorResultLayouts[editorResultLayoutScopeKey]), [editorResultLayoutScopeKey, editorResultLayouts]);
-    const handleEditorResultLayoutChange = useCallback(
+    const editorResultDefaultLayout = useMemo(
+        () => ({
+            'editor-panel': editorResultLayout[0],
+            'result-panel': editorResultLayout[1],
+        }),
+        [editorResultLayout],
+    );
+    const handleEditorResultLayoutChanged = useCallback(
         (layout: Layout) => {
             const next = normalizeEditorResultLayout([layout['editor-panel'], layout['result-panel']]);
             setEditorResultLayouts(prev => {
@@ -517,8 +524,14 @@ export function SqlMode({
                             )}
                         </div>
 
-                        <Group key={editorResultLayoutScopeKey} orientation="vertical" className="h-full min-h-0" onLayoutChange={handleEditorResultLayoutChange}>
-                            <Panel id="editor-panel" defaultSize={`${editorResultLayout[0]}%`} minSize={`${MIN_EDITOR_PANEL_SIZE}%`} className="min-h-0">
+                        <Group
+                            key={editorResultLayoutScopeKey}
+                            orientation="vertical"
+                            className="flex-1 min-h-0"
+                            defaultLayout={editorResultDefaultLayout}
+                            onLayoutChanged={handleEditorResultLayoutChanged}
+                        >
+                            <Panel id="editor-panel" minSize={`${MIN_EDITOR_PANEL_SIZE}%`} className="min-h-0">
                                 <div className="flex flex-col h-full border-b min-h-0">
                                     <SQLEditor
                                         ref={editorRef}
@@ -545,7 +558,7 @@ export function SqlMode({
 
                             <Separator className="h-1.5 bg-border transition-colors" />
 
-                            <Panel id="result-panel" defaultSize={`${editorResultLayout[1]}%`} minSize={`${MIN_RESULT_PANEL_SIZE}%`} className="min-h-0">
+                            <Panel id="result-panel" minSize={`${MIN_RESULT_PANEL_SIZE}%`} className="min-h-0">
                                 <div className="flex h-full flex-col min-h-0">
                                     <ResultTable />
                                 </div>
