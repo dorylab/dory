@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "target": "ES2022",
-        "lib": ["ES2022", "DOM"],
+        "lib": ["ES2022"],
         "module": "esnext",
         "moduleResolution": "bundler",
         "strict": true,
@@ -12,16 +12,10 @@
         "resolveJsonModule": true,
         "types": ["node"],
         "paths": {
-            "@dory/artifacts": ["../artifacts/src/index.ts"],
-            "@dory/artifacts/*": ["../artifacts/src/*"],
-            "@dory/database": ["./src/index.ts"],
-            "@dory/database/*": ["./src/*"],
             "@dory/resultset": ["../resultset/src/index.ts"],
-            "@dory/resultset/*": ["../resultset/src/*"],
-            "@dory/shared": ["../shared/src/index.ts"],
-            "@dory/shared/*": ["../shared/src/*"]
+            "@dory/resultset/*": ["../resultset/src/*"]
         }
     },
-    "include": ["src/**/*.ts", "src/**/*.json"],
+    "include": ["src/**/*.ts"],
     "exclude": ["node_modules"]
 }

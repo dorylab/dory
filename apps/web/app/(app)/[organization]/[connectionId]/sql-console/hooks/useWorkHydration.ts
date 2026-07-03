@@ -1,15 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 
 import { authFetch } from '@/lib/client/auth-fetch';
 import type { ResultSetStatsV1, ResultSetViewState } from '@/lib/client/type';
 import { useDB } from '@/lib/client/use-pglite';
+import { activeTabIdAtom } from '@/shared/stores/app.store';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
+import { resolveWorkHydrationTarget } from '../work-hydration-target';
 
 type WorkSnapshotResponse = {
     code?: number;
@@ -64,6 +66,8 @@ type WorkSnapshotResponse = {
     message?: string;
 };
 
+type WorkSnapshot = NonNullable<NonNullable<WorkSnapshotResponse['data']>['snapshot']>;
+
 export function useWorkHydration({
     tabs,
     isLoading,
@@ -80,9 +84,50 @@ export function useWorkHydration({
     const workId = normalizedWorkspaceScope.workspaceMode === 'agent' ? normalizedWorkspaceScope.workId : null;
     const requestedTabId = searchParams.get('tabId');
     const requestedSessionId = searchParams.get('sessionId');
+    const activeTabId = useAtomValue(activeTabIdAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
     const { dbReady, applyServerResult } = useDB();
     const hydratedWorkRef = useRef<string | null>(null);
+    const snapshotRef = useRef<WorkSnapshot | null>(null);
+    const [snapshotRevision, setSnapshotRevision] = useState(0);
+
+    const applyHydrationTarget = useCallback(
+        (snapshot: WorkSnapshot) => {
+            const hydrationTabs = tabs.length > 0 ? tabs : (snapshot.tabs ?? []);
+            const hydrationTarget = resolveWorkHydrationTarget({
+                tabs: hydrationTabs,
+                sessions: snapshot.sessions ?? [],
+                requestedTabId,
+                requestedSessionId,
+            });
+
+            if (Object.keys(hydrationTarget.sessionIdByTab).length > 0) {
+                setSessionIdMap(prev => {
+                    let changed = false;
+                    for (const [tabId, sessionId] of Object.entries(hydrationTarget.sessionIdByTab)) {
+                        if (prev[tabId] !== sessionId) {
+                            changed = true;
+                            break;
+                        }
+                    }
+
+                    return changed ? { ...prev, ...hydrationTarget.sessionIdByTab } : prev;
+                });
+                for (const [tabId, sessionId] of Object.entries(hydrationTarget.sessionIdByTab)) {
+                    try {
+                        localStorage.setItem(getSessionStorageKey(tabId, normalizedWorkspaceScope), sessionId);
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
+
+            if (hydrationTarget.targetTabId && hydrationTarget.targetTabId !== activeTabId) {
+                setActiveTabId(hydrationTarget.targetTabId);
+            }
+        },
+        [activeTabId, normalizedWorkspaceScope, requestedSessionId, requestedTabId, setActiveTabId, setSessionIdMap, tabs],
+    );
 
     useEffect(() => {
         if (!workId || !dbReady || isLoading || hydratedWorkRef.current === workId) return;
@@ -111,37 +156,25 @@ export function useWorkHydration({
 
             if (cancelled) return;
 
-            const targetTabId =
-                requestedTabId && tabs.some(tab => tab.tabId === requestedTabId)
-                    ? requestedTabId
-                    : (snapshot.sessions?.find(item => item.session.tabId)?.session.tabId ?? snapshot.tabs?.[0]?.tabId ?? null);
-            const targetSessionId =
-                requestedSessionId ??
-                (targetTabId ? snapshot.sessions?.find(item => item.session.tabId === targetTabId)?.session.sessionId : null) ??
-                snapshot.sessions?.[0]?.session.sessionId ??
-                null;
-
-            if (targetTabId && targetSessionId) {
-                setSessionIdMap(prev => ({ ...prev, [targetTabId]: targetSessionId }));
-                try {
-                    localStorage.setItem(getSessionStorageKey(targetTabId, normalizedWorkspaceScope), targetSessionId);
-                } catch {
-                    // ignore
-                }
-            }
-
-            if (targetTabId) {
-                setActiveTabId(targetTabId);
-            }
+            snapshotRef.current = snapshot;
+            setSnapshotRevision(revision => revision + 1);
         }
 
         hydrate().catch(error => {
             hydratedWorkRef.current = null;
+            snapshotRef.current = null;
             console.error('[useWorkHydration] failed', error);
         });
 
         return () => {
             cancelled = true;
         };
-    }, [applyServerResult, dbReady, isLoading, normalizedWorkspaceScope, requestedSessionId, requestedTabId, setActiveTabId, setSessionIdMap, tabs, workId]);
+    }, [applyServerResult, dbReady, isLoading, workId]);
+
+    useEffect(() => {
+        if (!workId || hydratedWorkRef.current !== workId) return;
+        const snapshot = snapshotRef.current;
+        if (!snapshot) return;
+        applyHydrationTarget(snapshot);
+    }, [applyHydrationTarget, snapshotRevision, workId]);
 }

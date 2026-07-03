@@ -182,9 +182,9 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
             // ignore
         }
 
-        const effectiveSessionId = sessionIdMap[id] ?? persisted;
+        const effectiveSessionId = sessionIdMap[id] || persisted;
 
-        setSessionIdMap(prev => (prev[id] === undefined ? { ...prev, [id]: effectiveSessionId } : prev));
+        setSessionIdMap(prev => (prev[id] ? prev : { ...prev, [id]: effectiveSessionId }));
 
         if (!effectiveSessionId) setResults([]);
     };

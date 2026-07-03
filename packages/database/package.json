@@ -25,6 +25,8 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@dory/artifacts": "0.1.0",
+        "@dory/resultset": "0.1.0",
         "@dory/shared": "0.1.0",
         "@electric-sql/pglite": "^0.4.3",
         "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17",

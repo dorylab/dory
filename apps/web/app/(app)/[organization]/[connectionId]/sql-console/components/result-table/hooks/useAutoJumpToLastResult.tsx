@@ -56,7 +56,10 @@ export function useAutoJumpToLastResult(opts: {
         
         
         
-        const shouldJump = justFinished && !userPicked && !alreadyJumpedThisFinish && (resultsIncreased || current !== target) && target >= 0;
+        const initialResultLoad = prevLen === 0 && nextLen > 0;
+        const shouldDefaultToLastResult = initialResultLoad && !userPicked && current !== target && target >= 0;
+        const shouldJump =
+            shouldDefaultToLastResult || (justFinished && !userPicked && !alreadyJumpedThisFinish && (resultsIncreased || current !== target) && target >= 0);
 
         if (shouldJump) {
             if (current !== target) {

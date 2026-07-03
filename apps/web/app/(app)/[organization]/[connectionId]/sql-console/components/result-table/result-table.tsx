@@ -124,7 +124,7 @@ export function ResultTable() {
     const tabId = useAtomValue(activeTabIdAtom);
     const sessionIdFromAtom = useAtomValue(activeSessionIdAtom);
     const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
-    const sessionId = sessionIdFromAtom ?? (typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
+    const sessionId = sessionIdFromAtom || (typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
 
     const { dbReady, listResultSetIndices, listResultSetsMeta, getResultRows, clearResults, dataVersion, getSession, updateResultSetViewState } = useDB();
 
