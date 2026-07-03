@@ -171,6 +171,17 @@ export const ConnectionDialogFormSchema = z
             return;
         }
 
+        if (value.connection.type === 'supabase') {
+            if (!value.connection.host?.trim()) {
+                ctx.addIssue({
+                    code: 'custom',
+                    path: ['connection', 'host'],
+                    message: 'Please provide a Supabase connection string',
+                });
+            }
+            return;
+        }
+
         if (value.connection.type === 'cloudflare-d1') {
             if (!value.identity.id && !value.identity.password?.trim()) {
                 ctx.addIssue({

@@ -3663,6 +3663,8 @@
                 "SetupDescription": "Run this command once on the device where Codex CLI is installed.",
                 "LoginCommand": "Authorize Dory MCP",
                 "BridgeCommand": "Install Dory Codex Agent",
+                "CopyCommand": "Copy command",
+                "CopiedCommand": "Copied",
                 "SetupRefreshHint": "After the service is installed, refresh this panel and enable Codex Agent.",
                 "ViewSetup": "View connection commands",
                 "UsageSetupHint": "Install the Dory Codex Agent service on this device, then refresh this panel to enable Codex Agent from the Web app.",

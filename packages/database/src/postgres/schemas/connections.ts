@@ -14,6 +14,7 @@ export type ConnectionType =
     | 'postgres'
     | 'sqlite'
     | 'snowflake'
+    | 'supabase'
     | 'sqlserver';
 export type ConnectionStatus = 'draft' | 'ready' | 'error' | 'disabled';
 export type SyncSource = 'local' | 'cloud';

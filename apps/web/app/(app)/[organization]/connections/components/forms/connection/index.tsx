@@ -22,7 +22,7 @@ const ENVIRONMENT_OPTION_ICONS = {
     shared: Users,
 } satisfies Record<ConnectionEnvironmentValue, typeof CircleOff>;
 
-const BETA_CONNECTION_TYPES = new Set(['snowflake']);
+const BETA_CONNECTION_TYPES = new Set(['snowflake', 'supabase']);
 
 function ConnectionTypeOptionLabel({ value, label }: { value: string; label: string }) {
     const isBeta = BETA_CONNECTION_TYPES.has(value);

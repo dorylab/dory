@@ -67,6 +67,12 @@ const SIDEBAR_CONFIG_BY_DIALECT: Record<ConnectionType, SidebarConfig> = {
         defaultSchemaName: 'PUBLIC',
         hiddenDatabases: ['SNOWFLAKE', 'SNOWFLAKE_SAMPLE_DATA', 'INFORMATION_SCHEMA'],
     },
+    supabase: {
+        dialect: 'postgres',
+        supportsSchemas: true,
+        defaultSchemaName: 'public',
+        hiddenDatabases: ['system', 'information_schema'],
+    },
     sqlserver: {
         dialect: 'sqlserver',
         supportsSchemas: true,

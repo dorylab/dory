@@ -1,5 +1,5 @@
 import { Pool, type ClientConfig, type PoolClient, type PoolConfig, type QueryResult as PgResult, types as pgTypes } from 'pg';
-import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
+import { DEFAULT_MAX_RESULT_ROWS, isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
@@ -165,7 +165,9 @@ export function buildPostgresPoolConfig(config: BaseConfig, databaseOverride?: s
     const runtime = extractRuntimeOptions(config);
     const rawOptions = (config.options ?? {}) as Record<string, unknown>;
     const connectionString =
-        config.type === 'neon' && typeof rawOptions.connectionString === 'string' && rawOptions.connectionString.trim() ? rawOptions.connectionString.trim() : undefined;
+        isPostgresFamilyConnectionType(config.type) && typeof rawOptions.connectionString === 'string' && rawOptions.connectionString.trim()
+            ? rawOptions.connectionString.trim()
+            : undefined;
 
     const poolConfig = {
         host: connectionOverride?.host ?? hostConfig.host,

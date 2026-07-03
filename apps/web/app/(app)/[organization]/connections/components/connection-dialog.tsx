@@ -29,6 +29,7 @@ import { useAtomValue } from 'jotai';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { getConnectionDriver } from './forms/connection/drivers';
 import { buildNeonConnectionStringForForm, normalizeNeonIdentityFromConnectionString } from './forms/connection/drivers/neon';
+import { buildSupabaseConnectionStringForForm, normalizeSupabaseIdentityFromConnectionString } from './forms/connection/drivers/supabase';
 import { createTlsDefaultsForConnectionType, normalizeTlsForForm, normalizeTlsForSubmit, TLS_SUPPORTED_CONNECTION_TYPES } from './forms/tls/utils';
 
 type Mode = 'Create' | 'Edit';
@@ -187,12 +188,13 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
     const duckDbMode = useWatch({ control, name: 'connection.duckdbMode' });
     const isSqlite = connectionType === 'sqlite';
     const isNeon = connectionType === 'neon';
+    const isSupabase = connectionType === 'supabase';
     const isDuckDb = connectionType === 'duckdb';
     const isCloudflareD1 = connectionType === 'cloudflare-d1';
     const isSnowflake = connectionType === 'snowflake';
     const isMotherDuck = isDuckDb && duckDbMode === 'motherduck';
-    const hidesIdentityForm = isSqlite || isNeon || isDuckDb || isCloudflareD1;
-    const hidesSshForm = isSqlite || isNeon || isDuckDb || isCloudflareD1 || isSnowflake;
+    const hidesIdentityForm = isSqlite || isNeon || isSupabase || isDuckDb || isCloudflareD1;
+    const hidesSshForm = isSqlite || isNeon || isSupabase || isDuckDb || isCloudflareD1 || isSnowflake;
     const hidesTlsForm = !TLS_SUPPORTED_CONNECTION_TYPES.has(connectionType);
 
     const isEditMode = mode === 'Edit' && Boolean(connectionItem?.connection?.id);
@@ -220,6 +222,16 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
             const fallbackIdentity = connectionItem?.identities?.find(identity => identity.isDefault);
 
             return normalizeNeonIdentityFromConnectionString(form.getValues('connection.host'), {
+                id: fallbackIdentity?.id,
+                username: fallbackIdentity?.username,
+                database: fallbackIdentity?.database,
+            });
+        }
+
+        if (isSupabase) {
+            const fallbackIdentity = connectionItem?.identities?.find(identity => identity.isDefault);
+
+            return normalizeSupabaseIdentityFromConnectionString(form.getValues('connection.host'), {
                 id: fallbackIdentity?.id,
                 username: fallbackIdentity?.username,
                 database: fallbackIdentity?.database,
@@ -332,6 +344,9 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
             };
             if (connectionItem.connection?.type === 'neon') {
                 nextValues.connection.host = buildNeonConnectionStringForForm(connectionItem.connection, formIdentity);
+            }
+            if (connectionItem.connection?.type === 'supabase') {
+                nextValues.connection.host = buildSupabaseConnectionStringForForm(connectionItem.connection, formIdentity);
             }
             reset(nextValues);
             setSavePassword(true);

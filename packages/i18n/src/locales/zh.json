@@ -3667,6 +3667,8 @@
                 "SetupDescription": "请在安装了 Codex CLI 的这台设备上运行一次这条命令。",
                 "LoginCommand": "授权 Dory MCP",
                 "BridgeCommand": "安装 Dory Codex Agent",
+                "CopyCommand": "复制命令",
+                "CopiedCommand": "已复制",
                 "SetupRefreshHint": "服务安装后，刷新此面板并启用 Codex Agent。",
                 "ViewSetup": "查看连接命令",
                 "UsageSetupHint": "在这台设备上安装 Dory Codex Agent 服务，刷新此面板后即可从 Web 应用启用 Codex Agent。",

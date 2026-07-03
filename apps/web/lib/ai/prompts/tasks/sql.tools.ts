@@ -1,4 +1,5 @@
 import type { ConnectionType } from '@dory/shared/types/connections';
+import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
 
 export const SQL_TOOL_INSTRUCTION = `
 When the user asks for data queries that require actual database results, first generate a read-only SQL statement (SELECT only) and call the sqlRunner tool. In your response, include the SQL and explain the query results.
@@ -47,7 +48,7 @@ About the sqlRunner tool
 `.trim();
 
 export function buildDialectSqlPrompt(connectionType?: ConnectionType | null): string {
-    const normalizedType = connectionType === 'neon' ? 'postgres' : connectionType === 'cloudflare-d1' ? 'sqlite' : connectionType;
+    const normalizedType = isPostgresFamilyConnectionType(connectionType) ? 'postgres' : connectionType === 'cloudflare-d1' ? 'sqlite' : connectionType;
 
     const commonRules = [SQL_TOOL_INSTRUCTION, SQL_RUNNER_GUIDE, CHART_BUILDER_GUIDE];
 

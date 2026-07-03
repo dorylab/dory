@@ -85,6 +85,7 @@ const SQL_DIALECT_BY_CONNECTION_TYPE: Partial<Record<ConnectionType, ConnectionD
     postgres: 'postgres',
     sqlite: 'sqlite',
     snowflake: 'snowflake',
+    supabase: 'postgres',
     sqlserver: 'sqlserver',
 };
 
@@ -114,6 +115,7 @@ export const normalizeSqlDialect = (value?: string | null): ConnectionDialect =>
             return 'mysql';
         case 'postgres':
         case 'neon':
+        case 'supabase':
         case 'postgresql':
             return 'postgres';
         case 'oracle':

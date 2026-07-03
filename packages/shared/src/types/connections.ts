@@ -10,6 +10,7 @@ export type ConnectionType =
     | 'postgres'
     | 'sqlite'
     | 'snowflake'
+    | 'supabase'
     | 'sqlserver';
 export type ConnectionStatus = 'Connected' | 'Error' | 'Disconnected';
 export type ConnectionCheckStatus = 'unknown' | 'ok' | 'error';
