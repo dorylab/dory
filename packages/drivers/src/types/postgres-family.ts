@@ -1,9 +1,9 @@
 import type { DriverType } from './index';
 
-export type PostgresFamilyConnectionType = 'postgres' | 'neon';
+export type PostgresFamilyConnectionType = 'postgres' | 'neon' | 'supabase';
 
 export function isPostgresFamilyConnectionType(value?: string | null): value is PostgresFamilyConnectionType {
-    return value === 'postgres' || value === 'neon';
+    return value === 'postgres' || value === 'neon' || value === 'supabase';
 }
 
 export function normalizePostgresFamilyConnectionType(value?: string | null): DriverType | 'unknown' {

@@ -35,6 +35,7 @@ export function registerDatabaseDrivers() {
     registerDriver('postgres', PostgresDatasource);
     registerDriver('sqlite', SqliteDatasource);
     registerDriver('snowflake', SnowflakeDatasource);
+    registerDriver('supabase', PostgresDatasource);
     registerDriver('sqlserver', SqlServerDatasource);
     registerDriver('duckdb', loadDuckDbDriver);
 }
@@ -51,6 +52,7 @@ export function isDatabaseDriverType(value: unknown): value is DriverType {
         value === 'postgres' ||
         value === 'sqlite' ||
         value === 'snowflake' ||
+        value === 'supabase' ||
         value === 'sqlserver'
     );
 }

@@ -3661,6 +3661,8 @@
                 "SetupDescription": "Codex CLI がインストールされているデバイスで、このコマンドを一度実行してください。",
                 "LoginCommand": "Dory MCP を認可",
                 "BridgeCommand": "Dory Codex Agent をインストール",
+                "CopyCommand": "コマンドをコピー",
+                "CopiedCommand": "コピーしました",
                 "SetupRefreshHint": "サービスのインストール後、このパネルを更新して Codex Agent を有効化してください。",
                 "ViewSetup": "接続コマンドを表示",
                 "UsageSetupHint": "このデバイスに Dory Codex Agent サービスをインストールし、このパネルを更新すると Web アプリから Codex Agent を有効化できます。",

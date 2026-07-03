@@ -7,7 +7,8 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Bot, CircleCheck, CircleHelp, Cpu, ExternalLink, FlaskConical, KeyRound, Loader2, LockKeyhole, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { Bot, Check, CircleCheck, CircleHelp, Copy, Cpu, ExternalLink, FlaskConical, KeyRound, Loader2, LockKeyhole, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { Alert, AlertDescription } from '@/registry/new-york-v4/ui/alert';
 import {
     AlertDialog,
@@ -1333,11 +1334,33 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
                         <DialogTitle>{t('LocalAi.SetupTitle')}</DialogTitle>
                         <DialogDescription>{t('LocalAi.SetupDescription')}</DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>{t('LocalAi.BridgeCommand')}</Label>
-                            <pre className="overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                                <code>{localAiBridgeCommand}</code>
+                    <div className="min-w-0 space-y-4">
+                        <div className="min-w-0 space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <Label>{t('LocalAi.BridgeCommand')}</Label>
+                                <CopyButton
+                                    text={localAiBridgeCommand}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs"
+                                    label={
+                                        <>
+                                            <Copy className="size-3.5" />
+                                            {t('LocalAi.CopyCommand')}
+                                        </>
+                                    }
+                                    copiedLabel={
+                                        <>
+                                            <Check className="size-3.5" />
+                                            {t('LocalAi.CopiedCommand')}
+                                        </>
+                                    }
+                                    aria-label={t('LocalAi.CopyCommand')}
+                                    title={t('LocalAi.CopyCommand')}
+                                />
+                            </div>
+                            <pre className="max-w-full overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                <code className="block w-max min-w-full whitespace-pre">{localAiBridgeCommand}</code>
                             </pre>
                         </div>
                         <p className="text-sm text-muted-foreground">{t('LocalAi.SetupRefreshHint')}</p>

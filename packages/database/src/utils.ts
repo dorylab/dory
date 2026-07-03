@@ -10,6 +10,10 @@ export const DatasourceTypesWithDBEngine = [
         engine: 'postgres',
     },
     {
+        type: 'supabase',
+        engine: 'postgres',
+    },
+    {
         type: 'clickhouse',
         engine: 'clickhouse',
     },

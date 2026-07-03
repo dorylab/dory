@@ -31,9 +31,11 @@ test('connection TLS submit normalization preserves saved content and clears pat
     assert.equal(tls.serverName, 'db.example.com');
 });
 
-test('Neon is not exposed as a configurable TLS connection type', () => {
+test('Hosted Postgres connection strings are not exposed as configurable TLS connection types', () => {
     assert.equal(TLS_SUPPORTED_CONNECTION_TYPES.has('neon'), false);
     assert.equal(normalizeTlsForSubmit('neon', { mode: 'verify-identity' }), null);
+    assert.equal(TLS_SUPPORTED_CONNECTION_TYPES.has('supabase'), false);
+    assert.equal(normalizeTlsForSubmit('supabase', { mode: 'verify-identity' }), null);
 });
 
 test('ClickHouse TLS submit normalization uses ClickHouse-specific modes and fields', () => {

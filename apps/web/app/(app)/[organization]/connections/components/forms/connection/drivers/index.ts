@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { UseFormReturn } from 'react-hook-form';
+import type { FieldValues, UseFormReturn } from 'react-hook-form';
 import type { RefinementCtx } from 'zod';
 import {
     ClickhouseConnectionFields,
@@ -40,6 +40,13 @@ import {
     SnowflakeConnectionFields,
     validateSnowflakeConnection,
 } from './snowflake';
+import {
+    createSupabaseConnectionDefaults,
+    normalizeSupabaseConnectionForForm,
+    normalizeSupabaseConnectionForSubmit,
+    SupabaseConnectionFields,
+    validateSupabaseConnection,
+} from './supabase';
 import { createSqliteConnectionDefaults, normalizeSqliteConnectionForForm, normalizeSqliteConnectionForSubmit, SqliteConnectionFields, validateSqliteConnection } from './sqlite';
 import {
     createSqlServerConnectionDefaults,
@@ -49,15 +56,27 @@ import {
     validateSqlServerConnection,
 } from './sqlserver';
 
-export type SupportedConnectionDriver = 'clickhouse' | 'cloudflare-d1' | 'duckdb' | 'mariadb' | 'mysql' | 'neon' | 'oracle' | 'postgres' | 'sqlite' | 'snowflake' | 'sqlserver';
+export type SupportedConnectionDriver =
+    | 'clickhouse'
+    | 'cloudflare-d1'
+    | 'duckdb'
+    | 'mariadb'
+    | 'mysql'
+    | 'neon'
+    | 'oracle'
+    | 'postgres'
+    | 'sqlite'
+    | 'snowflake'
+    | 'supabase'
+    | 'sqlserver';
 
 type DriverDefinition = {
     label: string;
-    FormComponent: ComponentType<{ form: UseFormReturn<any> }>;
-    createDefaults: () => any;
-    normalizeForForm: (connection: any) => any;
-    normalizeForSubmit: (connection: any) => any;
-    validate: (connection: any, ctx: RefinementCtx) => void;
+    FormComponent: ComponentType<{ form: UseFormReturn<FieldValues> }>;
+    createDefaults(): FieldValues;
+    normalizeForForm(connection: FieldValues | null | undefined): FieldValues;
+    normalizeForSubmit(connection: FieldValues | null | undefined): FieldValues;
+    validate(connection: FieldValues | null | undefined, ctx: RefinementCtx): void;
 };
 
 const DRIVERS: Record<SupportedConnectionDriver, DriverDefinition> = {
@@ -141,6 +160,14 @@ const DRIVERS: Record<SupportedConnectionDriver, DriverDefinition> = {
         normalizeForSubmit: normalizeSnowflakeConnectionForSubmit,
         validate: validateSnowflakeConnection,
     },
+    supabase: {
+        label: 'Supabase',
+        FormComponent: SupabaseConnectionFields,
+        createDefaults: createSupabaseConnectionDefaults,
+        normalizeForForm: normalizeSupabaseConnectionForForm,
+        normalizeForSubmit: normalizeSupabaseConnectionForSubmit,
+        validate: validateSupabaseConnection,
+    },
     sqlserver: {
         label: 'SQL Server',
         FormComponent: SqlServerConnectionFields,
@@ -183,6 +210,9 @@ export function getConnectionDriver(type?: string): DriverDefinition {
     }
     if (type === 'snowflake') {
         return DRIVERS.snowflake;
+    }
+    if (type === 'supabase') {
+        return DRIVERS.supabase;
     }
     if (type === 'sqlserver') {
         return DRIVERS.sqlserver;
