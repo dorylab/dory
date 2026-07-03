@@ -88,6 +88,7 @@ export function useWorkHydration({
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
     const { dbReady, applyServerResult } = useDB();
     const hydratedWorkRef = useRef<string | null>(null);
+    const activatedWorkRef = useRef<string | null>(null);
     const snapshotRef = useRef<WorkSnapshot | null>(null);
     const [snapshotRevision, setSnapshotRevision] = useState(0);
 
@@ -122,11 +123,15 @@ export function useWorkHydration({
                 }
             }
 
-            if (hydrationTarget.targetTabId && hydrationTarget.targetTabId !== activeTabId) {
-                setActiveTabId(hydrationTarget.targetTabId);
+            const shouldActivateTarget = Boolean(workId && activatedWorkRef.current !== workId && hydrationTarget.targetTabId);
+            if (workId && shouldActivateTarget) {
+                activatedWorkRef.current = workId;
+                if (hydrationTarget.targetTabId !== activeTabId) {
+                    setActiveTabId(hydrationTarget.targetTabId);
+                }
             }
         },
-        [activeTabId, normalizedWorkspaceScope, requestedSessionId, requestedTabId, setActiveTabId, setSessionIdMap, tabs],
+        [activeTabId, normalizedWorkspaceScope, requestedSessionId, requestedTabId, setActiveTabId, setSessionIdMap, tabs, workId],
     );
 
     useEffect(() => {
