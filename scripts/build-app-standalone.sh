@@ -176,6 +176,13 @@ strip_macho_native_binaries() {
       continue
     fi
 
+    case "${native_file#${OUT_DIR}/}" in
+      node_modules/@duckdb/node-bindings-darwin-*/libduckdb.dylib)
+        echo "Skipping strip for DuckDB dylib: ${native_file#${OUT_DIR}/}"
+        continue
+        ;;
+    esac
+
     echo "Stripping native binary: ${native_file#${OUT_DIR}/}"
     if ! strip -x "${native_file}"; then
       echo "Warning: failed to strip ${native_file}" >&2
@@ -332,6 +339,10 @@ rm -rf "${OUT_DIR}/node_modules/dory"
 
 dedupe_pglite_asset_copies
 dedupe_traced_native_binary_copies
+
+node "${ROOT_DIR}/scripts/thin-macho-binaries.mjs" \
+  --root "${OUT_DIR}" \
+  --include 'node_modules/@duckdb/node-bindings-darwin-*/libduckdb.dylib'
 
 strip_macho_native_binaries
 
