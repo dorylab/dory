@@ -166,6 +166,40 @@ dedupe_traced_native_binary_copies() {
   fi
 }
 
+replace_path_with_relative_symlink() {
+  local target_path="$1"
+  local source_path="$2"
+
+  if [[ ! -e "${target_path}" || ! -e "${source_path}" ]]; then
+    return
+  fi
+
+  local relative_source
+  relative_source="$(node -e "const path=require('node:path'); process.stdout.write(path.relative(path.dirname(process.argv[1]), process.argv[2]));" "${target_path}" "${source_path}")"
+  rm -rf "${target_path}"
+  ln -s "${relative_source}" "${target_path}"
+}
+
+dedupe_traced_shiki_package_copies() {
+  if [[ ! -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+    return
+  fi
+
+  local root_shiki_dir="${OUT_DIR}/node_modules/shiki"
+  if [[ ! -d "${root_shiki_dir}" ]]; then
+    return
+  fi
+
+  while IFS= read -r -d '' traced_shiki_dir; do
+    if cmp -s "${root_shiki_dir}/package.json" "${traced_shiki_dir}/package.json"; then
+      echo "Deduping traced Shiki package: ${traced_shiki_dir#${OUT_DIR}/}"
+      replace_path_with_relative_symlink "${traced_shiki_dir}" "${root_shiki_dir}"
+    else
+      echo "Warning: skipping Shiki dedupe for version-mismatched package ${traced_shiki_dir#${OUT_DIR}/}" >&2
+    fi
+  done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'shiki-*' -print0)
+}
+
 strip_macho_native_binaries() {
   if [[ "$(uname -s)" != "Darwin" ]] || ! command -v strip >/dev/null 2>&1 || ! command -v file >/dev/null 2>&1; then
     return
@@ -339,6 +373,7 @@ rm -rf "${OUT_DIR}/node_modules/dory"
 
 dedupe_pglite_asset_copies
 dedupe_traced_native_binary_copies
+dedupe_traced_shiki_package_copies
 
 node "${ROOT_DIR}/scripts/thin-macho-binaries.mjs" \
   --root "${OUT_DIR}" \
