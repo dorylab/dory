@@ -1,6 +1,6 @@
 import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
-import { pgBytea } from './bytea';
+import type { ResultSetArtifactRef } from '@dory/resultset';
 
 export type WorkStatus = 'active' | 'completed' | 'error' | 'archived';
 export type WorkEventStatus = 'success' | 'error';
@@ -108,27 +108,10 @@ export const workQueryResultSets = pgTable(
         startedAt: timestamp('started_at', { withTimezone: true }),
         finishedAt: timestamp('finished_at', { withTimezone: true }),
         durationMs: integer('duration_ms'),
+        resultSetId: text('result_set_id'),
+        artifactRefJson: jsonb('artifact_ref_json').$type<ResultSetArtifactRef | null>(),
     },
     t => [primaryKey({ name: 'pk_work_query_result_sets', columns: [t.workId, t.sessionId, t.setIndex] }), index('idx_work_qrs_session').on(t.workId, t.sessionId, t.setIndex)],
-);
-
-export const workQueryResultPages = pgTable(
-    'work_query_result_pages',
-    {
-        workId: text('work_id').notNull(),
-        sessionId: text('session_id').notNull(),
-        setIndex: integer('set_index').notNull(),
-        pageNo: integer('page_no').notNull(),
-        firstRowIndex: integer('first_row_index').notNull(),
-        rowCount: integer('row_count').notNull(),
-        rowsData: pgBytea('rows_data').notNull(),
-        isGzip: boolean('is_gzip').notNull().default(false),
-        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    },
-    t => [
-        primaryKey({ name: 'pk_work_query_result_pages', columns: [t.workId, t.sessionId, t.setIndex, t.pageNo] }),
-        index('idx_work_qrp_read').on(t.workId, t.sessionId, t.setIndex, t.pageNo),
-    ],
 );
 
 export const workChartStates = pgTable(

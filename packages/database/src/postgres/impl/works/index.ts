@@ -1,14 +1,33 @@
-import { gzipSync, gunzipSync } from 'node:zlib';
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
-import { tabs, workChartStates, workEvents, workQueryResultPages, workQueryResultSets, workQuerySessions, works, type WorkStatus } from '@dory/database/postgres/schemas';
+import {
+    agentRunResultSets,
+    queryRuns,
+    resultSets as resultSetsTable,
+    tabs,
+    workChartStates,
+    workEvents,
+    workQueryResultSets,
+    workQuerySessions,
+    works,
+    type WorkStatus,
+} from '@dory/database/postgres/schemas';
 import { translateDatabase } from '@dory/database/i18n';
+import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
+import {
+    buildResultSetPreview,
+    inferResultSetColumns,
+    ParquetResultSetDataWriter,
+    resultSetDataAvailability,
+    type ResultSetArtifactRef,
+    type ResultSetDataWriter,
+    type ResultSetManifest,
+} from '@dory/resultset';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import type { PostgresDBClient } from '@dory/shared';
 
-const ROWS_PER_PAGE = 1000;
 const DEFAULT_WORK_TITLE = 'Agent Run';
 
 export type WorkRecord = typeof works.$inferSelect;
@@ -84,28 +103,16 @@ function toDate(value: unknown, fallback?: Date | null): Date | null {
     return fallback ?? null;
 }
 
-function encodeRows(rows: unknown[]) {
-    const json = Buffer.from(JSON.stringify(rows), 'utf8');
-    const gzipped = gzipSync(json);
-    return {
-        data: gzipped,
-        isGzip: true,
-    };
-}
-
-function decodeRows(data: Uint8Array | Buffer, isGzip: boolean): unknown[] {
-    const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data.buffer, data.byteOffset, data.byteLength);
-    const json = (isGzip ? gunzipSync(buffer) : buffer).toString('utf8');
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-}
-
 function getString(value: unknown): string | null {
     return typeof value === 'string' ? value : null;
 }
 
 function getNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function getBoolean(value: unknown): boolean {
+    return value === true;
 }
 
 function compactToolInput(input: Record<string, unknown>) {
@@ -191,6 +198,11 @@ function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
 
 export class PostgresWorksRepository {
     private db!: PostgresDBClient;
+
+    constructor(
+        private readonly artifacts: DoryArtifactStore = getDoryArtifactStore(),
+        private readonly fullDataWriter: ResultSetDataWriter = new ParquetResultSetDataWriter(),
+    ) {}
 
     async init() {
         try {
@@ -372,6 +384,13 @@ export class PostgresWorksRepository {
     async archive(params: { organizationId: string; userId: string; workId: string }): Promise<WorkRecord | null> {
         this.assertInited();
         const now = new Date();
+        const [existing] = await this.db
+            .select()
+            .from(works)
+            .where(and(eq(works.workId, params.workId), eq(works.organizationId, params.organizationId), eq(works.userId, params.userId), isNull(works.archivedAt)))
+            .limit(1);
+        if (!existing) return null;
+
         const [row] = await this.db
             .update(works)
             .set({
@@ -383,7 +402,49 @@ export class PostgresWorksRepository {
             .where(and(eq(works.workId, params.workId), eq(works.organizationId, params.organizationId), eq(works.userId, params.userId), isNull(works.archivedAt)))
             .returning();
 
+        if (row) {
+            try {
+                await this.purgeWorkspaceArtifacts(params);
+            } catch (error) {
+                await this.db
+                    .update(works)
+                    .set({
+                        status: existing.status,
+                        archivedAt: null,
+                        updatedAt: new Date(),
+                        lastActiveAt: existing.lastActiveAt,
+                    })
+                    .where(and(eq(works.workId, params.workId), eq(works.organizationId, params.organizationId), eq(works.userId, params.userId)));
+                throw error;
+            }
+        }
+
         return (row as WorkRecord | undefined) ?? null;
+    }
+
+    private async purgeWorkspaceArtifacts(params: { organizationId: string; userId: string; workId: string }): Promise<void> {
+        const resultSetRows = await this.db
+            .select({
+                id: resultSetsTable.id,
+                artifactRefJson: resultSetsTable.artifactRefJson,
+            })
+            .from(resultSetsTable)
+            .where(or(eq(resultSetsTable.workId, params.workId), eq(resultSetsTable.agentRunId, params.workId)));
+        const resultSetIds = resultSetRows.map(row => row.id);
+
+        await Promise.all(resultSetRows.map(row => this.artifacts.resultSets.deleteResultSet(row.artifactRefJson)));
+        await this.artifacts.agentRuns.deleteAgentRun(this.artifacts.agentRuns.ref(params.organizationId, params.workId));
+
+        await Promise.all([
+            resultSetIds.length ? this.db.delete(agentRunResultSets).where(inArray(agentRunResultSets.resultSetId, resultSetIds)) : Promise.resolve(),
+            this.db.delete(agentRunResultSets).where(eq(agentRunResultSets.agentRunId, params.workId)),
+            this.db.delete(resultSetsTable).where(or(eq(resultSetsTable.workId, params.workId), eq(resultSetsTable.agentRunId, params.workId))),
+            this.db.delete(queryRuns).where(or(eq(queryRuns.workId, params.workId), eq(queryRuns.agentRunId, params.workId))),
+            this.db.delete(workQueryResultSets).where(eq(workQueryResultSets.workId, params.workId)),
+            this.db.delete(workQuerySessions).where(eq(workQuerySessions.workId, params.workId)),
+            this.db.delete(workChartStates).where(eq(workChartStates.workId, params.workId)),
+            this.db.delete(tabs).where(and(eq(tabs.userId, params.userId), eq(tabs.workId, params.workId))),
+        ]);
     }
 
     async listEvents(params: { organizationId: string; userId: string; workId: string }): Promise<WorkEventRecord[]> {
@@ -416,6 +477,7 @@ export class PostgresWorksRepository {
             })
             .returning();
 
+        await this.appendAgentRunEvent(input, row);
         await this.touch(input.workId);
         return row as WorkEventRecord;
     }
@@ -487,6 +549,8 @@ export class PostgresWorksRepository {
         this.assertInited();
         const session = payload.session;
         const sessionId = session.sessionId;
+        const work = await this.getWorkById(workId);
+        if (!work) throw new DatabaseError('Work not found', 404);
 
         await this.db
             .insert(workQuerySessions)
@@ -526,56 +590,182 @@ export class PostgresWorksRepository {
                 },
             });
 
-        await this.db.delete(workQueryResultPages).where(and(eq(workQueryResultPages.workId, workId), eq(workQueryResultPages.sessionId, sessionId)));
         await this.db.delete(workQueryResultSets).where(and(eq(workQueryResultSets.workId, workId), eq(workQueryResultSets.sessionId, sessionId)));
 
-        if (payload.queryResultSets.length) {
-            await this.db.insert(workQueryResultSets).values(
-                payload.queryResultSets.map(resultSet => ({
+        const compatibilityRows: Array<typeof workQueryResultSets.$inferInsert> = [];
+        const now = new Date();
+
+        for (const [index, resultSet] of payload.queryResultSets.entries()) {
+            const rows = Array.isArray(payload.results[index]) ? payload.results[index]! : [];
+            const artifactId = `rs_${newEntityId()}`;
+            const queryRunId = `qr_${newEntityId()}`;
+            const actorType = inferActorType(session.source);
+            const status = getString(resultSet.status) ?? session.status ?? 'success';
+            const columns = inferResultSetColumns(rows, resultSet.columns);
+            const rowCount = getNumber(resultSet.rowCount) ?? rows.length;
+            const preview = buildResultSetPreview({
+                columns,
+                rows,
+                rowCount,
+            });
+            const limited = getBoolean(resultSet.limited) || preview.truncated;
+            const manifest: ResultSetManifest = {
+                format: 'dory.resultset.v1',
+                artifactId,
+                organizationId: work.organizationId,
+                kind: 'sql-result-set',
+                status,
+                source: {
+                    type: 'query-run',
+                    queryRunId,
+                    connectionId: session.connectionId ?? work.connectionId ?? null,
+                    workspaceId: null,
+                    tabId: session.tabId ?? null,
                     workId,
-                    sessionId,
-                    setIndex: resultSet.setIndex,
-                    sqlText: resultSet.sqlText,
-                    sqlOp: getString(resultSet.sqlOp),
-                    title: getString(resultSet.title),
-                    columns: resultSet.columns ?? null,
-                    stats: resultSet.stats ?? null,
-                    viewState: resultSet.viewState ?? null,
-                    aiProfileVersion: getNumber(resultSet.aiProfileVersion) ?? 1,
-                    rowCount: getNumber(resultSet.rowCount),
-                    limited: Boolean(resultSet.limited),
+                    agentRunId: workId,
+                    actorType,
+                    actorId: session.userId ?? work.userId ?? null,
+                },
+                sql: {
+                    text: resultSet.sqlText || session.sqlText,
+                    dialect: session.database ?? null,
+                    operation: getString(resultSet.sqlOp) ?? 'unknown',
+                },
+                error:
+                    status === 'error'
+                        ? {
+                              message: getString(resultSet.errorMessage) ?? session.errorMessage ?? null,
+                              code: getString(resultSet.errorCode),
+                              sqlState: getString(resultSet.errorSqlState),
+                              meta: resultSet.errorMeta ?? undefined,
+                          }
+                        : undefined,
+                schema: columns,
+                rowCount,
+                previewRowCount: preview.previewRowCount,
+                limited,
+                limit: getNumber(resultSet.limit),
+                files: {},
+                lineage: {},
+                createdAt: now.toISOString(),
+                updatedAt: now.toISOString(),
+                contentHash: null,
+            };
+            const fullData = await this.writeFullDataArtifact({
+                artifactId,
+                status,
+                columns,
+                rows,
+            });
+
+            const { ref, manifest: persistedManifest } = await this.artifacts.resultSets.putResultSet({
+                organizationId: work.organizationId,
+                artifactId,
+                manifest,
+                preview: rows.length || status === 'success' ? preview : null,
+                data: fullData?.data ?? null,
+            });
+
+            try {
+                await this.db.insert(queryRuns).values({
+                    id: queryRunId,
+                    organizationId: work.organizationId,
+                    connectionId: session.connectionId ?? work.connectionId ?? null,
+                    workspaceId: null,
+                    tabId: session.tabId ?? null,
+                    workId,
+                    agentRunId: workId,
+                    actorType,
+                    actorId: session.userId ?? work.userId ?? null,
+                    sql: resultSet.sqlText || session.sqlText,
+                    status,
+                    durationMs: getNumber(resultSet.durationMs) ?? session.durationMs ?? null,
+                    errorMessage: getString(resultSet.errorMessage) ?? session.errorMessage ?? null,
+                    resultSetId: artifactId,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+
+                await this.db.insert(resultSetsTable).values({
+                    id: artifactId,
+                    organizationId: work.organizationId,
+                    connectionId: session.connectionId ?? work.connectionId ?? null,
+                    workspaceId: null,
+                    tabId: session.tabId ?? null,
+                    workId,
+                    agentRunId: workId,
+                    sourceQueryRunId: queryRunId,
+                    sourceType: 'query-run',
+                    kind: 'sql-result-set',
+                    status,
+                    rowCount,
+                    previewRowCount: preview.previewRowCount,
+                    limited,
                     limit: getNumber(resultSet.limit),
-                    affectedRows: getNumber(resultSet.affectedRows),
-                    status: getString(resultSet.status) ?? 'success',
-                    errorMessage: getString(resultSet.errorMessage),
-                    errorCode: getString(resultSet.errorCode),
-                    errorSqlState: getString(resultSet.errorSqlState),
-                    errorMeta: resultSet.errorMeta ?? null,
-                    warnings: resultSet.warnings ?? null,
-                    startedAt: toDate(resultSet.startedAt, null),
-                    finishedAt: toDate(resultSet.finishedAt, null),
-                    durationMs: getNumber(resultSet.durationMs),
-                })),
-            );
+                    schemaJson: columns,
+                    sql: resultSet.sqlText || session.sqlText,
+                    operation: getString(resultSet.sqlOp),
+                    errorMessage: getString(resultSet.errorMessage) ?? session.errorMessage ?? null,
+                    artifactRefJson: ref,
+                    dataAvailability: resultSetDataAvailability(persistedManifest),
+                    createdByActorType: actorType,
+                    createdByActorId: session.userId ?? work.userId ?? null,
+                    byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                    createdAt: now,
+                    updatedAt: now,
+                });
+
+                await this.db.insert(agentRunResultSets).values({
+                    agentRunId: workId,
+                    resultSetId: artifactId,
+                    queryRunId,
+                    role: 'generated',
+                    createdAt: now,
+                });
+            } catch (error) {
+                await this.artifacts.resultSets.deleteResultSet(ref).catch(() => undefined);
+                throw error;
+            }
+
+            compatibilityRows.push({
+                workId,
+                sessionId,
+                setIndex: resultSet.setIndex,
+                sqlText: resultSet.sqlText,
+                sqlOp: getString(resultSet.sqlOp),
+                title: getString(resultSet.title),
+                columns: resultSet.columns ?? null,
+                stats: resultSet.stats ?? null,
+                viewState: resultSet.viewState ?? null,
+                aiProfileVersion: getNumber(resultSet.aiProfileVersion) ?? 1,
+                rowCount,
+                limited,
+                limit: getNumber(resultSet.limit),
+                affectedRows: getNumber(resultSet.affectedRows),
+                status,
+                errorMessage: getString(resultSet.errorMessage),
+                errorCode: getString(resultSet.errorCode),
+                errorSqlState: getString(resultSet.errorSqlState),
+                errorMeta: resultSet.errorMeta ?? null,
+                warnings: resultSet.warnings ?? null,
+                startedAt: toDate(resultSet.startedAt, null),
+                finishedAt: toDate(resultSet.finishedAt, null),
+                durationMs: getNumber(resultSet.durationMs),
+                resultSetId: artifactId,
+                artifactRefJson: ref,
+            });
         }
 
-        for (let i = 0; i < payload.queryResultSets.length; i += 1) {
-            const resultSet = payload.queryResultSets[i]!;
-            const rows = Array.isArray(payload.results[i]) ? payload.results[i]! : [];
-            for (let offset = 0, pageNo = 0; offset < rows.length; offset += ROWS_PER_PAGE, pageNo += 1) {
-                const slice = rows.slice(offset, offset + ROWS_PER_PAGE);
-                const encoded = encodeRows(slice);
-                await this.db.insert(workQueryResultPages).values({
-                    workId,
-                    sessionId,
-                    setIndex: resultSet.setIndex,
-                    pageNo,
-                    firstRowIndex: offset,
-                    rowCount: slice.length,
-                    rowsData: encoded.data,
-                    isGzip: encoded.isGzip,
-                });
-            }
+        if (payload.queryResultSets.length) {
+            await this.db.insert(workQueryResultSets).values(compatibilityRows);
+        }
+
+        const currentResultSetId = compatibilityRows.at(-1)?.resultSetId ?? null;
+        if (currentResultSetId && session.tabId && session.userId) {
+            await this.db
+                .update(tabs)
+                .set({ currentResultSetId, updatedAt: now })
+                .where(and(eq(tabs.tabId, session.tabId), eq(tabs.userId, session.userId)));
         }
     }
 
@@ -584,7 +774,7 @@ export class PostgresWorksRepository {
         const work = await this.getById(params);
         if (!work) return null;
 
-        const [tabRows, sessionRows, resultSetRows, pageRows, chartRows] = await Promise.all([
+        const [tabRows, sessionRows, resultSetRows, chartRows] = await Promise.all([
             this.db
                 .select()
                 .from(tabs)
@@ -592,30 +782,23 @@ export class PostgresWorksRepository {
                 .orderBy(tabs.orderIndex, tabs.createdAt),
             this.db.select().from(workQuerySessions).where(eq(workQuerySessions.workId, params.workId)).orderBy(workQuerySessions.startedAt),
             this.db.select().from(workQueryResultSets).where(eq(workQueryResultSets.workId, params.workId)).orderBy(workQueryResultSets.sessionId, workQueryResultSets.setIndex),
-            this.db
-                .select()
-                .from(workQueryResultPages)
-                .where(eq(workQueryResultPages.workId, params.workId))
-                .orderBy(workQueryResultPages.sessionId, workQueryResultPages.setIndex, workQueryResultPages.pageNo),
             this.db.select().from(workChartStates).where(eq(workChartStates.workId, params.workId)),
         ]);
 
-        const resultsBySet = new Map<string, unknown[]>();
-        for (const page of pageRows) {
-            const key = `${page.sessionId}:${page.setIndex}`;
-            const rows = resultsBySet.get(key) ?? [];
-            rows.push(...decodeRows(page.rowsData as Uint8Array, page.isGzip));
-            resultsBySet.set(key, rows);
-        }
-
-        const sessions = sessionRows.map(session => {
-            const sets = resultSetRows.filter(resultSet => resultSet.sessionId === session.sessionId);
-            return {
-                session,
-                queryResultSets: sets,
-                results: sets.map(resultSet => resultsBySet.get(`${resultSet.sessionId}:${resultSet.setIndex}`) ?? []),
-            };
-        });
+        const sessions = await Promise.all(
+            sessionRows.map(async session => {
+                const sets = resultSetRows.filter(resultSet => resultSet.sessionId === session.sessionId);
+                return {
+                    session,
+                    queryResultSets: sets,
+                    results: await Promise.all(
+                        sets.map(async resultSet => {
+                            return this.readPreviewRows(resultSet.artifactRefJson);
+                        }),
+                    ),
+                };
+            }),
+        );
 
         return {
             work,
@@ -624,4 +807,61 @@ export class PostgresWorksRepository {
             chartStates: chartRows,
         };
     }
+
+    private async getWorkById(workId: string): Promise<WorkRecord | null> {
+        const [row] = await this.db.select().from(works).where(eq(works.workId, workId)).limit(1);
+        return (row as WorkRecord | undefined) ?? null;
+    }
+
+    private async readPreviewRows(ref: ResultSetArtifactRef | null | undefined): Promise<unknown[]> {
+        if (!ref) return [];
+        try {
+            const preview = await this.artifacts.resultSets.readPreview(ref);
+            return preview?.rows ?? [];
+        } catch (error) {
+            console.warn('[works] saved result preview is unavailable', {
+                artifactId: ref.artifactId,
+                error,
+            });
+            return [];
+        }
+    }
+
+    private async writeFullDataArtifact(input: { artifactId: string; status: string; columns: ResultSetManifest['schema']; rows: unknown[] }) {
+        if (input.status !== 'success') return null;
+        if (!input.columns.length) return null;
+        try {
+            return await this.fullDataWriter.write({
+                artifactId: input.artifactId,
+                schema: input.columns,
+                rows: input.rows,
+                target: null,
+            });
+        } catch (error) {
+            console.warn('[works] failed to write full result-set data artifact', {
+                artifactId: input.artifactId,
+                error,
+            });
+            return null;
+        }
+    }
+
+    private async appendAgentRunEvent(input: WorkEventCreateInput, row: unknown): Promise<void> {
+        try {
+            const ref = this.artifacts.agentRuns.ref(input.organizationId, input.workId);
+            await this.artifacts.agentRuns.appendEvent(ref, row);
+        } catch (error) {
+            console.warn('[works] failed to append agent run event artifact', {
+                workId: input.workId,
+                error,
+            });
+        }
+    }
+}
+
+function inferActorType(source: string | null | undefined): 'agent' | 'mcp' | 'user' | 'automation' {
+    if (source === 'mcp' || source === 'external-agent') return 'mcp';
+    if (source === 'automation') return 'automation';
+    if (source === 'user') return 'user';
+    return 'agent';
 }

@@ -30,7 +30,9 @@ export const works = activeSchemas?.works;
 export const workEvents = activeSchemas?.workEvents;
 export const workQuerySessions = activeSchemas?.workQuerySessions;
 export const workQueryResultSets = activeSchemas?.workQueryResultSets;
-export const workQueryResultPages = activeSchemas?.workQueryResultPages;
 export const workChartStates = activeSchemas?.workChartStates;
+export const queryRuns = activeSchemas?.queryRuns;
+export const resultSets = activeSchemas?.resultSets;
+export const agentRunResultSets = activeSchemas?.agentRunResultSets;
 
 export type ActiveDBSchema = typeof activeSchemas.schema;

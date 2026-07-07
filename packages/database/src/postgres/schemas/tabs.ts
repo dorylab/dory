@@ -21,6 +21,7 @@ export const tabs = pgTable('tabs', {
 
     state: text('state').$type<TabPayload>(),
     resultMeta: text('result_meta').$type<TabResultMetaPayload | null>(),
+    currentResultSetId: text('current_result_set_id'),
 
     // Explicit order field to avoid reserved words: orderIndex
     orderIndex: integer('order_index').notNull().default(0),

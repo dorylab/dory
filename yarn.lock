@@ -2681,6 +2681,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/artifacts@npm:0.1.0, @dory/artifacts@workspace:packages/artifacts":
+  version: 0.0.0-use.local
+  resolution: "@dory/artifacts@workspace:packages/artifacts"
+  dependencies:
+    "@aws-sdk/client-s3": "npm:^3.1051.0"
+    "@dory/resultset": "npm:0.1.0"
+    "@types/node": "npm:^25.5.2"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
 "@dory/auth-core@npm:0.1.0, @dory/auth-core@workspace:packages/auth-core":
   version: 0.0.0-use.local
   resolution: "@dory/auth-core@workspace:packages/auth-core"
@@ -2691,6 +2702,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dory/database@workspace:packages/database"
   dependencies:
+    "@dory/artifacts": "npm:0.1.0"
+    "@dory/resultset": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@electric-sql/pglite": "npm:^0.4.3"
     "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
@@ -2752,6 +2765,17 @@ __metadata:
     "@types/node": "npm:^25.5.2"
     next: "npm:16.2.7"
     next-intl: "npm:^4.9.2"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
+"@dory/resultset@npm:0.1.0, @dory/resultset@workspace:packages/resultset":
+  version: 0.0.0-use.local
+  resolution: "@dory/resultset@workspace:packages/resultset"
+  dependencies:
+    "@dory/shared": "npm:0.1.0"
+    "@duckdb/node-api": "npm:^1.5.2-r.1"
+    "@types/node": "npm:^25.5.2"
     typescript: "npm:^6.0.2"
   languageName: unknown
   linkType: soft
@@ -23755,11 +23779,13 @@ __metadata:
     "@dnd-kit/utilities": "npm:^3.2.2"
     "@dory/actions": "npm:0.1.0"
     "@dory/analysis": "npm:0.1.0"
+    "@dory/artifacts": "npm:0.1.0"
     "@dory/database": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"
     "@dory/ee": "npm:0.1.0"
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
+    "@dory/resultset": "npm:0.1.0"
     "@dory/server-core": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@dory/ui": "npm:0.1.0"
