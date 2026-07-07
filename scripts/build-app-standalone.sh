@@ -51,6 +51,27 @@ prune_better_sqlite3_package() {
     "${package_dir}/build/Release/obj.target"
 }
 
+copy_public_assets_to_standalone() {
+  local source_dir="$1"
+  local target_dir="$2"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude='.DS_Store' \
+      --exclude='/e2e-demo-flow/***' \
+      --exclude='/demo-*.png' \
+      "${source_dir}/" "${target_dir}/"
+    return
+  fi
+
+  rm -rf "${target_dir}"
+  cp -a "${source_dir}" "${target_dir}"
+  rm -rf \
+    "${target_dir}/.DS_Store" \
+    "${target_dir}/e2e-demo-flow"
+  find "${target_dir}" -maxdepth 1 -type f -name 'demo-*.png' -delete
+}
+
 strip_macho_native_binaries() {
   if [[ "$(uname -s)" != "Darwin" ]] || ! command -v strip >/dev/null 2>&1 || ! command -v file >/dev/null 2>&1; then
     return
@@ -115,7 +136,7 @@ fi
 
 # 4) apps/web/public
 if [[ -d "${WEB_DIR}/public" ]]; then
-  cp -a "${WEB_DIR}/public" "${OUT_WEB_DIR}/public"
+  copy_public_assets_to_standalone "${WEB_DIR}/public" "${OUT_WEB_DIR}/public"
 fi
 
 # 5) apps/web/dist-scripts (if exists)
