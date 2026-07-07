@@ -47,8 +47,28 @@ prune_better_sqlite3_package() {
     "${package_dir}/build/better_sqlite3.target.mk" \
     "${package_dir}/build/config.gypi" \
     "${package_dir}/build/deps" \
+    "${package_dir}/build/Release/sqlite3.a" \
     "${package_dir}/build/Release/obj" \
     "${package_dir}/build/Release/obj.target"
+}
+
+prune_snowflake_minicore_binaries() {
+  local package_dir="$1"
+  local binary_dir="${package_dir}/dist/lib/minicore/binaries"
+
+  if [[ ! -d "${binary_dir}" || "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+
+  local target_arch="${DORY_BUILD_ARCH:-$(uname -m)}"
+  local snowflake_arch
+  case "${target_arch}" in
+    arm64|aarch64) snowflake_arch="arm64" ;;
+    x64|x86_64|amd64) snowflake_arch="x64" ;;
+    *) return ;;
+  esac
+
+  find "${binary_dir}" -type f -name 'sf_mini_core_*.node' ! -name "*.darwin-${snowflake_arch}.node" -delete
 }
 
 copy_public_assets_to_standalone() {
@@ -110,6 +130,39 @@ dedupe_pglite_asset_copies() {
         *.wasm) replace_file_with_relative_symlink "${static_pglite_asset}" "${pglite_dist_dir}/pglite.wasm" ;;
       esac
     done < <(find "${OUT_WEB_DIR}/.next/static/media" -type f \( -name 'pglite.*.data' -o -name 'pglite.*.wasm' \) -print0)
+  fi
+}
+
+dedupe_traced_native_binary_copies() {
+  if [[ ! -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+    return
+  fi
+
+  local root_better_sqlite3_binary="${OUT_DIR}/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+  if [[ -f "${root_better_sqlite3_binary}" ]]; then
+    while IFS= read -r -d '' traced_better_sqlite3_binary; do
+      replace_file_with_relative_symlink "${traced_better_sqlite3_binary}" "${root_better_sqlite3_binary}"
+    done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -path '*/better-sqlite3-*/build/Release/better_sqlite3.node' -type f -print0)
+  fi
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+
+  local target_arch="${DORY_BUILD_ARCH:-$(uname -m)}"
+  local snowflake_arch
+  case "${target_arch}" in
+    arm64|aarch64) snowflake_arch="arm64" ;;
+    x64|x86_64|amd64) snowflake_arch="x64" ;;
+    *) return ;;
+  esac
+
+  local snowflake_binary_name="sf_mini_core_0.0.1.darwin-${snowflake_arch}.node"
+  local root_snowflake_binary="${OUT_DIR}/node_modules/snowflake-sdk/dist/lib/minicore/binaries/${snowflake_binary_name}"
+  if [[ -f "${root_snowflake_binary}" ]]; then
+    while IFS= read -r -d '' traced_snowflake_binary; do
+      replace_file_with_relative_symlink "${traced_snowflake_binary}" "${root_snowflake_binary}"
+    done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -path "*/snowflake-sdk-*/dist/lib/minicore/binaries/${snowflake_binary_name}" -type f -print0)
   fi
 }
 
@@ -264,15 +317,21 @@ if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
 fi
 
 prune_better_sqlite3_package "${OUT_DIR}/node_modules/better-sqlite3"
+prune_snowflake_minicore_binaries "${OUT_DIR}/node_modules/snowflake-sdk"
 if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
   while IFS= read -r -d '' better_sqlite3_package_dir; do
     prune_better_sqlite3_package "${better_sqlite3_package_dir}"
   done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'better-sqlite3*' -print0)
+
+  while IFS= read -r -d '' snowflake_package_dir; do
+    prune_snowflake_minicore_binaries "${snowflake_package_dir}"
+  done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'snowflake-sdk*' -print0)
 fi
 
 rm -rf "${OUT_DIR}/node_modules/dory"
 
 dedupe_pglite_asset_copies
+dedupe_traced_native_binary_copies
 
 strip_macho_native_binaries
 
