@@ -1,7 +1,6 @@
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { DuckDBInstance, type DuckDBAppender } from '@duckdb/node-api';
 
 export type ResultSetLogicalType = 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'binary' | 'unknown';
 
@@ -119,11 +118,43 @@ export class NoopFullDataWriter implements ResultSetDataWriter {
     }
 }
 
+export type ResultSetFullDataMode = 'auto' | 'parquet' | 'disabled';
+
+export function createDefaultResultSetDataWriter(env: Record<string, string | undefined> = process.env): ResultSetDataWriter {
+    const mode = normalizeFullDataMode(env.DORY_RESULTSET_FULL_DATA ?? env.DORY_RESULTSET_FULL_DATA_MODE);
+    if (mode === 'disabled') return new NoopFullDataWriter();
+    if (mode === 'parquet') return new ParquetResultSetDataWriter();
+    if (isVercelRuntime(env)) return new NoopFullDataWriter();
+    return new ParquetResultSetDataWriter();
+}
+
 type DuckDbColumnType = 'BOOLEAN' | 'BIGINT' | 'DOUBLE' | 'BLOB' | 'VARCHAR';
 
 type NormalizedColumn = ResultSetColumn & {
     parquetName: string;
     duckDbType: DuckDbColumnType;
+};
+
+type DuckDBAppenderLike = {
+    appendNull(): void;
+    appendBoolean(value: boolean): void;
+    appendBigInt(value: bigint): void;
+    appendDouble(value: number): void;
+    appendBlob(value: Uint8Array): void;
+    appendVarchar(value: string): void;
+    endRow(): void;
+    closeSync(): void;
+};
+
+type DuckDBConnectionLike = {
+    run(sql: string): Promise<unknown>;
+    createAppender(table: string): Promise<DuckDBAppenderLike>;
+    closeSync(): void;
+};
+
+type DuckDBInstanceLike = {
+    connect(): Promise<DuckDBConnectionLike>;
+    closeSync(): void;
 };
 
 export class ParquetResultSetDataWriter implements ResultSetDataWriter {
@@ -137,8 +168,9 @@ export class ParquetResultSetDataWriter implements ResultSetDataWriter {
         const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-${safeFilePart(input.artifactId)}-`));
         const outputPath = path.join(tempDir, 'data.parquet');
 
-        let instance: DuckDBInstance | null = null;
+        let instance: DuckDBInstanceLike | null = null;
         try {
+            const { DuckDBInstance } = await import('@duckdb/node-api');
             instance = await DuckDBInstance.create(':memory:');
             const connection = await instance.connect();
             try {
@@ -312,7 +344,7 @@ function inferDuckDbType(column: ResultSetColumn, values: unknown[]): DuckDbColu
     return 'VARCHAR';
 }
 
-function appendValue(appender: DuckDBAppender, column: NormalizedColumn, value: unknown) {
+function appendValue(appender: DuckDBAppenderLike, column: NormalizedColumn, value: unknown) {
     if (value === null || typeof value === 'undefined') {
         appender.appendNull();
         return;
@@ -403,4 +435,15 @@ function quoteLiteral(value: string) {
 
 function safeFilePart(value: string) {
     return value.replace(/[^a-zA-Z0-9_.-]/g, '_');
+}
+
+function normalizeFullDataMode(value: string | undefined): ResultSetFullDataMode {
+    const normalized = value?.trim().toLowerCase();
+    if (normalized === 'parquet' || normalized === 'full' || normalized === 'enabled' || normalized === 'true' || normalized === '1') return 'parquet';
+    if (normalized === 'disabled' || normalized === 'preview-only' || normalized === 'none' || normalized === 'false' || normalized === '0') return 'disabled';
+    return 'auto';
+}
+
+function isVercelRuntime(env: Record<string, string | undefined>) {
+    return Boolean(env.VERCEL || env.NEXT_RUNTIME === 'edge' || env.NEXT_RUNTIME === 'nodejs-vercel');
 }

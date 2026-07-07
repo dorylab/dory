@@ -4,7 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { DuckDBInstance } from '@duckdb/node-api';
 
-import { buildResultSetPreview, inferResultSetColumns, ParquetResultSetDataWriter, resultSetDataAvailability, type ResultSetManifest } from '../../src/index';
+import {
+    buildResultSetPreview,
+    createDefaultResultSetDataWriter,
+    inferResultSetColumns,
+    NoopFullDataWriter,
+    ParquetResultSetDataWriter,
+    resultSetDataAvailability,
+    type ResultSetManifest,
+} from '../../src/index';
 
 const rows = Array.from({ length: 5 }, (_, index) => ({ id: index + 1, name: `row-${index + 1}` }));
 const columns = inferResultSetColumns(rows);
@@ -98,6 +106,11 @@ const emptyParquet = await writer.write({
 });
 assert.equal(emptyParquet?.rowCount, 0);
 assert.ok((emptyParquet?.byteSize ?? 0) > 0);
+
+assert.ok(createDefaultResultSetDataWriter({ VERCEL: '1' }) instanceof NoopFullDataWriter);
+assert.ok(createDefaultResultSetDataWriter({ VERCEL: '1', DORY_RESULTSET_FULL_DATA: 'parquet' }) instanceof ParquetResultSetDataWriter);
+assert.ok(createDefaultResultSetDataWriter({ DORY_RESULTSET_FULL_DATA: 'disabled' }) instanceof NoopFullDataWriter);
+assert.ok(createDefaultResultSetDataWriter({ DORY_RUNTIME: 'desktop' }) instanceof ParquetResultSetDataWriter);
 
 const tempDir = await mkdtemp(path.join(os.tmpdir(), 'dory-resultset-test-'));
 try {

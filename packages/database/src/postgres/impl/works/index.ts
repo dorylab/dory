@@ -17,8 +17,8 @@ import { translateDatabase } from '@dory/database/i18n';
 import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
 import {
     buildResultSetPreview,
+    createDefaultResultSetDataWriter,
     inferResultSetColumns,
-    ParquetResultSetDataWriter,
     resultSetDataAvailability,
     type ResultSetArtifactRef,
     type ResultSetDataWriter,
@@ -201,7 +201,7 @@ export class PostgresWorksRepository {
 
     constructor(
         private readonly artifacts: DoryArtifactStore = getDoryArtifactStore(),
-        private readonly fullDataWriter: ResultSetDataWriter = new ParquetResultSetDataWriter(),
+        private readonly fullDataWriter: ResultSetDataWriter = createDefaultResultSetDataWriter(),
     ) {}
 
     async init() {
