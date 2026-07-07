@@ -12,7 +12,8 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@dory/shared": "0.1.0"
+        "@dory/shared": "0.1.0",
+        "@duckdb/node-api": "^1.5.2-r.1"
     },
     "devDependencies": {
         "@types/node": "^25.5.2",

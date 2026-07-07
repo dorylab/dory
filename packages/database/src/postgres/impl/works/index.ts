@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
 import {
@@ -15,7 +15,15 @@ import {
 } from '@dory/database/postgres/schemas';
 import { translateDatabase } from '@dory/database/i18n';
 import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
-import { buildResultSetPreview, inferResultSetColumns, resultSetDataAvailability, type ResultSetArtifactRef, type ResultSetManifest } from '@dory/resultset';
+import {
+    buildResultSetPreview,
+    inferResultSetColumns,
+    ParquetResultSetDataWriter,
+    resultSetDataAvailability,
+    type ResultSetArtifactRef,
+    type ResultSetDataWriter,
+    type ResultSetManifest,
+} from '@dory/resultset';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import type { PostgresDBClient } from '@dory/shared';
@@ -191,7 +199,10 @@ function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
 export class PostgresWorksRepository {
     private db!: PostgresDBClient;
 
-    constructor(private readonly artifacts: DoryArtifactStore = getDoryArtifactStore()) {}
+    constructor(
+        private readonly artifacts: DoryArtifactStore = getDoryArtifactStore(),
+        private readonly fullDataWriter: ResultSetDataWriter = new ParquetResultSetDataWriter(),
+    ) {}
 
     async init() {
         try {
@@ -373,6 +384,13 @@ export class PostgresWorksRepository {
     async archive(params: { organizationId: string; userId: string; workId: string }): Promise<WorkRecord | null> {
         this.assertInited();
         const now = new Date();
+        const [existing] = await this.db
+            .select()
+            .from(works)
+            .where(and(eq(works.workId, params.workId), eq(works.organizationId, params.organizationId), eq(works.userId, params.userId), isNull(works.archivedAt)))
+            .limit(1);
+        if (!existing) return null;
+
         const [row] = await this.db
             .update(works)
             .set({
@@ -385,14 +403,43 @@ export class PostgresWorksRepository {
             .returning();
 
         if (row) {
-            await this.purgeWorkspaceArtifacts(params);
+            try {
+                await this.purgeWorkspaceArtifacts(params);
+            } catch (error) {
+                await this.db
+                    .update(works)
+                    .set({
+                        status: existing.status,
+                        archivedAt: null,
+                        updatedAt: new Date(),
+                        lastActiveAt: existing.lastActiveAt,
+                    })
+                    .where(and(eq(works.workId, params.workId), eq(works.organizationId, params.organizationId), eq(works.userId, params.userId)));
+                throw error;
+            }
         }
 
         return (row as WorkRecord | undefined) ?? null;
     }
 
-    private async purgeWorkspaceArtifacts(params: { userId: string; workId: string }): Promise<void> {
+    private async purgeWorkspaceArtifacts(params: { organizationId: string; userId: string; workId: string }): Promise<void> {
+        const resultSetRows = await this.db
+            .select({
+                id: resultSetsTable.id,
+                artifactRefJson: resultSetsTable.artifactRefJson,
+            })
+            .from(resultSetsTable)
+            .where(or(eq(resultSetsTable.workId, params.workId), eq(resultSetsTable.agentRunId, params.workId)));
+        const resultSetIds = resultSetRows.map(row => row.id);
+
+        await Promise.all(resultSetRows.map(row => this.artifacts.resultSets.deleteResultSet(row.artifactRefJson)));
+        await this.artifacts.agentRuns.deleteAgentRun(this.artifacts.agentRuns.ref(params.organizationId, params.workId));
+
         await Promise.all([
+            resultSetIds.length ? this.db.delete(agentRunResultSets).where(inArray(agentRunResultSets.resultSetId, resultSetIds)) : Promise.resolve(),
+            this.db.delete(agentRunResultSets).where(eq(agentRunResultSets.agentRunId, params.workId)),
+            this.db.delete(resultSetsTable).where(or(eq(resultSetsTable.workId, params.workId), eq(resultSetsTable.agentRunId, params.workId))),
+            this.db.delete(queryRuns).where(or(eq(queryRuns.workId, params.workId), eq(queryRuns.agentRunId, params.workId))),
             this.db.delete(workQueryResultSets).where(eq(workQueryResultSets.workId, params.workId)),
             this.db.delete(workQuerySessions).where(eq(workQuerySessions.workId, params.workId)),
             this.db.delete(workChartStates).where(eq(workChartStates.workId, params.workId)),
@@ -604,12 +651,19 @@ export class PostgresWorksRepository {
                 updatedAt: now.toISOString(),
                 contentHash: null,
             };
+            const fullData = await this.writeFullDataArtifact({
+                artifactId,
+                status,
+                columns,
+                rows,
+            });
 
             const { ref, manifest: persistedManifest } = await this.artifacts.resultSets.putResultSet({
                 organizationId: work.organizationId,
                 artifactId,
                 manifest,
                 preview: rows.length || status === 'success' ? preview : null,
+                data: fullData?.data ?? null,
             });
 
             try {
@@ -708,7 +762,10 @@ export class PostgresWorksRepository {
 
         const currentResultSetId = compatibilityRows.at(-1)?.resultSetId ?? null;
         if (currentResultSetId && session.tabId && session.userId) {
-            await this.db.update(tabs).set({ currentResultSetId, updatedAt: now }).where(and(eq(tabs.tabId, session.tabId), eq(tabs.userId, session.userId)));
+            await this.db
+                .update(tabs)
+                .set({ currentResultSetId, updatedAt: now })
+                .where(and(eq(tabs.tabId, session.tabId), eq(tabs.userId, session.userId)));
         }
     }
 
@@ -767,6 +824,25 @@ export class PostgresWorksRepository {
                 error,
             });
             return [];
+        }
+    }
+
+    private async writeFullDataArtifact(input: { artifactId: string; status: string; columns: ResultSetManifest['schema']; rows: unknown[] }) {
+        if (input.status !== 'success') return null;
+        if (!input.columns.length) return null;
+        try {
+            return await this.fullDataWriter.write({
+                artifactId: input.artifactId,
+                schema: input.columns,
+                rows: input.rows,
+                target: null,
+            });
+        } catch (error) {
+            console.warn('[works] failed to write full result-set data artifact', {
+                artifactId: input.artifactId,
+                error,
+            });
+            return null;
         }
     }
 

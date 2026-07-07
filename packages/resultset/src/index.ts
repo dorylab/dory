@@ -1,3 +1,8 @@
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { DuckDBInstance, type DuckDBAppender } from '@duckdb/node-api';
+
 export type ResultSetLogicalType = 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'binary' | 'unknown';
 
 export type ResultSetColumn = {
@@ -101,20 +106,71 @@ export type ResultSetDataWriterResult = {
     format: 'parquet';
     rowCount: number;
     byteSize?: number;
+    data: Buffer;
 };
 
 export type ResultSetDataWriter = {
-    write(input: {
-        artifactId: string;
-        schema: ResultSetColumn[];
-        rows: AsyncIterable<Record<string, unknown>> | Record<string, unknown>[];
-        target: unknown;
-    }): Promise<ResultSetDataWriterResult | null>;
+    write(input: { artifactId: string; schema: ResultSetColumn[]; rows: AsyncIterable<unknown> | unknown[]; target: unknown }): Promise<ResultSetDataWriterResult | null>;
 };
 
 export class NoopFullDataWriter implements ResultSetDataWriter {
     async write(): Promise<ResultSetDataWriterResult | null> {
         return null;
+    }
+}
+
+type DuckDbColumnType = 'BOOLEAN' | 'BIGINT' | 'DOUBLE' | 'BLOB' | 'VARCHAR';
+
+type NormalizedColumn = ResultSetColumn & {
+    parquetName: string;
+    duckDbType: DuckDbColumnType;
+};
+
+export class ParquetResultSetDataWriter implements ResultSetDataWriter {
+    async write(input: { artifactId: string; schema: ResultSetColumn[]; rows: AsyncIterable<unknown> | unknown[]; target: unknown }): Promise<ResultSetDataWriterResult | null> {
+        const rows = await collectRows(input.rows);
+        const schema = input.schema.length ? input.schema : inferResultSetColumns(rows);
+        if (!schema.length) return null;
+
+        const normalizedRows = rows.map(row => normalizeRecord(row));
+        const columns = normalizeParquetColumns(schema, normalizedRows);
+        const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-${safeFilePart(input.artifactId)}-`));
+        const outputPath = path.join(tempDir, 'data.parquet');
+
+        let instance: DuckDBInstance | null = null;
+        try {
+            instance = await DuckDBInstance.create(':memory:');
+            const connection = await instance.connect();
+            try {
+                await connection.run(`CREATE TABLE result_set (${columns.map(column => `${quoteIdentifier(column.parquetName)} ${column.duckDbType}`).join(', ')})`);
+                if (normalizedRows.length) {
+                    const appender = await connection.createAppender('result_set');
+                    try {
+                        for (const row of normalizedRows) {
+                            for (const column of columns) appendValue(appender, column, row[column.name]);
+                            appender.endRow();
+                        }
+                    } finally {
+                        appender.closeSync();
+                    }
+                }
+                await connection.run(`COPY result_set TO ${quoteLiteral(outputPath)} (FORMAT PARQUET)`);
+            } finally {
+                connection.closeSync();
+            }
+
+            const [data, info] = await Promise.all([readFile(outputPath), stat(outputPath)]);
+            return {
+                path: 'data.parquet',
+                format: 'parquet',
+                rowCount: normalizedRows.length,
+                byteSize: info.size,
+                data,
+            };
+        } finally {
+            instance?.closeSync();
+            await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+        }
     }
 }
 
@@ -176,13 +232,175 @@ function normalizeColumn(column: unknown, index: number): ResultSetColumn | null
 }
 
 function normalizeLogicalType(value: unknown): ResultSetLogicalType | undefined {
-    if (value === 'string' || value === 'number' || value === 'boolean' || value === 'date' || value === 'datetime' || value === 'json' || value === 'binary' || value === 'unknown') {
+    if (
+        value === 'string' ||
+        value === 'number' ||
+        value === 'boolean' ||
+        value === 'date' ||
+        value === 'datetime' ||
+        value === 'json' ||
+        value === 'binary' ||
+        value === 'unknown'
+    ) {
         return value;
     }
     return undefined;
 }
 
 function normalizeRow(row: unknown): Record<string, unknown> {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return { value: toJsonSafeValue(row) };
+    return Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([key, value]) => [key, toJsonSafeValue(value)]));
+}
+
+function normalizeRecord(row: unknown): Record<string, unknown> {
     if (!row || typeof row !== 'object' || Array.isArray(row)) return { value: row };
     return row as Record<string, unknown>;
+}
+
+async function collectRows(rows: AsyncIterable<unknown> | unknown[]): Promise<unknown[]> {
+    if (Array.isArray(rows)) return rows;
+    const collected: unknown[] = [];
+    for await (const row of rows) collected.push(row);
+    return collected;
+}
+
+function normalizeParquetColumns(schema: ResultSetColumn[], rows: Record<string, unknown>[]): NormalizedColumn[] {
+    const usedNames = new Set<string>();
+    return schema.map((column, index) => {
+        const parquetName = uniqueParquetName(column.name || `column_${index + 1}`, usedNames);
+        return {
+            ...column,
+            parquetName,
+            duckDbType: inferDuckDbType(
+                column,
+                rows.map(row => row[column.name]),
+            ),
+        };
+    });
+}
+
+function uniqueParquetName(name: string, usedNames: Set<string>) {
+    let candidate = name || 'column';
+    let suffix = 2;
+    while (usedNames.has(candidate)) {
+        candidate = `${name}_${suffix}`;
+        suffix += 1;
+    }
+    usedNames.add(candidate);
+    return candidate;
+}
+
+function inferDuckDbType(column: ResultSetColumn, values: unknown[]): DuckDbColumnType {
+    const nonNullValues = values.filter(value => value !== null && typeof value !== 'undefined');
+    if (!nonNullValues.length) {
+        if (column.logicalType === 'number') return isIntegerDatabaseType(column.databaseType) ? 'BIGINT' : 'DOUBLE';
+        if (column.logicalType === 'boolean') return 'BOOLEAN';
+        if (column.logicalType === 'binary') return 'BLOB';
+        return 'VARCHAR';
+    }
+
+    if (column.logicalType === 'boolean' && nonNullValues.every(value => typeof value === 'boolean')) return 'BOOLEAN';
+    if (column.logicalType === 'binary' && nonNullValues.every(isBinaryValue)) return 'BLOB';
+    if (column.logicalType === 'number' || nonNullValues.every(value => typeof value === 'number' || typeof value === 'bigint')) {
+        if (nonNullValues.every(isIntegerLike)) return 'BIGINT';
+        if (nonNullValues.every(value => typeof value === 'number' && Number.isFinite(value))) return 'DOUBLE';
+    }
+    if (nonNullValues.every(value => typeof value === 'boolean')) return 'BOOLEAN';
+    if (nonNullValues.every(isBinaryValue)) return 'BLOB';
+    if (nonNullValues.every(isIntegerLike)) return 'BIGINT';
+    if (nonNullValues.every(value => typeof value === 'number' && Number.isFinite(value))) return 'DOUBLE';
+    return 'VARCHAR';
+}
+
+function appendValue(appender: DuckDBAppender, column: NormalizedColumn, value: unknown) {
+    if (value === null || typeof value === 'undefined') {
+        appender.appendNull();
+        return;
+    }
+
+    switch (column.duckDbType) {
+        case 'BOOLEAN':
+            if (typeof value === 'boolean') appender.appendBoolean(value);
+            else appender.appendNull();
+            return;
+        case 'BIGINT':
+            if (typeof value === 'bigint') appender.appendBigInt(clampBigInt64(value));
+            else if (typeof value === 'number' && Number.isFinite(value)) appender.appendBigInt(BigInt(Math.trunc(value)));
+            else appender.appendNull();
+            return;
+        case 'DOUBLE':
+            if (typeof value === 'number' && Number.isFinite(value)) appender.appendDouble(value);
+            else appender.appendNull();
+            return;
+        case 'BLOB':
+            if (isBinaryValue(value)) appender.appendBlob(toUint8Array(value));
+            else appender.appendNull();
+            return;
+        case 'VARCHAR':
+            appender.appendVarchar(toStableString(value));
+            return;
+    }
+}
+
+function toJsonSafeValue(value: unknown): unknown {
+    if (typeof value === 'bigint') return value.toString();
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+    if (isBinaryValue(value)) return Buffer.from(toUint8Array(value)).toString('base64');
+    if (Array.isArray(value)) return value.map(item => toJsonSafeValue(item));
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, nestedValue]) => [key, toJsonSafeValue(nestedValue)]));
+    }
+    if (typeof value === 'number' && !Number.isFinite(value)) return String(value);
+    return value;
+}
+
+function toStableString(value: unknown) {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'bigint') return value.toString();
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString();
+    if (isBinaryValue(value)) return Buffer.from(toUint8Array(value)).toString('base64');
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    try {
+        return JSON.stringify(toJsonSafeValue(value));
+    } catch {
+        return String(value);
+    }
+}
+
+function isBinaryValue(value: unknown): value is Uint8Array {
+    return value instanceof Uint8Array;
+}
+
+function toUint8Array(value: Uint8Array) {
+    return value;
+}
+
+function isIntegerLike(value: unknown) {
+    if (typeof value === 'bigint') return value >= MIN_INT64 && value <= MAX_INT64;
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= Number(MIN_INT64) && value <= Number(MAX_INT64);
+}
+
+function isIntegerDatabaseType(databaseType: string | undefined) {
+    return Boolean(databaseType && /\b(bigint|int8|integer|int4|smallint|int2|tinyint|number\(38,0\))\b/i.test(databaseType));
+}
+
+const MIN_INT64 = BigInt('-9223372036854775808');
+const MAX_INT64 = BigInt('9223372036854775807');
+
+function clampBigInt64(value: bigint) {
+    if (value < MIN_INT64) return MIN_INT64;
+    if (value > MAX_INT64) return MAX_INT64;
+    return value;
+}
+
+function quoteIdentifier(identifier: string) {
+    return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+function quoteLiteral(value: string) {
+    return `'${value.replace(/'/g, "''")}'`;
+}
+
+function safeFilePart(value: string) {
+    return value.replace(/[^a-zA-Z0-9_.-]/g, '_');
 }

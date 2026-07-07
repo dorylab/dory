@@ -2774,6 +2774,7 @@ __metadata:
   resolution: "@dory/resultset@workspace:packages/resultset"
   dependencies:
     "@dory/shared": "npm:0.1.0"
+    "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@types/node": "npm:^25.5.2"
     typescript: "npm:^6.0.2"
   languageName: unknown
