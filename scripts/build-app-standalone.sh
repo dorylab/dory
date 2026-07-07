@@ -72,6 +72,47 @@ copy_public_assets_to_standalone() {
   find "${target_dir}" -maxdepth 1 -type f -name 'demo-*.png' -delete
 }
 
+replace_file_with_relative_symlink() {
+  local target_path="$1"
+  local source_path="$2"
+
+  if [[ ! -f "${target_path}" || ! -f "${source_path}" ]]; then
+    return
+  fi
+
+  local relative_source
+  relative_source="$(node -e "const path=require('node:path'); process.stdout.write(path.relative(path.dirname(process.argv[1]), process.argv[2]));" "${target_path}" "${source_path}")"
+  rm -f "${target_path}"
+  ln -s "${relative_source}" "${target_path}"
+}
+
+dedupe_pglite_asset_copies() {
+  local pglite_dist_dir="${OUT_DIR}/node_modules/@electric-sql/pglite/dist"
+
+  if [[ ! -d "${pglite_dist_dir}" ]]; then
+    return
+  fi
+
+  for asset_name in pglite.data pglite.wasm initdb.wasm; do
+    replace_file_with_relative_symlink "${OUT_WEB_DIR}/dist-scripts/${asset_name}" "${pglite_dist_dir}/${asset_name}"
+  done
+
+  if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+    while IFS= read -r -d '' traced_pglite_asset; do
+      replace_file_with_relative_symlink "${traced_pglite_asset}" "${pglite_dist_dir}/$(basename "${traced_pglite_asset}")"
+    done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}/@electric-sql" \( -path '*/pglite-*/dist/pglite.data' -o -path '*/pglite-*/dist/pglite.wasm' \) -print0 2>/dev/null)
+  fi
+
+  if [[ -d "${OUT_WEB_DIR}/.next/static/media" ]]; then
+    while IFS= read -r -d '' static_pglite_asset; do
+      case "${static_pglite_asset}" in
+        *.data) replace_file_with_relative_symlink "${static_pglite_asset}" "${pglite_dist_dir}/pglite.data" ;;
+        *.wasm) replace_file_with_relative_symlink "${static_pglite_asset}" "${pglite_dist_dir}/pglite.wasm" ;;
+      esac
+    done < <(find "${OUT_WEB_DIR}/.next/static/media" -type f \( -name 'pglite.*.data' -o -name 'pglite.*.wasm' \) -print0)
+  fi
+}
+
 strip_macho_native_binaries() {
   if [[ "$(uname -s)" != "Darwin" ]] || ! command -v strip >/dev/null 2>&1 || ! command -v file >/dev/null 2>&1; then
     return
@@ -230,6 +271,8 @@ if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
 fi
 
 rm -rf "${OUT_DIR}/node_modules/dory"
+
+dedupe_pglite_asset_copies
 
 strip_macho_native_binaries
 
