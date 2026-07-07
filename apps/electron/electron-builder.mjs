@@ -57,6 +57,11 @@ const config = {
         {
             from: '../../release/standalone',
             to: 'standalone',
+            filter: ['**/*', '!node_modules/**/*'],
+        },
+        {
+            from: '../../release/standalone/node_modules',
+            to: 'standalone/node_modules',
             filter: ['**/*'],
         },
     ],

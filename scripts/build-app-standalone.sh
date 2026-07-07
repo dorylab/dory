@@ -16,7 +16,6 @@ STANDALONE_WEB_SRC="${STANDALONE_SRC}/apps/web"
 OUT_DIR="${ROOT_DIR}/release/standalone"
 OUT_WEB_DIR="${OUT_DIR}/apps/web"
 OUT_WEB_NEXT_NODE_MODULES_DIR="${OUT_WEB_DIR}/.next/node_modules"
-OUT_WEB_NODE_MODULES_DIR="${OUT_WEB_DIR}/node_modules"
 
 copy_node_package_to_standalone() {
   local package_name="$1"
@@ -26,11 +25,47 @@ copy_node_package_to_standalone() {
     return
   fi
 
-  for target_node_modules_dir in "${OUT_DIR}/node_modules" "${OUT_WEB_NODE_MODULES_DIR}"; do
-    mkdir -p "$(dirname "${target_node_modules_dir}/${package_name}")"
-    rm -rf "${target_node_modules_dir:?}/${package_name}"
-    cp -a "${source_dir}" "${target_node_modules_dir}/${package_name}"
-  done
+  local target_node_modules_dir="${OUT_DIR}/node_modules"
+  mkdir -p "$(dirname "${target_node_modules_dir}/${package_name}")"
+  rm -rf "${target_node_modules_dir:?}/${package_name}"
+  cp -a "${source_dir}" "${target_node_modules_dir}/${package_name}"
+}
+
+prune_better_sqlite3_package() {
+  local package_dir="$1"
+
+  if [[ ! -d "${package_dir}" ]]; then
+    return
+  fi
+
+  # Runtime only needs the JS package files and the compiled native addon.
+  rm -rf \
+    "${package_dir}/deps" \
+    "${package_dir}/src" \
+    "${package_dir}/binding.gyp" \
+    "${package_dir}/build/Makefile" \
+    "${package_dir}/build/better_sqlite3.target.mk" \
+    "${package_dir}/build/config.gypi" \
+    "${package_dir}/build/deps" \
+    "${package_dir}/build/Release/obj" \
+    "${package_dir}/build/Release/obj.target"
+}
+
+strip_macho_native_binaries() {
+  if [[ "$(uname -s)" != "Darwin" ]] || ! command -v strip >/dev/null 2>&1 || ! command -v file >/dev/null 2>&1; then
+    return
+  fi
+
+  while IFS= read -r -d '' native_file; do
+    if ! file -b "${native_file}" | grep -q 'Mach-O'; then
+      continue
+    fi
+
+    echo "Stripping native binary: ${native_file#${OUT_DIR}/}"
+    if ! strip -x "${native_file}"; then
+      echo "Warning: failed to strip ${native_file}" >&2
+    fi
+  done < <(find "${OUT_DIR}" -type f \( -name '*.dylib' -o -name '*.node' \) -print0)
 }
 
 if [[ ! -d "${STANDALONE_SRC}" ]]; then
@@ -54,12 +89,6 @@ fi
 # 2) apps/web required files
 cp -f "${STANDALONE_WEB_SRC}/server.js" "${OUT_WEB_DIR}/server.js"
 cp -f "${WEB_DIR}/package.json" "${OUT_WEB_DIR}/package.json"
-
-# Next standalone's server.js resolves packages like "next" relative to apps/web,
-# so keep a colocated node_modules copy under apps/web for packaged Electron builds.
-if [[ -d "${STANDALONE_SRC}/node_modules" ]]; then
-  cp -a "${STANDALONE_SRC}/node_modules" "${OUT_WEB_NODE_MODULES_DIR}"
-fi
 
 # Optional .env files
 if [[ -f "${STANDALONE_WEB_SRC}/.env" ]]; then
@@ -171,6 +200,17 @@ if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
     fi
   done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -type l -print0)
 fi
+
+prune_better_sqlite3_package "${OUT_DIR}/node_modules/better-sqlite3"
+if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+  while IFS= read -r -d '' better_sqlite3_package_dir; do
+    prune_better_sqlite3_package "${better_sqlite3_package_dir}"
+  done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'better-sqlite3*' -print0)
+fi
+
+rm -rf "${OUT_DIR}/node_modules/dory"
+
+strip_macho_native_binaries
 
 echo "Output ready: ${OUT_DIR}"
 echo "Included top-level entries:"

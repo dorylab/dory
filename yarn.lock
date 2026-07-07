@@ -2706,7 +2706,6 @@ __metadata:
     "@dory/resultset": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@electric-sql/pglite": "npm:^0.4.3"
-    "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
     "@types/node": "npm:^25.5.2"
     "@types/pg": "npm:^8.20.0"
     drizzle-orm: "npm:^0.45.2"
@@ -2977,13 +2976,6 @@ __metadata:
   peerDependencies:
     "@noble/ciphers": ^1.0.0
   checksum: 10c0/31cbfbaedae690e12344e49eb1b7fd0697f36cf4d03100df52b925e1f19d02a6f445834938ecdd1cd74154496a74fa9147cdda6209255512220e45eb9c693ca0
-  languageName: node
-  linkType: hard
-
-"@electric-sql/pglite-legacy@npm:@electric-sql/pglite@0.2.17":
-  version: 0.2.17
-  resolution: "@electric-sql/pglite@npm:0.2.17"
-  checksum: 10c0/4358eccb2a3de5148b8995c7dbf3cad2d80a2a193885838ec19e0381ca204c0e37f721d006ad23fcad0b694ec6089a6786b82f2ad87f18344c82e059ff37017f
   languageName: node
   linkType: hard
 
@@ -4106,7 +4098,6 @@ __metadata:
     "@dory/server-core": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
-    "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
     "@modelcontextprotocol/sdk": "npm:^1.29.0"
     "@types/node": "npm:^25.5.2"
     "@types/pg": "npm:^8.20.0"
@@ -23792,7 +23783,6 @@ __metadata:
     "@dory/web-utils": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
-    "@electric-sql/pglite-legacy": "npm:@electric-sql/pglite@0.2.17"
     "@eslint/eslintrc": "npm:^3"
     "@faker-js/faker": "npm:^10.4.0"
     "@hookform/resolvers": "npm:^5.2.2"
