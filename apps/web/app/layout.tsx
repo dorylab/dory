@@ -27,12 +27,24 @@ const META_THEME_COLORS = {
     dark: '#09090b',
 };
 
+function getMetadataBaseUrl() {
+    const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || process.env.BETTER_AUTH_URL?.trim() || siteConfig.url;
+
+    try {
+        return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(configuredUrl) ? configuredUrl : `https://${configuredUrl}`);
+    } catch {
+        return new URL(siteConfig.url);
+    }
+}
+
+const siteUrl = getMetadataBaseUrl();
+
 export const metadata: Metadata = {
     title: {
         default: siteConfig.name,
         template: `%s - ${siteConfig.name}`,
     },
-    metadataBase: new URL('https://getdory.dev'),
+    metadataBase: siteUrl,
     description: siteConfig.description,
     keywords: ['Clickhouse', 'Database UI', 'ch-ui', 'clickhouse ui', 'Open Source', 'SQL Editor', 'Database Management'],
     authors: [
@@ -45,13 +57,13 @@ export const metadata: Metadata = {
     openGraph: {
         type: 'website',
         locale: 'en_US',
-        url: 'https://v4.shadcn.com',
+        url: '/',
         title: siteConfig.name,
         description: siteConfig.description,
         siteName: siteConfig.name,
         images: [
             {
-                url: 'https://v4.shadcn.com/opengraph-image.png',
+                url: siteConfig.ogImage,
                 width: 1200,
                 height: 630,
                 alt: siteConfig.name,
@@ -62,15 +74,14 @@ export const metadata: Metadata = {
         card: 'summary_large_image',
         title: siteConfig.name,
         description: siteConfig.description,
-        images: ['https://v4.shadcn.com/opengraph-image.png'],
-        creator: '@shadcn',
+        images: [siteConfig.twitterImage],
     },
     icons: {
         icon: '/favicon.ico',
         shortcut: '/favicon-16x16.png',
         apple: '/apple-touch-icon.png',
     },
-    manifest: `${siteConfig.url}/site.webmanifest`,
+    manifest: new URL('/site.webmanifest', siteUrl).toString(),
 };
 
 export const viewport: Viewport = {
