@@ -19,7 +19,7 @@ export const DATABASE_TYPE_META: Partial<Record<ConnectionType, DatabaseTypeMeta
     mariadb: { src: '/images/logos/mariadb.svg', label: 'MariaDB' },
     mysql: { src: '/images/logos/mysql.svg', label: 'MySQL' },
     neon: { src: '/images/logos/neon.svg', label: 'Neon' },
-    oracle: { label: 'Oracle' },
+    oracle: { src: '/images/logos/oracle.svg', label: 'Oracle' },
     postgres: { src: '/images/logos/postgresql.svg', label: 'PostgreSQL' },
     sqlite: { src: '/images/logos/sqlite.svg', label: 'SQLite' },
     snowflake: { src: '/images/logos/snowflake.svg', label: 'Snowflake' },

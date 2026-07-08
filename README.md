@@ -143,16 +143,17 @@ Dory is a multi-database SQL client, with broad driver support and deeper integr
 
 | Database | Status |
 | --- | --- |
-| ClickHouse | ✅ Deeply integrated |
-| PostgreSQL | ✅ Supported |
-| Neon | ✅ Supported |
-| MySQL | ✅ Supported |
-| MariaDB | ✅ Supported |
-| SQLite | ✅ Supported |
-| DuckDB | ✅ Supported |
-| SQL Server | ✅ Supported |
-| Oracle | ✅ Supported |
-| Snowflake | 🚧 Planned |
+| <img src="./apps/web/public/images/logos/clickhouse.svg" alt="ClickHouse" width="18" /> ClickHouse | ✅ Deeply integrated |
+| <img src="./apps/web/public/images/logos/postgresql.svg" alt="PostgreSQL" width="18" /> PostgreSQL | ✅ Supported |
+| <img src="./apps/web/public/images/logos/neon.svg" alt="Neon" width="18" /> Neon | ✅ Supported |
+| <img src="./apps/web/public/images/logos/supabase.svg" alt="Supabase" width="18" /> Supabase | ✅ Supported |
+| <img src="./apps/web/public/images/logos/mysql.svg" alt="MySQL" width="18" /> MySQL | ✅ Supported |
+| <img src="./apps/web/public/images/logos/mariadb.svg" alt="MariaDB" width="18" /> MariaDB | ✅ Supported |
+| <img src="./apps/web/public/images/logos/sqlite.svg" alt="SQLite" width="18" /> SQLite | ✅ Supported |
+| <img src="./apps/web/public/images/logos/duckdb.svg" alt="DuckDB" width="18" /> DuckDB | ✅ Supported |
+| <img src="./apps/web/public/images/logos/sqlserver.svg" alt="SQL Server" width="18" /> SQL Server | ✅ Supported |
+| <img src="./apps/web/public/images/logos/oracle.svg" alt="Oracle" width="18" /> Oracle | ✅ Supported |
+| <img src="./apps/web/public/images/logos/snowflake.svg" alt="Snowflake" width="18" /> Snowflake | ✅ Supported |
 
 ---
 
