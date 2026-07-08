@@ -39,7 +39,7 @@ function applyLimitToStatement(statement: string, limit: number, dialect: Select
     return `${prefix}${limited}`;
 }
 
-function applyLimitToSql(sqlText: string, limit: number | undefined, dialect: SelectLimitDialect) {
+function applyLimitToSql(sqlText: string, limit: number | null | undefined, dialect: SelectLimitDialect) {
     if (!limit || !Number.isFinite(limit) || limit <= 0) return sqlText;
     const statements = splitMultiSQL(sqlText);
     if (statements.length <= 1) {
@@ -92,7 +92,7 @@ export function useSqlQueryRunner({
     }, [setUserId, userId, userReady]);
 
     const runQuery = useCallback(
-        async (tab: SQLTab, options?: { sqlOverride?: string; databaseOverride?: string | null; limit?: number }) => {
+        async (tab: SQLTab, options?: { sqlOverride?: string; databaseOverride?: string | null; limit?: number | null }) => {
             if (!dbReady || !tab || !userReady) return;
 
             const tabId = tab.tabId;

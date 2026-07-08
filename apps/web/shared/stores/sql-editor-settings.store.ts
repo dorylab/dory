@@ -14,7 +14,7 @@ export type SqlEditorSettings = {
     minimap: boolean;
     wordWrap: Monaco.editor.IEditorOptions['wordWrap'];
     folding: boolean;
-    queryLimit: number;
+    queryLimit: number | null;
 };
 
 export const SQL_EDITOR_THEME_OPTIONS: Array<{ label: string; value: SqlEditorTheme }> = [
@@ -36,6 +36,7 @@ export const SQL_EDITOR_FONT_FAMILY_OPTIONS: Array<{ label: string; value: SqlEd
 ];
 
 export const SQL_EDITOR_QUERY_LIMIT_OPTIONS = [100, 200, 500, 1000, 2000, 5000];
+export const SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE = 'none';
 
 export const DEFAULT_SQL_EDITOR_SETTINGS: SqlEditorSettings = {
     theme: 'auto',
@@ -58,7 +59,7 @@ const themeSet = new Set(SQL_EDITOR_THEME_OPTIONS.map(option => option.value));
 const fontSet = new Set(SQL_EDITOR_FONT_FAMILY_OPTIONS.map(option => option.value));
 const lineNumbersSet = new Set<SqlEditorSettings['lineNumbers']>(['on', 'off']);
 const wordWrapSet = new Set<SqlEditorSettings['wordWrap']>(['on', 'off']);
-const queryLimitSet = new Set(SQL_EDITOR_QUERY_LIMIT_OPTIONS);
+const queryLimitSet = new Set<number | null>([...SQL_EDITOR_QUERY_LIMIT_OPTIONS, null]);
 
 const storage = createJSONStorage<SqlEditorSettings>(() => localStorage);
 export const sqlEditorSettingsAtom = atomWithStorage<SqlEditorSettings>('sqlEditor.settings', DEFAULT_SQL_EDITOR_SETTINGS, storage);
@@ -73,7 +74,7 @@ export const normalizeSqlEditorSettings = (value?: Partial<SqlEditorSettings> | 
         : DEFAULT_SQL_EDITOR_SETTINGS.fontFamilyPreset;
     const fontSize = clamp(Number(next.fontSize ?? DEFAULT_SQL_EDITOR_SETTINGS.fontSize), FONT_SIZE_MIN, FONT_SIZE_MAX);
     const lineHeight = clamp(Number(next.lineHeight ?? DEFAULT_SQL_EDITOR_SETTINGS.lineHeight), LINE_HEIGHT_MIN, LINE_HEIGHT_MAX);
-    const rawQueryLimit = Number(next.queryLimit ?? DEFAULT_SQL_EDITOR_SETTINGS.queryLimit);
+    const rawQueryLimit = next.queryLimit === null ? null : Number(next.queryLimit ?? DEFAULT_SQL_EDITOR_SETTINGS.queryLimit);
     const queryLimit = queryLimitSet.has(rawQueryLimit) ? rawQueryLimit : DEFAULT_SQL_EDITOR_SETTINGS.queryLimit;
 
     return {

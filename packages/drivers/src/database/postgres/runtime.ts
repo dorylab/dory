@@ -303,7 +303,6 @@ export async function executePostgresQueryRowStream<Row>(
     options?: QuerySessionOptions,
 ): Promise<DriverQueryRowStream<Row>> {
     const { sql: compiledSql, values } = normalizeParams(sql, params);
-    const limitedSql = enforceSelectLimit(compiledSql, DEFAULT_MAX_RESULT_ROWS);
     const client = (await pool.connect()) as PgClientLike;
     const started = Date.now();
     let released = false;
@@ -322,7 +321,7 @@ export async function executePostgresQueryRowStream<Row>(
             options.trackQuery(client.processID);
         }
 
-        stream = new QueryStream(limitedSql, values, {
+        stream = new QueryStream(compiledSql, values, {
             batchSize: 1000,
             highWaterMark: 1000,
         });
@@ -343,8 +342,7 @@ export async function executePostgresQueryRowStream<Row>(
             rows,
             columns: normalizePgFields((stream as any)?._result?.fields),
             rowCount: null,
-            limited: /^\s*(select|with)\b/i.test(compiledSql),
-            limit: /^\s*(select|with)\b/i.test(compiledSql) ? DEFAULT_MAX_RESULT_ROWS : undefined,
+            limited: false,
             tookMs: Date.now() - started,
             close: () => {
                 stream?.destroy();

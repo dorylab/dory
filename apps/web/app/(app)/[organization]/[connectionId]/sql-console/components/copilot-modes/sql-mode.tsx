@@ -30,7 +30,7 @@ import { executeActionClient } from '@/lib/actions/client';
 import { AuthLinkSheet } from '@/components/auth/auth-link-sheet';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { useTranslations } from 'next-intl';
-import { normalizeSqlEditorSettings, SQL_EDITOR_QUERY_LIMIT_OPTIONS, sqlEditorSettingsAtom } from '@/shared/stores/sql-editor-settings.store';
+import { normalizeSqlEditorSettings, SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE, SQL_EDITOR_QUERY_LIMIT_OPTIONS, sqlEditorSettingsAtom } from '@/shared/stores/sql-editor-settings.store';
 import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import type { SavedQueryItem } from '../saved-queries/saved-queries-sidebar';
 import { createCopilotSQLContextEnvelope } from '../../../chatbot/copilot/copilot-envelope';
@@ -227,6 +227,11 @@ export function SqlMode({
         runQuery(activeTab, options);
     };
     const handleLimitChange = (value: string) => {
+        if (value === SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE) {
+            setQueryLimit(null);
+            setEditorSettings(prev => normalizeSqlEditorSettings({ ...prev, queryLimit: null }));
+            return;
+        }
         const next = Number(value);
         if (!Number.isFinite(next)) return;
         setQueryLimit(next);
@@ -239,7 +244,8 @@ export function SqlMode({
     const currentSqlText = getSqlText().trim();
     const hasSqlLimit = hasSelectLimit(currentSqlText, limitDialect);
     const runLabel = hasSelection ? t('Toolbar.RunSelected') : t('Toolbar.Run');
-    const runLabelWithLimit = hasSqlLimit ? `${runLabel} ( Limit: SQL )` : `${runLabel} ( Limit: ${queryLimit} )`;
+    const queryLimitLabel = queryLimit === null ? 'No limit' : String(queryLimit);
+    const runLabelWithLimit = hasSqlLimit ? `${runLabel} ( Limit: SQL )` : `${runLabel} ( Limit: ${queryLimitLabel} )`;
     const isSaved = !!currentSqlText && savedQueries.some(q => q.sqlText.trim() === currentSqlText);
     const isAnonymous = isAnonymousUser(session?.user);
     const callbackURL = useMemo(() => {
@@ -487,7 +493,8 @@ export function SqlMode({
                                                     {runLabelWithLimit}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuRadioGroup value={String(queryLimit)} onValueChange={handleLimitChange}>
+                                                <DropdownMenuRadioGroup value={queryLimit === null ? SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE : String(queryLimit)} onValueChange={handleLimitChange}>
+                                                    <DropdownMenuRadioItem value={SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE}>No limit</DropdownMenuRadioItem>
                                                     {SQL_EDITOR_QUERY_LIMIT_OPTIONS.map(option => (
                                                         <DropdownMenuRadioItem key={option} value={String(option)}>
                                                             Limit {option}

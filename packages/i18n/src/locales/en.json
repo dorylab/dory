@@ -3088,7 +3088,7 @@
                 "LineHeightLabel": "Line height",
                 "LineHeightDescription": "Controls line spacing multiplier (1.1-2.2).",
                 "QueryLimitLabel": "Default query limit",
-                "QueryLimitDescription": "Sets the default LIMIT for SQL runs.",
+                "QueryLimitDescription": "Sets the default LIMIT for SQL runs. Choose No limit to run without adding a LIMIT.",
                 "LineNumbersLabel": "Line numbers",
                 "LineNumbersDescription": "Show or hide line numbers.",
                 "MinimapLabel": "Minimap",

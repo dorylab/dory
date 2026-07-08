@@ -188,9 +188,8 @@ export async function executeDuckDbQuery<Row = any>(handle: DuckDbConnectionHand
 
 export async function executeDuckDbQueryRowStream<Row = any>(handle: DuckDbConnectionHandle, sql: string, params?: DriverQueryParams): Promise<DriverQueryRowStream<Row>> {
     const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
-    const limitedSql = isReadStatement(compiledSql) ? enforceSelectLimit(compiledSql, DEFAULT_MAX_RESULT_ROWS) : compiledSql;
     const started = Date.now();
-    const result = await handle.connection.stream(limitedSql, compiledParams as any);
+    const result = await handle.connection.stream(compiledSql, compiledParams as any);
 
     const rows = (async function* () {
         for await (const chunk of result.yieldRowObjectJson()) {
@@ -204,8 +203,7 @@ export async function executeDuckDbQueryRowStream<Row = any>(handle: DuckDbConne
         rows,
         rowCount: null,
         columns: toResultColumns(result),
-        limited: isReadStatement(compiledSql),
-        limit: isReadStatement(compiledSql) ? DEFAULT_MAX_RESULT_ROWS : undefined,
+        limited: false,
         tookMs: Date.now() - started,
         close: () => undefined,
     };

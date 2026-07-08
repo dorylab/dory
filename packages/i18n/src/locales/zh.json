@@ -3092,7 +3092,7 @@
                 "LineHeightLabel": "行高",
                 "LineHeightDescription": "控制行间距倍率（1.1-2.2）。",
                 "QueryLimitLabel": "默认查询限制",
-                "QueryLimitDescription": "设置执行 SQL 时默认附带的 LIMIT。",
+                "QueryLimitDescription": "设置执行 SQL 时默认附带的 LIMIT。选择 No limit 时不会自动追加 LIMIT。",
                 "LineNumbersLabel": "行号",
                 "LineNumbersDescription": "显示或隐藏行号。",
                 "MinimapLabel": "缩略图",
