@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dory"
+  short_description: "AI-native SQL workspace for agents"
+  default_prompt: "Use $dory to inspect this database, run safe SQL, and save the results in a Dory workspace."
