@@ -219,6 +219,18 @@ docker compose up -d
 
 For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://www.getdory.dev/docs/deploy/self-hosting).
 
+## 🧩 Dory Agent Skill
+
+Install the Dory skill for Codex, ChatGPT, Claude, and other agents that support the open Agent Skills format.
+
+```bash
+npx skills add https://github.com/dorylab/dory --skill dory
+```
+
+The skill teaches agents when to use Dory, how to use Dory MCP tools, and how to preserve generated SQL, result sets, and findings in an editable Dory Agent Run workspace.
+
+The skill does not install the Dory CLI or configure MCP automatically. For live database access, connect Dory MCP with the setup commands below.
+
 ## 🔗 Dory CLI and MCP
 
 Use `@getdory/cli` to connect MCP-compatible agents to Dory. It can run a local stdio MCP server, host a long-running HTTP MCP endpoint, bridge to hosted Dory Web, or reuse Dory Desktop local data with `--data desktop`.
