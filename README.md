@@ -88,13 +88,14 @@ Agent database work should not disappear into a chat transcript.
 
 ---
 
-### Desktop MCP for Claude Code / Codex CLI
+### Dory CLI and MCP for Agents
 
-The Dory desktop app exposes a local MCP endpoint so external agents can use your Dory connections without manual token copy/paste.
+`@getdory/cli` is the agent entrypoint for running Dory without opening the desktop app.
 
 - Works with Claude Code, Codex CLI, and other MCP-compatible clients
-- Uses Dory's connection list, schema inspection, saved queries, and read-only SQL execution
-- Keeps Desktop MCP grants managed by Dory instead of asking normal users to handle API tokens
+- Runs standalone MCP servers over stdio or HTTP
+- Acts as a headless runtime for automation and direct Dory Actions
+- Can use standalone data, hosted Dory Web, or Desktop local data with `--data desktop`
 
 ---
 
@@ -216,42 +217,67 @@ docker compose up -d
 
 For comprehensive self-hosting documentation, environment variables, and deployment guides, see the [Self-Hosting Documentation](https://www.getdory.dev/docs/deploy/self-hosting).
 
-## 🔗 Desktop MCP
+## 🔗 Dory CLI and MCP
 
-The Dory desktop app includes local MCP (Model Context Protocol) support, so agent clients can use your Dory connections without manually copying API tokens.
+Use `@getdory/cli` to connect MCP-compatible agents to Dory. It can run a local stdio MCP server, host a long-running HTTP MCP endpoint, bridge to hosted Dory Web, or reuse Dory Desktop local data with `--data desktop`.
 
 For the full MCP setup guide, including CLI stdio, headless HTTP, and hosted Dory bridge options, see [Dory MCP Guide](./docs/mcp.md).
 
-To enable Desktop MCP:
-
-1. Open the Dory desktop app.
-2. Go to **Settings → Agent Access**.
-3. Turn on **Enable**.
-4. Add the displayed local endpoint to your MCP client.
-
-By default, desktop MCP runs at:
-
-```text
-http://127.0.0.1:3318/api/mcp
-```
-
-For Codex CLI:
+Run a local stdio MCP server when your agent client is on the same machine:
 
 ```bash
-codex mcp add dory --url http://127.0.0.1:3318/api/mcp
+codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
 codex mcp list
 ```
 
-For Claude Code:
-
 ```bash
-claude mcp add --transport http dory http://127.0.0.1:3318/api/mcp
+claude mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
 claude mcp list
 ```
 
-Dory manages the desktop MCP grant automatically. The local MCP endpoint can list connections, inspect schemas, read saved queries, preview tables, run read-only SQL, and build analysis context for connected databases.
+Run a local HTTP MCP endpoint when you want a long-running service:
 
-For non-Desktop or headless setups, use [`@getdory/cli`](./packages/cli/README.md) and follow the [MCP guide](./docs/mcp.md).
+```bash
+npx -y @getdory/cli mcp token create --data standalone --name "local-http"
+
+export DORY_MCP_TOKEN="dory_mcp_..."
+
+npx -y @getdory/cli mcp serve \
+  --http \
+  --host 127.0.0.1 \
+  --port 3318 \
+  --token "$DORY_MCP_TOKEN" \
+  --data standalone
+```
+
+Add that HTTP endpoint to Codex CLI:
+
+```bash
+codex mcp add \
+  --url http://127.0.0.1:3318/api/mcp \
+  --bearer-token-env-var DORY_MCP_TOKEN \
+  dory
+```
+
+Add it to Claude Code:
+
+```bash
+claude mcp add \
+  --transport http \
+  dory \
+  http://127.0.0.1:3318/api/mcp \
+  --header "Authorization: Bearer $DORY_MCP_TOKEN"
+```
+
+Bridge hosted Dory Web to local MCP clients:
+
+```bash
+npx -y @getdory/cli mcp login --url https://your-dory-host
+codex mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+claude mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+```
+
+For the standalone `@getdory/mcp` bridge package, see [`packages/mcp`](./packages/mcp/README.md). For the full CLI and headless runtime guide, see [`packages/cli`](./packages/cli/README.md).
 
 ## 🧠 Supported AI Providers
 
