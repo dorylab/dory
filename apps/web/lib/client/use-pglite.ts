@@ -12,7 +12,7 @@ import { querySession, queryResultSet, queryResultPage } from './pglite/schemas'
 // Utilities and types
 import { createWorkerPool } from '@dory/web-utils/worker-pool';
 import { estimateBytes, isQuotaLikeError, idleYield, sleep, toDate3 } from './utils';
-import type { DBHook, ResultSetMeta, TabResult } from './type';
+import type { DBHook, ResultSetMeta, ResultSetRemoteFilter, ResultSetRemoteSearch, ResultSetRemoteSort, TabResult } from './type';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { dataVersionAtom, bumpDataVersionAtom } from './client.store';
 import { encodeRows, toArrayBuffer, decodeRow } from '@dory/web-utils/binary-codec';
@@ -37,6 +37,7 @@ type ReadResultRowsResponse = {
     offset: number;
     limit: number;
     rowCount: number | null;
+    unfilteredRowCount?: number | null;
     columns: unknown[];
     dataAvailability: string;
 };
@@ -694,19 +695,66 @@ export function useDB() {
     );
 
     const readResultSetRows = useCallback(
-        async (params: { resultSetId: string; offset?: number; limit?: number; signal?: AbortSignal }): Promise<ReadResultRowsResponse> => {
+        async (params: {
+            resultSetId: string;
+            offset?: number;
+            limit?: number;
+            sorts?: ResultSetRemoteSort[];
+            filters?: ResultSetRemoteFilter[];
+            search?: ResultSetRemoteSearch | null;
+            signal?: AbortSignal;
+        }): Promise<ReadResultRowsResponse> => {
             return executeActionClient<ReadResultRowsResponse>(
                 'resultSet.rows.read',
                 {
                     resultSetId: params.resultSetId,
                     offset: params.offset ?? 0,
                     limit: params.limit ?? 1000,
+                    sorts: params.sorts,
+                    filters: params.filters,
+                    search: params.search,
                 },
                 { signal: params.signal },
             );
         },
         [],
     );
+
+    const exportResultSet = useCallback<DBHook['exportResultSet']>(async params => {
+        return executeActionClient(
+            'resultSet.export.create',
+            {
+                resultSetId: params.resultSetId,
+                format: params.format,
+                sorts: params.sorts,
+                filters: params.filters,
+                search: params.search,
+            },
+        );
+    }, []);
+
+    const readResultSetChart = useCallback<DBHook['readResultSetChart']>(async params => {
+        return executeActionClient('resultSet.chart.read', {
+            resultSetId: params.resultSetId,
+            xKey: params.xKey,
+            yKey: params.yKey,
+            groupKey: params.groupKey,
+            chartType: params.chartType,
+            filters: params.filters,
+            search: params.search,
+        });
+    }, []);
+
+    const readResultSetProfile = useCallback<DBHook['readResultSetProfile']>(async params => {
+        return executeActionClient(
+            'resultSet.profile.read',
+            {
+                resultSetId: params.resultSetId,
+                sampleRows: params.sampleRows,
+            },
+            { signal: params.signal },
+        );
+    }, []);
 
     // ============ List/cleanup/session fetch ============
 
@@ -1036,6 +1084,9 @@ export function useDB() {
             insertResultRows,
             getResultRows,
             readResultSetRows,
+            exportResultSet,
+            readResultSetChart,
+            readResultSetProfile,
             listResultSetIndices,
             clearResults,
             getSession,
@@ -1054,6 +1105,9 @@ export function useDB() {
             insertResultRows,
             getResultRows,
             readResultSetRows,
+            exportResultSet,
+            readResultSetChart,
+            readResultSetProfile,
             listResultSetIndices,
             clearResults,
             getSession,

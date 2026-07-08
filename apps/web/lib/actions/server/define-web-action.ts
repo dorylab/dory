@@ -35,6 +35,9 @@ const LOCAL_WORKSPACE_ACTION_IDS = new Set<ActionId>([
     'query.cancel',
     'query.execute',
     'query.readOnlyExecute',
+    'resultSet.chart.read',
+    'resultSet.export.create',
+    'resultSet.profile.read',
     'resultSet.rows.read',
 ]);
 

@@ -18,6 +18,33 @@ export interface GetResultRowsOptions {
     log?: boolean; // Debug logging
 }
 
+export type ResultSetRemoteSort = {
+    column: string;
+    direction: 'asc' | 'desc';
+};
+
+export type ResultSetRemoteFilter = {
+    col: string;
+    kind: 'string' | 'number' | 'range';
+    op: string;
+    value?: string;
+    valueTo?: string;
+    rangeValueType?: 'number' | 'date';
+    label?: string;
+    caseSensitive?: boolean;
+};
+
+export type ResultSetRemoteSearch = {
+    text: string;
+    columns?: string[];
+};
+
+export type ResultSetRemoteOperations = {
+    sorts?: ResultSetRemoteSort[];
+    filters?: ResultSetRemoteFilter[];
+    search?: ResultSetRemoteSearch | null;
+};
+
 // ==== useDB hook interface (new API) ====
 export interface DBHook {
     dbReady: boolean;
@@ -89,6 +116,9 @@ export interface DBHook {
         resultSetId: string;
         offset?: number;
         limit?: number;
+        sorts?: ResultSetRemoteSort[];
+        filters?: ResultSetRemoteFilter[];
+        search?: ResultSetRemoteSearch | null;
         signal?: AbortSignal;
     }): Promise<{
         resultSetId: string;
@@ -96,8 +126,38 @@ export interface DBHook {
         offset: number;
         limit: number;
         rowCount: number | null;
+        unfilteredRowCount?: number | null;
         columns: unknown[];
         dataAvailability: string;
+    }>;
+
+    exportResultSet(params: {
+        resultSetId: string;
+        format: 'csv' | 'parquet';
+    } & ResultSetRemoteOperations): Promise<{
+        exportId: string;
+        format: 'csv' | 'parquet';
+        fileName: string;
+        byteSize?: number;
+        downloadUrl: string;
+    }>;
+
+    readResultSetChart(params: {
+        resultSetId: string;
+        xKey: string;
+        yKey: string;
+        groupKey?: string | null;
+        chartType?: string | null;
+    } & Pick<ResultSetRemoteOperations, 'filters' | 'search'>): Promise<{
+        data: Array<Record<string, unknown>>;
+        series: Array<{ key: string; label: string }>;
+        bucketHint?: string | null;
+    }>;
+
+    readResultSetProfile(params: { resultSetId: string; sampleRows?: number; signal?: AbortSignal }): Promise<{
+        columns: unknown[];
+        stats: ResultSetStatsV1;
+        sampleRows: Array<Record<string, unknown>>;
     }>;
 
     // List existing result sets (ascending)

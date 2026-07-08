@@ -126,7 +126,8 @@ export function ResultTable() {
     const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
     const sessionId = sessionIdFromAtom || (typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
 
-    const { dbReady, listResultSetIndices, listResultSetsMeta, getResultRows, readResultSetRows, clearResults, dataVersion, getSession, updateResultSetViewState } = useDB();
+    const { dbReady, listResultSetIndices, listResultSetsMeta, getResultRows, readResultSetRows, exportResultSet, readResultSetChart, clearResults, dataVersion, getSession, updateResultSetViewState } =
+        useDB();
 
     // Session status
     const [sessionStatus, setSessionStatus] = useState<'running' | 'success' | 'error' | 'canceled' | null>(null);
@@ -189,7 +190,6 @@ export function ResultTable() {
     const remoteResultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
     const isRemoteFullResult = Boolean(remoteResultSetId && sessionMetas?.dataAvailability === 'full');
     const remoteRowCount = expectedRowCount ?? (typeof sessionMetas?.previewRowCount === 'number' ? sessionMetas.previewRowCount : 0);
-    const showEmpty = !localDataLoading[tabId] && (isRemoteFullResult ? remoteRowCount === 0 : results.length === 0);
 
     const [query, setQuery] = useState('');
     const [sortState, setSortState] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
@@ -199,28 +199,9 @@ export function ResultTable() {
     const [chartStatesByKey, setChartStatesByKey] = useAtom(chartStatesByKeyAtom);
     const [chartStateVersionByTab, setChartStateVersionByTab] = useState<Record<string, number>>({});
     const [chartSnapshotsBySet, setChartSnapshotsBySet] = useState<Record<number, { rows: Array<{ rowData: Record<string, unknown> }>; columnsRaw?: unknown }>>({});
-    const rowCount = isRemoteFullResult ? remoteRowCount : results.length;
-    const remoteSource = useMemo(() => {
-        if (!remoteResultSetId || !isRemoteFullResult || remoteRowCount <= 0) return null;
-        return {
-            cacheKey: remoteResultSetId,
-            rowCount: remoteRowCount,
-            pageSize: 1000,
-            getRows: async (offset: number, limit: number, signal?: AbortSignal) => {
-                const response = await readResultSetRows({
-                    resultSetId: remoteResultSetId,
-                    offset,
-                    limit,
-                    signal,
-                });
-                return response.rows.map((row, index) => ({
-                    tabId,
-                    rid: offset + index,
-                    rowData: row,
-                }));
-            },
-        };
-    }, [isRemoteFullResult, readResultSetRows, remoteResultSetId, remoteRowCount, tabId]);
+    const [remoteEffectiveRowCount, setRemoteEffectiveRowCount] = useState<number | null>(null);
+    const rowCount = isRemoteFullResult ? (remoteEffectiveRowCount ?? remoteRowCount) : results.length;
+    const showEmpty = !localDataLoading[tabId] && (isRemoteFullResult ? rowCount === 0 : results.length === 0);
 
     useEffect(() => {
         const savedViewMode = viewModesByKey[viewModeKey];
@@ -351,6 +332,48 @@ export function ResultTable() {
         disableStorage: true,
     });
 
+    const remoteOperations = useMemo(
+        () => ({
+            sorts: sortState ? [sortState] : undefined,
+            filters: activeFilters.length > 0 ? activeFilters : undefined,
+            search: query.trim() ? { text: query.trim() } : undefined,
+        }),
+        [activeFilters, query, sortState],
+    );
+    const remoteOperationKey = useMemo(() => JSON.stringify(remoteOperations), [remoteOperations]);
+
+    useEffect(() => {
+        setRemoteEffectiveRowCount(null);
+    }, [remoteOperationKey, remoteResultSetId, remoteRowCount]);
+
+    const remoteSource = useMemo(() => {
+        if (!remoteResultSetId || !isRemoteFullResult || remoteRowCount <= 0) return null;
+        return {
+            cacheKey: `${remoteResultSetId}:${remoteOperationKey}`,
+            rowCount: remoteEffectiveRowCount ?? remoteRowCount,
+            pageSize: 1000,
+            getRows: async (offset: number, limit: number, signal?: AbortSignal) => {
+                const response = await readResultSetRows({
+                    resultSetId: remoteResultSetId,
+                    offset,
+                    limit,
+                    sorts: remoteOperations.sorts,
+                    filters: remoteOperations.filters,
+                    search: remoteOperations.search,
+                    signal,
+                });
+                if (typeof response.rowCount === 'number') {
+                    setRemoteEffectiveRowCount(response.rowCount);
+                }
+                return response.rows.map((row, index) => ({
+                    tabId,
+                    rid: offset + index,
+                    rowData: row,
+                }));
+            },
+        };
+    }, [isRemoteFullResult, readResultSetRows, remoteEffectiveRowCount, remoteOperationKey, remoteOperations, remoteResultSetId, remoteRowCount, tabId]);
+
     useEffect(() => {
         if (!sessionId || activeSet < 0) {
             hydratedViewStateKeyRef.current = null;
@@ -432,10 +455,10 @@ export function ResultTable() {
 
     const stats = useMemo(
         () => ({
-            filteredCount: isRemoteFullResult ? remoteRowCount : columnFilteredResults.length,
+            filteredCount: isRemoteFullResult ? rowCount : columnFilteredResults.length,
             totalCount: isRemoteFullResult ? remoteRowCount : results.length,
         }),
-        [columnFilteredResults.length, isRemoteFullResult, remoteRowCount, results.length],
+        [columnFilteredResults.length, isRemoteFullResult, remoteRowCount, results.length, rowCount],
     );
 
     const onStatsChange = useCallback(() => {}, []);
@@ -865,12 +888,28 @@ export function ResultTable() {
 
     /* ---------- actions ---------- */
 
-    const handleDownloadCsv = useCsvDownload({
+    const handleDownloadLocalCsv = useCsvDownload({
         results,
         tabId,
         queryId: sessionId,
         setIndex: activeSet,
     });
+
+    const handleDownloadCsv = useCallback(async () => {
+        if (isRemoteFullResult && remoteResultSetId) {
+            const created = await exportResultSet({
+                resultSetId: remoteResultSetId,
+                format: 'csv',
+                sorts: remoteOperations.sorts,
+                filters: remoteOperations.filters,
+                search: remoteOperations.search,
+            });
+            window.location.href = created.downloadUrl;
+            return;
+        }
+
+        await handleDownloadLocalCsv();
+    }, [exportResultSet, handleDownloadLocalCsv, isRemoteFullResult, remoteOperations.filters, remoteOperations.search, remoteOperations.sorts, remoteResultSetId]);
 
     /* ---------- render ---------- */
 
@@ -920,7 +959,7 @@ export function ResultTable() {
         if (execMetaBySet?.[activeSet]?.errorMessage) {
             return <SQLErrorAlert message={execMetaBySet?.[activeSet]?.errorMessage} sql={execMetaBySet?.[activeSet]?.sqlText} />;
         }
-        const showSharedFilterBar = !isRemoteFullResult && (currentViewMode === 'table' || currentViewMode === 'charts');
+        const showSharedFilterBar = currentViewMode === 'table' || currentViewMode === 'charts';
 
         return (
             <div className="flex h-full min-h-0 flex-col bg-card mb-2" data-testid="result-table-content">
@@ -989,7 +1028,7 @@ export function ResultTable() {
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onSelect={handleDownloadCsv} disabled={isRemoteFullResult || rowCount <= 0} className="cursor-pointer">
+                                        <DropdownMenuItem onSelect={() => void handleDownloadCsv()} disabled={rowCount <= 0} className="cursor-pointer">
                                             <Download />
                                             CSV
                                         </DropdownMenuItem>
@@ -1039,7 +1078,8 @@ export function ResultTable() {
                         {chartSetIndices.map(setIndex => {
                             const setChartStateKey = tabId ? `tab:${tabId}:set:${setIndex}` : 'unknown';
                             const snapshot =
-                                chartSnapshotsBySet[setIndex] ?? (setIndex === activeSet ? { rows: columnFilteredResults, columnsRaw: sessionMetas.columns } : undefined);
+                                chartSnapshotsBySet[setIndex] ??
+                                (setIndex === activeSet ? { rows: isRemoteFullResult ? [] : columnFilteredResults, columnsRaw: sessionMetas.columns } : undefined);
                             if (!snapshot) {
                                 return null;
                             }
@@ -1056,6 +1096,23 @@ export function ResultTable() {
                                             rows={snapshot.rows}
                                             columnsRaw={snapshot.columnsRaw}
                                             resultStats={setIndex === activeSet ? sessionMetas.stats : undefined}
+                                            remoteSource={
+                                                visible && isRemoteFullResult && remoteResultSetId
+                                                    ? {
+                                                          cacheKey: `${remoteResultSetId}:${remoteOperationKey}:chart`,
+                                                          readChart: state =>
+                                                              readResultSetChart({
+                                                                  resultSetId: remoteResultSetId,
+                                                                  xKey: state.xKey,
+                                                                  yKey: state.yKey,
+                                                                  groupKey: state.groupKey,
+                                                                  chartType: state.chartType,
+                                                                  filters: remoteOperations.filters,
+                                                                  search: remoteOperations.search,
+                                                              }),
+                                                      }
+                                                    : null
+                                            }
                                             stateKey={setChartStateKey}
                                             initialState={setInitialState}
                                             stateSyncEnabled={visible ? !localDataLoading[tabId] : false}

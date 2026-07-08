@@ -7,6 +7,35 @@ const readResultRowsInputSchema = z.object({
     resultSetId: z.string().min(1),
     offset: z.number().int().nonnegative().optional(),
     limit: z.number().int().positive().max(5000).optional(),
+    sorts: z
+        .array(
+            z.object({
+                column: z.string().min(1),
+                direction: z.enum(['asc', 'desc']),
+            }),
+        )
+        .optional(),
+    filters: z
+        .array(
+            z.object({
+                col: z.string().min(1),
+                kind: z.enum(['string', 'number', 'range']),
+                op: z.enum(['contains', 'equals', 'startsWith', 'endsWith', 'empty', 'notEmpty', 'regex', 'eq', 'ne', 'gt', 'ge', 'lt', 'le', 'range']),
+                value: z.string().optional(),
+                valueTo: z.string().optional(),
+                rangeValueType: z.enum(['number', 'date']).optional(),
+                label: z.string().optional(),
+                caseSensitive: z.boolean().optional(),
+            }),
+        )
+        .optional(),
+    search: z
+        .object({
+            text: z.string(),
+            columns: z.array(z.string().min(1)).optional(),
+        })
+        .nullable()
+        .optional(),
 });
 
 const resultSetRowsOutputSchema = z.object({
@@ -15,6 +44,7 @@ const resultSetRowsOutputSchema = z.object({
     offset: z.number(),
     limit: z.number(),
     rowCount: z.number().nullable(),
+    unfilteredRowCount: z.number().nullable().optional(),
     columns: z.array(z.unknown()),
     dataAvailability: z.string(),
 });
@@ -34,11 +64,14 @@ export const resultSetRowsReadAction = defineWebAction({
             user: 'user_sql_console',
             automation: 'automation_sql',
         },
-        allowInputFields: ['resultSetId', 'offset', 'limit'],
+        allowInputFields: ['resultSetId', 'offset', 'limit', 'sorts', 'filters', 'search'],
         inputSummary: input => ({
             resultSetId: input.resultSetId,
             offset: input.offset ?? 0,
             limit: input.limit ?? null,
+            sorts: input.sorts?.length ?? 0,
+            filters: input.filters?.length ?? 0,
+            search: input.search?.text ? true : undefined,
         }),
         resource: (_ctx, input) => ({
             type: 'resultSet',
@@ -56,5 +89,8 @@ export const resultSetRowsReadAction = defineWebAction({
             resultSetId: input.resultSetId,
             offset: input.offset ?? 0,
             limit: input.limit ?? 1000,
+            sorts: input.sorts,
+            filters: input.filters,
+            search: input.search,
         }),
 });

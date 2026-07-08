@@ -35,6 +35,10 @@ type ChartsProps = {
     rows: ChartRow[];
     columnsRaw?: unknown;
     resultStats?: ResultSetStatsV1 | null;
+    remoteSource?: {
+        cacheKey: string;
+        readChart: (state: ChartState, signal?: AbortSignal) => Promise<AggregatedChartData>;
+    } | null;
     className?: string;
     onApplyFilters?: (filters: ColumnFilter[], options?: { append?: boolean }) => void;
     onResetState?: () => void;
@@ -99,7 +103,7 @@ function isMetricKeyCompatibleWithColumns(metricKey: string, columnNames: string
     return column ? columnNames.includes(column) : true;
 }
 
-export function Charts({ rows, columnsRaw, resultStats, className, onApplyFilters, onResetState, stateKey, initialState, onStateChange, stateSyncEnabled = true }: ChartsProps) {
+export function Charts({ rows, columnsRaw, resultStats, remoteSource, className, onApplyFilters, onResetState, stateKey, initialState, onStateChange, stateSyncEnabled = true }: ChartsProps) {
     const { resolvedTheme } = useTheme();
     const autoChartProfile = useMemo(() => {
         if (resultStats?.autoChartProfile) {
@@ -212,7 +216,7 @@ export function Charts({ rows, columnsRaw, resultStats, className, onApplyFilter
 
     const chartStateIsAuto = chartType === suggestedState.chartType && xKey === suggestedState.xKey && yKey === suggestedState.yKey && groupKey === suggestedState.groupKey;
 
-    const aggregated = useMemo<AggregatedChartData>(() => {
+    const localAggregated = useMemo<AggregatedChartData>(() => {
         if (!effectiveXKey || !selectedMetric) {
             return { data: [], series: [], bucketHint: null };
         }
@@ -232,6 +236,45 @@ export function Charts({ rows, columnsRaw, resultStats, className, onApplyFilter
             }),
         }) as AggregatedChartData;
     }, [autoChartProfile.chartState, autoChartProfile.columnProfiles, autoChartProfile.metricOptions, chartType, effectiveGroupKey, effectiveXKey, rows, selectedMetric, yKey]);
+    const [remoteAggregated, setRemoteAggregated] = useState<AggregatedChartData | null>(null);
+
+    useEffect(() => {
+        if (!remoteSource || !effectiveXKey || !selectedMetric) {
+            setRemoteAggregated(null);
+            return;
+        }
+
+        const controller = new AbortController();
+        setRemoteAggregated(null);
+        remoteSource
+            .readChart(
+                {
+                    chartType,
+                    xKey: effectiveXKey,
+                    yKey,
+                    groupKey: effectiveGroupKey,
+                    chartColorPreset,
+                },
+                controller.signal,
+            )
+            .then(next => {
+                if (!controller.signal.aborted) {
+                    setRemoteAggregated(next);
+                }
+            })
+            .catch(error => {
+                if (!controller.signal.aborted) {
+                    console.warn('[Charts] remote chart read failed', error);
+                    setRemoteAggregated({ data: [], series: [], bucketHint: null });
+                }
+            });
+
+        return () => {
+            controller.abort();
+        };
+    }, [chartColorPreset, chartType, effectiveGroupKey, effectiveXKey, remoteSource, remoteSource?.cacheKey, selectedMetric, yKey]);
+
+    const aggregated = remoteSource ? (remoteAggregated ?? { data: [], series: [], bucketHint: null }) : localAggregated;
 
     const activeColorPreset = useMemo(() => CHART_COLOR_PRESETS.find(preset => preset.value === chartColorPreset) ?? CHART_COLOR_PRESETS[0], [chartColorPreset]);
     const chartColors = useMemo(() => {

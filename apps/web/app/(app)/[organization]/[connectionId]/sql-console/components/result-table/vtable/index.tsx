@@ -113,7 +113,8 @@ export default function VTable({
     }, [metas?.columns]);
     const columns = useMemo(() => columnsRaw.map(column => column.name), [columnsRaw]);
     const isRemote = Boolean(remoteSource);
-    const operationsDisabled = serverSideOperations || isRemote;
+    const operationsDisabled = false;
+    const usesServerSideOperations = serverSideOperations || isRemote;
     const remotePageSize = Math.max(1, Math.min(remoteSource?.pageSize ?? 1000, 5000));
     const [remoteRowsVersion, setRemoteRowsVersion] = useState(0);
     const remoteRowsRef = useRef<Map<number, { rowData: Record<string, unknown> }>>(new Map());
@@ -258,7 +259,7 @@ export default function VTable({
     const sortDirection = sortState?.direction ?? 'asc';
     const lastEmittedSortRef = useRef<{ column: string; direction: 'asc' | 'desc' } | null>(initialSort ?? null);
     const sortedResults = useMemo(() => {
-        if (operationsDisabled) return filteredResults;
+        if (usesServerSideOperations) return filteredResults;
         if (!sortBy) return filteredResults;
         const isNumericCol = numericColumns.has(sortBy);
         const sorted = [...filteredResults].sort((a, b) => {
@@ -280,7 +281,7 @@ export default function VTable({
             return sortDirection === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
         });
         return sorted;
-    }, [filteredResults, numericColumns, operationsDisabled, sortBy, sortDirection]);
+    }, [filteredResults, numericColumns, usesServerSideOperations, sortBy, sortDirection]);
     const tableRowCount = isRemote ? Math.max(0, remoteSource?.rowCount ?? 0) : sortedResults.length;
     const getDisplayRow = useCallback(
         (rowIndex: number) => {
