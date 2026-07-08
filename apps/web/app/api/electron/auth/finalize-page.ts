@@ -1,7 +1,8 @@
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
+import { normalizeRequestedDesktopProtocolScheme } from '@/lib/auth/desktop-protocol';
+import { getDesktopProtocolSchemeForServer } from '@dory/shared/runtime';
 import { NextResponse } from 'next/server';
 
-const DEEP_LINK = 'dory://auth-complete';
 const DEFAULT_THEME = 'blue';
 const THEME_COOKIE = 'active_theme';
 const SUPPORTED_THEMES = new Set(['default', 'default-scaled', 'blue', 'blue-scaled', 'green', 'amber', 'liquid', 'liquid-scaled', 'mono-scaled']);
@@ -14,8 +15,9 @@ export type FinalizePageCopy = {
     hint: string;
 };
 
-export function buildElectronAuthDeepLinkUrl(params: Record<string, string | undefined | null>) {
-    const deepLinkUrl = new URL(DEEP_LINK);
+export function buildElectronAuthDeepLinkUrl(params: Record<string, string | undefined | null>, options: { protocolScheme?: string | null } = {}) {
+    const protocolScheme = normalizeRequestedDesktopProtocolScheme(options.protocolScheme) ?? getDesktopProtocolSchemeForServer();
+    const deepLinkUrl = new URL(`${protocolScheme}://auth-complete`);
     for (const [key, value] of Object.entries(params)) {
         if (value) {
             deepLinkUrl.searchParams.set(key, value);

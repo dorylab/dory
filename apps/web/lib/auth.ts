@@ -18,7 +18,7 @@ import { resolveOrganizationIdForSession, shouldCreateDefaultOrganization } from
 import { createProvisionedOrganization } from './auth/organization-provisioning';
 import { translate } from '@dory/i18n/translate';
 import { getServerLocale } from '@dory/i18n/server';
-import { isBillingEnabledForServer, isDesktopRuntime } from '@dory/shared/runtime';
+import { getDesktopProtocolSchemeForServer, isBillingEnabledForServer, isDesktopRuntime } from '@dory/shared/runtime';
 import { organizationAc, organizationRoles } from './auth/organization-ac';
 import { canManageOrganizationBilling } from './billing/authz';
 import { buildDefaultOrganizationValues, linkAnonymousOrganizationToUser } from './auth/anonymous';
@@ -245,8 +245,7 @@ function createAuth() {
                         console.log('[auth][onLinkAccount] completed', {
                             anonymousUserId: anonymousUser.user.id,
                             newUserId: newUser.user.id,
-                            clearedRecoveryCookie:
-                                newUser.user.id !== anonymousUser.user.id && !isAnonymousUser(newUser.user),
+                            clearedRecoveryCookie: newUser.user.id !== anonymousUser.user.id && !isAnonymousUser(newUser.user),
                         });
 
                         if (newUser.user.id !== anonymousUser.user.id && !isAnonymousUser(newUser.user)) {
@@ -488,6 +487,7 @@ function createAuth() {
                 'http://127.0.0.1:*',
                 'http://localhost:*',
                 `dory://`,
+                `${getDesktopProtocolSchemeForServer()}://`,
                 ...(process.env.TRUSTED_ORIGINS?.split(',')
                     .map(s => s.trim())
                     .filter(Boolean) ?? []),

@@ -135,12 +135,16 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const locale = await getApiLocale();
     const copy = getElectronAuthFinalizePageCopy(locale);
+    const protocolScheme = url.searchParams.get('protocol');
     const error = url.searchParams.get('error');
     if (error) {
-        const deepLinkUrl = buildElectronAuthDeepLinkUrl({
-            error,
-            error_description: url.searchParams.get('error_description') ?? undefined,
-        });
+        const deepLinkUrl = buildElectronAuthDeepLinkUrl(
+            {
+                error,
+                error_description: url.searchParams.get('error_description') ?? undefined,
+            },
+            { protocolScheme },
+        );
         return createElectronAuthFinalizeResponse(req, deepLinkUrl, copy);
     }
 
@@ -182,7 +186,7 @@ export async function GET(req: Request) {
         activeOrganizationId,
     }) satisfies TicketUser;
     const ticket = await createTicket(auth, { user });
-    const deepLinkUrl = buildElectronAuthDeepLinkUrl({ ticket });
+    const deepLinkUrl = buildElectronAuthDeepLinkUrl({ ticket }, { protocolScheme });
 
     return createElectronAuthFinalizeResponse(req, deepLinkUrl, copy);
 }

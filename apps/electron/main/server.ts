@@ -5,7 +5,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fork, type ChildProcess } from 'node:child_process';
 import { parse as parseDotEnv } from 'dotenv';
-import { APP_BASE_URL, isBetaDistribution } from './constants.js';
+import { APP_BASE_URL, DISTRIBUTION, PROTOCOL, isBetaDistribution } from './constants.js';
 import type { LogFn } from './logger.js';
 
 interface CreateStandaloneServerManagerOptions {
@@ -329,6 +329,8 @@ function createDesktopServerEnv(options: DesktopServerEnvOptions): NodeJS.Proces
     const env: NodeJS.ProcessEnv = {
         ...options.childEnv,
         DORY_RUNTIME: 'desktop',
+        DORY_DISTRIBUTION: DISTRIBUTION,
+        DORY_PROTOCOL_SCHEME: PROTOCOL,
         DB_TYPE: 'pglite',
         NEXT_PUBLIC_DORY_RUNTIME: 'desktop',
         PORT: String(options.port),

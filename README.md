@@ -4,6 +4,22 @@
 
 <h1 align="center">Dory</h1>
 
+<!-- Begin  Tag -->
+<div class="sf-root" data-id="4073857" data-badge="oss-rising-star-white" data-metadata="achievement=oss-rising-star" style="width:125px">
+    <a href="https://sourceforge.net/projects/dorystudio/" target="_blank">Dory</a>
+</div>
+<script>(function () {var sc=document.createElement('script');sc.async=true;sc.src='https://b.sf-syn.com/badge_js?sf_id=4073857';var p=document.getElementsByTagName('script')[0];p.parentNode.insertBefore(sc, p);})();
+</script>
+<!-- End  Tag -->
+
+<!-- Begin  Tag -->
+<div class="sf-root" data-id="4073857" data-badge="oss-users-love-us-white" style="width:125px">
+    <a href="https://sourceforge.net/projects/dorystudio/" target="_blank">Dory</a>
+</div>
+<script>(function () {var sc=document.createElement('script');sc.async=true;sc.src='https://b.sf-syn.com/badge_js?sf_id=4073857';var p=document.getElementsByTagName('script')[0];p.parentNode.insertBefore(sc, p);})();
+</script>
+<!-- End  Tag -->
+
 **Dory is an AI-native SQL client for humans and agents.**
 
 Dory is a SQL workspace where humans can query, explore, and visualize data, and where AI agents can safely work with databases through MCP.
