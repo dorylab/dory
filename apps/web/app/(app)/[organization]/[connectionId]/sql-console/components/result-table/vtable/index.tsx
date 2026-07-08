@@ -76,16 +76,6 @@ function getSampleRowIndices(start: number, stop: number, limit: number) {
     return [...sampled].sort((left, right) => left - right);
 }
 
-function scheduleIdleWork(callback: () => void) {
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window && 'cancelIdleCallback' in window) {
-        const handle = window.requestIdleCallback(callback, { timeout: 250 });
-        return () => window.cancelIdleCallback(handle);
-    }
-
-    const handle = globalThis.setTimeout(callback, 16);
-    return () => globalThis.clearTimeout(handle);
-}
-
 export default function VTable({
     results,
     rowHeight = 32,
@@ -310,45 +300,50 @@ export default function VTable({
         return columns.slice(start, stop + 1);
     }, [columns]);
 
-    useEffect(() => {
-        let disposed = false;
-        let cancelFontReadyWork: (() => void) | null = null;
+    const visibleAutoColWidths = useMemo(() => {
+        const targetColumns = getVisibleAutoFitColumns();
+        if (targetColumns.length === 0) return {};
 
-        const updateAutoWidths = () => {
-            if (disposed) return;
-            const targetColumns = getVisibleAutoFitColumns();
-            if (targetColumns.length === 0) return;
-
-            setAutoColWidths(prev => {
-                const next: ColWidths = { ...prev };
-                for (const col of targetColumns) {
-                    next[col] = measureColumnWidth(col, sortedResults, initialVisibleSampleRowIndices);
-                }
-
-                if (targetColumns.every((key: string) => prev[key] === next[key])) {
-                    return prev;
-                }
-
-                return next;
-            });
-        };
-
-        const cancelInitialWork = scheduleIdleWork(updateAutoWidths);
-
-        if (typeof document !== 'undefined' && 'fonts' in document) {
-            document.fonts.ready.then(() => {
-                if (!disposed) {
-                    cancelFontReadyWork = scheduleIdleWork(updateAutoWidths);
-                }
-            });
+        const rowIndices = getVisibleSampleRowIndices(visibleRowRangeRef.current);
+        const next: ColWidths = {};
+        for (const col of targetColumns) {
+            next[col] = measureColumnWidth(col, sortedResults, rowIndices.length ? rowIndices : initialVisibleSampleRowIndices);
         }
+        return next;
+    }, [getVisibleAutoFitColumns, getVisibleSampleRowIndices, initialVisibleSampleRowIndices, measureColumnWidth, sortedResults, visibleMeasurementVersion]);
+
+    useEffect(() => {
+        const targetColumns = Object.keys(visibleAutoColWidths);
+        if (targetColumns.length === 0) return;
+
+        setAutoColWidths(prev => {
+            const next: ColWidths = { ...prev };
+            for (const col of targetColumns) {
+                next[col] = visibleAutoColWidths[col];
+            }
+
+            if (targetColumns.every(col => prev[col] === next[col])) {
+                return prev;
+            }
+
+            return next;
+        });
+    }, [visibleAutoColWidths]);
+
+    useEffect(() => {
+        if (typeof document === 'undefined' || !('fonts' in document)) return;
+
+        let disposed = false;
+        document.fonts.ready.then(() => {
+            if (!disposed) {
+                setVisibleMeasurementVersion(version => version + 1);
+            }
+        });
 
         return () => {
             disposed = true;
-            cancelInitialWork();
-            cancelFontReadyWork?.();
         };
-    }, [getVisibleAutoFitColumns, initialVisibleSampleRowIndices, measureColumnWidth, sortedResults, visibleMeasurementVersion]);
+    }, [columns]);
 
     useEffect(() => {
         visibleRowRangeRef.current = {
@@ -360,10 +355,10 @@ export default function VTable({
     const colWidths = useMemo(() => {
         const next: ColWidths = {};
         for (const col of columns) {
-            next[col] = clampColumnWidth(col, manualColWidths[col] ?? autoColWidths[col] ?? defaultColMinWidth);
+            next[col] = clampColumnWidth(col, manualColWidths[col] ?? visibleAutoColWidths[col] ?? autoColWidths[col] ?? defaultColMinWidth);
         }
         return next;
-    }, [autoColWidths, clampColumnWidth, columns, defaultColMinWidth, manualColWidths]);
+    }, [autoColWidths, clampColumnWidth, columns, defaultColMinWidth, manualColWidths, visibleAutoColWidths]);
 
     useEffect(() => {
         onStatsChange?.({
