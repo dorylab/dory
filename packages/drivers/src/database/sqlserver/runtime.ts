@@ -1,8 +1,9 @@
 import sql, { type ConnectionPool, type IResult, type Request, type config as SqlServerPoolConfig } from 'mssql';
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
+import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { buildSecureContextOptions, getDriverTlsOptions, normalizeTlsMode } from '@dory/drivers/core/tls';
 import { SqlServerDialect } from './dialect';
 
@@ -250,6 +251,45 @@ export async function executeSqlServerQuery<Row>(
     } finally {
         options?.untrackQuery?.();
     }
+}
+
+export async function executeSqlServerQueryRowStream<Row>(
+    pool: ConnectionPool,
+    sqlText: string,
+    params?: DriverQueryParams,
+    options?: {
+        context?: ConnectionQueryContext;
+        trackQuery?: (request: Request) => void;
+        untrackQuery?: () => void;
+    },
+): Promise<DriverQueryRowStream<Row>> {
+    const { sql: compiledSql, values } = normalizeParams(sqlText, params);
+    const request = pool.request();
+    bindParams(request, values);
+    const started = Date.now();
+
+    if (options?.trackQuery && options.context?.queryId) {
+        options.trackQuery(request);
+    }
+
+    const readable = request.toReadableStream({ highWaterMark: 1000 }) as AsyncIterable<Row> & { destroy?: (error?: Error) => void };
+    const cleanup = onceAsync(() => options?.untrackQuery?.());
+    void request.query<Row>(compiledSql).catch(error => {
+        readable.destroy?.(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    return {
+        rows: asyncIterableWithCleanup(readable, cleanup),
+        rowCount: null,
+        columns: undefined,
+        limited: false,
+        tookMs: Date.now() - started,
+        close: async () => {
+            request.cancel();
+            readable.destroy?.();
+            await cleanup();
+        },
+    };
 }
 
 export async function executeSqlServerCommand(pool: ConnectionPool, sqlText: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<void> {

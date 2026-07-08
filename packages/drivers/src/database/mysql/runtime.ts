@@ -2,8 +2,9 @@ import { createPool, type FieldPacket, type Pool, type PoolConnection, type Pool
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
+import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { buildMysqlTlsOptions, getDriverTlsOptions } from '@dory/drivers/core/tls';
 import { MySqlDialect } from './dialect';
 
@@ -268,6 +269,56 @@ export async function executeMySqlQuery<Row>(pool: Pool, config: BaseConfig, sql
     } finally {
         options?.untrackQuery?.();
         connection.release();
+    }
+}
+
+export async function executeMySqlQueryRowStream<Row>(
+    pool: Pool,
+    config: BaseConfig,
+    sql: string,
+    params?: DriverQueryParams,
+    options?: QuerySessionOptions,
+): Promise<DriverQueryRowStream<Row>> {
+    const { sql: compiledSql, values } = normalizeParams(sql, params);
+    const connection = await pool.getConnection();
+    const runtime = extractRuntimeOptions(config);
+    const queryTimeoutMs = options?.context?.statementTimeoutMs ?? runtime.queryTimeoutMs;
+    const started = Date.now();
+    let stream: ({ destroy?: (error?: Error) => void } & AsyncIterable<Row>) | null = null;
+
+    const cleanup = onceAsync(() => {
+        options?.untrackQuery?.();
+        connection.release();
+    });
+
+    try {
+        if (options?.trackQuery && options?.context?.queryId) {
+            options.trackQuery(connection.threadId);
+        }
+
+        const query = (connection as any).connection.query({
+            sql: compiledSql,
+            values,
+            timeout: queryTimeoutMs,
+        });
+        const queryStream = query.stream({ highWaterMark: 1000 }) as AsyncIterable<Row> & { destroy?: (error?: Error) => void };
+        stream = queryStream;
+
+        return {
+            rows: asyncIterableWithCleanup<Row>(queryStream, cleanup),
+            rowCount: null,
+            columns: undefined,
+            limited: false,
+            tookMs: Date.now() - started,
+            close: async () => {
+                stream?.destroy?.();
+                await cleanup();
+            },
+        };
+    } catch (error) {
+        stream?.destroy?.(error instanceof Error ? error : undefined);
+        await cleanup();
+        throw error;
     }
 }
 

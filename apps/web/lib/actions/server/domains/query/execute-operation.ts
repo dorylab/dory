@@ -64,7 +64,20 @@ function isStreamableResultStatement(sql: string) {
 }
 
 function supportsStreamingResultSets(connection: BaseConnection) {
-    return connection.config.type === 'postgres' || connection.config.type === 'duckdb';
+    return (
+        connection.config.type === 'clickhouse' ||
+        connection.config.type === 'cloudflare-d1' ||
+        connection.config.type === 'duckdb' ||
+        connection.config.type === 'mariadb' ||
+        connection.config.type === 'mysql' ||
+        connection.config.type === 'neon' ||
+        connection.config.type === 'oracle' ||
+        connection.config.type === 'postgres' ||
+        connection.config.type === 'sqlite' ||
+        connection.config.type === 'snowflake' ||
+        connection.config.type === 'supabase' ||
+        connection.config.type === 'sqlserver'
+    );
 }
 
 function toResultSetColumns(columns: ColumnMeta[] | undefined | null) {

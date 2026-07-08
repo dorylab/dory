@@ -1,7 +1,7 @@
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams, enforceSelectLimit } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 import { CloudflareD1Dialect } from './dialect';
 
@@ -214,6 +214,60 @@ export async function executeCloudflareD1Query<Row = any>(config: BaseConfig, sq
                 resultCount: payload.result?.length ?? 0,
             },
         },
+    };
+}
+
+export async function executeCloudflareD1QueryRowStream<Row = any>(config: BaseConfig, sql: string, params?: DriverQueryParams): Promise<DriverQueryRowStream<Row>> {
+    const d1 = getD1Config(config);
+    const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
+    const body: Record<string, unknown> = { sql: compiledSql };
+    if (Array.isArray(compiledParams) && compiledParams.length > 0) {
+        body.params = compiledParams;
+    }
+
+    const started = Date.now();
+    const response = await fetch(`${d1.apiBaseUrl}/accounts/${encodeURIComponent(d1.accountId)}/d1/database/${encodeURIComponent(d1.databaseId)}/query`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${d1.apiToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+
+    const payload = (await response.json().catch(() => null)) as CloudflareD1Response | null;
+    if (!response.ok || !payload?.success) {
+        throw new Error(getErrorMessage(payload ?? {}, `Cloudflare D1 query failed with status ${response.status}`));
+    }
+
+    const firstResult = Array.isArray(payload.result) ? payload.result[0] : undefined;
+    if (firstResult?.success === false) {
+        throw new Error(firstResult.error || 'Cloudflare D1 query failed');
+    }
+
+    const rows = normalizeRows(firstResult?.results) as Row[];
+    const meta = firstResult?.meta;
+    const reader = isReaderSql(compiledSql);
+
+    return {
+        rows: (async function* () {
+            for (const row of rows) {
+                yield row;
+            }
+        })(),
+        rowCount: reader ? null : (meta?.changes ?? rows.length),
+        columns: normalizeColumns(rows as Record<string, unknown>[]),
+        limited: false,
+        tookMs: Date.now() - started,
+        statistics: {
+            cloudflare: {
+                meta,
+                messages: payload.messages ?? [],
+                resultCount: payload.result?.length ?? 0,
+                streamingMode: 'buffered-api',
+            },
+        },
+        close: () => undefined,
     };
 }
 

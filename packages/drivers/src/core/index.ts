@@ -3,6 +3,7 @@ export * from './base/errors';
 export * from './base/limit';
 export * from './base/params/compile';
 export * from './base/params/types';
+export * from './base/row-stream';
 export * from './defaults';
 export * from './factory';
 export * from './pool-store';

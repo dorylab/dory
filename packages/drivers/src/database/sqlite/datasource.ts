@@ -1,10 +1,10 @@
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { SqliteDialect } from './dialect';
 import { createSqliteMetadataCapability, type SqliteMetadataAPI } from './capabilities/metadata';
 import { createSqliteTableInfoCapability } from './capabilities/table-info';
-import { executeSqliteQuery, openSqliteDatabase, pingSqlite } from './runtime';
+import { executeSqliteQuery, executeSqliteQueryRowStream, openSqliteDatabase, pingSqlite } from './runtime';
 
 export class SqliteDatasource extends BaseConnection {
     readonly dialect = SqliteDialect;
@@ -47,6 +47,10 @@ export class SqliteDatasource extends BaseConnection {
 
     async queryWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<QueryResult<Row>> {
         return executeSqliteQuery<Row>(this.getDatabase(), sql, context?.params);
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        return executeSqliteQueryRowStream<Row>(this.getDatabase(), sql, context?.params);
     }
 
     async command(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<void> {

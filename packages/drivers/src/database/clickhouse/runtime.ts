@@ -2,8 +2,9 @@ import { createClient, type ClickHouseClient, type ClickHouseClientConfigOptions
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
+import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import { buildClickhouseTlsOptions, getDriverTlsOptions, normalizeTlsMode } from '@dory/drivers/core/tls';
-import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { ClickhouseDialect } from './dialect';
 
@@ -215,6 +216,41 @@ export async function executeClickhouseQuery<Row>(client: ClickHouseClient, sql:
         limit: DEFAULT_MAX_RESULT_ROWS,
         tookMs: Date.now() - started,
         statistics: payload?.statistics ? { ...payload.statistics } : undefined,
+    };
+}
+
+export async function executeClickhouseQueryRowStream<Row>(client: ClickHouseClient, sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<DriverQueryRowStream<Row>> {
+    const started = Date.now();
+    const resultSet = await client.query({
+        query: sql,
+        format: 'JSONEachRow',
+        query_params: normalizeParams(params),
+        query_id: context?.queryId,
+    });
+    const cleanup = onceAsync(() => resultSet.close());
+
+    const chunks = resultSet.stream() as AsyncIterable<Array<{ json(): Row }>>;
+    const rows = (async function* () {
+        for await (const chunk of chunks) {
+            for (const row of chunk) {
+                yield row.json();
+            }
+        }
+    })();
+
+    return {
+        rows: asyncIterableWithCleanup(rows, cleanup),
+        rowCount: null,
+        columns: undefined,
+        limited: false,
+        tookMs: Date.now() - started,
+        statistics: {
+            clickhouse: {
+                queryId: resultSet.query_id,
+                streamingMode: 'json-each-row',
+            },
+        },
+        close: cleanup,
     };
 }
 

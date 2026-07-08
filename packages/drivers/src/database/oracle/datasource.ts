@@ -1,11 +1,11 @@
 import type { Pool } from 'oracledb';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { createOracleMetadataCapability, type OracleMetadataAPI } from './capabilities/metadata';
 import { createOracleTableInfoCapability } from './capabilities/table-info';
 import { OracleDialect } from './dialect';
-import { createOraclePool, executeOracleCommand, executeOracleQuery, pingOracle, resolveOraclePort, resolveOracleServiceName } from './runtime';
+import { createOraclePool, executeOracleCommand, executeOracleQuery, executeOracleQueryRowStream, pingOracle, resolveOraclePort, resolveOracleServiceName } from './runtime';
 
 export class OracleDatasource extends BaseConnection {
     readonly dialect = OracleDialect;
@@ -78,6 +78,13 @@ export class OracleDatasource extends BaseConnection {
         const targetService = context?.database ?? resolveOracleServiceName(this.config);
         const pool = await this.resolvePool(targetService);
         return executeOracleQuery<Row>(pool, sql, context?.params, { context });
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        this.assertReady();
+        const targetService = context?.database ?? resolveOracleServiceName(this.config);
+        const pool = await this.resolvePool(targetService);
+        return executeOracleQueryRowStream<Row>(pool, sql, context?.params, { context });
     }
 
     async command(sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<void> {

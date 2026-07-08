@@ -1,10 +1,10 @@
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { CloudflareD1Dialect } from './dialect';
 import { createCloudflareD1MetadataCapability, type CloudflareD1MetadataAPI } from './capabilities/metadata';
 import { createCloudflareD1TableInfoCapability } from './capabilities/table-info';
-import { executeCloudflareD1Query, pingCloudflareD1 } from './runtime';
+import { executeCloudflareD1Query, executeCloudflareD1QueryRowStream, pingCloudflareD1 } from './runtime';
 
 export class CloudflareD1Datasource extends BaseConnection {
     readonly dialect = CloudflareD1Dialect;
@@ -36,6 +36,11 @@ export class CloudflareD1Datasource extends BaseConnection {
     async queryWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<QueryResult<Row>> {
         this.assertReady();
         return executeCloudflareD1Query<Row>(this.config, sql, context?.params);
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        this.assertReady();
+        return executeCloudflareD1QueryRowStream<Row>(this.config, sql, context?.params);
     }
 
     async command(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<void> {

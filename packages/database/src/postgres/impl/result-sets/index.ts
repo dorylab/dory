@@ -661,14 +661,20 @@ export class PostgresResultSetsRepository {
         const previewRows: unknown[] = [];
         const maxPreviewRows = input.previewRows ?? DEFAULT_PREVIEW_ROWS;
         let streamedRowCount = 0;
+        let streamReadError: unknown = null;
 
         const countedRows = (async function* () {
-            for await (const row of input.rows) {
-                if (previewRows.length < maxPreviewRows) {
-                    previewRows.push(row);
+            try {
+                for await (const row of input.rows) {
+                    if (previewRows.length < maxPreviewRows) {
+                        previewRows.push(row);
+                    }
+                    streamedRowCount += 1;
+                    yield row;
                 }
-                streamedRowCount += 1;
-                yield row;
+            } catch (error) {
+                streamReadError = error;
+                throw error;
             }
         })();
 
@@ -678,6 +684,9 @@ export class PostgresResultSetsRepository {
             columns: explicitColumns,
             rows: countedRows,
         });
+        if (streamReadError) {
+            throw streamReadError;
+        }
         if (!fullData && streamedRowCount === 0 && status === 'success') {
             for await (const row of countedRows) {
                 void row;
