@@ -143,17 +143,18 @@ Dory is a multi-database SQL client, with broad driver support and deeper integr
 
 | Database | Status |
 | --- | --- |
-| <img src="./apps/web/public/images/logos/clickhouse.svg" alt="ClickHouse" width="18" /> ClickHouse | ✅ Deeply integrated |
-| <img src="./apps/web/public/images/logos/postgresql.svg" alt="PostgreSQL" width="18" /> PostgreSQL | ✅ Supported |
-| <img src="./apps/web/public/images/logos/neon.svg" alt="Neon" width="18" /> Neon | ✅ Supported |
-| <img src="./apps/web/public/images/logos/supabase.svg" alt="Supabase" width="18" /> Supabase | ✅ Supported |
-| <img src="./apps/web/public/images/logos/mysql.svg" alt="MySQL" width="18" /> MySQL | ✅ Supported |
-| <img src="./apps/web/public/images/logos/mariadb.svg" alt="MariaDB" width="18" /> MariaDB | ✅ Supported |
-| <img src="./apps/web/public/images/logos/sqlite.svg" alt="SQLite" width="18" /> SQLite | ✅ Supported |
-| <img src="./apps/web/public/images/logos/duckdb.svg" alt="DuckDB" width="18" /> DuckDB | ✅ Supported |
-| <img src="./apps/web/public/images/logos/sqlserver.svg" alt="SQL Server" width="18" /> SQL Server | ✅ Supported |
-| <img src="./apps/web/public/images/logos/oracle.svg" alt="Oracle" width="18" /> Oracle | ✅ Supported |
-| <img src="./apps/web/public/images/logos/snowflake.svg" alt="Snowflake" width="18" /> Snowflake | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/clickhouse.svg" alt="ClickHouse" width="18" height="18" /> ClickHouse</span> | ✅ Deeply integrated |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/postgresql.svg" alt="PostgreSQL" width="18" height="18" /> PostgreSQL</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/neon.svg" alt="Neon" width="18" height="18" /> Neon</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/supabase.svg" alt="Supabase" width="18" height="18" /> Supabase</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/cloudflare.svg" alt="Cloudflare D1" width="18" height="18" /> Cloudflare D1</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/mysql.svg" alt="MySQL" width="18" height="18" /> MySQL</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/mariadb.svg" alt="MariaDB" width="18" height="18" /> MariaDB</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/sqlite.svg" alt="SQLite" width="18" height="18" /> SQLite</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/duckdb.svg" alt="DuckDB" width="18" height="18" /> DuckDB</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/sqlserver.svg" alt="SQL Server" width="18" height="18" /> SQL Server</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/oracle.svg" alt="Oracle" width="18" height="18" /> Oracle</span> | ✅ Supported |
+| <span style="display: inline-flex; align-items: center; gap: 8px;"><img src="./apps/web/public/images/logos/snowflake.svg" alt="Snowflake" width="18" height="18" /> Snowflake</span> | ✅ Supported |
 
 ---
 
