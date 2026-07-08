@@ -96,15 +96,15 @@ function createAuth() {
         const infraEnabled = Boolean(betterAuthApiKey);
         const authPlugins = [
             jwt(),
+            dash({
+                ...betterAuthInfraOptions,
+                activityTracking: {
+                    enabled: true,
+                    updateInterval: 300000,
+                },
+            }),
             ...(infraEnabled
                 ? [
-                      dash({
-                          ...betterAuthInfraOptions,
-                          activityTracking: {
-                              enabled: true,
-                              updateInterval: 300000,
-                          },
-                      }),
                       sentinel({
                           ...betterAuthInfraOptions,
                           security: {
@@ -478,7 +478,12 @@ function createAuth() {
                     : []),
             ],
             baseURL: isDesktop && desktopOrigin ? desktopOrigin : undefined,
-            advanced: isDesktop ? { useSecureCookies: false } : undefined,
+            advanced: {
+                ...(isDesktop ? { useSecureCookies: false } : {}),
+                ipAddress: {
+                    ipAddressHeaders: ['x-vercel-forwarded-for', 'x-forwarded-for'],
+                },
+            },
             account: {
                 storeStateStrategy: 'database',
                 skipStateCookieCheck: true,
