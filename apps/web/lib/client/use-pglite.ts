@@ -786,6 +786,9 @@ export function useDB() {
 
             // 1) Session
             const s = payload.session;
+            await ormRef.current.delete(queryResultPage).where(eq(queryResultPage.sessionId, s.sessionId)).execute();
+            await ormRef.current.delete(queryResultSet).where(eq(queryResultSet.sessionId, s.sessionId)).execute();
+
             await ormRef.current
                 .insert(querySession)
                 .values({

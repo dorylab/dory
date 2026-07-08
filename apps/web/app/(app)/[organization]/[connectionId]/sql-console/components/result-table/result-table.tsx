@@ -186,6 +186,7 @@ export function ResultTable() {
     const limited = !!sessionMetas?.limited;
     const limitText = typeof sessionMetas?.limit === 'number' ? sessionMetas.limit.toLocaleString() : null;
     const shouldShowLimitNotice = isResult && limited;
+    const expectedRowCount = typeof sessionMetas?.rowCount === 'number' ? sessionMetas.rowCount : null;
 
     const [query, setQuery] = useState('');
     const [sortState, setSortState] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
@@ -531,7 +532,9 @@ export function ResultTable() {
         // Cache short-circuit. Metadata updates can bump surrounding state without changing rows.
         if (key) {
             const cached = RESULTS_CACHE.get(key);
-            if (cached?.fullyLoaded) {
+            const cacheMatchesCurrentData = cached?.dataVersion === dataVersion;
+            const emptyCacheMissingExpectedRows = expectedRowCount != null && expectedRowCount > 0 && (cached?.results?.length ?? 0) === 0;
+            if (cached?.fullyLoaded && cacheMatchesCurrentData && !emptyCacheMissingExpectedRows) {
                 hydrateFromCache(key, {
                     setResults,
                     resultsRef,
@@ -620,6 +623,8 @@ export function ResultTable() {
                 });
             } finally {
                 if (!disposed && !ac.signal.aborted) {
+                    const loadedRows = resultsRef.current.length;
+                    const missingExpectedRows = expectedRowCount != null && expectedRowCount > loadedRows;
                     setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
                     if (key) {
                         touchCache(key, {
@@ -627,7 +632,7 @@ export function ResultTable() {
                             meta: RESULTS_CACHE.get(key)?.meta,
                             sessionStatus,
                             dataVersion,
-                            fullyLoaded: true,
+                            fullyLoaded: !missingExpectedRows,
                         });
                     }
                 }
@@ -638,7 +643,7 @@ export function ResultTable() {
             disposed = true;
             ac.abort();
         };
-    }, [dbReady, tabId, sessionId, activeSet, getResultRows, dataVersion, uiRowBudget]);
+    }, [dbReady, tabId, sessionId, activeSet, getResultRows, dataVersion, uiRowBudget, expectedRowCount]);
 
     /* ---------- Hydrate session-level meta & keep cache in sync ---------- */
     useEffect(() => {
