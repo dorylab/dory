@@ -1,5 +1,6 @@
 import { getAuth } from '@/lib/auth';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
+import { getDesktopProtocolSchemeForAuth } from '@/lib/auth/desktop-protocol';
 import { NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
@@ -11,19 +12,18 @@ export async function GET(req: Request) {
     }
 
     const auth = await getAuth();
-    const envOrigin =
-        process.env.DORY_ELECTRON_ORIGIN?.trim() ||
-        process.env.NEXT_PUBLIC_DORY_ELECTRON_ORIGIN?.trim() ||
-        '';
+    const envOrigin = process.env.DORY_ELECTRON_ORIGIN?.trim() || process.env.NEXT_PUBLIC_DORY_ELECTRON_ORIGIN?.trim() || '';
     const origin = envOrigin || new URL(req.url).origin;
-    const finalizeUrl = `${origin}/api/electron/auth/finalize?provider=google`;
+    const finalizeUrl = new URL('/api/electron/auth/finalize', origin);
+    finalizeUrl.searchParams.set('provider', 'google');
+    finalizeUrl.searchParams.set('protocol', getDesktopProtocolSchemeForAuth(req.headers));
 
     const { response, headers } = await auth.api.signInSocial({
         headers: req.headers,
         body: {
             provider: 'google',
-            callbackURL: finalizeUrl,
-            errorCallbackURL: finalizeUrl,
+            callbackURL: finalizeUrl.toString(),
+            errorCallbackURL: finalizeUrl.toString(),
             disableRedirect: true,
         },
         returnHeaders: true,

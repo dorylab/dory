@@ -41,8 +41,8 @@ export async function migratePgliteDB() {
     const dataDir = await resolvePgliteDataDir();
 
     // Phase 1: Check for PG major version incompatibility BEFORE opening the DB.
-    // PGlite 0.4.x (PG 17) WASM crashes on PG 16 data, so we must detect and
-    // migrate using the legacy PGlite version before attempting to open.
+    // PGlite 0.4.x (PG 17) WASM can abort on PG 16 data, so archive older
+    // data directories before opening a fresh database with the current runtime.
     const upgradeResult = await migrateFromPg16IfNeeded(dataDir);
 
     // Phase 2: Open DB with current PGlite (fresh DB after upgrade, or existing PG 17)

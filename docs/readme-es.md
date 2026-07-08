@@ -165,7 +165,9 @@ Para documentación completa de self-hosting, consulta [Self-Hosting Documentati
 
 La app de escritorio de Dory incluye soporte MCP local, para que clientes de agente usen tus conexiones de Dory sin copiar tokens API manualmente.
 
-Para activarlo:
+Para la guía completa de MCP, incluyendo CLI stdio, HTTP headless y hosted bridge, consulta [Dory MCP Guide](./mcp.md).
+
+Para activar Desktop MCP:
 
 1. Abre la app de escritorio de Dory.
 2. Ve a **Settings → Agent Access**.
@@ -193,6 +195,8 @@ claude mcp list
 ```
 
 Dory gestiona automáticamente el Desktop MCP grant. El endpoint MCP local puede listar conexiones, inspeccionar schemas, leer consultas guardadas, previsualizar tablas, ejecutar SQL de solo lectura y construir contexto analítico para bases de datos conectadas.
+
+Para setups sin Desktop o headless, usa [`@getdory/cli`](../packages/cli/README.md) y sigue [Dory MCP Guide](./mcp.md).
 
 ## Supported AI Providers
 

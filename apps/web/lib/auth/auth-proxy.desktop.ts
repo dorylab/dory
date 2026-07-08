@@ -1,6 +1,7 @@
 import 'server-only';
 import { isDesktopRuntime } from '@dory/shared/runtime';
 import { clearDesktopAuthSnapshot } from '@/lib/auth/desktop-auth-snapshot';
+import { DORY_DESKTOP_PROTOCOL_HEADER, getDesktopProtocolSchemeForAuth } from '@/lib/auth/desktop-protocol';
 import { appendClearSessionCookieHeaders } from '@/lib/auth/session-cookie-cleanup';
 import { getCloudApiBaseUrl } from '@/lib/cloud/url';
 
@@ -101,6 +102,7 @@ export function createAuthProxyHeaders(incoming: Headers, baseUrl: string): Head
 
     const upstreamOrigin = new URL(baseUrl).origin;
     if (headers.has('origin')) headers.set('origin', upstreamOrigin);
+    headers.set(DORY_DESKTOP_PROTOCOL_HEADER, getDesktopProtocolSchemeForAuth());
 
     const referer = headers.get('referer');
     if (referer) {

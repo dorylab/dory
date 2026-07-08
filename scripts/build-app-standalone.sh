@@ -16,7 +16,6 @@ STANDALONE_WEB_SRC="${STANDALONE_SRC}/apps/web"
 OUT_DIR="${ROOT_DIR}/release/standalone"
 OUT_WEB_DIR="${OUT_DIR}/apps/web"
 OUT_WEB_NEXT_NODE_MODULES_DIR="${OUT_WEB_DIR}/.next/node_modules"
-OUT_WEB_NODE_MODULES_DIR="${OUT_WEB_DIR}/node_modules"
 
 copy_node_package_to_standalone() {
   local package_name="$1"
@@ -26,11 +25,203 @@ copy_node_package_to_standalone() {
     return
   fi
 
-  for target_node_modules_dir in "${OUT_DIR}/node_modules" "${OUT_WEB_NODE_MODULES_DIR}"; do
-    mkdir -p "$(dirname "${target_node_modules_dir}/${package_name}")"
-    rm -rf "${target_node_modules_dir:?}/${package_name}"
-    cp -a "${source_dir}" "${target_node_modules_dir}/${package_name}"
+  local target_node_modules_dir="${OUT_DIR}/node_modules"
+  mkdir -p "$(dirname "${target_node_modules_dir}/${package_name}")"
+  rm -rf "${target_node_modules_dir:?}/${package_name}"
+  cp -a "${source_dir}" "${target_node_modules_dir}/${package_name}"
+}
+
+prune_better_sqlite3_package() {
+  local package_dir="$1"
+
+  if [[ ! -d "${package_dir}" ]]; then
+    return
+  fi
+
+  # Runtime only needs the JS package files and the compiled native addon.
+  rm -rf \
+    "${package_dir}/deps" \
+    "${package_dir}/src" \
+    "${package_dir}/binding.gyp" \
+    "${package_dir}/build/Makefile" \
+    "${package_dir}/build/better_sqlite3.target.mk" \
+    "${package_dir}/build/config.gypi" \
+    "${package_dir}/build/deps" \
+    "${package_dir}/build/Release/sqlite3.a" \
+    "${package_dir}/build/Release/obj" \
+    "${package_dir}/build/Release/obj.target"
+}
+
+prune_snowflake_minicore_binaries() {
+  local package_dir="$1"
+  local binary_dir="${package_dir}/dist/lib/minicore/binaries"
+
+  if [[ ! -d "${binary_dir}" || "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+
+  local target_arch="${DORY_BUILD_ARCH:-$(uname -m)}"
+  local snowflake_arch
+  case "${target_arch}" in
+    arm64|aarch64) snowflake_arch="arm64" ;;
+    x64|x86_64|amd64) snowflake_arch="x64" ;;
+    *) return ;;
+  esac
+
+  find "${binary_dir}" -type f -name 'sf_mini_core_*.node' ! -name "*.darwin-${snowflake_arch}.node" -delete
+}
+
+copy_public_assets_to_standalone() {
+  local source_dir="$1"
+  local target_dir="$2"
+
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude='.DS_Store' \
+      --exclude='/e2e-demo-flow/***' \
+      --exclude='/demo-*.png' \
+      "${source_dir}/" "${target_dir}/"
+    return
+  fi
+
+  rm -rf "${target_dir}"
+  cp -a "${source_dir}" "${target_dir}"
+  rm -rf \
+    "${target_dir}/.DS_Store" \
+    "${target_dir}/e2e-demo-flow"
+  find "${target_dir}" -maxdepth 1 -type f -name 'demo-*.png' -delete
+}
+
+replace_file_with_relative_symlink() {
+  local target_path="$1"
+  local source_path="$2"
+
+  if [[ ! -f "${target_path}" || ! -f "${source_path}" ]]; then
+    return
+  fi
+
+  local relative_source
+  relative_source="$(node -e "const path=require('node:path'); process.stdout.write(path.relative(path.dirname(process.argv[1]), process.argv[2]));" "${target_path}" "${source_path}")"
+  rm -f "${target_path}"
+  ln -s "${relative_source}" "${target_path}"
+}
+
+dedupe_pglite_asset_copies() {
+  local pglite_dist_dir="${OUT_DIR}/node_modules/@electric-sql/pglite/dist"
+
+  if [[ ! -d "${pglite_dist_dir}" ]]; then
+    return
+  fi
+
+  for asset_name in pglite.data pglite.wasm initdb.wasm; do
+    replace_file_with_relative_symlink "${OUT_WEB_DIR}/dist-scripts/${asset_name}" "${pglite_dist_dir}/${asset_name}"
   done
+
+  if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+    while IFS= read -r -d '' traced_pglite_asset; do
+      replace_file_with_relative_symlink "${traced_pglite_asset}" "${pglite_dist_dir}/$(basename "${traced_pglite_asset}")"
+    done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}/@electric-sql" \( -path '*/pglite-*/dist/pglite.data' -o -path '*/pglite-*/dist/pglite.wasm' \) -print0 2>/dev/null)
+  fi
+
+  if [[ -d "${OUT_WEB_DIR}/.next/static/media" ]]; then
+    while IFS= read -r -d '' static_pglite_asset; do
+      case "${static_pglite_asset}" in
+        *.data) replace_file_with_relative_symlink "${static_pglite_asset}" "${pglite_dist_dir}/pglite.data" ;;
+        *.wasm) replace_file_with_relative_symlink "${static_pglite_asset}" "${pglite_dist_dir}/pglite.wasm" ;;
+      esac
+    done < <(find "${OUT_WEB_DIR}/.next/static/media" -type f \( -name 'pglite.*.data' -o -name 'pglite.*.wasm' \) -print0)
+  fi
+}
+
+dedupe_traced_native_binary_copies() {
+  if [[ ! -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+    return
+  fi
+
+  local root_better_sqlite3_binary="${OUT_DIR}/node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+  if [[ -f "${root_better_sqlite3_binary}" ]]; then
+    while IFS= read -r -d '' traced_better_sqlite3_binary; do
+      replace_file_with_relative_symlink "${traced_better_sqlite3_binary}" "${root_better_sqlite3_binary}"
+    done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -path '*/better-sqlite3-*/build/Release/better_sqlite3.node' -type f -print0)
+  fi
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    return
+  fi
+
+  local target_arch="${DORY_BUILD_ARCH:-$(uname -m)}"
+  local snowflake_arch
+  case "${target_arch}" in
+    arm64|aarch64) snowflake_arch="arm64" ;;
+    x64|x86_64|amd64) snowflake_arch="x64" ;;
+    *) return ;;
+  esac
+
+  local snowflake_binary_name="sf_mini_core_0.0.1.darwin-${snowflake_arch}.node"
+  local root_snowflake_binary="${OUT_DIR}/node_modules/snowflake-sdk/dist/lib/minicore/binaries/${snowflake_binary_name}"
+  if [[ -f "${root_snowflake_binary}" ]]; then
+    while IFS= read -r -d '' traced_snowflake_binary; do
+      replace_file_with_relative_symlink "${traced_snowflake_binary}" "${root_snowflake_binary}"
+    done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -path "*/snowflake-sdk-*/dist/lib/minicore/binaries/${snowflake_binary_name}" -type f -print0)
+  fi
+}
+
+replace_path_with_relative_symlink() {
+  local target_path="$1"
+  local source_path="$2"
+
+  if [[ ! -e "${target_path}" || ! -e "${source_path}" ]]; then
+    return
+  fi
+
+  local relative_source
+  relative_source="$(node -e "const path=require('node:path'); process.stdout.write(path.relative(path.dirname(process.argv[1]), process.argv[2]));" "${target_path}" "${source_path}")"
+  rm -rf "${target_path}"
+  ln -s "${relative_source}" "${target_path}"
+}
+
+dedupe_traced_shiki_package_copies() {
+  if [[ ! -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+    return
+  fi
+
+  local root_shiki_dir="${OUT_DIR}/node_modules/shiki"
+  if [[ ! -d "${root_shiki_dir}" ]]; then
+    return
+  fi
+
+  while IFS= read -r -d '' traced_shiki_dir; do
+    if cmp -s "${root_shiki_dir}/package.json" "${traced_shiki_dir}/package.json"; then
+      echo "Deduping traced Shiki package: ${traced_shiki_dir#${OUT_DIR}/}"
+      replace_path_with_relative_symlink "${traced_shiki_dir}" "${root_shiki_dir}"
+    else
+      echo "Warning: skipping Shiki dedupe for version-mismatched package ${traced_shiki_dir#${OUT_DIR}/}" >&2
+    fi
+  done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'shiki-*' -print0)
+}
+
+strip_macho_native_binaries() {
+  if [[ "$(uname -s)" != "Darwin" ]] || ! command -v strip >/dev/null 2>&1 || ! command -v file >/dev/null 2>&1; then
+    return
+  fi
+
+  while IFS= read -r -d '' native_file; do
+    if ! file -b "${native_file}" | grep -q 'Mach-O'; then
+      continue
+    fi
+
+    case "${native_file#${OUT_DIR}/}" in
+      node_modules/@duckdb/node-bindings-darwin-*/libduckdb.dylib)
+        echo "Skipping strip for DuckDB dylib: ${native_file#${OUT_DIR}/}"
+        continue
+        ;;
+    esac
+
+    echo "Stripping native binary: ${native_file#${OUT_DIR}/}"
+    if ! strip -x "${native_file}"; then
+      echo "Warning: failed to strip ${native_file}" >&2
+    fi
+  done < <(find "${OUT_DIR}" -type f \( -name '*.dylib' -o -name '*.node' \) -print0)
 }
 
 if [[ ! -d "${STANDALONE_SRC}" ]]; then
@@ -54,12 +245,6 @@ fi
 # 2) apps/web required files
 cp -f "${STANDALONE_WEB_SRC}/server.js" "${OUT_WEB_DIR}/server.js"
 cp -f "${WEB_DIR}/package.json" "${OUT_WEB_DIR}/package.json"
-
-# Next standalone's server.js resolves packages like "next" relative to apps/web,
-# so keep a colocated node_modules copy under apps/web for packaged Electron builds.
-if [[ -d "${STANDALONE_SRC}/node_modules" ]]; then
-  cp -a "${STANDALONE_SRC}/node_modules" "${OUT_WEB_NODE_MODULES_DIR}"
-fi
 
 # Optional .env files
 if [[ -f "${STANDALONE_WEB_SRC}/.env" ]]; then
@@ -86,7 +271,7 @@ fi
 
 # 4) apps/web/public
 if [[ -d "${WEB_DIR}/public" ]]; then
-  cp -a "${WEB_DIR}/public" "${OUT_WEB_DIR}/public"
+  copy_public_assets_to_standalone "${WEB_DIR}/public" "${OUT_WEB_DIR}/public"
 fi
 
 # 5) apps/web/dist-scripts (if exists)
@@ -171,6 +356,30 @@ if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
     fi
   done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -type l -print0)
 fi
+
+prune_better_sqlite3_package "${OUT_DIR}/node_modules/better-sqlite3"
+prune_snowflake_minicore_binaries "${OUT_DIR}/node_modules/snowflake-sdk"
+if [[ -d "${OUT_WEB_NEXT_NODE_MODULES_DIR}" ]]; then
+  while IFS= read -r -d '' better_sqlite3_package_dir; do
+    prune_better_sqlite3_package "${better_sqlite3_package_dir}"
+  done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'better-sqlite3*' -print0)
+
+  while IFS= read -r -d '' snowflake_package_dir; do
+    prune_snowflake_minicore_binaries "${snowflake_package_dir}"
+  done < <(find "${OUT_WEB_NEXT_NODE_MODULES_DIR}" -mindepth 1 -maxdepth 1 -type d -name 'snowflake-sdk*' -print0)
+fi
+
+rm -rf "${OUT_DIR}/node_modules/dory"
+
+dedupe_pglite_asset_copies
+dedupe_traced_native_binary_copies
+dedupe_traced_shiki_package_copies
+
+node "${ROOT_DIR}/scripts/thin-macho-binaries.mjs" \
+  --root "${OUT_DIR}" \
+  --include 'node_modules/@duckdb/node-bindings-darwin-*/libduckdb.dylib'
+
+strip_macho_native_binaries
 
 echo "Output ready: ${OUT_DIR}"
 echo "Included top-level entries:"

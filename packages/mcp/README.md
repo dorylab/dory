@@ -1,98 +1,75 @@
 # Dory MCP Bridge
 
-Local stdio bridge for connecting MCP clients to a hosted Dory Web MCP endpoint.
+`@getdory/mcp` is the lightweight stdio bridge for connecting local MCP clients to a hosted Dory Web MCP endpoint.
 
-CLI usage:
+Most users should start with the full [`Dory MCP Guide`](../../docs/mcp.md). Use `@getdory/cli` for standalone MCP servers, token management, direct Dory Actions, local runtime services, and self-hosted storage. This package remains a small hosted-bridge entrypoint.
 
-```sh
-npx -y @getdory/cli mcp login --url https://your-dory-host
-npx -y @getdory/cli mcp bridge --url https://your-dory-host
-```
+## When to Use This Package
 
-Package usage:
+| Use case | Recommended package |
+| --- | --- |
+| Hosted Dory Web endpoint with local stdio bridge | `@getdory/mcp` or `@getdory/cli mcp bridge` |
+| Standalone local MCP server | `@getdory/cli` |
+| HTTP headless runtime | `@getdory/cli` |
+| Token management | `@getdory/cli` |
+| Direct Dory Action execution | `@getdory/cli` |
+
+## Hosted Bridge
+
+Authorize once in the browser:
 
 ```sh
 npx -y @getdory/mcp login --url https://your-dory-host
+```
+
+Run the bridge:
+
+```sh
 npx -y @getdory/mcp --url https://your-dory-host
 ```
 
-Add the hosted bridge to Codex CLI:
+The bridge stores a personal MCP token locally and forwards stdio MCP traffic to:
+
+```text
+https://your-dory-host/api/mcp
+```
+
+## Add to Codex CLI
 
 ```sh
-codex mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+codex mcp add dory-hosted -- npx -y @getdory/mcp --url https://your-dory-host
 codex mcp list
 ```
 
-Add the hosted bridge to Claude Code:
+## Add to Claude Code
 
 ```sh
-claude mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+claude mcp add dory-hosted -- npx -y @getdory/mcp --url https://your-dory-host
 claude mcp list
 ```
 
-For standalone MCP servers, token management, direct Dory Actions, and self-hosted storage, use `@getdory/cli`:
+## Equivalent CLI Commands
+
+The same hosted bridge workflow is available through `@getdory/cli`:
 
 ```sh
-npx -y @getdory/cli mcp token create --data standalone --name "local-mcp"
-
-export DORY_MCP_TOKEN="dory_mcp_..."
-
-npx -y @getdory/cli mcp serve --stdio --data standalone
-npx -y @getdory/cli mcp serve --http --data standalone --host 127.0.0.1 --port 3318 --token "$DORY_MCP_TOKEN"
+npx -y @getdory/cli mcp login --url https://your-dory-host
+npx -y @getdory/cli mcp status --url https://your-dory-host
+npx -y @getdory/cli mcp bridge --url https://your-dory-host
+npx -y @getdory/cli mcp logout --url https://your-dory-host
 ```
 
-`mcp token create` prints JSON. Copy the `token` value into `DORY_MCP_TOKEN`.
-When `--scope` is omitted, Dory creates a local token with `read`, `write`, and `local_ai:run`. Use `--scope read` for read-only clients.
+Use `@getdory/cli` when you also need standalone/headless MCP, runtime service management, or Dory Actions.
 
-Add the standalone HTTP endpoint to Codex CLI:
+## Environment
 
-```sh
-export DORY_MCP_TOKEN="dory_mcp_..."
-
-codex mcp add \
-  --url http://127.0.0.1:3318/api/mcp \
-  --bearer-token-env-var DORY_MCP_TOKEN \
-  dory
-
-codex mcp list
+```text
+DORY_MCP_URL      Default Dory origin or /api/mcp endpoint
+DORY_MCP_TOKEN    Advanced bearer token override
+DORY_MCP_CONFIG   Credential file path
 ```
 
-Add the standalone HTTP endpoint to Claude Code:
+## More Documentation
 
-```sh
-export DORY_MCP_TOKEN="dory_mcp_..."
-
-claude mcp add \
-  --transport http \
-  dory \
-  http://127.0.0.1:3318/api/mcp \
-  --header "Authorization: Bearer $DORY_MCP_TOKEN"
-
-claude mcp list
-```
-
-For local stdio instead of HTTP, let the MCP client start the server:
-
-```sh
-codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
-claude mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
-```
-
-Use `--data desktop` instead of `--data standalone` when you want the client to use Dory Desktop local data.
-
-For local Codex Agent access from Dory Web, use:
-
-```sh
-npx -y @getdory/cli runtime install --codex-agent --url https://your-dory-host
-```
-
-The background runtime can also host an HTTP MCP endpoint:
-
-```sh
-npx -y @getdory/cli runtime install \
-  --mcp-http \
-  --data standalone \
-  --host 127.0.0.1 \
-  --port 3318 \
-  --token "$DORY_MCP_TOKEN"
-```
+- MCP setup guide: [`docs/mcp.md`](../../docs/mcp.md)
+- CLI reference: [`packages/cli/README.md`](../cli/README.md)

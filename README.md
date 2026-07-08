@@ -4,6 +4,15 @@
 
 <h1 align="center">Dory</h1>
 
+<p align="center">
+  <a href="https://sourceforge.net/projects/dorystudio/">
+    <img src="https://b.sf-syn.com/badge_img/4073857/oss-rising-star-white?achievement=oss-rising-star" alt="SourceForge Rising Star Award" width="125" />
+  </a>
+  <a href="https://sourceforge.net/projects/dorystudio/">
+    <img src="https://b.sf-syn.com/badge_img/4073857/oss-users-love-us-white" alt="SourceForge Users Love Us Award" width="125" />
+  </a>
+</p>
+
 **Dory is an AI-native SQL client for humans and agents.**
 
 Dory is a SQL workspace where humans can query, explore, and visualize data, and where AI agents can safely work with databases through MCP.
@@ -19,6 +28,7 @@ Use Dory as your everyday SQL client, or as the database execution layer for age
   <a href="https://github.com/dorylab/dory/releases"><b>Download for Windows</b></a> &nbsp; • &nbsp;
   <a href="#quick-start"><b>📦 Quick Start</b></a> &nbsp; • &nbsp;
   <a href="https://www.getdory.dev/docs/deploy/self-hosting"><b>🏠 Self-Hosting</b></a> &nbsp; • &nbsp;
+  <a href="./docs/mcp.md"><b>MCP Guide</b></a> &nbsp; • &nbsp;
   <a href="./docs/contributing.md"><b>🤝 Contributing</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/stargazers"><b>⭐ Star</b></a>
 </p>
@@ -210,7 +220,9 @@ For comprehensive self-hosting documentation, environment variables, and deploym
 
 The Dory desktop app includes local MCP (Model Context Protocol) support, so agent clients can use your Dory connections without manually copying API tokens.
 
-To enable it:
+For the full MCP setup guide, including CLI stdio, headless HTTP, and hosted Dory bridge options, see [Dory MCP Guide](./docs/mcp.md).
+
+To enable Desktop MCP:
 
 1. Open the Dory desktop app.
 2. Go to **Settings → Agent Access**.
@@ -238,6 +250,8 @@ claude mcp list
 ```
 
 Dory manages the desktop MCP grant automatically. The local MCP endpoint can list connections, inspect schemas, read saved queries, preview tables, run read-only SQL, and build analysis context for connected databases.
+
+For non-Desktop or headless setups, use [`@getdory/cli`](./packages/cli/README.md) and follow the [MCP guide](./docs/mcp.md).
 
 ## 🧠 Supported AI Providers
 

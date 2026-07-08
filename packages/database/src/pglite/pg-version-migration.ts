@@ -1,11 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { PGlite as LegacyPGlite } from '@electric-sql/pglite-legacy';
 import { readPgVersion, CURRENT_PG_VERSION } from './pg-version';
-import {
-    exportWorkspaceRecoverySnapshot,
-    type WorkspaceRecoverySnapshot,
-} from './workspace-recovery';
+import { type WorkspaceRecoverySnapshot } from './workspace-recovery';
 
 function createArchiveSuffix(date = new Date()) {
     const pad = (value: number) => String(value).padStart(2, '0');
@@ -27,11 +23,11 @@ export type PgUpgradeResult = {
 };
 
 /**
- * Checks if the PGlite data directory contains PG 16 data and performs
- * a cross-version migration using the legacy PGlite (0.2.17) to extract data.
+ * Checks if the PGlite data directory contains pre-PG 17 data and archives it
+ * before the current PGlite runtime opens the directory.
  *
- * Must be called BEFORE getPgliteClient() — the new PGlite (0.4.x) crashes
- * when opening PG 16 data directories.
+ * Must be called BEFORE getPgliteClient() because the current PGlite (0.4.x)
+ * can abort when opening PG 16 data directories.
  */
 export async function migrateFromPg16IfNeeded(dataDir: string): Promise<PgUpgradeResult> {
     const pgVersion = await readPgVersion(dataDir);
@@ -40,7 +36,7 @@ export async function migrateFromPg16IfNeeded(dataDir: string): Promise<PgUpgrad
         return { migrated: false, snapshot: null, archivedDataDir: null };
     }
 
-    console.log(`[PGlite upgrade] Detected PG ${pgVersion} data, migrating to PG ${CURRENT_PG_VERSION}...`);
+    console.warn(`[PGlite upgrade] Detected PG ${pgVersion} data, archiving before starting PG ${CURRENT_PG_VERSION}.`);
 
     // 1. Archive old data dir
     const archivedDataDir = path.join(
@@ -53,24 +49,9 @@ export async function migrateFromPg16IfNeeded(dataDir: string): Promise<PgUpgrad
         to: archivedDataDir,
     });
 
-    // 2. Export snapshot using legacy PGlite that can open PG 16 data
-    const snapshotPath = `${archivedDataDir}.upgrade-snapshot.json`;
-    let snapshot: WorkspaceRecoverySnapshot | null = null;
+    console.warn('[PGlite upgrade] Legacy PGlite is no longer bundled, so old data was archived without automatic export.', {
+        archivedDataDir,
+    });
 
-    try {
-        snapshot = await exportWorkspaceRecoverySnapshot(
-            archivedDataDir,
-            snapshotPath,
-            LegacyPGlite as any,
-        );
-        console.log('[PGlite upgrade] Successfully exported data from old database');
-    } catch (error) {
-        console.error('[PGlite upgrade] Failed to export data from old database. ' +
-            'The archived directory is preserved for manual recovery.', {
-            error,
-            archivedDataDir,
-        });
-    }
-
-    return { migrated: true, snapshot, archivedDataDir };
+    return { migrated: true, snapshot: null, archivedDataDir };
 }

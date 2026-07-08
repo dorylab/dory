@@ -19,8 +19,9 @@ process.env.DORY_RUNTIME = 'desktop';
 process.env.DORY_DESKTOP_USER_DATA_PATH = userDataPath;
 process.env.DORY_CLOUD_API_URL = 'https://app.getdory.dev/api';
 
-const [{ proxyAuthRequest }, { readDesktopAuthSnapshot, writeDesktopAuthSnapshot }] = await Promise.all([
+const [{ proxyAuthRequest }, { DORY_DESKTOP_PROTOCOL_HEADER }, { readDesktopAuthSnapshot, writeDesktopAuthSnapshot }] = await Promise.all([
     import('../../lib/auth/auth-proxy.desktop'),
+    import('../../lib/auth/desktop-protocol'),
     import('../../lib/auth/desktop-auth-snapshot'),
 ]);
 
@@ -87,5 +88,31 @@ test('desktop sign-out clears local snapshot and auth cookies after upstream suc
         );
     } finally {
         globalThis.fetch = originalFetch;
+    }
+});
+
+test('desktop auth proxy forwards the resolved desktop protocol to cloud auth routes', async () => {
+    const previousProtocol = process.env.DORY_PROTOCOL_SCHEME;
+    process.env.DORY_PROTOCOL_SCHEME = 'dory-beta';
+
+    const originalFetch = globalThis.fetch;
+    let forwardedProtocol: string | null = null;
+    globalThis.fetch = (async (_input, init) => {
+        forwardedProtocol = new Headers(init?.headers).get(DORY_DESKTOP_PROTOCOL_HEADER);
+        return new Response(JSON.stringify({ url: 'https://github.com/login/oauth/authorize' }), { status: 200 });
+    }) as typeof fetch;
+
+    try {
+        const response = await proxyAuthRequest(new Request('http://127.0.0.1:49415/api/electron/auth/start/github'));
+
+        assert.equal(response.status, 200);
+        assert.equal(forwardedProtocol, 'dory-beta');
+    } finally {
+        globalThis.fetch = originalFetch;
+        if (previousProtocol === undefined) {
+            delete process.env.DORY_PROTOCOL_SCHEME;
+        } else {
+            process.env.DORY_PROTOCOL_SCHEME = previousProtocol;
+        }
     }
 });
