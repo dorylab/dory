@@ -224,7 +224,7 @@ For comprehensive self-hosting documentation, environment variables, and deploym
 Install the Dory skill for Codex, ChatGPT, Claude, and other agents that support the open Agent Skills format.
 
 ```bash
-npx skills add https://github.com/dorylab/dory --skill dory
+npx skills add https://github.com/dorylab/skills --skill dory
 ```
 
 The skill teaches agents when to use Dory, how to use Dory MCP tools, and how to preserve generated SQL, result sets, and findings in an editable Dory Agent Run workspace.
