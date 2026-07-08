@@ -165,7 +165,13 @@ docker compose up -d
 
 Dory 桌面端包含本地 MCP 支持，Agent 客户端可以使用你的 Dory 连接，而不需要手动复制 API token。
 
-启用方式：
+完整 MCP 教程见：[Dory MCP Guide](./mcp.md)。其中包括：
+
+- Desktop MCP：在 Dory 桌面端开启本地 HTTP endpoint，由 Dory 自动管理授权。
+- CLI MCP：通过 `@getdory/cli` 使用 standalone stdio 或 headless HTTP runtime。
+- Hosted bridge：通过 `mcp login` 和 `mcp bridge` 连接已有 Dory Web 部署。
+
+启用 Desktop MCP：
 
 1. 打开 Dory 桌面端。
 2. 进入 **Settings → Agent Access**。
@@ -193,6 +199,8 @@ claude mcp list
 ```
 
 Dory 会自动管理 Desktop MCP grant。本地 MCP endpoint 可以列出连接、查看 schema、读取已保存查询、预览表、执行只读 SQL，并为连接的数据库构建分析上下文。
+
+非 Desktop 或 headless 场景请使用 [`@getdory/cli`](../packages/cli/README.md)，并参考 [Dory MCP Guide](./mcp.md)。
 
 ## 支持的 AI Provider
 

@@ -1,12 +1,16 @@
 # Dory CLI / Dory Headless Runtime
 
-`@getdory/cli` runs Dory without the desktop client. It is the standalone entrypoint for MCP servers, automation, and direct Dory Action execution.
+`@getdory/cli` runs Dory without the desktop client. It is the standalone entrypoint for MCP servers, automation, local runtime services, and direct Dory Action execution.
+
+For the user-facing MCP setup guide, start with [`docs/mcp.md`](../../docs/mcp.md). This README is the package reference.
 
 ## Requirements
 
-- Node.js 20 or newer.
+- Node.js 20 or newer for user installs.
 - Linux, macOS, or Windows with npm available.
 - Network access during install for native database driver packages.
+
+Repository development follows the root `package.json` engine requirement, currently Node.js 24.x.
 
 This beta ships the full Dory database driver set. Install can compile or download native packages for PGlite, DuckDB, SQLite, Oracle, MySQL, and Postgres support. If install fails, confirm your Node version first, then check whether your platform has the build tools required by the failing native package.
 
@@ -29,19 +33,36 @@ dory --help
 
 Standalone mode stores Dory state under `~/.dory` and is the default mode for Linux servers, CI, and shared automation hosts.
 
+### Local stdio MCP
+
+Use stdio when the MCP client runs on the same machine as Dory. The client starts and stops `dory mcp serve --stdio` itself, so you do not need to keep a terminal open.
+
 ```sh
 npx -y @getdory/cli init --data standalone
 npx -y @getdory/cli doctor --data standalone
-npx -y @getdory/cli mcp token create --data standalone --name "server"
-npx -y @getdory/cli mcp serve --stdio --data standalone
+
+codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
+codex mcp list
 ```
 
-Run a local HTTP MCP endpoint:
+Claude Code:
 
 ```sh
-npx -y @getdory/cli mcp token create --data standalone --name "local-http"
+claude mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
+claude mcp list
+```
 
-export DORY_MCP_TOKEN="dory_mcp_..."
+### Local HTTP MCP
+
+Use HTTP when you need a stable endpoint URL or a long-running runtime service. HTTP MCP requires bearer token authentication.
+
+```sh
+export DORY_MCP_TOKEN="$(
+  npx -y @getdory/cli mcp token create \
+    --data standalone \
+    --name "local-http" \
+    --scope read | jq -r '.token'
+)"
 
 npx -y @getdory/cli mcp serve \
   --http \
@@ -51,82 +72,13 @@ npx -y @getdory/cli mcp serve \
   --data standalone
 ```
 
-The HTTP endpoint is:
+The endpoint is:
 
 ```text
 http://127.0.0.1:3318/api/mcp
 ```
 
-`mcp token create` prints JSON. Copy the `token` value into `DORY_MCP_TOKEN`.
-When `--scope` is omitted, Dory creates a local token with `read`, `write`, and `local_ai:run`. Use `--scope read` for read-only clients.
-
-Add the HTTP endpoint to Codex CLI:
-
-```sh
-export DORY_MCP_TOKEN="dory_mcp_..."
-
-codex mcp add \
-  --url http://127.0.0.1:3318/api/mcp \
-  --bearer-token-env-var DORY_MCP_TOKEN \
-  dory
-
-codex mcp list
-```
-
-For local stdio instead of HTTP:
-
-```sh
-codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
-codex mcp list
-```
-
-## Add to Codex or Claude Code
-
-Use stdio when the MCP client is on the same machine as Dory. The client starts and stops `dory mcp serve --stdio ...` itself, so you do not need to keep a terminal open.
-
-Codex CLI with standalone data:
-
-```sh
-codex mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
-codex mcp list
-```
-
-Claude Code with standalone data:
-
-```sh
-claude mcp add dory -- npx -y @getdory/cli mcp serve --stdio --data standalone
-claude mcp list
-```
-
-Use Desktop data when you want the agent to use connections and local state from Dory Desktop:
-
-```sh
-codex mcp add dory-desktop -- npx -y @getdory/cli mcp serve --stdio --data desktop
-claude mcp add dory-desktop -- npx -y @getdory/cli mcp serve --stdio --data desktop
-```
-
-Use HTTP when you want a long-running endpoint or a shared remote endpoint. First create a token and start the HTTP runtime:
-
-```sh
-export DORY_MCP_TOKEN="$(
-  npx -y @getdory/cli mcp token create \
-    --data standalone \
-    --name "agent-http" \
-    --scope read \
-    --scope write | jq -r '.token'
-)"
-
-npx -y @getdory/cli runtime install \
-  --mcp-http \
-  --data standalone \
-  --host 127.0.0.1 \
-  --port 3318 \
-  --token "$DORY_MCP_TOKEN"
-
-npx -y @getdory/cli runtime restart --data standalone
-```
-
-Codex CLI with HTTP:
+Codex CLI:
 
 ```sh
 codex mcp add \
@@ -135,7 +87,7 @@ codex mcp add \
   dory
 ```
 
-Claude Code with HTTP:
+Claude Code:
 
 ```sh
 claude mcp add \
@@ -145,17 +97,167 @@ claude mcp add \
   --header "Authorization: Bearer $DORY_MCP_TOKEN"
 ```
 
-For Claude Code, the HTTP header value is written to its MCP configuration. Use stdio for local-only setups when you do not want to store a bearer token in client config.
+## Command Reference
 
-Run Dory Actions directly:
+### General
 
 ```sh
-npx -y @getdory/cli action list --data standalone
-npx -y @getdory/cli action describe connection.create --data standalone
+dory --help
+dory --version
+dory init --data standalone|desktop|self-hosted
+dory doctor --data standalone|desktop|self-hosted
+```
+
+`doctor` checks the selected storage path, secrets, migrations, identity, MCP token count, and connection count.
+
+### Storage
+
+```sh
+dory storage detect --data standalone|desktop|self-hosted
+dory storage doctor --data standalone|desktop|self-hosted
+```
+
+Data modes:
+
+- `standalone`: independent Dory app storage under `~/.dory`. This is the recommended headless server mode.
+- `desktop`: use Dory Desktop local data through the Dory Local Runtime. If Desktop is already running, the CLI connects to it; otherwise the CLI starts a local runtime.
+- `self-hosted`: use a self-hosted Dory Web Postgres app database.
+
+Self-hosted mode must use the same secrets as the Web deployment:
+
+```sh
+DS_SECRET_KEY="same-as-web" \
+BETTER_AUTH_SECRET="same-as-web" \
+dory mcp serve \
+  --stdio \
+  --data self-hosted \
+  --database-url "$DATABASE_URL"
+```
+
+If `DS_SECRET_KEY` or `BETTER_AUTH_SECRET` do not match the Web deployment, encrypted connection secrets and auth-backed data will not be readable.
+
+Storage overrides:
+
+```sh
+--user-data-dir <path>    Override Electron/headless userData directory
+--pglite-path <path>      Override PGlite app storage path
+--database-url <url>      Use Postgres for self-hosted Dory app storage
+```
+
+### MCP Serve
+
+```sh
+dory mcp serve --stdio --data desktop|standalone|self-hosted
+dory mcp serve --http --host 127.0.0.1 --port 3318 --data desktop|standalone|self-hosted
+dory mcp serve --http --host 0.0.0.0 --allow-remote --token <existing-token> --data standalone
+```
+
+HTTP listens on `127.0.0.1` by default and requires bearer token authentication. In local PGlite modes, the CLI starts a small HTTP proxy that forwards MCP traffic to the Dory Local Runtime, so PGlite is still only opened by one process.
+
+Remote binds require an existing token and explicit opt-in:
+
+```sh
+dory mcp serve \
+  --http \
+  --host 0.0.0.0 \
+  --port 3318 \
+  --allow-remote \
+  --token "$DORY_MCP_TOKEN" \
+  --data standalone
+```
+
+Do not expose the plain HTTP server directly to the public internet. Put it behind TLS.
+
+### MCP Tokens
+
+```sh
+dory mcp token create [--name <name>] [--scope <scope>] --data desktop|standalone|self-hosted
+dory mcp token list --data desktop|standalone|self-hosted
+dory mcp token revoke --id <token-id> --data desktop|standalone|self-hosted
+```
+
+`mcp token create` prints JSON. Copy the `token` value into `DORY_MCP_TOKEN` for HTTP clients.
+
+When `--scope` is omitted, Dory creates a local token with `read`, `write`, and `local_ai:run`. Use `--scope read` for read-only clients. Use `--scope write` only for trusted clients that need create, update, or delete capabilities.
+
+### Hosted Dory Bridge
+
+Use these commands when a hosted or self-hosted Dory Web deployment exposes `/api/mcp` and the local MCP client needs a stdio bridge:
+
+```sh
+dory mcp login --url <dory-origin>
+dory mcp status --url <dory-origin>
+dory mcp bridge --url <dory-origin>
+dory mcp logout --url <dory-origin>
+```
+
+Codex CLI:
+
+```sh
+codex mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+codex mcp list
+```
+
+Claude Code:
+
+```sh
+claude mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
+claude mcp list
+```
+
+### Runtime Service
+
+```sh
+dory runtime install
+dory runtime install --codex-agent --url <dory-origin>
+dory runtime install --mcp-http --host 127.0.0.1 --port 3318
+dory runtime install --codex-agent --url <dory-origin> --mcp-http --host 0.0.0.0 --allow-remote --token <existing-token>
+dory runtime run
+dory runtime status
+dory runtime restart
+dory runtime stop
+dory runtime uninstall
+```
+
+Install a background HTTP MCP endpoint:
+
+```sh
+dory runtime install \
+  --mcp-http \
+  --host 127.0.0.1 \
+  --port 3318 \
+  --token "$DORY_MCP_TOKEN" \
+  --data standalone
+
+dory runtime status --data standalone
+```
+
+The token is stored in the runtime service config with file mode `0600`; it is not placed in the launchd plist, systemd unit, or process command line.
+
+For troubleshooting, run the runtime in the foreground:
+
+```sh
+dory runtime run --data standalone
+```
+
+### Dory Actions
+
+Run Dory Actions directly through the same Action layer exposed to agents:
+
+```sh
+dory action list --data desktop|standalone|self-hosted
+dory action describe <action-id> --data desktop|standalone|self-hosted
+dory action <action-id> --json '<json>' --data desktop|standalone|self-hosted
+dory action <action-id> --input input.json --data desktop|standalone|self-hosted
+```
+
+Read example:
+
+```sh
 npx -y @getdory/cli action connection.list --data standalone --projection mcp --json '{}'
 ```
 
-Create or update local state through the same Action layer. For example, create a connection in headless mode:
+Write and destructive Actions require explicit CLI confirmation:
 
 ```sh
 npx -y @getdory/cli action connection.create \
@@ -187,205 +289,23 @@ npx -y @getdory/cli action connection.create \
 
 ## MCP Tools and Actions
 
-Dory MCP exposes a small set of high-level tools for data work, plus read/write Action transports:
+Dory MCP exposes workflow tools plus read/write Action transports:
 
-- `dory_list_connections`
-- `dory_explore_schema`
-- `dory_run_readonly_sql`
-- `dory_saved_queries`
-- `dory_workspace_tabs`
 - `dory_create_work`
 - `dory_finish_work`
 - `dory_read`
 - `dory_write`
+- `dory_list_connections`
+- `dory_explore_schema`
+- `dory_run_readonly_sql`
+- `dory_workspace_tabs`
+- `dory_saved_queries`
+
+For database analysis, call `dory_create_work` first and pass the returned `work.workId` to work-scoped tools such as `dory_list_connections`, `dory_explore_schema`, and `dory_run_readonly_sql`. Use `dory_finish_work` to save findings and execution steps.
 
 Use `dory_read` for read-only or low-risk Actions such as `connection.list`, `connection.test`, and schema exploration. Use `dory_write` for create, update, or delete Actions such as `connection.create`, `connection.update`, and `connection.delete`. Do not expect one MCP tool per business operation.
 
-For example, connection setup goes through `dory_write`:
-
-```json
-{
-  "operation": "run",
-  "actionId": "connection.create",
-  "input": {
-    "payload": {
-      "connection": {
-        "type": "postgres",
-        "engine": "postgres",
-        "name": "Local Postgres",
-        "host": "127.0.0.1",
-        "port": 5432,
-        "database": "postgres"
-      },
-      "identities": [
-        {
-          "name": "Default",
-          "username": "postgres",
-          "password": "postgres",
-          "isDefault": true,
-          "database": "postgres",
-          "enabled": true
-        }
-      ]
-    }
-  },
-  "projection": "mcp"
-}
-```
-
-Before running an Action from an agent, ask Dory to describe it:
-
-```json
-{
-  "operation": "describe",
-  "actionId": "connection.create"
-}
-```
-
-Only Actions that are exposed to the `mcp` actor and allowed by the token scopes are available through `dory_read` or `dory_write`. Most users only need `read` and `write`; `write` covers create, update, and delete operations, while write tokens can also call read operations through `dory_read`. MCP client approval is treated as confirmation for destructive Dory Actions.
-
-## Connect Local Codex Agent
-
-Dory Web can run Codex on this device through the CLI. Run this once on the device where Codex CLI is installed:
-
-```sh
-npx -y @getdory/cli runtime install --codex-agent --url https://your-dory-host
-```
-
-The command authorizes Dory, installs one background Dory Local Runtime service, and enables the Codex agent capability inside it. When Dory sends a job to the runtime, it runs `codex exec` with Dory MCP tools enabled.
-
-Manage the background service:
-
-```sh
-dory runtime status
-dory runtime restart
-dory runtime stop
-dory runtime uninstall
-```
-
-For troubleshooting, run the worker in the foreground:
-
-```sh
-dory runtime run --codex-agent --url https://your-dory-host
-```
-
-The Dory MCP bearer token is passed through an environment variable and is not written into the Codex command arguments.
-
-## Data Modes
-
-- `standalone`: independent Dory app storage under `~/.dory`. This is the recommended headless server mode.
-- `desktop`: use Dory Desktop local data through the Dory Local Runtime. If Desktop is already running, the CLI connects to it; otherwise the CLI starts a local runtime.
-- `self-hosted`: use a self-hosted Dory Web Postgres app database.
-
-Use `doctor` before serving MCP to confirm the selected storage path, secrets, migrations, identity, token count, and connection count:
-
-```sh
-npx -y @getdory/cli doctor --data standalone
-```
-
-Self-hosted mode must use the same secrets as the Web deployment:
-
-```sh
-DS_SECRET_KEY="same-as-web" \
-BETTER_AUTH_SECRET="same-as-web" \
-npx -y @getdory/cli mcp serve \
-  --stdio \
-  --data self-hosted \
-  --database-url "$DATABASE_URL"
-```
-
-If `DS_SECRET_KEY` or `BETTER_AUTH_SECRET` do not match the Web deployment, encrypted connection secrets and auth-backed data will not be readable.
-
-## HTTP Security
-
-HTTP MCP listens on `127.0.0.1` by default and requires bearer token authentication. In local PGlite modes, the CLI starts a small HTTP proxy that forwards MCP traffic to the Dory Local Runtime, so PGlite is still only opened by one process.
-
-For local-only testing you can omit `--token`; the CLI will create one and print it to stderr. For repeatable setup, shared endpoints, or remote endpoints, create a token first:
-
-```sh
-npx -y @getdory/cli mcp token create \
-  --data standalone \
-  --name "mcp-http" \
-  --scope read
-```
-
-To let a remote MCP client run write Actions such as `connection.create`, create a token with the user-facing `write` scope:
-
-```sh
-npx -y @getdory/cli mcp token create \
-  --data standalone \
-  --name "mcp-action-writer" \
-  --scope write
-```
-
-Remote binds require an existing token and an explicit opt-in:
-
-```sh
-npx -y @getdory/cli mcp serve \
-  --http \
-  --host 0.0.0.0 \
-  --port 3318 \
-  --allow-remote \
-  --token "$DORY_MCP_TOKEN" \
-  --data standalone
-```
-
-Do not expose the plain HTTP server directly to the public internet. Put it behind TLS.
-
-Install the same HTTP endpoint as the background runtime service:
-
-```sh
-dory runtime install \
-  --mcp-http \
-  --host 0.0.0.0 \
-  --port 3318 \
-  --allow-remote \
-  --token "$DORY_MCP_TOKEN" \
-  --data standalone
-```
-
-The token is stored in the runtime service config with file mode `0600`; it is not placed in the launchd plist, systemd unit, or process command line.
-
-Codex agent and HTTP MCP can be enabled together on the same service:
-
-```sh
-dory runtime install \
-  --codex-agent \
-  --url https://your-dory-host \
-  --mcp-http \
-  --host 0.0.0.0 \
-  --port 3318 \
-  --allow-remote \
-  --token "$DORY_MCP_TOKEN" \
-  --data standalone
-```
-
-Nginx example:
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name dory-mcp.example.com;
-
-    ssl_certificate /etc/letsencrypt/live/dory-mcp.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dory-mcp.example.com/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3318;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-}
-```
-
-Caddy example:
-
-```caddy
-dory-mcp.example.com {
-    reverse_proxy 127.0.0.1:3318
-}
-```
+`dory_run_readonly_sql` only allows read-only SQL against the target database. It still writes Dory workspace metadata, Agent Run context, SQL tabs, and result snapshots.
 
 ## Docker Headless Runtime
 
@@ -422,19 +342,6 @@ The endpoint is:
 http://127.0.0.1:3318/api/mcp
 ```
 
-To share a self-hosted Dory Web Postgres database instead of standalone `/data/.dory` storage:
-
-```sh
-docker run --rm \
-  -p 3318:3318 \
-  -e DORY_DATA=self-hosted \
-  -e DORY_MCP_TOKEN="$DORY_MCP_TOKEN" \
-  -e DATABASE_URL="$DATABASE_URL" \
-  -e DS_SECRET_KEY="$DS_SECRET_KEY" \
-  -e BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
-  dorylab/dory-headless:latest
-```
-
 Runtime environment:
 
 - `DORY_MCP_TOKEN` is required.
@@ -445,78 +352,22 @@ Runtime environment:
 
 For public deployments, terminate TLS in front of the container instead of exposing cleartext HTTP directly.
 
-## Linux Server Deployment
+## Security Notes
 
-Use the built-in runtime service installer for long-running Linux hosts. It creates the `dory-runtime.service` user service and runs one Dory Local Runtime process:
+- HTTP MCP requires bearer token authentication.
+- `read` scope can read Dory connections, schemas, saved queries, query-oriented metadata, and related low-risk Actions according to the user's organization permissions.
+- `write` scope covers create, update, and delete operations. It can satisfy destructive Action scope checks, so grant it only to trusted MCP clients.
+- Remote binds require `--host 0.0.0.0`, `--allow-remote`, and an existing token.
+- Use stdio for local-only setups when you do not want to store a bearer token in an MCP client config.
 
-```sh
-npm install -g @getdory/cli@latest
+## Troubleshooting
 
-dory mcp token create \
-  --data standalone \
-  --name "server-http" \
-  --scope write
-
-export DORY_MCP_TOKEN="dory_mcp_..."
-
-dory runtime install \
-  --mcp-http \
-  --host 127.0.0.1 \
-  --port 3318 \
-  --token "$DORY_MCP_TOKEN" \
-  --data standalone
-
-dory runtime status --data standalone
-```
-
-For a remote endpoint, bind to `0.0.0.0` only with an explicit token and `--allow-remote`, then put TLS in front of it:
-
-```sh
-dory runtime install \
-  --mcp-http \
-  --host 0.0.0.0 \
-  --port 3318 \
-  --allow-remote \
-  --token "$DORY_MCP_TOKEN" \
-  --data standalone
-```
-
-## Desktop Data Source
-
-Use Desktop data only when you want the CLI to read connections, tabs, saved queries, and tokens already stored by Dory Desktop:
-
-```sh
-npx -y @getdory/cli doctor --data desktop
-npx -y @getdory/cli mcp serve --stdio --data desktop
-```
-
-Desktop mode connects through the Dory Local Runtime, so Desktop, CLI, MCP, and runtime capabilities reuse the same local PGlite owner instead of opening the PGlite directory independently.
-
-When the Dory Desktop app is open, CLI commands connect to the existing Desktop runtime. When it is closed, CLI commands can start or use the local runtime directly, so stdio MCP and Action commands can still work against Desktop data.
-
-## Hosted Dory Bridge
-
-For hosted Dory Web MCP endpoints, use:
-
-```sh
-npx -y @getdory/cli mcp login --url https://your-dory-host
-npx -y @getdory/cli mcp status --url https://your-dory-host
-npx -y @getdory/cli mcp bridge --url https://your-dory-host
-```
-
-Add the hosted bridge to Codex CLI as a stdio MCP server:
-
-```sh
-codex mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
-codex mcp list
-```
-
-Add the hosted bridge to Claude Code:
-
-```sh
-claude mcp add dory-hosted -- npx -y @getdory/cli mcp bridge --url https://your-dory-host
-claude mcp list
-```
+- `Unsupported engine`: install Node.js 20 or newer.
+- `crypto is not defined`: the process is running on an unsupported Node.js version. Upgrade to Node.js 20 or newer.
+- Native package install failure: install platform build tools, upgrade Node.js, or retry on Node.js 22.
+- `--data self-hosted requires DS_SECRET_KEY`: export the same `DS_SECRET_KEY` and `BETTER_AUTH_SECRET` used by your Dory Web deployment.
+- `No desktop auth snapshot`: open Dory Desktop once, or pass `--user-data-dir` for the active Desktop profile.
+- `Missing MCP bearer token`: set `DORY_MCP_TOKEN` and configure the MCP client to send it.
 
 ## Update and Uninstall
 
@@ -537,14 +388,6 @@ Remove standalone data only when you no longer need local Dory state:
 ```sh
 rm -rf ~/.dory
 ```
-
-## Troubleshooting
-
-- `Unsupported engine`: install Node.js 20 or newer.
-- `crypto is not defined`: the process is running on an unsupported Node.js version. Upgrade to Node.js 20 or newer.
-- Native package install failure: install platform build tools, upgrade Node.js, or retry on Node.js 22.
-- `--data self-hosted requires DS_SECRET_KEY`: export the same `DS_SECRET_KEY` and `BETTER_AUTH_SECRET` used by your Dory Web deployment.
-- `No desktop auth snapshot`: open Dory Desktop once, or pass `--user-data-dir` for the active Desktop profile.
 
 ## Release Smoke
 

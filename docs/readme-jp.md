@@ -165,7 +165,9 @@ docker compose up -d
 
 Dory デスクトップアプリには local MCP support が含まれており、Agent クライアントは API token を手動コピーせずに Dory の接続を使えます。
 
-有効化:
+CLI stdio、headless HTTP、hosted bridge を含む完全な MCP 手順は [Dory MCP Guide](./mcp.md) を参照してください。
+
+Desktop MCP の有効化:
 
 1. Dory デスクトップアプリを開く。
 2. **Settings → Agent Access** に移動。
@@ -193,6 +195,8 @@ claude mcp list
 ```
 
 Dory は Desktop MCP grant を自動的に管理します。local MCP endpoint は、接続一覧、schema 検査、保存済みクエリの読み取り、table preview、read-only SQL、分析コンテキスト構築をサポートします。
+
+Desktop 以外または headless の構成では [`@getdory/cli`](../packages/cli/README.md) を使い、[Dory MCP Guide](./mcp.md) を参照してください。
 
 ## Supported AI Providers
 
