@@ -4,21 +4,14 @@
 
 <h1 align="center">Dory</h1>
 
-<!-- Begin  Tag -->
-<div class="sf-root" data-id="4073857" data-badge="oss-rising-star-white" data-metadata="achievement=oss-rising-star" style="width:125px">
-    <a href="https://sourceforge.net/projects/dorystudio/" target="_blank">Dory</a>
-</div>
-<script>(function () {var sc=document.createElement('script');sc.async=true;sc.src='https://b.sf-syn.com/badge_js?sf_id=4073857';var p=document.getElementsByTagName('script')[0];p.parentNode.insertBefore(sc, p);})();
-</script>
-<!-- End  Tag -->
-
-<!-- Begin  Tag -->
-<div class="sf-root" data-id="4073857" data-badge="oss-users-love-us-white" style="width:125px">
-    <a href="https://sourceforge.net/projects/dorystudio/" target="_blank">Dory</a>
-</div>
-<script>(function () {var sc=document.createElement('script');sc.async=true;sc.src='https://b.sf-syn.com/badge_js?sf_id=4073857';var p=document.getElementsByTagName('script')[0];p.parentNode.insertBefore(sc, p);})();
-</script>
-<!-- End  Tag -->
+<p align="center">
+  <a href="https://sourceforge.net/projects/dorystudio/">
+    <img src="https://b.sf-syn.com/badge_img/4073857/oss-rising-star-white?achievement=oss-rising-star" alt="SourceForge Rising Star Award" width="125" />
+  </a>
+  <a href="https://sourceforge.net/projects/dorystudio/">
+    <img src="https://b.sf-syn.com/badge_img/4073857/oss-users-love-us-white" alt="SourceForge Users Love Us Award" width="125" />
+  </a>
+</p>
 
 **Dory is an AI-native SQL client for humans and agents.**
 
