@@ -53,6 +53,17 @@ export interface DriverQueryResult<Row = any> {
 }
 export type QueryResult<Row = any> = DriverQueryResult<Row>;
 
+export interface DriverQueryRowStream<Row = any> {
+    rows: AsyncIterable<Row>;
+    rowCount?: number | null;
+    limited?: boolean;
+    limit?: number;
+    columns?: ColumnMeta[];
+    tookMs?: number;
+    statistics?: Record<string, unknown>;
+    close?: () => Promise<void> | void;
+}
+
 export interface DriverHealthInfo {
     ok: boolean;
     message?: string;

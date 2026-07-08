@@ -6,7 +6,7 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { enforceSelectLimit } from '@dory/drivers/core';
-import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 
@@ -133,6 +133,15 @@ function toColumns(reader: Awaited<ReturnType<DuckDBConnection['runAndReadAll']>
     }));
 }
 
+function toResultColumns(result: Awaited<ReturnType<DuckDBConnection['stream']>>) {
+    const names = result.columnNames();
+    const types = result.columnTypes().map(type => type.toString());
+    return names.map((name, index) => ({
+        name,
+        type: types[index],
+    }));
+}
+
 export async function openDuckDbConnection(config: BaseConfig): Promise<DuckDbConnectionHandle> {
     const resolved = resolveDuckDbDatabasePath(config);
     const options = resolveDuckDbInstanceOptions(config);
@@ -174,6 +183,31 @@ export async function executeDuckDbQuery<Row = any>(handle: DuckDbConnectionHand
         limited: isReadStatement(compiledSql) && rows.length >= DEFAULT_MAX_RESULT_ROWS,
         limit: isReadStatement(compiledSql) ? DEFAULT_MAX_RESULT_ROWS : undefined,
         tookMs: Date.now() - started,
+    };
+}
+
+export async function executeDuckDbQueryRowStream<Row = any>(handle: DuckDbConnectionHandle, sql: string, params?: DriverQueryParams): Promise<DriverQueryRowStream<Row>> {
+    const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
+    const limitedSql = isReadStatement(compiledSql) ? enforceSelectLimit(compiledSql, DEFAULT_MAX_RESULT_ROWS) : compiledSql;
+    const started = Date.now();
+    const result = await handle.connection.stream(limitedSql, compiledParams as any);
+
+    const rows = (async function* () {
+        for await (const chunk of result.yieldRowObjectJson()) {
+            for (const row of chunk) {
+                yield row as Row;
+            }
+        }
+    })();
+
+    return {
+        rows,
+        rowCount: null,
+        columns: toResultColumns(result),
+        limited: isReadStatement(compiledSql),
+        limit: isReadStatement(compiledSql) ? DEFAULT_MAX_RESULT_ROWS : undefined,
+        tookMs: Date.now() - started,
+        close: () => undefined,
     };
 }
 

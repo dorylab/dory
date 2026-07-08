@@ -2749,11 +2749,13 @@ __metadata:
     "@types/node": "npm:^25.5.2"
     "@types/oracledb": "npm:^6"
     "@types/pg": "npm:^8.20.0"
+    "@types/pg-query-stream": "npm:^3.4.0"
     better-sqlite3: "npm:^12.8.0"
     mssql: "npm:^12.2.1"
     mysql2: "npm:^3.20.0"
     oracledb: "npm:^6.10.0"
     pg: "npm:^8.20.0"
+    pg-query-stream: "npm:^4.16.0"
     snowflake-sdk: "npm:^3.0.0"
     ssh2: "npm:^1.17.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
@@ -9451,6 +9453,15 @@ __metadata:
   version: 2.0.4
   resolution: "@types/pako@npm:2.0.4"
   checksum: 10c0/5765bf8bc7e77ee141c454118f03e544b8f6cb51eb257d82dc5830feeab8cd00818af3a1eabefdfbe8dd3ae9916ed5403937bf1031a0ee51deea27fdf4dccdfb
+  languageName: node
+  linkType: hard
+
+"@types/pg-query-stream@npm:^3.4.0":
+  version: 3.4.0
+  resolution: "@types/pg-query-stream@npm:3.4.0"
+  dependencies:
+    pg-query-stream: "npm:*"
+  checksum: 10c0/b1404f9f4dee8562d004c4bfe986464921fb50facfe4bccc5305da069f978fa286094a3d7aa8e9cb44383a89990532dee35924110495d0ad361480e337e259d4
   languageName: node
   linkType: hard
 
@@ -19810,6 +19821,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"pg-cursor@npm:^2.21.0":
+  version: 2.21.0
+  resolution: "pg-cursor@npm:2.21.0"
+  peerDependencies:
+    pg: ^8
+  checksum: 10c0/abc916bbec4eb285357b987ab2ea43e515db1ea4b5a5d1f5817db4eb1ad91afb951de98261c221ac7d05912856c6180fb2259c4537ea248d4cae69f53d2beb9c
+  languageName: node
+  linkType: hard
+
 "pg-int8@npm:1.0.1":
   version: 1.0.1
   resolution: "pg-int8@npm:1.0.1"
@@ -19830,6 +19850,17 @@ __metadata:
   version: 1.13.0
   resolution: "pg-protocol@npm:1.13.0"
   checksum: 10c0/a4e851e6bb8ff404ca19d561cf49b6b0caf45163bd3f289889edaf6c4e9fb25b08fb57f50d37a8cc86007efcf2cbb3dd2372c97a353a546f45eb49ddebc84fa9
+  languageName: node
+  linkType: hard
+
+"pg-query-stream@npm:*, pg-query-stream@npm:^4.16.0":
+  version: 4.16.0
+  resolution: "pg-query-stream@npm:4.16.0"
+  dependencies:
+    pg-cursor: "npm:^2.21.0"
+  peerDependencies:
+    pg: ^8
+  checksum: 10c0/ff8c7656aa769a855bce33c3db42a3a9a42be4f78a9f796031abb1ad4206701859e09e290263adc1283ba7bdc7bdbab33ec8492241de5bb584d70453878b9c5c
   languageName: node
   linkType: hard
 

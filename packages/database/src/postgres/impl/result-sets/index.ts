@@ -52,6 +52,12 @@ export type PersistQueryResultSetInput = {
     previewRows?: number;
 };
 
+export type PersistQueryResultSetStreamInput = Omit<PersistQueryResultSetInput, 'rows'> & {
+    rows: AsyncIterable<unknown>;
+    columns?: ResultSetColumn[];
+    rowCount?: number | null;
+};
+
 export type PersistQueryResultSetOutput = {
     resultSetId: string;
     queryRunId: string;
@@ -88,6 +94,13 @@ function getNumber(value: unknown): number | null {
 
 function getBoolean(value: unknown): boolean {
     return value === true;
+}
+
+function getDurationMs(value: unknown, startedAt: unknown, finishedAt: Date): number | null {
+    if (startedAt instanceof Date) return Math.max(0, Math.round(finishedAt.getTime() - startedAt.getTime()));
+    const direct = getNumber(value);
+    if (direct != null && direct > 0) return direct;
+    return null;
 }
 
 function inferActorType(source?: string | null) {
@@ -158,7 +171,7 @@ export class PostgresResultSetsRepository {
             rowCount,
             maxRows: input.previewRows ?? DEFAULT_PREVIEW_ROWS,
         });
-        const limited = getBoolean(resultSet.limited) || preview.truncated;
+        const limited = getBoolean(resultSet.limited);
         const manifest: ResultSetManifest = {
             format: 'dory.resultset.v1',
             artifactId,
@@ -293,6 +306,186 @@ export class PostgresResultSetsRepository {
         };
     }
 
+    async persistQueryResultSetStream(input: PersistQueryResultSetStreamInput): Promise<PersistQueryResultSetOutput> {
+        this.assertInited();
+
+        const resultSet = input.resultSet;
+        const artifactId = `rs_${newEntityId()}`;
+        const queryRunId = `qr_${newEntityId()}`;
+        const actorType = inferActorType(input.source);
+        const status = getString(resultSet.status) ?? 'success';
+        const explicitColumns = input.columns?.length ? input.columns : inferResultSetColumns([], resultSet.columns);
+        const now = new Date();
+        const previewRows: unknown[] = [];
+        const maxPreviewRows = input.previewRows ?? DEFAULT_PREVIEW_ROWS;
+        let streamedRowCount = 0;
+
+        const countedRows = (async function* () {
+            for await (const row of input.rows) {
+                if (previewRows.length < maxPreviewRows) {
+                    previewRows.push(row);
+                }
+                streamedRowCount += 1;
+                yield row;
+            }
+        })();
+
+        const fullData = await this.writeFullDataArtifact({
+            artifactId,
+            status,
+            columns: explicitColumns,
+            rows: countedRows,
+        });
+        if (!fullData && streamedRowCount === 0 && status === 'success') {
+            for await (const row of countedRows) {
+                void row;
+            }
+        }
+
+        const completedAt = new Date();
+        const durationMs = getDurationMs(resultSet.durationMs, resultSet.startedAt, completedAt);
+        const columns = explicitColumns.length ? explicitColumns : inferResultSetColumns(previewRows);
+        const rowCount = getNumber(resultSet.rowCount) ?? input.rowCount ?? fullData?.rowCount ?? streamedRowCount;
+        const preview = buildResultSetPreview({
+            columns,
+            rows: previewRows,
+            rowCount,
+            maxRows: maxPreviewRows,
+        });
+        const limited = getBoolean(resultSet.limited);
+        const manifest: ResultSetManifest = {
+            format: 'dory.resultset.v1',
+            artifactId,
+            organizationId: input.organizationId,
+            kind: 'sql-result-set',
+            status,
+            source: {
+                type: 'query-run',
+                queryRunId,
+                connectionId: input.connectionId ?? null,
+                workspaceId: input.workspaceId ?? null,
+                tabId: input.tabId ?? null,
+                workId: input.workId ?? null,
+                agentRunId: input.agentRunId ?? null,
+                actorType,
+                actorId: input.userId,
+            },
+            sql: {
+                text: resultSet.sqlText || input.sessionSqlText,
+                dialect: input.database ?? null,
+                operation: getString(resultSet.sqlOp) ?? 'unknown',
+            },
+            error:
+                status === 'error'
+                    ? {
+                          message: getString(resultSet.errorMessage),
+                          code: getString(resultSet.errorCode),
+                          sqlState: getString(resultSet.errorSqlState),
+                          meta: resultSet.errorMeta ?? undefined,
+                      }
+                    : undefined,
+            schema: columns,
+            rowCount,
+            previewRowCount: preview.previewRowCount,
+            limited,
+            limit: getNumber(resultSet.limit),
+            files: {},
+            lineage: {},
+            createdAt: now.toISOString(),
+            updatedAt: completedAt.toISOString(),
+            contentHash: null,
+        };
+
+        let persistedRef: ResultSetArtifactRef | null = null;
+        try {
+            const { ref, manifest: persistedManifest } = await this.artifacts.resultSets.putResultSet({
+                organizationId: input.organizationId,
+                artifactId,
+                manifest,
+                preview: previewRows.length || status === 'success' ? preview : null,
+                data: fullData?.data ?? null,
+            });
+            persistedRef = ref;
+
+            await this.db.insert(queryRuns).values({
+                id: queryRunId,
+                organizationId: input.organizationId,
+                connectionId: input.connectionId ?? null,
+                workspaceId: input.workspaceId ?? null,
+                tabId: input.tabId ?? null,
+                workId: input.workId ?? null,
+                agentRunId: input.agentRunId ?? null,
+                actorType,
+                actorId: input.userId,
+                sql: resultSet.sqlText || input.sessionSqlText,
+                status,
+                durationMs,
+                errorMessage: getString(resultSet.errorMessage),
+                resultSetId: artifactId,
+                createdAt: now,
+                updatedAt: completedAt,
+            });
+
+            await this.db.insert(resultSetsTable).values({
+                id: artifactId,
+                organizationId: input.organizationId,
+                connectionId: input.connectionId ?? null,
+                workspaceId: input.workspaceId ?? null,
+                tabId: input.tabId ?? null,
+                workId: input.workId ?? null,
+                agentRunId: input.agentRunId ?? null,
+                sourceQueryRunId: queryRunId,
+                sourceType: 'query-run',
+                kind: 'sql-result-set',
+                status,
+                rowCount,
+                previewRowCount: preview.previewRowCount,
+                limited,
+                limit: getNumber(resultSet.limit),
+                schemaJson: columns,
+                sql: resultSet.sqlText || input.sessionSqlText,
+                operation: getString(resultSet.sqlOp),
+                errorMessage: getString(resultSet.errorMessage),
+                artifactRefJson: ref,
+                dataAvailability: resultSetDataAvailability(persistedManifest),
+                createdByActorType: actorType,
+                createdByActorId: input.userId,
+                byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                createdAt: now,
+                updatedAt: completedAt,
+            });
+
+            if (input.agentRunId) {
+                await this.db.insert(agentRunResultSets).values({
+                    agentRunId: input.agentRunId,
+                    resultSetId: artifactId,
+                    queryRunId,
+                    role: 'generated',
+                    createdAt: now,
+                });
+            }
+
+            return {
+                resultSetId: artifactId,
+                queryRunId,
+                artifactRef: ref,
+                dataAvailability: resultSetDataAvailability(persistedManifest),
+                previewRows: preview.rows,
+                previewRowCount: preview.previewRowCount,
+                rowCount,
+                schema: columns,
+                byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+            };
+        } catch (error) {
+            if (persistedRef) {
+                await this.artifacts.resultSets.deleteResultSet(persistedRef).catch(() => undefined);
+            }
+            throw error;
+        } finally {
+            await fullData?.cleanup?.();
+        }
+    }
+
     async readRows(params: { organizationId: string; resultSetId: string; offset?: number | null; limit?: number | null }): Promise<ReadResultRowsOutput> {
         this.assertInited();
 
@@ -357,9 +550,8 @@ export class PostgresResultSetsRepository {
         }
     }
 
-    private async writeFullDataArtifact(input: { artifactId: string; status: string; columns: ResultSetManifest['schema']; rows: unknown[] }) {
+    private async writeFullDataArtifact(input: { artifactId: string; status: string; columns: ResultSetManifest['schema']; rows: AsyncIterable<unknown> | unknown[] }) {
         if (input.status !== 'success') return null;
-        if (!input.columns.length) return null;
         try {
             return await this.fullDataWriter.write({
                 artifactId: input.artifactId,

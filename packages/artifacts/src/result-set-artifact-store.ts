@@ -33,9 +33,11 @@ export class ResultSetArtifactStore {
         }
 
         if (input.data && dataPath) {
-            const body = Buffer.isBuffer(input.data) ? input.data : input.data instanceof Uint8Array ? Buffer.from(input.data) : await readableToBuffer(input.data);
-            dataByteSize = body.byteLength;
-            await this.objectStore.put(dataPath, body, { contentType: 'application/vnd.apache.parquet' });
+            dataByteSize = Buffer.isBuffer(input.data) || input.data instanceof Uint8Array ? input.data.byteLength : undefined;
+            await this.objectStore.put(dataPath, input.data, { contentType: 'application/vnd.apache.parquet' });
+            if (typeof dataByteSize === 'undefined') {
+                dataByteSize = (await this.objectStore.stat(dataPath))?.byteSize;
+            }
         }
 
         const manifest: ResultSetManifest = {

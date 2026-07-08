@@ -1,12 +1,12 @@
 import type { Pool } from 'pg';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { isTlsNegotiationError, isTlsPreferMode, withTlsDisabledOptions } from '@dory/drivers/core/tls';
 import { createPostgresMetadataCapability, type PostgresMetadataAPI } from './capabilities/metadata';
 import { createPostgresTableInfoCapability } from './capabilities/table-info';
 import { PostgresDialect } from './dialect';
-import { createPostgresPool, executePostgresCommand, executePostgresQuery, pingPostgres, resolvePostgresPort } from './runtime';
+import { createPostgresPool, executePostgresCommand, executePostgresQuery, executePostgresQueryRowStream, pingPostgres, resolvePostgresPort } from './runtime';
 
 export class PostgresDatasource extends BaseConnection {
     readonly dialect = PostgresDialect;
@@ -110,6 +110,29 @@ export class PostgresDatasource extends BaseConnection {
         const pool = this.resolvePool(targetDatabase);
 
         return executePostgresQuery<Row>(pool, this.config, sql, context?.params, {
+            context,
+            trackQuery: pid => {
+                if (context?.queryId) {
+                    this.runningQueries.set(context.queryId, {
+                        pid,
+                        database: targetDatabase ?? this.config.database ?? 'postgres',
+                    });
+                }
+            },
+            untrackQuery: () => {
+                if (context?.queryId) {
+                    this.runningQueries.delete(context.queryId);
+                }
+            },
+        });
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        this.assertReady();
+        const targetDatabase = context?.database ?? this.config.database;
+        const pool = this.resolvePool(targetDatabase);
+
+        return executePostgresQueryRowStream<Row>(pool, this.config, sql, context?.params, {
             context,
             trackQuery: pid => {
                 if (context?.queryId) {

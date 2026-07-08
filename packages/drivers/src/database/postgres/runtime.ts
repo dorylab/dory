@@ -1,9 +1,10 @@
 import { Pool, type ClientConfig, type PoolClient, type PoolConfig, type QueryResult as PgResult, types as pgTypes } from 'pg';
+import QueryStream from 'pg-query-stream';
 import { DEFAULT_MAX_RESULT_ROWS, isPostgresFamilyConnectionType } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ColumnMeta, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { buildNodeTlsConnectionOptions, getDriverTlsOptions } from '@dory/drivers/core/tls';
 import { PostgresDialect } from './dialect';
 
@@ -200,6 +201,14 @@ function normalizeColumns(result: PgResult<any>) {
     }));
 }
 
+function normalizePgFields(fields: Array<{ name: string; dataTypeID?: number }> | undefined): ColumnMeta[] | undefined {
+    if (!Array.isArray(fields) || !fields.length) return undefined;
+    return fields.map(field => ({
+        name: field.name,
+        type: typeof field.dataTypeID === 'number' ? String(field.dataTypeID) : undefined,
+    }));
+}
+
 function normalizeParams(sql: string, params?: DriverQueryParams) {
     const compiled = compileParams(PostgresDialect, sql, params);
     return {
@@ -283,6 +292,69 @@ export async function executePostgresQuery<Row>(pool: Pool, config: BaseConfig, 
     } finally {
         options?.untrackQuery?.();
         client.release();
+    }
+}
+
+export async function executePostgresQueryRowStream<Row>(
+    pool: Pool,
+    config: BaseConfig,
+    sql: string,
+    params?: DriverQueryParams,
+    options?: QuerySessionOptions,
+): Promise<DriverQueryRowStream<Row>> {
+    const { sql: compiledSql, values } = normalizeParams(sql, params);
+    const limitedSql = enforceSelectLimit(compiledSql, DEFAULT_MAX_RESULT_ROWS);
+    const client = (await pool.connect()) as PgClientLike;
+    const started = Date.now();
+    let released = false;
+    let stream: QueryStream | null = null;
+
+    const release = () => {
+        if (released) return;
+        released = true;
+        options?.untrackQuery?.();
+        client.release();
+    };
+
+    try {
+        await applySessionContext(client, config, options?.context);
+        if (options?.trackQuery && options?.context?.queryId && client.processID) {
+            options.trackQuery(client.processID);
+        }
+
+        stream = new QueryStream(limitedSql, values, {
+            batchSize: 1000,
+            highWaterMark: 1000,
+        });
+        const readable = client.query(stream);
+
+        const rows = (async function* () {
+            try {
+                for await (const row of readable as AsyncIterable<Row>) {
+                    yield row;
+                }
+            } finally {
+                stream?.destroy();
+                release();
+            }
+        })();
+
+        return {
+            rows,
+            columns: normalizePgFields((stream as any)?._result?.fields),
+            rowCount: null,
+            limited: /^\s*(select|with)\b/i.test(compiledSql),
+            limit: /^\s*(select|with)\b/i.test(compiledSql) ? DEFAULT_MAX_RESULT_ROWS : undefined,
+            tookMs: Date.now() - started,
+            close: () => {
+                stream?.destroy();
+                release();
+            },
+        };
+    } catch (error) {
+        stream?.destroy();
+        release();
+        throw error;
     }
 }
 

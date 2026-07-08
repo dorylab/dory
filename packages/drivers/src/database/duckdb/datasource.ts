@@ -1,11 +1,11 @@
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 
 import { createDuckDbMetadataCapability, type DuckDbMetadataAPI } from './capabilities/metadata';
 import { createDuckDbTableInfoCapability } from './capabilities/table-info';
 import { DuckDbDialect } from './dialect';
-import { closeDuckDbConnection, executeDuckDbQuery, openDuckDbConnection, pingDuckDb } from './runtime';
+import { closeDuckDbConnection, executeDuckDbQuery, executeDuckDbQueryRowStream, openDuckDbConnection, pingDuckDb } from './runtime';
 
 type DuckDbHandle = Awaited<ReturnType<typeof openDuckDbConnection>>;
 
@@ -48,6 +48,10 @@ export class DuckDbDatasource extends BaseConnection {
 
     async queryWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<QueryResult<Row>> {
         return executeDuckDbQuery<Row>(this.getHandle(), sql, context?.params);
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        return executeDuckDbQueryRowStream<Row>(this.getHandle(), sql, context?.params);
     }
 
     async command(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<void> {

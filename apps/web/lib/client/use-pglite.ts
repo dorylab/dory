@@ -693,6 +693,21 @@ export function useDB() {
         [],
     );
 
+    const readResultSetRows = useCallback(
+        async (params: { resultSetId: string; offset?: number; limit?: number; signal?: AbortSignal }): Promise<ReadResultRowsResponse> => {
+            return executeActionClient<ReadResultRowsResponse>(
+                'resultSet.rows.read',
+                {
+                    resultSetId: params.resultSetId,
+                    offset: params.offset ?? 0,
+                    limit: params.limit ?? 1000,
+                },
+                { signal: params.signal },
+            );
+        },
+        [],
+    );
+
     // ============ List/cleanup/session fetch ============
 
     const listResultSetIndices = useCallback(async (sessionId: string): Promise<number[]> => {
@@ -1020,6 +1035,7 @@ export function useDB() {
 
             insertResultRows,
             getResultRows,
+            readResultSetRows,
             listResultSetIndices,
             clearResults,
             getSession,
@@ -1037,6 +1053,7 @@ export function useDB() {
             listResultSetsMeta,
             insertResultRows,
             getResultRows,
+            readResultSetRows,
             listResultSetIndices,
             clearResults,
             getSession,

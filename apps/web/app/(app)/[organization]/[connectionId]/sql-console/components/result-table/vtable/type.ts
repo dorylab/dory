@@ -1,5 +1,6 @@
 export interface VTableProps {
     results: { rowData: Record<string, any> }[];
+    remoteSource?: VTableRemoteSource | null;
     rowHeight?: number;
     maxHeight?: number;
     defaultColMinWidth?: number;
@@ -23,6 +24,13 @@ export interface VTableProps {
     selectedRowIndexes?: number[];
     onSortChange?: (sort: { column: string; direction: 'asc' | 'desc' } | null) => void;
     onSelectedRowIndexesChange?: (rowIndexes: number[]) => void;
+}
+
+export interface VTableRemoteSource {
+    cacheKey: string;
+    rowCount: number;
+    pageSize?: number;
+    getRows: (offset: number, limit: number, signal?: AbortSignal) => Promise<{ rowData: Record<string, unknown> }[]>;
 }
 
 export type ColWidths = Record<string, number>;

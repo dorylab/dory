@@ -85,6 +85,21 @@ export interface DBHook {
     // Read rows: page fetch + worker decode, row callback/return
     getResultRows(sessionId: string, setIndex?: number, opts?: GetResultRowsOptions): Promise<TabResult[]>;
 
+    readResultSetRows(params: {
+        resultSetId: string;
+        offset?: number;
+        limit?: number;
+        signal?: AbortSignal;
+    }): Promise<{
+        resultSetId: string;
+        rows: Record<string, unknown>[];
+        offset: number;
+        limit: number;
+        rowCount: number | null;
+        columns: unknown[];
+        dataAvailability: string;
+    }>;
+
     // List existing result sets (ascending)
     listResultSetIndices(sessionId: string): Promise<number[]>;
 
