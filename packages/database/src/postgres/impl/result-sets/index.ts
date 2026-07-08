@@ -150,6 +150,8 @@ type QueryClause = {
 };
 
 type ResultSetRecord = typeof resultSetsTable.$inferSelect;
+type ProfileColumnType = 'string' | 'integer' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'array' | 'unknown';
+type ProfileSemanticRole = 'identifier' | 'dimension' | 'measure' | 'time' | 'text' | 'json' | 'unknown';
 
 function quoteLiteral(value: string) {
     return `'${value.replace(/'/g, "''")}'`;
@@ -345,6 +347,95 @@ function getNumber(value: unknown): number | null {
 
 function getBoolean(value: unknown): boolean {
     return value === true;
+}
+
+function toFiniteNumber(value: unknown): number | null {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'bigint') return Number(value);
+    if (typeof value !== 'string') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeProfileColumnType(column: ResultSetColumn, sampleValues: unknown[]): ProfileColumnType {
+    const logicalType = column.logicalType;
+    if (logicalType === 'boolean' || logicalType === 'date' || logicalType === 'datetime' || logicalType === 'json') return logicalType;
+    if (logicalType === 'number') return sampleValues.some(value => typeof value === 'number' && !Number.isInteger(value)) ? 'number' : 'integer';
+    if (logicalType === 'string') return 'string';
+
+    const databaseType = String(column.databaseType ?? '').toLowerCase();
+    if (/(json|jsonb|variant|object)/.test(databaseType)) return 'json';
+    if (/(array|\[\])/.test(databaseType)) return 'array';
+    if (/bool/.test(databaseType)) return 'boolean';
+    if (/(timestamp|datetime|timestamptz)/.test(databaseType)) return 'datetime';
+    if (/(^date$)/.test(databaseType)) return 'date';
+    if (/(int|integer|bigint|smallint|tinyint|serial)/.test(databaseType)) return 'integer';
+    if (/(float|double|decimal|numeric|real|money)/.test(databaseType)) return 'number';
+    if (/(char|text|uuid|enum|citext|string)/.test(databaseType)) return 'string';
+
+    const first = sampleValues.find(value => value != null && value !== '');
+    if (typeof first === 'number') return Number.isInteger(first) ? 'integer' : 'number';
+    if (typeof first === 'boolean') return 'boolean';
+    if (Array.isArray(first)) return 'array';
+    if (first && typeof first === 'object') return 'json';
+    if (typeof first === 'string') {
+        if (Number.isFinite(Number(first))) return Number.isInteger(Number(first)) ? 'integer' : 'number';
+        if (Date.parse(first) && /^\d{4}-\d{1,2}-\d{1,2}/.test(first)) return first.includes('T') ? 'datetime' : 'date';
+        return 'string';
+    }
+
+    return 'unknown';
+}
+
+function inferProfileSemanticRole(params: { columnName: string; normalizedType: ProfileColumnType; distinctCount: number; nonNullCount: number }): ProfileSemanticRole {
+    const lowerName = params.columnName.toLowerCase();
+    const distinctRatio = params.nonNullCount > 0 ? params.distinctCount / params.nonNullCount : 0;
+    const idHint = /(^id$|_id$|^id_|identifier|uuid|guid|key$)/.test(lowerName);
+    const timeHint = /(date|time|timestamp|created|updated|_at$|at$|day|week|month|year)/.test(lowerName);
+    const measureHint = /(^|[_\W])(count|sum|amount|total|price|revenue|cost|score|avg|average|qty|quantity|size|rate)([_\W]|$)/.test(lowerName);
+
+    if (idHint) return 'identifier';
+    if (params.normalizedType === 'date' || params.normalizedType === 'datetime' || timeHint) return 'time';
+    if ((params.normalizedType === 'integer' || params.normalizedType === 'number') && (measureHint || !idHint)) return 'measure';
+    if (distinctRatio >= 0.95 && params.normalizedType === 'string' && params.nonNullCount >= 20) return 'identifier';
+    if (params.normalizedType === 'string') {
+        if (measureHint) return 'measure';
+        if (params.distinctCount <= 24 || distinctRatio <= 0.3) return 'dimension';
+        return 'text';
+    }
+    if (params.normalizedType === 'json' || params.normalizedType === 'array') return 'json';
+    return 'unknown';
+}
+
+function shannonEntropy(counts: number[]) {
+    const total = counts.reduce((sum, value) => sum + value, 0);
+    if (total <= 0) return 0;
+    return counts.reduce((sum, count) => {
+        if (count <= 0) return sum;
+        const probability = count / total;
+        return sum - probability * Math.log2(probability);
+    }, 0);
+}
+
+function informationDensityFor(params: { nonNullCount: number; distinctCount: number; distinctRatio: number; entropy: number; topValueShare: number | null }) {
+    if (params.nonNullCount <= 0 || params.distinctCount <= 1 || params.entropy <= 0 || params.topValueShare === 1) return 'none';
+    if (params.topValueShare != null && params.topValueShare >= 0.9) return 'low';
+    if (params.distinctRatio < 0.02 || params.entropy < 1) return 'low';
+    if (params.distinctRatio < 0.35 || params.entropy < 3) return 'medium';
+    return 'high';
+}
+
+function buildSampleTopK(values: unknown[]) {
+    const counts = new Map<string, number>();
+    for (const value of values) {
+        if (value == null || value === '') continue;
+        const key = typeof value === 'string' ? value : JSON.stringify(value);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+        .map(([value, count]) => ({ value, count }))
+        .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value))
+        .slice(0, 8);
 }
 
 function getDurationMs(value: unknown, startedAt: unknown, finishedAt: Date): number | null {
@@ -885,10 +976,81 @@ export class PostgresResultSetsRepository {
         const query = buildResultSetQueryClause(columns, { filters: params.filters, search: params.search });
 
         return this.withDuckDbResultSetData(params.organizationId, params.resultSetId, async ({ connection, parquetPath }) => {
-            const xExpr = `COALESCE(CAST(${columnSql(xColumn)} AS VARCHAR), '(empty)')`;
-            const groupExpr = groupColumn ? `COALESCE(CAST(${columnSql(groupColumn)} AS VARCHAR), '(empty)')` : null;
             const fromSql = ` FROM read_parquet(${quoteLiteral(parquetPath)})`;
             const metricAlias = '__value__';
+
+            if (params.chartType === 'scatter' && metric.column) {
+                const xExpr = `TRY_CAST(${columnSql(xColumn)} AS DOUBLE)`;
+                const yExpr = `TRY_CAST(${columnSql(metric.column)} AS DOUBLE)`;
+                const rows = (
+                    (await connection.runAndReadAll(
+                        `
+                        SELECT ${xExpr} AS xLabel, ${yExpr} AS ${quoteIdentifier(metricAlias)}
+                        ${fromSql}
+                        ${query.whereSql ? `${query.whereSql} AND` : 'WHERE'} ${xExpr} IS NOT NULL AND ${yExpr} IS NOT NULL
+                        LIMIT 1000
+                        `,
+                        query.params as any,
+                    )).getRowObjectsJson() as Record<string, unknown>[]
+                ).map(row => ({ xLabel: row.xLabel, [metricAlias]: row[metricAlias] }));
+
+                return {
+                    data: rows,
+                    series: [{ key: metricAlias, label: metric.label }],
+                    bucketHint: rows.length >= 1000 ? 'Limited to first 1,000 points' : null,
+                };
+            }
+
+            if (params.chartType === 'histogram') {
+                const xExpr = `TRY_CAST(${columnSql(xColumn)} AS DOUBLE)`;
+                const rows = (await connection.runAndReadAll(
+                    `
+                    WITH filtered AS (
+                        SELECT ${xExpr} AS x_value
+                        ${fromSql}
+                        ${query.whereSql}
+                    ),
+                    bounds AS (
+                        SELECT MIN(x_value) AS min_value, MAX(x_value) AS max_value
+                        FROM filtered
+                        WHERE x_value IS NOT NULL
+                    ),
+                    bucketed AS (
+                        SELECT
+                            CASE
+                                WHEN bounds.max_value = bounds.min_value THEN 0
+                                ELSE LEAST(19, GREATEST(0, FLOOR(((filtered.x_value - bounds.min_value) / NULLIF(bounds.max_value - bounds.min_value, 0)) * 20)))
+                            END AS bucket_index,
+                            bounds.min_value,
+                            bounds.max_value
+                        FROM filtered
+                        CROSS JOIN bounds
+                        WHERE filtered.x_value IS NOT NULL
+                    )
+                    SELECT
+                        CASE
+                            WHEN max_value = min_value THEN CAST(min_value AS VARCHAR)
+                            ELSE CAST(ROUND(min_value + bucket_index * ((max_value - min_value) / 20), 2) AS VARCHAR)
+                                || ' - ' ||
+                                CAST(ROUND(min_value + (bucket_index + 1) * ((max_value - min_value) / 20), 2) AS VARCHAR)
+                        END AS xLabel,
+                        COUNT(*) AS ${quoteIdentifier(metricAlias)}
+                    FROM bucketed
+                    GROUP BY bucket_index, min_value, max_value
+                    ORDER BY bucket_index
+                    `,
+                    query.params as any,
+                )).getRowObjectsJson() as Record<string, unknown>[];
+
+                return {
+                    data: rows.map(row => ({ xLabel: row.xLabel, [metricAlias]: row[metricAlias] })),
+                    series: [{ key: metricAlias, label: 'Count' }],
+                    bucketHint: 'Auto-bucketed into up to 20 ranges',
+                };
+            }
+
+            const xExpr = `COALESCE(CAST(${columnSql(xColumn)} AS VARCHAR), '(empty)')`;
+            const groupExpr = groupColumn ? `COALESCE(CAST(${columnSql(groupColumn)} AS VARCHAR), '(empty)')` : null;
             const selectParts = [`${xExpr} AS xLabel`, `${metric.sql} AS ${quoteIdentifier(metricAlias)}`];
             const groupParts = [xExpr];
             if (groupExpr) {
@@ -949,44 +1111,61 @@ export class PostgresResultSetsRepository {
         return this.withDuckDbResultSetData(params.organizationId, params.resultSetId, async ({ connection, parquetPath }) => {
             const reader = await connection.runAndReadAll(`SELECT * FROM read_parquet(${quoteLiteral(parquetPath)}) LIMIT ${sampleLimit}`);
             const sampleRows = rowsBySchema(reader.getRowsJson() as unknown[][], columns);
-            const columnProfiles: Record<string, unknown> = {};
             const rowCount = manifest.rowCount ?? record.rowCount ?? null;
+            const allowlist = buildColumnAllowlist(columns);
+            const columnStats = new Map<string, Record<string, unknown>>();
+            const columnTopK = new Map<string, Array<{ value: string; count: number }>>();
 
             for (const column of columns) {
+                if (!getAllowedColumn(allowlist, column.name)) continue;
                 const nameSql = columnSql(column);
                 const statsReader = await connection.runAndReadAll(
-                    `SELECT COUNT(*) AS total_count, COUNT(${nameSql}) AS non_null_count, COUNT(DISTINCT ${nameSql}) AS distinct_count FROM read_parquet(${quoteLiteral(parquetPath)})`,
+                    `
+                    SELECT
+                        COUNT(*) AS total_count,
+                        COUNT(${nameSql}) AS non_null_count,
+                        COUNT(DISTINCT CAST(${nameSql} AS VARCHAR)) AS distinct_count,
+                        MIN(TRY_CAST(${nameSql} AS DOUBLE)) AS min_number,
+                        MAX(TRY_CAST(${nameSql} AS DOUBLE)) AS max_number,
+                        SUM(TRY_CAST(${nameSql} AS DOUBLE)) AS sum_number,
+                        AVG(TRY_CAST(${nameSql} AS DOUBLE)) AS avg_number,
+                        SUM(CASE WHEN TRY_CAST(${nameSql} AS DOUBLE) = 0 THEN 1 ELSE 0 END) AS zero_count,
+                        SUM(CASE WHEN TRY_CAST(${nameSql} AS DOUBLE) < 0 THEN 1 ELSE 0 END) AS negative_count,
+                        MIN(TRY_CAST(${nameSql} AS TIMESTAMP)) AS min_time,
+                        MAX(TRY_CAST(${nameSql} AS TIMESTAMP)) AS max_time
+                    FROM read_parquet(${quoteLiteral(parquetPath)})
+                    `,
                 );
-                const stats = (statsReader.getRowObjectsJson()[0] ?? {}) as Record<string, unknown>;
-                columnProfiles[column.name] = {
-                    name: column.name,
-                    normalizedType: column.logicalType ?? 'unknown',
-                    nullCount: Math.max(0, Number(stats.total_count ?? 0) - Number(stats.non_null_count ?? 0)),
-                    nonNullCount: Number(stats.non_null_count ?? 0),
-                    distinctCount: Number(stats.distinct_count ?? 0),
-                    sampleValues: sampleRows.map(row => row[column.name]).filter(value => value != null).slice(0, 5),
-                };
+                columnStats.set(column.name, (statsReader.getRowObjectsJson()[0] ?? {}) as Record<string, unknown>);
+
+                const topReader = await connection.runAndReadAll(
+                    `
+                    SELECT CAST(${nameSql} AS VARCHAR) AS value, COUNT(*) AS count
+                    FROM read_parquet(${quoteLiteral(parquetPath)})
+                    WHERE ${nameSql} IS NOT NULL AND CAST(${nameSql} AS VARCHAR) <> ''
+                    GROUP BY 1
+                    ORDER BY count DESC, value ASC
+                    LIMIT 8
+                    `,
+                );
+                columnTopK.set(
+                    column.name,
+                    ((topReader.getRowObjectsJson() as Record<string, unknown>[]) ?? []).map(row => ({
+                        value: String(row.value ?? ''),
+                        count: Number(row.count ?? 0),
+                    })),
+                );
             }
 
-            return {
+            return this.buildProfile({
                 columns,
-                stats: {
-                    summary: {
-                        kind: 'detail_table',
-                        rowCount,
-                        columnCount: columns.length,
-                        limited: Boolean(record.limited),
-                        limit: record.limit ?? null,
-                    },
-                    columns: columnProfiles,
-                    sample: {
-                        sampleStrategy: 'head',
-                        sampleRowCount: sampleRows.length,
-                        truncatedForAI: (rowCount ?? sampleRows.length) > sampleRows.length,
-                    },
-                },
                 sampleRows,
-            };
+                rowCount,
+                limited: Boolean(record.limited),
+                limit: record.limit ?? null,
+                columnStats,
+                columnTopK,
+            });
         });
     }
 
@@ -1042,36 +1221,151 @@ export class PostgresResultSetsRepository {
         const column = getAllowedColumn(allowlist, rawColumn);
         if (!column) return { sql: 'COUNT(*)', label: 'Count' };
         const numeric = `TRY_CAST(${columnSql(column)} AS DOUBLE)`;
-        if (kind === 'sum') return { sql: `SUM(${numeric})`, label: `Sum ${column.name}` };
-        if (kind === 'avg') return { sql: `AVG(${numeric})`, label: `Avg ${column.name}` };
-        if (kind === 'max') return { sql: `MAX(${numeric})`, label: `Max ${column.name}` };
-        if (kind === 'min') return { sql: `MIN(${numeric})`, label: `Min ${column.name}` };
-        if (kind === 'count_distinct') return { sql: `COUNT(DISTINCT ${columnSql(column)})`, label: `Distinct ${column.name}` };
-        if (kind === 'count_true') return { sql: `SUM(CASE WHEN ${columnSql(column)} THEN 1 ELSE 0 END)`, label: `True ${column.name}` };
+        if (kind === 'sum') return { sql: `SUM(${numeric})`, label: `Sum ${column.name}`, column };
+        if (kind === 'avg') return { sql: `AVG(${numeric})`, label: `Avg ${column.name}`, column };
+        if (kind === 'max') return { sql: `MAX(${numeric})`, label: `Max ${column.name}`, column };
+        if (kind === 'min') return { sql: `MIN(${numeric})`, label: `Min ${column.name}`, column };
+        if (kind === 'count_distinct') return { sql: `COUNT(DISTINCT ${columnSql(column)})`, label: `Distinct ${column.name}`, column };
+        if (kind === 'count_true') return { sql: `SUM(CASE WHEN ${columnSql(column)} THEN 1 ELSE 0 END)`, label: `True ${column.name}`, column };
         return { sql: 'COUNT(*)', label: 'Count' };
     }
 
     private buildBasicProfile(params: { columns: ResultSetColumn[]; sampleRows: Record<string, unknown>[]; rowCount: number | null }): ResultSetProfileReadOutput {
+        return this.buildProfile({
+            columns: params.columns,
+            sampleRows: params.sampleRows,
+            rowCount: params.rowCount,
+            limited: false,
+            limit: null,
+            columnStats: new Map(),
+            columnTopK: new Map(),
+        });
+    }
+
+    private buildProfile(params: {
+        columns: ResultSetColumn[];
+        sampleRows: Record<string, unknown>[];
+        rowCount: number | null;
+        limited: boolean;
+        limit: number | null;
+        columnStats: Map<string, Record<string, unknown>>;
+        columnTopK: Map<string, Array<{ value: string; count: number }>>;
+    }): ResultSetProfileReadOutput {
         const columnProfiles: Record<string, unknown> = {};
+        let totalNullCells = 0;
+        let numericColumnCount = 0;
+        let dimensionColumnCount = 0;
+        let timeColumnCount = 0;
+        let identifierColumnCount = 0;
+        const primaryMeasureColumns: string[] = [];
+        const primaryDimensionColumns: string[] = [];
+        let primaryTimeColumn: string | null = null;
+
         for (const column of params.columns) {
             const values = params.sampleRows.map(row => row[column.name]);
-            const nonNullValues = values.filter(value => value != null);
+            const stats = params.columnStats.get(column.name);
+            const totalCount = Number(stats?.total_count ?? values.length);
+            const nonNullCount = Number(stats?.non_null_count ?? values.filter(value => value != null && value !== '').length);
+            const nullCount = Math.max(0, totalCount - nonNullCount);
+            const distinctCount = Number(stats?.distinct_count ?? new Set(values.filter(value => value != null && value !== '').map(value => String(value))).size);
+            const normalizedType = normalizeProfileColumnType(column, values);
+            const semanticRole = inferProfileSemanticRole({
+                columnName: column.name,
+                normalizedType,
+                distinctCount,
+                nonNullCount,
+            });
+            const topK = params.columnTopK.get(column.name) ?? buildSampleTopK(values);
+            const nullRatio = totalCount > 0 ? nullCount / totalCount : 0;
+            const distinctRatio = nonNullCount > 0 ? distinctCount / nonNullCount : 0;
+            const entropy = shannonEntropy(topK.map(item => item.count));
+            const topValueShare = nonNullCount > 0 && topK[0] ? topK[0].count / nonNullCount : null;
+            const isHighCardinality = nonNullCount > 0 && distinctRatio >= 0.75;
+            const isCategorical = nonNullCount > 0 && distinctCount > 0 && distinctRatio <= 0.3;
+
+            if (normalizedType === 'integer' || normalizedType === 'number') numericColumnCount += 1;
+            if (semanticRole === 'dimension') {
+                dimensionColumnCount += 1;
+                primaryDimensionColumns.push(column.name);
+            }
+            if (semanticRole === 'time') {
+                timeColumnCount += 1;
+                primaryTimeColumn ??= column.name;
+            }
+            if (semanticRole === 'identifier') identifierColumnCount += 1;
+            if (semanticRole === 'measure') primaryMeasureColumns.push(column.name);
+            totalNullCells += nullCount;
+
             columnProfiles[column.name] = {
                 name: column.name,
-                normalizedType: column.logicalType ?? 'unknown',
-                nullCount: values.length - nonNullValues.length,
-                nonNullCount: nonNullValues.length,
-                distinctCount: new Set(nonNullValues.map(value => String(value))).size,
-                sampleValues: nonNullValues.slice(0, 5),
+                normalizedType,
+                semanticRole,
+                nullCount,
+                nonNullCount,
+                nullRatio,
+                distinctCount,
+                distinctRatio,
+                entropy,
+                topValueShare,
+                informationDensity: informationDensityFor({ nonNullCount, distinctCount, distinctRatio, entropy, topValueShare }),
+                sampleValues: values.filter(value => value != null && value !== '').slice(0, 5),
+                topK: normalizedType === 'string' || semanticRole === 'dimension' ? topK : undefined,
+                min: toFiniteNumber(stats?.min_number),
+                max: toFiniteNumber(stats?.max_number),
+                sum: toFiniteNumber(stats?.sum_number),
+                avg: toFiniteNumber(stats?.avg_number),
+                zeroCount: toFiniteNumber(stats?.zero_count),
+                negativeCount: toFiniteNumber(stats?.negative_count),
+                minTime: stats?.min_time == null ? null : String(stats.min_time),
+                maxTime: stats?.max_time == null ? null : String(stats.max_time),
+                isHighCardinality,
+                isCategorical,
             };
         }
+
+        let kind = 'detail_table';
+        if (params.sampleRows.length === 1 && params.columns.length === 1 && numericColumnCount === 1) {
+            kind = 'single_value';
+        } else if (primaryTimeColumn && primaryMeasureColumns.length > 0) {
+            kind = 'time_series';
+        } else if (primaryDimensionColumns.length > 0 && primaryMeasureColumns.length > 0) {
+            kind = 'aggregated_table';
+        }
+
+        const recommendedChart =
+            kind === 'single_value'
+                ? 'metric'
+                : kind === 'time_series'
+                  ? 'line'
+                  : kind === 'aggregated_table'
+                    ? ((columnProfiles[primaryDimensionColumns[0] ?? ''] as { distinctCount?: number } | undefined)?.distinctCount ?? 0) <= 8
+                        ? 'pie'
+                        : 'bar'
+                    : primaryMeasureColumns.length >= 2
+                      ? 'scatter'
+                      : 'table';
+        const totalCells = Math.max(0, (params.rowCount ?? params.sampleRows.length) * params.columns.length);
+
         return {
             columns: params.columns,
             stats: {
                 summary: {
-                    kind: 'detail_table',
+                    kind,
                     rowCount: params.rowCount,
                     columnCount: params.columns.length,
+                    limited: params.limited,
+                    limit: params.limit,
+                    numericColumnCount,
+                    dimensionColumnCount,
+                    timeColumnCount,
+                    identifierColumnCount,
+                    nullCellRatio: totalCells > 0 ? totalNullCells / totalCells : null,
+                    duplicateRowRatio: null,
+                    isGoodForChart: recommendedChart !== 'table',
+                    recommendedChart,
+                    primaryTimeColumn,
+                    primaryMeasureColumns,
+                    primaryDimensionColumns,
                 },
                 columns: columnProfiles,
                 sample: {
@@ -1106,3 +1400,8 @@ export class PostgresResultSetsRepository {
         if (!this.db) throw new DatabaseError('Result set repository not initialized', 500);
     }
 }
+
+export const __resultSetRepositoryTestInternals = {
+    buildResultSetQueryClause,
+    rowsBySchema,
+};
