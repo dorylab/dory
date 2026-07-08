@@ -59,6 +59,9 @@ export interface DBHook {
             viewState?: ResultSetViewState | null;
             aiProfileVersion?: number | null;
             rowCount?: number | null;
+            resultSetId?: string | null;
+            dataAvailability?: string | null;
+            previewRowCount?: number | null;
             affectedRows?: number | null;
             status?: 'success' | 'error';
             errorMessage?: string | null;
@@ -123,6 +126,9 @@ export interface DBHook {
             viewState?: ResultSetViewState | null;
             aiProfileVersion?: number | null;
             rowCount?: number | null;
+            resultSetId?: string | null;
+            dataAvailability?: string | null;
+            previewRowCount?: number | null;
             affectedRows?: number | null;
             status: 'success' | 'error';
             errorMessage?: string | null;
@@ -174,6 +180,9 @@ export interface QueryResultSetRow {
     viewState: ResultSetViewState | null;
     aiProfileVersion: number;
     rowCount: number | null;
+    resultSetId: string | null;
+    dataAvailability: string | null;
+    previewRowCount: number | null;
     affectedRows: number | null;
 
     status: ResultSetStatus;
@@ -230,6 +239,9 @@ export type ResultSetMeta = {
 
     limited: boolean;
     limit: number | null;
+    resultSetId: string | null;
+    dataAvailability: string | null;
+    previewRowCount: number | null;
     
     affectedRows: number | null;
     status: 'success' | 'error' | 'running'; // For UI, you may map running to session running

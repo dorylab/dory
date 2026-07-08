@@ -15,6 +15,7 @@ import { PostgresLocalFilesRepository } from './postgres/impl/local-files';
 import { PostgresOrganizationAiProvidersRepository } from './postgres/impl/organization-ai-providers';
 import { PostgresActionAuditRepository } from './postgres/impl/action-audit';
 import { PostgresWorksRepository } from './postgres/impl/works';
+import { PostgresResultSetsRepository } from './postgres/impl/result-sets';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -39,6 +40,7 @@ export type PostgresDBService = {
     localFiles: PostgresLocalFilesRepository;
     organizationAiProviders: PostgresOrganizationAiProvidersRepository;
     works: PostgresWorksRepository;
+    resultSets: PostgresResultSetsRepository;
 };
 
 /**
@@ -105,6 +107,9 @@ export async function getDBService(): Promise<DBService> {
             const worksRepo = new PostgresWorksRepository();
             await worksRepo.init();
 
+            const resultSetsRepo = new PostgresResultSetsRepository();
+            await resultSetsRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
@@ -122,6 +127,7 @@ export async function getDBService(): Promise<DBService> {
                 localFiles: localFilesRepo,
                 organizationAiProviders: organizationAiProvidersRepo,
                 works: worksRepo,
+                resultSets: resultSetsRepo,
             };
             break;
         }

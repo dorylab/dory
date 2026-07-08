@@ -35,6 +35,7 @@ const LOCAL_WORKSPACE_ACTION_IDS = new Set<ActionId>([
     'query.cancel',
     'query.execute',
     'query.readOnlyExecute',
+    'resultSet.rows.read',
 ]);
 
 function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<any, any, WebActionServices>, 'id' | 'domain'>): ActionDesktopAuthMode {
@@ -42,7 +43,7 @@ function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<any, any, WebAc
         return 'local-workspace';
     }
 
-    if (['connection', 'tab', 'savedQuery', 'schema', 'table'].includes(action.domain)) {
+    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'resultSet'].includes(action.domain)) {
         return 'local-workspace';
     }
 

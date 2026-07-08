@@ -27,5 +27,15 @@
     "bps": true,
     "folderMillis": 1776498850532,
     "hash": "bfc8ad775fd4747c274278c5935dc6f621cbba3fb96f54f55ea7fa7a7b78d7f3"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"query_result_set\" ADD COLUMN \"result_set_id\" text;",
+      "\nALTER TABLE \"query_result_set\" ADD COLUMN \"data_availability\" text;",
+      "\nALTER TABLE \"query_result_set\" ADD COLUMN \"preview_row_count\" integer;"
+    ],
+    "bps": true,
+    "folderMillis": 1783502890039,
+    "hash": "4bbd0d9e3a5955afd25dca3f14df98c6ff327a65135b1e45c8ac27486e7f8654"
   }
 ]

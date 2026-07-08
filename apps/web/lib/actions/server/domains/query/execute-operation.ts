@@ -9,6 +9,12 @@ import type { QuerySource } from '@dory/shared/types/audit';
 import type { WebActionServices } from '../../types';
 
 export const MAX_ACTION_STATEMENTS = 100;
+const DEFAULT_RESULT_PREVIEW_ROWS = 200;
+
+function useLegacyPgliteResultStorage() {
+    const value = process.env.DORY_SQL_CONSOLE_RESULT_STORAGE?.trim().toLowerCase() || process.env.DORY_SQL_RESULTSET_STORAGE?.trim().toLowerCase();
+    return value === 'pglite' || value === 'legacy';
+}
 
 function preciseDateNow(): Date {
     return new Date(performance.timeOrigin + performance.now());
@@ -215,21 +221,50 @@ export async function executeSqlAction(
             const results: unknown[][] = [];
             let hitError = false;
             let firstErrorMsg: string | null = null;
+            const persistArtifacts = !useLegacyPgliteResultStorage();
 
             for (let i = 0; i < statements.length; i += 1) {
                 const statement = statements[i]!;
                 const execOne = await executeOne(entry.instance, statement, { database: input.database }, { queryId: sessionId });
-                const qrs = {
+                let qrs: Record<string, unknown> = {
                     sessionId,
                     setIndex: i,
                     ...execOne.qrs,
                 };
+
+                if (persistArtifacts) {
+                    const persisted = await ctx.services.db.resultSets.persistQueryResultSet({
+                        organizationId: ctx.organizationId,
+                        userId: ctx.userId,
+                        connectionId,
+                        tabId: input.tabId ?? null,
+                        sessionId,
+                        database: input.database ?? null,
+                        sessionSqlText: input.sql,
+                        source: input.source ?? null,
+                        resultSet: qrs as any,
+                        rows: execOne.resultRows,
+                        previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
+                    });
+
+                    qrs = {
+                        ...qrs,
+                        resultSetId: persisted.resultSetId,
+                        dataAvailability: persisted.dataAvailability,
+                        previewRowCount: persisted.previewRowCount,
+                        rowCount: persisted.rowCount,
+                        columns: persisted.schema,
+                    };
+                    results.push(persisted.previewRows);
+                } else {
+                    results.push(execOne.resultRows);
+                }
+
                 queryResultSets.push(qrs);
-                results.push(execOne.resultRows);
 
                 if (!execOne.ok) {
                     hitError = true;
-                    if (!firstErrorMsg) firstErrorMsg = qrs.errorMessage;
+                    if (!firstErrorMsg) firstErrorMsg = typeof qrs.errorMessage === 'string' ? qrs.errorMessage : null;
                     if (stopOnError) break;
                 }
             }
@@ -263,6 +298,8 @@ export async function executeSqlAction(
                     durationMs: overallDuration,
                     totalSets: queryResultSets.length,
                     stopOnError,
+                    resultStorage: persistArtifacts ? 'artifact' : 'pglite',
+                    previewRows: persistArtifacts ? DEFAULT_RESULT_PREVIEW_ROWS : null,
                 },
             };
         },
