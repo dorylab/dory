@@ -18,6 +18,10 @@ const VISIBLE_AUTO_FIT_ROW_BUFFER = 20;
 const VISIBLE_AUTO_FIT_COLUMN_BUFFER = 2;
 const INITIAL_VISIBLE_COLUMN_COUNT = 12;
 const INITIAL_VISIBLE_ROW_COUNT = 24;
+const REMOTE_DEFAULT_PAGE_SIZE = 5000;
+const REMOTE_MAX_CACHED_PAGES = 24;
+const REMOTE_PREFETCH_PAGES_BEFORE = 1;
+const REMOTE_PREFETCH_PAGES_AFTER = 2;
 const HEADER_TEXT_PAD = 44;
 const CELL_TEXT_PAD = 18;
 const FALLBACK_CHAR_WIDTH = 8;
@@ -115,7 +119,7 @@ export default function VTable({
     const isRemote = Boolean(remoteSource);
     const operationsDisabled = false;
     const usesServerSideOperations = serverSideOperations || isRemote;
-    const remotePageSize = Math.max(1, Math.min(remoteSource?.pageSize ?? 1000, 5000));
+    const remotePageSize = Math.max(1, Math.min(remoteSource?.pageSize ?? REMOTE_DEFAULT_PAGE_SIZE, 5000));
     const [remoteRowsVersion, setRemoteRowsVersion] = useState(0);
     const remoteRowsRef = useRef<Map<number, { rowData: Record<string, unknown> }>>(new Map());
     const remotePagesRef = useRef<Map<number, number>>(new Map());
@@ -307,9 +311,24 @@ export default function VTable({
     const requestRemoteRange = useCallback(
         (start: number, stop: number) => {
             if (!remoteSource || stop < start) return;
-            const pageStart = Math.floor(Math.max(0, start) / remotePageSize);
-            const pageStop = Math.floor(Math.max(0, stop) / remotePageSize);
+            const visiblePageStart = Math.floor(Math.max(0, start) / remotePageSize);
+            const visiblePageStop = Math.floor(Math.max(0, stop) / remotePageSize);
+            const maxPage = Math.max(0, Math.ceil(tableRowCount / remotePageSize) - 1);
+            const pageStart = Math.max(0, visiblePageStart - REMOTE_PREFETCH_PAGES_BEFORE);
+            const pageStop = Math.min(maxPage, visiblePageStop + REMOTE_PREFETCH_PAGES_AFTER);
             const abortSignal = remoteAbortRef.current?.signal;
+            const now = Date.now();
+            const protectedPages = new Set<number>();
+
+            for (let page = pageStart; page <= pageStop; page += 1) {
+                protectedPages.add(page);
+            }
+
+            for (let page = visiblePageStart; page <= visiblePageStop; page += 1) {
+                if (remotePagesRef.current.has(page)) {
+                    remotePagesRef.current.set(page, now);
+                }
+            }
 
             for (let page = pageStart; page <= pageStop; page += 1) {
                 if (remotePagesRef.current.has(page) || remoteLoadingPagesRef.current.has(page)) continue;
@@ -325,17 +344,19 @@ export default function VTable({
                         });
                         remotePagesRef.current.set(page, Date.now());
 
-                        if (remotePagesRef.current.size > 12) {
+                        if (remotePagesRef.current.size > REMOTE_MAX_CACHED_PAGES) {
                             const stalePages = [...remotePagesRef.current.entries()].sort((left, right) => left[1] - right[1]);
-                            const removeCount = remotePagesRef.current.size - 12;
-                            for (let i = 0; i < removeCount; i += 1) {
-                                const stalePage = stalePages[i]?.[0];
+                            let removeCount = remotePagesRef.current.size - REMOTE_MAX_CACHED_PAGES;
+                            for (const [stalePage] of stalePages) {
+                                if (removeCount <= 0) break;
                                 if (typeof stalePage !== 'number') continue;
+                                if (protectedPages.has(stalePage)) continue;
                                 remotePagesRef.current.delete(stalePage);
                                 const staleOffset = stalePage * remotePageSize;
                                 for (let rowIndex = staleOffset; rowIndex < staleOffset + remotePageSize; rowIndex += 1) {
                                     remoteRowsRef.current.delete(rowIndex);
                                 }
+                                removeCount -= 1;
                             }
                         }
                     })
@@ -356,12 +377,12 @@ export default function VTable({
                     });
             }
         },
-        [remotePageSize, remoteSource],
+        [remotePageSize, remoteSource, tableRowCount],
     );
 
     useEffect(() => {
         if (!remoteSource || tableRowCount <= 0) return;
-        requestRemoteRange(0, Math.min(tableRowCount - 1, INITIAL_VISIBLE_ROW_COUNT + 20));
+        requestRemoteRange(0, Math.min(tableRowCount - 1, remotePageSize - 1));
     }, [remoteSource, requestRemoteRange, tableRowCount]);
 
     const getVisibleSampleRowIndices = useCallback(
@@ -985,10 +1006,12 @@ export default function VTable({
 
         const colKeyName = columns[columnIndex - 1];
         const keyCell = ck(r, colKeyName);
+        const displayRow = getDisplayRow(r);
+        const isRemoteRowLoading = isRemote && !displayRow;
         const isRowSelected = selectedRowIds.has(r);
         const isCellSelected = selectedCells.has(keyCell);
         const isFocused = focusedCell?.row === r && focusedCell?.col === colKeyName;
-        const cellValue = getDisplayRow(r)?.rowData?.[colKeyName];
+        const cellValue = displayRow?.rowData?.[colKeyName];
         const isRectSelectedCell = Boolean(selectedRectBounds && isCellSelected);
         const rectTopRow = selectedRectBounds?.rows[0];
         const rectBottomRow = selectedRectBounds?.rows[selectedRectBounds.rows.length - 1];
@@ -1040,7 +1063,11 @@ export default function VTable({
                 }}
                 title={formatTooltip(cellValue)}
             >
-                <span className="block truncate min-w-0 w-full">{formatValue(cellValue)}</span>
+                {isRemoteRowLoading ? (
+                    <span className="block h-3 w-20 max-w-[70%] rounded-sm bg-muted" />
+                ) : (
+                    <span className="block truncate min-w-0 w-full">{formatValue(cellValue)}</span>
+                )}
             </div>
         );
     };
@@ -1132,7 +1159,7 @@ export default function VTable({
                                     rowCount={tableRowCount + 1}
                                     fixedRowCount={1}
                                     fixedColumnCount={1}
-                                    overscanRowCount={10}
+                                    overscanRowCount={80}
                                     overscanColumnCount={2}
                                     enableFixedColumnScroll
                                     enableFixedRowScroll

@@ -351,7 +351,7 @@ export function ResultTable() {
         return {
             cacheKey: `${remoteResultSetId}:${remoteOperationKey}`,
             rowCount: remoteEffectiveRowCount ?? remoteRowCount,
-            pageSize: 1000,
+            pageSize: 5000,
             getRows: async (offset: number, limit: number, signal?: AbortSignal) => {
                 const response = await readResultSetRows({
                     resultSetId: remoteResultSetId,

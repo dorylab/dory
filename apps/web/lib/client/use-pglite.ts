@@ -1055,6 +1055,7 @@ export function useDB() {
             for (let k = 0; k < payload.queryResultSets.length; k++) {
                 const resultSet = payload.queryResultSets[k];
                 if (!resultSet || resultSet.status !== 'success') continue;
+                if (resultSet.resultSetId && resultSet.dataAvailability === 'preview-only') continue;
 
                 const rows = payload.results[k] ?? [];
                 queueMicrotask(() => {

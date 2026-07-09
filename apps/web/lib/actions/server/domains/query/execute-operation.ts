@@ -12,6 +12,9 @@ import type { WebActionServices } from '../../types';
 
 export const MAX_ACTION_STATEMENTS = 100;
 const DEFAULT_RESULT_PREVIEW_ROWS = 200;
+const STREAM_DISPLAY_PREVIEW_ROWS = 5000;
+const STREAM_DISPLAY_CHUNK_ROWS = 200;
+const STREAM_DISPLAY_FLUSH_MS = 250;
 
 type PersistableResultSet = Record<string, unknown> & {
     sessionId: string;
@@ -520,14 +523,19 @@ async function runSqlExecution(
                     const streamQueryRunId = stream ? `qr_${newEntityId()}` : null;
                     if (stream && options?.onEvent) {
                         const previewRows: unknown[] = [];
+                        let pendingDisplayRows: unknown[] = [];
                         let observedRows = 0;
-                        let previewEmitted = false;
+                        let displayedRows = 0;
                         let lastProgressAt = 0;
+                        let lastPreviewAt = 0;
                         const emitPreview = async () => {
-                            if (previewEmitted) return;
-                            previewEmitted = true;
+                            if (!pendingDisplayRows.length) return;
                             const previewColumns = toResultSetColumns(stream.columns);
-                            const columns = previewColumns.length ? previewColumns : inferColumnsFromRows(previewRows);
+                            const columns = previewColumns.length ? previewColumns : inferColumnsFromRows([...previewRows, ...pendingDisplayRows]);
+                            const chunk = pendingDisplayRows;
+                            pendingDisplayRows = [];
+                            displayedRows += chunk.length;
+                            lastPreviewAt = performance.now();
                             await options.onEvent?.({
                                 type: 'result-preview',
                                 payload: buildPayload({
@@ -549,13 +557,13 @@ async function runSqlExecution(
                                             resultSetId: streamResultSetId,
                                             columns,
                                             rowCount: stream.rowCount ?? observedRows,
-                                            previewRowCount: previewRows.length,
+                                            previewRowCount: displayedRows,
                                             dataAvailability: 'preview-only',
                                             finishedAt: null,
                                             durationMs: Math.max(0, Math.round(performance.now() - sessT0)),
                                         },
                                     ],
-                                    results: [...results, previewRows.slice()],
+                                    results: [...results.map(() => []), chunk],
                                     refId,
                                     resultStorage,
                                 }),
@@ -572,10 +580,16 @@ async function runSqlExecution(
                                     if (previewRows.length < DEFAULT_RESULT_PREVIEW_ROWS) {
                                         previewRows.push(row);
                                     }
-                                    if (!previewEmitted && previewRows.length >= DEFAULT_RESULT_PREVIEW_ROWS) {
-                                        await emitPreview();
+                                    if (displayedRows + pendingDisplayRows.length < STREAM_DISPLAY_PREVIEW_ROWS) {
+                                        pendingDisplayRows.push(row);
                                     }
                                     const now = performance.now();
+                                    if (
+                                        pendingDisplayRows.length > 0 &&
+                                        (pendingDisplayRows.length >= STREAM_DISPLAY_CHUNK_ROWS || now - lastPreviewAt >= STREAM_DISPLAY_FLUSH_MS)
+                                    ) {
+                                        await emitPreview();
+                                    }
                                     if (observedRows > 0 && now - lastProgressAt > 500) {
                                         lastProgressAt = now;
                                         await options.onEvent?.({
@@ -584,14 +598,14 @@ async function runSqlExecution(
                                                 sessionId,
                                                 setIndex: i,
                                                 rowsWritten: observedRows,
-                                                previewRowCount: previewRows.length,
+                                                previewRowCount: displayedRows + pendingDisplayRows.length,
                                                 elapsedMs: Math.max(0, Math.round(now - sessT0)),
                                             },
                                         });
                                     }
                                     yield row;
                                 }
-                                if (!previewEmitted) {
+                                if (pendingDisplayRows.length > 0) {
                                     await emitPreview();
                                 }
                             } finally {
