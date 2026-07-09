@@ -925,6 +925,8 @@ export function useDB() {
 
             // 1) Session
             const s = payload.session;
+            await ormRef.current.delete(queryResultPage).where(eq(queryResultPage.sessionId, s.sessionId)).execute();
+            await ormRef.current.delete(queryResultSet).where(eq(queryResultSet.sessionId, s.sessionId)).execute();
 
             await ormRef.current
                 .insert(querySession)
@@ -1031,15 +1033,6 @@ export function useDB() {
             // 3) Paged row writes
             // Keep 1:1 mapping between queryResultSets[k] and results[k].
             if (Array.isArray(payload.results) && Array.isArray(payload.queryResultSets)) {
-                for (const resultSet of payload.queryResultSets) {
-                    if (resultSet.resultSetId && resultSet.dataAvailability === 'full') {
-                        await ormRef.current
-                            .delete(queryResultPage)
-                            .where(and(eq(queryResultPage.sessionId, s.sessionId), eq(queryResultPage.setIndex, resultSet.setIndex)))
-                            .execute();
-                    }
-                }
-
                 for (let k = 0; k < payload.queryResultSets.length; k++) {
                     const resultSet = payload.queryResultSets[k]!;
                     if (resultSet.resultSetId && resultSet.dataAvailability === 'full') continue;
@@ -1055,7 +1048,6 @@ export function useDB() {
             for (let k = 0; k < payload.queryResultSets.length; k++) {
                 const resultSet = payload.queryResultSets[k];
                 if (!resultSet || resultSet.status !== 'success') continue;
-                if (resultSet.resultSetId && resultSet.dataAvailability === 'preview-only') continue;
 
                 const rows = payload.results[k] ?? [];
                 queueMicrotask(() => {

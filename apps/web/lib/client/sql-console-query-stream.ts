@@ -26,7 +26,6 @@ export type QueryExecutePayload = {
 export type SqlConsoleQueryStreamEvent =
     | { type: 'session-started'; payload: QueryExecutePayload }
     | { type: 'result-started'; payload: QueryExecutePayload }
-    | { type: 'result-preview'; payload: QueryExecutePayload }
     | {
           type: 'result-progress';
           payload: {

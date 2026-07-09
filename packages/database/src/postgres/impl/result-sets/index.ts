@@ -27,6 +27,15 @@ import type { PostgresDBClient } from '@dory/shared';
 const DEFAULT_PREVIEW_ROWS = 200;
 const DEFAULT_ROW_LIMIT = 1000;
 const MAX_ROW_LIMIT = 5000;
+const ROW_PAGE_CACHE_TTL_MS = 60_000;
+const ROW_PAGE_CACHE_MAX_ENTRIES = 128;
+
+type RowPageCacheEntry = {
+    createdAt: number;
+    output: ReadResultRowsOutput;
+};
+
+const rowPageCache = new Map<string, RowPageCacheEntry>();
 
 type QueryResultSetInput = Record<string, unknown> & {
     sessionId: string;
@@ -463,6 +472,74 @@ function normalizeLimit(value: number | null | undefined) {
     return Math.max(1, Math.min(MAX_ROW_LIMIT, candidate));
 }
 
+function stableJson(value: unknown): string {
+    if (typeof value === 'undefined') return 'undefined';
+    if (value === null || typeof value !== 'object') return JSON.stringify(value);
+    if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+        .sort()
+        .map(key => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+        .join(',')}}`;
+}
+
+function makeRowPageCacheKey(params: {
+    organizationId: string;
+    resultSetId: string;
+    offset: number;
+    limit: number;
+    dataAvailability: ResultSetDataAvailability;
+    manifestUpdatedAt?: string | null;
+    rowCount?: number | null;
+    operations?: ResultSetQueryOperations | null;
+}) {
+    return stableJson({
+        organizationId: params.organizationId,
+        resultSetId: params.resultSetId,
+        offset: params.offset,
+        limit: params.limit,
+        dataAvailability: params.dataAvailability,
+        manifestUpdatedAt: params.manifestUpdatedAt ?? null,
+        rowCount: params.rowCount ?? null,
+        operations: params.operations ?? null,
+    });
+}
+
+function cloneReadRowsOutput(output: ReadResultRowsOutput): ReadResultRowsOutput {
+    return {
+        ...output,
+        rows: output.rows.map(row => ({ ...row })),
+        columns: output.columns.map(column => ({ ...column })),
+    };
+}
+
+function getCachedRowPage(key: string): ReadResultRowsOutput | null {
+    const entry = rowPageCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.createdAt > ROW_PAGE_CACHE_TTL_MS) {
+        rowPageCache.delete(key);
+        return null;
+    }
+
+    rowPageCache.delete(key);
+    rowPageCache.set(key, entry);
+    return cloneReadRowsOutput(entry.output);
+}
+
+function setCachedRowPage(key: string, output: ReadResultRowsOutput) {
+    rowPageCache.set(key, {
+        createdAt: Date.now(),
+        output: cloneReadRowsOutput(output),
+    });
+
+    while (rowPageCache.size > ROW_PAGE_CACHE_MAX_ENTRIES) {
+        const oldestKey = rowPageCache.keys().next().value;
+        if (typeof oldestKey !== 'string') break;
+        rowPageCache.delete(oldestKey);
+    }
+}
+
 function rowsBySchema(rows: unknown[][], columns: ResultSetColumn[]) {
     return rows.map(row => {
         const out: Record<string, unknown> = {};
@@ -850,11 +927,29 @@ export class PostgresResultSetsRepository {
         const manifest = await this.artifacts.resultSets.readManifest(artifactRef);
         const columns = manifest.schema ?? record.schemaJson ?? [];
         const dataAvailability = resultSetDataAvailability(manifest);
+        const cacheKey = makeRowPageCacheKey({
+            organizationId: params.organizationId,
+            resultSetId: params.resultSetId,
+            offset,
+            limit,
+            dataAvailability,
+            manifestUpdatedAt: manifest.updatedAt,
+            rowCount: manifest.rowCount ?? record.rowCount ?? null,
+            operations: {
+                sorts: params.sorts,
+                filters: params.filters,
+                search: params.search,
+            },
+        });
+        const cachedPage = getCachedRowPage(cacheKey);
+        if (cachedPage) {
+            return cachedPage;
+        }
 
         if (dataAvailability !== 'full') {
             const preview = await this.artifacts.resultSets.readPreview(artifactRef);
             const previewRows = preview?.rows ?? [];
-            return {
+            const output = {
                 resultSetId: params.resultSetId,
                 rows: previewRows.slice(offset, offset + limit),
                 offset,
@@ -864,12 +959,14 @@ export class PostgresResultSetsRepository {
                 columns,
                 dataAvailability,
             };
+            setCachedRowPage(cacheKey, output);
+            return output;
         }
 
         const query = buildResultSetQueryClause(columns, params);
         const unfilteredRowCount = manifest.rowCount ?? record.rowCount ?? null;
 
-        return this.withDuckDbResultSetData(params.organizationId, params.resultSetId, async ({ connection, parquetPath }) => {
+        const output = await this.withDuckDbResultSetData(params.organizationId, params.resultSetId, async ({ connection, parquetPath }) => {
             const fromSql = ` FROM read_parquet(${quoteLiteral(parquetPath)})`;
             const countSql = query.whereSql ? `SELECT COUNT(*)${fromSql}${query.whereSql}` : null;
             const filteredCount =
@@ -892,6 +989,8 @@ export class PostgresResultSetsRepository {
                 dataAvailability,
             };
         });
+        setCachedRowPage(cacheKey, output);
+        return output;
     }
 
     async createExport(

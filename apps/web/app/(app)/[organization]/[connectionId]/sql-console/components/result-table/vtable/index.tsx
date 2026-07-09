@@ -120,11 +120,11 @@ export default function VTable({
     const operationsDisabled = false;
     const usesServerSideOperations = serverSideOperations || isRemote;
     const remotePageSize = Math.max(1, Math.min(remoteSource?.pageSize ?? REMOTE_DEFAULT_PAGE_SIZE, 5000));
-    const [remoteRowsVersion, setRemoteRowsVersion] = useState(0);
+    const [, setRemoteRowsVersion] = useState(0);
     const remoteRowsRef = useRef<Map<number, { rowData: Record<string, unknown> }>>(new Map());
     const remotePagesRef = useRef<Map<number, number>>(new Map());
     const remoteLoadingPagesRef = useRef<Set<number>>(new Set());
-    const remoteAbortRef = useRef<AbortController | null>(null);
+    const remotePageAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
 
     const clampColumnWidth = useCallback(
         (col: string, width: number) => {
@@ -161,6 +161,17 @@ export default function VTable({
         stop: Math.max(0, INITIAL_VISIBLE_COLUMN_COUNT - 1),
     });
     const [visibleMeasurementVersion, setVisibleMeasurementVersion] = useState(0);
+    const visibleMeasurementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const scheduleInitialMeasurement = useCallback((delayMs = 0) => {
+        if (visibleMeasurementTimeoutRef.current) {
+            clearTimeout(visibleMeasurementTimeoutRef.current);
+        }
+        visibleMeasurementTimeoutRef.current = setTimeout(() => {
+            visibleMeasurementTimeoutRef.current = null;
+            setVisibleMeasurementVersion(version => version + 1);
+        }, delayMs);
+    }, []);
 
     useEffect(() => {
         setManualColWidths(prev => {
@@ -233,7 +244,7 @@ export default function VTable({
 
             return clampColumnWidth(col, Math.max(headerWidth, maxCellWidth, defaultColMinWidth));
         },
-        [clampColumnWidth, defaultColMinWidth, isRemote, measureTextWidth, remoteRowsVersion, results],
+        [clampColumnWidth, defaultColMinWidth, isRemote, measureTextWidth, results],
     );
 
     const internalFilters = useVTableFilters({ results, storageKey });
@@ -292,19 +303,23 @@ export default function VTable({
             if (isRemote) return remoteRowsRef.current.get(rowIndex);
             return sortedResults[rowIndex];
         },
-        [isRemote, sortedResults, remoteRowsVersion],
+        [isRemote, sortedResults],
     );
 
     useEffect(() => {
-        remoteAbortRef.current?.abort();
-        remoteAbortRef.current = new AbortController();
+        for (const controller of remotePageAbortControllersRef.current.values()) {
+            controller.abort();
+        }
         remoteRowsRef.current = new Map();
         remotePagesRef.current = new Map();
         remoteLoadingPagesRef.current = new Set();
+        remotePageAbortControllersRef.current = new Map();
         setRemoteRowsVersion(version => version + 1);
 
         return () => {
-            remoteAbortRef.current?.abort();
+            for (const controller of remotePageAbortControllersRef.current.values()) {
+                controller.abort();
+            }
         };
     }, [remoteSource?.cacheKey]);
 
@@ -316,12 +331,25 @@ export default function VTable({
             const maxPage = Math.max(0, Math.ceil(tableRowCount / remotePageSize) - 1);
             const pageStart = Math.max(0, visiblePageStart - REMOTE_PREFETCH_PAGES_BEFORE);
             const pageStop = Math.min(maxPage, visiblePageStop + REMOTE_PREFETCH_PAGES_AFTER);
-            const abortSignal = remoteAbortRef.current?.signal;
             const now = Date.now();
             const protectedPages = new Set<number>();
+            const visiblePages: number[] = [];
+            const prefetchPages: number[] = [];
 
             for (let page = pageStart; page <= pageStop; page += 1) {
                 protectedPages.add(page);
+                if (page >= visiblePageStart && page <= visiblePageStop) {
+                    visiblePages.push(page);
+                } else {
+                    prefetchPages.push(page);
+                }
+            }
+
+            for (const page of [...remoteLoadingPagesRef.current]) {
+                if (protectedPages.has(page)) continue;
+                remotePageAbortControllersRef.current.get(page)?.abort();
+                remotePageAbortControllersRef.current.delete(page);
+                remoteLoadingPagesRef.current.delete(page);
             }
 
             for (let page = visiblePageStart; page <= visiblePageStop; page += 1) {
@@ -330,15 +358,17 @@ export default function VTable({
                 }
             }
 
-            for (let page = pageStart; page <= pageStop; page += 1) {
+            for (const page of [...visiblePages, ...prefetchPages]) {
                 if (remotePagesRef.current.has(page) || remoteLoadingPagesRef.current.has(page)) continue;
                 remoteLoadingPagesRef.current.add(page);
+                const controller = new AbortController();
+                remotePageAbortControllersRef.current.set(page, controller);
                 const offset = page * remotePageSize;
 
                 remoteSource
-                    .getRows(offset, remotePageSize, abortSignal)
+                    .getRows(offset, remotePageSize, controller.signal)
                     .then(rows => {
-                        if (abortSignal?.aborted) return;
+                        if (controller.signal.aborted) return;
                         rows.forEach((row, index) => {
                             remoteRowsRef.current.set(offset + index, row);
                         });
@@ -361,7 +391,7 @@ export default function VTable({
                         }
                     })
                     .catch(error => {
-                        if (!abortSignal?.aborted) {
+                        if (!controller.signal.aborted) {
                             console.warn('[VTable] remote result page load failed', {
                                 cacheKey: remoteSource.cacheKey,
                                 page,
@@ -370,8 +400,9 @@ export default function VTable({
                         }
                     })
                     .finally(() => {
+                        remotePageAbortControllersRef.current.delete(page);
                         remoteLoadingPagesRef.current.delete(page);
-                        if (!abortSignal?.aborted) {
+                        if (!controller.signal.aborted) {
                             setRemoteRowsVersion(version => version + 1);
                         }
                     });
@@ -383,7 +414,7 @@ export default function VTable({
     useEffect(() => {
         if (!remoteSource || tableRowCount <= 0) return;
         requestRemoteRange(0, Math.min(tableRowCount - 1, remotePageSize - 1));
-    }, [remoteSource, requestRemoteRange, tableRowCount]);
+    }, [remotePageSize, remoteSource, requestRemoteRange, tableRowCount]);
 
     const getVisibleSampleRowIndices = useCallback(
         (range?: { start: number; stop: number }) => {
@@ -413,6 +444,7 @@ export default function VTable({
     }, [columns]);
 
     const visibleAutoColWidths = useMemo(() => {
+        void visibleMeasurementVersion;
         const targetColumns = getVisibleAutoFitColumns();
         if (targetColumns.length === 0) return {};
 
@@ -448,14 +480,22 @@ export default function VTable({
         let disposed = false;
         document.fonts.ready.then(() => {
             if (!disposed) {
-                setVisibleMeasurementVersion(version => version + 1);
+                scheduleInitialMeasurement();
             }
         });
 
         return () => {
             disposed = true;
         };
-    }, [columns]);
+    }, [columns, scheduleInitialMeasurement]);
+
+    useEffect(() => {
+        return () => {
+            if (visibleMeasurementTimeoutRef.current) {
+                clearTimeout(visibleMeasurementTimeoutRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         visibleRowRangeRef.current = {
@@ -1147,7 +1187,6 @@ export default function VTable({
                                         const prevColumnRange = visibleColumnRangeRef.current;
                                         if (prevColumnRange.start !== nextColumnStart || prevColumnRange.stop !== nextColumnStop) {
                                             visibleColumnRangeRef.current = { start: nextColumnStart, stop: nextColumnStop };
-                                            setVisibleMeasurementVersion(version => version + 1);
                                         }
                                         if (isRemote) {
                                             requestRemoteRange(Math.max(0, nextStart - 30), Math.min(tableRowCount - 1, nextStop + 60));

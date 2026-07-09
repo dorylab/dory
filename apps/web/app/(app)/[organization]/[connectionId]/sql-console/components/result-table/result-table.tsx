@@ -189,7 +189,7 @@ export function ResultTable() {
     const expectedRowCount = typeof sessionMetas?.rowCount === 'number' ? sessionMetas.rowCount : null;
     const remoteResultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
     const isRemoteFullResult = Boolean(remoteResultSetId && sessionMetas?.dataAvailability === 'full');
-    const remoteRowCount = expectedRowCount ?? (typeof sessionMetas?.previewRowCount === 'number' ? sessionMetas.previewRowCount : 0);
+    const remoteRowCount = expectedRowCount ?? 0;
 
     const [query, setQuery] = useState('');
     const [sortState, setSortState] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);

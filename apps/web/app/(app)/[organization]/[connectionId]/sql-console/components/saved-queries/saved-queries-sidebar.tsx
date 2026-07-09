@@ -46,7 +46,7 @@ import { currentConnectionAtom } from '@/shared/stores/app.store';
 import posthog from 'posthog-js';
 import { AccountRequiredSheet } from '@/components/auth/account-required-sheet';
 import type { AuditItem } from '@dory/shared/types/audit';
-import { savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
+import { QUERY_HISTORY_UPDATED_EVENT, savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
 import { useRouteConnectionId } from '../../hooks/useRouteConnectionId';
 import { FolderItem, type FolderData } from './folder-item';
 import { CreateFolderDialog } from './create-folder-dialog';
@@ -405,6 +405,19 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
             window.removeEventListener('saved-queries-updated', handler);
         };
     }, [fetchAll, isMyQueriesView]);
+
+    useEffect(() => {
+        const handler = (event: Event) => {
+            if (queryView !== 'query-history') return;
+            const detail = event instanceof CustomEvent ? (event.detail as { connectionId?: string | null } | null) : null;
+            if (detail?.connectionId && detail.connectionId !== connectionId) return;
+            fetchQueryHistory();
+        };
+        window.addEventListener(QUERY_HISTORY_UPDATED_EVENT, handler);
+        return () => {
+            window.removeEventListener(QUERY_HISTORY_UPDATED_EVENT, handler);
+        };
+    }, [connectionId, fetchQueryHistory, queryView]);
 
     useEffect(() => {
         return () => {

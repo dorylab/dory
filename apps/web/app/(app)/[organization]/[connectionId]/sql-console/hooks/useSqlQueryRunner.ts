@@ -7,7 +7,7 @@ import { executeActionClient } from '@/lib/actions/client';
 import { runSqlQueryStream, type QueryExecutePayload } from '@/lib/client/sql-console-query-stream';
 import { fetchTablePreview } from '../../../components/table-browser/lib/fetch-table-preview';
 import { SQLTab } from '@dory/shared/types/tabs';
-import { runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
+import { QUERY_HISTORY_UPDATED_EVENT, runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
 import { SQLEditorHandle } from '../components/sql-editor';
 import { useTranslations } from 'next-intl';
 import { columnsCacheAtom, currentConnectionAtom, schemaMetadataRefreshAtom } from '@/shared/stores/app.store';
@@ -20,10 +20,11 @@ type QueryResultSetSummary = {
     sqlOp?: unknown;
     status?: unknown;
 };
+type ApplyServerResultPayload = Parameters<ReturnType<typeof useDB>['applyServerResult']>[0];
 
 function genSessionId() {
-    // @ts-ignore
-    return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const randomUUID = globalThis.crypto?.randomUUID;
+    return typeof randomUUID === 'function' ? randomUUID.call(globalThis.crypto) : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 const LEADING_COMMENTS_REGEX = /^\s*(?:(?:--[^\n]*\n)|(?:#[^\n]*\n)|(?:\/\*[\s\S]*?\*\/\s*))*/;
@@ -52,6 +53,17 @@ function hasSuccessfulSchemaChange(payload: unknown) {
     const queryResultSets = payload && typeof payload === 'object' && 'queryResultSets' in payload ? (payload as { queryResultSets?: unknown }).queryResultSets : null;
     const resultSets = Array.isArray(queryResultSets) ? (queryResultSets as QueryResultSetSummary[]) : [];
     return resultSets.some(resultSet => resultSet?.status === 'success' && resultSet?.sqlOp === 'DDL');
+}
+
+function isQueryExecutePayload(value: unknown): value is QueryExecutePayload {
+    if (!value || typeof value !== 'object') return false;
+    const payload = value as Partial<QueryExecutePayload>;
+    return Boolean(payload.session && typeof payload.session === 'object' && Array.isArray(payload.queryResultSets) && Array.isArray(payload.results));
+}
+
+function notifyQueryHistoryUpdated(connectionId?: string | null) {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(QUERY_HISTORY_UPDATED_EVENT, { detail: { connectionId: connectionId ?? null } }));
 }
 
 export function useSqlQueryRunner({
@@ -114,6 +126,7 @@ export function useSqlQueryRunner({
 
             const stopOnError = false;
             const source = tab.tabType === 'table' ? 'data-preview' : 'sql-console';
+            const queryConnectionId = tab.connectionId ?? currentConnection?.connection?.id ?? null;
 
             setRunningTabs(p => ({ ...p, [tabId]: 'running' }));
             const controller = new AbortController();
@@ -123,7 +136,7 @@ export function useSqlQueryRunner({
             setSessionIdMap(p => ({ ...p, [tabId]: sessionId }));
             try {
                 localStorage.setItem(
-                    getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null }),
+                    getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: queryConnectionId }),
                     sessionId,
                 );
             } catch {
@@ -154,7 +167,7 @@ export function useSqlQueryRunner({
                         source,
                         signal: controller.signal,
                     });
-                    payload = (res as any)?.data ?? null;
+                    payload = isQueryExecutePayload(res.data) ? res.data : null;
                 } else {
                     await runSqlQueryStream({
                         input: {
@@ -165,9 +178,9 @@ export function useSqlQueryRunner({
                             userId,
                             tabId,
                             source,
-                            connectionId: tab.connectionId ?? currentConnection?.connection?.id,
+                            connectionId: queryConnectionId ?? undefined,
                         },
-                        currentConnectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null,
+                        currentConnectionId: queryConnectionId,
                         signal: controller.signal,
                         onEvent: async event => {
                             if (event.type === 'error') {
@@ -178,8 +191,8 @@ export function useSqlQueryRunner({
 
                             if ('payload' in event && event.payload && 'session' in event.payload) {
                                 payload = event.payload;
-                                if (event.type === 'result-preview' || event.type === 'result-completed' || event.type === 'session-finished') {
-                                    await applyServerResult(event.payload as any);
+                                if (event.type === 'result-completed' || event.type === 'session-finished') {
+                                    await applyServerResult(event.payload as ApplyServerResultPayload);
                                 }
                             }
                         },
@@ -191,12 +204,12 @@ export function useSqlQueryRunner({
                 }
                 const finalPayload = payload;
                 if (tab.tabType === 'table') {
-                    await applyServerResult(finalPayload as any);
+                    await applyServerResult(finalPayload as ApplyServerResultPayload);
                 }
 
                 if (tab.tabType === 'sql' && hasSuccessfulSchemaChange(finalPayload)) {
                     setSchemaMetadataRefresh(prev => ({
-                        connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null,
+                        connectionId: queryConnectionId,
                         database,
                         version: prev.version + 1,
                     }));
@@ -219,14 +232,16 @@ export function useSqlQueryRunner({
                     ...p,
                     [tabId]: finalStatus,
                 }));
+                notifyQueryHistoryUpdated(queryConnectionId);
 
                 const latestTab = tabs.find(t => t.tabId === tabId);
                 if (latestTab && latestTab.tabType === 'sql') {
                     void requestAITabTitle(latestTab, { sqlTextOverride: finalSqlText });
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 console.error('[SQLConsoleClient.runQuery] error:', e);
-                if (e?.name === 'AbortError') {
+                const errorMessage = e instanceof Error ? e.message : String(e ?? 'SQL execution failed');
+                if (e instanceof Error && e.name === 'AbortError') {
                     try {
                         const totalMs = Math.round(performance.now() - t0);
                         await finishQuerySession(sessionId, {
@@ -238,16 +253,18 @@ export function useSqlQueryRunner({
                         // ignore
                     }
                     setRunningTabs(p => ({ ...p, [tabId]: 'canceled' }));
+                    notifyQueryHistoryUpdated(queryConnectionId);
                 } else {
                     try {
                         await finishQuerySession(sessionId, {
                             status: 'error',
-                            errorMessage: String(e?.message ?? e),
+                            errorMessage,
                         });
                     } catch {
                         // ignore
                     }
                     setRunningTabs(p => ({ ...p, [tabId]: 'error' }));
+                    notifyQueryHistoryUpdated(queryConnectionId);
                 }
             } finally {
                 const stored = abortControllersRef.current[tabId];
@@ -274,6 +291,7 @@ export function useSqlQueryRunner({
             requestAITabTitle,
             t,
             currentConnection?.connection?.id,
+            normalizedWorkspaceScope,
         ],
     );
 

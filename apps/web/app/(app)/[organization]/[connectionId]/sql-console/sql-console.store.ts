@@ -34,6 +34,7 @@ export const sqlEditorResultLayoutByScopeAtom = atomWithStorage<Record<string, S
 );
 
 export type SavedQueriesView = 'my-queries' | 'query-history';
+export const QUERY_HISTORY_UPDATED_EVENT = 'query-history-updated';
 
 export const savedQueriesViewByConnectionAtom = atomWithStorage<Record<string, SavedQueriesView>>(
     'sqlConsole.savedQueriesViewByConnection',

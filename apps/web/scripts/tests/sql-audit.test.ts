@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { BaseConnection, DriverPoolEntry } from '@dory/drivers/core';
+import type { DriverQueryResult, DriverQueryRowStream } from '@dory/drivers/types';
 import {
     createSqlAuditConnectionSnapshot,
     isSqlAuditConnectionSnapshotCurrent,
@@ -24,15 +25,28 @@ function createConnection(overrides: Partial<BaseConnection> = {}) {
             host: 'localhost',
             database: 'default_db',
         },
-        async query(sql: string): Promise<{ rows: Array<{ id: number }>; rowCount: number; columns: Array<{ name: string; type: string }> }> {
+        async query(_sql: string, _params?: unknown, _context?: unknown): Promise<DriverQueryResult<{ id: number }>> {
+            void _sql;
+            void _params;
+            void _context;
             return {
                 rows: [{ id: 1 }],
                 rowCount: 1,
                 columns: [{ name: 'id', type: 'integer' }],
             };
         },
-        async queryWithContext(sql: string, context?: { database?: string; queryId?: string }): Promise<any> {
+        async queryWithContext(sql: string, context?: { database?: string; queryId?: string }): Promise<DriverQueryResult<{ id: number }>> {
             return this.query(sql, undefined, context);
+        },
+        async queryRowsStreamWithContext(): Promise<DriverQueryRowStream<{ id: number }>> {
+            return {
+                rows: (async function* () {
+                    yield { id: 1 };
+                    yield { id: 2 };
+                })(),
+                rowCount: null,
+                columns: [{ name: 'id', type: 'integer' }],
+            };
         },
         async command(sql: string): Promise<void> {
             await this.query(sql);
@@ -199,6 +213,36 @@ test('does not duplicate nested queryWithContext to query delegation', async () 
     assert.equal(writes[0]!.sqlText, 'select nested');
 });
 
+test('audits successful streaming SQL execution after consuming rows', async () => {
+    const writes = captureAuditWrites();
+    const connection = createConnection();
+
+    const stream = await runWithSqlAudit(
+        {
+            organizationId: 'org-1',
+            userId: 'user-1',
+            source: 'user_sql_console',
+            connectionId: 'conn-1',
+            databaseName: 'db_from_context',
+        },
+        () => connection.queryRowsStreamWithContext('select stream', { database: 'db_from_call', queryId: 'stream-query-1' }),
+    );
+
+    const rows = [];
+    for await (const row of stream.rows) {
+        rows.push(row);
+    }
+
+    assert.deepEqual(rows, [{ id: 1 }, { id: 2 }]);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0]!.status, 'success');
+    assert.equal(writes[0]!.source, 'user_sql_console');
+    assert.equal(writes[0]!.sqlText, 'select stream');
+    assert.equal(writes[0]!.databaseName, 'db_from_call');
+    assert.equal(writes[0]!.queryId, 'stream-query-1');
+    assert.equal(writes[0]!.rowsRead, 2);
+});
+
 test('does not audit driver calls outside a SQL audit context', async () => {
     const writes = captureAuditWrites();
     const connection = createConnection();
@@ -242,7 +286,7 @@ test('does not expose secrets in identity audit snapshots', async () => {
             },
             identities: [],
             ssh: null,
-        } as any,
+        } as unknown as Parameters<typeof createSqlAuditConnectionSnapshot>[0],
         {
             id: 'identity-1',
             name: 'Analyst',
@@ -253,7 +297,7 @@ test('does not expose secrets in identity audit snapshots', async () => {
             password: 'secret-password',
             token: 'secret-token',
             updatedAt: new Date('2026-05-29T00:00:00.000Z'),
-        } as any,
+        } as Parameters<typeof createSqlAuditConnectionSnapshot>[1],
     );
 
     assert.deepEqual(
