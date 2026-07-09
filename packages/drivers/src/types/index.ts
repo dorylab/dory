@@ -36,6 +36,7 @@ export type DriverQueryContext = {
     database?: string;
     schema?: string;
     queryId?: string;
+    statementIndex?: number;
     statementTimeoutMs?: number;
 };
 export type ConnectionQueryContext = DriverQueryContext;

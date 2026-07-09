@@ -67,6 +67,8 @@ async function initSchema() {
             "tab_id" text,
             "work_id" text,
             "agent_run_id" text,
+            "session_id" text,
+            "set_index" integer,
             "actor_type" text NOT NULL,
             "actor_id" text,
             "sql" text NOT NULL,
@@ -87,6 +89,8 @@ async function initSchema() {
             "tab_id" text,
             "work_id" text,
             "agent_run_id" text,
+            "session_id" text,
+            "set_index" integer,
             "source_query_run_id" text,
             "source_type" text NOT NULL,
             "kind" text NOT NULL,
@@ -230,7 +234,12 @@ test('writes expiresAt when persisting result sets and streams', async () => {
     const [persistedRow] = await db.select().from(resultSets).where(eq(resultSets.id, persisted.resultSetId)).limit(1);
     assert.ok(persistedRow);
     assert.ok(persistedRow.expiresAt);
+    assert.equal(persistedRow.sessionId, 'session_retention');
+    assert.equal(persistedRow.setIndex, 0);
     assert.equal(persistedRow.expiresAt.getTime() - persistedRow.createdAt.getTime(), 14 * 24 * 60 * 60 * 1000);
+    const [persistedRun] = await db.select().from(queryRuns).where(eq(queryRuns.resultSetId, persisted.resultSetId)).limit(1);
+    assert.equal(persistedRun?.sessionId, 'session_retention');
+    assert.equal(persistedRun?.setIndex, 0);
 
     const streamed = await resultSetsRepo.persistQueryResultSetStream({
         organizationId: 'org_retention',
@@ -255,6 +264,8 @@ test('writes expiresAt when persisting result sets and streams', async () => {
     const [streamedRow] = await db.select().from(resultSets).where(eq(resultSets.id, streamed.resultSetId)).limit(1);
     assert.ok(streamedRow);
     assert.ok(streamedRow.expiresAt);
+    assert.equal(streamedRow.sessionId, 'session_retention_stream');
+    assert.equal(streamedRow.setIndex, 0);
     assert.equal(streamedRow.expiresAt.getTime() - streamedRow.createdAt.getTime(), 14 * 24 * 60 * 60 * 1000);
 });
 

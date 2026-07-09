@@ -74,6 +74,7 @@ export type AuditItem = {
     created_at: string;
     organizationId: string;
     user_id: string;
+    query_id?: string | null;
     source: QuerySource;
     status: QueryStatus;
     duration_ms?: number | null;
@@ -96,6 +97,19 @@ export type AuditItem = {
     database_name?: string | null;
     sql_text: string;
     extra_json?: Record<string, unknown> | null;
+    result_set?: {
+        sessionId: string;
+        setIndex: number;
+        resultSetId: string;
+        rowCount: number | null;
+        previewRowCount: number;
+        columns: unknown[];
+        dataAvailability: string;
+        status: string;
+        durationMs: number | null;
+        limited: boolean;
+        limit: number | null;
+    } | null;
 };
 
 export type AuditSearchResponse = {

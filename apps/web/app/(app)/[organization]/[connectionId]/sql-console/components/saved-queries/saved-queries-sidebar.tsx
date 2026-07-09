@@ -68,6 +68,7 @@ export type SavedQueryItem = {
     createdAt?: string | Date | null;
     updatedAt?: string | Date | null;
     archivedAt?: string | Date | null;
+    historyResultSet?: AuditItem['result_set'];
 };
 
 function formatTime(value: string | Date | null | undefined, locale: string) {
@@ -90,7 +91,7 @@ type SortableRenderProps = SortableDragProps & {
     isDragging: boolean;
 };
 
-type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'sql_text' | 'status' | 'duration_ms' | 'error_message'>;
+type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'query_id' | 'sql_text' | 'status' | 'duration_ms' | 'error_message' | 'result_set'>;
 
 function summarizeSql(sqlText: string) {
     return sqlText.replace(/\s+/g, ' ').trim();
@@ -1188,6 +1189,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                                                             connectionId,
                                                             createdAt: item.created_at,
                                                             updatedAt: item.created_at,
+                                                            historyResultSet: item.result_set ?? null,
                                                         });
                                                     }}
                                                 >

@@ -35,7 +35,7 @@ function createConnection(overrides: Partial<BaseConnection> = {}) {
                 columns: [{ name: 'id', type: 'integer' }],
             };
         },
-        async queryWithContext(sql: string, context?: { database?: string; queryId?: string }): Promise<DriverQueryResult<{ id: number }>> {
+        async queryWithContext(sql: string, context?: { database?: string; queryId?: string; statementIndex?: number }): Promise<DriverQueryResult<{ id: number }>> {
             return this.query(sql, undefined, context);
         },
         async queryRowsStreamWithContext(): Promise<DriverQueryRowStream<{ id: number }>> {
@@ -109,7 +109,7 @@ test('audits successful SQL execution inside a SQL audit context', async () => {
             connectionId: 'conn-1',
             databaseName: 'db_from_context',
         },
-        () => connection.queryWithContext('select 1', { database: 'db_from_call', queryId: 'query-1' }),
+        () => connection.queryWithContext('select 1', { database: 'db_from_call', queryId: 'query-1', statementIndex: 0 }),
     );
 
     assert.equal(writes.length, 1);
@@ -118,6 +118,7 @@ test('audits successful SQL execution inside a SQL audit context', async () => {
     assert.equal(writes[0]!.sqlText, 'select 1');
     assert.equal(writes[0]!.databaseName, 'db_from_call');
     assert.equal(writes[0]!.queryId, 'query-1');
+    assert.equal(writes[0]!.extraJson?.statementIndex, 0);
     assert.equal(writes[0]!.rowsRead, 1);
 });
 

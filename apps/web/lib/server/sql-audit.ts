@@ -259,6 +259,7 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
                 durationMs,
                 extraJson: {
                     auditMethod: method,
+                    ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
                     ...(store.extraJson ?? {}),
                 },
             });
@@ -280,6 +281,7 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
             result: method === 'command' ? null : (result as DriverQueryResult<unknown> | null),
             extraJson: {
                 auditMethod: method,
+                ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
                 ...(store.extraJson ?? {}),
             },
         });
@@ -297,6 +299,7 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
             durationMs,
             extraJson: {
                 auditMethod: method,
+                ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
                 ...(store.extraJson ?? {}),
             },
         });
@@ -335,6 +338,7 @@ function wrapAuditedRowStream(input: {
             },
             extraJson: {
                 auditMethod: 'queryRowsStreamWithContext',
+                ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
                 ...(store.extraJson ?? {}),
             },
         });

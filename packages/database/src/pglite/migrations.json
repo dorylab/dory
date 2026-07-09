@@ -345,5 +345,18 @@
     "bps": true,
     "folderMillis": 1783555200000,
     "hash": "fcb22933cf8147ad515eb18def0ad94279eef8075228402e655cc8a389f4661d"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"query_runs\" ADD COLUMN IF NOT EXISTS \"session_id\" text;\n",
+      "\nALTER TABLE \"query_runs\" ADD COLUMN IF NOT EXISTS \"set_index\" integer;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"session_id\" text;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"set_index\" integer;\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_session_set\" ON \"query_runs\" USING btree (\"organization_id\",\"session_id\",\"set_index\");\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_session_set\" ON \"result_sets\" USING btree (\"organization_id\",\"session_id\",\"set_index\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1783641600000,
+    "hash": "0476816eebdb4d8b52bbd72edbfc8a8abb3fb60296ee3b69c3826c685ad402c8"
   }
 ]

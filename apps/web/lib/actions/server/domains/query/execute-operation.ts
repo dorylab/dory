@@ -209,7 +209,7 @@ function isQuerySource(value?: string | null): value is QuerySource {
     );
 }
 
-async function executeOne(connection: BaseConnection, statement: string, context: { database?: string | null }, options?: { queryId?: string }) {
+async function executeOne(connection: BaseConnection, statement: string, context: { database?: string | null }, options?: { queryId?: string; statementIndex?: number }) {
     const startedAt = preciseDateNow();
     const perfStart = performance.now();
 
@@ -217,6 +217,7 @@ async function executeOne(connection: BaseConnection, statement: string, context
         const result = await connection.queryWithContext(statement, {
             database: context.database ?? undefined,
             queryId: options?.queryId,
+            statementIndex: options?.statementIndex,
         });
         const rows = result.rows ?? [];
         const finishedAt = preciseDateNow();
@@ -281,7 +282,7 @@ async function executeOne(connection: BaseConnection, statement: string, context
     }
 }
 
-async function executeOneStream(connection: BaseConnection, statement: string, context: { database?: string | null }, options?: { queryId?: string }) {
+async function executeOneStream(connection: BaseConnection, statement: string, context: { database?: string | null }, options?: { queryId?: string; statementIndex?: number }) {
     const startedAt = preciseDateNow();
     const perfStart = performance.now();
 
@@ -289,6 +290,7 @@ async function executeOneStream(connection: BaseConnection, statement: string, c
         const result = await connection.queryRowsStreamWithContext(statement, {
             database: context.database ?? undefined,
             queryId: options?.queryId,
+            statementIndex: options?.statementIndex,
         });
         const finishedAt = preciseDateNow();
         const durationMs = performance.now() - perfStart;
@@ -492,8 +494,8 @@ async function runSqlExecution(
                 });
 
                 const execOne = useStreaming
-                    ? await executeOneStream(entry.instance, statement, { database: input.database }, { queryId: sessionId })
-                    : await executeOne(entry.instance, statement, { database: input.database }, { queryId: sessionId });
+                    ? await executeOneStream(entry.instance, statement, { database: input.database }, { queryId: sessionId, statementIndex: i })
+                    : await executeOne(entry.instance, statement, { database: input.database }, { queryId: sessionId, statementIndex: i });
                 let qrs: Record<string, unknown> = {
                     sessionId,
                     setIndex: i,
