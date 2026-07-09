@@ -56,6 +56,8 @@ export type PersistQueryResultSetStreamInput = Omit<PersistQueryResultSetInput, 
     rows: AsyncIterable<unknown>;
     columns?: ResultSetColumn[];
     rowCount?: number | null;
+    resultSetId?: string | null;
+    queryRunId?: string | null;
 };
 
 export type PersistQueryResultSetOutput = {
@@ -652,8 +654,8 @@ export class PostgresResultSetsRepository {
         this.assertInited();
 
         const resultSet = input.resultSet;
-        const artifactId = `rs_${newEntityId()}`;
-        const queryRunId = `qr_${newEntityId()}`;
+        const artifactId = input.resultSetId?.trim() || `rs_${newEntityId()}`;
+        const queryRunId = input.queryRunId?.trim() || `qr_${newEntityId()}`;
         const actorType = inferActorType(input.source);
         const status = getString(resultSet.status) ?? 'success';
         const explicitColumns = input.columns?.length ? input.columns : inferResultSetColumns([], resultSet.columns);

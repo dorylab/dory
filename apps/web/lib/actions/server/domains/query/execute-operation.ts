@@ -6,6 +6,7 @@ import { runWithSqlAudit } from '@/lib/server/sql-audit';
 import type { ActionContext } from '@dory/actions';
 import type { BaseConnection } from '@dory/drivers/core';
 import type { ColumnMeta, DriverQueryRowStream } from '@dory/drivers/types';
+import { newEntityId } from '@dory/shared/id';
 import type { QuerySource } from '@dory/shared/types/audit';
 import type { WebActionServices } from '../../types';
 
@@ -18,6 +19,44 @@ type PersistableResultSet = Record<string, unknown> & {
     sqlText: string;
     status: 'success' | 'error' | string;
 };
+
+export type QueryExecuteInput = {
+    connectionId?: string | null;
+    identityId?: string | null;
+    database?: string | null;
+    sql: string;
+    stopOnError?: boolean | null;
+    sessionId?: string | null;
+    tabId?: string | null;
+    source?: string | null;
+    refId?: string | null;
+};
+
+export type QueryExecutePayload = {
+    session: Record<string, unknown>;
+    queryResultSets: Array<Record<string, unknown>>;
+    results: unknown[][];
+    meta: Record<string, unknown>;
+};
+
+export type QueryExecutionStreamEvent =
+    | { type: 'session-started'; payload: QueryExecutePayload }
+    | { type: 'result-started'; payload: QueryExecutePayload }
+    | { type: 'result-preview'; payload: QueryExecutePayload }
+    | {
+          type: 'result-progress';
+          payload: {
+              sessionId: string;
+              setIndex: number;
+              rowsWritten: number;
+              previewRowCount: number;
+              elapsedMs: number;
+          };
+      }
+    | { type: 'result-completed'; payload: QueryExecutePayload }
+    | { type: 'session-finished'; payload: QueryExecutePayload };
+
+type QueryExecutionEventSink = (event: QueryExecutionStreamEvent) => Promise<void> | void;
 
 function useLegacyPgliteResultStorage() {
     const value = process.env.DORY_SQL_CONSOLE_RESULT_STORAGE?.trim().toLowerCase() || process.env.DORY_SQL_RESULTSET_STORAGE?.trim().toLowerCase();
@@ -86,6 +125,68 @@ function toResultSetColumns(columns: ColumnMeta[] | undefined | null) {
         databaseType: column.type,
         logicalType: 'unknown' as const,
     }));
+}
+
+function inferColumnsFromRows(rows: unknown[]) {
+    const names = new Set<string>();
+    for (const row of rows) {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+        for (const key of Object.keys(row)) names.add(key);
+    }
+    return [...names].map(name => ({
+        name,
+        logicalType: 'unknown' as const,
+    }));
+}
+
+function buildPayload(input: {
+    sessionId: string;
+    userId: string;
+    tabId?: string | null;
+    connectionId: string;
+    database?: string | null;
+    sqlText: string;
+    status: 'running' | 'success' | 'error';
+    errorMessage?: string | null;
+    startedAt: number;
+    finishedAt?: number | null;
+    durationMs?: number | null;
+    resultSetCount: number;
+    stopOnError: boolean;
+    source?: string | null;
+    queryResultSets: Array<Record<string, unknown>>;
+    results: unknown[][];
+    refId: string;
+    resultStorage: 'artifact' | 'pglite';
+}) {
+    return {
+        session: {
+            sessionId: input.sessionId,
+            userId: input.userId,
+            tabId: input.tabId ?? null,
+            connectionId: input.connectionId,
+            database: input.database ?? null,
+            sqlText: input.sqlText,
+            status: input.status,
+            errorMessage: input.errorMessage ?? null,
+            startedAt: input.startedAt,
+            finishedAt: input.finishedAt ?? null,
+            durationMs: input.durationMs ?? null,
+            resultSetCount: input.resultSetCount,
+            stopOnError: input.stopOnError,
+            source: input.source ?? null,
+        },
+        queryResultSets: input.queryResultSets,
+        results: input.results,
+        meta: {
+            refId: input.refId,
+            durationMs: input.durationMs ?? 0,
+            totalSets: input.resultSetCount,
+            stopOnError: input.stopOnError,
+            resultStorage: input.resultStorage,
+            previewRows: input.resultStorage === 'artifact' ? DEFAULT_RESULT_PREVIEW_ROWS : null,
+        },
+    };
 }
 
 function queryAuditSource(ctx: ActionContext<WebActionServices>, source?: string | null): QuerySource {
@@ -263,16 +364,21 @@ async function executeOneStream(connection: BaseConnection, statement: string, c
 
 export async function executeSqlAction(
     ctx: ActionContext<WebActionServices>,
-    input: {
-        connectionId?: string | null;
-        identityId?: string | null;
-        database?: string | null;
-        sql: string;
-        stopOnError?: boolean | null;
-        sessionId?: string | null;
-        tabId?: string | null;
-        source?: string | null;
-        refId?: string | null;
+    input: QueryExecuteInput,
+) {
+    return runSqlExecution(ctx, input);
+}
+
+export async function executeSqlActionStream(ctx: ActionContext<WebActionServices>, input: QueryExecuteInput, options: { signal?: AbortSignal; onEvent: QueryExecutionEventSink }) {
+    return runSqlExecution(ctx, input, options);
+}
+
+async function runSqlExecution(
+    ctx: ActionContext<WebActionServices>,
+    input: QueryExecuteInput,
+    options?: {
+        signal?: AbortSignal;
+        onEvent?: QueryExecutionEventSink;
     },
 ) {
     const connectionId = input.connectionId?.trim() || ctx.currentConnectionId?.trim();
@@ -284,6 +390,7 @@ export async function executeSqlAction(
     const stopOnError = input.stopOnError ?? false;
     const sessionId = input.sessionId || randomUUID();
     const auditSource = queryAuditSource(ctx, input.source);
+    const refId = input.refId || randomUUID();
 
     if (!statements.length) {
         const now = Math.round(performance.timeOrigin + performance.now());
@@ -307,7 +414,7 @@ export async function executeSqlAction(
             queryResultSets: [],
             results: [],
             meta: {
-                refId: input.refId || randomUUID(),
+                refId,
                 durationMs: 0,
                 totalSets: 0,
                 stopOnError,
@@ -345,10 +452,58 @@ export async function executeSqlAction(
             let hitError = false;
             let firstErrorMsg: string | null = null;
             const persistArtifacts = !useLegacyPgliteResultStorage();
+            const resultStorage = persistArtifacts ? 'artifact' : 'pglite';
+
+            await options?.onEvent?.({
+                type: 'session-started',
+                payload: buildPayload({
+                    sessionId,
+                    userId: ctx.userId,
+                    tabId: input.tabId ?? null,
+                    connectionId,
+                    database: input.database ?? null,
+                    sqlText: input.sql,
+                    status: 'running',
+                    startedAt: overallStartedAt,
+                    resultSetCount: 0,
+                    stopOnError,
+                    source: input.source ?? null,
+                    queryResultSets: [],
+                    results: [],
+                    refId,
+                    resultStorage,
+                }),
+            });
 
             for (let i = 0; i < statements.length; i += 1) {
+                if (options?.signal?.aborted) {
+                    throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
+                }
+
                 const statement = statements[i]!;
                 const useStreaming = persistArtifacts && supportsStreamingResultSets(entry.instance) && isStreamableResultStatement(statement);
+
+                await options?.onEvent?.({
+                    type: 'result-started',
+                    payload: buildPayload({
+                        sessionId,
+                        userId: ctx.userId,
+                        tabId: input.tabId ?? null,
+                        connectionId,
+                        database: input.database ?? null,
+                        sqlText: input.sql,
+                        status: 'running',
+                        startedAt: overallStartedAt,
+                        resultSetCount: queryResultSets.length,
+                        stopOnError,
+                        source: input.source ?? null,
+                        queryResultSets: queryResultSets.slice(),
+                        results: results.slice(),
+                        refId,
+                        resultStorage,
+                    }),
+                });
+
                 const execOne = useStreaming
                     ? await executeOneStream(entry.instance, statement, { database: input.database }, { queryId: sessionId })
                     : await executeOne(entry.instance, statement, { database: input.database }, { queryId: sessionId });
@@ -360,6 +515,90 @@ export async function executeSqlAction(
 
                 if (persistArtifacts) {
                     const stream = (execOne as { resultStream?: DriverQueryRowStream }).resultStream;
+                    let rowsForPersist = stream?.rows;
+                    const streamResultSetId = stream ? `rs_${newEntityId()}` : null;
+                    const streamQueryRunId = stream ? `qr_${newEntityId()}` : null;
+                    if (stream && options?.onEvent) {
+                        const previewRows: unknown[] = [];
+                        let observedRows = 0;
+                        let previewEmitted = false;
+                        let lastProgressAt = 0;
+                        const emitPreview = async () => {
+                            if (previewEmitted) return;
+                            previewEmitted = true;
+                            const previewColumns = toResultSetColumns(stream.columns);
+                            const columns = previewColumns.length ? previewColumns : inferColumnsFromRows(previewRows);
+                            await options.onEvent?.({
+                                type: 'result-preview',
+                                payload: buildPayload({
+                                    sessionId,
+                                    userId: ctx.userId,
+                                    tabId: input.tabId ?? null,
+                                    connectionId,
+                                    database: input.database ?? null,
+                                    sqlText: input.sql,
+                                    status: 'running',
+                                    startedAt: overallStartedAt,
+                                    resultSetCount: queryResultSets.length + 1,
+                                    stopOnError,
+                                    source: input.source ?? null,
+                                    queryResultSets: [
+                                        ...queryResultSets,
+                                        {
+                                            ...qrs,
+                                            resultSetId: streamResultSetId,
+                                            columns,
+                                            rowCount: stream.rowCount ?? observedRows,
+                                            previewRowCount: previewRows.length,
+                                            dataAvailability: 'preview-only',
+                                            finishedAt: null,
+                                            durationMs: Math.max(0, Math.round(performance.now() - sessT0)),
+                                        },
+                                    ],
+                                    results: [...results, previewRows.slice()],
+                                    refId,
+                                    resultStorage,
+                                }),
+                            });
+                        };
+
+                        rowsForPersist = (async function* () {
+                            try {
+                                for await (const row of stream.rows) {
+                                    if (options.signal?.aborted) {
+                                        throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
+                                    }
+                                    observedRows += 1;
+                                    if (previewRows.length < DEFAULT_RESULT_PREVIEW_ROWS) {
+                                        previewRows.push(row);
+                                    }
+                                    if (!previewEmitted && previewRows.length >= DEFAULT_RESULT_PREVIEW_ROWS) {
+                                        await emitPreview();
+                                    }
+                                    const now = performance.now();
+                                    if (observedRows > 0 && now - lastProgressAt > 500) {
+                                        lastProgressAt = now;
+                                        await options.onEvent?.({
+                                            type: 'result-progress',
+                                            payload: {
+                                                sessionId,
+                                                setIndex: i,
+                                                rowsWritten: observedRows,
+                                                previewRowCount: previewRows.length,
+                                                elapsedMs: Math.max(0, Math.round(now - sessT0)),
+                                            },
+                                        });
+                                    }
+                                    yield row;
+                                }
+                                if (!previewEmitted) {
+                                    await emitPreview();
+                                }
+                            } finally {
+                                await stream.close?.();
+                            }
+                        })();
+                    }
                     const persisted = stream
                         ? await ctx.services.db.resultSets.persistQueryResultSetStream({
                               organizationId: ctx.organizationId,
@@ -371,9 +610,11 @@ export async function executeSqlAction(
                               sessionSqlText: input.sql,
                               source: input.source ?? null,
                               resultSet: qrs as PersistableResultSet,
-                              rows: stream.rows,
+                              rows: rowsForPersist ?? stream.rows,
                               columns: toResultSetColumns(stream.columns),
                               rowCount: stream.rowCount ?? null,
+                              resultSetId: streamResultSetId,
+                              queryRunId: streamQueryRunId,
                               previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
                           })
                         : await ctx.services.db.resultSets.persistQueryResultSet({
@@ -415,6 +656,27 @@ export async function executeSqlAction(
 
                 queryResultSets.push(qrs);
 
+                await options?.onEvent?.({
+                    type: 'result-completed',
+                    payload: buildPayload({
+                        sessionId,
+                        userId: ctx.userId,
+                        tabId: input.tabId ?? null,
+                        connectionId,
+                        database: input.database ?? null,
+                        sqlText: input.sql,
+                        status: 'running',
+                        startedAt: overallStartedAt,
+                        resultSetCount: queryResultSets.length,
+                        stopOnError,
+                        source: input.source ?? null,
+                        queryResultSets: queryResultSets.slice(),
+                        results: results.slice(),
+                        refId,
+                        resultStorage,
+                    }),
+                });
+
                 if (!execOne.ok) {
                     hitError = true;
                     if (!firstErrorMsg) firstErrorMsg = typeof qrs.errorMessage === 'string' ? qrs.errorMessage : null;
@@ -427,34 +689,28 @@ export async function executeSqlAction(
             const overallFinishedAt = Math.max(overallStartedAt, Math.round(performance.timeOrigin + sessT1));
             const status: 'success' | 'error' = hitError ? 'error' : 'success';
 
-            return {
-                session: {
-                    sessionId,
-                    userId: ctx.userId,
-                    tabId: input.tabId ?? null,
-                    connectionId,
-                    database: input.database ?? null,
-                    sqlText: input.sql,
-                    status,
-                    errorMessage: hitError ? firstErrorMsg : null,
-                    startedAt: overallStartedAt,
-                    finishedAt: overallFinishedAt,
-                    durationMs: overallDuration,
-                    resultSetCount: queryResultSets.length,
-                    stopOnError,
-                    source: input.source ?? null,
-                },
+            const payload = buildPayload({
+                sessionId,
+                userId: ctx.userId,
+                tabId: input.tabId ?? null,
+                connectionId,
+                database: input.database ?? null,
+                sqlText: input.sql,
+                status,
+                errorMessage: hitError ? firstErrorMsg : null,
+                startedAt: overallStartedAt,
+                finishedAt: overallFinishedAt,
+                durationMs: overallDuration,
+                resultSetCount: queryResultSets.length,
+                stopOnError,
+                source: input.source ?? null,
                 queryResultSets,
                 results,
-                meta: {
-                    refId: input.refId || randomUUID(),
-                    durationMs: overallDuration,
-                    totalSets: queryResultSets.length,
-                    stopOnError,
-                    resultStorage: persistArtifacts ? 'artifact' : 'pglite',
-                    previewRows: persistArtifacts ? DEFAULT_RESULT_PREVIEW_ROWS : null,
-                },
-            };
+                refId,
+                resultStorage,
+            });
+            await options?.onEvent?.({ type: 'session-finished', payload });
+            return payload;
         },
     );
 }

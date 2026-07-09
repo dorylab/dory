@@ -657,6 +657,9 @@ export function ResultTable() {
 
                         const slice = chunk.length > remaining ? (chunk.slice(0, remaining) as ResultRow[]) : (chunk as ResultRow[]);
                         resultsRef.current.push(...slice);
+                        if (slice.length > 0) {
+                            firstChunkArrivedRef.current = true;
+                        }
 
                         if (rafRef.current == null) {
                             rafRef.current = requestAnimationFrame(() => {
@@ -922,7 +925,9 @@ export function ResultTable() {
             const emptyResultMessage = workspaceScope.workspaceMode === 'agent' ? t('Results.AgentRunQueryFirst') : t('Results.RunQueryFirst');
             return <div className="h-full flex items-center justify-center px-4 text-center text-sm bg-card text-muted-foreground">{emptyResultMessage}</div>;
         }
-        if (runningTabs[tabId] === 'running') {
+        const hasRenderableRows = activeSet >= 0 && (isRemoteFullResult ? rowCount > 0 : results.length > 0);
+        const hasRenderableResult = activeSet >= 0 && (hasRenderableRows || execMetaBySet?.[activeSet]?.errorMessage);
+        if (runningTabs[tabId] === 'running' && !hasRenderableResult) {
             return (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
                     <Badge variant="outline" className="gap-1">
