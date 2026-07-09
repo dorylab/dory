@@ -3001,6 +3001,11 @@
                     "Title": "Configuración de IA",
                     "Description": "Configura los modelos disponibles para esta organización."
                 },
+                "Storage": {
+                    "Label": "Almacenamiento",
+                    "Title": "Almacenamiento",
+                    "Description": "Gestiona los resultados de consulta retenidos y los artifacts locales."
+                },
                 "Billing": {
                     "Label": "Planes y suscripciones",
                     "Title": "Planes y suscripciones",
@@ -3032,6 +3037,23 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "Expón un endpoint MCP local para Codex, Claude Code y otros agentes."
+                }
+            },
+            "Storage": {
+                "ResultSets": {
+                    "Title": "Result Sets",
+                    "Description": "Controla cuánto tiempo se conservan los archivos de resultados antes de limpiarlos.",
+                    "FieldLabel": "Retención de resultados de consulta",
+                    "FieldDescription": "Los archivos de resultados vencidos se eliminan en segundo plano. El historial de consultas se conserva.",
+                    "SelectPlaceholder": "Seleccionar duración",
+                    "DayOption": "{count, plural, one {# día} other {# días}}",
+                    "SaveAction": "Guardar retención",
+                    "Saving": "Guardando...",
+                    "ReadOnlyHint": "Tu rol actual no permite actualizar la configuración de almacenamiento.",
+                    "Toasts": {
+                        "Updated": "Retención de resultados actualizada",
+                        "UpdateFailed": "No se pudo actualizar la retención de resultados"
+                    }
                 }
             },
             "Appearance": {

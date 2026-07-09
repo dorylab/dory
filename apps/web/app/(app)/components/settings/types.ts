@@ -1,7 +1,19 @@
 import type { ElementType } from 'react';
-import { Palette, Info, Code, Database, Bot, BadgeCheck, Building2, Cable } from 'lucide-react';
+import { Palette, Info, Code, Database, Bot, BadgeCheck, Building2, Cable, HardDrive } from 'lucide-react';
 
-export type CategoryKey = 'organization' | 'ai' | 'billing' | 'appearance' | 'editor' | 'notifications' | 'data' | 'agentAccess' | 'shortcuts' | 'security' | 'about';
+export type CategoryKey =
+    | 'organization'
+    | 'ai'
+    | 'billing'
+    | 'storage'
+    | 'appearance'
+    | 'editor'
+    | 'notifications'
+    | 'data'
+    | 'agentAccess'
+    | 'shortcuts'
+    | 'security'
+    | 'about';
 export type CategoryGroupKey = 'person' | 'workspace' | 'about';
 
 export type SettingsCategory = {
@@ -38,6 +50,14 @@ export function getCategories(
                   icon: Bot,
                   title: t('Categories.Ai.Title'),
                   description: t('Categories.Ai.Description'),
+              },
+              {
+                  key: 'storage',
+                  group: 'workspace',
+                  label: t('Categories.Storage.Label'),
+                  icon: HardDrive,
+                  title: t('Categories.Storage.Title'),
+                  description: t('Categories.Storage.Description'),
               },
               {
                   key: 'agentAccess',

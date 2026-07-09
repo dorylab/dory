@@ -3001,6 +3001,11 @@
                     "Title": "AI 設定",
                     "Description": "この組織で利用できるモデルを設定します。"
                 },
+                "Storage": {
+                    "Label": "ストレージ",
+                    "Title": "ストレージ",
+                    "Description": "保持するクエリ結果とローカル artifact を管理します。"
+                },
                 "Billing": {
                     "Label": "プランとサブスクリプション",
                     "Title": "プランとサブスクリプション",
@@ -3032,6 +3037,23 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "Codex、Claude Code、その他の Agent 向けにローカル MCP エンドポイントを公開します。"
+                }
+            },
+            "Storage": {
+                "ResultSets": {
+                    "Title": "Result Sets",
+                    "Description": "保存されたクエリ結果ファイルをクリーンアップ前に保持する期間を制御します。",
+                    "FieldLabel": "クエリ結果の保存期間",
+                    "FieldDescription": "期限切れの結果ファイルはバックグラウンドで削除されます。クエリ履歴は保持されます。",
+                    "SelectPlaceholder": "期間を選択",
+                    "DayOption": "{count} 日",
+                    "SaveAction": "保存期間を保存",
+                    "Saving": "保存中...",
+                    "ReadOnlyHint": "現在のロールではストレージ設定を更新できません。",
+                    "Toasts": {
+                        "Updated": "結果の保存期間を更新しました",
+                        "UpdateFailed": "結果の保存期間の更新に失敗しました"
+                    }
                 }
             },
             "Appearance": {

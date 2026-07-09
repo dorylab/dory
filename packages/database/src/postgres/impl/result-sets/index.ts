@@ -4,11 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, lte } from 'drizzle-orm';
 
 import { getDoryArtifactStore, joinObjectPath, safeObjectPathPart, type DoryArtifactStore } from '@dory/artifacts';
 import { getClient } from '@dory/database/postgres/client';
-import { agentRunResultSets, queryRuns, resultSets as resultSetsTable } from '@dory/database/postgres/schemas';
+import { agentRunResultSets, organizations, queryRuns, resultSets as resultSetsTable, workQueryResultSets } from '@dory/database/postgres/schemas';
+import { DEFAULT_RESULT_SET_RETENTION_DAYS, getResultSetRetentionDaysFromOrganizationMetadata } from '@dory/database/postgres/impl/organization';
 import {
     buildResultSetPreview,
     createDefaultResultSetDataWriter,
@@ -140,6 +141,11 @@ export type ResultSetExportObject = {
     fileName: string;
     contentType: string;
     byteSize?: number;
+};
+
+export type CleanupExpiredResultSetsOutput = {
+    scanned: number;
+    deleted: number;
 };
 
 export type ResultSetProfileReadOutput = {
@@ -358,6 +364,10 @@ function getNumber(value: unknown): number | null {
 
 function getBoolean(value: unknown): boolean {
     return value === true;
+}
+
+function addDays(date: Date, days: number) {
+    return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -586,6 +596,7 @@ export class PostgresResultSetsRepository {
         const columns = inferResultSetColumns(rows, resultSet.columns);
         const rowCount = getNumber(resultSet.rowCount) ?? rows.length;
         const now = new Date();
+        const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
         const preview = buildResultSetPreview({
             columns,
             rows,
@@ -696,6 +707,7 @@ export class PostgresResultSetsRepository {
                 createdByActorType: actorType,
                 createdByActorId: input.userId,
                 byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                expiresAt,
                 createdAt: now,
                 updatedAt: now,
             });
@@ -737,6 +749,7 @@ export class PostgresResultSetsRepository {
         const status = getString(resultSet.status) ?? 'success';
         const explicitColumns = input.columns?.length ? input.columns : inferResultSetColumns([], resultSet.columns);
         const now = new Date();
+        const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
         const previewRows: unknown[] = [];
         const maxPreviewRows = input.previewRows ?? DEFAULT_PREVIEW_ROWS;
         let streamedRowCount = 0;
@@ -881,6 +894,7 @@ export class PostgresResultSetsRepository {
                 createdByActorType: actorType,
                 createdByActorId: input.userId,
                 byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                expiresAt,
                 createdAt: now,
                 updatedAt: completedAt,
             });
@@ -914,6 +928,53 @@ export class PostgresResultSetsRepository {
         } finally {
             await fullData?.cleanup?.();
         }
+    }
+
+    async cleanupExpiredResultSets(params: { organizationId: string; now?: Date; limit?: number }): Promise<CleanupExpiredResultSetsOutput> {
+        this.assertInited();
+
+        const now = params.now ?? new Date();
+        const limit = Math.max(1, Math.min(params.limit ?? 100, 500));
+        const rows = await this.db
+            .select({
+                id: resultSetsTable.id,
+                artifactRefJson: resultSetsTable.artifactRefJson,
+            })
+            .from(resultSetsTable)
+            .where(and(eq(resultSetsTable.organizationId, params.organizationId), lte(resultSetsTable.expiresAt, now)))
+            .orderBy(asc(resultSetsTable.expiresAt))
+            .limit(limit);
+        const resultSetIds = rows.map(row => row.id);
+
+        for (const row of rows) {
+            await this.artifacts.resultSets.deleteResultSet(row.artifactRefJson);
+        }
+
+        if (resultSetIds.length) {
+            await Promise.all([
+                this.db.delete(agentRunResultSets).where(inArray(agentRunResultSets.resultSetId, resultSetIds)),
+                this.db
+                    .update(queryRuns)
+                    .set({
+                        resultSetId: null,
+                        updatedAt: now,
+                    })
+                    .where(and(eq(queryRuns.organizationId, params.organizationId), inArray(queryRuns.resultSetId, resultSetIds))),
+                this.db
+                    .update(workQueryResultSets)
+                    .set({
+                        resultSetId: null,
+                        artifactRefJson: null,
+                    })
+                    .where(inArray(workQueryResultSets.resultSetId, resultSetIds)),
+                this.db.delete(resultSetsTable).where(and(eq(resultSetsTable.organizationId, params.organizationId), inArray(resultSetsTable.id, resultSetIds))),
+            ]);
+        }
+
+        return {
+            scanned: rows.length,
+            deleted: resultSetIds.length,
+        };
     }
 
     async readRows(params: { organizationId: string; resultSetId: string; offset?: number | null; limit?: number | null } & ResultSetQueryOperations): Promise<ReadResultRowsOutput> {
@@ -1317,6 +1378,11 @@ export class PostgresResultSetsRepository {
             instance?.closeSync();
             await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
         }
+    }
+
+    private async getRetentionDays(organizationId: string): Promise<number> {
+        const rows = await this.db.select({ metadata: organizations.metadata }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+        return rows.length ? getResultSetRetentionDaysFromOrganizationMetadata(rows[0]?.metadata) : DEFAULT_RESULT_SET_RETENTION_DAYS;
     }
 
     private exportObjectPath(organizationId: string, exportId: string, fileName: string) {

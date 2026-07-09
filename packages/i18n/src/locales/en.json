@@ -3003,6 +3003,11 @@
                     "Title": "AI Configuration",
                     "Description": "Configure the models available to this organization."
                 },
+                "Storage": {
+                    "Label": "Storage",
+                    "Title": "Storage",
+                    "Description": "Manage retained query results and local artifacts."
+                },
                 "Billing": {
                     "Label": "Plans & Subscriptions",
                     "Title": "Plans & Subscriptions",
@@ -3034,6 +3039,23 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "Expose a local MCP endpoint for Codex, Claude Code, and other agents."
+                }
+            },
+            "Storage": {
+                "ResultSets": {
+                    "Title": "Result Sets",
+                    "Description": "Control how long saved query result files are kept before cleanup removes them.",
+                    "FieldLabel": "Query result retention",
+                    "FieldDescription": "Expired result files are removed in the background. Query history is kept.",
+                    "SelectPlaceholder": "Select duration",
+                    "DayOption": "{count, plural, one {# day} other {# days}}",
+                    "SaveAction": "Save retention",
+                    "Saving": "Saving...",
+                    "ReadOnlyHint": "Your current role does not allow updating storage settings.",
+                    "Toasts": {
+                        "Updated": "Result retention updated",
+                        "UpdateFailed": "Failed to update result retention"
+                    }
                 }
             },
             "Appearance": {

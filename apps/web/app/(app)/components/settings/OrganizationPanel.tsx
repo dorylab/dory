@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
@@ -9,7 +9,12 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Label } from '@/registry/new-york-v4/ui/label';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { getFullOrganization, getOrganizationAccess, isValidOrganizationSlug, updateOrganization } from '@/lib/organization/api';
+import {
+    getFullOrganization,
+    getOrganizationAccess,
+    isValidOrganizationSlug,
+    updateOrganization,
+} from '@/lib/organization/api';
 
 function replaceOrganizationInPath(pathname: string, currentSlug: string, nextSlug: string) {
     const segments = pathname.split('/').filter(Boolean);
@@ -31,8 +36,8 @@ export function OrganizationPanel() {
     const organizationSlug = params.organization;
     const t = useTranslations('OrganizationSettings.Organization');
     const queryClient = useQueryClient();
-    const [name, setName] = useState('');
-    const [slug, setSlug] = useState('');
+    const [nameOverride, setNameOverride] = useState<string | null>(null);
+    const [slugOverride, setSlugOverride] = useState<string | null>(null);
 
     const organizationQuery = useQuery({
         queryKey: ['organization-full', organizationSlug],
@@ -43,14 +48,10 @@ export function OrganizationPanel() {
         queryFn: () => getOrganizationAccess(),
     });
 
-    useEffect(() => {
-        if (!organizationQuery.data) return;
-        setName(organizationQuery.data.name ?? '');
-        setSlug(organizationQuery.data.slug ?? '');
-    }, [organizationQuery.data]);
-
     const updateMutation = useMutation({
         mutationFn: () => {
+            const name = nameOverride ?? organizationQuery.data?.name ?? '';
+            const slug = slugOverride ?? organizationQuery.data?.slug ?? '';
             if (!slug.trim()) {
                 throw new Error(t('Errors.SlugRequired'));
             }
@@ -67,6 +68,8 @@ export function OrganizationPanel() {
         },
         onSuccess: async updated => {
             toast.success(t('Toasts.Updated'));
+            setNameOverride(null);
+            setSlugOverride(null);
             await queryClient.invalidateQueries({ queryKey: ['organization-full'] });
             await queryClient.invalidateQueries({ queryKey: ['organization-list'] });
             if (updated?.slug && updated.slug !== organizationSlug) {
@@ -82,6 +85,8 @@ export function OrganizationPanel() {
     const access = accessQuery.data;
     const canUpdate = Boolean(access?.permissions?.organization?.update);
     const isInitialLoading = organizationQuery.isLoading && !organization;
+    const name = nameOverride ?? organization?.name ?? '';
+    const slug = slugOverride ?? organization?.slug ?? '';
 
     if (isInitialLoading) {
         return (
@@ -105,11 +110,21 @@ export function OrganizationPanel() {
         <div className="flex w-full flex-col gap-6">
             <div className="grid gap-2">
                 <Label htmlFor="organization-name">{t('Fields.Name')}</Label>
-                <Input id="organization-name" value={name} onChange={event => setName(event.target.value)} disabled={!organization || !canUpdate || updateMutation.isPending} />
+                <Input
+                    id="organization-name"
+                    value={name}
+                    onChange={event => setNameOverride(event.target.value)}
+                    disabled={!organization || !canUpdate || updateMutation.isPending}
+                />
             </div>
             <div className="grid gap-2">
                 <Label htmlFor="organization-slug">{t('Fields.Slug')}</Label>
-                <Input id="organization-slug" value={slug} onChange={event => setSlug(event.target.value)} disabled={!organization || !canUpdate || updateMutation.isPending} />
+                <Input
+                    id="organization-slug"
+                    value={slug}
+                    onChange={event => setSlugOverride(event.target.value)}
+                    disabled={!organization || !canUpdate || updateMutation.isPending}
+                />
             </div>
             <div className="flex items-center justify-end">
                 <Button onClick={() => updateMutation.mutate()} disabled={!organization || !canUpdate || !name.trim() || !slug.trim() || updateMutation.isPending}>

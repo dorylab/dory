@@ -83,6 +83,7 @@ export const resultSets = pgTable(
         index('idx_result_sets_work_created').on(t.workId, t.createdAt),
         index('idx_result_sets_agent_created').on(t.agentRunId, t.createdAt),
         index('idx_result_sets_source_query_run').on(t.sourceQueryRunId),
+        index('idx_result_sets_expires_at').on(t.expiresAt),
     ],
 );
 

@@ -3007,6 +3007,11 @@
                     "Title": "AI 配置",
                     "Description": "配置当前组织可使用的 AI 模型与 Provider。"
                 },
+                "Storage": {
+                    "Label": "存储",
+                    "Title": "存储",
+                    "Description": "管理查询结果和本地 artifact 的保留策略。"
+                },
                 "Billing": {
                     "Label": "套餐与订阅",
                     "Title": "套餐与订阅",
@@ -3038,6 +3043,23 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "为 Codex、Claude Code 和其他 Agent 开启本地 MCP endpoint。"
+                }
+            },
+            "Storage": {
+                "ResultSets": {
+                    "Title": "Result Sets",
+                    "Description": "控制已保存查询结果文件在自动清理前保留多久。",
+                    "FieldLabel": "查询结果保存时间",
+                    "FieldDescription": "过期结果文件会在后台清理，查询历史会保留。",
+                    "SelectPlaceholder": "选择保存时间",
+                    "DayOption": "{count} 天",
+                    "SaveAction": "保存设置",
+                    "Saving": "保存中...",
+                    "ReadOnlyHint": "你当前的角色不允许修改存储设置。",
+                    "Toasts": {
+                        "Updated": "查询结果保存时间已更新",
+                        "UpdateFailed": "更新查询结果保存时间失败"
+                    }
                 }
             },
             "Appearance": {

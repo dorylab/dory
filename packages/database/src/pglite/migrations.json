@@ -337,5 +337,13 @@
     "bps": true,
     "folderMillis": 1783075200000,
     "hash": "2e273d975e1613f47ee4b4e2bcb87b066a090fd5152031a8866debeeb037cddd"
+  },
+  {
+    "sql": [
+      "CREATE INDEX IF NOT EXISTS \"idx_result_sets_expires_at\" ON \"result_sets\" USING btree (\"expires_at\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1783555200000,
+    "hash": "fcb22933cf8147ad515eb18def0ad94279eef8075228402e655cc8a389f4661d"
   }
 ]

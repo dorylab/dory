@@ -13,6 +13,7 @@ import { AgentAccessPanel } from './AgentAccessPanel';
 import type { AISettingsPageClientProps } from '../../[organization]/settings/ai/page.client';
 import type { BillingSettingsPageClientProps } from '../../[organization]/settings/billing/page.client';
 import { OrganizationPanel } from './OrganizationPanel';
+import { StoragePanel } from './StoragePanel';
 import { useSettings } from './settings-provider';
 
 const AISettingsPageClient = dynamic<AISettingsPageClientProps>(() => import('../../[organization]/settings/ai/page.client'));
@@ -42,6 +43,8 @@ export function PanelByKey({
             return <AISettingsPageClient initialRuntime={runtime} onOpenBillingSettings={() => openSettings('billing')} />;
         case 'billing':
             return <BillingSettingsPageClient billingManagementAvailable={billingManagementAvailable} desktopBillingHandoff={desktopBillingHandoff} />;
+        case 'storage':
+            return <StoragePanel />;
         case 'appearance':
             return <AppearancePanel />;
         case 'editor':
