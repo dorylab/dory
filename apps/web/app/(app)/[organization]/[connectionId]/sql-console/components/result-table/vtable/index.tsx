@@ -20,6 +20,7 @@ const INITIAL_VISIBLE_COLUMN_COUNT = 12;
 const INITIAL_VISIBLE_ROW_COUNT = 24;
 const REMOTE_DEFAULT_PAGE_SIZE = 5000;
 const REMOTE_MAX_CACHED_PAGES = 24;
+const REMOTE_MAX_CACHED_SOURCES = 32;
 const REMOTE_PREFETCH_PAGES_BEFORE = 1;
 const REMOTE_PREFETCH_PAGES_AFTER = 2;
 const HEADER_TEXT_PAD = 44;
@@ -51,6 +52,43 @@ type MeasurableMultiGrid = MultiGrid & {
     recomputeGridSize?: () => void;
     forceUpdateGrids?: () => void;
 };
+
+type RemoteRowCacheEntry = {
+    rows: Map<number, { rowData: Record<string, unknown> }>;
+    pages: Map<number, number>;
+    touchedAt: number;
+};
+
+const remoteRowCacheByKey = new Map<string, RemoteRowCacheEntry>();
+
+function getRemoteRowCache(cacheKey: string) {
+    const entry = remoteRowCacheByKey.get(cacheKey);
+    if (entry) {
+        entry.touchedAt = Date.now();
+    }
+    return entry;
+}
+
+function setRemoteRowCache(cacheKey: string, rows: Map<number, { rowData: Record<string, unknown> }>, pages: Map<number, number>) {
+    remoteRowCacheByKey.set(cacheKey, {
+        rows: new Map(rows),
+        pages: new Map(pages),
+        touchedAt: Date.now(),
+    });
+
+    if (remoteRowCacheByKey.size <= REMOTE_MAX_CACHED_SOURCES) {
+        return;
+    }
+
+    const staleEntries = [...remoteRowCacheByKey.entries()].sort((left, right) => left[1].touchedAt - right[1].touchedAt);
+    const removeCount = remoteRowCacheByKey.size - REMOTE_MAX_CACHED_SOURCES;
+    for (let index = 0; index < removeCount; index += 1) {
+        const staleKey = staleEntries[index]?.[0];
+        if (staleKey) {
+            remoteRowCacheByKey.delete(staleKey);
+        }
+    }
+}
 
 function areNumberArraysEqual(left: number[] | undefined, right: number[] | undefined) {
     if (left === right) return true;
@@ -125,6 +163,9 @@ export default function VTable({
     const remotePagesRef = useRef<Map<number, number>>(new Map());
     const remoteLoadingPagesRef = useRef<Set<number>>(new Set());
     const remotePageAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
+    const activeRemoteCacheKeyRef = useRef<string | null>(remoteSource?.cacheKey ?? null);
+    const activeRemoteSourceIdRef = useRef<string | null>(remoteSource?.sourceId ?? null);
+    const remoteRowsStaleRef = useRef(false);
 
     const clampColumnWidth = useCallback(
         (col: string, width: number) => {
@@ -310,8 +351,26 @@ export default function VTable({
         for (const controller of remotePageAbortControllersRef.current.values()) {
             controller.abort();
         }
-        remoteRowsRef.current = new Map();
-        remotePagesRef.current = new Map();
+        const nextCacheKey = remoteSource?.cacheKey ?? null;
+        const nextSourceId = remoteSource?.sourceId ?? nextCacheKey;
+        const cached = nextCacheKey ? getRemoteRowCache(nextCacheKey) : null;
+        const canKeepStaleRows = Boolean(nextCacheKey && activeRemoteSourceIdRef.current === nextSourceId && remoteRowsRef.current.size > 0);
+
+        activeRemoteCacheKeyRef.current = nextCacheKey;
+        activeRemoteSourceIdRef.current = nextSourceId;
+
+        if (cached) {
+            remoteRowsRef.current = new Map(cached.rows);
+            remotePagesRef.current = new Map(cached.pages);
+            remoteRowsStaleRef.current = false;
+        } else {
+            if (!canKeepStaleRows) {
+                remoteRowsRef.current = new Map();
+            }
+            remotePagesRef.current = new Map();
+            remoteRowsStaleRef.current = canKeepStaleRows;
+        }
+
         remoteLoadingPagesRef.current = new Set();
         remotePageAbortControllersRef.current = new Map();
         setRemoteRowsVersion(version => version + 1);
@@ -321,7 +380,7 @@ export default function VTable({
                 controller.abort();
             }
         };
-    }, [remoteSource?.cacheKey]);
+    }, [remoteSource?.cacheKey, remoteSource?.sourceId]);
 
     const requestRemoteRange = useCallback(
         (start: number, stop: number) => {
@@ -369,6 +428,11 @@ export default function VTable({
                     .getRows(offset, remotePageSize, controller.signal)
                     .then(rows => {
                         if (controller.signal.aborted) return;
+                        if (activeRemoteCacheKeyRef.current !== remoteSource.cacheKey) return;
+                        if (remoteRowsStaleRef.current) {
+                            remoteRowsRef.current = new Map();
+                            remoteRowsStaleRef.current = false;
+                        }
                         rows.forEach((row, index) => {
                             remoteRowsRef.current.set(offset + index, row);
                         });
@@ -389,6 +453,7 @@ export default function VTable({
                                 removeCount -= 1;
                             }
                         }
+                        setRemoteRowCache(remoteSource.cacheKey, remoteRowsRef.current, remotePagesRef.current);
                     })
                     .catch(error => {
                         if (!controller.signal.aborted) {
@@ -533,20 +598,23 @@ export default function VTable({
         lastEmittedSortRef.current = initialSort;
     }, [initialSort]);
 
-    const handleSort = useCallback((col: string) => {
-        if (operationsDisabled) return;
-        setSortState(current => {
-            if (current?.column !== col) {
-                return { column: col, direction: 'asc' };
-            }
+    const handleSort = useCallback(
+        (col: string) => {
+            if (operationsDisabled) return;
+            setSortState(current => {
+                if (current?.column !== col) {
+                    return { column: col, direction: 'asc' };
+                }
 
-            if (current.direction === 'asc') {
-                return { column: col, direction: 'desc' };
-            }
+                if (current.direction === 'asc') {
+                    return { column: col, direction: 'desc' };
+                }
 
-            return null;
-        });
-    }, [operationsDisabled]);
+                return null;
+            });
+        },
+        [operationsDisabled],
+    );
 
     const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(() => new Set(selectedRowIndexes ?? []));
     const [, setSelectionAnchor] = useState<number | null>(null);

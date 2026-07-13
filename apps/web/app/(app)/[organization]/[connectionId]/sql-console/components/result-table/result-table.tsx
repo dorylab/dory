@@ -6,7 +6,7 @@ import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
 import VTable from './vtable';
 import { InspectorPanel } from './vtable/InspectorPanel';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
-import { activeSessionIdAtom, runningTabsAtom } from '../../sql-console.store';
+import { runningTabsAtom, sessionIdByTabAtom } from '../../sql-console.store';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useSqlConsoleResultStore } from '@/lib/client/sql-console-result-store';
 import { MetaState } from '@dory/shared/types/sql-console';
@@ -58,6 +58,9 @@ type SessionUiSnapshot = {
     sessionMetaBySet?: Record<number, CurrentSessionMeta>;
     meta?: MetaState;
     sessionStatus?: ResultSessionStatus | null;
+};
+type ResultTableProps = {
+    tabId?: string;
 };
 type InspectorPayload =
     | {
@@ -132,7 +135,7 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 
 /* =================================== component =================================== */
 
-export function ResultTable() {
+export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const t = useTranslations('SqlConsole');
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
     const [currentViewMode, setCurrentViewMode] = useState<ResultViewMode>('table');
@@ -147,10 +150,12 @@ export function ResultTable() {
     const runningTabs = useAtomValue(runningTabsAtom);
 
     // Atoms
-    const tabId = useAtomValue(activeTabIdAtom);
-    const sessionIdFromAtom = useAtomValue(activeSessionIdAtom);
+    const activeTabId = useAtomValue(activeTabIdAtom);
+    const tabId = tabIdProp ?? activeTabId;
+    const sessionIdByTab = useAtomValue(sessionIdByTabAtom);
+    const sessionIdFromAtom = tabId ? sessionIdByTab[tabId] : undefined;
     const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
-    const sessionId = sessionIdFromAtom || (typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
+    const sessionId = sessionIdFromAtom || (tabId && typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
 
     const { dbReady, listResultSetIndices, listResultSetsMeta, readResultSetRows, exportResultSet, readResultSetChart, dataVersion, getSession, updateResultSetViewState } =
         useSqlConsoleResultStore();
@@ -345,6 +350,7 @@ export function ResultTable() {
         if (!remoteResultSetId || !isRemoteFullResult || remoteRowCount <= 0) return null;
         return {
             cacheKey: `${remoteResultSetId}:${remoteOperationKey}`,
+            sourceId: remoteResultSetId,
             rowCount: remoteEffectiveRowCount ?? remoteRowCount,
             pageSize: 5000,
             getRows: async (offset: number, limit: number, signal?: AbortSignal) => {
