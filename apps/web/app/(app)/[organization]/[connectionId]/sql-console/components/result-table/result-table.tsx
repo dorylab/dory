@@ -30,13 +30,35 @@ import { useVTableFilters, VTableFilters } from './vtable/VTableFilters';
 import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import type { ColumnFilter } from './vtable/type';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
-import type { ResultSetViewState } from '@/lib/client/type';
+import type { ResultSetMeta, ResultSetViewState } from '@/lib/client/type';
 import { isQueryHistoryRestoredSession } from '../../query-history-result-restore';
 /* =================================== constants =================================== */
 
 const OVERVIEW_SET = -1;
 type ResultViewMode = 'table' | 'charts';
 type ResultSessionStatus = 'running' | 'success' | 'error' | 'canceled';
+type ResultSetSummaryMeta = {
+    sessionId: string;
+    setIndex: number;
+    sqlText: string;
+    status: ResultSessionStatus;
+    startedAt?: number | null;
+    finishedAt?: number | null;
+    durationMs?: number | null;
+    rowCount?: number | null;
+    affectedRows?: number | null;
+    errorMessage?: string | null;
+    limited?: boolean;
+    limit?: number | null;
+};
+type CurrentSessionMeta = ResultSetMeta | { columns: never[] };
+type SessionUiSnapshot = {
+    indices?: number[];
+    setsMeta?: ResultSetSummaryMeta[];
+    sessionMetaBySet?: Record<number, CurrentSessionMeta>;
+    meta?: MetaState;
+    sessionStatus?: ResultSessionStatus | null;
+};
 type InspectorPayload =
     | {
           row: number;
@@ -136,6 +158,7 @@ export function ResultTable() {
     // Session status
     const [sessionStatus, setSessionStatus] = useState<'running' | 'success' | 'error' | 'canceled' | null>(null);
     const lastSessionRef = useRef<string | null>(null);
+    const sessionUiCacheRef = useRef<Record<string, SessionUiSnapshot>>({});
 
     const [indices, setIndices] = useState<number[]>([]);
     const prevStatusRef = useRef<'running' | 'success' | 'error' | 'canceled' | null | undefined>(null);
@@ -217,22 +240,25 @@ export function ResultTable() {
 
     const setUserPickedFalse = useSetAtom(useMemo(() => makeSetUserPickedAtom(tabId, sessionId), [tabId, sessionId]));
 
-    const [setsMeta, setSetsMeta] = useState<
-        Array<{
-            sessionId: string;
-            setIndex: number;
-            sqlText: string;
-            status: ResultSessionStatus;
-            startedAt?: number | null;
-            finishedAt?: number | null;
-            durationMs?: number | null;
-            rowCount?: number | null;
-            affectedRows?: number | null;
-            errorMessage?: string | null;
-            limited?: boolean;
-            limit?: number | null;
-        }>
-    >([]);
+    const [setsMeta, setSetsMeta] = useState<ResultSetSummaryMeta[]>([]);
+
+    const cacheSessionUi = useCallback((cacheSessionId: string, snapshot: Partial<SessionUiSnapshot>) => {
+        sessionUiCacheRef.current[cacheSessionId] = {
+            ...(sessionUiCacheRef.current[cacheSessionId] ?? {}),
+            ...snapshot,
+        };
+    }, []);
+
+    const cacheSessionMeta = useCallback((cacheSessionId: string, setIndex: number, sessionMeta: CurrentSessionMeta) => {
+        const previous = sessionUiCacheRef.current[cacheSessionId] ?? {};
+        sessionUiCacheRef.current[cacheSessionId] = {
+            ...previous,
+            sessionMetaBySet: {
+                ...(previous.sessionMetaBySet ?? {}),
+                [setIndex]: sessionMeta,
+            },
+        };
+    }, []);
 
     useEffect(() => {
         const prev = prevStatusRef.current;
@@ -254,6 +280,7 @@ export function ResultTable() {
             const metas = await listResultSetsMeta(sessionId);
             const currentSessionMeta = metas?.find(m => m.sessionId === sessionId && m.setIndex === activeSet) ?? { columns: [] };
             if (!canceled) {
+                cacheSessionMeta(sessionId, activeSet, currentSessionMeta);
                 setSessionMetas(currentSessionMeta);
             }
         })();
@@ -261,7 +288,7 @@ export function ResultTable() {
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, activeSet]);
+    }, [dbReady, sessionId, dataVersion, activeSet, cacheSessionMeta, listResultSetsMeta, setSessionMetas]);
 
     const filteredResults = useMemo(() => {
         if (isRemoteFullResult) return [];
@@ -298,6 +325,7 @@ export function ResultTable() {
         storageKey,
         disableStorage: true,
     });
+    const hasActiveResultOperations = query.trim().length > 0 || activeFilters.length > 0;
 
     const remoteOperations = useMemo(
         () => ({
@@ -424,6 +452,8 @@ export function ResultTable() {
         }),
         [columnFilteredResults.length, isRemoteFullResult, remoteRowCount, results.length, rowCount],
     );
+    const shouldShowWholeResultEmpty = showEmpty && !hasActiveResultOperations;
+    const shouldShowFilteredEmpty = showEmpty && hasActiveResultOperations;
 
     const onStatsChange = useCallback(() => {}, []);
     const handleSelectedRowIndexesChange = useCallback((next: number[]) => {
@@ -440,10 +470,6 @@ export function ResultTable() {
         if (!tabId) return;
         if (lastTabIdRef.current !== tabId) {
             lastTabIdRef.current = tabId;
-
-            setResults([]);
-            setIndices([]);
-            setSessionStatus(null);
         }
     }, [tabId]);
 
@@ -456,6 +482,7 @@ export function ResultTable() {
                 const arr = await listResultSetIndices(sessionId);
                 if (canceled) return;
                 const next = Array.isArray(arr) ? Array.from(new Set(arr.filter(n => Number.isFinite(n) && n >= 0))).sort((a, b) => a - b) : [];
+                cacheSessionUi(sessionId, { indices: next });
                 setIndices(next);
 
                 if (activeSet >= 0 && !next.includes(activeSet)) {
@@ -467,7 +494,7 @@ export function ResultTable() {
             canceled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dbReady, sessionId, dataVersion]);
+    }, [dbReady, sessionId, dataVersion, cacheSessionUi]);
 
     /* ---------- Pull session status ---------- */
     useEffect(() => {
@@ -480,13 +507,14 @@ export function ResultTable() {
             const sess = await getSession(sessionId);
             if (!canceled) {
                 const nextStatus = sess?.status === 'running' || sess?.status === 'success' || sess?.status === 'error' || sess?.status === 'canceled' ? sess.status : null;
+                cacheSessionUi(sessionId, { sessionStatus: nextStatus });
                 setSessionStatus(nextStatus);
             }
         })();
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, getSession]);
+    }, [dbReady, sessionId, dataVersion, getSession, cacheSessionUi]);
 
     /* ---------- Reset on session change ---------- */
     useEffect(() => {
@@ -503,9 +531,36 @@ export function ResultTable() {
             lastSessionRef.current = sessionId;
 
             setResults([]);
+            setRemoteEffectiveRowCount(null);
+
+            const cached = sessionUiCacheRef.current[sessionId];
+            if (cached) {
+                setIndices(cached.indices ?? []);
+                setSetsMeta(cached.setsMeta ?? []);
+                setSessionMetas(cached.sessionMetaBySet?.[activeSet] ?? { columns: [] });
+                setMeta(cached.meta ?? {});
+                setSessionStatus(cached.sessionStatus ?? null);
+                return;
+            }
+
             setIndices([]);
+            setSetsMeta([]);
+            setSessionMetas({});
+            setMeta({});
+            setSessionStatus(null);
         }
-    }, [sessionId]);
+    }, [activeSet, sessionId, setSessionMetas]);
+
+    useEffect(() => {
+        if (!sessionId || activeSet < 0) {
+            return;
+        }
+
+        const cachedSessionMeta = sessionUiCacheRef.current[sessionId]?.sessionMetaBySet?.[activeSet];
+        if (cachedSessionMeta) {
+            setSessionMetas(cachedSessionMeta);
+        }
+    }, [activeSet, sessionId, setSessionMetas]);
 
     useEffect(() => {
         if (!sessionId || !tabId) {
@@ -556,6 +611,7 @@ export function ResultTable() {
                         source: isQueryHistoryRestoredSession(tabId, sessionId) ? 'query-history' : (sess?.source ?? undefined),
                         syncing: false,
                     };
+                    cacheSessionUi(sessionId, { meta: next });
                     return next;
                 });
             } catch {}
@@ -563,7 +619,7 @@ export function ResultTable() {
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, getSession, tabId, activeSet, sessionStatus]);
+    }, [dbReady, sessionId, dataVersion, getSession, tabId, activeSet, sessionStatus, cacheSessionUi]);
 
     useEffect(() => {
         let canceled = false;
@@ -573,12 +629,13 @@ export function ResultTable() {
                 const metas = await listResultSetsMeta(sessionId);
                 if (canceled) return;
                 if (!metas) return;
-                setSetsMeta(
-                    metas.map(m => ({
+                const nextSetsMeta: ResultSetSummaryMeta[] = metas.map(m => {
+                    const status: ResultSessionStatus = m.status === 'running' ? 'running' : m.status === 'error' ? 'error' : 'success';
+                    return {
                         sessionId: m.sessionId,
                         setIndex: m.setIndex,
                         sqlText: m.sqlText ?? '',
-                        status: m.status === 'running' ? 'running' : m.status === 'error' ? 'error' : 'success',
+                        status,
                         startedAt: m.startedAt ?? null,
                         finishedAt: m.finishedAt ?? null,
                         durationMs: m.durationMs ?? null,
@@ -587,10 +644,15 @@ export function ResultTable() {
                         errorMessage: m.errorMessage ?? null,
                         limited: m.limited ?? false,
                         limit: m.limit ?? null,
-                    })),
-                );
+                    };
+                });
+                setSetsMeta(nextSetsMeta);
 
                 const next = metas.map(m => m.setIndex).sort((a, b) => a - b);
+                cacheSessionUi(sessionId, {
+                    indices: next,
+                    setsMeta: nextSetsMeta,
+                });
                 setIndices(next);
 
                 if (activeSet >= 0 && !next.includes(activeSet)) {
@@ -601,7 +663,7 @@ export function ResultTable() {
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, listResultSetsMeta]);
+    }, [activeSet, dbReady, sessionId, dataVersion, listResultSetsMeta, cacheSessionUi, setActiveSet]);
 
     const overviewItems: OverviewItem[] = useMemo(() => {
         if (!sessionId) return [];
@@ -648,13 +710,7 @@ export function ResultTable() {
             const runningRemote = m?.status === 'running' || runningTabs[tabId] === 'running';
             const runningLocal = false;
 
-            const shownRows = isActive
-                ? isRemoteFullResult
-                    ? (expectedRowCount ?? 0)
-                    : results.length
-                : typeof m?.rowCount === 'number'
-                  ? m.rowCount
-                  : 0;
+            const shownRows = isActive ? (isRemoteFullResult ? (expectedRowCount ?? 0) : results.length) : typeof m?.rowCount === 'number' ? m.rowCount : 0;
 
             map[i] = {
                 runningRemote,
@@ -736,11 +792,11 @@ export function ResultTable() {
                 />
             );
         }
-        if (showEmpty) {
-            return <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>;
-        }
         if (execMetaBySet?.[activeSet]?.errorMessage) {
             return <SQLErrorAlert message={execMetaBySet?.[activeSet]?.errorMessage} sql={execMetaBySet?.[activeSet]?.sqlText} />;
+        }
+        if (shouldShowWholeResultEmpty) {
+            return <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>;
         }
         const showSharedFilterBar = currentViewMode === 'table' || currentViewMode === 'charts';
 
@@ -824,25 +880,29 @@ export function ResultTable() {
                 {currentViewMode === 'table' ? (
                     <>
                         <div className="flex-1 min-h-0">
-                            <VTable
-                                results={isRemoteFullResult ? [] : columnFilteredResults}
-                                remoteSource={remoteSource}
-                                storageKey={storageKey}
-                                onStatsChange={onStatsChange}
-                                setInspectorOpen={setInspectorOpen}
-                                setInspectorMode={setInspectorMode}
-                                setInspectorPayload={setInspectorPayload}
-                                activeFilters={activeFilters}
-                                onUpsertFilter={setColumnFilter}
-                                onRemoveFilter={removeFilter}
-                                onClearAllFilters={clearAllFilters}
-                                showFiltersBar={false}
-                                initialSort={sortState}
-                                selectedRowIndexes={selectedRowIndexes}
-                                serverSideOperations={isRemoteFullResult}
-                                onSortChange={setSortState}
-                                onSelectedRowIndexesChange={handleSelectedRowIndexesChange}
-                            />
+                            {shouldShowFilteredEmpty ? (
+                                <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>
+                            ) : (
+                                <VTable
+                                    results={isRemoteFullResult ? [] : columnFilteredResults}
+                                    remoteSource={remoteSource}
+                                    storageKey={storageKey}
+                                    onStatsChange={onStatsChange}
+                                    setInspectorOpen={setInspectorOpen}
+                                    setInspectorMode={setInspectorMode}
+                                    setInspectorPayload={setInspectorPayload}
+                                    activeFilters={activeFilters}
+                                    onUpsertFilter={setColumnFilter}
+                                    onRemoveFilter={removeFilter}
+                                    onClearAllFilters={clearAllFilters}
+                                    showFiltersBar={false}
+                                    initialSort={sortState}
+                                    selectedRowIndexes={selectedRowIndexes}
+                                    serverSideOperations={isRemoteFullResult}
+                                    onSortChange={setSortState}
+                                    onSelectedRowIndexesChange={handleSelectedRowIndexesChange}
+                                />
+                            )}
                         </div>
                         <InspectorPanel
                             open={inspectorOpen}
