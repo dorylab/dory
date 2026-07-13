@@ -275,7 +275,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
     const { tabId, connectionId, databaseName, onDetailStateChange } = props;
     const locale = useLocale();
     const t = useTranslations('SqlConsole');
-    const { dbReady, getResultRows, applyServerResult } = useDB();
+    const { dbReady, getResultRows, readResultSetProfile, applyServerResult } = useDB();
     const sessionMetas = useAtomValue(currentSessionMetaAtom);
     const sessionIdByTab = useAtomValue(sessionIdByTabAtom);
     const activeSessionId = tabId ? sessionIdByTab[tabId] : undefined;
@@ -288,6 +288,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
     const workspaces = useAtomValue(analysisWorkspaceStateAtom);
     const upsertWorkspace = useSetAtom(upsertAnalysisWorkspaceAtom);
     const [sampleRows, setSampleRows] = useState<Array<Record<string, unknown>>>([]);
+    const [profileStats, setProfileStats] = useState<typeof sessionMetas.stats | null>(null);
     const [sampleRowsReady, setSampleRowsReady] = useState(false);
     const [analysisRows, setAnalysisRows] = useState<AnalysisRow[]>([]);
     const [runningSuggestionId, setRunningSuggestionId] = useState<string | null>(null);
@@ -304,9 +305,22 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             if (!dbReady || !activeSessionId || activeSet == null || activeSet < 0) {
                 if (!canceled) {
                     setSampleRows([]);
+                    setProfileStats(null);
                     setSampleRowsReady(true);
                 }
                 return;
+            }
+
+            const resultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
+            if (resultSetId && sessionMetas?.dataAvailability === 'full') {
+                const profile = await readResultSetProfile({ resultSetId, sampleRows: 200 }).catch(() => null);
+                if (canceled) return;
+                if (profile) {
+                    setSampleRows(profile.sampleRows.slice(0, 200));
+                    setProfileStats(profile.stats);
+                    setSampleRowsReady(true);
+                    return;
+                }
             }
 
             const rows = await getResultRows(activeSessionId, activeSet, {
@@ -315,26 +329,29 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             }).catch(() => []);
             if (canceled) return;
             setSampleRows(rows.map(row => row.rowData as Record<string, unknown>).slice(0, 200));
+            setProfileStats(null);
             setSampleRowsReady(true);
         })();
 
         return () => {
             canceled = true;
         };
-    }, [activeSessionId, activeSet, dbReady, getResultRows]);
+    }, [activeSessionId, activeSet, dbReady, getResultRows, readResultSetProfile, sessionMetas?.dataAvailability, sessionMetas?.resultSetId]);
+
+    const effectiveStats = profileStats ?? sessionMetas?.stats;
 
     const insightRewriteRequest = useMemo(() => {
         if (!sampleRowsReady) return null;
         const columns = Array.isArray(sessionMetas?.columns) ? sessionMetas.columns : [];
         return buildInsightRewriteRequest({
-            stats: sessionMetas?.stats,
+            stats: effectiveStats,
             columns,
             sqlText: sessionMetas?.sqlText ?? '',
             rows: sampleRows,
             locale,
             t: (key, values) => t(key as any, values),
         });
-    }, [locale, sampleRows, sampleRowsReady, sessionMetas, t]);
+    }, [effectiveStats, locale, sampleRows, sampleRowsReady, sessionMetas, t]);
     const insightRewriteCacheKey = useMemo(() => makeInsightRewriteCacheKey(insightRewriteRequest), [insightRewriteRequest]);
 
     useEffect(() => {
@@ -359,7 +376,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         if (!activeSessionId || activeSet == null || activeSet < 0) return null;
         const columns = Array.isArray(sessionMetas?.columns) ? sessionMetas.columns : [];
         const draft = buildInsightDraft({
-            stats: sessionMetas?.stats,
+            stats: effectiveStats,
             columns,
             sqlText: sessionMetas?.sqlText ?? '',
             rows: sampleRows,
@@ -368,7 +385,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         });
         const view = buildInsights(
             {
-                stats: sessionMetas?.stats,
+                stats: effectiveStats,
                 columns,
                 sqlText: sessionMetas?.sqlText ?? '',
                 rows: sampleRows,
@@ -379,7 +396,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         );
         const structured = buildStructuredInsightView({
             context: {
-                stats: sessionMetas?.stats,
+                stats: effectiveStats,
                 columns,
                 sqlText: sessionMetas?.sqlText ?? '',
                 rows: sampleRows,
@@ -396,7 +413,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             databaseName: databaseName ?? null,
             rowCount: sessionMetas?.rowCount ?? sampleRows.length,
             columns,
-            stats: sessionMetas?.stats,
+            stats: effectiveStats,
         });
         const suggestions = buildAnalysisSuggestions({
             resultContext,
@@ -415,7 +432,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             resultContext,
             suggestions,
         };
-    }, [activeSessionId, activeSet, databaseName, locale, rewritten, sampleRows, sessionMetas, t]);
+    }, [activeSessionId, activeSet, databaseName, effectiveStats, locale, rewritten, sampleRows, sessionMetas, t]);
 
     useEffect(() => {
         if (!workspaceKey || !insightBundle || !tabId || !activeSessionId || activeSet == null || activeSet < 0) return;

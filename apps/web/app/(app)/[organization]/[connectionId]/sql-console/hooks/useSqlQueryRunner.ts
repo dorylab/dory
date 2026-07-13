@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useDB } from '@/lib/client/use-pglite';
-import { useQuery } from '@/hooks/use-query';
 import { executeActionClient } from '@/lib/actions/client';
+import { runSqlQueryStream, type QueryExecutePayload } from '@/lib/client/sql-console-query-stream';
 import { fetchTablePreview } from '../../../components/table-browser/lib/fetch-table-preview';
 import { SQLTab } from '@dory/shared/types/tabs';
-import { runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
+import { QUERY_HISTORY_UPDATED_EVENT, runningTabsAtom, sessionIdByTabAtom } from '../sql-console.store';
 import { SQLEditorHandle } from '../components/sql-editor';
 import { useTranslations } from 'next-intl';
 import { columnsCacheAtom, currentConnectionAtom, schemaMetadataRefreshAtom } from '@/shared/stores/app.store';
@@ -20,10 +20,11 @@ type QueryResultSetSummary = {
     sqlOp?: unknown;
     status?: unknown;
 };
+type ApplyServerResultPayload = Parameters<ReturnType<typeof useDB>['applyServerResult']>[0];
 
 function genSessionId() {
-    // @ts-ignore
-    return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const randomUUID = globalThis.crypto?.randomUUID;
+    return typeof randomUUID === 'function' ? randomUUID.call(globalThis.crypto) : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 const LEADING_COMMENTS_REGEX = /^\s*(?:(?:--[^\n]*\n)|(?:#[^\n]*\n)|(?:\/\*[\s\S]*?\*\/\s*))*/;
@@ -39,7 +40,7 @@ function applyLimitToStatement(statement: string, limit: number, dialect: Select
     return `${prefix}${limited}`;
 }
 
-function applyLimitToSql(sqlText: string, limit: number | undefined, dialect: SelectLimitDialect) {
+function applyLimitToSql(sqlText: string, limit: number | null | undefined, dialect: SelectLimitDialect) {
     if (!limit || !Number.isFinite(limit) || limit <= 0) return sqlText;
     const statements = splitMultiSQL(sqlText);
     if (statements.length <= 1) {
@@ -52,6 +53,17 @@ function hasSuccessfulSchemaChange(payload: unknown) {
     const queryResultSets = payload && typeof payload === 'object' && 'queryResultSets' in payload ? (payload as { queryResultSets?: unknown }).queryResultSets : null;
     const resultSets = Array.isArray(queryResultSets) ? (queryResultSets as QueryResultSetSummary[]) : [];
     return resultSets.some(resultSet => resultSet?.status === 'success' && resultSet?.sqlOp === 'DDL');
+}
+
+function isQueryExecutePayload(value: unknown): value is QueryExecutePayload {
+    if (!value || typeof value !== 'object') return false;
+    const payload = value as Partial<QueryExecutePayload>;
+    return Boolean(payload.session && typeof payload.session === 'object' && Array.isArray(payload.queryResultSets) && Array.isArray(payload.results));
+}
+
+function notifyQueryHistoryUpdated(connectionId?: string | null) {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(new CustomEvent(QUERY_HISTORY_UPDATED_EVENT, { detail: { connectionId: connectionId ?? null } }));
 }
 
 export function useSqlQueryRunner({
@@ -69,7 +81,6 @@ export function useSqlQueryRunner({
     requestAITabTitle: RequestAITabTitle;
     workspaceScope?: SqlWorkspaceScope;
 }) {
-    const { run: query } = useQuery();
     const { dbReady, setUserId, createQuerySession, finishQuerySession, applyServerResult } = useDB();
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
@@ -92,7 +103,7 @@ export function useSqlQueryRunner({
     }, [setUserId, userId, userReady]);
 
     const runQuery = useCallback(
-        async (tab: SQLTab, options?: { sqlOverride?: string; databaseOverride?: string | null; limit?: number }) => {
+        async (tab: SQLTab, options?: { sqlOverride?: string; databaseOverride?: string | null; limit?: number | null }) => {
             if (!dbReady || !tab || !userReady) return;
 
             const tabId = tab.tabId;
@@ -115,6 +126,7 @@ export function useSqlQueryRunner({
 
             const stopOnError = false;
             const source = tab.tabType === 'table' ? 'data-preview' : 'sql-console';
+            const queryConnectionId = tab.connectionId ?? currentConnection?.connection?.id ?? null;
 
             setRunningTabs(p => ({ ...p, [tabId]: 'running' }));
             const controller = new AbortController();
@@ -124,7 +136,7 @@ export function useSqlQueryRunner({
             setSessionIdMap(p => ({ ...p, [tabId]: sessionId }));
             try {
                 localStorage.setItem(
-                    getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null }),
+                    getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: queryConnectionId }),
                     sessionId,
                 );
             } catch {
@@ -143,40 +155,61 @@ export function useSqlQueryRunner({
                     sessionId,
                 });
 
-                const res =
-                    tab.tabType === 'table'
-                        ? await fetchTablePreview({
-                              connectionId: tab.connectionId,
-                              databaseName: database as string,
-                              tableName: tableName as string,
-                              limit: tab.dataView?.limit,
-                              sessionId,
-                              tabId,
-                              source,
-                              signal: controller.signal,
-                          })
-                        : await query(
-                              {
-                                  sql: finalSqlText,
-                                  database,
-                                  stopOnError,
-                                  sessionId,
-                                  userId,
-                                  tabId,
-                                  source,
-                              },
-                              { signal: controller.signal },
-                          );
+                let payload: QueryExecutePayload | null = null;
+                if (tab.tabType === 'table') {
+                    const res = await fetchTablePreview({
+                        connectionId: tab.connectionId,
+                        databaseName: database as string,
+                        tableName: tableName as string,
+                        limit: tab.dataView?.limit,
+                        sessionId,
+                        tabId,
+                        source,
+                        signal: controller.signal,
+                    });
+                    payload = isQueryExecutePayload(res.data) ? res.data : null;
+                } else {
+                    await runSqlQueryStream({
+                        input: {
+                            sql: finalSqlText,
+                            database,
+                            stopOnError,
+                            sessionId,
+                            userId,
+                            tabId,
+                            source,
+                            connectionId: queryConnectionId ?? undefined,
+                        },
+                        currentConnectionId: queryConnectionId,
+                        signal: controller.signal,
+                        onEvent: async event => {
+                            if (event.type === 'error') {
+                                throw Object.assign(new Error(event.payload.message), {
+                                    code: event.payload.code,
+                                });
+                            }
 
-                const payload = (res as any)?.data;
+                            if ('payload' in event && event.payload && 'session' in event.payload) {
+                                payload = event.payload;
+                                if (event.type === 'result-completed' || event.type === 'session-finished') {
+                                    await applyServerResult(event.payload as ApplyServerResultPayload);
+                                }
+                            }
+                        },
+                    });
+                }
+
                 if (!payload || !payload.session) {
                     throw new Error(t('Errors.InvalidSessionData'));
                 }
-                await applyServerResult(payload);
+                const finalPayload = payload;
+                if (tab.tabType === 'table') {
+                    await applyServerResult(finalPayload as ApplyServerResultPayload);
+                }
 
-                if (tab.tabType === 'sql' && hasSuccessfulSchemaChange(payload)) {
+                if (tab.tabType === 'sql' && hasSuccessfulSchemaChange(finalPayload)) {
                     setSchemaMetadataRefresh(prev => ({
-                        connectionId: tab.connectionId ?? currentConnection?.connection?.id ?? null,
+                        connectionId: queryConnectionId,
                         database,
                         version: prev.version + 1,
                     }));
@@ -184,24 +217,31 @@ export function useSqlQueryRunner({
                 }
 
                 const totalMs = Math.round(performance.now() - t0);
+                const finalStatus =
+                    finalPayload.session.status === 'error' || finalPayload.session.status === 'canceled' || finalPayload.session.status === 'success'
+                        ? finalPayload.session.status
+                        : 'success';
+                const totalSets = typeof finalPayload.meta?.totalSets === 'number' ? finalPayload.meta.totalSets : (finalPayload.session?.resultSetCount ?? 0);
                 await finishQuerySession(sessionId, {
-                    status: payload.session.status ?? 'success',
-                    resultSetCount: payload.meta?.totalSets ?? payload.session?.resultSetCount ?? 0,
-                    durationMs: payload.session.durationMs ?? totalMs,
+                    status: finalStatus,
+                    resultSetCount: totalSets,
+                    durationMs: finalPayload.session.durationMs ?? totalMs,
                 });
 
                 setRunningTabs(p => ({
                     ...p,
-                    [tabId]: payload.session.status ?? 'success',
+                    [tabId]: finalStatus,
                 }));
+                notifyQueryHistoryUpdated(queryConnectionId);
 
                 const latestTab = tabs.find(t => t.tabId === tabId);
                 if (latestTab && latestTab.tabType === 'sql') {
                     void requestAITabTitle(latestTab, { sqlTextOverride: finalSqlText });
                 }
-            } catch (e: any) {
+            } catch (e: unknown) {
                 console.error('[SQLConsoleClient.runQuery] error:', e);
-                if (e?.name === 'AbortError') {
+                const errorMessage = e instanceof Error ? e.message : String(e ?? 'SQL execution failed');
+                if (e instanceof Error && e.name === 'AbortError') {
                     try {
                         const totalMs = Math.round(performance.now() - t0);
                         await finishQuerySession(sessionId, {
@@ -213,16 +253,18 @@ export function useSqlQueryRunner({
                         // ignore
                     }
                     setRunningTabs(p => ({ ...p, [tabId]: 'canceled' }));
+                    notifyQueryHistoryUpdated(queryConnectionId);
                 } else {
                     try {
                         await finishQuerySession(sessionId, {
                             status: 'error',
-                            errorMessage: String(e?.message ?? e),
+                            errorMessage,
                         });
                     } catch {
                         // ignore
                     }
                     setRunningTabs(p => ({ ...p, [tabId]: 'error' }));
+                    notifyQueryHistoryUpdated(queryConnectionId);
                 }
             } finally {
                 const stored = abortControllersRef.current[tabId];
@@ -237,7 +279,6 @@ export function useSqlQueryRunner({
             activeTab,
             activeDatabase,
             limitDialect,
-            query,
             createQuerySession,
             applyServerResult,
             finishQuerySession,
@@ -250,6 +291,7 @@ export function useSqlQueryRunner({
             requestAITabTitle,
             t,
             currentConnection?.connection?.id,
+            normalizedWorkspaceScope,
         ],
     );
 

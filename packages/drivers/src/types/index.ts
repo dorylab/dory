@@ -36,6 +36,7 @@ export type DriverQueryContext = {
     database?: string;
     schema?: string;
     queryId?: string;
+    statementIndex?: number;
     statementTimeoutMs?: number;
 };
 export type ConnectionQueryContext = DriverQueryContext;
@@ -52,6 +53,17 @@ export interface DriverQueryResult<Row = any> {
     statistics?: Record<string, unknown>;
 }
 export type QueryResult<Row = any> = DriverQueryResult<Row>;
+
+export interface DriverQueryRowStream<Row = any> {
+    rows: AsyncIterable<Row>;
+    rowCount?: number | null;
+    limited?: boolean;
+    limit?: number;
+    columns?: ColumnMeta[];
+    tookMs?: number;
+    statistics?: Record<string, unknown>;
+    close?: () => Promise<void> | void;
+}
 
 export interface DriverHealthInfo {
     ok: boolean;

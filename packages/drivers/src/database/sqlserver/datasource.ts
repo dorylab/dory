@@ -1,11 +1,11 @@
 import type { ConnectionPool, Request } from 'mssql';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { createSqlServerMetadataCapability, type SqlServerMetadataAPI } from './capabilities/metadata';
 import { createSqlServerTableInfoCapability } from './capabilities/table-info';
 import { SqlServerDialect } from './dialect';
-import { createSqlServerPool, executeSqlServerCommand, executeSqlServerQuery, pingSqlServer, resolveSqlServerPort } from './runtime';
+import { createSqlServerPool, executeSqlServerCommand, executeSqlServerQuery, executeSqlServerQueryRowStream, pingSqlServer, resolveSqlServerPort } from './runtime';
 
 export class SqlServerDatasource extends BaseConnection {
     readonly dialect = SqlServerDialect;
@@ -88,6 +88,21 @@ export class SqlServerDatasource extends BaseConnection {
         const targetDatabase = context?.database ?? this.config.database;
         const pool = await this.resolvePool(targetDatabase);
         return executeSqlServerQuery<Row>(pool, sql, context?.params, {
+            context,
+            trackQuery: request => {
+                if (context?.queryId) this.runningQueries.set(context.queryId, request);
+            },
+            untrackQuery: () => {
+                if (context?.queryId) this.runningQueries.delete(context.queryId);
+            },
+        });
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        this.assertReady();
+        const targetDatabase = context?.database ?? this.config.database;
+        const pool = await this.resolvePool(targetDatabase);
+        return executeSqlServerQueryRowStream<Row>(pool, sql, context?.params, {
             context,
             trackQuery: request => {
                 if (context?.queryId) this.runningQueries.set(context.queryId, request);

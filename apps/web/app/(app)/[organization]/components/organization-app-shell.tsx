@@ -6,6 +6,7 @@ import { SettingsProvider } from '../../components/settings/settings';
 import { AppContentShell } from './app-sidebar/app-content-shell';
 import { AppSidebar } from './app-sidebar/app-sidebar';
 import { ConnectionDialogRoot } from '../connections/components/connection-dialog-root';
+import { ResultSetCleanupTrigger } from './result-set-cleanup-trigger';
 
 export function OrganizationAppShell({
     children,
@@ -36,6 +37,7 @@ export function OrganizationAppShell({
             billingManagementAvailable={billingManagementAvailable}
             desktopBillingHandoff={desktopBillingHandoff}
         >
+            <ResultSetCleanupTrigger organizationId={organizationId} />
             <div className="flex h-screen min-h-0 flex-col overflow-hidden">
                 <SidebarProvider
                     className="flex-1 !min-h-0"

@@ -24,7 +24,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import { copilotPanelOpenAtom, copilotPanelWidthAtom, editorSelectionByTabAtom, inlineSqlAskByTabAtom } from './sql-console.store';
+import { copilotPanelOpenAtom, copilotPanelWidthAtom, editorSelectionByTabAtom, inlineSqlAskByTabAtom, sessionIdByTabAtom } from './sql-console.store';
 
 import { SQLConsoleSidebar } from '../../components/sql-console-sidebar/sql-console-sidebar';
 import type { RenameTablePayload, TableActionPayload } from '../../components/sql-console-sidebar/types';
@@ -38,7 +38,9 @@ import type { SQLEditorHandle } from './components/sql-editor';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
+import { useDB } from '@/lib/client/use-pglite';
+import { getSessionStorageKey, sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
+import { buildQueryHistoryResultRestorePayload } from './query-history-result-restore';
 import { AgentRunWorkspacePanel } from './agent-run-workspace-panel';
 
 const INITIAL_LAYOUT = {
@@ -270,6 +272,7 @@ export default function AgentWorkspaceClient({
     const tAgentRuns = useTranslations('AgentRuns');
     const router = useRouter();
     const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
+    const activeWorkspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
 
     const horizontalLayout = useMemo(() => normalizeHorizontalLayout(normalizedLayout), [normalizedLayout]);
     const [showChatbot, setShowChatbot] = useAtom(copilotPanelOpenAtom);
@@ -277,6 +280,8 @@ export default function AgentWorkspaceClient({
     const currentConnection = useAtomValue(currentConnectionAtom);
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const setInlineAskByTab = useSetAtom(inlineSqlAskByTabAtom);
+    const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
+    const { dbReady, applyServerResult } = useDB();
     const [agentRunPanelOpen, setAgentRunPanelOpen] = useState(true);
     const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot && !agentRunPanelOpen : false;
     const normalizedChatWidth = useMemo(
@@ -680,24 +685,59 @@ export default function AgentWorkspaceClient({
     }, [activeTab, activeTabId, isLoading, savedWorkspaceFingerprint, tabs]);
 
     const applySavedQuery = useCallback(
-        async (item: SavedQueryItem) => {
+        async (item: SavedQueryItem): Promise<string | null> => {
             const sqlText = item.sqlText ?? '';
-            if (!sqlText.trim()) return;
+            if (!sqlText.trim()) return null;
 
             if (!activeTabId) {
-                await addTab({ tabName: item.title, content: sqlText, activate: true });
-                return;
+                return addTab({ tabName: item.title, content: sqlText, activate: true });
             }
 
             if (!activeTab || activeTab.tabType !== 'sql') {
-                await addTab({ tabName: item.title, content: sqlText, activate: true });
-                return;
+                return addTab({ tabName: item.title, content: sqlText, activate: true });
             }
 
             editorRef.current?.applyContentWithUndo?.(sqlText);
             updateTab(activeTabId, { content: sqlText }, { immediate: true });
+            return activeTabId;
         },
         [activeTab, activeTabId, addTab, editorRef, updateTab],
+    );
+
+    const restoreQueryHistoryResult = useCallback(
+        async (item: SavedQueryItem, tabId: string | null) => {
+            if (!tabId) return;
+            const payload = buildQueryHistoryResultRestorePayload({
+                item,
+                tabId,
+                connectionId: connectionId ?? currentConnection?.connection?.id ?? null,
+            });
+            if (!payload) {
+                setSessionIdMap(prev => {
+                    if (!prev[tabId]) return prev;
+                    const next = { ...prev };
+                    delete next[tabId];
+                    return next;
+                });
+                try {
+                    localStorage.removeItem(getSessionStorageKey(tabId, activeWorkspaceScope));
+                } catch {
+                    // ignore
+                }
+                return;
+            }
+
+            if (!dbReady) return;
+
+            await applyServerResult(payload);
+            setSessionIdMap(prev => ({ ...prev, [tabId]: payload.session.sessionId }));
+            try {
+                localStorage.setItem(getSessionStorageKey(tabId, activeWorkspaceScope), payload.session.sessionId);
+            } catch {
+                // ignore
+            }
+        },
+        [activeWorkspaceScope, applyServerResult, connectionId, currentConnection?.connection?.id, dbReady, setSessionIdMap],
     );
 
     const handleSavedQuerySelect = useCallback(
@@ -708,16 +748,19 @@ export default function AgentWorkspaceClient({
             const existing = tabs.find(tab => tab.tabType === 'sql' && (tab.content ?? '').trim() === normalized);
             if (existing) {
                 setActiveTabId(existing.tabId);
+                await restoreQueryHistoryResult(item, existing.tabId);
                 return;
             }
 
             if (!activeTabId) {
-                await addTab({ tabName: item.title, content: sqlText, activate: true });
+                const tabId = await addTab({ tabName: item.title, content: sqlText, activate: true });
+                await restoreQueryHistoryResult(item, tabId);
                 return;
             }
 
             if (!activeTab || activeTab.tabType !== 'sql') {
-                await addTab({ tabName: item.title, content: sqlText, activate: true });
+                const tabId = await addTab({ tabName: item.title, content: sqlText, activate: true });
+                await restoreQueryHistoryResult(item, tabId);
                 return;
             }
 
@@ -729,9 +772,10 @@ export default function AgentWorkspaceClient({
                 return;
             }
 
-            await applySavedQuery(item);
+            const tabId = await applySavedQuery(item);
+            await restoreQueryHistoryResult(item, tabId);
         },
-        [activeTab, activeTabId, addTab, applySavedQuery, editorRef, setActiveTabId, tabs],
+        [activeTab, activeTabId, addTab, applySavedQuery, editorRef, restoreQueryHistoryResult, setActiveTabId, tabs],
     );
 
     return (
@@ -928,7 +972,10 @@ export default function AgentWorkspaceClient({
                                 const next = pendingSavedQuery;
                                 setConfirmOpen(false);
                                 setPendingSavedQuery(null);
-                                if (next) await applySavedQuery(next);
+                                if (next) {
+                                    const tabId = await applySavedQuery(next);
+                                    await restoreQueryHistoryResult(next, tabId);
+                                }
                             }}
                         >
                             {t('SavedQueries.Override')}

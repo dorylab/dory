@@ -46,7 +46,8 @@ import { currentConnectionAtom } from '@/shared/stores/app.store';
 import posthog from 'posthog-js';
 import { AccountRequiredSheet } from '@/components/auth/account-required-sheet';
 import type { AuditItem } from '@dory/shared/types/audit';
-import { savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
+import { QUERY_HISTORY_UPDATED_EVENT, savedQueriesViewByConnectionAtom, type SavedQueriesView } from '../../sql-console.store';
+import { isQueryHistoryResultRestorable } from '../../query-history-result-restore';
 import { useRouteConnectionId } from '../../hooks/useRouteConnectionId';
 import { FolderItem, type FolderData } from './folder-item';
 import { CreateFolderDialog } from './create-folder-dialog';
@@ -68,6 +69,14 @@ export type SavedQueryItem = {
     createdAt?: string | Date | null;
     updatedAt?: string | Date | null;
     archivedAt?: string | Date | null;
+    historyResultSet?: AuditItem['result_set'] | null;
+    historyMeta?: {
+        source: 'query-history';
+        createdAt?: string | Date | null;
+        status?: string | null;
+        durationMs?: number | null;
+        canRestoreResult: boolean;
+    };
 };
 
 function formatTime(value: string | Date | null | undefined, locale: string) {
@@ -90,7 +99,7 @@ type SortableRenderProps = SortableDragProps & {
     isDragging: boolean;
 };
 
-type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'sql_text' | 'status' | 'duration_ms' | 'error_message'>;
+type QueryHistoryItem = Pick<AuditItem, 'id' | 'created_at' | 'query_id' | 'sql_text' | 'status' | 'duration_ms' | 'error_message' | 'result_set'>;
 
 function summarizeSql(sqlText: string) {
     return sqlText.replace(/\s+/g, ' ').trim();
@@ -405,6 +414,19 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
             window.removeEventListener('saved-queries-updated', handler);
         };
     }, [fetchAll, isMyQueriesView]);
+
+    useEffect(() => {
+        const handler = (event: Event) => {
+            if (queryView !== 'query-history') return;
+            const detail = event instanceof CustomEvent ? (event.detail as { connectionId?: string | null } | null) : null;
+            if (detail?.connectionId && detail.connectionId !== connectionId) return;
+            fetchQueryHistory();
+        };
+        window.addEventListener(QUERY_HISTORY_UPDATED_EVENT, handler);
+        return () => {
+            window.removeEventListener(QUERY_HISTORY_UPDATED_EVENT, handler);
+        };
+    }, [connectionId, fetchQueryHistory, queryView]);
 
     useEffect(() => {
         return () => {
@@ -1158,6 +1180,23 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                                 {historyItems.map(item => {
                                     const displaySql = item.sql_text ?? '';
                                     const summary = summarizeSql(displaySql);
+                                    const historyItem: SavedQueryItem = {
+                                        id: `history:${item.id}`,
+                                        title: buildHistoryQueryTitle(item, t('SavedQueries.QueryHistoryUntitled')),
+                                        sqlText: item.sql_text,
+                                        connectionId,
+                                        createdAt: item.created_at,
+                                        updatedAt: item.created_at,
+                                        historyResultSet: item.result_set ?? null,
+                                        historyMeta: {
+                                            source: 'query-history',
+                                            createdAt: item.created_at,
+                                            status: item.status,
+                                            durationMs: item.duration_ms,
+                                            canRestoreResult: isQueryHistoryResultRestorable({ historyResultSet: item.result_set ?? null }),
+                                        },
+                                    };
+                                    const canRestoreResult = historyItem.historyMeta?.canRestoreResult === true;
                                     return (
                                         <HoverCard key={item.id} openDelay={200} closeDelay={120}>
                                             <HoverCardTrigger asChild>
@@ -1168,14 +1207,7 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                                                         'border border-transparent hover:border-muted-foreground/20 hover:bg-muted/40',
                                                     )}
                                                     onClick={() => {
-                                                        onSelect?.({
-                                                            id: `history:${item.id}`,
-                                                            title: buildHistoryQueryTitle(item, t('SavedQueries.QueryHistoryUntitled')),
-                                                            sqlText: item.sql_text,
-                                                            connectionId,
-                                                            createdAt: item.created_at,
-                                                            updatedAt: item.created_at,
-                                                        });
+                                                        onSelect?.(historyItem);
                                                     }}
                                                 >
                                                     <div className="flex w-full items-center justify-between gap-2">
@@ -1187,6 +1219,14 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                                                         {item.duration_ms === null || item.duration_ms === undefined ? null : (
                                                             <span className="shrink-0">{t('SavedQueries.QueryHistoryDuration', { value: String(item.duration_ms) })}</span>
                                                         )}
+                                                        <span
+                                                            className={cn(
+                                                                'ml-auto shrink-0 rounded border px-1.5 py-0.5 text-[10px] leading-none',
+                                                                canRestoreResult ? 'border-green-500/30 text-green-700' : 'border-muted-foreground/25 text-muted-foreground',
+                                                            )}
+                                                        >
+                                                            {canRestoreResult ? t('SavedQueries.QueryHistoryResultAvailable') : t('SavedQueries.QueryHistorySqlOnly')}
+                                                        </span>
                                                     </div>
                                                     {item.error_message ? <div className="mt-0.5 line-clamp-1 text-[11px] text-destructive">{item.error_message}</div> : null}
                                                 </button>
@@ -1196,6 +1236,13 @@ export function SavedQueriesSidebar({ onSelect }: SavedQueriesSidebarProps) {
                                                     <div className="space-y-1">
                                                         <div className="text-lg font-semibold text-foreground">{t('SavedQueries.QueryHistory')}</div>
                                                         <div className="text-xs text-muted-foreground">{formatTime(item.created_at, locale)}</div>
+                                                    </div>
+                                                    <div className="grid gap-1 text-xs text-muted-foreground">
+                                                        <div>{canRestoreResult ? t('SavedQueries.QueryHistoryRestoreHint') : t('SavedQueries.QueryHistorySqlOnlyHint')}</div>
+                                                        <div>{t('SavedQueries.QueryHistoryStatus', { value: String(item.status) })}</div>
+                                                        {item.duration_ms === null || item.duration_ms === undefined ? null : (
+                                                            <div>{t('SavedQueries.QueryHistoryDuration', { value: String(item.duration_ms) })}</div>
+                                                        )}
                                                     </div>
                                                     <SmartCodeBlock value={displaySql || ' '} type="sql" maxHeightClassName="max-h-64" />
                                                 </div>

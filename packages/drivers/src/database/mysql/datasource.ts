@@ -1,12 +1,12 @@
 import type { Pool } from 'mysql2/promise';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { isTlsNegotiationError, isTlsPreferMode, withTlsDisabledOptions } from '@dory/drivers/core/tls';
 import { createMysqlMetadataCapability, type MysqlMetadataAPI } from './capabilities/metadata';
 import { createMysqlTableInfoCapability } from './capabilities/table-info';
 import { MySqlDialect } from './dialect';
-import { cancelMySqlQuery, createMySqlPool, executeMySqlCommand, executeMySqlQuery, pingMySql, resolveMysqlPort } from './runtime';
+import { cancelMySqlQuery, createMySqlPool, executeMySqlCommand, executeMySqlQuery, executeMySqlQueryRowStream, pingMySql, resolveMysqlPort } from './runtime';
 
 export class MySqlDatasource extends BaseConnection {
     readonly dialect = MySqlDialect;
@@ -114,6 +114,29 @@ export class MySqlDatasource extends BaseConnection {
         const pool = this.resolvePool(targetDatabase);
 
         return executeMySqlQuery<Row>(pool, this.config, sql, context?.params, {
+            context,
+            trackQuery: threadId => {
+                if (context?.queryId) {
+                    this.runningQueries.set(context.queryId, {
+                        threadId,
+                        database: targetDatabase ?? undefined,
+                    });
+                }
+            },
+            untrackQuery: () => {
+                if (context?.queryId) {
+                    this.runningQueries.delete(context.queryId);
+                }
+            },
+        });
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        this.assertReady();
+        const targetDatabase = context?.database ?? this.config.database;
+        const pool = this.resolvePool(targetDatabase);
+
+        return executeMySqlQueryRowStream<Row>(pool, this.config, sql, context?.params, {
             context,
             trackQuery: threadId => {
                 if (context?.queryId) {

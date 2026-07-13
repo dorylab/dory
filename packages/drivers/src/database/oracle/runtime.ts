@@ -1,8 +1,9 @@
 import oracledb, { type BindParameters, type ExecuteOptions, type Pool, type PoolAttributes, type Result } from 'oracledb';
 import { compileParams } from '@dory/drivers/core';
+import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { OracleDialect } from './dialect';
 
 oracledb.fetchAsString = Array.from(new Set([...(oracledb.fetchAsString ?? []), oracledb.CLOB]));
@@ -255,6 +256,47 @@ export async function executeOracleQuery<Row>(
         };
     } finally {
         await connection.close();
+    }
+}
+
+export async function executeOracleQueryRowStream<Row>(
+    pool: Pool,
+    sqlText: string,
+    params?: DriverQueryParams,
+    options?: {
+        context?: ConnectionQueryContext;
+    },
+): Promise<DriverQueryRowStream<Row>> {
+    const { sql: compiledSql, values } = normalizeParams(sqlText, params);
+    const connection = await pool.getConnection();
+    const runtimeOptions = (options?.context?.statementTimeoutMs ? { callTimeout: options.context.statementTimeoutMs } : {}) as ExecuteOptions;
+    const executeOptions: ExecuteOptions = {
+        outFormat: oracledb.OUT_FORMAT_OBJECT,
+        fetchArraySize: 1000,
+        ...runtimeOptions,
+    };
+    const started = Date.now();
+    let stream: (AsyncIterable<Row> & { destroy?: (error?: Error) => void }) | null = null;
+    const cleanup = onceAsync(() => connection.close());
+
+    try {
+        const queryStream = connection.queryStream<Row>(compiledSql, values, executeOptions) as AsyncIterable<Row> & { destroy?: (error?: Error) => void };
+        stream = queryStream;
+        return {
+            rows: asyncIterableWithCleanup(queryStream, cleanup),
+            rowCount: null,
+            columns: undefined,
+            limited: false,
+            tookMs: Date.now() - started,
+            close: async () => {
+                stream?.destroy?.();
+                await cleanup();
+            },
+        };
+    } catch (error) {
+        stream?.destroy?.(error instanceof Error ? error : undefined);
+        await cleanup();
+        throw error;
     }
 }
 

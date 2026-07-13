@@ -2,7 +2,7 @@
 
 import type { OrganizationRole } from '@dory/shared/types/organization';
 
-type FetchMethod = 'GET' | 'POST';
+type FetchMethod = 'GET' | 'POST' | 'PATCH';
 const REQUEST_TIMEOUT_MS = 10000;
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -149,6 +149,18 @@ export type OrganizationAccessSummary = {
     } | null;
 };
 
+export type ResultSetRetentionSettings = {
+    retentionDays: number;
+    defaultRetentionDays: number;
+    allowedRetentionDays: number[];
+    canManage: boolean;
+};
+
+export type ResultSetCleanupSummary = {
+    scanned: number;
+    deleted: number;
+};
+
 export function slugifyOrganizationName(name: string) {
     return name
         .toLowerCase()
@@ -217,6 +229,25 @@ export async function updateOrganization(input: { organizationId: string; name: 
                 slug: input.slug,
             },
         },
+    });
+}
+
+export async function getResultSetRetentionSettings() {
+    return appApiRequest<ResultSetRetentionSettings>('/api/organization/result-set-retention');
+}
+
+export async function updateResultSetRetentionSettings(input: { retentionDays: number }) {
+    return appApiRequest<ResultSetRetentionSettings>('/api/organization/result-set-retention', {
+        method: 'PATCH',
+        body: {
+            retentionDays: input.retentionDays,
+        },
+    });
+}
+
+export async function cleanupExpiredResultSets() {
+    return appApiRequest<ResultSetCleanupSummary>('/api/result-sets/cleanup-expired', {
+        method: 'POST',
     });
 }
 

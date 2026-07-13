@@ -5,7 +5,7 @@ import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { getDBService } from '@dory/database';
 import type { BaseConnection, DriverPoolEntry, DriverQueryParams } from '@dory/drivers/core';
 import { pickConnectionIdentity } from '@dory/drivers/config';
-import type { DriverQueryContext, DriverQueryResult } from '@dory/drivers/types';
+import type { DriverQueryContext, DriverQueryResult, DriverQueryRowStream } from '@dory/drivers/types';
 import type { AuditPayload, QuerySource, QueryStatus } from '@dory/shared/types/audit';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 
@@ -27,7 +27,12 @@ type SqlAuditStore = SqlAuditContext & {
     inDriverCall?: boolean;
 };
 
-type SqlAuditMethod = 'query' | 'queryWithContext' | 'command';
+type SqlAuditMethod = 'query' | 'queryWithContext' | 'queryRowsStreamWithContext' | 'command';
+type AuditResultStats = {
+    rows?: unknown[];
+    rowCount?: number | null;
+    statistics?: Record<string, unknown>;
+};
 
 const sqlAuditStore = new AsyncLocalStorage<SqlAuditStore>();
 const SQL_AUDIT_PATCHED = Symbol.for('dory.sqlAudit.patched');
@@ -68,8 +73,19 @@ export function runWithSqlAudit<T>(context: SqlAuditContext | null | undefined, 
 export function getCurrentSqlAuditContext(): SqlAuditContext | null {
     const store = sqlAuditStore.getStore();
     if (!store) return null;
-    const { inDriverCall: _inDriverCall, ...context } = store;
-    return context;
+    return {
+        organizationId: store.organizationId,
+        userId: store.userId,
+        source: store.source,
+        connectionId: store.connectionId,
+        connectionName: store.connectionName,
+        identityId: store.identityId,
+        databaseName: store.databaseName,
+        tabId: store.tabId,
+        queryId: store.queryId,
+        extraJson: store.extraJson,
+        connectionSnapshot: store.connectionSnapshot,
+    };
 }
 
 export function setSqlAuditWriteOverrideForTests(handler: ((payload: AuditPayload & { status: QueryStatus }) => Promise<void> | void) | null) {
@@ -92,6 +108,7 @@ export function patchDriverInstanceForSqlAudit(instance: BaseConnection): BaseCo
 
     patchDriverMethod(instance, 'query');
     patchDriverMethod(instance, 'queryWithContext');
+    patchDriverMethod(instance, 'queryRowsStreamWithContext');
     patchDriverMethod(instance, 'command');
 
     return instance;
@@ -218,6 +235,38 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
     const queryContext = extractQueryContext(method, args);
     const started = performance.now();
 
+    if (method === 'queryRowsStreamWithContext') {
+        try {
+            const stream = (await sqlAuditStore.run({ ...store, inDriverCall: true }, async () => original.call(instance, sql, ...args))) as DriverQueryRowStream<unknown>;
+            return wrapAuditedRowStream({
+                stream,
+                store,
+                instance,
+                sql,
+                queryContext,
+                started,
+            });
+        } catch (error) {
+            const durationMs = Math.round(performance.now() - started);
+            await insertSqlAudit({
+                context: store,
+                instance,
+                sqlText: sql,
+                databaseName: queryContext.database ?? store.databaseName ?? instance.config.database ?? null,
+                queryId: queryContext.queryId ?? store.queryId ?? null,
+                status: 'error',
+                errorMessage: error instanceof Error ? error.message : String(error ?? 'SQL execution failed'),
+                durationMs,
+                extraJson: {
+                    auditMethod: method,
+                    ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
+                    ...(store.extraJson ?? {}),
+                },
+            });
+            throw error;
+        }
+    }
+
     try {
         const result = await sqlAuditStore.run({ ...store, inDriverCall: true }, async () => original.call(instance, sql, ...args));
         const durationMs = Math.round(performance.now() - started);
@@ -232,6 +281,7 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
             result: method === 'command' ? null : (result as DriverQueryResult<unknown> | null),
             extraJson: {
                 auditMethod: method,
+                ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
                 ...(store.extraJson ?? {}),
             },
         });
@@ -249,6 +299,7 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
             durationMs,
             extraJson: {
                 auditMethod: method,
+                ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
                 ...(store.extraJson ?? {}),
             },
         });
@@ -256,8 +307,67 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
     }
 }
 
+function wrapAuditedRowStream(input: {
+    stream: DriverQueryRowStream<unknown>;
+    store: SqlAuditStore;
+    instance: BaseConnection;
+    sql: string;
+    queryContext: DriverQueryContext;
+    started: number;
+}): DriverQueryRowStream<unknown> {
+    const { stream, store, instance, sql, queryContext, started } = input;
+    let observedRows = 0;
+    let logged = false;
+
+    const writeAudit = async (status: QueryStatus, errorMessage?: string | null) => {
+        if (logged) return;
+        logged = true;
+        const durationMs = Math.round(performance.now() - started);
+        await insertSqlAudit({
+            context: store,
+            instance,
+            sqlText: sql,
+            databaseName: queryContext.database ?? store.databaseName ?? instance.config.database ?? null,
+            queryId: queryContext.queryId ?? store.queryId ?? null,
+            status,
+            errorMessage: errorMessage ?? null,
+            durationMs,
+            result: {
+                rowCount: stream.rowCount ?? observedRows,
+                statistics: stream.statistics,
+            },
+            extraJson: {
+                auditMethod: 'queryRowsStreamWithContext',
+                ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
+                ...(store.extraJson ?? {}),
+            },
+        });
+    };
+
+    async function* rows() {
+        try {
+            for await (const row of stream.rows) {
+                observedRows += 1;
+                yield row;
+            }
+            await writeAudit('success');
+        } catch (error) {
+            await writeAudit('error', error instanceof Error ? error.message : String(error ?? 'SQL stream failed'));
+            throw error;
+        } finally {
+            await writeAudit('canceled', 'Query stream closed before completion');
+        }
+    }
+
+    return {
+        ...stream,
+        rows: rows(),
+        close: stream.close ? () => stream.close?.() : undefined,
+    };
+}
+
 function extractQueryContext(method: SqlAuditMethod, args: unknown[]): DriverQueryContext {
-    if (method === 'queryWithContext') {
+    if (method === 'queryWithContext' || method === 'queryRowsStreamWithContext') {
         return isQueryContext(args[0]) ? args[0] : {};
     }
     return isQueryContext(args[1]) ? args[1] : {};
@@ -276,7 +386,7 @@ async function insertSqlAudit(input: {
     status: QueryStatus;
     errorMessage?: string | null;
     durationMs?: number | null;
-    result?: DriverQueryResult<unknown> | null;
+    result?: AuditResultStats | null;
     extraJson?: Record<string, unknown> | null;
 }) {
     try {
@@ -400,7 +510,7 @@ function safeDecode(value: string) {
     }
 }
 
-function resolveRowCount(result?: DriverQueryResult<unknown> | null): number | null {
+function resolveRowCount(result?: AuditResultStats | null): number | null {
     if (!result) return null;
     if (Number.isFinite(result.rowCount)) return Math.max(0, Math.floor(result.rowCount!));
     if (Array.isArray(result.rows)) return result.rows.length;

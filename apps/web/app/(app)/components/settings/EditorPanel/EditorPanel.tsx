@@ -8,6 +8,7 @@ import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { SettingsRow } from '../SettingsRow';
 import {
     SQL_EDITOR_FONT_FAMILY_OPTIONS,
+    SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE,
     SQL_EDITOR_QUERY_LIMIT_OPTIONS,
     SQL_EDITOR_THEME_OPTIONS,
     normalizeSqlEditorSettings,
@@ -100,13 +101,14 @@ export function EditorPanel() {
 
             <SettingsRow label={t('Editor.QueryLimitLabel')} description={t('Editor.QueryLimitDescription')}>
                 <Select
-                    value={String(settings.queryLimit)}
-                    onValueChange={value => updateSettings({ queryLimit: Number(value) })}
+                    value={settings.queryLimit === null ? SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE : String(settings.queryLimit)}
+                    onValueChange={value => updateSettings({ queryLimit: value === SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE ? null : Number(value) })}
                 >
                     <SelectTrigger className="h-8 w-35 justify-between">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent align="end">
+                        <SelectItem value={SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE}>No limit</SelectItem>
                         {SQL_EDITOR_QUERY_LIMIT_OPTIONS.map(option => (
                             <SelectItem key={option} value={String(option)}>
                                 {option}

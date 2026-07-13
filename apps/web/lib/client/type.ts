@@ -18,6 +18,33 @@ export interface GetResultRowsOptions {
     log?: boolean; // Debug logging
 }
 
+export type ResultSetRemoteSort = {
+    column: string;
+    direction: 'asc' | 'desc';
+};
+
+export type ResultSetRemoteFilter = {
+    col: string;
+    kind: 'string' | 'number' | 'range';
+    op: string;
+    value?: string;
+    valueTo?: string;
+    rangeValueType?: 'number' | 'date';
+    label?: string;
+    caseSensitive?: boolean;
+};
+
+export type ResultSetRemoteSearch = {
+    text: string;
+    columns?: string[];
+};
+
+export type ResultSetRemoteOperations = {
+    sorts?: ResultSetRemoteSort[];
+    filters?: ResultSetRemoteFilter[];
+    search?: ResultSetRemoteSearch | null;
+};
+
 // ==== useDB hook interface (new API) ====
 export interface DBHook {
     dbReady: boolean;
@@ -59,6 +86,9 @@ export interface DBHook {
             viewState?: ResultSetViewState | null;
             aiProfileVersion?: number | null;
             rowCount?: number | null;
+            resultSetId?: string | null;
+            dataAvailability?: string | null;
+            previewRowCount?: number | null;
             affectedRows?: number | null;
             status?: 'success' | 'error';
             errorMessage?: string | null;
@@ -82,6 +112,54 @@ export interface DBHook {
     // Read rows: page fetch + worker decode, row callback/return
     getResultRows(sessionId: string, setIndex?: number, opts?: GetResultRowsOptions): Promise<TabResult[]>;
 
+    readResultSetRows(params: {
+        resultSetId: string;
+        offset?: number;
+        limit?: number;
+        sorts?: ResultSetRemoteSort[];
+        filters?: ResultSetRemoteFilter[];
+        search?: ResultSetRemoteSearch | null;
+        signal?: AbortSignal;
+    }): Promise<{
+        resultSetId: string;
+        rows: Record<string, unknown>[];
+        offset: number;
+        limit: number;
+        rowCount: number | null;
+        unfilteredRowCount?: number | null;
+        columns: unknown[];
+        dataAvailability: string;
+    }>;
+
+    exportResultSet(params: {
+        resultSetId: string;
+        format: 'csv' | 'parquet';
+    } & ResultSetRemoteOperations): Promise<{
+        exportId: string;
+        format: 'csv' | 'parquet';
+        fileName: string;
+        byteSize?: number;
+        downloadUrl: string;
+    }>;
+
+    readResultSetChart(params: {
+        resultSetId: string;
+        xKey: string;
+        yKey: string;
+        groupKey?: string | null;
+        chartType?: string | null;
+    } & Pick<ResultSetRemoteOperations, 'filters' | 'search'>): Promise<{
+        data: Array<Record<string, unknown>>;
+        series: Array<{ key: string; label: string }>;
+        bucketHint?: string | null;
+    }>;
+
+    readResultSetProfile(params: { resultSetId: string; sampleRows?: number; signal?: AbortSignal }): Promise<{
+        columns: unknown[];
+        stats: ResultSetStatsV1;
+        sampleRows: Array<Record<string, unknown>>;
+    }>;
+
     // List existing result sets (ascending)
     listResultSetIndices(sessionId: string): Promise<number[]>;
 
@@ -90,8 +168,11 @@ export interface DBHook {
 
     getSession: (sessionId: string) => Promise<{
         status: string;
+        errorMessage?: string | null;
         startedAt: Date;
         finishedAt: Date | null;
+        durationMs?: number | null;
+        source?: string | null;
     } | null>;
 
     // ★ New: persist /api/sql response into three tables (recommended)
@@ -123,6 +204,9 @@ export interface DBHook {
             viewState?: ResultSetViewState | null;
             aiProfileVersion?: number | null;
             rowCount?: number | null;
+            resultSetId?: string | null;
+            dataAvailability?: string | null;
+            previewRowCount?: number | null;
             affectedRows?: number | null;
             status: 'success' | 'error';
             errorMessage?: string | null;
@@ -174,6 +258,9 @@ export interface QueryResultSetRow {
     viewState: ResultSetViewState | null;
     aiProfileVersion: number;
     rowCount: number | null;
+    resultSetId: string | null;
+    dataAvailability: string | null;
+    previewRowCount: number | null;
     affectedRows: number | null;
 
     status: ResultSetStatus;
@@ -230,6 +317,9 @@ export type ResultSetMeta = {
 
     limited: boolean;
     limit: number | null;
+    resultSetId: string | null;
+    dataAvailability: string | null;
+    previewRowCount: number | null;
     
     affectedRows: number | null;
     status: 'success' | 'error' | 'running'; // For UI, you may map running to session running

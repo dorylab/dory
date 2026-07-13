@@ -2,6 +2,7 @@
 import { and, desc, eq, gte, inArray, ilike, lte, sql, SQLWrapper } from 'drizzle-orm';
 import { queryAudit } from '../../schemas/audit';
 import { connections } from '../../schemas/connections';
+import { resultSets } from '../../schemas/result-sets';
 import { getClient } from '../../client';
 import type { AuditItem, AuditSearchParams, AuditSearchResult, OverviewFilters, OverviewResponse, QuerySource, QueryStatus } from '@dory/shared/types/audit';
 import type { PostgresDBClient } from '@dory/shared';
@@ -148,6 +149,18 @@ export class PgAuditQueryRepository {
         const rows = await db
             .select({
                 audit: queryAudit,
+                resultSet: {
+                    id: resultSets.id,
+                    sessionId: resultSets.sessionId,
+                    setIndex: resultSets.setIndex,
+                    rowCount: resultSets.rowCount,
+                    previewRowCount: resultSets.previewRowCount,
+                    schemaJson: resultSets.schemaJson,
+                    dataAvailability: resultSets.dataAvailability,
+                    status: resultSets.status,
+                    limited: resultSets.limited,
+                    limit: resultSets.limit,
+                },
                 connectionType: connections.type,
                 connectionHost: connections.host,
                 connectionPort: connections.port,
@@ -156,6 +169,14 @@ export class PgAuditQueryRepository {
             })
             .from(queryAudit)
             .leftJoin(connections, and(eq(queryAudit.connectionId, connections.id), eq(queryAudit.organizationId, connections.organizationId)))
+            .leftJoin(
+                resultSets,
+                and(
+                    eq(queryAudit.organizationId, resultSets.organizationId),
+                    eq(queryAudit.queryId, resultSets.sessionId),
+                    sql`cast(${queryAudit.extraJson} ->> 'statementIndex' as integer) = ${resultSets.setIndex}`,
+                ),
+            )
             .where(whereCondition)
             .orderBy(desc(queryAudit.createdAt), desc(queryAudit.id))
             .offset(offset)
@@ -174,6 +195,7 @@ export class PgAuditQueryRepository {
 
                 organizationId: r.organizationId,
                 user_id: r.userId,
+                query_id: r.queryId ?? null,
 
                 source: r.source as any,
                 status: r.status as any,
@@ -206,6 +228,22 @@ export class PgAuditQueryRepository {
 
                 sql_text: r.sqlText,
                 extra_json: (r.extraJson as any) ?? null,
+                result_set:
+                    row.resultSet?.id && row.resultSet.sessionId && typeof row.resultSet.setIndex === 'number'
+                        ? {
+                              sessionId: row.resultSet.sessionId,
+                              setIndex: row.resultSet.setIndex,
+                              resultSetId: row.resultSet.id,
+                              rowCount: row.resultSet.rowCount ?? null,
+                              previewRowCount: row.resultSet.previewRowCount ?? 0,
+                              columns: Array.isArray(row.resultSet.schemaJson) ? row.resultSet.schemaJson : [],
+                              dataAvailability: row.resultSet.dataAvailability,
+                              status: row.resultSet.status,
+                              durationMs: r.durationMs ?? null,
+                              limited: row.resultSet.limited ?? false,
+                              limit: row.resultSet.limit ?? null,
+                          }
+                        : null,
             };
         });
 

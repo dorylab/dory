@@ -1,11 +1,11 @@
 import type snowflake from 'snowflake-sdk';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { createSnowflakeMetadataCapability, type SnowflakeMetadataAPI } from './capabilities/metadata';
 import { createSnowflakeTableInfoCapability } from './capabilities/table-info';
 import { SnowflakeDialect } from './dialect';
-import { closeSnowflake, connectSnowflake, createSnowflakeConnection, executeSnowflakeCommand, executeSnowflakeQuery, pingSnowflake } from './runtime';
+import { closeSnowflake, connectSnowflake, createSnowflakeConnection, executeSnowflakeCommand, executeSnowflakeQuery, executeSnowflakeQueryRowStream, pingSnowflake } from './runtime';
 
 export class SnowflakeDatasource extends BaseConnection {
     readonly dialect = SnowflakeDialect;
@@ -58,6 +58,23 @@ export class SnowflakeDatasource extends BaseConnection {
     async queryWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<QueryResult<Row>> {
         this.assertReady();
         return this.query<Row>(sql, context?.params, context);
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        this.assertReady();
+        return executeSnowflakeQueryRowStream<Row>(this.connection!, this.config, sql, context?.params, {
+            context,
+            trackQuery: statement => {
+                if (context?.queryId) {
+                    this.runningQueries.set(context.queryId, statement);
+                }
+            },
+            untrackQuery: () => {
+                if (context?.queryId) {
+                    this.runningQueries.delete(context.queryId);
+                }
+            },
+        });
     }
 
     async command(sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<void> {

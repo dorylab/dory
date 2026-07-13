@@ -1370,6 +1370,11 @@
             "QueryHistoryEmptyDescription": "在 SQL console 主动执行 SQL 后，最近的查询会显示在这里。",
             "QueryHistoryUntitled": "SQL 查询",
             "QueryHistoryDuration": "{value} ms",
+            "QueryHistoryResultAvailable": "结果可用",
+            "QueryHistorySqlOnly": "仅 SQL",
+            "QueryHistoryRestoreHint": "点击后会恢复这次历史查询的结果。",
+            "QueryHistorySqlOnlyHint": "点击后只会替换 SQL，当前结果会被清空。",
+            "QueryHistoryStatus": "状态：{value}",
             "SearchPlaceholder": "搜索保存的查询",
             "SearchEmpty": "未找到匹配的查询",
             "MoreActions": "更多操作",
@@ -1445,6 +1450,11 @@
             "Shown": "显示：{value}",
             "LimitSuffix": " / 限制 {value}",
             "Truncated": "已截断",
+            "HistorySource": "来自历史查询",
+            "HistorySourceTooltip": "这个结果来自已保存的历史查询结果。",
+            "HistorySourceStarted": "查询时间：{value}",
+            "HistorySourceFinished": "完成时间：{value}",
+            "HistorySourceDuration": "执行耗时：{value} ms",
             "SqlPreviewLabel": "SQL 预览",
             "SqlPreviewAria": "显示 SQL 预览"
         },
@@ -3007,6 +3017,11 @@
                     "Title": "AI 配置",
                     "Description": "配置当前组织可使用的 AI 模型与 Provider。"
                 },
+                "Storage": {
+                    "Label": "存储",
+                    "Title": "存储",
+                    "Description": "管理查询结果和本地 artifact 的保留策略。"
+                },
                 "Billing": {
                     "Label": "套餐与订阅",
                     "Title": "套餐与订阅",
@@ -3038,6 +3053,23 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "为 Codex、Claude Code 和其他 Agent 开启本地 MCP endpoint。"
+                }
+            },
+            "Storage": {
+                "ResultSets": {
+                    "Title": "Result Sets",
+                    "Description": "控制已保存查询结果文件在自动清理前保留多久。",
+                    "FieldLabel": "查询结果保存时间",
+                    "FieldDescription": "过期结果文件会在后台清理，查询历史会保留。",
+                    "SelectPlaceholder": "选择保存时间",
+                    "DayOption": "{count} 天",
+                    "SaveAction": "保存设置",
+                    "Saving": "保存中...",
+                    "ReadOnlyHint": "你当前的角色不允许修改存储设置。",
+                    "Toasts": {
+                        "Updated": "查询结果保存时间已更新",
+                        "UpdateFailed": "更新查询结果保存时间失败"
+                    }
                 }
             },
             "Appearance": {
@@ -3092,7 +3124,7 @@
                 "LineHeightLabel": "行高",
                 "LineHeightDescription": "控制行间距倍率（1.1-2.2）。",
                 "QueryLimitLabel": "默认查询限制",
-                "QueryLimitDescription": "设置执行 SQL 时默认附带的 LIMIT。",
+                "QueryLimitDescription": "设置执行 SQL 时默认附带的 LIMIT。选择 No limit 时不会自动追加 LIMIT。",
                 "LineNumbersLabel": "行号",
                 "LineNumbersDescription": "显示或隐藏行号。",
                 "MinimapLabel": "缩略图",

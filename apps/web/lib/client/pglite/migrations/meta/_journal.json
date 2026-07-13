@@ -15,6 +15,13 @@
       "when": 1776498850532,
       "tag": "0001_wild_machine_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783502890039,
+      "tag": "0002_regular_unus",
+      "breakpoints": true
     }
   ]
 }

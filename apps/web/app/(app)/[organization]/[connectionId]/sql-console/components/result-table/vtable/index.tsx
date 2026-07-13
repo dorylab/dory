@@ -18,6 +18,10 @@ const VISIBLE_AUTO_FIT_ROW_BUFFER = 20;
 const VISIBLE_AUTO_FIT_COLUMN_BUFFER = 2;
 const INITIAL_VISIBLE_COLUMN_COUNT = 12;
 const INITIAL_VISIBLE_ROW_COUNT = 24;
+const REMOTE_DEFAULT_PAGE_SIZE = 5000;
+const REMOTE_MAX_CACHED_PAGES = 24;
+const REMOTE_PREFETCH_PAGES_BEFORE = 1;
+const REMOTE_PREFETCH_PAGES_AFTER = 2;
 const HEADER_TEXT_PAD = 44;
 const CELL_TEXT_PAD = 18;
 const FALLBACK_CHAR_WIDTH = 8;
@@ -78,6 +82,7 @@ function getSampleRowIndices(start: number, stop: number, limit: number) {
 
 export default function VTable({
     results,
+    remoteSource,
     rowHeight = 32,
     defaultColMinWidth = 140,
     indexColWidth = 56,
@@ -111,6 +116,15 @@ export default function VTable({
             }));
     }, [metas?.columns]);
     const columns = useMemo(() => columnsRaw.map(column => column.name), [columnsRaw]);
+    const isRemote = Boolean(remoteSource);
+    const operationsDisabled = false;
+    const usesServerSideOperations = serverSideOperations || isRemote;
+    const remotePageSize = Math.max(1, Math.min(remoteSource?.pageSize ?? REMOTE_DEFAULT_PAGE_SIZE, 5000));
+    const [, setRemoteRowsVersion] = useState(0);
+    const remoteRowsRef = useRef<Map<number, { rowData: Record<string, unknown> }>>(new Map());
+    const remotePagesRef = useRef<Map<number, number>>(new Map());
+    const remoteLoadingPagesRef = useRef<Set<number>>(new Set());
+    const remotePageAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
 
     const clampColumnWidth = useCallback(
         (col: string, width: number) => {
@@ -147,6 +161,17 @@ export default function VTable({
         stop: Math.max(0, INITIAL_VISIBLE_COLUMN_COUNT - 1),
     });
     const [visibleMeasurementVersion, setVisibleMeasurementVersion] = useState(0);
+    const visibleMeasurementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const scheduleInitialMeasurement = useCallback((delayMs = 0) => {
+        if (visibleMeasurementTimeoutRef.current) {
+            clearTimeout(visibleMeasurementTimeoutRef.current);
+        }
+        visibleMeasurementTimeoutRef.current = setTimeout(() => {
+            visibleMeasurementTimeoutRef.current = null;
+            setVisibleMeasurementVersion(version => version + 1);
+        }, delayMs);
+    }, []);
 
     useEffect(() => {
         setManualColWidths(prev => {
@@ -206,20 +231,20 @@ export default function VTable({
     }, []);
 
     const measureColumnWidth = useCallback(
-        (col: string, rows: VTableProps['results'], rowIndices: number[]) => {
+        (col: string, rowIndices: number[]) => {
             const fontFamily = typeof document === 'undefined' ? 'system-ui, sans-serif' : getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
             const headerWidth = measureTextWidth(col, `700 14px ${fontFamily}`) + HEADER_TEXT_PAD;
 
             let maxCellWidth = 0;
             for (const rowIndex of rowIndices) {
-                const cellValue = rows[rowIndex]?.rowData?.[col];
+                const cellValue = isRemote ? remoteRowsRef.current.get(rowIndex)?.rowData?.[col] : results[rowIndex]?.rowData?.[col];
                 const text = formatTooltip(cellValue);
                 maxCellWidth = Math.max(maxCellWidth, measureTextWidth(text, `400 14px ${fontFamily}`) + CELL_TEXT_PAD);
             }
 
             return clampColumnWidth(col, Math.max(headerWidth, maxCellWidth, defaultColMinWidth));
         },
-        [clampColumnWidth, defaultColMinWidth, measureTextWidth],
+        [clampColumnWidth, defaultColMinWidth, isRemote, measureTextWidth, results],
     );
 
     const internalFilters = useVTableFilters({ results, storageKey });
@@ -249,7 +274,7 @@ export default function VTable({
     const sortDirection = sortState?.direction ?? 'asc';
     const lastEmittedSortRef = useRef<{ column: string; direction: 'asc' | 'desc' } | null>(initialSort ?? null);
     const sortedResults = useMemo(() => {
-        if (serverSideOperations) return filteredResults;
+        if (usesServerSideOperations) return filteredResults;
         if (!sortBy) return filteredResults;
         const isNumericCol = numericColumns.has(sortBy);
         const sorted = [...filteredResults].sort((a, b) => {
@@ -271,22 +296,140 @@ export default function VTable({
             return sortDirection === 'asc' ? String(aVal).localeCompare(String(bVal)) : String(bVal).localeCompare(String(aVal));
         });
         return sorted;
-    }, [filteredResults, numericColumns, serverSideOperations, sortBy, sortDirection]);
+    }, [filteredResults, numericColumns, usesServerSideOperations, sortBy, sortDirection]);
+    const tableRowCount = isRemote ? Math.max(0, remoteSource?.rowCount ?? 0) : sortedResults.length;
+    const getDisplayRow = useCallback(
+        (rowIndex: number) => {
+            if (isRemote) return remoteRowsRef.current.get(rowIndex);
+            return sortedResults[rowIndex];
+        },
+        [isRemote, sortedResults],
+    );
+
+    useEffect(() => {
+        for (const controller of remotePageAbortControllersRef.current.values()) {
+            controller.abort();
+        }
+        remoteRowsRef.current = new Map();
+        remotePagesRef.current = new Map();
+        remoteLoadingPagesRef.current = new Set();
+        remotePageAbortControllersRef.current = new Map();
+        setRemoteRowsVersion(version => version + 1);
+
+        return () => {
+            for (const controller of remotePageAbortControllersRef.current.values()) {
+                controller.abort();
+            }
+        };
+    }, [remoteSource?.cacheKey]);
+
+    const requestRemoteRange = useCallback(
+        (start: number, stop: number) => {
+            if (!remoteSource || stop < start) return;
+            const visiblePageStart = Math.floor(Math.max(0, start) / remotePageSize);
+            const visiblePageStop = Math.floor(Math.max(0, stop) / remotePageSize);
+            const maxPage = Math.max(0, Math.ceil(tableRowCount / remotePageSize) - 1);
+            const pageStart = Math.max(0, visiblePageStart - REMOTE_PREFETCH_PAGES_BEFORE);
+            const pageStop = Math.min(maxPage, visiblePageStop + REMOTE_PREFETCH_PAGES_AFTER);
+            const now = Date.now();
+            const protectedPages = new Set<number>();
+            const visiblePages: number[] = [];
+            const prefetchPages: number[] = [];
+
+            for (let page = pageStart; page <= pageStop; page += 1) {
+                protectedPages.add(page);
+                if (page >= visiblePageStart && page <= visiblePageStop) {
+                    visiblePages.push(page);
+                } else {
+                    prefetchPages.push(page);
+                }
+            }
+
+            for (const page of [...remoteLoadingPagesRef.current]) {
+                if (protectedPages.has(page)) continue;
+                remotePageAbortControllersRef.current.get(page)?.abort();
+                remotePageAbortControllersRef.current.delete(page);
+                remoteLoadingPagesRef.current.delete(page);
+            }
+
+            for (let page = visiblePageStart; page <= visiblePageStop; page += 1) {
+                if (remotePagesRef.current.has(page)) {
+                    remotePagesRef.current.set(page, now);
+                }
+            }
+
+            for (const page of [...visiblePages, ...prefetchPages]) {
+                if (remotePagesRef.current.has(page) || remoteLoadingPagesRef.current.has(page)) continue;
+                remoteLoadingPagesRef.current.add(page);
+                const controller = new AbortController();
+                remotePageAbortControllersRef.current.set(page, controller);
+                const offset = page * remotePageSize;
+
+                remoteSource
+                    .getRows(offset, remotePageSize, controller.signal)
+                    .then(rows => {
+                        if (controller.signal.aborted) return;
+                        rows.forEach((row, index) => {
+                            remoteRowsRef.current.set(offset + index, row);
+                        });
+                        remotePagesRef.current.set(page, Date.now());
+
+                        if (remotePagesRef.current.size > REMOTE_MAX_CACHED_PAGES) {
+                            const stalePages = [...remotePagesRef.current.entries()].sort((left, right) => left[1] - right[1]);
+                            let removeCount = remotePagesRef.current.size - REMOTE_MAX_CACHED_PAGES;
+                            for (const [stalePage] of stalePages) {
+                                if (removeCount <= 0) break;
+                                if (typeof stalePage !== 'number') continue;
+                                if (protectedPages.has(stalePage)) continue;
+                                remotePagesRef.current.delete(stalePage);
+                                const staleOffset = stalePage * remotePageSize;
+                                for (let rowIndex = staleOffset; rowIndex < staleOffset + remotePageSize; rowIndex += 1) {
+                                    remoteRowsRef.current.delete(rowIndex);
+                                }
+                                removeCount -= 1;
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        if (!controller.signal.aborted) {
+                            console.warn('[VTable] remote result page load failed', {
+                                cacheKey: remoteSource.cacheKey,
+                                page,
+                                error,
+                            });
+                        }
+                    })
+                    .finally(() => {
+                        remotePageAbortControllersRef.current.delete(page);
+                        remoteLoadingPagesRef.current.delete(page);
+                        if (!controller.signal.aborted) {
+                            setRemoteRowsVersion(version => version + 1);
+                        }
+                    });
+            }
+        },
+        [remotePageSize, remoteSource, tableRowCount],
+    );
+
+    useEffect(() => {
+        if (!remoteSource || tableRowCount <= 0) return;
+        requestRemoteRange(0, Math.min(tableRowCount - 1, remotePageSize - 1));
+    }, [remotePageSize, remoteSource, requestRemoteRange, tableRowCount]);
 
     const getVisibleSampleRowIndices = useCallback(
         (range?: { start: number; stop: number }) => {
-            if (sortedResults.length === 0) return [];
+            if (tableRowCount === 0) return [];
 
             const sourceRange = range ?? {
                 start: 0,
-                stop: Math.max(0, Math.min(sortedResults.length - 1, INITIAL_VISIBLE_ROW_COUNT - 1)),
+                stop: Math.max(0, Math.min(tableRowCount - 1, INITIAL_VISIBLE_ROW_COUNT - 1)),
             };
 
             const start = Math.max(0, sourceRange.start - VISIBLE_AUTO_FIT_ROW_BUFFER);
-            const stop = Math.min(sortedResults.length - 1, sourceRange.stop + VISIBLE_AUTO_FIT_ROW_BUFFER);
+            const stop = Math.min(tableRowCount - 1, sourceRange.stop + VISIBLE_AUTO_FIT_ROW_BUFFER);
             return getSampleRowIndices(start, stop, VISIBLE_AUTO_FIT_SAMPLE_LIMIT);
         },
-        [sortedResults.length],
+        [tableRowCount],
     );
 
     const initialVisibleSampleRowIndices = useMemo(() => getVisibleSampleRowIndices(), [getVisibleSampleRowIndices]);
@@ -301,16 +444,17 @@ export default function VTable({
     }, [columns]);
 
     const visibleAutoColWidths = useMemo(() => {
+        void visibleMeasurementVersion;
         const targetColumns = getVisibleAutoFitColumns();
         if (targetColumns.length === 0) return {};
 
         const rowIndices = getVisibleSampleRowIndices(visibleRowRangeRef.current);
         const next: ColWidths = {};
         for (const col of targetColumns) {
-            next[col] = measureColumnWidth(col, sortedResults, rowIndices.length ? rowIndices : initialVisibleSampleRowIndices);
+            next[col] = measureColumnWidth(col, rowIndices.length ? rowIndices : initialVisibleSampleRowIndices);
         }
         return next;
-    }, [getVisibleAutoFitColumns, getVisibleSampleRowIndices, initialVisibleSampleRowIndices, measureColumnWidth, sortedResults, visibleMeasurementVersion]);
+    }, [getVisibleAutoFitColumns, getVisibleSampleRowIndices, initialVisibleSampleRowIndices, measureColumnWidth, visibleMeasurementVersion]);
 
     useEffect(() => {
         const targetColumns = Object.keys(visibleAutoColWidths);
@@ -336,21 +480,29 @@ export default function VTable({
         let disposed = false;
         document.fonts.ready.then(() => {
             if (!disposed) {
-                setVisibleMeasurementVersion(version => version + 1);
+                scheduleInitialMeasurement();
             }
         });
 
         return () => {
             disposed = true;
         };
-    }, [columns]);
+    }, [columns, scheduleInitialMeasurement]);
+
+    useEffect(() => {
+        return () => {
+            if (visibleMeasurementTimeoutRef.current) {
+                clearTimeout(visibleMeasurementTimeoutRef.current);
+            }
+        };
+    }, []);
 
     useEffect(() => {
         visibleRowRangeRef.current = {
             start: 0,
-            stop: Math.min(Math.max(0, sortedResults.length - 1), Math.max(0, INITIAL_VISIBLE_ROW_COUNT - 1)),
+            stop: Math.min(Math.max(0, tableRowCount - 1), Math.max(0, INITIAL_VISIBLE_ROW_COUNT - 1)),
         };
-    }, [sortedResults]);
+    }, [tableRowCount]);
 
     const colWidths = useMemo(() => {
         const next: ColWidths = {};
@@ -362,9 +514,9 @@ export default function VTable({
 
     useEffect(() => {
         onStatsChange?.({
-            filteredCount: sortedResults.length,
+            filteredCount: tableRowCount,
         });
-    }, [onStatsChange, sortedResults.length, results]);
+    }, [onStatsChange, results, tableRowCount]);
 
     useEffect(() => {
         if (areSortStatesEqual(lastEmittedSortRef.current, initialSort)) {
@@ -382,6 +534,7 @@ export default function VTable({
     }, [initialSort]);
 
     const handleSort = useCallback((col: string) => {
+        if (operationsDisabled) return;
         setSortState(current => {
             if (current?.column !== col) {
                 return { column: col, direction: 'asc' };
@@ -393,7 +546,7 @@ export default function VTable({
 
             return null;
         });
-    }, []);
+    }, [operationsDisabled]);
 
     const [selectedRowIds, setSelectedRowIds] = useState<Set<number>>(() => new Set(selectedRowIndexes ?? []));
     const [, setSelectionAnchor] = useState<number | null>(null);
@@ -513,7 +666,7 @@ export default function VTable({
     };
     const autoFitVisible = (col: string) => {
         const rowIndices = getVisibleSampleRowIndices(visibleRowRangeRef.current);
-        const finalW = measureColumnWidth(col, sortedResults, rowIndices);
+        const finalW = measureColumnWidth(col, rowIndices);
         setManualColWidths(prev => ({ ...prev, [col]: finalW }));
         recomputeAll();
     };
@@ -577,7 +730,7 @@ export default function VTable({
             const { rows, cols } = rect;
             const rows2D = rows.map(r =>
                 cols.map(c => {
-                    const v = sortedResults[r]?.rowData?.[c];
+                    const v = getDisplayRow(r)?.rowData?.[c];
                     return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
                 }),
             );
@@ -592,7 +745,7 @@ export default function VTable({
             const rows2D = rows.map(r =>
                 cols.map(c => {
                     const has = selectedCells.has(ck(r, c));
-                    const v = has ? sortedResults[r]?.rowData?.[c] : '';
+                    const v = has ? getDisplayRow(r)?.rowData?.[c] : '';
                     return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
                 }),
             );
@@ -603,7 +756,7 @@ export default function VTable({
             const cols = [...columns];
             const rows2D = rows.map(r =>
                 cols.map(c => {
-                    const v = sortedResults[r]?.rowData?.[c];
+                    const v = getDisplayRow(r)?.rowData?.[c];
                     return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
                 }),
             );
@@ -689,7 +842,7 @@ export default function VTable({
                 const indices = Array.from(selectedRowIds).sort((a, b) => a - b);
                 const lines = indices
                     .map(i => {
-                        const row = sortedResults[i]?.rowData ?? {};
+                        const row = getDisplayRow(i)?.rowData ?? {};
                         return Object.values(row)
                             .map(v => (v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)))
                             .join('\t');
@@ -755,7 +908,7 @@ export default function VTable({
             e.preventDefault();
             if (selectedCells.size > 1) await copySelectedCellsTSV();
             else {
-                const v = sortedResults[rowIndex]?.rowData?.[col];
+                const v = getDisplayRow(rowIndex)?.rowData?.[col];
                 await copyText(typeof v === 'object' ? JSON.stringify(v) : v == null ? '' : String(v));
             }
         }
@@ -782,13 +935,13 @@ export default function VTable({
     }
     const sel = getSelectionInfo();
     const openCellInspector = (row: number, col: string) => {
-        const v = sortedResults[row]?.rowData?.[col];
+        const v = getDisplayRow(row)?.rowData?.[col];
         setInspectorMode?.('cell');
         setInspectorPayload?.({ row, col, value: v });
         setInspectorOpen?.(true);
     };
     const openRowInspector = (rowIndex: number) => {
-        const rowData = sortedResults[rowIndex]?.rowData ?? {};
+        const rowData = getDisplayRow(rowIndex)?.rowData ?? {};
         setInspectorMode?.('row');
         setInspectorPayload?.({ row: rowIndex, rowData });
         setInspectorOpen?.(true);
@@ -796,10 +949,10 @@ export default function VTable({
     const applyQuickEqualsFilterForCell = useCallback(
         (rowIndex: number, colName: string) => {
             const colMeta = (columnsRaw ?? []).find(c => c.name === colName);
-            const cellVal = sortedResults[rowIndex]?.rowData?.[colName];
+            const cellVal = getDisplayRow(rowIndex)?.rowData?.[colName];
             setColumnFilter(buildEqualsFilterFromCell({ colName, colType: colMeta?.type, raw: cellVal }));
         },
-        [columnsRaw, setColumnFilter, sortedResults],
+        [columnsRaw, getDisplayRow, setColumnFilter],
     );
 
     const cellRenderer = ({ columnIndex, rowIndex, key, style }: GridCellProps) => {
@@ -825,12 +978,17 @@ export default function VTable({
                     style={{ ...style, display: 'flex', alignItems: 'center' }}
                     className={cn('relative px-2 py-1 border-b border-r bg-muted text-sm font-bold select-none whitespace-nowrap', existing && PRIMARY_SELECTION_SOFT_CLASS)}
                 >
-                    <button type="button" className="flex flex-1 text-left cursor-pointer min-w-0 overflow-hidden whitespace-nowrap" onClick={() => handleSort(col)}>
+                    <button
+                        type="button"
+                        className={cn('flex flex-1 text-left min-w-0 overflow-hidden whitespace-nowrap', operationsDisabled ? 'cursor-default' : 'cursor-pointer')}
+                        disabled={operationsDisabled}
+                        onClick={() => handleSort(col)}
+                    >
                         <span className="truncate block min-w-0">{col}</span>
-                        {isSorted && <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
+                        {!operationsDisabled && isSorted && <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>}
                     </button>
 
-                    <ColumnFilterPopover {...getColumnFilterPopoverProps(col)} />
+                    {!operationsDisabled && <ColumnFilterPopover {...getColumnFilterPopoverProps(col)} />}
 
                     <div
                         onMouseDown={e => onDragStart(e, col)}
@@ -888,10 +1046,12 @@ export default function VTable({
 
         const colKeyName = columns[columnIndex - 1];
         const keyCell = ck(r, colKeyName);
+        const displayRow = getDisplayRow(r);
+        const isRemoteRowLoading = isRemote && !displayRow;
         const isRowSelected = selectedRowIds.has(r);
         const isCellSelected = selectedCells.has(keyCell);
         const isFocused = focusedCell?.row === r && focusedCell?.col === colKeyName;
-        const cellValue = sortedResults[r]?.rowData?.[colKeyName];
+        const cellValue = displayRow?.rowData?.[colKeyName];
         const isRectSelectedCell = Boolean(selectedRectBounds && isCellSelected);
         const rectTopRow = selectedRectBounds?.rows[0];
         const rectBottomRow = selectedRectBounds?.rows[selectedRectBounds.rows.length - 1];
@@ -943,7 +1103,11 @@ export default function VTable({
                 }}
                 title={formatTooltip(cellValue)}
             >
-                <span className="block truncate min-w-0 w-full">{formatValue(cellValue)}</span>
+                {isRemoteRowLoading ? (
+                    <span className="block h-3 w-20 max-w-[70%] rounded-sm bg-muted" />
+                ) : (
+                    <span className="block truncate min-w-0 w-full">{formatValue(cellValue)}</span>
+                )}
             </div>
         );
     };
@@ -984,11 +1148,12 @@ export default function VTable({
         return () => {
             container.removeEventListener('wheel', handleWheel, true);
         };
-    }, [syncHeaderHorizontalScroll, columns.length, sortedResults.length]);
+    }, [syncHeaderHorizontalScroll, columns.length, tableRowCount]);
 
     // const clearQuery = () => setGlobalQuery('');
 
-    if (!results || results.length === 0) return null;
+    if (!isRemote && (!results || results.length === 0)) return null;
+    if (isRemote && tableRowCount === 0) return null;
 
     return (
         <ContextMenu>
@@ -1022,16 +1187,18 @@ export default function VTable({
                                         const prevColumnRange = visibleColumnRangeRef.current;
                                         if (prevColumnRange.start !== nextColumnStart || prevColumnRange.stop !== nextColumnStop) {
                                             visibleColumnRangeRef.current = { start: nextColumnStart, stop: nextColumnStop };
-                                            setVisibleMeasurementVersion(version => version + 1);
+                                        }
+                                        if (isRemote) {
+                                            requestRemoteRange(Math.max(0, nextStart - 30), Math.min(tableRowCount - 1, nextStop + 60));
                                         }
                                     }}
                                     width={width}
                                     height={height}
                                     columnCount={columns.length + 1}
-                                    rowCount={sortedResults.length + 1}
+                                    rowCount={tableRowCount + 1}
                                     fixedRowCount={1}
                                     fixedColumnCount={1}
-                                    overscanRowCount={10}
+                                    overscanRowCount={80}
                                     overscanColumnCount={2}
                                     enableFixedColumnScroll
                                     enableFixedRowScroll
@@ -1132,7 +1299,7 @@ export default function VTable({
                 >
                     {t('VTable.Context.CopyWithHeaders')}
                 </ContextMenuItem>
-                {(sel.mode === 'singleCell' || sel.mode === 'rowOnly' || sel.mode === 'singleRow') && (
+                {!operationsDisabled && (sel.mode === 'singleCell' || sel.mode === 'rowOnly' || sel.mode === 'singleRow') && (
                     <ContextMenuItem
                         inset
                         onSelect={e => {

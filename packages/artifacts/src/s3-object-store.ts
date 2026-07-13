@@ -38,7 +38,7 @@ export class S3CompatibleObjectStore implements ObjectStore {
             new PutObjectCommand({
                 Bucket: this.config.bucket,
                 Key: path,
-                Body: await objectBodyToBuffer(body),
+                Body: body instanceof Readable ? body : await objectBodyToBuffer(body),
                 ContentType: options?.contentType,
             }),
         );

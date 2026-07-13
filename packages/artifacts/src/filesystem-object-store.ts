@@ -1,7 +1,8 @@
 import path from 'node:path';
-import { createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 import { objectBodyToBuffer, type ObjectInfo, type ObjectStat, type ObjectStore, type ObjectStoreBody, type ObjectStorePutOptions } from './object-store';
 
@@ -13,6 +14,10 @@ export class FilesystemObjectStore implements ObjectStore {
     async put(objectPath: string, body: ObjectStoreBody, _options?: ObjectStorePutOptions): Promise<void> {
         const filePath = this.resolvePath(objectPath);
         await mkdir(path.dirname(filePath), { recursive: true });
+        if (body instanceof Readable) {
+            await pipeline(body, createWriteStream(filePath, { mode: 0o600 }));
+            return;
+        }
         await writeFile(filePath, await objectBodyToBuffer(body), { mode: 0o600 });
     }
 

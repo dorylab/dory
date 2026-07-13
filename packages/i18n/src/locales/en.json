@@ -1366,6 +1366,11 @@
             "QueryHistoryEmptyDescription": "Run SQL from the console and your recent queries will appear here.",
             "QueryHistoryUntitled": "SQL query",
             "QueryHistoryDuration": "{value} ms",
+            "QueryHistoryResultAvailable": "Result available",
+            "QueryHistorySqlOnly": "SQL only",
+            "QueryHistoryRestoreHint": "Opening this history item restores its saved result.",
+            "QueryHistorySqlOnlyHint": "Opening this history item only replaces the SQL and clears the current result.",
+            "QueryHistoryStatus": "Status: {value}",
             "SearchPlaceholder": "Search saved queries",
             "SearchEmpty": "No matching saved queries",
             "MoreActions": "More actions",
@@ -1441,6 +1446,11 @@
             "Shown": "Shown: {value}",
             "LimitSuffix": " / limit {value}",
             "Truncated": "Truncated",
+            "HistorySource": "From query history",
+            "HistorySourceTooltip": "This result comes from a saved query history result.",
+            "HistorySourceStarted": "Query time: {value}",
+            "HistorySourceFinished": "Finished: {value}",
+            "HistorySourceDuration": "Execution: {value} ms",
             "SqlPreviewLabel": "SQL preview",
             "SqlPreviewAria": "Show SQL preview"
         },
@@ -3003,6 +3013,11 @@
                     "Title": "AI Configuration",
                     "Description": "Configure the models available to this organization."
                 },
+                "Storage": {
+                    "Label": "Storage",
+                    "Title": "Storage",
+                    "Description": "Manage retained query results and local artifacts."
+                },
                 "Billing": {
                     "Label": "Plans & Subscriptions",
                     "Title": "Plans & Subscriptions",
@@ -3034,6 +3049,23 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "Expose a local MCP endpoint for Codex, Claude Code, and other agents."
+                }
+            },
+            "Storage": {
+                "ResultSets": {
+                    "Title": "Result Sets",
+                    "Description": "Control how long saved query result files are kept before cleanup removes them.",
+                    "FieldLabel": "Query result retention",
+                    "FieldDescription": "Expired result files are removed in the background. Query history is kept.",
+                    "SelectPlaceholder": "Select duration",
+                    "DayOption": "{count, plural, one {# day} other {# days}}",
+                    "SaveAction": "Save retention",
+                    "Saving": "Saving...",
+                    "ReadOnlyHint": "Your current role does not allow updating storage settings.",
+                    "Toasts": {
+                        "Updated": "Result retention updated",
+                        "UpdateFailed": "Failed to update result retention"
+                    }
                 }
             },
             "Appearance": {
@@ -3088,7 +3120,7 @@
                 "LineHeightLabel": "Line height",
                 "LineHeightDescription": "Controls line spacing multiplier (1.1-2.2).",
                 "QueryLimitLabel": "Default query limit",
-                "QueryLimitDescription": "Sets the default LIMIT for SQL runs.",
+                "QueryLimitDescription": "Sets the default LIMIT for SQL runs. Choose No limit to run without adding a LIMIT.",
                 "LineNumbersLabel": "Line numbers",
                 "LineNumbersDescription": "Show or hide line numbers.",
                 "MinimapLabel": "Minimap",

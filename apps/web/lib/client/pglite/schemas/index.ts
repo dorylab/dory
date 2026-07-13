@@ -58,6 +58,9 @@ export const queryResultSet = pgTable(
 
         limited: boolean('limited').notNull().default(false),
         limit: integer('limit'),
+        resultSetId: text('result_set_id'),
+        dataAvailability: text('data_availability'),
+        previewRowCount: integer('preview_row_count'),
         
         affectedRows: integer('affected_rows'),
 

@@ -12,13 +12,14 @@ import { querySession, queryResultSet, queryResultPage } from './pglite/schemas'
 // Utilities and types
 import { createWorkerPool } from '@dory/web-utils/worker-pool';
 import { estimateBytes, isQuotaLikeError, idleYield, sleep, toDate3 } from './utils';
-import type { DBHook, ResultSetMeta, TabResult } from './type';
+import type { DBHook, ResultSetMeta, ResultSetRemoteFilter, ResultSetRemoteSearch, ResultSetRemoteSort, TabResult } from './type';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { dataVersionAtom, bumpDataVersionAtom } from './client.store';
 import { encodeRows, toArrayBuffer, decodeRow } from '@dory/web-utils/binary-codec';
 import { translate } from '@dory/i18n/translate';
 import { getClientLocale } from '@dory/i18n/client';
 import { profileResultSet, type ResultSetStatsV1, type ResultSetViewState } from './result-set-ai';
+import { executeActionClient } from '@/lib/actions/client';
 
 // ---------------- Concurrency and pagination params ----------------
 const WORKER_COUNT = Math.max(1, Math.min(3, typeof navigator !== 'undefined' && (navigator as any).hardwareConcurrency ? (navigator as any).hardwareConcurrency - 1 : 2));
@@ -28,6 +29,18 @@ const DEFAULT_ROWS_PER_PAGE = 1_000;
 const TARGET_PAGE_BYTES = 4 * 1024 * 1024;
 const YIELD_MS: number = 8;
 const RESULT_SET_PROFILE_VERSION = 2;
+const REMOTE_RESULT_PAGE_SIZE = 5000;
+
+type ReadResultRowsResponse = {
+    resultSetId: string;
+    rows: Record<string, unknown>[];
+    offset: number;
+    limit: number;
+    rowCount: number | null;
+    unfilteredRowCount?: number | null;
+    columns: unknown[];
+    dataAvailability: string;
+};
 
 function translatePgliteError(key: string) {
     return translate(getClientLocale(), key);
@@ -154,6 +167,9 @@ export function useDB() {
                 viewState: (meta.viewState ?? null) as any,
                 aiProfileVersion: meta.aiProfileVersion ?? RESULT_SET_PROFILE_VERSION,
                 rowCount: meta.rowCount ?? null,
+                resultSetId: meta.resultSetId ?? null,
+                dataAvailability: meta.dataAvailability ?? null,
+                previewRowCount: meta.previewRowCount ?? null,
                 affectedRows: meta.affectedRows ?? null,
                 // Only allow 'success' or 'error' for status
                 status: meta.status === 'running' ? 'error' : (meta.status ?? 'success'),
@@ -182,6 +198,9 @@ export function useDB() {
                         viewState: values.viewState,
                         aiProfileVersion: values.aiProfileVersion,
                         rowCount: values.rowCount,
+                        resultSetId: values.resultSetId,
+                        dataAvailability: values.dataAvailability,
+                        previewRowCount: values.previewRowCount,
                         affectedRows: values.affectedRows,
                         status: values.status,
                         errorMessage: values.errorMessage,
@@ -234,6 +253,9 @@ export function useDB() {
                     viewState: queryResultSet.viewState,
                     aiProfileVersion: queryResultSet.aiProfileVersion,
                     rowCount: queryResultSet.rowCount,
+                    resultSetId: queryResultSet.resultSetId,
+                    dataAvailability: queryResultSet.dataAvailability,
+                    previewRowCount: queryResultSet.previewRowCount,
                     affectedRows: queryResultSet.affectedRows,
                     status: queryResultSet.status,
                     errorMessage: queryResultSet.errorMessage,
@@ -365,6 +387,9 @@ export function useDB() {
                             viewState: null,
                             aiProfileVersion: RESULT_SET_PROFILE_VERSION,
                             rowCount: 0,
+                            resultSetId: null,
+                            dataAvailability: null,
+                            previewRowCount: null,
                             affectedRows: null,
                             status: 'success',
                             errorMessage: null,
@@ -569,6 +594,55 @@ export function useDB() {
                 return true;
             };
 
+            const [remoteMeta] = await orm
+                .select({
+                    resultSetId: queryResultSet.resultSetId,
+                    dataAvailability: queryResultSet.dataAvailability,
+                })
+                .from(queryResultSet)
+                .where(and(eq(queryResultSet.sessionId, sessionId), eq(queryResultSet.setIndex, setIndex)))
+                .limit(1);
+
+            if (remoteMeta?.resultSetId && remoteMeta.dataAvailability === 'full') {
+                let offset = 0;
+                const pageSize = Math.min(REMOTE_RESULT_PAGE_SIZE, Math.max(emitChunkRows, Math.min(rowBudgetMax, REMOTE_RESULT_PAGE_SIZE)));
+
+                for (;;) {
+                    if (opts?.signal?.aborted) break;
+                    if (emittedRows >= rowBudgetMax) break;
+
+                    const remainingBudget = rowBudgetMax - emittedRows;
+                    const limit = Math.max(1, Math.min(pageSize, remainingBudget));
+                    const response = await executeActionClient<ReadResultRowsResponse>(
+                        'resultSet.rows.read',
+                        {
+                            resultSetId: remoteMeta.resultSetId,
+                            offset,
+                            limit,
+                        },
+                        { signal: opts?.signal },
+                    );
+
+                    const rows = Array.isArray(response.rows) ? response.rows : [];
+                    if (!rows.length) {
+                        if (offset === 0 && hasConsumer) onChunk!([]);
+                        break;
+                    }
+
+                    const cont = await emitRowsInSlices(rows, offset);
+                    offset += rows.length;
+                    if (!cont || rows.length < limit) break;
+
+                    const rowCount = typeof response.rowCount === 'number' ? response.rowCount : null;
+                    if (rowCount != null && offset >= rowCount) break;
+                    if (response.dataAvailability !== 'full') break;
+
+                    await timeBudgetYield(8);
+                }
+
+                return hasConsumer ? [] : out;
+            }
+
             let nextPromise = fetchOne(lastPageNo);
 
             for (; ;) {
@@ -619,6 +693,68 @@ export function useDB() {
         },
         [],
     );
+
+    const readResultSetRows = useCallback(
+        async (params: {
+            resultSetId: string;
+            offset?: number;
+            limit?: number;
+            sorts?: ResultSetRemoteSort[];
+            filters?: ResultSetRemoteFilter[];
+            search?: ResultSetRemoteSearch | null;
+            signal?: AbortSignal;
+        }): Promise<ReadResultRowsResponse> => {
+            return executeActionClient<ReadResultRowsResponse>(
+                'resultSet.rows.read',
+                {
+                    resultSetId: params.resultSetId,
+                    offset: params.offset ?? 0,
+                    limit: params.limit ?? 1000,
+                    sorts: params.sorts,
+                    filters: params.filters,
+                    search: params.search,
+                },
+                { signal: params.signal },
+            );
+        },
+        [],
+    );
+
+    const exportResultSet = useCallback<DBHook['exportResultSet']>(async params => {
+        return executeActionClient(
+            'resultSet.export.create',
+            {
+                resultSetId: params.resultSetId,
+                format: params.format,
+                sorts: params.sorts,
+                filters: params.filters,
+                search: params.search,
+            },
+        );
+    }, []);
+
+    const readResultSetChart = useCallback<DBHook['readResultSetChart']>(async params => {
+        return executeActionClient('resultSet.chart.read', {
+            resultSetId: params.resultSetId,
+            xKey: params.xKey,
+            yKey: params.yKey,
+            groupKey: params.groupKey,
+            chartType: params.chartType,
+            filters: params.filters,
+            search: params.search,
+        });
+    }, []);
+
+    const readResultSetProfile = useCallback<DBHook['readResultSetProfile']>(async params => {
+        return executeActionClient(
+            'resultSet.profile.read',
+            {
+                resultSetId: params.resultSetId,
+                sampleRows: params.sampleRows,
+            },
+            { signal: params.signal },
+        );
+    }, []);
 
     // ============ List/cleanup/session fetch ============
 
@@ -675,8 +811,11 @@ export function useDB() {
         const rows = await ormRef.current
             .select({
                 status: querySession.status,
+                errorMessage: querySession.errorMessage,
                 startedAt: querySession.startedAt,
                 finishedAt: querySession.finishedAt,
+                durationMs: querySession.durationMs,
+                source: querySession.source,
             })
             .from(querySession)
             .where(eq(querySession.sessionId, sessionId))
@@ -769,6 +908,9 @@ export function useDB() {
                 rowCount?: number | null;
                 limited?: boolean | null;
                 limit?: number | null;
+                resultSetId?: string | null;
+                dataAvailability?: string | null;
+                previewRowCount?: number | null;
                 affectedRows?: number | null;
                 status: 'success' | 'error';
                 errorMessage?: string | null;
@@ -845,6 +987,9 @@ export function useDB() {
                             rowCount: r.rowCount ?? null,
                             limited: r.limited ?? false,
                             limit: r.limit ?? null,
+                            resultSetId: r.resultSetId ?? null,
+                            dataAvailability: r.dataAvailability ?? null,
+                            previewRowCount: r.previewRowCount ?? null,
                             affectedRows: r.affectedRows ?? null,
                             status: r.status,
                             errorMessage: r.errorMessage ?? null,
@@ -870,6 +1015,9 @@ export function useDB() {
                             rowCount: sql`excluded.row_count`,
                             limited: sql`excluded.limited`,
                             limit: sql`excluded.limit`,
+                            resultSetId: sql`excluded.result_set_id`,
+                            dataAvailability: sql`excluded.data_availability`,
+                            previewRowCount: sql`excluded.preview_row_count`,
                             affectedRows: sql`excluded.affected_rows`,
                             status: sql`excluded.status`,
                             errorMessage: sql`excluded.error_message`,
@@ -889,7 +1037,9 @@ export function useDB() {
             // Keep 1:1 mapping between queryResultSets[k] and results[k].
             if (Array.isArray(payload.results) && Array.isArray(payload.queryResultSets)) {
                 for (let k = 0; k < payload.queryResultSets.length; k++) {
-                    const si = payload.queryResultSets[k]!.setIndex;
+                    const resultSet = payload.queryResultSets[k]!;
+                    if (resultSet.resultSetId && resultSet.dataAvailability === 'full') continue;
+                    const si = resultSet.setIndex;
                     const rows = payload.results[k] ?? [];
                     if (!rows.length) continue;
                     await insertResultRows(s.sessionId, si, rows);
@@ -936,6 +1086,10 @@ export function useDB() {
 
             insertResultRows,
             getResultRows,
+            readResultSetRows,
+            exportResultSet,
+            readResultSetChart,
+            readResultSetProfile,
             listResultSetIndices,
             clearResults,
             getSession,
@@ -953,6 +1107,10 @@ export function useDB() {
             listResultSetsMeta,
             insertResultRows,
             getResultRows,
+            readResultSetRows,
+            exportResultSet,
+            readResultSetChart,
+            readResultSetProfile,
             listResultSetIndices,
             clearResults,
             getSession,

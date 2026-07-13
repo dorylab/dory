@@ -1,6 +1,6 @@
 import type { ClickHouseClient } from '@clickhouse/client';
-import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import { BaseConnection, asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { ClickhouseDialect } from './dialect';
 import {
@@ -8,6 +8,7 @@ import {
     createClickhouseClient,
     executeClickhouseCommand,
     executeClickhouseQuery,
+    executeClickhouseQueryRowStream,
     isClickhouseTlsEnabled,
     pingClickhouse,
     resolveClickhouseHttpPort,
@@ -77,6 +78,38 @@ export class ClickhouseDatasource extends BaseConnection {
             return await executeClickhouseQuery<Row>(tempClient, sql, context?.params, context);
         } finally {
             await tempClient.close().catch(() => undefined);
+        }
+    }
+
+    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        this.assertReady();
+        const targetDb = context?.database ?? this.config.database;
+
+        if (!targetDb || targetDb === this.config.database) {
+            return executeClickhouseQueryRowStream<Row>(this.client!, sql, context?.params, context);
+        }
+
+        const sshEndpoint = this.getSshEndpoint();
+        const tempClient = createClickhouseClient(this.config, {
+            database: targetDb,
+            hostOverride: sshEndpoint?.host,
+            httpPortOverride: sshEndpoint?.port,
+        });
+
+        try {
+            const result = await executeClickhouseQueryRowStream<Row>(tempClient, sql, context?.params, context);
+            const close = onceAsync(async () => {
+                await result.close?.();
+                await tempClient.close().catch(() => undefined);
+            });
+            return {
+                ...result,
+                rows: asyncIterableWithCleanup(result.rows, close),
+                close,
+            };
+        } catch (error) {
+            await tempClient.close().catch(() => undefined);
+            throw error;
         }
     }
 

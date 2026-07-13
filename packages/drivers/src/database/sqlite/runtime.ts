@@ -4,7 +4,7 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 import { SqliteDialect } from './dialect';
@@ -118,6 +118,40 @@ export function executeSqliteQuery<Row = any>(db: SqliteDatabase, sql: string, p
         rows: [],
         rowCount: result.changes,
         tookMs: Date.now() - started,
+    };
+}
+
+export function executeSqliteQueryRowStream<Row = any>(db: SqliteDatabase, sql: string, params?: DriverQueryParams): DriverQueryRowStream<Row> {
+    const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
+    const statement = db.prepare(compiledSql);
+    const boundParams = bindStatement(statement, compiledParams);
+    const started = Date.now();
+
+    if (!statement.reader) {
+        const result = statement.run(...boundParams);
+        return {
+            rows: (async function* () {})(),
+            rowCount: result.changes,
+            columns: [],
+            limited: false,
+            tookMs: Date.now() - started,
+        };
+    }
+
+    const iterator = statement.iterate(...boundParams) as Iterable<Row>;
+    const rows = (async function* () {
+        for (const row of iterator) {
+            yield row;
+        }
+    })();
+
+    return {
+        rows,
+        rowCount: null,
+        columns: normalizeColumns(statement),
+        limited: false,
+        tookMs: Date.now() - started,
+        close: () => undefined,
     };
 }
 

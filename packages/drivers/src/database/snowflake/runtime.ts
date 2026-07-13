@@ -3,8 +3,9 @@ import snowflake from 'snowflake-sdk';
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
+import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { SnowflakeDialect } from './dialect';
 
 type SnowflakeConnection = snowflake.Connection;
@@ -219,6 +220,76 @@ export async function executeSnowflakeQuery<Row>(
             },
         }) as snowflake.RowStatement;
 
+        if (options?.trackQuery && options.context?.queryId) {
+            options.trackQuery(statement);
+        }
+    });
+}
+
+export async function executeSnowflakeQueryRowStream<Row>(
+    connection: SnowflakeConnection,
+    config: BaseConfig,
+    sql: string,
+    params?: DriverQueryParams,
+    options?: {
+        context?: ConnectionQueryContext;
+        trackQuery?: (statement: snowflake.RowStatement) => void;
+        untrackQuery?: () => void;
+    },
+): Promise<DriverQueryRowStream<Row>> {
+    const { sql: compiledSql, values } = normalizeParams(sql, params);
+    const runtime = extractRuntimeOptions(config);
+    const started = Date.now();
+    const queryTimeoutMs = options?.context?.statementTimeoutMs ?? runtime.requestTimeoutMs;
+
+    return await new Promise<DriverQueryRowStream<Row>>((resolve, reject) => {
+        let stream: (AsyncIterable<Row> & { destroy?: (error?: Error) => void }) | null = null;
+        const cleanup = onceAsync(() => options?.untrackQuery?.());
+        let statementRef: snowflake.RowStatement | null = null;
+
+        const statement = connection.execute({
+            sqlText: compiledSql,
+            binds: values as snowflake.Binds,
+            streamResult: true,
+            parameters: queryTimeoutMs ? { STATEMENT_TIMEOUT_IN_SECONDS: Math.max(1, Math.ceil(queryTimeoutMs / 1000)) } : undefined,
+            complete: (err, stmt) => {
+                if (err) {
+                    void cleanup();
+                    reject(err);
+                    return;
+                }
+
+                const rowStatement = stmt as snowflake.RowStatement;
+                statementRef = rowStatement;
+                const rowStream = rowStatement.streamRows() as AsyncIterable<Row> & { destroy?: (error?: Error) => void };
+                stream = rowStream;
+
+                resolve({
+                    rows: asyncIterableWithCleanup<Row>(rowStream, cleanup),
+                    rowCount: null,
+                    columns: normalizeColumns(rowStatement),
+                    limited: false,
+                    tookMs: Date.now() - started,
+                    statistics: {
+                        snowflake: {
+                            queryId: rowStatement.getQueryId?.(),
+                            streamingMode: 'streamRows',
+                        },
+                    },
+                    close: async () => {
+                        stream?.destroy?.();
+                        if (statementRef) {
+                            await new Promise<void>(done => {
+                                statementRef?.cancel(() => done());
+                            }).catch(() => undefined);
+                        }
+                        await cleanup();
+                    },
+                });
+            },
+        }) as snowflake.RowStatement;
+
+        statementRef = statement;
         if (options?.trackQuery && options.context?.queryId) {
             options.trackQuery(statement);
         }

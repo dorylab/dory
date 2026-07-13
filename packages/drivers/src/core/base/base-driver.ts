@@ -15,6 +15,7 @@ import type {
     DriverHealthInfo,
     DriverMonitoringSummary,
     DriverMonitoringSummaryOptions,
+    DriverQueryRowStream,
     DriverQueryContext,
     DriverQueryResult,
     DriverTableProfile,
@@ -58,6 +59,10 @@ export abstract class BaseDriver {
      */
     async queryWithContext<Row = any>(sql: string, context?: DriverQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryResult<Row>> {
         return this.query<Row>(sql, context?.params, context);
+    }
+
+    async queryRowsStreamWithContext<Row = any>(_sql: string, _context?: DriverQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+        throw new UnsupportedDriverCapabilityError('queryRowsStreamWithContext', this.config.type);
     }
 
     async command(sql: string, params?: DriverQueryParams, context?: DriverQueryContext): Promise<void> {

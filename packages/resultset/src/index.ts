@@ -1,6 +1,8 @@
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { Readable } from 'node:stream';
 
 export type ResultSetLogicalType = 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'binary' | 'unknown';
 
@@ -105,7 +107,8 @@ export type ResultSetDataWriterResult = {
     format: 'parquet';
     rowCount: number;
     byteSize?: number;
-    data: Buffer;
+    data: Buffer | Readable;
+    cleanup?: () => Promise<void>;
 };
 
 export type ResultSetDataWriter = {
@@ -159,49 +162,55 @@ type DuckDBInstanceLike = {
 
 export class ParquetResultSetDataWriter implements ResultSetDataWriter {
     async write(input: { artifactId: string; schema: ResultSetColumn[]; rows: AsyncIterable<unknown> | unknown[]; target: unknown }): Promise<ResultSetDataWriterResult | null> {
-        const rows = await collectRows(input.rows);
-        const schema = input.schema.length ? input.schema : inferResultSetColumns(rows);
+        const preparedRows = await prepareRowsForParquet(input.rows, input.schema);
+        const schema = input.schema.length ? input.schema : inferResultSetColumns(preparedRows.sampleRows);
         if (!schema.length) return null;
 
-        const normalizedRows = rows.map(row => normalizeRecord(row));
-        const columns = normalizeParquetColumns(schema, normalizedRows);
+        const columns = normalizeParquetColumns(schema, preparedRows.sampleRows.map(row => normalizeRecord(row)));
         const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-${safeFilePart(input.artifactId)}-`));
         const outputPath = path.join(tempDir, 'data.parquet');
 
         let instance: DuckDBInstanceLike | null = null;
+        let keepTempDir = false;
         try {
             const { DuckDBInstance } = await import('@duckdb/node-api');
             instance = await DuckDBInstance.create(':memory:');
             const connection = await instance.connect();
             try {
                 await connection.run(`CREATE TABLE result_set (${columns.map(column => `${quoteIdentifier(column.parquetName)} ${column.duckDbType}`).join(', ')})`);
-                if (normalizedRows.length) {
-                    const appender = await connection.createAppender('result_set');
-                    try {
-                        for (const row of normalizedRows) {
-                            for (const column of columns) appendValue(appender, column, row[column.name]);
-                            appender.endRow();
-                        }
-                    } finally {
-                        appender.closeSync();
+                const appender = await connection.createAppender('result_set');
+                let rowCount = 0;
+                try {
+                    for (const row of preparedRows.sampleRows) {
+                        appendRow(appender, columns, row);
+                        rowCount += 1;
                     }
+                    for await (const row of preparedRows.remainingRows) {
+                        appendRow(appender, columns, row);
+                        rowCount += 1;
+                    }
+                } finally {
+                    appender.closeSync();
                 }
                 await connection.run(`COPY result_set TO ${quoteLiteral(outputPath)} (FORMAT PARQUET)`);
+                const info = await stat(outputPath);
+                keepTempDir = true;
+                return {
+                    path: 'data.parquet',
+                    format: 'parquet',
+                    rowCount,
+                    byteSize: info.size,
+                    data: createReadStream(outputPath),
+                    cleanup: () => rm(tempDir, { recursive: true, force: true }).catch(() => undefined),
+                };
             } finally {
                 connection.closeSync();
             }
-
-            const [data, info] = await Promise.all([readFile(outputPath), stat(outputPath)]);
-            return {
-                path: 'data.parquet',
-                format: 'parquet',
-                rowCount: normalizedRows.length,
-                byteSize: info.size,
-                data,
-            };
         } finally {
             instance?.closeSync();
-            await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+            if (!keepTempDir) {
+                await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+            }
         }
     }
 }
@@ -289,11 +298,39 @@ function normalizeRecord(row: unknown): Record<string, unknown> {
     return row as Record<string, unknown>;
 }
 
-async function collectRows(rows: AsyncIterable<unknown> | unknown[]): Promise<unknown[]> {
-    if (Array.isArray(rows)) return rows;
-    const collected: unknown[] = [];
-    for await (const row of rows) collected.push(row);
-    return collected;
+async function prepareRowsForParquet(rows: AsyncIterable<unknown> | unknown[], schema: ResultSetColumn[]) {
+    if (Array.isArray(rows)) {
+        return {
+            sampleRows: schema.length ? rows.slice(0, 200) : rows,
+            remainingRows: rowsFromArray(schema.length ? rows.slice(200) : []),
+        };
+    }
+
+    const iterator = rows[Symbol.asyncIterator]();
+    const sampleRows: unknown[] = [];
+    const sampleLimit = schema.length ? 0 : 200;
+    while (sampleRows.length < sampleLimit) {
+        const next = await iterator.next();
+        if (next.done) break;
+        sampleRows.push(next.value);
+    }
+
+    return {
+        sampleRows,
+        remainingRows: rowsFromIterator(iterator),
+    };
+}
+
+async function* rowsFromArray(rows: unknown[]) {
+    for (const row of rows) yield row;
+}
+
+async function* rowsFromIterator(iterator: AsyncIterator<unknown>) {
+    for (;;) {
+        const next = await iterator.next();
+        if (next.done) return;
+        yield next.value;
+    }
 }
 
 function normalizeParquetColumns(schema: ResultSetColumn[], rows: Record<string, unknown>[]): NormalizedColumn[] {
@@ -372,6 +409,12 @@ function appendValue(appender: DuckDBAppenderLike, column: NormalizedColumn, val
             appender.appendVarchar(toStableString(value));
             return;
     }
+}
+
+function appendRow(appender: DuckDBAppenderLike, columns: NormalizedColumn[], row: unknown) {
+    const normalizedRow = normalizeRecord(row);
+    for (const column of columns) appendValue(appender, column, normalizedRow[column.name]);
+    appender.endRow();
 }
 
 function toJsonSafeValue(value: unknown): unknown {
