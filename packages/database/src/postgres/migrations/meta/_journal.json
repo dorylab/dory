@@ -155,6 +155,13 @@
       "when": 1783641600000,
       "tag": "0021_query_history_result_restore",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1783728000000,
+      "tag": "0022_result_set_view_state",
+      "breakpoints": true
     }
   ]
 }

@@ -6,7 +6,7 @@ import { ArrowLeft, Clipboard, FileText, Loader2, Play, Sparkles } from 'lucide-
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { useDB } from '@/lib/client/use-pglite';
+import { notifySqlConsoleResultDataUpdated, useSqlConsoleResultStore } from '@/lib/client/sql-console-result-store';
 import { buildInsightDraft, buildInsightRewriteRequest, buildInsights, buildStructuredInsightView, type InsightRewriteResponse } from '@/lib/client/result-set-insights';
 import { fetchInsightRewrite, makeInsightRewriteCacheKey } from '@/lib/client/result-insight-rewrite';
 import { buildAnalysisSuggestions, buildAnalysisSummaryFromDraft } from '@/lib/analysis/suggestions';
@@ -275,7 +275,9 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
     const { tabId, connectionId, databaseName, onDetailStateChange } = props;
     const locale = useLocale();
     const t = useTranslations('SqlConsole');
-    const { dbReady, getResultRows, readResultSetProfile, applyServerResult } = useDB();
+    type TranslationValues = Parameters<typeof t>[1];
+    const translate = useCallback((key: string, values?: TranslationValues) => t(key as never, values as never), [t]);
+    const { listResultSetsMeta, readResultSetProfile } = useSqlConsoleResultStore();
     const sessionMetas = useAtomValue(currentSessionMetaAtom);
     const sessionIdByTab = useAtomValue(sessionIdByTabAtom);
     const activeSessionId = tabId ? sessionIdByTab[tabId] : undefined;
@@ -302,7 +304,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         let canceled = false;
         setSampleRowsReady(false);
         (async () => {
-            if (!dbReady || !activeSessionId || activeSet == null || activeSet < 0) {
+            if (!activeSessionId || activeSet == null || activeSet < 0) {
                 if (!canceled) {
                     setSampleRows([]);
                     setProfileStats(null);
@@ -312,7 +314,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             }
 
             const resultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
-            if (resultSetId && sessionMetas?.dataAvailability === 'full') {
+            if (resultSetId) {
                 const profile = await readResultSetProfile({ resultSetId, sampleRows: 200 }).catch(() => null);
                 if (canceled) return;
                 if (profile) {
@@ -323,12 +325,8 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
                 }
             }
 
-            const rows = await getResultRows(activeSessionId, activeSet, {
-                rowBudget: 200,
-                yieldUi: false,
-            }).catch(() => []);
             if (canceled) return;
-            setSampleRows(rows.map(row => row.rowData as Record<string, unknown>).slice(0, 200));
+            setSampleRows([]);
             setProfileStats(null);
             setSampleRowsReady(true);
         })();
@@ -336,7 +334,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         return () => {
             canceled = true;
         };
-    }, [activeSessionId, activeSet, dbReady, getResultRows, readResultSetProfile, sessionMetas?.dataAvailability, sessionMetas?.resultSetId]);
+    }, [activeSessionId, activeSet, readResultSetProfile, sessionMetas?.resultSetId]);
 
     const effectiveStats = profileStats ?? sessionMetas?.stats;
 
@@ -349,9 +347,9 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             sqlText: sessionMetas?.sqlText ?? '',
             rows: sampleRows,
             locale,
-            t: (key, values) => t(key as any, values),
+            t: translate,
         });
-    }, [effectiveStats, locale, sampleRows, sampleRowsReady, sessionMetas, t]);
+    }, [effectiveStats, locale, sampleRows, sampleRowsReady, sessionMetas, translate]);
     const insightRewriteCacheKey = useMemo(() => makeInsightRewriteCacheKey(insightRewriteRequest), [insightRewriteRequest]);
 
     useEffect(() => {
@@ -381,7 +379,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             sqlText: sessionMetas?.sqlText ?? '',
             rows: sampleRows,
             locale,
-            t: (key, values) => t(key as any, values),
+            t: translate,
         });
         const view = buildInsights(
             {
@@ -390,7 +388,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
                 sqlText: sessionMetas?.sqlText ?? '',
                 rows: sampleRows,
                 locale,
-                t: (key, values) => t(key as any, values),
+                t: translate,
             },
             rewritten,
         );
@@ -401,7 +399,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
                 sqlText: sessionMetas?.sqlText ?? '',
                 rows: sampleRows,
                 locale,
-                t: (key, values) => t(key as any, values),
+                t: translate,
             },
             draft,
             view,
@@ -420,7 +418,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             draft,
             recommendedActions: structured.decision.items.flatMap(item => item.actions),
             recommendedActionsOnly: !!rewritten?.items?.some(item => item.actions.length > 0),
-            t: (key, values) => t(key as any, values),
+            t: translate,
         });
         return {
             draft,
@@ -432,7 +430,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
             resultContext,
             suggestions,
         };
-    }, [activeSessionId, activeSet, databaseName, effectiveStats, locale, rewritten, sampleRows, sessionMetas, t]);
+    }, [activeSessionId, activeSet, databaseName, effectiveStats, locale, rewritten, sampleRows, sessionMetas, translate]);
 
     useEffect(() => {
         if (!workspaceKey || !insightBundle || !tabId || !activeSessionId || activeSet == null || activeSet < 0) return;
@@ -505,23 +503,23 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         let canceled = false;
 
         (async () => {
-            if (!dbReady || !selectedSessionResultRef) {
+            if (!selectedSessionResultRef) {
                 if (!canceled) setAnalysisRows([]);
                 return;
             }
 
-            const rows = await getResultRows(selectedSessionResultRef.sessionId, selectedSessionResultRef.setIndex, {
-                rowBudget: 80,
-                yieldUi: false,
-            }).catch(() => []);
+            const metas = await listResultSetsMeta(selectedSessionResultRef.sessionId).catch(() => []);
+            const meta = metas.find(item => item.setIndex === selectedSessionResultRef.setIndex);
+            const resultSetId = typeof meta?.resultSetId === 'string' && meta.resultSetId ? meta.resultSetId : null;
+            const profile = resultSetId ? await readResultSetProfile({ resultSetId, sampleRows: 80 }).catch(() => null) : null;
             if (canceled) return;
-            setAnalysisRows(rows.map(row => row.rowData as AnalysisRow));
+            setAnalysisRows((profile?.sampleRows ?? []).map(row => row as AnalysisRow));
         })();
 
         return () => {
             canceled = true;
         };
-    }, [dbReady, getResultRows, selectedSessionResultRef]);
+    }, [listResultSetsMeta, readResultSetProfile, selectedSessionResultRef]);
 
     const handleSelectSuggestion = (suggestion: AnalysisSuggestion) => {
         if (!tabId || !activeSessionId || activeSet == null || activeSet < 0) return;
@@ -703,7 +701,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
                     setIndex: activeSet,
                 };
 
-                await applyServerResult(response.query);
+                notifySqlConsoleResultDataUpdated();
                 persistAnalysisSession(sourceRef.sessionId, sourceRef.setIndex, response.session, optimisticId ?? undefined);
             } catch (error) {
                 toast.error(error instanceof Error ? error.message : t('Insights.Analysis.Errors.RunFailed'));
@@ -714,7 +712,6 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         [
             activeSessionId,
             activeSet,
-            applyServerResult,
             connectionId,
             databaseName,
             handleSelectSuggestion,
@@ -764,7 +761,7 @@ export default function AnalysisActions(props: AnalysisActionsProps) {
         ).finally(() => {
             setAnalysisRequest(null);
         });
-    }, [activeSessionId, activeSet, analysisRequest, handleRunSuggestion, insightBundle, setAnalysisRequest, workspaceSuggestions]);
+    }, [activeSessionId, activeSet, analysisRequest, handleRunSuggestion, insightBundle, setAnalysisRequest, t, workspaceSuggestions]);
 
     if (!activeSessionId || activeSet == null || activeSet < 0 || !insightBundle) {
         return null;

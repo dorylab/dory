@@ -358,5 +358,13 @@
     "bps": true,
     "folderMillis": 1783641600000,
     "hash": "0476816eebdb4d8b52bbd72edbfc8a8abb3fb60296ee3b69c3826c685ad402c8"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"view_state\" jsonb;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1783728000000,
+    "hash": "7b59e37520f5259c7683afff4f23dcf0417a2cf98538208729c832977bf0aad0"
   }
 ]

@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useDB } from '@/lib/client/use-pglite';
 import { executeActionClient } from '@/lib/actions/client';
+import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
 import { runSqlQueryStream, type QueryExecutePayload } from '@/lib/client/sql-console-query-stream';
 import { fetchTablePreview } from '../../../components/table-browser/lib/fetch-table-preview';
 import { SQLTab } from '@dory/shared/types/tabs';
@@ -14,13 +14,13 @@ import { columnsCacheAtom, currentConnectionAtom, schemaMetadataRefreshAtom } fr
 import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
 import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
+import { clearQueryHistoryRestoredSession } from '../query-history-result-restore';
 
 type RequestAITabTitle = (tab: SQLTab, options?: { force?: boolean; sqlTextOverride?: string }) => Promise<void> | void;
 type QueryResultSetSummary = {
     sqlOp?: unknown;
     status?: unknown;
 };
-type ApplyServerResultPayload = Parameters<ReturnType<typeof useDB>['applyServerResult']>[0];
 
 function genSessionId() {
     const randomUUID = globalThis.crypto?.randomUUID;
@@ -81,7 +81,6 @@ export function useSqlQueryRunner({
     requestAITabTitle: RequestAITabTitle;
     workspaceScope?: SqlWorkspaceScope;
 }) {
-    const { dbReady, setUserId, createQuerySession, finishQuerySession, applyServerResult } = useDB();
     const userReady = !!userId;
     const t = useTranslations('SqlConsole');
     const currentConnection = useAtomValue(currentConnectionAtom);
@@ -96,15 +95,9 @@ export function useSqlQueryRunner({
     const [sessionIdMap, setSessionIdMap] = useAtom(sessionIdByTabAtom);
     const [runningTabs, setRunningTabs] = useAtom(runningTabsAtom);
 
-    useEffect(() => {
-        if (userReady) {
-            setUserId(userId!);
-        }
-    }, [setUserId, userId, userReady]);
-
     const runQuery = useCallback(
         async (tab: SQLTab, options?: { sqlOverride?: string; databaseOverride?: string | null; limit?: number | null }) => {
-            if (!dbReady || !tab || !userReady) return;
+            if (!tab || !userReady) return;
 
             const tabId = tab.tabId;
             const sql = editorRef.current?.getValue() ?? (activeTab?.tabType === 'sql' ? (activeTab?.content ?? '') : '');
@@ -139,22 +132,12 @@ export function useSqlQueryRunner({
                     getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: queryConnectionId }),
                     sessionId,
                 );
+                clearQueryHistoryRestoredSession(tabId);
             } catch {
                 // ignore
             }
 
-            const t0 = performance.now();
-
             try {
-                await createQuerySession({
-                    tabId,
-                    sqlText: tab.tabType === 'table' ? `TABLE PREVIEW ${database}.${tableName}` : finalSqlText,
-                    database,
-                    stopOnError,
-                    source,
-                    sessionId,
-                });
-
                 let payload: QueryExecutePayload | null = null;
                 if (tab.tabType === 'table') {
                     const res = await fetchTablePreview({
@@ -168,6 +151,7 @@ export function useSqlQueryRunner({
                         signal: controller.signal,
                     });
                     payload = isQueryExecutePayload(res.data) ? res.data : null;
+                    notifySqlConsoleResultDataUpdated();
                 } else {
                     await runSqlQueryStream({
                         input: {
@@ -192,7 +176,7 @@ export function useSqlQueryRunner({
                             if ('payload' in event && event.payload && 'session' in event.payload) {
                                 payload = event.payload;
                                 if (event.type === 'result-completed' || event.type === 'session-finished') {
-                                    await applyServerResult(event.payload as ApplyServerResultPayload);
+                                    notifySqlConsoleResultDataUpdated();
                                 }
                             }
                         },
@@ -203,9 +187,6 @@ export function useSqlQueryRunner({
                     throw new Error(t('Errors.InvalidSessionData'));
                 }
                 const finalPayload = payload;
-                if (tab.tabType === 'table') {
-                    await applyServerResult(finalPayload as ApplyServerResultPayload);
-                }
 
                 if (tab.tabType === 'sql' && hasSuccessfulSchemaChange(finalPayload)) {
                     setSchemaMetadataRefresh(prev => ({
@@ -216,17 +197,10 @@ export function useSqlQueryRunner({
                     setColumnsCache({});
                 }
 
-                const totalMs = Math.round(performance.now() - t0);
                 const finalStatus =
                     finalPayload.session.status === 'error' || finalPayload.session.status === 'canceled' || finalPayload.session.status === 'success'
                         ? finalPayload.session.status
                         : 'success';
-                const totalSets = typeof finalPayload.meta?.totalSets === 'number' ? finalPayload.meta.totalSets : (finalPayload.session?.resultSetCount ?? 0);
-                await finishQuerySession(sessionId, {
-                    status: finalStatus,
-                    resultSetCount: totalSets,
-                    durationMs: finalPayload.session.durationMs ?? totalMs,
-                });
 
                 setRunningTabs(p => ({
                     ...p,
@@ -240,29 +214,10 @@ export function useSqlQueryRunner({
                 }
             } catch (e: unknown) {
                 console.error('[SQLConsoleClient.runQuery] error:', e);
-                const errorMessage = e instanceof Error ? e.message : String(e ?? 'SQL execution failed');
                 if (e instanceof Error && e.name === 'AbortError') {
-                    try {
-                        const totalMs = Math.round(performance.now() - t0);
-                        await finishQuerySession(sessionId, {
-                            status: 'canceled',
-                            errorMessage: t('Errors.QueryCanceled'),
-                            durationMs: totalMs,
-                        });
-                    } catch {
-                        // ignore
-                    }
                     setRunningTabs(p => ({ ...p, [tabId]: 'canceled' }));
                     notifyQueryHistoryUpdated(queryConnectionId);
                 } else {
-                    try {
-                        await finishQuerySession(sessionId, {
-                            status: 'error',
-                            errorMessage,
-                        });
-                    } catch {
-                        // ignore
-                    }
                     setRunningTabs(p => ({ ...p, [tabId]: 'error' }));
                     notifyQueryHistoryUpdated(queryConnectionId);
                 }
@@ -274,14 +229,10 @@ export function useSqlQueryRunner({
             }
         },
         [
-            dbReady,
             userReady,
             activeTab,
             activeDatabase,
             limitDialect,
-            createQuerySession,
-            applyServerResult,
-            finishQuerySession,
             setRunningTabs,
             setSessionIdMap,
             setSchemaMetadataRefresh,
@@ -333,7 +284,7 @@ export function useSqlQueryRunner({
         runQuery,
         cancelQuery,
         runningTabs,
-        dbReady,
+        dbReady: true,
         userReady,
     };
 }

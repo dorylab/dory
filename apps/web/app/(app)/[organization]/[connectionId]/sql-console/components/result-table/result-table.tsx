@@ -9,26 +9,24 @@ import { activeTabIdAtom } from '@/shared/stores/app.store';
 import { activeSessionIdAtom, localDataLoadingAtom, runningTabsAtom } from '../../sql-console.store';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useCsvDownload } from './hooks/use-csv-download';
-import { useDB } from '@/lib/client/use-pglite';
+import { useSqlConsoleResultStore } from '@/lib/client/sql-console-result-store';
 import { MetaState } from '@dory/shared/types/sql-console';
 import { Toolbar } from './Toolbar';
 import type { ExecMeta } from './Toolbar';
-import { makeCacheKey, hydrateFromCache, touchCache, RESULTS_CACHE } from './hooks/useResultsCache';
+import { makeCacheKey, touchCache, RESULTS_CACHE } from './hooks/useResultsCache';
 import { OverviewItem, ResultRow } from './types';
 import { useSessionMeta } from './hooks/useSessionMeta';
-import { debugModeAtom, uiRowBudgetAtom } from './stores/prefs.atoms';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { OverviewTable } from './OverviewTable';
 import { currentSessionMetaAtom } from './stores/result-table.atoms';
 import { chartStatesByKeyAtom, viewModesByTabAtom } from './components/charts/stores/chart-state.atoms';
 import { ResultStatusBar } from './ResultStatusBar';
-import { DebugPanel, DebugPayload } from './components/DebugPanel';
 import { makeSetUserPickedAtom, makeActiveSetAtom, makeAutoSetActiveSetAtom, makeSetActiveSetAtom, makeUserPickedAtom } from './stores/active-set.atoms';
 import { useAutoJumpToLastResult } from './hooks/useAutoJumpToLastResult';
 import { SQLErrorAlert } from './components/SQLErrorAlert';
 import { VTableSearchBar } from './components/TableSearchBar';
 import { Charts } from './components/charts';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useVTableFilters, VTableFilters } from './vtable/VTableFilters';
@@ -36,11 +34,23 @@ import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import type { ColumnFilter } from './vtable/type';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
 import type { ResultSetViewState } from '@/lib/client/type';
+import { isQueryHistoryRestoredSession } from '../../query-history-result-restore';
 /* =================================== constants =================================== */
 
-const MAX_ROWS_HINT = 5_000_000; // UI hint only
 const OVERVIEW_SET = -1;
 type ResultViewMode = 'table' | 'charts';
+type ResultSessionStatus = 'running' | 'success' | 'error' | 'canceled';
+type InspectorPayload =
+    | {
+          row: number;
+          col: string;
+          value: unknown;
+      }
+    | {
+          row: number;
+          rowData: Record<string, unknown>;
+      }
+    | null;
 
 function serializeViewFilters(filters: ColumnFilter[]): NonNullable<ResultSetViewState['filters']> {
     return filters.map(filter => ({
@@ -87,7 +97,7 @@ function deserializeViewFilters(filters: ResultSetViewState['filters']): ColumnF
         return {
             col: String(filter.column),
             kind: isNumeric ? 'number' : 'string',
-            op: filter.op as any,
+            op: filter.op as ColumnFilter['op'],
             value: rawValue == null ? undefined : String(rawValue),
             caseSensitive: scalar?.caseSensitive === true,
         };
@@ -105,19 +115,16 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 
 export function ResultTable() {
     const t = useTranslations('SqlConsole');
-    const locale = useLocale();
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
     const [currentViewMode, setCurrentViewMode] = useState<ResultViewMode>('table');
     const [inspectorOpen, setInspectorOpen] = useState(false);
     const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
-    const [inspectorPayload, setInspectorPayload] = useState<any>(null);
+    const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
     const [meta, setMeta] = useState<MetaState>({});
     const [sessionMetas, setSessionMetas] = useAtom(currentSessionMetaAtom);
 
-    const [debugMode, setDebugMode] = useAtom(debugModeAtom);
-    const [uiRowBudget, setUiRowBudget] = useAtom(uiRowBudgetAtom);
     const runningTabs = useAtomValue(runningTabsAtom);
 
     // Atoms
@@ -126,8 +133,8 @@ export function ResultTable() {
     const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
     const sessionId = sessionIdFromAtom || (typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
 
-    const { dbReady, listResultSetIndices, listResultSetsMeta, getResultRows, readResultSetRows, exportResultSet, readResultSetChart, clearResults, dataVersion, getSession, updateResultSetViewState } =
-        useDB();
+    const { dbReady, listResultSetIndices, listResultSetsMeta, readResultSetRows, exportResultSet, readResultSetChart, dataVersion, getSession, updateResultSetViewState } =
+        useSqlConsoleResultStore();
 
     // Session status
     const [sessionStatus, setSessionStatus] = useState<'running' | 'success' | 'error' | 'canceled' | null>(null);
@@ -180,15 +187,13 @@ export function ResultTable() {
     const viewModeKey = useMemo(() => (tabId && activeSet >= 0 ? `tab:${tabId}:set:${activeSet}` : 'unknown'), [activeSet, tabId]);
 
     const noSessionId = !sessionId;
-    const showLocalLoading = localDataLoading[tabId] && !firstChunkArrivedRef.current;
     const isResult = activeSet >= 0;
 
     const limited = !!sessionMetas?.limited;
-    const limitText = typeof sessionMetas?.limit === 'number' ? sessionMetas.limit.toLocaleString() : null;
     const shouldShowLimitNotice = isResult && limited;
     const expectedRowCount = typeof sessionMetas?.rowCount === 'number' ? sessionMetas.rowCount : null;
     const remoteResultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
-    const isRemoteFullResult = Boolean(remoteResultSetId && sessionMetas?.dataAvailability === 'full');
+    const isRemoteFullResult = Boolean(remoteResultSetId);
     const remoteRowCount = expectedRowCount ?? 0;
 
     const [query, setQuery] = useState('');
@@ -229,33 +234,12 @@ export function ResultTable() {
 
     const setUserPickedFalse = useSetAtom(useMemo(() => makeSetUserPickedAtom(tabId, sessionId), [tabId, sessionId]));
 
-    const debugPayload: DebugPayload = {
-        tabId,
-        sessionId: sessionId ?? undefined,
-        activeSet,
-        rowCount,
-        sessionStatus,
-        storageKey,
-        meta: {
-            truncated: !!meta.truncated,
-            durationMs: meta.durationMs,
-            startedAt: meta.startedAt,
-            finishedAt: meta.finishedAt,
-            fromCache: meta.fromCache,
-            scannedRows: meta.scannedRows,
-            scannedBytes: meta.scannedBytes,
-            source: meta.source,
-            syncing: !!meta.syncing,
-            uiRowBudget,
-        },
-    };
-
     const [setsMeta, setSetsMeta] = useState<
         Array<{
             sessionId: string;
             setIndex: number;
             sqlText: string;
-            status: 'success' | 'error';
+            status: ResultSessionStatus;
             startedAt?: number | null;
             finishedAt?: number | null;
             durationMs?: number | null;
@@ -305,7 +289,7 @@ export function ResultTable() {
         return results.filter(row => {
             if (hasGlobal) {
                 let hit = false;
-                for (const c of sessionMetas.columns.map((x: any) => x.name)) {
+                for (const c of sessionMetas.columns.map((x: { name?: string }) => x.name)) {
                     const v = row.rowData?.[c];
                     const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
                     if (s.toLowerCase().includes(gq)) {
@@ -520,7 +504,8 @@ export function ResultTable() {
             }
             const sess = await getSession(sessionId);
             if (!canceled) {
-                setSessionStatus((sess?.status as any) ?? null);
+                const nextStatus = sess?.status === 'running' || sess?.status === 'success' || sess?.status === 'error' || sess?.status === 'canceled' ? sess.status : null;
+                setSessionStatus(nextStatus);
             }
         })();
         return () => {
@@ -555,30 +540,6 @@ export function ResultTable() {
             fetchControllerRef.current?.abort();
         }
     }, [sessionId, tabId, setLocalDataLoading]);
-
-    /* ---------- Enforce budget immediately when lowered ---------- */
-    useEffect(() => {
-        if (!tabId || !sessionId) return;
-        if (activeSet < 0) return;
-        if (isRemoteFullResult) return;
-        const key = makeCacheKey(tabId, sessionId, activeSet);
-        if (resultsRef.current.length > uiRowBudget) {
-            resultsRef.current = resultsRef.current.slice(0, uiRowBudget);
-            setResults(resultsRef.current.slice());
-            setMeta(prev => ({ ...prev, truncated: true }));
-            fetchControllerRef.current?.abort();
-            if (key) {
-                touchCache(key, {
-                    results: resultsRef.current,
-                    meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), truncated: true },
-                    dataVersion,
-                    fullyLoaded: true,
-                });
-            }
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [uiRowBudget, isRemoteFullResult]);
 
     useEffect(() => {
         if (!sessionId) {
@@ -619,124 +580,23 @@ export function ResultTable() {
             return;
         }
 
-        // Cache short-circuit. Metadata updates can bump surrounding state without changing rows.
-        if (key) {
-            const cached = RESULTS_CACHE.get(key);
-            const cacheMatchesCurrentData = cached?.dataVersion === dataVersion;
-            const emptyCacheMissingExpectedRows = expectedRowCount != null && expectedRowCount > 0 && (cached?.results?.length ?? 0) === 0;
-            if (cached?.fullyLoaded && cacheMatchesCurrentData && !emptyCacheMissingExpectedRows) {
-                hydrateFromCache(key, {
-                    setResults,
-                    resultsRef,
-                    setMeta,
-                    setSessionStatus: s => setSessionStatus(s ?? null),
-                    setLoading: s => setLocalDataLoading(prev => ({ ...prev, [tabId]: s })),
-                });
-                return;
-            }
-        }
-
-        // Start a new reader
+        // Browser storage is no longer a result data source. Without a server resultSetId,
+        // the SQL text can remain selected but the result area must stay empty.
         fetchControllerRef.current?.abort();
-        const ac = new AbortController();
-        fetchControllerRef.current = ac;
-
         resultsRef.current = [];
         setResults([]);
-        setLocalDataLoading(prev => ({ ...prev, [tabId]: true }));
-        firstChunkArrivedRef.current = false;
-
-        let disposed = false;
-
-        (async () => {
-            try {
-                await getResultRows(sessionId, activeSet, {
-                    signal: ac.signal,
-                    rowBudget: uiRowBudget,
-                    emitChunkRows: 1000,
-                    yieldUi: true,
-                    onChunk: chunk => {
-                        if (disposed || ac.signal.aborted) return;
-
-                        const remaining = uiRowBudget - resultsRef.current.length;
-                        if (remaining <= 0) {
-                            setMeta(prev => ({ ...prev, truncated: true }));
-                            if (key) {
-                                touchCache(key, {
-                                    results: resultsRef.current,
-                                    meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), truncated: true },
-                                    sessionStatus,
-                                    dataVersion,
-                                    fullyLoaded: true,
-                                });
-                            }
-                            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-                            ac.abort();
-                            return;
-                        }
-
-                        const slice = chunk.length > remaining ? (chunk.slice(0, remaining) as ResultRow[]) : (chunk as ResultRow[]);
-                        resultsRef.current.push(...slice);
-                        if (slice.length > 0) {
-                            firstChunkArrivedRef.current = true;
-                        }
-
-                        if (rafRef.current == null) {
-                            rafRef.current = requestAnimationFrame(() => {
-                                rafRef.current = null;
-                                setResults(resultsRef.current.slice());
-                            });
-                        }
-
-                        if (key) {
-                            touchCache(key, {
-                                results: resultsRef.current,
-                                meta: RESULTS_CACHE.get(key)?.meta,
-                                sessionStatus,
-                                dataVersion,
-                                fullyLoaded: false,
-                            });
-                        }
-
-                        if (slice.length < chunk.length) {
-                            setMeta(prev => ({ ...prev, truncated: true }));
-                            if (key) {
-                                touchCache(key, {
-                                    results: resultsRef.current,
-                                    meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), truncated: true },
-                                    sessionStatus,
-                                    dataVersion,
-                                    fullyLoaded: true,
-                                });
-                            }
-                            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-                            ac.abort();
-                        }
-                    },
-                });
-            } finally {
-                if (!disposed && !ac.signal.aborted) {
-                    const loadedRows = resultsRef.current.length;
-                    const missingExpectedRows = expectedRowCount != null && expectedRowCount > loadedRows;
-                    setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-                    if (key) {
-                        touchCache(key, {
-                            results: resultsRef.current,
-                            meta: RESULTS_CACHE.get(key)?.meta,
-                            sessionStatus,
-                            dataVersion,
-                            fullyLoaded: !missingExpectedRows,
-                        });
-                    }
-                }
-            }
-        })();
-
-        return () => {
-            disposed = true;
-            ac.abort();
-        };
-    }, [dbReady, tabId, sessionId, activeSet, getResultRows, dataVersion, uiRowBudget, expectedRowCount, isRemoteFullResult, sessionStatus]);
+        setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
+        firstChunkArrivedRef.current = true;
+        if (key) {
+            touchCache(key, {
+                results: [],
+                meta: RESULTS_CACHE.get(key)?.meta,
+                sessionStatus,
+                dataVersion,
+                fullyLoaded: true,
+            });
+        }
+    }, [dbReady, tabId, sessionId, activeSet, dataVersion, isRemoteFullResult, sessionStatus]);
 
     /* ---------- Hydrate session-level meta & keep cache in sync ---------- */
     useEffect(() => {
@@ -747,15 +607,15 @@ export function ResultTable() {
                 return;
             }
             try {
-                const sess: any = await getSession(sessionId);
+                const sess = await getSession(sessionId);
                 if (canceled) return;
 
-                const startedRaw = sess?.startedAt ?? sess?.started_at;
-                const finishedRaw = sess?.finishedAt ?? sess?.finished_at;
+                const startedRaw = sess?.startedAt;
+                const finishedRaw = sess?.finishedAt;
                 const startedAt = startedRaw ? new Date(startedRaw) : undefined;
                 const finishedAt = finishedRaw ? new Date(finishedRaw) : undefined;
 
-                const durationMs = sess?.durationMs ?? sess?.elapsed_ms ?? (startedAt && finishedAt ? finishedAt.getTime() - startedAt.getTime() : undefined);
+                const durationMs = sess?.durationMs ?? (startedAt && finishedAt ? finishedAt.getTime() - startedAt.getTime() : undefined);
 
                 setMeta(prev => {
                     const next = {
@@ -763,11 +623,8 @@ export function ResultTable() {
                         startedAt,
                         finishedAt,
                         durationMs,
-                        fromCache: sess?.fromCache ?? sess?.cache ?? sess?.cache_hit,
-                        source: sess?.source ?? sess?.engine ?? sess?.backend,
-                        scannedRows: sess?.scannedRows ?? sess?.scanned_rows,
-                        scannedBytes: sess?.scannedBytes ?? sess?.scanned_bytes,
-                        syncing: sess?.syncing ?? sess?.verifying ?? false,
+                        source: isQueryHistoryRestoredSession(tabId, sessionId) ? 'query-history' : (sess?.source ?? undefined),
+                        syncing: false,
                     };
                     if (activeSet >= 0) {
                         const key = makeCacheKey(tabId, sessionId, activeSet);
@@ -810,7 +667,7 @@ export function ResultTable() {
                         sessionId: m.sessionId,
                         setIndex: m.setIndex,
                         sqlText: m.sqlText ?? '',
-                        status: (m.status as any) ?? 'success',
+                        status: m.status === 'running' ? 'running' : m.status === 'error' ? 'error' : 'success',
                         startedAt: m.startedAt ?? null,
                         finishedAt: m.finishedAt ?? null,
                         durationMs: m.durationMs ?? null,
@@ -877,7 +734,7 @@ export function ResultTable() {
             const isActive = i === activeSet;
             const m = setsMeta.find(x => x.setIndex === i);
 
-            const runningRemote = (m?.status as any) === 'running' || runningTabs[tabId] === 'running';
+            const runningRemote = m?.status === 'running' || runningTabs[tabId] === 'running';
             const runningLocal = !!localDataLoading[tabId];
 
             const shownRows = isActive
@@ -920,7 +777,7 @@ export function ResultTable() {
     });
 
     const handleDownloadCsv = useCallback(async () => {
-        if (isRemoteFullResult && remoteResultSetId) {
+        if (remoteResultSetId) {
             const created = await exportResultSet({
                 resultSetId: remoteResultSetId,
                 format: 'csv',
@@ -933,7 +790,7 @@ export function ResultTable() {
         }
 
         await handleDownloadLocalCsv();
-    }, [exportResultSet, handleDownloadLocalCsv, isRemoteFullResult, remoteOperations.filters, remoteOperations.search, remoteOperations.sorts, remoteResultSetId]);
+    }, [exportResultSet, handleDownloadLocalCsv, remoteOperations.filters, remoteOperations.search, remoteOperations.sorts, remoteResultSetId]);
 
     /* ---------- render ---------- */
 

@@ -24,8 +24,6 @@
         "pglite:migrate:generate": "yarn workspace web run pglite:migrate:generate",
         "pglite:migrate:compile": "yarn workspace web run pglite:migrate:compile",
         "pglite:seed:queries": "yarn workspace web run pglite:seed:queries",
-        "client:migrate:generate": "yarn workspace web run client:migrate:generate",
-        "client:migrate:compile": "yarn workspace web run client:migrate:compile",
         "lint": "yarn workspace web run lint",
         "lint:fix": "yarn workspace web run lint:fix",
         "typecheck": "yarn workspace web run typecheck",

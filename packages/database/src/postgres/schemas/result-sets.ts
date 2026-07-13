@@ -64,6 +64,7 @@ export const resultSets = pgTable(
         limited: boolean('limited').notNull().default(false),
         limit: integer('limit'),
         schemaJson: jsonb('schema_json').$type<ResultSetColumn[]>().notNull().default([]),
+        viewState: jsonb('view_state'),
         sql: text('sql'),
         operation: text('operation'),
         errorMessage: text('error_message'),

@@ -34,9 +34,9 @@ import type { SQLEditorHandle } from './components/sql-editor';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { useDB } from '@/lib/client/use-pglite';
+import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
 import { getSessionStorageKey, humanSqlWorkspaceScope, sqlWorkspaceScopeAtom } from './workspace-scope';
-import { buildQueryHistoryResultRestorePayload } from './query-history-result-restore';
+import { clearQueryHistoryRestoredSession, getQueryHistoryRestorableSessionId, markQueryHistoryRestoredSession } from './query-history-result-restore';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -113,7 +113,6 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const setInlineAskByTab = useSetAtom(inlineSqlAskByTabAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
-    const { dbReady, applyServerResult } = useDB();
     const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot : false;
     const normalizedChatWidth = useMemo(
         () => clamp(chatWidth ?? INITIAL_LAYOUT.copilot.defaultWidth, INITIAL_LAYOUT.copilot.minWidth, INITIAL_LAYOUT.copilot.maxWidth),
@@ -357,12 +356,8 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     const restoreQueryHistoryResult = useCallback(
         async (item: SavedQueryItem, tabId: string | null) => {
             if (!tabId) return;
-            const payload = buildQueryHistoryResultRestorePayload({
-                item,
-                tabId,
-                connectionId: currentConnection?.connection?.id ?? null,
-            });
-            if (!payload) {
+            const sessionId = getQueryHistoryRestorableSessionId(item);
+            if (!sessionId) {
                 setSessionIdMap(prev => {
                     if (!prev[tabId]) return prev;
                     const next = { ...prev };
@@ -371,23 +366,24 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                 });
                 try {
                     localStorage.removeItem(getSessionStorageKey(tabId, workspaceScope));
+                    clearQueryHistoryRestoredSession(tabId);
                 } catch {
                     // ignore
                 }
+                notifySqlConsoleResultDataUpdated();
                 return;
             }
 
-            if (!dbReady) return;
-
-            await applyServerResult(payload);
-            setSessionIdMap(prev => ({ ...prev, [tabId]: payload.session.sessionId }));
+            setSessionIdMap(prev => ({ ...prev, [tabId]: sessionId }));
             try {
-                localStorage.setItem(getSessionStorageKey(tabId, workspaceScope), payload.session.sessionId);
+                localStorage.setItem(getSessionStorageKey(tabId, workspaceScope), sessionId);
+                markQueryHistoryRestoredSession(tabId, sessionId);
             } catch {
                 // ignore
             }
+            notifySqlConsoleResultDataUpdated();
         },
-        [applyServerResult, currentConnection?.connection?.id, dbReady, setSessionIdMap, workspaceScope],
+        [setSessionIdMap, workspaceScope],
     );
 
     const handleSavedQuerySelect = useCallback(
