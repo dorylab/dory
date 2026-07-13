@@ -3,6 +3,11 @@ import type { SavedQueryItem } from './components/saved-queries/saved-queries-si
 
 type ApplyServerResultPayload = Parameters<DBHook['applyServerResult']>[0];
 
+export function isQueryHistoryResultRestorable(item: Pick<SavedQueryItem, 'historyResultSet'>) {
+    const resultSet = item.historyResultSet;
+    return Boolean(resultSet?.resultSetId && resultSet.sessionId && typeof resultSet.setIndex === 'number' && resultSet.dataAvailability === 'full');
+}
+
 export function buildQueryHistoryResultRestorePayload(params: {
     item: SavedQueryItem;
     tabId: string;
@@ -10,7 +15,7 @@ export function buildQueryHistoryResultRestorePayload(params: {
     userId?: string | null;
 }): ApplyServerResultPayload | null {
     const resultSet = params.item.historyResultSet;
-    if (!resultSet?.resultSetId || !resultSet.sessionId || typeof resultSet.setIndex !== 'number' || resultSet.dataAvailability !== 'full') {
+    if (!isQueryHistoryResultRestorable(params.item) || !resultSet) {
         return null;
     }
 

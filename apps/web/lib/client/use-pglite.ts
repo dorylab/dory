@@ -811,8 +811,11 @@ export function useDB() {
         const rows = await ormRef.current
             .select({
                 status: querySession.status,
+                errorMessage: querySession.errorMessage,
                 startedAt: querySession.startedAt,
                 finishedAt: querySession.finishedAt,
+                durationMs: querySession.durationMs,
+                source: querySession.source,
             })
             .from(querySession)
             .where(eq(querySession.sessionId, sessionId))

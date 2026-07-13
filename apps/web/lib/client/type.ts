@@ -168,8 +168,11 @@ export interface DBHook {
 
     getSession: (sessionId: string) => Promise<{
         status: string;
+        errorMessage?: string | null;
         startedAt: Date;
         finishedAt: Date | null;
+        durationMs?: number | null;
+        source?: string | null;
     } | null>;
 
     // ★ New: persist /api/sql response into three tables (recommended)

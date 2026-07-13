@@ -18,6 +18,7 @@ export type ExecMeta = {
     startedAt?: number;
     finishedAt?: number;
     errorMessage?: string;
+    source?: string;
 };
 
 export function Toolbar(props: {

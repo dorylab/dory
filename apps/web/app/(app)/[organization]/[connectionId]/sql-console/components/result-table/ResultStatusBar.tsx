@@ -1,5 +1,5 @@
 "use client";
-import { RefreshCw, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle2, Clock, History } from 'lucide-react';
 import { ExecMeta } from './Toolbar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { cn } from '@/registry/new-york-v4/lib/utils';
@@ -18,9 +18,18 @@ export const ResultStatusBar: React.FC<
             <span className="text-muted-foreground"></span>
         </div>
     );
-    const { runningRemote, runningLocal, executionMs, sqlText, rowsReturned, rowsAffected, shownRows, limitApplied, limitValue, truncated, errorMessage } = meta;
+    const { runningRemote, runningLocal, executionMs, sqlText, rowsAffected, shownRows, limitApplied, limitValue, truncated, errorMessage, startedAt, finishedAt, source } = meta;
 
     const isRunning = runningRemote || runningLocal;
+    const isQueryHistoryResult = source === 'query-history';
+    const formatTime = (value?: number) => {
+        if (typeof value !== 'number') return null;
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        return date.toLocaleString(locale);
+    };
+    const startedAtText = formatTime(startedAt);
+    const finishedAtText = formatTime(finishedAt);
 
     return (
         <div className={cn('w-full justify-between bg-card border-t px-3 py-1.5 text-xs text-muted-foreground flex items-center gap-3', className)}>
@@ -81,6 +90,27 @@ export const ResultStatusBar: React.FC<
                     </>
                 )}
                 {truncated && <span className="text-amber-600">{t('ResultStatus.Truncated')}</span>}
+                {isQueryHistoryResult && (
+                    <TooltipProvider delayDuration={150}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span className="inline-flex cursor-help items-center gap-1.5 text-muted-foreground">
+                                    <History className="h-3.5 w-3.5" />
+                                    <span>{t('ResultStatus.HistorySource')}</span>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[520px] space-y-1 whitespace-pre-wrap break-words text-xs">
+                                <div>{t('ResultStatus.HistorySourceTooltip')}</div>
+                                {startedAtText ? <div>{t('ResultStatus.HistorySourceStarted', { value: startedAtText })}</div> : null}
+                                {finishedAtText ? <div>{t('ResultStatus.HistorySourceFinished', { value: finishedAtText })}</div> : null}
+                                {typeof executionMs === 'number' ? (
+                                    <div>{t('ResultStatus.HistorySourceDuration', { value: Math.max(0, Math.round(executionMs)).toLocaleString(locale) })}</div>
+                                ) : null}
+                                {sqlText ? <div className="mt-2 border-t pt-2 font-mono text-[11px] leading-snug">{sqlText}</div> : null}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
             </div>
 
             {sqlText && (

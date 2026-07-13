@@ -514,7 +514,10 @@ export function ResultTable() {
     useEffect(() => {
         let canceled = false;
         (async () => {
-            if (!dbReady || !sessionId) return;
+            if (!dbReady || !sessionId) {
+                if (!canceled) setSessionStatus(null);
+                return;
+            }
             const sess = await getSession(sessionId);
             if (!canceled) {
                 setSessionStatus((sess?.status as any) ?? null);
@@ -527,7 +530,19 @@ export function ResultTable() {
 
     /* ---------- Reset on session change ---------- */
     useEffect(() => {
-        if (!sessionId) return;
+        if (!sessionId) {
+            lastSessionRef.current = null;
+            resultsRef.current = [];
+            setResults([]);
+            setIndices([]);
+            setSetsMeta([]);
+            setMeta({});
+            setSessionStatus(null);
+            firstChunkArrivedRef.current = false;
+            fetchControllerRef.current?.abort();
+            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
+            return;
+        }
         if (lastSessionRef.current !== sessionId) {
             lastSessionRef.current = sessionId;
 
@@ -566,7 +581,12 @@ export function ResultTable() {
     }, [uiRowBudget, isRemoteFullResult]);
 
     useEffect(() => {
-        if (!dbReady || !tabId || !sessionId) {
+        if (!sessionId) {
+            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
+            return;
+        }
+
+        if (!dbReady || !tabId) {
             setLocalDataLoading(prev => ({ ...prev, [tabId]: true }));
             return;
         }
@@ -884,10 +904,11 @@ export function ResultTable() {
                 startedAt: m?.startedAt ?? undefined,
                 finishedAt: m?.finishedAt ?? undefined,
                 errorMessage: m?.errorMessage ?? undefined,
+                source: typeof meta.source === 'string' ? meta.source : undefined,
             };
         }
         return map;
-    }, [indices, activeSet, setsMeta, runningTabs, tabId, localDataLoading, isRemoteFullResult, expectedRowCount, results.length, sessionId, meta.truncated]);
+    }, [indices, activeSet, setsMeta, runningTabs, tabId, localDataLoading, isRemoteFullResult, expectedRowCount, results.length, sessionId, meta.truncated, meta.source]);
 
     /* ---------- actions ---------- */
 

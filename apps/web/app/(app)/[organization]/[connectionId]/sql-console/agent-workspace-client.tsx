@@ -706,13 +706,28 @@ export default function AgentWorkspaceClient({
 
     const restoreQueryHistoryResult = useCallback(
         async (item: SavedQueryItem, tabId: string | null) => {
-            if (!tabId || !dbReady) return;
+            if (!tabId) return;
             const payload = buildQueryHistoryResultRestorePayload({
                 item,
                 tabId,
                 connectionId: connectionId ?? currentConnection?.connection?.id ?? null,
             });
-            if (!payload) return;
+            if (!payload) {
+                setSessionIdMap(prev => {
+                    if (!prev[tabId]) return prev;
+                    const next = { ...prev };
+                    delete next[tabId];
+                    return next;
+                });
+                try {
+                    localStorage.removeItem(getSessionStorageKey(tabId, activeWorkspaceScope));
+                } catch {
+                    // ignore
+                }
+                return;
+            }
+
+            if (!dbReady) return;
 
             await applyServerResult(payload);
             setSessionIdMap(prev => ({ ...prev, [tabId]: payload.session.sessionId }));
