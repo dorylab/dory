@@ -2030,7 +2030,9 @@
             "Search": {
                 "FilteredTotalAria": "Filtered / Total",
                 "Placeholder": "Search (Ctrl/Cmd+F to focus)",
-                "ClearAria": "Clear search"
+                "ClearAria": "Clear search",
+                "Submit": "Search",
+                "SubmitAria": "Search results"
             },
             "Inspector": {
                 "ResizeTitle": "Drag to resize",

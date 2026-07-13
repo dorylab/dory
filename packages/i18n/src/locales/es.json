@@ -2029,7 +2029,9 @@
             "Search": {
                 "FilteredTotalAria": "Filtrado / Total",
                 "Placeholder": "Buscar (Ctrl/Cmd+F para enfocar)",
-                "ClearAria": "Limpiar búsqueda"
+                "ClearAria": "Limpiar búsqueda",
+                "Submit": "Buscar",
+                "SubmitAria": "Buscar resultados"
             },
             "Inspector": {
                 "ResizeTitle": "Arrastra para cambiar el tamaño",

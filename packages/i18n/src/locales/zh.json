@@ -2034,7 +2034,9 @@
             "Search": {
                 "FilteredTotalAria": "筛选 / 总数",
                 "Placeholder": "搜索（Ctrl/Cmd+F 聚焦）",
-                "ClearAria": "清除搜索"
+                "ClearAria": "清除搜索",
+                "Submit": "搜索",
+                "SubmitAria": "搜索结果"
             },
             "Inspector": {
                 "ResizeTitle": "拖动调整宽度",
