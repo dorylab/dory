@@ -12,7 +12,6 @@
     "packageManager": "yarn@4.14.1",
     "scripts": {
         "dev": "yarn workspace web run dev",
-        "prebuild": "yarn workspace web run prebuild",
         "build": "yarn workspace web run build",
         "build:bootstrap": "yarn workspace web run build:bootstrap",
         "deploy": "yarn workspace web run deploy",

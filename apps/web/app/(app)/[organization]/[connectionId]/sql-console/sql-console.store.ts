@@ -1,4 +1,3 @@
-import { TabResult } from '@/lib/client/type';
 import type { ActionIntent } from '@/lib/copilot/action/types';
 import type { AnalysisWorkspaceState, AnalysisResultRef } from '@dory/analysis/types';
 import type { ResultAction } from '@dory/analysis/core/result-actions';
@@ -42,8 +41,6 @@ export const savedQueriesViewByConnectionAtom = atomWithStorage<Record<string, S
     createJSONStorage(() => localStorage),
 );
 
-export const currentTabResultAtom = atom<TabResult[]>([]);
-
 export const sessionIdByTabAtom = atom<Record<string, string>>({});
 
 export type EditorSelectionRange = { start: number; end: number };
@@ -86,7 +83,6 @@ export const activeSessionIdAtom = atom<string | undefined>(get => {
 });
 
 export const runningTabsAtom = atom<Record<string, 'idle' | 'running' | 'success' | 'error' | 'canceled'>>({});
-export const localDataLoadingAtom = atom<Record<string, boolean>>({});
 
 export type CopilotAnalysisRequest = {
     id: string;

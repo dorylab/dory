@@ -1,11 +1,5 @@
 import type { AIResultContextPayload, ResultColumnMeta, ResultSetStatsV1, ResultSetViewState } from './result-set-ai';
 
-export interface TabResult {
-    tabId: string;
-    rid: number;
-    rowData: unknown;
-}
-
 export type ResultSetRemoteSort = {
     column: string;
     direction: 'asc' | 'desc';
@@ -26,15 +20,6 @@ export type ResultSetRemoteSearch = {
     text: string;
     columns?: string[];
 };
-
-export type ResultSetRemoteOperations = {
-    sorts?: ResultSetRemoteSort[];
-    filters?: ResultSetRemoteFilter[];
-    search?: ResultSetRemoteSearch | null;
-};
-
-export type SessionStatus = 'running' | 'success' | 'error' | 'canceled';
-export type ResultSetStatus = 'success' | 'error';
 
 export type ResultSetMeta = {
     sessionId: string;

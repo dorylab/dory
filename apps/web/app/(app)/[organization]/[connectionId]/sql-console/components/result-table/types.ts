@@ -1,26 +1,6 @@
-import type { MutableRefObject } from 'react';
-import type { MetaState } from '@dory/shared/types/sql-console';
-
 export type ResultRow = { tabId: string; rid: number; rowData: any };
 
 export type SessionStatus = 'running' | 'success' | 'error' | 'canceled' | null;
-
-export type CacheEntry = {
-    results: ResultRow[];
-    meta?: Partial<MetaState> & { truncated?: boolean };
-    sessionStatus?: SessionStatus;
-    fullyLoaded?: boolean;
-    dataVersion?: number;
-    lastUpdated: number; // for LRU eviction
-};
-
-export type HydrateSetters = {
-    setResults: (r: ResultRow[]) => void;
-    resultsRef: MutableRefObject<ResultRow[]>;
-    setMeta: (updater: (prev: MetaState) => MetaState) => void;
-    setSessionStatus: (s: SessionStatus) => void;
-    setLoading: (b: boolean) => void;
-};
 
 export type ApiExecStatus = 'idle' | 'running' | 'success' | 'error' | 'canceled';
 

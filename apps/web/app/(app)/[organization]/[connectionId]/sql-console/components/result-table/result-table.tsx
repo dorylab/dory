@@ -6,16 +6,13 @@ import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
 import VTable from './vtable';
 import { InspectorPanel } from './vtable/InspectorPanel';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
-import { activeSessionIdAtom, localDataLoadingAtom, runningTabsAtom } from '../../sql-console.store';
+import { activeSessionIdAtom, runningTabsAtom } from '../../sql-console.store';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCsvDownload } from './hooks/use-csv-download';
 import { useSqlConsoleResultStore } from '@/lib/client/sql-console-result-store';
 import { MetaState } from '@dory/shared/types/sql-console';
 import { Toolbar } from './Toolbar';
 import type { ExecMeta } from './Toolbar';
-import { makeCacheKey, touchCache, RESULTS_CACHE } from './hooks/useResultsCache';
 import { OverviewItem, ResultRow } from './types';
-import { useSessionMeta } from './hooks/useSessionMeta';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { OverviewTable } from './OverviewTable';
 import { currentSessionMetaAtom } from './stores/result-table.atoms';
@@ -165,23 +162,9 @@ export function ResultTable() {
         getCurrentActiveSet: () => (typeof activeSet === 'number' ? activeSet : undefined),
     });
 
-    // Rows / Loading
-    const firstChunkArrivedRef = useRef(false);
-
-    // Accumulator + one-frame flush
-    const rafRef = useRef<number | null>(null);
-    const fetchControllerRef = useRef<AbortController | null>(null);
-
     const lastTabIdRef = useRef<string | null>(null);
 
-    // Rows / Loading
     const [results, setResults] = useState<ResultRow[]>([]);
-    const [localDataLoading, setLocalDataLoading] = useAtom(localDataLoadingAtom);
-
-    // Accumulator + one-frame flush
-    const resultsRef = useRef<ResultRow[]>([]);
-
-    useSessionMeta({ dbReady, tabId, sessionId, activeSet, dataVersion, getSession, setMeta, sessionStatus });
 
     const storageKey = useMemo(() => (tabId && sessionId ? `${tabId}:${sessionId}#${activeSet}` : 'unknown'), [tabId, sessionId, activeSet]);
     const viewModeKey = useMemo(() => (tabId && activeSet >= 0 ? `tab:${tabId}:set:${activeSet}` : 'unknown'), [activeSet, tabId]);
@@ -206,7 +189,7 @@ export function ResultTable() {
     const [chartSnapshotsBySet, setChartSnapshotsBySet] = useState<Record<number, { rows: Array<{ rowData: Record<string, unknown> }>; columnsRaw?: unknown }>>({});
     const [remoteEffectiveRowCount, setRemoteEffectiveRowCount] = useState<number | null>(null);
     const rowCount = isRemoteFullResult ? (remoteEffectiveRowCount ?? remoteRowCount) : results.length;
-    const showEmpty = !localDataLoading[tabId] && (isRemoteFullResult ? rowCount === 0 : results.length === 0);
+    const showEmpty = isRemoteFullResult ? rowCount === 0 : results.length === 0;
 
     useEffect(() => {
         const savedViewMode = viewModesByKey[viewModeKey];
@@ -394,9 +377,6 @@ export function ResultTable() {
         if (activeSet < 0) {
             return;
         }
-        if (localDataLoading[tabId]) {
-            return;
-        }
         if (isRemoteFullResult) {
             return;
         }
@@ -408,7 +388,7 @@ export function ResultTable() {
                 columnsRaw: sessionMetas.columns,
             },
         }));
-    }, [activeSet, columnFilteredResults, isRemoteFullResult, localDataLoading, sessionMetas.columns, tabId]);
+    }, [activeSet, columnFilteredResults, isRemoteFullResult, sessionMetas.columns]);
 
     useEffect(() => {
         if (!sessionId || activeSet < 0) {
@@ -461,15 +441,10 @@ export function ResultTable() {
         if (lastTabIdRef.current !== tabId) {
             lastTabIdRef.current = tabId;
 
-            resultsRef.current = [];
             setResults([]);
             setIndices([]);
-            firstChunkArrivedRef.current = false;
             setSessionStatus(null);
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-            fetchControllerRef.current?.abort();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tabId]);
 
     /* ---------- Refresh result-set indices (0..n-1) ---------- */
@@ -517,86 +492,41 @@ export function ResultTable() {
     useEffect(() => {
         if (!sessionId) {
             lastSessionRef.current = null;
-            resultsRef.current = [];
             setResults([]);
             setIndices([]);
             setSetsMeta([]);
             setMeta({});
             setSessionStatus(null);
-            firstChunkArrivedRef.current = false;
-            fetchControllerRef.current?.abort();
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
             return;
         }
         if (lastSessionRef.current !== sessionId) {
             lastSessionRef.current = sessionId;
 
-            resultsRef.current = [];
             setResults([]);
-            firstChunkArrivedRef.current = false;
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: true }));
             setIndices([]);
-
-            fetchControllerRef.current?.abort();
         }
-    }, [sessionId, tabId, setLocalDataLoading]);
+    }, [sessionId]);
 
     useEffect(() => {
-        if (!sessionId) {
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-            return;
-        }
-
-        if (!dbReady || !tabId) {
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: true }));
+        if (!sessionId || !tabId) {
+            setResults([]);
             return;
         }
 
         if (activeSet < 0) {
-            fetchControllerRef.current?.abort?.();
-            resultsRef.current = [];
             setResults([]);
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
             return;
         }
 
-        const key = makeCacheKey(tabId, sessionId, activeSet);
-
         if (isRemoteFullResult) {
-            fetchControllerRef.current?.abort();
-            resultsRef.current = [];
             setResults([]);
-            firstChunkArrivedRef.current = true;
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-            if (key) {
-                touchCache(key, {
-                    results: [],
-                    meta: RESULTS_CACHE.get(key)?.meta,
-                    sessionStatus,
-                    dataVersion,
-                    fullyLoaded: false,
-                });
-            }
             return;
         }
 
         // Browser storage is no longer a result data source. Without a server resultSetId,
         // the SQL text can remain selected but the result area must stay empty.
-        fetchControllerRef.current?.abort();
-        resultsRef.current = [];
         setResults([]);
-        setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-        firstChunkArrivedRef.current = true;
-        if (key) {
-            touchCache(key, {
-                results: [],
-                meta: RESULTS_CACHE.get(key)?.meta,
-                sessionStatus,
-                dataVersion,
-                fullyLoaded: true,
-            });
-        }
-    }, [dbReady, tabId, sessionId, activeSet, dataVersion, isRemoteFullResult, sessionStatus]);
+    }, [tabId, sessionId, activeSet, dataVersion, isRemoteFullResult]);
 
     /* ---------- Hydrate session-level meta & keep cache in sync ---------- */
     useEffect(() => {
@@ -626,16 +556,6 @@ export function ResultTable() {
                         source: isQueryHistoryRestoredSession(tabId, sessionId) ? 'query-history' : (sess?.source ?? undefined),
                         syncing: false,
                     };
-                    if (activeSet >= 0) {
-                        const key = makeCacheKey(tabId, sessionId, activeSet);
-                        if (key) {
-                            touchCache(key, {
-                                meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), ...next },
-                                sessionStatus,
-                                dataVersion,
-                            });
-                        }
-                    }
                     return next;
                 });
             } catch {}
@@ -644,15 +564,6 @@ export function ResultTable() {
             canceled = true;
         };
     }, [dbReady, sessionId, dataVersion, getSession, tabId, activeSet, sessionStatus]);
-
-    /* ---------- cleanup ---------- */
-    useEffect(
-        () => () => {
-            if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-            fetchControllerRef.current?.abort();
-        },
-        [],
-    );
 
     useEffect(() => {
         let canceled = false;
@@ -735,17 +646,15 @@ export function ResultTable() {
             const m = setsMeta.find(x => x.setIndex === i);
 
             const runningRemote = m?.status === 'running' || runningTabs[tabId] === 'running';
-            const runningLocal = !!localDataLoading[tabId];
+            const runningLocal = false;
 
             const shownRows = isActive
                 ? isRemoteFullResult
                     ? (expectedRowCount ?? 0)
                     : results.length
-                : (() => {
-                      const key = makeCacheKey(tabId, sessionId!, i);
-                      const cached = key ? RESULTS_CACHE.get(key) : undefined;
-                      return cached?.results?.length ?? 0;
-                  })();
+                : typeof m?.rowCount === 'number'
+                  ? m.rowCount
+                  : 0;
 
             map[i] = {
                 runningRemote,
@@ -765,16 +674,9 @@ export function ResultTable() {
             };
         }
         return map;
-    }, [indices, activeSet, setsMeta, runningTabs, tabId, localDataLoading, isRemoteFullResult, expectedRowCount, results.length, sessionId, meta.truncated, meta.source]);
+    }, [indices, activeSet, setsMeta, runningTabs, tabId, isRemoteFullResult, expectedRowCount, results.length, meta.truncated, meta.source]);
 
     /* ---------- actions ---------- */
-
-    const handleDownloadLocalCsv = useCsvDownload({
-        results,
-        tabId,
-        queryId: sessionId,
-        setIndex: activeSet,
-    });
 
     const handleDownloadCsv = useCallback(async () => {
         if (remoteResultSetId) {
@@ -788,9 +690,7 @@ export function ResultTable() {
             window.location.href = created.downloadUrl;
             return;
         }
-
-        await handleDownloadLocalCsv();
-    }, [exportResultSet, handleDownloadLocalCsv, remoteOperations.filters, remoteOperations.search, remoteOperations.sorts, remoteResultSetId]);
+    }, [exportResultSet, remoteOperations.filters, remoteOperations.search, remoteOperations.sorts, remoteResultSetId]);
 
     /* ---------- render ---------- */
 
@@ -998,7 +898,7 @@ export function ResultTable() {
                                             }
                                             stateKey={setChartStateKey}
                                             initialState={setInitialState}
-                                            stateSyncEnabled={visible ? !localDataLoading[tabId] : false}
+                                            stateSyncEnabled={visible}
                                             onResetState={() => {
                                                 setChartStatesByKey(prev => {
                                                     if (!prev[setChartStateKey]) {

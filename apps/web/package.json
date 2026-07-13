@@ -6,8 +6,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "dev": "yarn run prebuild && tsx ./scripts/dev-bootstrap.ts && next dev --turbopack",
-        "prebuild": "echo \"No browser DB migrations\"",
+        "dev": "tsx ./scripts/dev-bootstrap.ts && next dev --turbopack",
         "build": "yarn run build:bootstrap && next build",
         "build:cf": "next build && opennextjs-cloudflare build",
         "build:bootstrap": "bun build scripts/bootstrap.ts --target=node --format=esm --outfile=./dist-scripts/bootstrap.mjs && node scripts/copy-pglite-assets.mjs",

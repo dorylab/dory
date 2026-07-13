@@ -2343,13 +2343,6 @@
             "InvalidRequest": "无效请求",
             "InvalidConnection": "无效数据源",
             "RequestFailed": "请求失败"
-        },
-        "Pglite": {
-            "DbNotInitialized": "DB 未初始化",
-            "UserNotInitialized": "User 未初始化",
-            "BrowserOnly": "PGlite 仅可在浏览器中运行",
-            "InvalidInstance": "PGlite drizzle 实例无效：缺少 dialect.migrate 或 session",
-            "MigrationFailed": "[PGlite migrate] 迁移失败！将直接丢弃旧数据库，并切换到一个全新的版本。"
         }
     },
     "Api": {
