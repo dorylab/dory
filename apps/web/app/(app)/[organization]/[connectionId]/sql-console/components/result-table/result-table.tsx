@@ -840,7 +840,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                             <div className="flex min-w-0 flex-1 flex-row">
                                 <VTableSearchBar
                                     query={query}
-                                    className="w-96 max-w-full"
+                                    className="w-80 max-w-full"
                                     onQueryChange={setQuery}
                                     onClearQuery={() => setQuery('')}
                                     filteredCount={stats.filteredCount}

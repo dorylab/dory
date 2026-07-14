@@ -2,6 +2,7 @@
 
 import { cn } from '@/registry/new-york-v4/lib/utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { ButtonGroup } from '@/registry/new-york-v4/ui/button-group';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Search, X } from 'lucide-react';
 import { useRef, useEffect, useCallback, useState } from 'react';
@@ -52,7 +53,7 @@ export function VTableSearchBar(props: {
     const template = `${'9'.repeat(digits)} / ${'9'.repeat(digits)}`;
 
     return (
-        <div className={cn('flex items-center gap-2 p-2', props.className)}>
+        <div className={cn('flex items-center gap-2 py-1 pl-2 pr-1', props.className)}>
             {typeof filteredCount === 'number' && typeof totalCount === 'number' && (
                 <div className="relative flex-none">
                     <span aria-hidden className="invisible block px-1 font-mono tabular-nums text-xs">
@@ -68,34 +69,35 @@ export function VTableSearchBar(props: {
                 </div>
             )}
 
-            <div className="relative flex-1 min-w-0">
-                <Input
-                    ref={inputRef}
-                    value={draftQuery}
-                    onChange={e => setDraftQuery(e.target.value)}
-                    onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                            submitSearch();
-                        }
-                    }}
-                    placeholder={t('VTable.Search.Placeholder')}
-                    className={cn('h-6 text-xs placeholder:text-xs pr-6')}
-                />
-                {draftQuery && (
-                    <button
-                        type="button"
-                        className="absolute right-1.5 top-1/2 -translate-y-1/2 opacity-70 hover:opacity-100"
-                        onClick={clearSearch}
-                        aria-label={t('VTable.Search.ClearAria')}
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                )}
-            </div>
-            <Button type="button" variant="outline" size="sm" className="h-6 flex-none gap-1 px-2 text-xs" onClick={submitSearch} aria-label={t('VTable.Search.SubmitAria')}>
-                <Search className="h-3.5 w-3.5" />
-                {t('VTable.Search.Submit')}
-            </Button>
+            <ButtonGroup className="h-6 min-w-0 flex-1">
+                <div className="relative flex min-w-0 flex-1">
+                    <Input
+                        ref={inputRef}
+                        value={draftQuery}
+                        onChange={e => setDraftQuery(e.target.value)}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                                submitSearch();
+                            }
+                        }}
+                        placeholder={t('VTable.Search.Placeholder')}
+                        className={cn('h-6 rounded-r-none px-2 pr-6 text-xs shadow-none placeholder:text-xs')}
+                    />
+                    {draftQuery ? (
+                        <button
+                            type="button"
+                            className="absolute right-1 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded-sm opacity-70 hover:opacity-100"
+                            onClick={clearSearch}
+                            aria-label={t('VTable.Search.ClearAria')}
+                        >
+                            <X className="h-3.5 w-3.5" />
+                        </button>
+                    ) : null}
+                </div>
+                <Button type="button" variant="outline" size="icon-xs" className="h-6 w-6" onClick={submitSearch} aria-label={t('VTable.Search.SubmitAria')}>
+                    <Search className="h-3.5 w-3.5" />
+                </Button>
+            </ButtonGroup>
         </div>
     );
 }
