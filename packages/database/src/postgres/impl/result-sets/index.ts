@@ -1,5 +1,5 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -12,6 +12,7 @@ import { agentRunResultSets, organizations, queryRuns, resultSets as resultSetsT
 import { DEFAULT_RESULT_SET_RETENTION_DAYS, getResultSetRetentionDaysFromOrganizationMetadata } from '@dory/database/postgres/impl/organization';
 import {
     buildResultSetPreview,
+    configureResultSetDuckDb,
     createDefaultResultSetDataWriter,
     inferResultSetColumns,
     resultSetDataAvailability,
@@ -20,6 +21,7 @@ import {
     type ResultSetDataAvailability,
     type ResultSetDataWriter,
     type ResultSetManifest,
+    type ResultSetRowIterable,
 } from '@dory/resultset';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
@@ -63,7 +65,7 @@ export type PersistQueryResultSetInput = {
 };
 
 export type PersistQueryResultSetStreamInput = Omit<PersistQueryResultSetInput, 'rows'> & {
-    rows: AsyncIterable<unknown>;
+    rows: ResultSetRowIterable;
     columns?: ResultSetColumn[];
     rowCount?: number | null;
     resultSetId?: string | null;
@@ -393,6 +395,15 @@ function organizationPathPart(organizationId: string) {
     return safe.startsWith('org_') ? safe : `org_${safe}`;
 }
 
+function localDataPartPath(tempDir: string, partPath: string) {
+    const root = path.resolve(tempDir);
+    const target = path.resolve(tempDir, ...partPath.split('/'));
+    if (!target.startsWith(`${root}${path.sep}`)) {
+        throw new DatabaseError('Invalid result set data part path', 500);
+    }
+    return target;
+}
+
 function getString(value: unknown): string | null {
     return typeof value === 'string' ? value : null;
 }
@@ -589,6 +600,57 @@ function setCachedRowPage(key: string, output: ReadResultRowsOutput) {
     }
 }
 
+function isAsyncIterableRows(rows: ResultSetRowIterable): rows is AsyncIterable<unknown> {
+    return typeof (rows as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function';
+}
+
+function withRowCounting(
+    rows: ResultSetRowIterable,
+    handlers: {
+        onRow: (row: unknown) => void;
+        onError: (error: unknown) => void;
+    },
+): ResultSetRowIterable {
+    if (isAsyncIterableRows(rows)) {
+        return (async function* () {
+            try {
+                for await (const row of rows) {
+                    handlers.onRow(row);
+                    yield row;
+                }
+            } catch (error) {
+                handlers.onError(error);
+                throw error;
+            }
+        })();
+    }
+
+    return (function* () {
+        try {
+            for (const row of rows) {
+                handlers.onRow(row);
+                yield row;
+            }
+        } catch (error) {
+            handlers.onError(error);
+            throw error;
+        }
+    })();
+}
+
+async function consumeRows(rows: ResultSetRowIterable): Promise<void> {
+    if (isAsyncIterableRows(rows)) {
+        for await (const row of rows) {
+            void row;
+        }
+        return;
+    }
+
+    for (const row of rows) {
+        void row;
+    }
+}
+
 function rowsBySchema(rows: unknown[][], columns: ResultSetColumn[]) {
     return rows.map(row => {
         const out: Record<string, unknown> = {};
@@ -693,13 +755,15 @@ export class PostgresResultSetsRepository {
             rows,
         });
 
-        const { ref, manifest: persistedManifest } = await this.artifacts.resultSets.putResultSet({
-            organizationId: input.organizationId,
-            artifactId,
-            manifest,
-            preview: rows.length || status === 'success' ? preview : null,
-            data: fullData?.data ?? null,
-        });
+        const { ref, manifest: persistedManifest } = await this.artifacts.resultSets
+            .putResultSet({
+                organizationId: input.organizationId,
+                artifactId,
+                manifest,
+                preview: rows.length || status === 'success' ? preview : null,
+                dataParts: fullData?.parts ?? null,
+            })
+            .finally(() => fullData?.cleanup?.().catch(() => undefined));
 
         try {
             await this.db.insert(queryRuns).values({
@@ -798,20 +862,17 @@ export class PostgresResultSetsRepository {
         let streamedRowCount = 0;
         let streamReadError: unknown = null;
 
-        const countedRows = (async function* () {
-            try {
-                for await (const row of input.rows) {
-                    if (previewRows.length < maxPreviewRows) {
-                        previewRows.push(row);
-                    }
-                    streamedRowCount += 1;
-                    yield row;
+        const countedRows = withRowCounting(input.rows, {
+            onRow: row => {
+                if (previewRows.length < maxPreviewRows) {
+                    previewRows.push(row);
                 }
-            } catch (error) {
+                streamedRowCount += 1;
+            },
+            onError: error => {
                 streamReadError = error;
-                throw error;
-            }
-        })();
+            },
+        });
 
         const fullData = await this.writeFullDataArtifact({
             artifactId,
@@ -823,9 +884,7 @@ export class PostgresResultSetsRepository {
             throw streamReadError;
         }
         if (!fullData && streamedRowCount === 0 && status === 'success') {
-            for await (const row of countedRows) {
-                void row;
-            }
+            await consumeRows(countedRows);
         }
 
         const completedAt = new Date();
@@ -889,7 +948,7 @@ export class PostgresResultSetsRepository {
                 artifactId,
                 manifest,
                 preview: previewRows.length || status === 'success' ? preview : null,
-                data: fullData?.data ?? null,
+                dataParts: fullData?.parts ?? null,
             });
             persistedRef = ref;
 
@@ -973,7 +1032,7 @@ export class PostgresResultSetsRepository {
             }
             throw error;
         } finally {
-            await fullData?.cleanup?.();
+            await fullData?.cleanup?.().catch(() => undefined);
         }
     }
 
@@ -1260,13 +1319,6 @@ export class PostgresResultSetsRepository {
             const fromSql = ` FROM read_parquet(${quoteLiteral(parquetPath)})`;
             const selectSql = `SELECT *${fromSql}${query.whereSql}${query.orderSql}`;
 
-            if (params.format === 'parquet' && !query.hasOperations) {
-                const data = await this.artifacts.resultSets.openData(artifactRef);
-                if (!data) throw new DatabaseError('Result set data is unavailable', 404);
-                await this.artifacts.objectStore.put(objectPath, data, { contentType });
-                return;
-            }
-
             const copyFormat = params.format === 'csv' ? "CSV, HEADER TRUE" : 'PARQUET';
             await connection.runAndReadAll(`COPY (${selectSql}) TO ${quoteLiteral(exportPath)} (FORMAT ${copyFormat})`, query.params as any);
             await this.artifacts.objectStore.put(objectPath, createReadStream(exportPath), { contentType });
@@ -1533,19 +1585,26 @@ export class PostgresResultSetsRepository {
         fn: (ctx: { connection: any; parquetPath: string; tempDir: string }) => Promise<T>,
     ): Promise<T> {
         const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-resultset-${resultSetId}-`));
-        const parquetPath = path.join(tempDir, 'data.parquet');
+        const dataDir = path.join(tempDir, 'data');
+        const parquetPath = path.join(dataDir, '*.parquet');
         let instance: any = null;
         try {
             const record = await this.getRecord(organizationId, resultSetId);
             const artifactRef = record.artifactRefJson as ResultSetArtifactRef;
-            const data = await this.artifacts.resultSets.openData(artifactRef);
-            if (!data) throw new DatabaseError('Result set data is unavailable', 404);
-            await pipeline(data, createWriteStream(parquetPath, { mode: 0o600 }));
+            const manifest = await this.artifacts.resultSets.readManifest(artifactRef);
+            const dataParts = await this.artifacts.resultSets.openDataParts(artifactRef, manifest);
+            if (!dataParts.length) throw new DatabaseError('Result set data is unavailable', 404);
+            for (const part of dataParts) {
+                const localPath = localDataPartPath(tempDir, part.path);
+                await mkdir(path.dirname(localPath), { recursive: true });
+                await pipeline(part.stream, createWriteStream(localPath, { mode: 0o600 }));
+            }
 
             const { DuckDBInstance } = await import('@duckdb/node-api');
-            instance = await DuckDBInstance.create(':memory:');
+            instance = await DuckDBInstance.create(path.join(tempDir, 'reader.duckdb'));
             const connection = await instance.connect();
             try {
+                await configureResultSetDuckDb(connection, path.join(tempDir, 'duckdb-tmp'));
                 return await fn({ connection, parquetPath, tempDir });
             } finally {
                 connection.closeSync();
@@ -1730,7 +1789,7 @@ export class PostgresResultSetsRepository {
         };
     }
 
-    private async writeFullDataArtifact(input: { artifactId: string; status: string; columns: ResultSetManifest['schema']; rows: AsyncIterable<unknown> | unknown[] }) {
+    private async writeFullDataArtifact(input: { artifactId: string; status: string; columns: ResultSetManifest['schema']; rows: ResultSetRowIterable }) {
         if (input.status !== 'success') return null;
         try {
             return await this.fullDataWriter.write({

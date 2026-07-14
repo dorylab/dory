@@ -658,13 +658,15 @@ export class PostgresWorksRepository {
                 rows,
             });
 
-            const { ref, manifest: persistedManifest } = await this.artifacts.resultSets.putResultSet({
-                organizationId: work.organizationId,
-                artifactId,
-                manifest,
-                preview: rows.length || status === 'success' ? preview : null,
-                data: fullData?.data ?? null,
-            });
+            const { ref, manifest: persistedManifest } = await this.artifacts.resultSets
+                .putResultSet({
+                    organizationId: work.organizationId,
+                    artifactId,
+                    manifest,
+                    preview: rows.length || status === 'success' ? preview : null,
+                    dataParts: fullData?.parts ?? null,
+                })
+                .finally(() => fullData?.cleanup?.().catch(() => undefined));
 
             try {
                 await this.db.insert(queryRuns).values({

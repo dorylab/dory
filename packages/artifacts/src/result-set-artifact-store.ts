@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { resultSetDataAvailability, type ResultSetArtifactRef, type ResultSetManifest, type ResultSetPreview } from '@dory/resultset';
+import { resultSetDataAvailability, type ResultSetArtifactRef, type ResultSetFilePartManifest, type ResultSetManifest, type ResultSetPreview } from '@dory/resultset';
 
 import { joinObjectPath, readableToBuffer, safeObjectPathPart, type ObjectStore } from './object-store';
 
@@ -8,7 +8,16 @@ export type PutResultSetArtifactInput = {
     artifactId: string;
     manifest: ResultSetManifest;
     preview?: ResultSetPreview | null;
-    data?: Buffer | Uint8Array | Readable | null;
+    dataParts?: Array<{
+        path: string;
+        rowCount?: number;
+        byteSize?: number;
+        data: Buffer | Uint8Array | Readable;
+    }> | null;
+};
+
+export type ResultSetDataPart = ResultSetFilePartManifest & {
+    stream: Readable;
 };
 
 export class ResultSetArtifactStore {
@@ -21,10 +30,10 @@ export class ResultSetArtifactStore {
         const basePath = this.basePath(input.organizationId, input.artifactId);
         const manifestPath = joinObjectPath(basePath, 'manifest.json');
         const previewPath = input.preview ? joinObjectPath(basePath, 'preview.json') : undefined;
-        const dataPath = input.data ? joinObjectPath(basePath, 'data.parquet') : undefined;
+        const dataParts = input.dataParts?.length ? input.dataParts : [];
 
         let previewByteSize: number | undefined;
-        let dataByteSize: number | undefined;
+        const manifestDataParts: ResultSetFilePartManifest[] = [];
 
         if (input.preview && previewPath) {
             const body = Buffer.from(JSON.stringify(input.preview), 'utf8');
@@ -32,14 +41,24 @@ export class ResultSetArtifactStore {
             await this.objectStore.put(previewPath, body, { contentType: 'application/json' });
         }
 
-        if (input.data && dataPath) {
-            dataByteSize = Buffer.isBuffer(input.data) || input.data instanceof Uint8Array ? input.data.byteLength : undefined;
-            await this.objectStore.put(dataPath, input.data, { contentType: 'application/vnd.apache.parquet' });
-            if (typeof dataByteSize === 'undefined') {
-                dataByteSize = (await this.objectStore.stat(dataPath))?.byteSize;
+        for (const part of dataParts) {
+            const partPath = normalizeDataPartPath(part.path);
+            const objectPath = joinObjectPath(basePath, partPath);
+            let byteSize = part.byteSize ?? (Buffer.isBuffer(part.data) || part.data instanceof Uint8Array ? part.data.byteLength : undefined);
+            await this.objectStore.put(objectPath, part.data, { contentType: 'application/vnd.apache.parquet' });
+            if (typeof byteSize === 'undefined') {
+                byteSize = (await this.objectStore.stat(objectPath))?.byteSize;
             }
+            manifestDataParts.push({
+                path: partPath,
+                format: 'parquet',
+                rowCount: part.rowCount,
+                byteSize,
+            });
         }
 
+        const dataRowCount = manifestDataParts.reduce((sum, part) => sum + (part.rowCount ?? 0), 0);
+        const dataByteSize = manifestDataParts.reduce((sum, part) => sum + (part.byteSize ?? 0), 0);
         const manifest: ResultSetManifest = {
             ...input.manifest,
             files: {
@@ -51,12 +70,13 @@ export class ResultSetArtifactStore {
                           byteSize: previewByteSize,
                       }
                     : undefined,
-                data: input.data
+                data: manifestDataParts.length
                     ? {
-                          path: 'data.parquet',
+                          path: 'data',
                           format: 'parquet',
-                          rowCount: input.manifest.rowCount ?? undefined,
+                          rowCount: dataRowCount,
                           byteSize: dataByteSize,
+                          parts: manifestDataParts,
                       }
                     : undefined,
             },
@@ -70,7 +90,7 @@ export class ResultSetArtifactStore {
             basePath,
             manifestPath: 'manifest.json',
             previewPath: input.preview ? 'preview.json' : undefined,
-            dataPath: input.data ? 'data.parquet' : undefined,
+            dataPath: manifestDataParts.length ? 'data' : undefined,
             dataAvailability: resultSetDataAvailability(manifest),
         };
 
@@ -90,11 +110,25 @@ export class ResultSetArtifactStore {
         return JSON.parse(body.toString('utf8')) as ResultSetPreview;
     }
 
-    async openData(ref: ResultSetArtifactRef): Promise<Readable | null> {
-        if (!ref.dataPath) return null;
-        const objectPath = joinObjectPath(ref.basePath, ref.dataPath);
-        if (!(await this.objectStore.exists(objectPath))) return null;
-        return this.objectStore.get(objectPath);
+    async openDataParts(ref: ResultSetArtifactRef, manifest: ResultSetManifest): Promise<ResultSetDataPart[]> {
+        const parts = manifest.files.data?.parts ?? [];
+        if (!ref.dataPath || !parts.length) return [];
+        const streams: ResultSetDataPart[] = [];
+        for (const part of parts) {
+            const partPath = normalizeDataPartPath(part.path);
+            const objectPath = joinObjectPath(ref.basePath, partPath);
+            if (!(await this.objectStore.exists(objectPath))) {
+                throw new Error(`Result-set data part is missing: ${partPath}`);
+            }
+            streams.push({
+                path: partPath,
+                format: 'parquet',
+                rowCount: part.rowCount,
+                byteSize: part.byteSize,
+                stream: await this.objectStore.get(objectPath),
+            });
+        }
+        return streams;
     }
 
     async deleteResultSet(ref: ResultSetArtifactRef): Promise<void> {
@@ -113,4 +147,15 @@ export class ResultSetArtifactStore {
 function organizationPathPart(organizationId: string) {
     const safe = safeObjectPathPart(organizationId);
     return safe.startsWith('org_') ? safe : `org_${safe}`;
+}
+
+function normalizeDataPartPath(value: string) {
+    const path = joinObjectPath(value);
+    if (!path.startsWith('data/')) {
+        throw new Error(`Invalid result-set data part path: ${value}`);
+    }
+    if (path.split('/').some(part => part === '..')) {
+        throw new Error(`Invalid result-set data part path: ${value}`);
+    }
+    return path;
 }

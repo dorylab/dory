@@ -7,7 +7,7 @@ export function onceAsync(fn: () => Promise<void> | void): () => Promise<void> {
     };
 }
 
-export async function* asyncIterableWithCleanup<Row>(iterable: AsyncIterable<Row>, cleanup: () => Promise<void> | void): AsyncIterable<Row> {
+export async function* asyncIterableWithCleanup<Row>(iterable: AsyncIterable<Row> | Iterable<Row>, cleanup: () => Promise<void> | void): AsyncIterable<Row> {
     try {
         for await (const row of iterable) {
             yield row;

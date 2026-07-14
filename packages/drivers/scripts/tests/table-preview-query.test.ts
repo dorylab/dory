@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import Database from 'better-sqlite3';
-import { previewSqliteTable } from '../../src/database/sqlite/runtime.ts';
+import { SqliteDatasource } from '../../src/database/sqlite/datasource.ts';
+import { executeSqliteQueryRowStream, previewSqliteTable } from '../../src/database/sqlite/runtime.ts';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../src/database/shared/table-preview-query.ts';
 
 const quoteDouble = (value: string) => `"${value.replace(/"/g, '""')}"`;
@@ -85,6 +89,37 @@ assert.equal(noCountPreview.totalRows, null);
 assert.equal(noCountPreview.unfilteredTotalRows, null);
 assert.equal(noCountPreview.rows.length, 2);
 
+const stream = executeSqliteQueryRowStream<{ id: number }>(db, 'SELECT id FROM orders ORDER BY id');
+const streamIterator = (stream.rows as Iterable<{ id: number }>)[Symbol.iterator]();
+assert.deepEqual(streamIterator.next().value, { id: 1 });
+stream.close?.();
+assert.doesNotThrow(() => db.pragma('schema_version'));
+
 db.close();
+
+const tempDir = await mkdtemp(path.join(os.tmpdir(), 'dory-sqlite-stream-test-'));
+try {
+    const dbPath = path.join(tempDir, 'data.sqlite');
+    const fileDb = new Database(dbPath);
+    fileDb.exec(`
+        CREATE TABLE stream_orders (id INTEGER PRIMARY KEY, status TEXT);
+        INSERT INTO stream_orders (status) VALUES ('paid'), ('paid'), ('void');
+    `);
+    fileDb.close();
+
+    const datasource = new SqliteDatasource({ id: 'sqlite_stream_test', type: 'sqlite', path: dbPath } as any);
+    await datasource.init();
+    try {
+        const datasourceStream = await datasource.queryRowsStreamWithContext<{ id: number }>('SELECT id FROM stream_orders ORDER BY id');
+        const datasourceIterator = (datasourceStream.rows as Iterable<{ id: number }>)[Symbol.iterator]();
+        assert.deepEqual(datasourceIterator.next().value, { id: 1 });
+        assert.doesNotThrow(() => datasource.getDatabase().pragma('schema_version'));
+        await datasourceStream.close?.();
+    } finally {
+        await datasource.close();
+    }
+} finally {
+    await rm(tempDir, { recursive: true, force: true });
+}
 
 console.log('table-preview query tests passed');

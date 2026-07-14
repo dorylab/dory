@@ -311,7 +311,7 @@ test('cleanup keeps DB records when artifact deletion fails', async () => {
             putResultSet: artifacts.resultSets.putResultSet.bind(artifacts.resultSets),
             readManifest: artifacts.resultSets.readManifest.bind(artifacts.resultSets),
             readPreview: artifacts.resultSets.readPreview.bind(artifacts.resultSets),
-            openData: artifacts.resultSets.openData.bind(artifacts.resultSets),
+            openDataParts: artifacts.resultSets.openDataParts.bind(artifacts.resultSets),
             exists: artifacts.resultSets.exists.bind(artifacts.resultSets),
             basePath: artifacts.resultSets.basePath.bind(artifacts.resultSets),
             deleteResultSet: async () => {

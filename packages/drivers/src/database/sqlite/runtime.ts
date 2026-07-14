@@ -130,7 +130,7 @@ export function executeSqliteQueryRowStream<Row = any>(db: SqliteDatabase, sql: 
     if (!statement.reader) {
         const result = statement.run(...boundParams);
         return {
-            rows: (async function* () {})(),
+            rows: [],
             rowCount: result.changes,
             columns: [],
             limited: false,
@@ -138,10 +138,26 @@ export function executeSqliteQueryRowStream<Row = any>(db: SqliteDatabase, sql: 
         };
     }
 
-    const iterator = statement.iterate(...boundParams) as Iterable<Row>;
-    const rows = (async function* () {
-        for (const row of iterator) {
-            yield row;
+    const iterator = (statement.iterate(...boundParams) as Iterable<Row>)[Symbol.iterator]();
+    let iteratorClosed = false;
+    const close = () => {
+        if (iteratorClosed) return;
+        iteratorClosed = true;
+        iterator.return?.();
+    };
+
+    const rows = (function* () {
+        try {
+            for (;;) {
+                const next = iterator.next();
+                if (next.done) {
+                    iteratorClosed = true;
+                    return;
+                }
+                yield next.value;
+            }
+        } finally {
+            close();
         }
     })();
 
@@ -151,7 +167,7 @@ export function executeSqliteQueryRowStream<Row = any>(db: SqliteDatabase, sql: 
         columns: normalizeColumns(statement),
         limited: false,
         tookMs: Date.now() - started,
-        close: () => undefined,
+        close,
     };
 }
 

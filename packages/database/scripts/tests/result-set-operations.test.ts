@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,11 +14,13 @@ function quoteLiteral(value: string) {
 async function main() {
     const { DuckDBInstance } = await import('@duckdb/node-api');
     const tempDir = await mkdtemp(path.join(os.tmpdir(), 'dory-resultset-ops-test-'));
-    const parquetPath = path.join(tempDir, 'data.parquet');
+    const parquetPartPath = path.join(tempDir, 'data', 'part-00000.parquet');
+    const parquetPath = path.join(tempDir, 'data', '*.parquet');
     const csvPath = path.join(tempDir, 'filtered.csv');
     let instance: any = null;
 
     try {
+        await mkdir(path.dirname(parquetPartPath), { recursive: true });
         instance = await DuckDBInstance.create(':memory:');
         const connection = await instance.connect();
         try {
@@ -38,7 +40,7 @@ async function main() {
                     (3, 'Gamma', 'a', 30.0, '2026-01-03'),
                     (4, 'alphabet', 'b', -5.0, '2026-01-04')
             `);
-            await connection.run(`COPY source TO ${quoteLiteral(parquetPath)} (FORMAT PARQUET)`);
+            await connection.run(`COPY source TO ${quoteLiteral(parquetPartPath)} (FORMAT PARQUET)`);
 
             const columns: ResultSetColumn[] = [
                 { name: 'id', logicalType: 'number' },
@@ -89,7 +91,7 @@ async function main() {
             const injectionRows = (await connection.runAndReadAll(`SELECT COUNT(*)${fromSql}${injectionQuery.whereSql}`, injectionQuery.params as any)).getRowsJson() as unknown[][];
             assert.equal(Number(injectionRows[0]?.[0]), 0);
 
-            void createReadStream(parquetPath).close();
+            void createReadStream(parquetPartPath).close();
         } finally {
             connection.closeSync();
         }
