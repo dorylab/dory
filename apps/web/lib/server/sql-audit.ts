@@ -344,6 +344,29 @@ function wrapAuditedRowStream(input: {
         });
     };
 
+    if (typeof (stream.rows as AsyncIterable<unknown>)[Symbol.asyncIterator] !== 'function') {
+        function* rows() {
+            try {
+                for (const row of stream.rows as Iterable<unknown>) {
+                    observedRows += 1;
+                    yield row;
+                }
+                void writeAudit('success').catch(() => undefined);
+            } catch (error) {
+                void writeAudit('error', error instanceof Error ? error.message : String(error ?? 'SQL stream failed')).catch(() => undefined);
+                throw error;
+            } finally {
+                void writeAudit('canceled', 'Query stream closed before completion').catch(() => undefined);
+            }
+        }
+
+        return {
+            ...stream,
+            rows: rows(),
+            close: stream.close ? () => stream.close?.() : undefined,
+        };
+    }
+
     async function* rows() {
         try {
             for await (const row of stream.rows) {

@@ -99,7 +99,13 @@ const fullManifest: ResultSetManifest = {
     ...manifest,
     files: {
         ...manifest.files,
-        data: { path: 'data', format: 'parquet', rowCount: 2, byteSize: parquet?.byteSize, parts: parquet?.parts.map(part => ({ path: part.path, format: part.format, rowCount: part.rowCount, byteSize: part.byteSize })) },
+        data: {
+            path: 'data',
+            format: 'parquet',
+            rowCount: 2,
+            byteSize: parquet?.byteSize,
+            parts: parquet?.parts.map(part => ({ path: part.path, format: part.format, rowCount: part.rowCount, byteSize: part.byteSize })),
+        },
     },
 };
 assert.equal(resultSetDataAvailability(fullManifest), 'full');
@@ -116,16 +122,17 @@ assert.equal(emptyParquet?.parts[0]?.rowCount, 0);
 assert.ok((emptyParquet?.byteSize ?? 0) > 0);
 
 function* generatedRows() {
-    yield { id: 1, name: 'generated-1' };
-    yield { id: 2, name: 'generated-2' };
-    yield { id: 3, name: 'generated-3' };
+    yield { id: 1, name: 'generated-1', bytes: new Uint8Array([1]) };
+    yield { id: 2, name: 'generated-2', bytes: new Uint8Array([2]) };
+    yield { id: 3, name: 'generated-3', bytes: new Uint8Array([3]) };
 }
 
 const generatedParquet = await writer.write({
     artifactId: 'rs_generated_test',
     schema: [
-        { name: 'id', logicalType: 'number' },
-        { name: 'name', logicalType: 'string' },
+        { name: 'id', logicalType: 'unknown' },
+        { name: 'name', logicalType: 'unknown' },
+        { name: 'bytes', logicalType: 'unknown' },
     ],
     rows: generatedRows(),
     target: null,
@@ -146,6 +153,12 @@ try {
         await pipeline(part.data as NodeJS.ReadableStream, createWriteStream(path.join(tempDir, part.path)));
     }
     const parquetPath = path.join(dataDir, '*.parquet');
+    const generatedDataDir = path.join(tempDir, 'generated-data');
+    await mkdir(generatedDataDir, { recursive: true });
+    for (const part of generatedParquet!.parts) {
+        await pipeline(part.data as NodeJS.ReadableStream, createWriteStream(path.join(generatedDataDir, path.basename(part.path))));
+    }
+    const generatedParquetPath = path.join(generatedDataDir, '*.parquet');
     const instance = await DuckDBInstance.create(':memory:');
     const connection = await instance.connect();
     try {
@@ -153,6 +166,12 @@ try {
         const readRows = reader.getRowObjectsJson() as Array<Record<string, unknown>>;
         assert.deepEqual(readRows[0], { id: '1', name: 'Ada', active: true, amount: 12.5 });
         assert.deepEqual(readRows[1], { id: '2', name: 'Grace', active: false, amount: null });
+
+        const generatedTypesReader = await connection.runAndReadAll(
+            `SELECT typeof(id) AS id_type, typeof(name) AS name_type, typeof(bytes) AS bytes_type FROM read_parquet('${generatedParquetPath.replace(/'/g, "''")}') LIMIT 1`,
+        );
+        const generatedTypes = generatedTypesReader.getRowObjectsJson() as Array<Record<string, unknown>>;
+        assert.deepEqual(generatedTypes[0], { id_type: 'BIGINT', name_type: 'VARCHAR', bytes_type: 'BLOB' });
     } finally {
         connection.closeSync();
         instance.closeSync();

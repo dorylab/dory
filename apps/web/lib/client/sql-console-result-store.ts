@@ -143,7 +143,6 @@ export function useSqlConsoleResultStore() {
 
     const updateResultSetViewState = useCallback(async (sessionId: string, setIndex: number, viewState: ResultSetViewState | null) => {
         await executeActionClient('query.resultSet.viewState.update', { sessionId, setIndex, viewState });
-        notifySqlConsoleResultDataUpdated();
     }, []);
 
     const readResultSetRows = useCallback((params: ReadRowsInput) => {

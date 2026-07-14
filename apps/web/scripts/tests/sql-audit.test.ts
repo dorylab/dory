@@ -244,6 +244,40 @@ test('audits successful streaming SQL execution after consuming rows', async () 
     assert.equal(writes[0]!.rowsRead, 2);
 });
 
+test('preserves synchronous row streams while auditing', async () => {
+    const writes = captureAuditWrites();
+    const connection = createConnection({
+        async queryRowsStreamWithContext<Row = unknown>(): Promise<DriverQueryRowStream<Row>> {
+            return {
+                rows: (function* () {
+                    yield { id: 1 };
+                    yield { id: 2 };
+                })() as Iterable<Row>,
+                rowCount: null,
+                columns: [{ name: 'id', type: 'integer' }],
+            };
+        },
+    });
+
+    const stream = await runWithSqlAudit(
+        {
+            organizationId: 'org-1',
+            userId: 'user-1',
+            source: 'user_sql_console',
+            connectionId: 'conn-1',
+        },
+        () => connection.queryRowsStreamWithContext('select sync stream'),
+    );
+
+    assert.equal(typeof (stream.rows as Iterable<unknown>)[Symbol.iterator], 'function');
+    assert.equal(typeof (stream.rows as AsyncIterable<unknown>)[Symbol.asyncIterator], 'undefined');
+    assert.deepEqual([...(stream.rows as Iterable<{ id: number }>)], [{ id: 1 }, { id: 2 }]);
+    await Promise.resolve();
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0]!.status, 'success');
+    assert.equal(writes[0]!.rowsRead, 2);
+});
+
 test('does not audit driver calls outside a SQL audit context', async () => {
     const writes = captureAuditWrites();
     const connection = createConnection();

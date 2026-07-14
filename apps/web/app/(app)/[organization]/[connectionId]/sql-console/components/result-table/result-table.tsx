@@ -35,6 +35,7 @@ import { isQueryHistoryRestoredSession } from '../../query-history-result-restor
 /* =================================== constants =================================== */
 
 const OVERVIEW_SET = -1;
+const EMPTY_RESULTS: ResultRow[] = [];
 type ResultViewMode = 'table' | 'charts';
 type ResultSessionStatus = 'running' | 'success' | 'error' | 'canceled';
 type ResultSetSummaryMeta = {
@@ -890,7 +891,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                                 <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>
                             ) : (
                                 <VTable
-                                    results={isRemoteFullResult ? [] : columnFilteredResults}
+                                    results={isRemoteFullResult ? EMPTY_RESULTS : columnFilteredResults}
                                     remoteSource={remoteSource}
                                     storageKey={storageKey}
                                     onStatsChange={onStatsChange}

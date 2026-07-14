@@ -182,11 +182,7 @@ type DuckDBInstanceLike = {
     closeSync(): void;
 };
 
-export async function configureResultSetDuckDb(
-    connection: Pick<DuckDBConnectionLike, 'run'>,
-    tempDirectory: string,
-    env: Record<string, string | undefined> = process.env,
-) {
+export async function configureResultSetDuckDb(connection: Pick<DuckDBConnectionLike, 'run'>, tempDirectory: string, env: Record<string, string | undefined> = process.env) {
     await mkdir(tempDirectory, { recursive: true });
     await connection.run(`SET temp_directory = ${quoteLiteral(tempDirectory)}`);
     await connection.run(`SET memory_limit = ${quoteLiteral(normalizeDuckDbMemoryLimit(env.DORY_RESULTSET_DUCKDB_MEMORY_LIMIT))}`);
@@ -199,25 +195,27 @@ export class ParquetResultSetDataWriter implements ResultSetDataWriter {
         const schema = input.schema.length ? input.schema : inferResultSetColumns(preparedRows.sampleRows);
         if (!schema.length) return null;
 
-        const columns = normalizeParquetColumns(schema, preparedRows.sampleRows.map(row => normalizeRecord(row)));
+        const columns = normalizeParquetColumns(
+            schema,
+            preparedRows.sampleRows.map(row => normalizeRecord(row)),
+        );
         const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-${safeFilePart(input.artifactId)}-`));
         const dataDir = path.join(tempDir, 'data');
         const partRows = normalizeParquetPartRows(process.env.DORY_RESULTSET_PARQUET_PART_ROWS);
         const parts: ResultSetDataWriterPart[] = [];
 
-        let instance: DuckDBInstanceLike | null = null;
         let keepTempDir = false;
         try {
             const { DuckDBInstance } = await import('@duckdb/node-api');
-            instance = await DuckDBInstance.create(path.join(tempDir, 'writer.duckdb'));
-            const connection = await instance.connect();
-            try {
-                await configureResultSetDuckDb(connection, path.join(tempDir, 'duckdb-tmp'));
-                let rowCount = 0;
-                let byteSize = 0;
-                let chunk: unknown[] = [];
+            let rowCount = 0;
+            let byteSize = 0;
+            let chunk: unknown[] = [];
 
-                const flushChunk = async () => {
+            const flushChunk = async () => {
+                const instance: DuckDBInstanceLike = await DuckDBInstance.create(':memory:');
+                const connection = await instance.connect();
+                try {
+                    await configureResultSetDuckDb(connection, path.join(tempDir, 'duckdb-tmp'));
                     const part = await writeParquetPart({
                         connection,
                         columns,
@@ -229,34 +227,40 @@ export class ParquetResultSetDataWriter implements ResultSetDataWriter {
                     rowCount += part.rowCount;
                     byteSize += part.byteSize ?? 0;
                     chunk = [];
-                };
-
-                const pushRow = async (row: unknown) => {
-                    chunk.push(row);
-                    if (chunk.length >= partRows) await flushChunk();
-                };
-
-                for (const row of preparedRows.sampleRows) await pushRow(row);
-                if (isAsyncIterable(preparedRows.remainingRows)) {
-                    for await (const row of preparedRows.remainingRows) await pushRow(row);
-                } else {
-                    for (const row of preparedRows.remainingRows) await pushRow(row);
+                } finally {
+                    connection.closeSync();
+                    instance.closeSync();
                 }
+            };
 
-                if (chunk.length || parts.length === 0) await flushChunk();
-                keepTempDir = true;
-                return {
-                    format: 'parquet',
-                    rowCount,
-                    byteSize,
-                    parts,
-                    cleanup: () => rm(tempDir, { recursive: true, force: true }).catch(() => undefined),
-                };
-            } finally {
-                connection.closeSync();
+            const pushRow = (row: unknown) => {
+                chunk.push(row);
+                return chunk.length >= partRows;
+            };
+
+            for (const row of preparedRows.sampleRows) {
+                if (pushRow(row)) await flushChunk();
             }
+            if (isAsyncIterable(preparedRows.remainingRows)) {
+                for await (const row of preparedRows.remainingRows) {
+                    if (pushRow(row)) await flushChunk();
+                }
+            } else {
+                for (const row of preparedRows.remainingRows) {
+                    if (pushRow(row)) await flushChunk();
+                }
+            }
+
+            if (chunk.length || parts.length === 0) await flushChunk();
+            keepTempDir = true;
+            return {
+                format: 'parquet',
+                rowCount,
+                byteSize,
+                parts,
+                cleanup: () => rm(tempDir, { recursive: true, force: true }).catch(() => undefined),
+            };
         } finally {
-            instance?.closeSync();
             if (!keepTempDir) {
                 await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
             }
@@ -278,7 +282,9 @@ async function writeParquetPart(input: {
     const tableName = `result_set_part_${input.partIndex}`;
 
     await input.connection.run(`DROP TABLE IF EXISTS ${quoteIdentifier(tableName)}`);
-    await input.connection.run(`CREATE TABLE ${quoteIdentifier(tableName)} (${input.columns.map(column => `${quoteIdentifier(column.parquetName)} ${column.duckDbType}`).join(', ')})`);
+    await input.connection.run(
+        `CREATE TABLE ${quoteIdentifier(tableName)} (${input.columns.map(column => `${quoteIdentifier(column.parquetName)} ${column.duckDbType}`).join(', ')})`,
+    );
     const appender = await input.connection.createAppender(tableName);
     try {
         for (const row of input.rows) appendRow(appender, input.columns, row);
@@ -416,7 +422,7 @@ async function prepareRowsForParquet(rows: ResultSetRowIterable, schema: ResultS
     if (isAsyncIterable(rows)) {
         const iterator = rows[Symbol.asyncIterator]();
         const sampleRows: unknown[] = [];
-        const sampleLimit = schema.length ? 0 : 200;
+        const sampleLimit = 200;
         while (sampleRows.length < sampleLimit) {
             const next = await iterator.next();
             if (next.done) break;
@@ -431,7 +437,7 @@ async function prepareRowsForParquet(rows: ResultSetRowIterable, schema: ResultS
 
     const iterator = rows[Symbol.iterator]();
     const sampleRows: unknown[] = [];
-    const sampleLimit = schema.length ? 0 : 200;
+    const sampleLimit = 200;
     while (sampleRows.length < sampleLimit) {
         const next = iterator.next();
         if (next.done) break;
