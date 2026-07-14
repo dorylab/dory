@@ -72,6 +72,10 @@ export type PersistQueryResultSetStreamInput = Omit<PersistQueryResultSetInput, 
     queryRunId?: string | null;
 };
 
+export type PersistQueryResultSetStreamOptions = {
+    onPreviewPersisted?: (output: PersistQueryResultSetOutput) => Promise<void> | void;
+};
+
 export type PersistQueryResultSetOutput = {
     resultSetId: string;
     queryRunId: string;
@@ -408,6 +412,14 @@ function getString(value: unknown): string | null {
     return typeof value === 'string' ? value : null;
 }
 
+function getErrorMessage(error: unknown) {
+    if (error && typeof error === 'object' && 'message' in error) {
+        const message = (error as { message?: unknown }).message;
+        if (typeof message === 'string' && message) return message;
+    }
+    return String(error);
+}
+
 function getNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -651,6 +663,62 @@ async function consumeRows(rows: ResultSetRowIterable): Promise<void> {
     }
 }
 
+async function preparePreviewRows(rows: ResultSetRowIterable, maxRows: number): Promise<{ previewRows: unknown[]; remainingRows: ResultSetRowIterable }> {
+    const previewRows: unknown[] = [];
+    const limit = Math.max(0, Math.floor(maxRows));
+    if (limit <= 0) {
+        return { previewRows, remainingRows: rows };
+    }
+
+    if (isAsyncIterableRows(rows)) {
+        const iterator = rows[Symbol.asyncIterator]();
+        while (previewRows.length < limit) {
+            const next = await iterator.next();
+            if (next.done) break;
+            previewRows.push(next.value);
+        }
+        return { previewRows, remainingRows: asyncRowsFromIterator(iterator) };
+    }
+
+    const iterator = rows[Symbol.iterator]();
+    while (previewRows.length < limit) {
+        const next = iterator.next();
+        if (next.done) break;
+        previewRows.push(next.value);
+    }
+    return { previewRows, remainingRows: rowsFromIterator(iterator) };
+}
+
+function concatRows(prefixRows: unknown[], remainingRows: ResultSetRowIterable): ResultSetRowIterable {
+    if (isAsyncIterableRows(remainingRows)) {
+        return (async function* () {
+            for (const row of prefixRows) yield row;
+            for await (const row of remainingRows) yield row;
+        })();
+    }
+
+    return (function* () {
+        for (const row of prefixRows) yield row;
+        for (const row of remainingRows) yield row;
+    })();
+}
+
+function* rowsFromIterator(iterator: Iterator<unknown>) {
+    for (;;) {
+        const next = iterator.next();
+        if (next.done) return;
+        yield next.value;
+    }
+}
+
+async function* asyncRowsFromIterator(iterator: AsyncIterator<unknown>) {
+    for (;;) {
+        const next = await iterator.next();
+        if (next.done) return;
+        yield next.value;
+    }
+}
+
 function rowsBySchema(rows: unknown[][], columns: ResultSetColumn[]) {
     return rows.map(row => {
         const out: Record<string, unknown> = {};
@@ -665,7 +733,8 @@ function rowsBySchema(rows: unknown[][], columns: ResultSetColumn[]) {
 function normalizeReadValue(value: unknown, column: ResultSetColumn | undefined) {
     if (typeof value !== 'string') return value;
     if (!column) return value;
-    const integerLikeColumn = column.logicalType === 'number' || Boolean(column.databaseType && /\b(bigint|int8|integer|int4|smallint|int2|tinyint|number\(38,0\))\b/i.test(column.databaseType));
+    const integerLikeColumn =
+        column.logicalType === 'number' || Boolean(column.databaseType && /\b(bigint|int8|integer|int4|smallint|int2|tinyint|number\(38,0\))\b/i.test(column.databaseType));
     if (!integerLikeColumn || !/^-?\d+$/.test(value)) return value;
     const numberValue = Number(value);
     return Number.isSafeInteger(numberValue) ? numberValue : value;
@@ -846,7 +915,7 @@ export class PostgresResultSetsRepository {
         };
     }
 
-    async persistQueryResultSetStream(input: PersistQueryResultSetStreamInput): Promise<PersistQueryResultSetOutput> {
+    async persistQueryResultSetStream(input: PersistQueryResultSetStreamInput, options: PersistQueryResultSetStreamOptions = {}): Promise<PersistQueryResultSetOutput> {
         this.assertInited();
 
         const resultSet = input.resultSet;
@@ -857,53 +926,26 @@ export class PostgresResultSetsRepository {
         const explicitColumns = input.columns?.length ? input.columns : inferResultSetColumns([], resultSet.columns);
         const now = new Date();
         const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
-        const previewRows: unknown[] = [];
         const maxPreviewRows = input.previewRows ?? DEFAULT_PREVIEW_ROWS;
-        let streamedRowCount = 0;
-        let streamReadError: unknown = null;
-
-        const countedRows = withRowCounting(input.rows, {
-            onRow: row => {
-                if (previewRows.length < maxPreviewRows) {
-                    previewRows.push(row);
-                }
-                streamedRowCount += 1;
-            },
-            onError: error => {
-                streamReadError = error;
-            },
-        });
-
-        const fullData = await this.writeFullDataArtifact({
-            artifactId,
-            status,
-            columns: explicitColumns,
-            rows: countedRows,
-        });
-        if (streamReadError) {
-            throw streamReadError;
-        }
-        if (!fullData && streamedRowCount === 0 && status === 'success') {
-            await consumeRows(countedRows);
-        }
-
-        const completedAt = new Date();
-        const durationMs = getDurationMs(resultSet.durationMs, resultSet.startedAt, completedAt);
+        const preparedRows = await preparePreviewRows(input.rows, maxPreviewRows);
+        const previewRows = preparedRows.previewRows;
         const columns = explicitColumns.length ? explicitColumns : inferResultSetColumns(previewRows);
-        const rowCount = getNumber(resultSet.rowCount) ?? input.rowCount ?? fullData?.rowCount ?? streamedRowCount;
+        const initialRowCount = getNumber(resultSet.rowCount) ?? input.rowCount ?? (previewRows.length < maxPreviewRows ? previewRows.length : null);
         const preview = buildResultSetPreview({
             columns,
             rows: previewRows,
-            rowCount,
+            rowCount: initialRowCount,
             maxRows: maxPreviewRows,
         });
         const limited = getBoolean(resultSet.limited);
-        const manifest: ResultSetManifest = {
+        const previewStatus = status === 'success' ? 'running' : status;
+        const previewAt = new Date();
+        const previewManifestInput: ResultSetManifest = {
             format: 'dory.resultset.v1',
             artifactId,
             organizationId: input.organizationId,
             kind: 'sql-result-set',
-            status,
+            status: previewStatus,
             source: {
                 type: 'query-run',
                 queryRunId,
@@ -921,7 +963,7 @@ export class PostgresResultSetsRepository {
                 operation: getString(resultSet.sqlOp) ?? 'unknown',
             },
             error:
-                status === 'error'
+                previewStatus === 'error'
                     ? {
                           message: getString(resultSet.errorMessage),
                           code: getString(resultSet.errorCode),
@@ -930,28 +972,26 @@ export class PostgresResultSetsRepository {
                       }
                     : undefined,
             schema: columns,
-            rowCount,
+            rowCount: initialRowCount,
             previewRowCount: preview.previewRowCount,
             limited,
             limit: getNumber(resultSet.limit),
             files: {},
             lineage: {},
             createdAt: now.toISOString(),
-            updatedAt: completedAt.toISOString(),
+            updatedAt: previewAt.toISOString(),
             contentHash: null,
         };
 
-        let persistedRef: ResultSetArtifactRef | null = null;
-        try {
-            const { ref, manifest: persistedManifest } = await this.artifacts.resultSets.putResultSet({
-                organizationId: input.organizationId,
-                artifactId,
-                manifest,
-                preview: previewRows.length || status === 'success' ? preview : null,
-                dataParts: fullData?.parts ?? null,
-            });
-            persistedRef = ref;
+        const { ref: previewRef, manifest: previewManifest } = await this.artifacts.resultSets.putResultSet({
+            organizationId: input.organizationId,
+            artifactId,
+            manifest: previewManifestInput,
+            preview: previewRows.length || previewStatus === 'running' || previewStatus === 'success' ? preview : null,
+            dataParts: null,
+        });
 
+        try {
             await this.db.insert(queryRuns).values({
                 id: queryRunId,
                 organizationId: input.organizationId,
@@ -965,12 +1005,12 @@ export class PostgresResultSetsRepository {
                 actorType,
                 actorId: input.userId,
                 sql: resultSet.sqlText || input.sessionSqlText,
-                status,
-                durationMs,
+                status: previewStatus,
+                durationMs: getDurationMs(resultSet.durationMs, resultSet.startedAt, previewAt),
                 errorMessage: getString(resultSet.errorMessage),
                 resultSetId: artifactId,
                 createdAt: now,
-                updatedAt: completedAt,
+                updatedAt: previewAt,
             });
 
             await this.db.insert(resultSetsTable).values({
@@ -986,8 +1026,8 @@ export class PostgresResultSetsRepository {
                 sourceQueryRunId: queryRunId,
                 sourceType: 'query-run',
                 kind: 'sql-result-set',
-                status,
-                rowCount,
+                status: previewStatus,
+                rowCount: initialRowCount,
                 previewRowCount: preview.previewRowCount,
                 limited,
                 limit: getNumber(resultSet.limit),
@@ -995,14 +1035,14 @@ export class PostgresResultSetsRepository {
                 sql: resultSet.sqlText || input.sessionSqlText,
                 operation: getString(resultSet.sqlOp),
                 errorMessage: getString(resultSet.errorMessage),
-                artifactRefJson: ref,
-                dataAvailability: resultSetDataAvailability(persistedManifest),
+                artifactRefJson: previewRef,
+                dataAvailability: resultSetDataAvailability(previewManifest),
                 createdByActorType: actorType,
                 createdByActorId: input.userId,
-                byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                byteSize: (previewManifest.files.preview?.byteSize ?? 0) + (previewManifest.files.data?.byteSize ?? 0),
                 expiresAt,
                 createdAt: now,
-                updatedAt: completedAt,
+                updatedAt: previewAt,
             });
 
             if (input.agentRunId) {
@@ -1014,23 +1054,177 @@ export class PostgresResultSetsRepository {
                     createdAt: now,
                 });
             }
+        } catch (error) {
+            await this.artifacts.resultSets.deleteResultSet(previewRef).catch(() => undefined);
+            throw error;
+        }
+
+        const previewOutput: PersistQueryResultSetOutput = {
+            resultSetId: artifactId,
+            queryRunId,
+            artifactRef: previewRef,
+            dataAvailability: resultSetDataAvailability(previewManifest),
+            previewRows: preview.rows,
+            previewRowCount: preview.previewRowCount,
+            rowCount: initialRowCount ?? previewRows.length,
+            schema: columns,
+            byteSize: (previewManifest.files.preview?.byteSize ?? 0) + (previewManifest.files.data?.byteSize ?? 0),
+        };
+        await options.onPreviewPersisted?.(previewOutput);
+
+        let streamedRowCount = 0;
+        let streamReadError: unknown = null;
+        const countedRows = withRowCounting(concatRows(previewRows, preparedRows.remainingRows), {
+            onRow: row => {
+                void row;
+                streamedRowCount += 1;
+            },
+            onError: error => {
+                streamReadError = error;
+            },
+        });
+
+        const fullData = await this.writeFullDataArtifact({
+            artifactId,
+            status,
+            columns,
+            rows: countedRows,
+        });
+        const completedAt = new Date();
+        const durationMs = getDurationMs(resultSet.durationMs, resultSet.startedAt, completedAt);
+        if (!fullData && streamedRowCount === 0 && status === 'success' && !streamReadError) {
+            await consumeRows(countedRows);
+        }
+        if (streamReadError) {
+            const message = getErrorMessage(streamReadError);
+            await Promise.all([
+                this.db
+                    .update(queryRuns)
+                    .set({
+                        status: 'error',
+                        durationMs,
+                        errorMessage: message,
+                        updatedAt: completedAt,
+                    })
+                    .where(eq(queryRuns.id, queryRunId)),
+                this.db
+                    .update(resultSetsTable)
+                    .set({
+                        status: 'error',
+                        errorMessage: message,
+                        rowCount: streamedRowCount || initialRowCount,
+                        updatedAt: completedAt,
+                    })
+                    .where(eq(resultSetsTable.id, artifactId)),
+            ]);
+            throw streamReadError;
+        }
+
+        const rowCount = getNumber(resultSet.rowCount) ?? input.rowCount ?? fullData?.rowCount ?? streamedRowCount;
+        const manifest: ResultSetManifest = {
+            ...previewManifestInput,
+            status,
+            error:
+                status === 'error'
+                    ? {
+                          message: getString(resultSet.errorMessage),
+                          code: getString(resultSet.errorCode),
+                          sqlState: getString(resultSet.errorSqlState),
+                          meta: resultSet.errorMeta ?? undefined,
+                      }
+                    : undefined,
+            rowCount,
+            updatedAt: completedAt.toISOString(),
+        };
+
+        let latestRef = previewRef;
+        let latestManifest = previewManifest;
+        try {
+            const { ref, manifest: persistedManifest } = await this.artifacts.resultSets.putResultSet({
+                organizationId: input.organizationId,
+                artifactId,
+                manifest,
+                preview: previewRows.length || status === 'success' ? preview : null,
+                dataParts: fullData?.parts ?? null,
+            });
+            latestRef = ref;
+            latestManifest = persistedManifest;
+            const dataAvailability = resultSetDataAvailability(persistedManifest);
+            const byteSize = (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0);
+
+            await Promise.all([
+                this.db
+                    .update(queryRuns)
+                    .set({
+                        status,
+                        durationMs,
+                        errorMessage: getString(resultSet.errorMessage),
+                        resultSetId: artifactId,
+                        updatedAt: completedAt,
+                    })
+                    .where(eq(queryRuns.id, queryRunId)),
+                this.db
+                    .update(resultSetsTable)
+                    .set({
+                        status,
+                        rowCount,
+                        previewRowCount: preview.previewRowCount,
+                        limited,
+                        limit: getNumber(resultSet.limit),
+                        schemaJson: columns,
+                        errorMessage: getString(resultSet.errorMessage),
+                        artifactRefJson: ref,
+                        dataAvailability,
+                        byteSize,
+                        updatedAt: completedAt,
+                    })
+                    .where(eq(resultSetsTable.id, artifactId)),
+            ]);
 
             return {
                 resultSetId: artifactId,
                 queryRunId,
                 artifactRef: ref,
-                dataAvailability: resultSetDataAvailability(persistedManifest),
+                dataAvailability,
                 previewRows: preview.rows,
                 previewRowCount: preview.previewRowCount,
                 rowCount,
                 schema: columns,
-                byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                byteSize,
             };
         } catch (error) {
-            if (persistedRef) {
-                await this.artifacts.resultSets.deleteResultSet(persistedRef).catch(() => undefined);
-            }
-            throw error;
+            const message = getErrorMessage(error);
+            await Promise.all([
+                this.db
+                    .update(queryRuns)
+                    .set({
+                        status: 'success',
+                        durationMs,
+                        errorMessage: null,
+                        resultSetId: artifactId,
+                        updatedAt: completedAt,
+                    })
+                    .where(eq(queryRuns.id, queryRunId)),
+                this.db
+                    .update(resultSetsTable)
+                    .set({
+                        status: 'success',
+                        errorMessage: null,
+                        rowCount: streamedRowCount || rowCount,
+                        dataAvailability: resultSetDataAvailability(latestManifest),
+                        artifactRefJson: latestRef,
+                        updatedAt: completedAt,
+                    })
+                    .where(eq(resultSetsTable.id, artifactId)),
+            ]).catch(() => undefined);
+            console.warn('[resultSets] full data finalize failed; keeping preview-only result set', {
+                artifactId,
+                error: message,
+            });
+            return {
+                ...previewOutput,
+                rowCount: streamedRowCount || rowCount,
+            };
         } finally {
             await fullData?.cleanup?.().catch(() => undefined);
         }
@@ -1102,13 +1296,7 @@ export class PostgresResultSetsRepository {
         if (!runs.length && !sets.length) return null;
 
         const statuses = [...runs.map(row => row.status), ...sets.map(row => row.status)].filter(Boolean);
-        const status = statuses.includes('error')
-            ? 'error'
-            : statuses.includes('canceled')
-              ? 'canceled'
-              : statuses.includes('running')
-                ? 'running'
-                : 'success';
+        const status = statuses.includes('error') ? 'error' : statuses.includes('canceled') ? 'canceled' : statuses.includes('running') ? 'running' : 'success';
         const errorMessage = runs.find(row => row.errorMessage)?.errorMessage ?? sets.find(row => row.errorMessage)?.errorMessage ?? null;
         const startedAt =
             [...runs.map(row => row.createdAt), ...sets.map(row => row.createdAt)]
@@ -1212,7 +1400,9 @@ export class PostgresResultSetsRepository {
             .execute();
     }
 
-    async readRows(params: { organizationId: string; resultSetId: string; offset?: number | null; limit?: number | null } & ResultSetQueryOperations): Promise<ReadResultRowsOutput> {
+    async readRows(
+        params: { organizationId: string; resultSetId: string; offset?: number | null; limit?: number | null } & ResultSetQueryOperations,
+    ): Promise<ReadResultRowsOutput> {
         this.assertInited();
 
         const record = await this.getRecord(params.organizationId, params.resultSetId);
@@ -1266,13 +1456,8 @@ export class PostgresResultSetsRepository {
             const fromSql = ` FROM read_parquet(${quoteLiteral(parquetPath)})`;
             const countSql = query.whereSql ? `SELECT COUNT(*)${fromSql}${query.whereSql}` : null;
             const filteredCount =
-                countSql != null
-                    ? Number(((await connection.runAndReadAll(countSql, query.params as any)).getRowsJson() as unknown[][])[0]?.[0] ?? 0)
-                    : unfilteredRowCount;
-            const reader = await connection.runAndReadAll(
-                `SELECT *${fromSql}${query.whereSql}${query.orderSql} LIMIT ${limit} OFFSET ${offset}`,
-                query.params as any,
-            );
+                countSql != null ? Number(((await connection.runAndReadAll(countSql, query.params as any)).getRowsJson() as unknown[][])[0]?.[0] ?? 0) : unfilteredRowCount;
+            const reader = await connection.runAndReadAll(`SELECT *${fromSql}${query.whereSql}${query.orderSql} LIMIT ${limit} OFFSET ${offset}`, query.params as any);
             const rows = rowsBySchema(reader.getRowsJson() as unknown[][], columns);
             return {
                 resultSetId: params.resultSetId,
@@ -1319,7 +1504,7 @@ export class PostgresResultSetsRepository {
             const fromSql = ` FROM read_parquet(${quoteLiteral(parquetPath)})`;
             const selectSql = `SELECT *${fromSql}${query.whereSql}${query.orderSql}`;
 
-            const copyFormat = params.format === 'csv' ? "CSV, HEADER TRUE" : 'PARQUET';
+            const copyFormat = params.format === 'csv' ? 'CSV, HEADER TRUE' : 'PARQUET';
             await connection.runAndReadAll(`COPY (${selectSql}) TO ${quoteLiteral(exportPath)} (FORMAT ${copyFormat})`, query.params as any);
             await this.artifacts.objectStore.put(objectPath, createReadStream(exportPath), { contentType });
         });
@@ -1382,15 +1567,17 @@ export class PostgresResultSetsRepository {
                 const xExpr = `TRY_CAST(${columnSql(xColumn)} AS DOUBLE)`;
                 const yExpr = `TRY_CAST(${columnSql(metric.column)} AS DOUBLE)`;
                 const rows = (
-                    (await connection.runAndReadAll(
-                        `
+                    (
+                        await connection.runAndReadAll(
+                            `
                         SELECT ${xExpr} AS xLabel, ${yExpr} AS ${quoteIdentifier(metricAlias)}
                         ${fromSql}
                         ${query.whereSql ? `${query.whereSql} AND` : 'WHERE'} ${xExpr} IS NOT NULL AND ${yExpr} IS NOT NULL
                         LIMIT 1000
                         `,
-                        query.params as any,
-                    )).getRowObjectsJson() as Record<string, unknown>[]
+                            query.params as any,
+                        )
+                    ).getRowObjectsJson() as Record<string, unknown>[]
                 ).map(row => ({ xLabel: row.xLabel, [metricAlias]: row[metricAlias] }));
 
                 return {
@@ -1402,8 +1589,9 @@ export class PostgresResultSetsRepository {
 
             if (params.chartType === 'histogram') {
                 const xExpr = `TRY_CAST(${columnSql(xColumn)} AS DOUBLE)`;
-                const rows = (await connection.runAndReadAll(
-                    `
+                const rows = (
+                    await connection.runAndReadAll(
+                        `
                     WITH filtered AS (
                         SELECT ${xExpr} AS x_value
                         ${fromSql}
@@ -1438,8 +1626,9 @@ export class PostgresResultSetsRepository {
                     GROUP BY bucket_index, min_value, max_value
                     ORDER BY bucket_index
                     `,
-                    query.params as any,
-                )).getRowObjectsJson() as Record<string, unknown>[];
+                        query.params as any,
+                    )
+                ).getRowObjectsJson() as Record<string, unknown>[];
 
                 return {
                     data: rows.map(row => ({ xLabel: row.xLabel, [metricAlias]: row[metricAlias] })),
