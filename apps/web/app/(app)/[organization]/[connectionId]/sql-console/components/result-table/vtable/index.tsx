@@ -351,6 +351,11 @@ export default function VTable({
         return sorted;
     }, [filteredResults, numericColumns, usesServerSideOperations, sortBy, sortDirection]);
     const tableRowCount = isRemote ? Math.max(0, remoteSource?.rowCount ?? 0) : sortedResults.length;
+    const effectiveIndexColWidth = useMemo(() => {
+        const fontFamily = typeof document === 'undefined' ? 'system-ui, sans-serif' : getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
+        const maxRowLabel = String(Math.max(1, tableRowCount));
+        return Math.max(indexColWidth, measureTextWidth(maxRowLabel, `400 14px ${fontFamily}`) + CELL_TEXT_PAD);
+    }, [indexColWidth, measureTextWidth, tableRowCount]);
     const getDisplayRow = useCallback(
         (rowIndex: number) => {
             if (isRemote) return remoteRowsRef.current.get(rowIndex);
@@ -705,10 +710,10 @@ export default function VTable({
         }
     }, []);
     const totalWidth = useMemo(() => {
-        let sum = indexColWidth;
+        let sum = effectiveIndexColWidth;
         for (const c of columns) sum += Math.max((colWidths[c] ?? defaultColMinWidth) + HEADER_PAD, 60);
         return sum;
-    }, [columns, colWidths, indexColWidth, defaultColMinWidth]);
+    }, [columns, colWidths, defaultColMinWidth, effectiveIndexColWidth]);
 
     const dragState = useRef<{ col: string; startX: number; startW: number } | null>(null);
     const recomputeAll = () => {
@@ -1248,12 +1253,12 @@ export default function VTable({
     );
     const getGridColumnWidth = useCallback(
         ({ index }: { index: number }) => {
-            if (index === 0) return indexColWidth;
+            if (index === 0) return effectiveIndexColWidth;
             const col = columns[index - 1];
             const base = Math.max(colWidths[col] ?? defaultColMinWidth, 60);
             return base + HEADER_PAD;
         },
-        [colWidths, columns, defaultColMinWidth, indexColWidth],
+        [colWidths, columns, defaultColMinWidth, effectiveIndexColWidth],
     );
     const getGridRowHeight = useCallback(({ index }: { index: number }) => (index === 0 ? Math.max(rowHeight, 32) : rowHeight), [rowHeight]);
     const latestSectionRenderedRef = useRef(handleSectionRendered);
