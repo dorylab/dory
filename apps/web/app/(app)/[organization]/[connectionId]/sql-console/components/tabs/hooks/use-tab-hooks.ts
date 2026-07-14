@@ -6,7 +6,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
 
 import { activeTabIdAtom, currentConnectionAtom, tabsAtom } from '@/shared/stores/app.store';
-import { currentTabResultAtom, sessionIdByTabAtom } from '../../../sql-console.store';
+import { sessionIdByTabAtom } from '../../../sql-console.store';
 import { executeActionClient } from '@/lib/actions/client';
 import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
@@ -71,7 +71,6 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
 
     const sessionIdMap = useAtomValue(sessionIdByTabAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
-    const setResults = useSetAtom(currentTabResultAtom);
 
     const [isLoading, setIsLoading] = useState(true);
     const t = useTranslations('SqlConsole');
@@ -186,7 +185,6 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
 
         setSessionIdMap(prev => (prev[id] ? prev : { ...prev, [id]: effectiveSessionId }));
 
-        if (!effectiveSessionId) setResults([]);
     };
 
     // ---------------------------------------------------
@@ -484,7 +482,6 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
                 } catch {
                     // ignore
                 }
-                setResults([]);
             }
         }
 

@@ -1,5 +1,17 @@
+export type VTableInspectorPayload =
+    | {
+          row: number;
+          col: string;
+          value: unknown;
+      }
+    | {
+          row: number;
+          rowData: Record<string, unknown>;
+      }
+    | null;
+
 export interface VTableProps {
-    results: { rowData: Record<string, any> }[];
+    results: { rowData: Record<string, unknown> }[];
     remoteSource?: VTableRemoteSource | null;
     rowHeight?: number;
     maxHeight?: number;
@@ -8,12 +20,12 @@ export interface VTableProps {
     storageKey?: string;
     colMinWidthMap?: Record<string, number>;
     colMaxWidthMap?: Record<string, number>;
-    onStatsChange: (stats: { filteredCount: number; }) => void;
+    onStatsChange: (stats: { filteredCount: number }) => void;
     inspectorTopOffset?: number;
     showSearchBar?: boolean;
     setInspectorOpen?: (open: boolean) => void;
     setInspectorMode?: (mode: 'cell' | 'row' | null) => void;
-    setInspectorPayload?: (payload: any) => void;
+    setInspectorPayload?: (payload: VTableInspectorPayload) => void;
     activeFilters?: ColumnFilter[];
     onUpsertFilter?: (filter: ColumnFilter) => void;
     onRemoveFilter?: (col: string) => void;
@@ -28,6 +40,7 @@ export interface VTableProps {
 
 export interface VTableRemoteSource {
     cacheKey: string;
+    sourceId?: string;
     rowCount: number;
     pageSize?: number;
     getRows: (offset: number, limit: number, signal?: AbortSignal) => Promise<{ rowData: Record<string, unknown> }[]>;
@@ -47,7 +60,7 @@ export interface ColumnFilter {
     col: string;
     kind: 'string' | 'number' | 'range';
     op: StrOp | NumOp | 'range';
-    value?: string; 
+    value?: string;
     valueTo?: string;
     rangeValueType?: 'number' | 'date';
     label?: string;

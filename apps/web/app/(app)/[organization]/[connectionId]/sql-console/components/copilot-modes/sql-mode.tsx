@@ -30,7 +30,12 @@ import { executeActionClient } from '@/lib/actions/client';
 import { AuthLinkSheet } from '@/components/auth/auth-link-sheet';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { useTranslations } from 'next-intl';
-import { normalizeSqlEditorSettings, SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE, SQL_EDITOR_QUERY_LIMIT_OPTIONS, sqlEditorSettingsAtom } from '@/shared/stores/sql-editor-settings.store';
+import {
+    normalizeSqlEditorSettings,
+    SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE,
+    SQL_EDITOR_QUERY_LIMIT_OPTIONS,
+    sqlEditorSettingsAtom,
+} from '@/shared/stores/sql-editor-settings.store';
 import { activeDatabaseAtom, activeSchemaAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import type { SavedQueryItem } from '../saved-queries/saved-queries-sidebar';
 import { createCopilotSQLContextEnvelope } from '../../../chatbot/copilot/copilot-envelope';
@@ -493,7 +498,10 @@ export function SqlMode({
                                                     {runLabelWithLimit}
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuRadioGroup value={queryLimit === null ? SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE : String(queryLimit)} onValueChange={handleLimitChange}>
+                                                <DropdownMenuRadioGroup
+                                                    value={queryLimit === null ? SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE : String(queryLimit)}
+                                                    onValueChange={handleLimitChange}
+                                                >
                                                     <DropdownMenuRadioItem value={SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE}>No limit</DropdownMenuRadioItem>
                                                     {SQL_EDITOR_QUERY_LIMIT_OPTIONS.map(option => (
                                                         <DropdownMenuRadioItem key={option} value={String(option)}>
@@ -567,7 +575,7 @@ export function SqlMode({
 
                             <Panel id="result-panel" minSize={`${MIN_RESULT_PANEL_SIZE}%`} className="min-h-0">
                                 <div className="flex h-full flex-col min-h-0">
-                                    <ResultTable />
+                                    <ResultTable tabId={activeTabId} />
                                 </div>
                             </Panel>
                         </Group>

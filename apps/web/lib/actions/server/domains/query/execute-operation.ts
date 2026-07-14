@@ -57,11 +57,6 @@ export type QueryExecutionStreamEvent =
 
 type QueryExecutionEventSink = (event: QueryExecutionStreamEvent) => Promise<void> | void;
 
-function useLegacyPgliteResultStorage() {
-    const value = process.env.DORY_SQL_CONSOLE_RESULT_STORAGE?.trim().toLowerCase() || process.env.DORY_SQL_RESULTSET_STORAGE?.trim().toLowerCase();
-    return value === 'pglite' || value === 'legacy';
-}
-
 function preciseDateNow(): Date {
     return new Date(performance.timeOrigin + performance.now());
 }
@@ -144,7 +139,6 @@ function buildPayload(input: {
     queryResultSets: Array<Record<string, unknown>>;
     results: unknown[][];
     refId: string;
-    resultStorage: 'artifact' | 'pglite';
 }) {
     return {
         session: {
@@ -170,8 +164,8 @@ function buildPayload(input: {
             durationMs: input.durationMs ?? 0,
             totalSets: input.resultSetCount,
             stopOnError: input.stopOnError,
-            resultStorage: input.resultStorage,
-            previewRows: input.resultStorage === 'artifact' ? DEFAULT_RESULT_PREVIEW_ROWS : null,
+            resultStorage: 'artifact',
+            previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
         },
     };
 }
@@ -440,9 +434,6 @@ async function runSqlExecution(
             const results: unknown[][] = [];
             let hitError = false;
             let firstErrorMsg: string | null = null;
-            const persistArtifacts = !useLegacyPgliteResultStorage();
-            const resultStorage = persistArtifacts ? 'artifact' : 'pglite';
-
             await options?.onEvent?.({
                 type: 'session-started',
                 payload: buildPayload({
@@ -460,7 +451,6 @@ async function runSqlExecution(
                     queryResultSets: [],
                     results: [],
                     refId,
-                    resultStorage,
                 }),
             });
 
@@ -470,7 +460,7 @@ async function runSqlExecution(
                 }
 
                 const statement = statements[i]!;
-                const useStreaming = persistArtifacts && supportsStreamingResultSets(entry.instance) && isStreamableResultStatement(statement);
+                const useStreaming = supportsStreamingResultSets(entry.instance) && isStreamableResultStatement(statement);
 
                 await options?.onEvent?.({
                     type: 'result-started',
@@ -489,7 +479,6 @@ async function runSqlExecution(
                         queryResultSets: queryResultSets.slice(),
                         results: results.slice(),
                         refId,
-                        resultStorage,
                     }),
                 });
 
@@ -502,97 +491,93 @@ async function runSqlExecution(
                     ...execOne.qrs,
                 };
 
-                if (persistArtifacts) {
-                    const stream = (execOne as { resultStream?: DriverQueryRowStream }).resultStream;
-                    let rowsForPersist = stream?.rows;
-                    const streamResultSetId = stream ? `rs_${newEntityId()}` : null;
-                    const streamQueryRunId = stream ? `qr_${newEntityId()}` : null;
-                    if (stream && options?.onEvent) {
-                        let observedRows = 0;
-                        let lastProgressAt = 0;
+                const stream = (execOne as { resultStream?: DriverQueryRowStream }).resultStream;
+                let rowsForPersist = stream?.rows;
+                const streamResultSetId = stream ? `rs_${newEntityId()}` : null;
+                const streamQueryRunId = stream ? `qr_${newEntityId()}` : null;
+                if (stream && options?.onEvent) {
+                    let observedRows = 0;
+                    let lastProgressAt = 0;
 
-                        rowsForPersist = (async function* () {
-                            try {
-                                for await (const row of stream.rows) {
-                                    if (options.signal?.aborted) {
-                                        throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
-                                    }
-                                    observedRows += 1;
-                                    const now = performance.now();
-                                    if (observedRows > 0 && now - lastProgressAt > 500) {
-                                        lastProgressAt = now;
-                                        await options.onEvent?.({
-                                            type: 'result-progress',
-                                            payload: {
-                                                sessionId,
-                                                setIndex: i,
-                                                rowsWritten: observedRows,
-                                                previewRowCount: 0,
-                                                elapsedMs: Math.max(0, Math.round(now - sessT0)),
-                                            },
-                                        });
-                                    }
-                                    yield row;
+                    rowsForPersist = (async function* () {
+                        try {
+                            for await (const row of stream.rows) {
+                                if (options.signal?.aborted) {
+                                    throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
                                 }
-                            } finally {
-                                await stream.close?.();
+                                observedRows += 1;
+                                const now = performance.now();
+                                if (observedRows > 0 && now - lastProgressAt > 500) {
+                                    lastProgressAt = now;
+                                    await options.onEvent?.({
+                                        type: 'result-progress',
+                                        payload: {
+                                            sessionId,
+                                            setIndex: i,
+                                            rowsWritten: observedRows,
+                                            previewRowCount: 0,
+                                            elapsedMs: Math.max(0, Math.round(now - sessT0)),
+                                        },
+                                    });
+                                }
+                                yield row;
                             }
-                        })();
-                    }
-                    const persisted = stream
-                        ? await ctx.services.db.resultSets.persistQueryResultSetStream({
-                              organizationId: ctx.organizationId,
-                              userId: ctx.userId,
-                              connectionId,
-                              tabId: input.tabId ?? null,
-                              sessionId,
-                              database: input.database ?? null,
-                              sessionSqlText: input.sql,
-                              source: input.source ?? null,
-                              resultSet: qrs as PersistableResultSet,
-                              rows: rowsForPersist ?? stream.rows,
-                              columns: toResultSetColumns(stream.columns),
-                              rowCount: stream.rowCount ?? null,
-                              resultSetId: streamResultSetId,
-                              queryRunId: streamQueryRunId,
-                              previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
-                          })
-                        : await ctx.services.db.resultSets.persistQueryResultSet({
-                              organizationId: ctx.organizationId,
-                              userId: ctx.userId,
-                              connectionId,
-                              tabId: input.tabId ?? null,
-                              sessionId,
-                              database: input.database ?? null,
-                              sessionSqlText: input.sql,
-                              source: input.source ?? null,
-                              resultSet: qrs as PersistableResultSet,
-                              rows: (execOne as { resultRows: unknown[] }).resultRows,
-                              previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
-                          });
+                        } finally {
+                            await stream.close?.();
+                        }
+                    })();
+                }
+                const persisted = stream
+                    ? await ctx.services.db.resultSets.persistQueryResultSetStream({
+                          organizationId: ctx.organizationId,
+                          userId: ctx.userId,
+                          connectionId,
+                          tabId: input.tabId ?? null,
+                          sessionId,
+                          database: input.database ?? null,
+                          sessionSqlText: input.sql,
+                          source: input.source ?? null,
+                          resultSet: qrs as PersistableResultSet,
+                          rows: rowsForPersist ?? stream.rows,
+                          columns: toResultSetColumns(stream.columns),
+                          rowCount: stream.rowCount ?? null,
+                          resultSetId: streamResultSetId,
+                          queryRunId: streamQueryRunId,
+                          previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
+                      })
+                    : await ctx.services.db.resultSets.persistQueryResultSet({
+                          organizationId: ctx.organizationId,
+                          userId: ctx.userId,
+                          connectionId,
+                          tabId: input.tabId ?? null,
+                          sessionId,
+                          database: input.database ?? null,
+                          sessionSqlText: input.sql,
+                          source: input.source ?? null,
+                          resultSet: qrs as PersistableResultSet,
+                          rows: (execOne as { resultRows: unknown[] }).resultRows,
+                          previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
+                      });
 
+                qrs = {
+                    ...qrs,
+                    resultSetId: persisted.resultSetId,
+                    dataAvailability: persisted.dataAvailability,
+                    previewRowCount: persisted.previewRowCount,
+                    rowCount: persisted.rowCount,
+                    columns: persisted.schema,
+                };
+                if (stream) {
+                    const finishedAt = preciseDateNow();
+                    const startedAt = qrs.startedAt instanceof Date ? qrs.startedAt : null;
                     qrs = {
                         ...qrs,
-                        resultSetId: persisted.resultSetId,
-                        dataAvailability: persisted.dataAvailability,
-                        previewRowCount: persisted.previewRowCount,
-                        rowCount: persisted.rowCount,
-                        columns: persisted.schema,
+                        finishedAt,
+                        durationMs: startedAt ? Math.max(0, Math.round(finishedAt.getTime() - startedAt.getTime())) : qrs.durationMs,
+                        limited: typeof stream.limit === 'number' ? persisted.rowCount >= stream.limit : qrs.limited,
                     };
-                    if (stream) {
-                        const finishedAt = preciseDateNow();
-                        const startedAt = qrs.startedAt instanceof Date ? qrs.startedAt : null;
-                        qrs = {
-                            ...qrs,
-                            finishedAt,
-                            durationMs: startedAt ? Math.max(0, Math.round(finishedAt.getTime() - startedAt.getTime())) : qrs.durationMs,
-                            limited: typeof stream.limit === 'number' ? persisted.rowCount >= stream.limit : qrs.limited,
-                        };
-                    }
-                    results.push(persisted.previewRows);
-                } else {
-                    results.push((execOne as { resultRows: unknown[] }).resultRows);
                 }
+                results.push(persisted.previewRows);
 
                 queryResultSets.push(qrs);
 
@@ -613,7 +598,6 @@ async function runSqlExecution(
                         queryResultSets: queryResultSets.slice(),
                         results: results.slice(),
                         refId,
-                        resultStorage,
                     }),
                 });
 
@@ -647,7 +631,6 @@ async function runSqlExecution(
                 queryResultSets,
                 results,
                 refId,
-                resultStorage,
             });
             await options?.onEvent?.({ type: 'session-finished', payload });
             return payload;

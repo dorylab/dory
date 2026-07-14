@@ -5,8 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useAtomValue, useSetAtom } from 'jotai';
 
 import { authFetch } from '@/lib/client/auth-fetch';
-import type { ResultSetStatsV1, ResultSetViewState } from '@/lib/client/type';
-import { useDB } from '@/lib/client/use-pglite';
+import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
@@ -42,8 +41,8 @@ type WorkSnapshotResponse = {
                     sqlOp?: string | null;
                     title?: string | null;
                     columns?: unknown | null;
-                    stats?: ResultSetStatsV1 | null;
-                    viewState?: ResultSetViewState | null;
+                    stats?: unknown | null;
+                    viewState?: unknown | null;
                     aiProfileVersion?: number | null;
                     rowCount?: number | null;
                     limited?: boolean | null;
@@ -86,7 +85,6 @@ export function useWorkHydration({
     const requestedSessionId = searchParams.get('sessionId');
     const activeTabId = useAtomValue(activeTabIdAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
-    const { dbReady, applyServerResult } = useDB();
     const hydratedWorkRef = useRef<string | null>(null);
     const activatedWorkRef = useRef<string | null>(null);
     const snapshotRef = useRef<WorkSnapshot | null>(null);
@@ -135,7 +133,7 @@ export function useWorkHydration({
     );
 
     useEffect(() => {
-        if (!workId || !dbReady || isLoading || hydratedWorkRef.current === workId) return;
+        if (!workId || isLoading || hydratedWorkRef.current === workId) return;
 
         const activeWorkId = workId;
         let cancelled = false;
@@ -151,18 +149,11 @@ export function useWorkHydration({
             const snapshot = payload.data?.snapshot;
             if (!snapshot || cancelled) return;
 
-            for (const item of snapshot.sessions ?? []) {
-                await applyServerResult({
-                    session: item.session,
-                    queryResultSets: item.queryResultSets,
-                    results: item.results,
-                });
-            }
-
             if (cancelled) return;
 
             snapshotRef.current = snapshot;
             setSnapshotRevision(revision => revision + 1);
+            notifySqlConsoleResultDataUpdated();
         }
 
         hydrate().catch(error => {
@@ -174,7 +165,7 @@ export function useWorkHydration({
         return () => {
             cancelled = true;
         };
-    }, [applyServerResult, dbReady, isLoading, workId]);
+    }, [isLoading, workId]);
 
     useEffect(() => {
         if (!workId || hydratedWorkRef.current !== workId) return;

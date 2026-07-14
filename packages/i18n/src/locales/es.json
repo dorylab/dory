@@ -2029,7 +2029,9 @@
             "Search": {
                 "FilteredTotalAria": "Filtrado / Total",
                 "Placeholder": "Buscar (Ctrl/Cmd+F para enfocar)",
-                "ClearAria": "Limpiar búsqueda"
+                "ClearAria": "Limpiar búsqueda",
+                "Submit": "Buscar",
+                "SubmitAria": "Buscar resultados"
             },
             "Inspector": {
                 "ResizeTitle": "Arrastra para cambiar el tamaño",
@@ -2338,13 +2340,6 @@
             "InvalidRequest": "Invalid request",
             "InvalidConnection": "Fuente de datos no válida",
             "RequestFailed": "Request failed"
-        },
-        "Pglite": {
-            "DbNotInitialized": "Database not initialized",
-            "UserNotInitialized": "User not initialized",
-            "BrowserOnly": "PGlite only runs in browser",
-            "InvalidInstance": "Invalid PGlite drizzle instance: missing dialect.migrate or session",
-            "MigrationFailed": "[PGlite migrate] Migration failed. The old database will be discarded and a new version will be created."
         }
     },
     "Api": {

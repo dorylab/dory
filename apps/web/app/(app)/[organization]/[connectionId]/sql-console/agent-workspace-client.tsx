@@ -38,9 +38,9 @@ import type { SQLEditorHandle } from './components/sql-editor';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
-import { useDB } from '@/lib/client/use-pglite';
+import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
-import { buildQueryHistoryResultRestorePayload } from './query-history-result-restore';
+import { clearQueryHistoryRestoredSession, getQueryHistoryRestorableSessionId, markQueryHistoryRestoredSession } from './query-history-result-restore';
 import { AgentRunWorkspacePanel } from './agent-run-workspace-panel';
 
 const INITIAL_LAYOUT = {
@@ -281,7 +281,6 @@ export default function AgentWorkspaceClient({
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const setInlineAskByTab = useSetAtom(inlineSqlAskByTabAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
-    const { dbReady, applyServerResult } = useDB();
     const [agentRunPanelOpen, setAgentRunPanelOpen] = useState(true);
     const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot && !agentRunPanelOpen : false;
     const normalizedChatWidth = useMemo(
@@ -707,12 +706,8 @@ export default function AgentWorkspaceClient({
     const restoreQueryHistoryResult = useCallback(
         async (item: SavedQueryItem, tabId: string | null) => {
             if (!tabId) return;
-            const payload = buildQueryHistoryResultRestorePayload({
-                item,
-                tabId,
-                connectionId: connectionId ?? currentConnection?.connection?.id ?? null,
-            });
-            if (!payload) {
+            const sessionId = getQueryHistoryRestorableSessionId(item);
+            if (!sessionId) {
                 setSessionIdMap(prev => {
                     if (!prev[tabId]) return prev;
                     const next = { ...prev };
@@ -721,23 +716,24 @@ export default function AgentWorkspaceClient({
                 });
                 try {
                     localStorage.removeItem(getSessionStorageKey(tabId, activeWorkspaceScope));
+                    clearQueryHistoryRestoredSession(tabId);
                 } catch {
                     // ignore
                 }
+                notifySqlConsoleResultDataUpdated();
                 return;
             }
 
-            if (!dbReady) return;
-
-            await applyServerResult(payload);
-            setSessionIdMap(prev => ({ ...prev, [tabId]: payload.session.sessionId }));
+            setSessionIdMap(prev => ({ ...prev, [tabId]: sessionId }));
             try {
-                localStorage.setItem(getSessionStorageKey(tabId, activeWorkspaceScope), payload.session.sessionId);
+                localStorage.setItem(getSessionStorageKey(tabId, activeWorkspaceScope), sessionId);
+                markQueryHistoryRestoredSession(tabId, sessionId);
             } catch {
                 // ignore
             }
+            notifySqlConsoleResultDataUpdated();
         },
-        [activeWorkspaceScope, applyServerResult, connectionId, currentConnection?.connection?.id, dbReady, setSessionIdMap],
+        [activeWorkspaceScope, setSessionIdMap],
     );
 
     const handleSavedQuerySelect = useCallback(

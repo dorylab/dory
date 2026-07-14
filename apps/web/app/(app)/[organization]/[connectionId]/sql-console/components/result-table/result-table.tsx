@@ -6,41 +6,73 @@ import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
 import VTable from './vtable';
 import { InspectorPanel } from './vtable/InspectorPanel';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
-import { activeSessionIdAtom, localDataLoadingAtom, runningTabsAtom } from '../../sql-console.store';
+import { runningTabsAtom, sessionIdByTabAtom } from '../../sql-console.store';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useCsvDownload } from './hooks/use-csv-download';
-import { useDB } from '@/lib/client/use-pglite';
+import { useSqlConsoleResultStore } from '@/lib/client/sql-console-result-store';
 import { MetaState } from '@dory/shared/types/sql-console';
 import { Toolbar } from './Toolbar';
 import type { ExecMeta } from './Toolbar';
-import { makeCacheKey, hydrateFromCache, touchCache, RESULTS_CACHE } from './hooks/useResultsCache';
 import { OverviewItem, ResultRow } from './types';
-import { useSessionMeta } from './hooks/useSessionMeta';
-import { debugModeAtom, uiRowBudgetAtom } from './stores/prefs.atoms';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { OverviewTable } from './OverviewTable';
 import { currentSessionMetaAtom } from './stores/result-table.atoms';
 import { chartStatesByKeyAtom, viewModesByTabAtom } from './components/charts/stores/chart-state.atoms';
 import { ResultStatusBar } from './ResultStatusBar';
-import { DebugPanel, DebugPayload } from './components/DebugPanel';
 import { makeSetUserPickedAtom, makeActiveSetAtom, makeAutoSetActiveSetAtom, makeSetActiveSetAtom, makeUserPickedAtom } from './stores/active-set.atoms';
 import { useAutoJumpToLastResult } from './hooks/useAutoJumpToLastResult';
 import { SQLErrorAlert } from './components/SQLErrorAlert';
 import { VTableSearchBar } from './components/TableSearchBar';
 import { Charts } from './components/charts';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useVTableFilters, VTableFilters } from './vtable/VTableFilters';
 import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import type { ColumnFilter } from './vtable/type';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
-import type { ResultSetViewState } from '@/lib/client/type';
+import type { ResultSetMeta, ResultSetViewState } from '@/lib/client/type';
+import { isQueryHistoryRestoredSession } from '../../query-history-result-restore';
 /* =================================== constants =================================== */
 
-const MAX_ROWS_HINT = 5_000_000; // UI hint only
 const OVERVIEW_SET = -1;
 type ResultViewMode = 'table' | 'charts';
+type ResultSessionStatus = 'running' | 'success' | 'error' | 'canceled';
+type ResultSetSummaryMeta = {
+    sessionId: string;
+    setIndex: number;
+    sqlText: string;
+    status: ResultSessionStatus;
+    startedAt?: number | null;
+    finishedAt?: number | null;
+    durationMs?: number | null;
+    rowCount?: number | null;
+    affectedRows?: number | null;
+    errorMessage?: string | null;
+    limited?: boolean;
+    limit?: number | null;
+};
+type CurrentSessionMeta = ResultSetMeta | { columns: never[] };
+type SessionUiSnapshot = {
+    indices?: number[];
+    setsMeta?: ResultSetSummaryMeta[];
+    sessionMetaBySet?: Record<number, CurrentSessionMeta>;
+    meta?: MetaState;
+    sessionStatus?: ResultSessionStatus | null;
+};
+type ResultTableProps = {
+    tabId?: string;
+};
+type InspectorPayload =
+    | {
+          row: number;
+          col: string;
+          value: unknown;
+      }
+    | {
+          row: number;
+          rowData: Record<string, unknown>;
+      }
+    | null;
 
 function serializeViewFilters(filters: ColumnFilter[]): NonNullable<ResultSetViewState['filters']> {
     return filters.map(filter => ({
@@ -87,7 +119,7 @@ function deserializeViewFilters(filters: ResultSetViewState['filters']): ColumnF
         return {
             col: String(filter.column),
             kind: isNumeric ? 'number' : 'string',
-            op: filter.op as any,
+            op: filter.op as ColumnFilter['op'],
             value: rawValue == null ? undefined : String(rawValue),
             caseSensitive: scalar?.caseSensitive === true,
         };
@@ -103,35 +135,35 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 
 /* =================================== component =================================== */
 
-export function ResultTable() {
+export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const t = useTranslations('SqlConsole');
-    const locale = useLocale();
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
     const [currentViewMode, setCurrentViewMode] = useState<ResultViewMode>('table');
     const [inspectorOpen, setInspectorOpen] = useState(false);
     const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
-    const [inspectorPayload, setInspectorPayload] = useState<any>(null);
+    const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
     const [meta, setMeta] = useState<MetaState>({});
     const [sessionMetas, setSessionMetas] = useAtom(currentSessionMetaAtom);
 
-    const [debugMode, setDebugMode] = useAtom(debugModeAtom);
-    const [uiRowBudget, setUiRowBudget] = useAtom(uiRowBudgetAtom);
     const runningTabs = useAtomValue(runningTabsAtom);
 
     // Atoms
-    const tabId = useAtomValue(activeTabIdAtom);
-    const sessionIdFromAtom = useAtomValue(activeSessionIdAtom);
+    const activeTabId = useAtomValue(activeTabIdAtom);
+    const tabId = tabIdProp ?? activeTabId;
+    const sessionIdByTab = useAtomValue(sessionIdByTabAtom);
+    const sessionIdFromAtom = tabId ? sessionIdByTab[tabId] : undefined;
     const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
-    const sessionId = sessionIdFromAtom || (typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
+    const sessionId = sessionIdFromAtom || (tabId && typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
 
-    const { dbReady, listResultSetIndices, listResultSetsMeta, getResultRows, readResultSetRows, exportResultSet, readResultSetChart, clearResults, dataVersion, getSession, updateResultSetViewState } =
-        useDB();
+    const { dbReady, listResultSetIndices, listResultSetsMeta, readResultSetRows, exportResultSet, readResultSetChart, dataVersion, getSession, updateResultSetViewState } =
+        useSqlConsoleResultStore();
 
     // Session status
     const [sessionStatus, setSessionStatus] = useState<'running' | 'success' | 'error' | 'canceled' | null>(null);
     const lastSessionRef = useRef<string | null>(null);
+    const sessionUiCacheRef = useRef<Record<string, SessionUiSnapshot>>({});
 
     const [indices, setIndices] = useState<number[]>([]);
     const prevStatusRef = useRef<'running' | 'success' | 'error' | 'canceled' | null | undefined>(null);
@@ -158,37 +190,21 @@ export function ResultTable() {
         getCurrentActiveSet: () => (typeof activeSet === 'number' ? activeSet : undefined),
     });
 
-    // Rows / Loading
-    const firstChunkArrivedRef = useRef(false);
-
-    // Accumulator + one-frame flush
-    const rafRef = useRef<number | null>(null);
-    const fetchControllerRef = useRef<AbortController | null>(null);
-
     const lastTabIdRef = useRef<string | null>(null);
 
-    // Rows / Loading
     const [results, setResults] = useState<ResultRow[]>([]);
-    const [localDataLoading, setLocalDataLoading] = useAtom(localDataLoadingAtom);
-
-    // Accumulator + one-frame flush
-    const resultsRef = useRef<ResultRow[]>([]);
-
-    useSessionMeta({ dbReady, tabId, sessionId, activeSet, dataVersion, getSession, setMeta, sessionStatus });
 
     const storageKey = useMemo(() => (tabId && sessionId ? `${tabId}:${sessionId}#${activeSet}` : 'unknown'), [tabId, sessionId, activeSet]);
     const viewModeKey = useMemo(() => (tabId && activeSet >= 0 ? `tab:${tabId}:set:${activeSet}` : 'unknown'), [activeSet, tabId]);
 
     const noSessionId = !sessionId;
-    const showLocalLoading = localDataLoading[tabId] && !firstChunkArrivedRef.current;
     const isResult = activeSet >= 0;
 
     const limited = !!sessionMetas?.limited;
-    const limitText = typeof sessionMetas?.limit === 'number' ? sessionMetas.limit.toLocaleString() : null;
     const shouldShowLimitNotice = isResult && limited;
     const expectedRowCount = typeof sessionMetas?.rowCount === 'number' ? sessionMetas.rowCount : null;
     const remoteResultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
-    const isRemoteFullResult = Boolean(remoteResultSetId && sessionMetas?.dataAvailability === 'full');
+    const isRemoteFullResult = Boolean(remoteResultSetId);
     const remoteRowCount = expectedRowCount ?? 0;
 
     const [query, setQuery] = useState('');
@@ -201,7 +217,7 @@ export function ResultTable() {
     const [chartSnapshotsBySet, setChartSnapshotsBySet] = useState<Record<number, { rows: Array<{ rowData: Record<string, unknown> }>; columnsRaw?: unknown }>>({});
     const [remoteEffectiveRowCount, setRemoteEffectiveRowCount] = useState<number | null>(null);
     const rowCount = isRemoteFullResult ? (remoteEffectiveRowCount ?? remoteRowCount) : results.length;
-    const showEmpty = !localDataLoading[tabId] && (isRemoteFullResult ? rowCount === 0 : results.length === 0);
+    const showEmpty = isRemoteFullResult ? rowCount === 0 : results.length === 0;
 
     useEffect(() => {
         const savedViewMode = viewModesByKey[viewModeKey];
@@ -229,43 +245,25 @@ export function ResultTable() {
 
     const setUserPickedFalse = useSetAtom(useMemo(() => makeSetUserPickedAtom(tabId, sessionId), [tabId, sessionId]));
 
-    const debugPayload: DebugPayload = {
-        tabId,
-        sessionId: sessionId ?? undefined,
-        activeSet,
-        rowCount,
-        sessionStatus,
-        storageKey,
-        meta: {
-            truncated: !!meta.truncated,
-            durationMs: meta.durationMs,
-            startedAt: meta.startedAt,
-            finishedAt: meta.finishedAt,
-            fromCache: meta.fromCache,
-            scannedRows: meta.scannedRows,
-            scannedBytes: meta.scannedBytes,
-            source: meta.source,
-            syncing: !!meta.syncing,
-            uiRowBudget,
-        },
-    };
+    const [setsMeta, setSetsMeta] = useState<ResultSetSummaryMeta[]>([]);
 
-    const [setsMeta, setSetsMeta] = useState<
-        Array<{
-            sessionId: string;
-            setIndex: number;
-            sqlText: string;
-            status: 'success' | 'error';
-            startedAt?: number | null;
-            finishedAt?: number | null;
-            durationMs?: number | null;
-            rowCount?: number | null;
-            affectedRows?: number | null;
-            errorMessage?: string | null;
-            limited?: boolean;
-            limit?: number | null;
-        }>
-    >([]);
+    const cacheSessionUi = useCallback((cacheSessionId: string, snapshot: Partial<SessionUiSnapshot>) => {
+        sessionUiCacheRef.current[cacheSessionId] = {
+            ...(sessionUiCacheRef.current[cacheSessionId] ?? {}),
+            ...snapshot,
+        };
+    }, []);
+
+    const cacheSessionMeta = useCallback((cacheSessionId: string, setIndex: number, sessionMeta: CurrentSessionMeta) => {
+        const previous = sessionUiCacheRef.current[cacheSessionId] ?? {};
+        sessionUiCacheRef.current[cacheSessionId] = {
+            ...previous,
+            sessionMetaBySet: {
+                ...(previous.sessionMetaBySet ?? {}),
+                [setIndex]: sessionMeta,
+            },
+        };
+    }, []);
 
     useEffect(() => {
         const prev = prevStatusRef.current;
@@ -287,6 +285,7 @@ export function ResultTable() {
             const metas = await listResultSetsMeta(sessionId);
             const currentSessionMeta = metas?.find(m => m.sessionId === sessionId && m.setIndex === activeSet) ?? { columns: [] };
             if (!canceled) {
+                cacheSessionMeta(sessionId, activeSet, currentSessionMeta);
                 setSessionMetas(currentSessionMeta);
             }
         })();
@@ -294,7 +293,7 @@ export function ResultTable() {
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, activeSet]);
+    }, [dbReady, sessionId, dataVersion, activeSet, cacheSessionMeta, listResultSetsMeta, setSessionMetas]);
 
     const filteredResults = useMemo(() => {
         if (isRemoteFullResult) return [];
@@ -305,7 +304,7 @@ export function ResultTable() {
         return results.filter(row => {
             if (hasGlobal) {
                 let hit = false;
-                for (const c of sessionMetas.columns.map((x: any) => x.name)) {
+                for (const c of sessionMetas.columns.map((x: { name?: string }) => x.name)) {
                     const v = row.rowData?.[c];
                     const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
                     if (s.toLowerCase().includes(gq)) {
@@ -331,6 +330,7 @@ export function ResultTable() {
         storageKey,
         disableStorage: true,
     });
+    const hasActiveResultOperations = query.trim().length > 0 || activeFilters.length > 0;
 
     const remoteOperations = useMemo(
         () => ({
@@ -350,6 +350,7 @@ export function ResultTable() {
         if (!remoteResultSetId || !isRemoteFullResult || remoteRowCount <= 0) return null;
         return {
             cacheKey: `${remoteResultSetId}:${remoteOperationKey}`,
+            sourceId: remoteResultSetId,
             rowCount: remoteEffectiveRowCount ?? remoteRowCount,
             pageSize: 5000,
             getRows: async (offset: number, limit: number, signal?: AbortSignal) => {
@@ -410,9 +411,6 @@ export function ResultTable() {
         if (activeSet < 0) {
             return;
         }
-        if (localDataLoading[tabId]) {
-            return;
-        }
         if (isRemoteFullResult) {
             return;
         }
@@ -424,7 +422,7 @@ export function ResultTable() {
                 columnsRaw: sessionMetas.columns,
             },
         }));
-    }, [activeSet, columnFilteredResults, isRemoteFullResult, localDataLoading, sessionMetas.columns, tabId]);
+    }, [activeSet, columnFilteredResults, isRemoteFullResult, sessionMetas.columns]);
 
     useEffect(() => {
         if (!sessionId || activeSet < 0) {
@@ -460,6 +458,8 @@ export function ResultTable() {
         }),
         [columnFilteredResults.length, isRemoteFullResult, remoteRowCount, results.length, rowCount],
     );
+    const shouldShowWholeResultEmpty = showEmpty && !hasActiveResultOperations;
+    const shouldShowFilteredEmpty = showEmpty && hasActiveResultOperations;
 
     const onStatsChange = useCallback(() => {}, []);
     const handleSelectedRowIndexesChange = useCallback((next: number[]) => {
@@ -476,16 +476,7 @@ export function ResultTable() {
         if (!tabId) return;
         if (lastTabIdRef.current !== tabId) {
             lastTabIdRef.current = tabId;
-
-            resultsRef.current = [];
-            setResults([]);
-            setIndices([]);
-            firstChunkArrivedRef.current = false;
-            setSessionStatus(null);
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-            fetchControllerRef.current?.abort();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tabId]);
 
     /* ---------- Refresh result-set indices (0..n-1) ---------- */
@@ -497,6 +488,7 @@ export function ResultTable() {
                 const arr = await listResultSetIndices(sessionId);
                 if (canceled) return;
                 const next = Array.isArray(arr) ? Array.from(new Set(arr.filter(n => Number.isFinite(n) && n >= 0))).sort((a, b) => a - b) : [];
+                cacheSessionUi(sessionId, { indices: next });
                 setIndices(next);
 
                 if (activeSet >= 0 && !next.includes(activeSet)) {
@@ -508,7 +500,7 @@ export function ResultTable() {
             canceled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dbReady, sessionId, dataVersion]);
+    }, [dbReady, sessionId, dataVersion, cacheSessionUi]);
 
     /* ---------- Pull session status ---------- */
     useEffect(() => {
@@ -520,223 +512,82 @@ export function ResultTable() {
             }
             const sess = await getSession(sessionId);
             if (!canceled) {
-                setSessionStatus((sess?.status as any) ?? null);
+                const nextStatus = sess?.status === 'running' || sess?.status === 'success' || sess?.status === 'error' || sess?.status === 'canceled' ? sess.status : null;
+                cacheSessionUi(sessionId, { sessionStatus: nextStatus });
+                setSessionStatus(nextStatus);
             }
         })();
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, getSession]);
+    }, [dbReady, sessionId, dataVersion, getSession, cacheSessionUi]);
 
     /* ---------- Reset on session change ---------- */
     useEffect(() => {
         if (!sessionId) {
             lastSessionRef.current = null;
-            resultsRef.current = [];
             setResults([]);
             setIndices([]);
             setSetsMeta([]);
             setMeta({});
             setSessionStatus(null);
-            firstChunkArrivedRef.current = false;
-            fetchControllerRef.current?.abort();
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
             return;
         }
         if (lastSessionRef.current !== sessionId) {
             lastSessionRef.current = sessionId;
 
-            resultsRef.current = [];
             setResults([]);
-            firstChunkArrivedRef.current = false;
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: true }));
-            setIndices([]);
+            setRemoteEffectiveRowCount(null);
 
-            fetchControllerRef.current?.abort();
-        }
-    }, [sessionId, tabId, setLocalDataLoading]);
-
-    /* ---------- Enforce budget immediately when lowered ---------- */
-    useEffect(() => {
-        if (!tabId || !sessionId) return;
-        if (activeSet < 0) return;
-        if (isRemoteFullResult) return;
-        const key = makeCacheKey(tabId, sessionId, activeSet);
-        if (resultsRef.current.length > uiRowBudget) {
-            resultsRef.current = resultsRef.current.slice(0, uiRowBudget);
-            setResults(resultsRef.current.slice());
-            setMeta(prev => ({ ...prev, truncated: true }));
-            fetchControllerRef.current?.abort();
-            if (key) {
-                touchCache(key, {
-                    results: resultsRef.current,
-                    meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), truncated: true },
-                    dataVersion,
-                    fullyLoaded: true,
-                });
+            const cached = sessionUiCacheRef.current[sessionId];
+            if (cached) {
+                setIndices(cached.indices ?? []);
+                setSetsMeta(cached.setsMeta ?? []);
+                setSessionMetas(cached.sessionMetaBySet?.[activeSet] ?? { columns: [] });
+                setMeta(cached.meta ?? {});
+                setSessionStatus(cached.sessionStatus ?? null);
+                return;
             }
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
+
+            setIndices([]);
+            setSetsMeta([]);
+            setSessionMetas({});
+            setMeta({});
+            setSessionStatus(null);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [uiRowBudget, isRemoteFullResult]);
+    }, [activeSet, sessionId, setSessionMetas]);
 
     useEffect(() => {
-        if (!sessionId) {
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
+        if (!sessionId || activeSet < 0) {
             return;
         }
 
-        if (!dbReady || !tabId) {
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: true }));
+        const cachedSessionMeta = sessionUiCacheRef.current[sessionId]?.sessionMetaBySet?.[activeSet];
+        if (cachedSessionMeta) {
+            setSessionMetas(cachedSessionMeta);
+        }
+    }, [activeSet, sessionId, setSessionMetas]);
+
+    useEffect(() => {
+        if (!sessionId || !tabId) {
+            setResults([]);
             return;
         }
 
         if (activeSet < 0) {
-            fetchControllerRef.current?.abort?.();
-            resultsRef.current = [];
             setResults([]);
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
             return;
         }
-
-        const key = makeCacheKey(tabId, sessionId, activeSet);
 
         if (isRemoteFullResult) {
-            fetchControllerRef.current?.abort();
-            resultsRef.current = [];
             setResults([]);
-            firstChunkArrivedRef.current = true;
-            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-            if (key) {
-                touchCache(key, {
-                    results: [],
-                    meta: RESULTS_CACHE.get(key)?.meta,
-                    sessionStatus,
-                    dataVersion,
-                    fullyLoaded: false,
-                });
-            }
             return;
         }
 
-        // Cache short-circuit. Metadata updates can bump surrounding state without changing rows.
-        if (key) {
-            const cached = RESULTS_CACHE.get(key);
-            const cacheMatchesCurrentData = cached?.dataVersion === dataVersion;
-            const emptyCacheMissingExpectedRows = expectedRowCount != null && expectedRowCount > 0 && (cached?.results?.length ?? 0) === 0;
-            if (cached?.fullyLoaded && cacheMatchesCurrentData && !emptyCacheMissingExpectedRows) {
-                hydrateFromCache(key, {
-                    setResults,
-                    resultsRef,
-                    setMeta,
-                    setSessionStatus: s => setSessionStatus(s ?? null),
-                    setLoading: s => setLocalDataLoading(prev => ({ ...prev, [tabId]: s })),
-                });
-                return;
-            }
-        }
-
-        // Start a new reader
-        fetchControllerRef.current?.abort();
-        const ac = new AbortController();
-        fetchControllerRef.current = ac;
-
-        resultsRef.current = [];
+        // Browser storage is no longer a result data source. Without a server resultSetId,
+        // the SQL text can remain selected but the result area must stay empty.
         setResults([]);
-        setLocalDataLoading(prev => ({ ...prev, [tabId]: true }));
-        firstChunkArrivedRef.current = false;
-
-        let disposed = false;
-
-        (async () => {
-            try {
-                await getResultRows(sessionId, activeSet, {
-                    signal: ac.signal,
-                    rowBudget: uiRowBudget,
-                    emitChunkRows: 1000,
-                    yieldUi: true,
-                    onChunk: chunk => {
-                        if (disposed || ac.signal.aborted) return;
-
-                        const remaining = uiRowBudget - resultsRef.current.length;
-                        if (remaining <= 0) {
-                            setMeta(prev => ({ ...prev, truncated: true }));
-                            if (key) {
-                                touchCache(key, {
-                                    results: resultsRef.current,
-                                    meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), truncated: true },
-                                    sessionStatus,
-                                    dataVersion,
-                                    fullyLoaded: true,
-                                });
-                            }
-                            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-                            ac.abort();
-                            return;
-                        }
-
-                        const slice = chunk.length > remaining ? (chunk.slice(0, remaining) as ResultRow[]) : (chunk as ResultRow[]);
-                        resultsRef.current.push(...slice);
-                        if (slice.length > 0) {
-                            firstChunkArrivedRef.current = true;
-                        }
-
-                        if (rafRef.current == null) {
-                            rafRef.current = requestAnimationFrame(() => {
-                                rafRef.current = null;
-                                setResults(resultsRef.current.slice());
-                            });
-                        }
-
-                        if (key) {
-                            touchCache(key, {
-                                results: resultsRef.current,
-                                meta: RESULTS_CACHE.get(key)?.meta,
-                                sessionStatus,
-                                dataVersion,
-                                fullyLoaded: false,
-                            });
-                        }
-
-                        if (slice.length < chunk.length) {
-                            setMeta(prev => ({ ...prev, truncated: true }));
-                            if (key) {
-                                touchCache(key, {
-                                    results: resultsRef.current,
-                                    meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), truncated: true },
-                                    sessionStatus,
-                                    dataVersion,
-                                    fullyLoaded: true,
-                                });
-                            }
-                            setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-                            ac.abort();
-                        }
-                    },
-                });
-            } finally {
-                if (!disposed && !ac.signal.aborted) {
-                    const loadedRows = resultsRef.current.length;
-                    const missingExpectedRows = expectedRowCount != null && expectedRowCount > loadedRows;
-                    setLocalDataLoading(prev => ({ ...prev, [tabId]: false }));
-                    if (key) {
-                        touchCache(key, {
-                            results: resultsRef.current,
-                            meta: RESULTS_CACHE.get(key)?.meta,
-                            sessionStatus,
-                            dataVersion,
-                            fullyLoaded: !missingExpectedRows,
-                        });
-                    }
-                }
-            }
-        })();
-
-        return () => {
-            disposed = true;
-            ac.abort();
-        };
-    }, [dbReady, tabId, sessionId, activeSet, getResultRows, dataVersion, uiRowBudget, expectedRowCount, isRemoteFullResult, sessionStatus]);
+    }, [tabId, sessionId, activeSet, dataVersion, isRemoteFullResult]);
 
     /* ---------- Hydrate session-level meta & keep cache in sync ---------- */
     useEffect(() => {
@@ -747,15 +598,15 @@ export function ResultTable() {
                 return;
             }
             try {
-                const sess: any = await getSession(sessionId);
+                const sess = await getSession(sessionId);
                 if (canceled) return;
 
-                const startedRaw = sess?.startedAt ?? sess?.started_at;
-                const finishedRaw = sess?.finishedAt ?? sess?.finished_at;
+                const startedRaw = sess?.startedAt;
+                const finishedRaw = sess?.finishedAt;
                 const startedAt = startedRaw ? new Date(startedRaw) : undefined;
                 const finishedAt = finishedRaw ? new Date(finishedRaw) : undefined;
 
-                const durationMs = sess?.durationMs ?? sess?.elapsed_ms ?? (startedAt && finishedAt ? finishedAt.getTime() - startedAt.getTime() : undefined);
+                const durationMs = sess?.durationMs ?? (startedAt && finishedAt ? finishedAt.getTime() - startedAt.getTime() : undefined);
 
                 setMeta(prev => {
                     const next = {
@@ -763,22 +614,10 @@ export function ResultTable() {
                         startedAt,
                         finishedAt,
                         durationMs,
-                        fromCache: sess?.fromCache ?? sess?.cache ?? sess?.cache_hit,
-                        source: sess?.source ?? sess?.engine ?? sess?.backend,
-                        scannedRows: sess?.scannedRows ?? sess?.scanned_rows,
-                        scannedBytes: sess?.scannedBytes ?? sess?.scanned_bytes,
-                        syncing: sess?.syncing ?? sess?.verifying ?? false,
+                        source: isQueryHistoryRestoredSession(tabId, sessionId) ? 'query-history' : (sess?.source ?? undefined),
+                        syncing: false,
                     };
-                    if (activeSet >= 0) {
-                        const key = makeCacheKey(tabId, sessionId, activeSet);
-                        if (key) {
-                            touchCache(key, {
-                                meta: { ...(RESULTS_CACHE.get(key)?.meta ?? {}), ...next },
-                                sessionStatus,
-                                dataVersion,
-                            });
-                        }
-                    }
+                    cacheSessionUi(sessionId, { meta: next });
                     return next;
                 });
             } catch {}
@@ -786,16 +625,7 @@ export function ResultTable() {
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, getSession, tabId, activeSet, sessionStatus]);
-
-    /* ---------- cleanup ---------- */
-    useEffect(
-        () => () => {
-            if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-            fetchControllerRef.current?.abort();
-        },
-        [],
-    );
+    }, [dbReady, sessionId, dataVersion, getSession, tabId, activeSet, sessionStatus, cacheSessionUi]);
 
     useEffect(() => {
         let canceled = false;
@@ -805,12 +635,13 @@ export function ResultTable() {
                 const metas = await listResultSetsMeta(sessionId);
                 if (canceled) return;
                 if (!metas) return;
-                setSetsMeta(
-                    metas.map(m => ({
+                const nextSetsMeta: ResultSetSummaryMeta[] = metas.map(m => {
+                    const status: ResultSessionStatus = m.status === 'running' ? 'running' : m.status === 'error' ? 'error' : 'success';
+                    return {
                         sessionId: m.sessionId,
                         setIndex: m.setIndex,
                         sqlText: m.sqlText ?? '',
-                        status: (m.status as any) ?? 'success',
+                        status,
                         startedAt: m.startedAt ?? null,
                         finishedAt: m.finishedAt ?? null,
                         durationMs: m.durationMs ?? null,
@@ -819,10 +650,15 @@ export function ResultTable() {
                         errorMessage: m.errorMessage ?? null,
                         limited: m.limited ?? false,
                         limit: m.limit ?? null,
-                    })),
-                );
+                    };
+                });
+                setSetsMeta(nextSetsMeta);
 
                 const next = metas.map(m => m.setIndex).sort((a, b) => a - b);
+                cacheSessionUi(sessionId, {
+                    indices: next,
+                    setsMeta: nextSetsMeta,
+                });
                 setIndices(next);
 
                 if (activeSet >= 0 && !next.includes(activeSet)) {
@@ -833,7 +669,7 @@ export function ResultTable() {
         return () => {
             canceled = true;
         };
-    }, [dbReady, sessionId, dataVersion, listResultSetsMeta]);
+    }, [activeSet, dbReady, sessionId, dataVersion, listResultSetsMeta, cacheSessionUi, setActiveSet]);
 
     const overviewItems: OverviewItem[] = useMemo(() => {
         if (!sessionId) return [];
@@ -877,18 +713,10 @@ export function ResultTable() {
             const isActive = i === activeSet;
             const m = setsMeta.find(x => x.setIndex === i);
 
-            const runningRemote = (m?.status as any) === 'running' || runningTabs[tabId] === 'running';
-            const runningLocal = !!localDataLoading[tabId];
+            const runningRemote = m?.status === 'running' || runningTabs[tabId] === 'running';
+            const runningLocal = false;
 
-            const shownRows = isActive
-                ? isRemoteFullResult
-                    ? (expectedRowCount ?? 0)
-                    : results.length
-                : (() => {
-                      const key = makeCacheKey(tabId, sessionId!, i);
-                      const cached = key ? RESULTS_CACHE.get(key) : undefined;
-                      return cached?.results?.length ?? 0;
-                  })();
+            const shownRows = isActive ? (isRemoteFullResult ? (expectedRowCount ?? 0) : results.length) : typeof m?.rowCount === 'number' ? m.rowCount : 0;
 
             map[i] = {
                 runningRemote,
@@ -908,19 +736,12 @@ export function ResultTable() {
             };
         }
         return map;
-    }, [indices, activeSet, setsMeta, runningTabs, tabId, localDataLoading, isRemoteFullResult, expectedRowCount, results.length, sessionId, meta.truncated, meta.source]);
+    }, [indices, activeSet, setsMeta, runningTabs, tabId, isRemoteFullResult, expectedRowCount, results.length, meta.truncated, meta.source]);
 
     /* ---------- actions ---------- */
 
-    const handleDownloadLocalCsv = useCsvDownload({
-        results,
-        tabId,
-        queryId: sessionId,
-        setIndex: activeSet,
-    });
-
     const handleDownloadCsv = useCallback(async () => {
-        if (isRemoteFullResult && remoteResultSetId) {
+        if (remoteResultSetId) {
             const created = await exportResultSet({
                 resultSetId: remoteResultSetId,
                 format: 'csv',
@@ -931,9 +752,7 @@ export function ResultTable() {
             window.location.href = created.downloadUrl;
             return;
         }
-
-        await handleDownloadLocalCsv();
-    }, [exportResultSet, handleDownloadLocalCsv, isRemoteFullResult, remoteOperations.filters, remoteOperations.search, remoteOperations.sorts, remoteResultSetId]);
+    }, [exportResultSet, remoteOperations.filters, remoteOperations.search, remoteOperations.sorts, remoteResultSetId]);
 
     /* ---------- render ---------- */
 
@@ -979,11 +798,11 @@ export function ResultTable() {
                 />
             );
         }
-        if (showEmpty) {
-            return <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>;
-        }
         if (execMetaBySet?.[activeSet]?.errorMessage) {
             return <SQLErrorAlert message={execMetaBySet?.[activeSet]?.errorMessage} sql={execMetaBySet?.[activeSet]?.sqlText} />;
+        }
+        if (shouldShowWholeResultEmpty) {
+            return <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>;
         }
         const showSharedFilterBar = currentViewMode === 'table' || currentViewMode === 'charts';
 
@@ -1021,7 +840,7 @@ export function ResultTable() {
                             <div className="flex min-w-0 flex-1 flex-row">
                                 <VTableSearchBar
                                     query={query}
-                                    className="w-96 max-w-full"
+                                    className="w-80 max-w-full"
                                     onQueryChange={setQuery}
                                     onClearQuery={() => setQuery('')}
                                     filteredCount={stats.filteredCount}
@@ -1067,25 +886,29 @@ export function ResultTable() {
                 {currentViewMode === 'table' ? (
                     <>
                         <div className="flex-1 min-h-0">
-                            <VTable
-                                results={isRemoteFullResult ? [] : columnFilteredResults}
-                                remoteSource={remoteSource}
-                                storageKey={storageKey}
-                                onStatsChange={onStatsChange}
-                                setInspectorOpen={setInspectorOpen}
-                                setInspectorMode={setInspectorMode}
-                                setInspectorPayload={setInspectorPayload}
-                                activeFilters={activeFilters}
-                                onUpsertFilter={setColumnFilter}
-                                onRemoveFilter={removeFilter}
-                                onClearAllFilters={clearAllFilters}
-                                showFiltersBar={false}
-                                initialSort={sortState}
-                                selectedRowIndexes={selectedRowIndexes}
-                                serverSideOperations={isRemoteFullResult}
-                                onSortChange={setSortState}
-                                onSelectedRowIndexesChange={handleSelectedRowIndexesChange}
-                            />
+                            {shouldShowFilteredEmpty ? (
+                                <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>
+                            ) : (
+                                <VTable
+                                    results={isRemoteFullResult ? [] : columnFilteredResults}
+                                    remoteSource={remoteSource}
+                                    storageKey={storageKey}
+                                    onStatsChange={onStatsChange}
+                                    setInspectorOpen={setInspectorOpen}
+                                    setInspectorMode={setInspectorMode}
+                                    setInspectorPayload={setInspectorPayload}
+                                    activeFilters={activeFilters}
+                                    onUpsertFilter={setColumnFilter}
+                                    onRemoveFilter={removeFilter}
+                                    onClearAllFilters={clearAllFilters}
+                                    showFiltersBar={false}
+                                    initialSort={sortState}
+                                    selectedRowIndexes={selectedRowIndexes}
+                                    serverSideOperations={isRemoteFullResult}
+                                    onSortChange={setSortState}
+                                    onSelectedRowIndexesChange={handleSelectedRowIndexesChange}
+                                />
+                            )}
                         </div>
                         <InspectorPanel
                             open={inspectorOpen}
@@ -1141,7 +964,7 @@ export function ResultTable() {
                                             }
                                             stateKey={setChartStateKey}
                                             initialState={setInitialState}
-                                            stateSyncEnabled={visible ? !localDataLoading[tabId] : false}
+                                            stateSyncEnabled={visible}
                                             onResetState={() => {
                                                 setChartStatesByKey(prev => {
                                                     if (!prev[setChartStateKey]) {

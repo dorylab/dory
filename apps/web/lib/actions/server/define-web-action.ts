@@ -34,6 +34,9 @@ const LOCAL_WORKSPACE_ACTION_IDS = new Set<ActionId>([
     'chart.buildResultContext',
     'query.cancel',
     'query.execute',
+    'query.resultSet.viewState.update',
+    'query.resultSets.list',
+    'query.session.get',
     'query.readOnlyExecute',
     'resultSet.chart.read',
     'resultSet.export.create',
@@ -41,7 +44,7 @@ const LOCAL_WORKSPACE_ACTION_IDS = new Set<ActionId>([
     'resultSet.rows.read',
 ]);
 
-function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<any, any, WebActionServices>, 'id' | 'domain'>): ActionDesktopAuthMode {
+function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<unknown, unknown, WebActionServices>, 'id' | 'domain'>): ActionDesktopAuthMode {
     if (LOCAL_WORKSPACE_ACTION_IDS.has(action.id)) {
         return 'local-workspace';
     }

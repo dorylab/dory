@@ -2029,7 +2029,9 @@
             "Search": {
                 "FilteredTotalAria": "絞り込み / 合計",
                 "Placeholder": "検索（Ctrl/Cmd+F でフォーカス）",
-                "ClearAria": "検索をクリア"
+                "ClearAria": "検索をクリア",
+                "Submit": "検索",
+                "SubmitAria": "結果を検索"
             },
             "Inspector": {
                 "ResizeTitle": "ドラッグしてサイズ変更",
@@ -2338,13 +2340,6 @@
             "InvalidRequest": "Invalid request",
             "InvalidConnection": "無効なデータソースです",
             "RequestFailed": "Request failed"
-        },
-        "Pglite": {
-            "DbNotInitialized": "Database not initialized",
-            "UserNotInitialized": "User not initialized",
-            "BrowserOnly": "PGlite only runs in browser",
-            "InvalidInstance": "Invalid PGlite drizzle instance: missing dialect.migrate or session",
-            "MigrationFailed": "[PGlite migrate] Migration failed. The old database will be discarded and a new version will be created."
         }
     },
     "Api": {

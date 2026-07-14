@@ -159,6 +159,45 @@ export type ResultSetProfileReadOutput = {
     sampleRows: Record<string, unknown>[];
 };
 
+export type QuerySessionReadOutput = {
+    sessionId: string;
+    status: string;
+    errorMessage: string | null;
+    startedAt: Date | null;
+    finishedAt: Date | null;
+    durationMs: number | null;
+    resultSetCount: number;
+    source: string | null;
+};
+
+export type SessionResultSetMeta = {
+    sessionId: string;
+    setIndex: number;
+    sqlText: string;
+    sqlOp: string | null;
+    title: string | null;
+    columns: ResultSetColumn[];
+    stats: ResultSetProfileReadOutput['stats'] | null;
+    viewState: unknown | null;
+    aiProfileVersion: number | null;
+    rowCount: number | null;
+    limited: boolean;
+    limit: number | null;
+    resultSetId: string;
+    dataAvailability: string;
+    previewRowCount: number | null;
+    affectedRows: number | null;
+    status: string;
+    errorMessage: string | null;
+    errorCode: string | null;
+    errorSqlState: string | null;
+    errorMeta: unknown | null;
+    warnings: unknown | null;
+    startedAt: number | null;
+    finishedAt: number | null;
+    durationMs: number | null;
+};
+
 type QueryClause = {
     whereSql: string;
     orderSql: string;
@@ -983,6 +1022,135 @@ export class PostgresResultSetsRepository {
             scanned: rows.length,
             deleted: resultSetIds.length,
         };
+    }
+
+    async getQuerySession(params: { organizationId: string; sessionId: string }): Promise<QuerySessionReadOutput | null> {
+        this.assertInited();
+
+        const [runs, sets] = await Promise.all([
+            this.db
+                .select()
+                .from(queryRuns)
+                .where(and(eq(queryRuns.organizationId, params.organizationId), eq(queryRuns.sessionId, params.sessionId)))
+                .orderBy(asc(queryRuns.setIndex), asc(queryRuns.createdAt)),
+            this.db
+                .select()
+                .from(resultSetsTable)
+                .where(and(eq(resultSetsTable.organizationId, params.organizationId), eq(resultSetsTable.sessionId, params.sessionId)))
+                .orderBy(asc(resultSetsTable.setIndex), asc(resultSetsTable.createdAt)),
+        ]);
+
+        if (!runs.length && !sets.length) return null;
+
+        const statuses = [...runs.map(row => row.status), ...sets.map(row => row.status)].filter(Boolean);
+        const status = statuses.includes('error')
+            ? 'error'
+            : statuses.includes('canceled')
+              ? 'canceled'
+              : statuses.includes('running')
+                ? 'running'
+                : 'success';
+        const errorMessage = runs.find(row => row.errorMessage)?.errorMessage ?? sets.find(row => row.errorMessage)?.errorMessage ?? null;
+        const startedAt =
+            [...runs.map(row => row.createdAt), ...sets.map(row => row.createdAt)]
+                .filter((value): value is Date => value instanceof Date)
+                .sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+        const finishedAt =
+            [...runs.map(row => row.updatedAt), ...sets.map(row => row.updatedAt)]
+                .filter((value): value is Date => value instanceof Date)
+                .sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
+        const durationMs =
+            runs.reduce<number | null>((total, row) => (typeof row.durationMs === 'number' ? (total ?? 0) + row.durationMs : total), null) ??
+            (startedAt && finishedAt ? Math.max(0, finishedAt.getTime() - startedAt.getTime()) : null);
+
+        return {
+            sessionId: params.sessionId,
+            status,
+            errorMessage,
+            startedAt,
+            finishedAt,
+            durationMs,
+            resultSetCount: sets.length || runs.length,
+            source: sets[0]?.sourceType ?? 'query-run',
+        };
+    }
+
+    async listSessionResultSets(params: { organizationId: string; sessionId: string }): Promise<SessionResultSetMeta[]> {
+        this.assertInited();
+
+        const [rows, runs] = await Promise.all([
+            this.db
+                .select()
+                .from(resultSetsTable)
+                .where(and(eq(resultSetsTable.organizationId, params.organizationId), eq(resultSetsTable.sessionId, params.sessionId)))
+                .orderBy(asc(resultSetsTable.setIndex), asc(resultSetsTable.createdAt)),
+            this.db
+                .select()
+                .from(queryRuns)
+                .where(and(eq(queryRuns.organizationId, params.organizationId), eq(queryRuns.sessionId, params.sessionId)))
+                .orderBy(asc(queryRuns.setIndex), asc(queryRuns.createdAt)),
+        ]);
+        const runsByResultSetId = new Map(runs.map(row => [row.resultSetId, row]));
+        const runsBySetIndex = new Map(runs.map(row => [row.setIndex, row]));
+
+        return Promise.all(
+            rows.map(async row => {
+                let stats: ResultSetProfileReadOutput['stats'] | null = null;
+                try {
+                    const profile = await this.readProfile({
+                        organizationId: params.organizationId,
+                        resultSetId: row.id,
+                        sampleRows: 200,
+                    });
+                    stats = profile.stats;
+                } catch {
+                    stats = null;
+                }
+
+                const run = runsByResultSetId.get(row.id) ?? runsBySetIndex.get(row.setIndex ?? 0) ?? null;
+
+                return {
+                    sessionId: row.sessionId ?? params.sessionId,
+                    setIndex: row.setIndex ?? 0,
+                    sqlText: row.sql ?? '',
+                    sqlOp: row.operation ?? null,
+                    title: null,
+                    columns: row.schemaJson ?? [],
+                    stats,
+                    viewState: row.viewState ?? null,
+                    aiProfileVersion: null,
+                    rowCount: row.rowCount ?? null,
+                    limited: row.limited,
+                    limit: row.limit ?? null,
+                    resultSetId: row.id,
+                    dataAvailability: row.dataAvailability,
+                    previewRowCount: row.previewRowCount ?? null,
+                    affectedRows: null,
+                    status: row.status,
+                    errorMessage: row.errorMessage ?? null,
+                    errorCode: null,
+                    errorSqlState: null,
+                    errorMeta: null,
+                    warnings: null,
+                    startedAt: (run?.createdAt ?? row.createdAt) instanceof Date ? (run?.createdAt ?? row.createdAt).getTime() : null,
+                    finishedAt: (run?.updatedAt ?? row.updatedAt) instanceof Date ? (run?.updatedAt ?? row.updatedAt).getTime() : null,
+                    durationMs: run?.durationMs ?? null,
+                };
+            }),
+        );
+    }
+
+    async updateResultSetViewState(params: { organizationId: string; sessionId: string; setIndex: number; viewState: unknown | null }) {
+        this.assertInited();
+
+        await this.db
+            .update(resultSetsTable)
+            .set({
+                viewState: params.viewState,
+                updatedAt: new Date(),
+            })
+            .where(and(eq(resultSetsTable.organizationId, params.organizationId), eq(resultSetsTable.sessionId, params.sessionId), eq(resultSetsTable.setIndex, params.setIndex)))
+            .execute();
     }
 
     async readRows(params: { organizationId: string; resultSetId: string; offset?: number | null; limit?: number | null } & ResultSetQueryOperations): Promise<ReadResultRowsOutput> {
