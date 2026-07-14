@@ -59,6 +59,12 @@ type MeasurableMultiGrid = MultiGrid & {
     forceUpdateGrids?: () => void;
 };
 
+type VersionedMultiGridProps = MultiGridProps & {
+    dataVersion?: number;
+};
+
+const VersionedMultiGrid = MultiGrid as React.ComponentType<VersionedMultiGridProps>;
+
 type RemoteRowCacheEntry = {
     rows: Map<number, { rowData: Record<string, unknown> }>;
     pages: Map<number, number>;
@@ -1343,10 +1349,10 @@ export default function VTable({
 
     const renderGrid = useCallback(
         ({ width, height }: { width: number; height: number }) => {
-            void remoteRowsVersion;
             return (
-                <MultiGrid
+                <VersionedMultiGrid
                     ref={gridRef}
+                    dataVersion={remoteRowsVersion}
                     onSectionRendered={stableSectionRendered}
                     width={width}
                     height={height}
