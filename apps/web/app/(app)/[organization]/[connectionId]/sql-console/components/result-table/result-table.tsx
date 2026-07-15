@@ -386,6 +386,11 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             return;
         }
 
+        // Wait for metadata belonging to this result set before marking its view state as hydrated.
+        if (sessionMetas.sessionId !== sessionId || sessionMetas.setIndex !== activeSet) {
+            return;
+        }
+
         const viewStateKey = `${sessionId}:${activeSet}`;
         if (hydratedViewStateKeyRef.current === viewStateKey) {
             return;
@@ -406,7 +411,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         setSortState(viewState?.sorts?.[0] ?? null);
         setSelectedRowIndexes(viewState?.selectedRowIndexes ?? []);
         replaceFilters(deserializeViewFilters(viewState?.filters));
-    }, [activeSet, replaceFilters, sessionId, sessionMetas.viewState]);
+    }, [activeSet, replaceFilters, sessionId, sessionMetas.sessionId, sessionMetas.setIndex, sessionMetas.viewState]);
 
     useEffect(() => {
         if (activeSet < 0) {

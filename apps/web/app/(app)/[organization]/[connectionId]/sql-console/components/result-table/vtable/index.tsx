@@ -178,6 +178,7 @@ export default function VTable({
     const remotePageAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
     const activeRemoteCacheKeyRef = useRef<string | null>(remoteSource?.cacheKey ?? null);
     const activeRemoteSourceIdRef = useRef<string | null>(remoteSource?.sourceId ?? null);
+    const hydratedRemoteSourceRef = useRef<{ cacheKey: string | null; sourceId: string | null } | null>(null);
     const remoteRowsStaleRef = useRef(false);
 
     const clampColumnWidth = useCallback(
@@ -366,11 +367,28 @@ export default function VTable({
     );
 
     useEffect(() => {
-        for (const controller of remotePageAbortControllersRef.current.values()) {
-            controller.abort();
-        }
+        const resetRemoteRequests = () => {
+            for (const controller of remotePageAbortControllersRef.current.values()) {
+                controller.abort();
+            }
+            remoteLoadingPagesRef.current = new Set();
+            remotePageAbortControllersRef.current = new Map();
+        };
+
+        resetRemoteRequests();
         const nextCacheKey = remoteSource?.cacheKey ?? null;
         const nextSourceId = remoteSource?.sourceId ?? nextCacheKey;
+        const hydratedSource = hydratedRemoteSourceRef.current;
+        const isSameHydratedSource = hydratedSource?.cacheKey === nextCacheKey && hydratedSource.sourceId === nextSourceId;
+
+        // React Activity reconnects effects when a hidden SQL tab becomes visible.
+        // Preserve the current result pages on reconnect; only a real source change
+        // should replace the remote row cache.
+        if (isSameHydratedSource) {
+            return resetRemoteRequests;
+        }
+
+        hydratedRemoteSourceRef.current = { cacheKey: nextCacheKey, sourceId: nextSourceId };
         const cached = nextCacheKey ? getRemoteRowCache(nextCacheKey) : null;
         const canKeepStaleRows = Boolean(nextCacheKey && activeRemoteSourceIdRef.current === nextSourceId && remoteRowsRef.current.size > 0);
         activeRemoteCacheKeyRef.current = nextCacheKey;
@@ -388,15 +406,9 @@ export default function VTable({
             remoteRowsStaleRef.current = canKeepStaleRows;
         }
 
-        remoteLoadingPagesRef.current = new Set();
-        remotePageAbortControllersRef.current = new Map();
         setRemoteRowsVersion(version => version + 1);
 
-        return () => {
-            for (const controller of remotePageAbortControllersRef.current.values()) {
-                controller.abort();
-            }
-        };
+        return resetRemoteRequests;
     }, [remoteSource?.cacheKey, remoteSource?.sourceId]);
 
     const requestRemoteRange = useCallback(
