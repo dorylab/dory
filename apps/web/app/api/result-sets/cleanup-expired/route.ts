@@ -1,1 +1,3 @@
-export { POST, runtime } from '../cleanup/route';
+export { POST } from '../cleanup/route';
+
+export const runtime = 'nodejs';

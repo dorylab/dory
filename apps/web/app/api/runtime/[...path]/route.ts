@@ -1,15 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDBService } from '@dory/database';
-import {
-    createDoryMcpToken,
-    createHeadlessUserActionContext,
-    executeDoryAction,
-    getDoryAction,
-    getFirstActiveDoryMcpToken,
-    listDoryActions,
-    resolveDoryRuntimeIdentity,
-    resolveDoryStorageProfile,
-} from '@dory/server-core';
+import { createHeadlessUserActionContext, executeDoryAction, getDoryAction, listDoryActions, resolveDoryRuntimeIdentity } from '@dory/server-core/runtime';
+import { resolveDoryStorageProfile } from '@dory/server-core/storage';
+import { createDoryMcpToken, getFirstActiveDoryMcpToken } from '@dory/server-core/tokens';
 import type { ActionId } from '@dory/actions';
 
 export const runtime = 'nodejs';
