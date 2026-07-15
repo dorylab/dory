@@ -6,8 +6,6 @@ import { ColumnFilterPopover } from './ColumnFIlter';
 import { VTableProps, ColWidths, CellKey, ck, parseCK } from './type';
 import { formatTooltip, formatValue } from './utils';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/registry/new-york-v4/ui/context-menu';
-import { useAtomValue } from 'jotai';
-import { currentSessionMetaAtom } from '../stores/result-table.atoms';
 import { buildEqualsFilterFromCell, mapDbTypeToTwoKinds } from './filter';
 import { useTranslations } from 'next-intl';
 import { useVTableFilterUi, useVTableFilters, VTableFilters } from './VTableFilters';
@@ -132,6 +130,7 @@ function getSampleRowIndices(start: number, stop: number, limit: number) {
 
 export default function VTable({
     results,
+    columnMetas,
     remoteSource,
     rowHeight = 32,
     defaultColMinWidth = 140,
@@ -156,16 +155,15 @@ export default function VTable({
     onSelectedRowIndexesChange,
 }: VTableProps) {
     const t = useTranslations('SqlConsole');
-    const metas = useAtomValue(currentSessionMetaAtom);
     const columnsRaw = useMemo<ColumnMeta[]>(() => {
-        const rawColumns = (metas?.columns ?? []) as RawColumnMeta[];
+        const rawColumns = columnMetas as RawColumnMeta[];
         return rawColumns
             .filter((column): column is RawColumnMeta & { name: string } => typeof column.name === 'string' && column.name.length > 0)
             .map(column => ({
                 name: column.name,
                 type: typeof column.type === 'string' || column.type === null ? column.type : undefined,
             }));
-    }, [metas?.columns]);
+    }, [columnMetas]);
     const columns = useMemo(() => columnsRaw.map(column => column.name), [columnsRaw]);
     const isRemote = Boolean(remoteSource);
     const operationsDisabled = false;
@@ -1522,12 +1520,7 @@ export default function VTable({
                     )}
 
                     {/* Grid */}
-                    <div
-                        ref={gridContainerRef}
-                        className="flex-1 min-h-0 outline-none"
-                        tabIndex={0}
-                        onKeyDown={onGridKeyDown}
-                    >
+                    <div ref={gridContainerRef} className="flex-1 min-h-0 outline-none" tabIndex={0} onKeyDown={onGridKeyDown}>
                         {gridElement}
                     </div>
                 </div>

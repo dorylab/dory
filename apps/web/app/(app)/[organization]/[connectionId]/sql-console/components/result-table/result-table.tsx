@@ -52,7 +52,7 @@ type ResultSetSummaryMeta = {
     limited?: boolean;
     limit?: number | null;
 };
-type CurrentSessionMeta = ResultSetMeta | { columns: never[] };
+type CurrentSessionMeta = Partial<ResultSetMeta> & { columns: ResultSetMeta['columns'] };
 type SessionUiSnapshot = {
     indices?: number[];
     setsMeta?: ResultSetSummaryMeta[];
@@ -146,7 +146,8 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
     const [meta, setMeta] = useState<MetaState>({});
-    const [sessionMetas, setSessionMetas] = useAtom(currentSessionMetaAtom);
+    const [sessionMetas, setSessionMetas] = useState<CurrentSessionMeta>({ columns: [] });
+    const setCurrentSessionMeta = useSetAtom(currentSessionMetaAtom);
 
     const runningTabs = useAtomValue(runningTabsAtom);
 
@@ -157,6 +158,12 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const sessionIdFromAtom = tabId ? sessionIdByTab[tabId] : undefined;
     const workspaceScope = useAtomValue(sqlWorkspaceScopeAtom);
     const sessionId = sessionIdFromAtom || (tabId && typeof window !== 'undefined' ? (localStorage.getItem(getSessionStorageKey(tabId, workspaceScope)) ?? undefined) : undefined);
+
+    useEffect(() => {
+        if (tabId === activeTabId) {
+            setCurrentSessionMeta(sessionMetas);
+        }
+    }, [activeTabId, sessionMetas, setCurrentSessionMeta, tabId]);
 
     const { dbReady, listResultSetIndices, listResultSetsMeta, readResultSetRows, exportResultSet, readResultSetChart, dataVersion, getSession, updateResultSetViewState } =
         useSqlConsoleResultStore();
@@ -277,7 +284,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
 
     useEffect(() => {
         if (!dbReady || !sessionId) {
-            setSessionMetas({});
+            setSessionMetas({ columns: [] });
             return;
         }
 
@@ -305,7 +312,8 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         return results.filter(row => {
             if (hasGlobal) {
                 let hit = false;
-                for (const c of sessionMetas.columns.map((x: { name?: string }) => x.name)) {
+                for (const c of (sessionMetas.columns ?? []).map((x: { name?: string }) => x.name)) {
+                    if (!c) continue;
                     const v = row.rowData?.[c];
                     const s = v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
                     if (s.toLowerCase().includes(gq)) {
@@ -557,7 +565,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
 
             setIndices([]);
             setSetsMeta([]);
-            setSessionMetas({});
+            setSessionMetas({ columns: [] });
             setMeta({});
             setSessionStatus(null);
         }
@@ -897,6 +905,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                             ) : (
                                 <VTable
                                     results={isRemoteFullResult ? EMPTY_RESULTS : columnFilteredResults}
+                                    columnMetas={sessionMetas.columns ?? []}
                                     remoteSource={remoteSource}
                                     storageKey={storageKey}
                                     onStatsChange={onStatsChange}

@@ -620,6 +620,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             <div className="flex-1 min-h-0">
                 <VTable
                     results={rows}
+                    columnMetas={previewData?.columns ?? []}
                     storageKey={storageKey}
                     onStatsChange={handleVTableStatsChange}
                     showSearchBar={true}

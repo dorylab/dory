@@ -12,6 +12,7 @@ export type VTableInspectorPayload =
 
 export interface VTableProps {
     results: { rowData: Record<string, unknown> }[];
+    columnMetas: Array<{ name?: unknown; type?: unknown }>;
     remoteSource?: VTableRemoteSource | null;
     rowHeight?: number;
     maxHeight?: number;
