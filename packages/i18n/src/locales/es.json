@@ -1463,7 +1463,8 @@
             "Charts": "Gráficos",
             "ResultTab": "Resultado {index}",
             "WaitingForResults": "Esperando resultados...",
-            "DownloadCsvTitle": "Descargar CSV"
+            "DownloadCsvTitle": "Descargar CSV",
+            "StorageLimitPreviewOnly": "Se alcanzó el límite de almacenamiento del Workspace. La consulta finalizó correctamente, pero solo se conservó la vista previa."
         },
         "Insights": {
             "Title": "Insights",
@@ -3052,12 +3053,19 @@
                     "FieldDescription": "Los archivos de resultados vencidos se eliminan en segundo plano. El historial de consultas se conserva.",
                     "SelectPlaceholder": "Seleccionar duración",
                     "DayOption": "{count, plural, one {# día} other {# días}}",
-                    "SaveAction": "Guardar retención",
+                    "QuotaLabel": "Almacenamiento máximo",
+                    "QuotaDescription": "Límite compartido para resultados guardados y exportaciones CSV/Parquet.",
+                    "QuotaPlaceholder": "Seleccionar límite",
+                    "GigabyteOption": "{count} GB",
+                    "UsageLabel": "Uso actual",
+                    "ResultUsage": "Resultados: {size}",
+                    "ExportUsage": "Exportaciones: {size}",
+                    "SaveAction": "Guardar configuración",
                     "Saving": "Guardando...",
                     "ReadOnlyHint": "Tu rol actual no permite actualizar la configuración de almacenamiento.",
                     "Toasts": {
-                        "Updated": "Retención de resultados actualizada",
-                        "UpdateFailed": "No se pudo actualizar la retención de resultados"
+                        "Updated": "Configuración de almacenamiento actualizada",
+                        "UpdateFailed": "No se pudo actualizar la configuración de almacenamiento"
                     }
                 }
             },

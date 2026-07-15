@@ -149,16 +149,34 @@ export type OrganizationAccessSummary = {
     } | null;
 };
 
-export type ResultSetRetentionSettings = {
+export type ResultSetStorageSettings = {
     retentionDays: number;
     defaultRetentionDays: number;
     allowedRetentionDays: number[];
+    maxStorageBytes: number;
+    defaultMaxStorageBytes: number;
+    allowedMaxStorageBytes: number[];
+    resultSetsBytes: number;
+    exportsBytes: number;
+    totalBytes: number;
     canManage: boolean;
 };
+
+export type ResultSetRetentionSettings = ResultSetStorageSettings;
 
 export type ResultSetCleanupSummary = {
     scanned: number;
     deleted: number;
+    deletedResultSets: number;
+    deletedExports: number;
+    bytesFreed: number;
+    usageAfter: {
+        resultSetsBytes: number;
+        exportsBytes: number;
+        totalBytes: number;
+    };
+    hasMore: boolean;
+    failures: number;
 };
 
 export function slugifyOrganizationName(name: string) {
@@ -233,20 +251,30 @@ export async function updateOrganization(input: { organizationId: string; name: 
 }
 
 export async function getResultSetRetentionSettings() {
-    return appApiRequest<ResultSetRetentionSettings>('/api/organization/result-set-retention');
+    return getResultSetStorageSettings();
 }
 
 export async function updateResultSetRetentionSettings(input: { retentionDays: number }) {
-    return appApiRequest<ResultSetRetentionSettings>('/api/organization/result-set-retention', {
+    return updateResultSetStorageSettings(input);
+}
+
+export async function getResultSetStorageSettings() {
+    return appApiRequest<ResultSetStorageSettings>('/api/organization/result-set-storage');
+}
+
+export async function updateResultSetStorageSettings(input: { retentionDays?: number; maxStorageBytes?: number }) {
+    return appApiRequest<ResultSetStorageSettings>('/api/organization/result-set-storage', {
         method: 'PATCH',
-        body: {
-            retentionDays: input.retentionDays,
-        },
+        body: input,
     });
 }
 
 export async function cleanupExpiredResultSets() {
-    return appApiRequest<ResultSetCleanupSummary>('/api/result-sets/cleanup-expired', {
+    return cleanupResultSetStorage();
+}
+
+export async function cleanupResultSetStorage() {
+    return appApiRequest<ResultSetCleanupSummary>('/api/result-sets/cleanup', {
         method: 'POST',
     });
 }

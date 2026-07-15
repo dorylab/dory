@@ -5,7 +5,7 @@ import type { ChangeEvent, KeyboardEvent, TextareaHTMLAttributes } from 'react';
 import { useTranslations } from 'next-intl';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from '@/registry/new-york-v4/ui/command';
+import { Command, CommandGroup, CommandList } from '@/registry/new-york-v4/ui/command';
 import { cn } from '@/registry/new-york-v4/lib/utils';
 import { Table } from 'lucide-react';
 

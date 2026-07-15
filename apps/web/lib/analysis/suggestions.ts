@@ -1,5 +1,4 @@
 import type { InsightAction, InsightDraft, InsightFact, InsightKeyColumns, InsightPattern, RecommendedInsightAction } from '@/lib/client/result-set-insights';
-import { extractTableRefs } from '@dory/analysis/result-context';
 import type { AnalysisSuggestion, AnalysisSuggestionKind, ResultContext } from '@dory/analysis/types';
 
 type AnalysisTranslate = (key: string, values?: Record<string, string | number>) => string;

@@ -62,10 +62,6 @@ export default function UserPrivilegesPage() {
     const userName = decodeURIComponent(encodedName ?? '');
     const { connectionId, routeConnectionId, isClickhouseConnection, isConnectionReady } = usePrivilegesConnectionReady();
 
-    if (isConnectionReady && !isClickhouseConnection) {
-        return null;
-    }
-
     const queryClient = useQueryClient();
 
     const userQuery = useQuery({
@@ -473,6 +469,8 @@ export default function UserPrivilegesPage() {
         }
         return null;
     };
+
+    if (isConnectionReady && !isClickhouseConnection) return null;
 
     return (
         <div className="flex h-full flex-col gap-6 p-6">

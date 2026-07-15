@@ -61,10 +61,6 @@ export default function RolePrivilegesPage() {
     const roleName = decodeURIComponent(encodedName ?? '');
     const { connectionId, routeConnectionId, isClickhouseConnection, isConnectionReady } = usePrivilegesConnectionReady();
 
-    if (isConnectionReady && !isClickhouseConnection) {
-        return null;
-    }
-
     const queryClient = useQueryClient();
 
     const roleQueryKey = ['privileges', 'role', connectionId, roleName] as const;
@@ -449,6 +445,8 @@ export default function RolePrivilegesPage() {
 
     const isLoading = !isConnectionReady || roleQuery.isLoading;
     const hasError = roleQuery.isError;
+
+    if (isConnectionReady && !isClickhouseConnection) return null;
 
     return (
         <div className="flex h-full flex-col gap-6 p-6">

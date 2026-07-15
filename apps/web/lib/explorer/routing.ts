@@ -1,5 +1,5 @@
 import { getDriverCapabilities, isSupportedListKind, isSupportedObjectKind, resolveExplorerDriver } from './capabilities';
-import { buildExplorerBasePath, buildExplorerDatabasePath, buildExplorerListPath, buildExplorerObjectPath, buildExplorerSchemaPath } from './build-path';
+import { buildExplorerBasePath, buildExplorerDatabasePath, buildExplorerObjectPath, buildExplorerSchemaPath } from './build-path';
 import { parseExplorerSlug } from './parse-slug';
 import { resolveClickhouseExplorerResource } from './resolvers/clickhouse';
 import { resolveDorisExplorerResource } from './resolvers/doris';

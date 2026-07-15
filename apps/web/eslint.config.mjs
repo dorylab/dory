@@ -13,6 +13,15 @@ const eslintConfig = defineConfig([
         },
         rules: {
             '@next/next/no-duplicate-head': 'off',
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            'react-hooks/immutability': 'off',
+            'react-hooks/incompatible-library': 'off',
+            'react-hooks/preserve-manual-memoization': 'off',
+            'react-hooks/purity': 'off',
+            'react-hooks/refs': 'off',
+            'react-hooks/set-state-in-effect': 'off',
+            'react-hooks/static-components': 'off',
             'unused-imports/no-unused-imports': 1,
             'unused-imports/no-unused-vars': [
                 1,

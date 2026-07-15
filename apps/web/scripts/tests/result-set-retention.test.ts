@@ -7,7 +7,7 @@ import test from 'node:test';
 import { eq, sql } from 'drizzle-orm';
 
 import { AgentRunArtifactStore, FilesystemObjectStore, ResultSetArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
-import { NoopFullDataWriter } from '@dory/resultset';
+import { NoopFullDataWriter, type ResultSetDataWriter } from '@dory/resultset';
 
 const dbDir = await mkdtemp(path.join(os.tmpdir(), 'dory-result-set-retention-db-'));
 const artifactDir = await mkdtemp(path.join(os.tmpdir(), 'dory-result-set-retention-artifacts-'));
@@ -17,8 +17,14 @@ process.env.PGLITE_DB_PATH = dbDir;
 
 const { getClient } = await import('@dory/database/postgres/client');
 const { resetPgliteClient } = await import('@dory/database/postgres/client/pglite');
-const { user, organizations, resultSets, queryRuns, agentRunResultSets } = await import('@dory/database/postgres/schemas');
-const { PostgresOrganizationsRepository, DEFAULT_RESULT_SET_RETENTION_DAYS } = await import('@dory/database/postgres/impl/organization');
+const { user, organizations, resultSets, resultSetExports, queryRuns, agentRunResultSets } = await import('@dory/database/postgres/schemas');
+const {
+    ALLOWED_RESULT_SET_MAX_STORAGE_BYTES,
+    PostgresOrganizationsRepository,
+    DEFAULT_RESULT_SET_MAX_STORAGE_BYTES,
+    DEFAULT_RESULT_SET_RETENTION_DAYS,
+    isAllowedResultSetMaxStorageBytes,
+} = await import('@dory/database/postgres/impl/organization');
 const { PostgresResultSetsRepository } = await import('@dory/database/postgres/impl/result-sets');
 
 const db = await getClient();
@@ -100,6 +106,7 @@ async function initSchema() {
             "limited" boolean NOT NULL DEFAULT false,
             "limit" integer,
             "schema_json" jsonb NOT NULL DEFAULT '[]'::jsonb,
+            "view_state" jsonb,
             "sql" text,
             "operation" text,
             "error_message" text,
@@ -112,10 +119,24 @@ async function initSchema() {
             "created_by_actor_type" text NOT NULL,
             "created_by_actor_id" text,
             "content_hash" text,
-            "byte_size" integer,
+            "byte_size" bigint,
+            "storage_limit_applied" boolean NOT NULL DEFAULT false,
             "expires_at" timestamp with time zone,
             "created_at" timestamp with time zone NOT NULL,
             "updated_at" timestamp with time zone NOT NULL
+        )
+    `);
+    await db.execute(sql`
+        CREATE TABLE "result_set_exports" (
+            "id" text PRIMARY KEY NOT NULL,
+            "organization_id" text NOT NULL,
+            "result_set_id" text,
+            "object_path" text NOT NULL,
+            "format" text NOT NULL,
+            "file_name" text NOT NULL,
+            "byte_size" bigint NOT NULL,
+            "expires_at" timestamp with time zone NOT NULL,
+            "created_at" timestamp with time zone NOT NULL
         )
     `);
     await db.execute(sql`
@@ -200,13 +221,22 @@ test('defaults result set retention to 7 days and preserves organization metadat
     const { organizationsRepo } = await createRepositories();
 
     assert.equal(await organizationsRepo.getResultSetRetentionDays('org_retention'), DEFAULT_RESULT_SET_RETENTION_DAYS);
-    await organizationsRepo.setResultSetRetentionDays('org_retention', 14);
-    assert.equal(await organizationsRepo.getResultSetRetentionDays('org_retention'), 14);
+    assert.deepEqual(await organizationsRepo.getResultSetStorageSettings('org_retention'), {
+        retentionDays: DEFAULT_RESULT_SET_RETENTION_DAYS,
+        maxStorageBytes: DEFAULT_RESULT_SET_MAX_STORAGE_BYTES,
+    });
+    assert.deepEqual(
+        ALLOWED_RESULT_SET_MAX_STORAGE_BYTES,
+        [1, 5, 10, 25, 50].map(value => value * 1024 ** 3),
+    );
+    assert.equal(isAllowedResultSetMaxStorageBytes(25 * 1024 ** 3), true);
+    assert.equal(isAllowedResultSetMaxStorageBytes(2 * 1024 ** 3), false);
+    await organizationsRepo.setResultSetStorageSettings('org_retention', { retentionDays: 14, maxStorageBytes: 10 * 1024 ** 3 });
 
     const rows = await db.select({ metadata: organizations.metadata }).from(organizations);
     assert.deepEqual(JSON.parse(rows[0]!.metadata ?? '{}'), {
         mcp: { enabled: true },
-        resultSets: { retentionDays: 14 },
+        resultSets: { retentionDays: 14, maxStorageBytes: 10 * 1024 ** 3 },
     });
 });
 
@@ -290,11 +320,18 @@ test('cleanup deletes expired artifacts and result set rows while keeping query 
         rows: [{ id: 3 }],
     });
 
-    await db.update(resultSets).set({ expiresAt: new Date('2026-01-01T00:00:00.000Z') }).where(eq(resultSets.id, persisted.resultSetId));
+    await db
+        .update(resultSets)
+        .set({ expiresAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(resultSets.id, persisted.resultSetId));
     assert.equal(await artifacts.resultSets.exists(persisted.artifactRef), true);
 
     const summary = await resultSetsRepo.cleanupExpiredResultSets({ organizationId: 'org_retention', now: new Date('2026-02-01T00:00:00.000Z') });
-    assert.deepEqual(summary, { scanned: 1, deleted: 1 });
+    assert.equal(summary.scanned, 1);
+    assert.equal(summary.deleted, 1);
+    assert.equal(summary.deletedResultSets, 1);
+    assert.equal(summary.deletedExports, 0);
+    assert.equal(summary.hasMore, false);
     assert.equal(await artifacts.resultSets.exists(persisted.artifactRef), false);
     assert.equal((await db.select().from(resultSets).where(eq(resultSets.id, persisted.resultSetId))).length, 0);
     assert.equal((await db.select().from(agentRunResultSets).where(eq(agentRunResultSets.resultSetId, persisted.resultSetId))).length, 0);
@@ -307,7 +344,7 @@ test('cleanup deletes expired artifacts and result set rows while keeping query 
 test('cleanup keeps DB records when artifact deletion fails', async () => {
     const failingArtifacts: DoryArtifactStore = {
         ...artifacts,
-        resultSets: ({
+        resultSets: {
             putResultSet: artifacts.resultSets.putResultSet.bind(artifacts.resultSets),
             readManifest: artifacts.resultSets.readManifest.bind(artifacts.resultSets),
             readPreview: artifacts.resultSets.readPreview.bind(artifacts.resultSets),
@@ -317,7 +354,7 @@ test('cleanup keeps DB records when artifact deletion fails', async () => {
             deleteResultSet: async () => {
                 throw new Error('delete failed');
             },
-        } as unknown) as DoryArtifactStore['resultSets'],
+        } as unknown as DoryArtifactStore['resultSets'],
     };
     const resultSetsRepo = new PostgresResultSetsRepository(failingArtifacts, new NoopFullDataWriter());
     await resultSetsRepo.init();
@@ -339,7 +376,102 @@ test('cleanup keeps DB records when artifact deletion fails', async () => {
         rows: [{ id: 4 }],
     });
 
-    await db.update(resultSets).set({ expiresAt: new Date('2026-01-01T00:00:00.000Z') }).where(eq(resultSets.id, persisted.resultSetId));
-    await assert.rejects(() => resultSetsRepo.cleanupExpiredResultSets({ organizationId: 'org_retention', now: new Date('2026-02-01T00:00:00.000Z') }), /delete failed/);
+    await db
+        .update(resultSets)
+        .set({ expiresAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(resultSets.id, persisted.resultSetId));
+    const summary = await resultSetsRepo.cleanupExpiredResultSets({ organizationId: 'org_retention', now: new Date('2026-02-01T00:00:00.000Z') });
+    assert.equal(summary.failures, 1);
+    assert.equal(summary.hasMore, true);
     assert.equal((await db.select().from(resultSets).where(eq(resultSets.id, persisted.resultSetId))).length, 1);
+});
+
+test('stores bigint usage and removes exports before result sets when over quota', async () => {
+    await db.insert(organizations).values({
+        id: 'org_quota',
+        name: 'Quota Org',
+        ownerUserId: 'user_retention',
+        slug: 'quota-org',
+        metadata: JSON.stringify({ resultSets: { retentionDays: 7, maxStorageBytes: 1024 ** 3 } }),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    const { resultSetsRepo } = await createRepositories();
+    const persisted = await resultSetsRepo.persistQueryResultSet({
+        organizationId: 'org_quota',
+        userId: 'user_retention',
+        sessionId: 'session_quota',
+        sessionSqlText: 'select quota',
+        resultSet: { sessionId: 'session_quota', setIndex: 0, sqlText: 'select quota', status: 'success', rowCount: 1 },
+        rows: [{ id: 1 }],
+    });
+    await db
+        .update(resultSets)
+        .set({ byteSize: 800 * 1024 ** 2, expiresAt: new Date('2027-01-01T00:00:00.000Z') })
+        .where(eq(resultSets.id, persisted.resultSetId));
+
+    const exportPath = 'result-set-exports/org_quota/rse_quota/result.csv';
+    await objectStore.put(exportPath, 'export');
+    await db.insert(resultSetExports).values({
+        id: 'rse_quota',
+        organizationId: 'org_quota',
+        resultSetId: persisted.resultSetId,
+        objectPath: exportPath,
+        format: 'csv',
+        fileName: 'result.csv',
+        byteSize: 400 * 1024 ** 2,
+        expiresAt: new Date('2027-01-01T00:00:00.000Z'),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    const before = await resultSetsRepo.getStorageUsage('org_quota');
+    assert.equal(before.totalBytes, 1200 * 1024 ** 2);
+    const cleanup = await resultSetsRepo.cleanupWorkspaceStorage({ organizationId: 'org_quota', now: new Date('2026-07-01T00:00:00.000Z') });
+    assert.equal(cleanup.deletedExports, 1);
+    assert.equal(cleanup.deletedResultSets, 0);
+    assert.equal(cleanup.usageAfter.totalBytes, 800 * 1024 ** 2);
+    assert.equal((await db.select().from(resultSets).where(eq(resultSets.id, persisted.resultSetId))).length, 1);
+
+    await db
+        .update(resultSets)
+        .set({ byteSize: 3 * 1024 ** 3 })
+        .where(eq(resultSets.id, persisted.resultSetId));
+    assert.equal((await resultSetsRepo.getStorageUsage('org_quota')).resultSetsBytes, 3 * 1024 ** 3);
+});
+
+test('keeps only preview when a single full result exceeds the Workspace limit', async () => {
+    const oversizedWriter: ResultSetDataWriter = {
+        async write() {
+            return {
+                format: 'parquet',
+                rowCount: 1,
+                byteSize: 2 * 1024 ** 3,
+                parts: [{ path: 'data/part-00000.parquet', format: 'parquet', rowCount: 1, byteSize: 2 * 1024 ** 3, data: Buffer.from('fake') }],
+            };
+        },
+    };
+    const repo = new PostgresResultSetsRepository(artifacts, oversizedWriter);
+    await repo.init();
+    const persisted = await repo.persistQueryResultSet({
+        organizationId: 'org_quota',
+        userId: 'user_retention',
+        sessionId: 'session_oversized',
+        sessionSqlText: 'select oversized',
+        resultSet: { sessionId: 'session_oversized', setIndex: 0, sqlText: 'select oversized', status: 'success', rowCount: 1 },
+        rows: [{ id: 1 }],
+    });
+
+    assert.equal(persisted.storageLimitApplied, true);
+    assert.equal(persisted.dataAvailability, 'preview-only');
+    assert.match(persisted.warning ?? '', /Workspace storage limit/);
+});
+
+test('reclaims unregistered legacy exports after 24 hours', async () => {
+    const { resultSetsRepo } = await createRepositories();
+    const legacyPath = 'result-set-exports/org_quota/rse_legacy/legacy.csv';
+    await objectStore.put(legacyPath, 'legacy');
+    const cleanup = await resultSetsRepo.cleanupWorkspaceStorage({ organizationId: 'org_quota', now: new Date(Date.now() + 25 * 60 * 60 * 1000) });
+    assert.equal(await objectStore.exists(legacyPath), false);
+    assert.equal(cleanup.deletedExports, 1);
+    assert.equal(cleanup.bytesFreed, Buffer.byteLength('legacy'));
 });

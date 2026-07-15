@@ -50,10 +50,6 @@ export default function PrivilegesPage() {
     const { connectionId, routeConnectionId, isClickhouseConnection, isConnectionReady } = usePrivilegesConnectionReady();
     const queryClient = useQueryClient();
 
-    if (isConnectionReady && !isClickhouseConnection) {
-        return null;
-    }
-
     const usersQueryKey = useMemo(() => ['privileges', 'users', connectionId], [connectionId]);
     const rolesQueryKey = useMemo(() => ['privileges', 'roles', connectionId], [connectionId]);
     const clustersQueryKey = useMemo(() => ['privileges', 'clusters', connectionId], [connectionId]);
@@ -273,6 +269,8 @@ export default function PrivilegesPage() {
     };
 
     const isLoading = !isConnectionReady || usersQuery.isLoading || rolesQuery.isLoading;
+
+    if (isConnectionReady && !isClickhouseConnection) return null;
 
     return (
         <div className="flex h-full flex-col gap-6 p-6">

@@ -71,6 +71,7 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         const editorSettings = useAtomValue(sqlEditorSettingsAtom);
         const editorTheme = resolveSqlEditorTheme(editorSettings, resolvedTheme);
         const t = useTranslations('SqlConsole');
+        const activeSqlContent = activeTab?.tabType === 'sql' ? (activeTab.content ?? '') : '';
 
         const containerRef = useRef<HTMLDivElement | null>(null);
         const { saveContent, flushSave } = useDebouncedTabSave(updateTab);
@@ -105,14 +106,10 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
             formatHandlerRef,
         });
 
-        if (activeTab?.tabType !== 'sql') {
-            return <div>{t('Editor.NotSqlTab')}</div>;
-        }
-
         useImperativeHandle(
             ref,
             () => ({
-                getValue: () => editorRef.current?.getValue() ?? (activeTab?.tabType === 'sql' ? (activeTab?.content ?? '') : ''),
+                getValue: () => editorRef.current?.getValue() ?? activeSqlContent,
                 flushSave: () => flushSave(),
                 applyContentWithUndo: (next: string) => {
                     const editor = editorRef.current;
@@ -159,14 +156,14 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
                     editor.focus();
                 },
             }),
-            [activeTab?.tabType === 'sql' ? activeTab?.content : '', flushSave],
+            [activeSqlContent, flushSave],
         );
 
         useEffect(() => {
             if (typeof window === 'undefined') return;
 
             window.__DORY_E2E_MONACO__ = {
-                getValue: () => editorRef.current?.getValue() ?? (activeTab?.tabType === 'sql' ? (activeTab?.content ?? '') : ''),
+                getValue: () => editorRef.current?.getValue() ?? activeSqlContent,
                 setValue: (next: string) => {
                     const editor = editorRef.current;
                     const model = editor?.getModel();
@@ -185,7 +182,7 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
                     delete window.__DORY_E2E_MONACO__;
                 }
             };
-        }, [activeTab?.content, activeTab?.tabType, editorRef]);
+        }, [activeSqlContent, editorRef]);
 
         useEffect(() => {
             if (!activeTab || activeTab.tabType !== 'sql') return;

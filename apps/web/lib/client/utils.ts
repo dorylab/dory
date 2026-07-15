@@ -17,11 +17,8 @@ export function sleep(ms: number) {
 
 export function idleYield(minTime = 4): Promise<void> {
     return new Promise(res => {
-        // Modern browsers
-        // @ts-ignore
-        if (window.requestIdleCallback) {
-            // @ts-ignore
-            requestIdleCallback(() => res(), { timeout: minTime });
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(() => res(), { timeout: minTime });
         } else {
             setTimeout(res, minTime);
         }

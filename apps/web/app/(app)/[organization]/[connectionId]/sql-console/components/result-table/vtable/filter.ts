@@ -1,5 +1,4 @@
 "use client";
-import { useRef } from "react";
 import { ColumnFilter } from "./type";
 
 export type FieldKind = 'string' | 'number';

@@ -95,7 +95,7 @@ export async function apiRenameSession(params: { sessionId: string; title: strin
         body: JSON.stringify({ title: params.title }),
     });
 
-    const data = (await res.json()) as ApiEnvelope<{}>;
+    const data = (await res.json()) as ApiEnvelope<unknown>;
     assertOk(res, data, params.errorMessage ?? '');
 }
 
@@ -105,7 +105,7 @@ export async function apiDeleteSession(sessionId: string, options?: { errorMessa
         cache: 'no-store',
     });
 
-    const data = (await res.json()) as ApiEnvelope<{}>;
+    const data = (await res.json()) as ApiEnvelope<unknown>;
     assertOk(res, data, options?.errorMessage ?? '');
 }
 

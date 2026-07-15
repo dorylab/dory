@@ -5,7 +5,7 @@ import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { Database, Timer, HardDrive, ShieldAlert, RefreshCw, Clipboard, CheckCheck } from 'lucide-react';
-import { formatDuration } from 'date-fns';
+import { formatDuration, intervalToDuration } from 'date-fns';
 import { formatNumber, formatTime, formatBytes } from '../utils/format';
 import { useTranslations } from 'next-intl';
 
@@ -89,7 +89,7 @@ export function ResultMetaBar({ meta, compact = false, className }: { meta: Resu
                 <Timer className="h-3.5 w-3.5" />
                 <b className="text-foreground">
                     {typeof durationMs === 'number'
-                        ? formatDuration(require('date-fns').intervalToDuration({ start: 0, end: durationMs }))
+                        ? formatDuration(intervalToDuration({ start: 0, end: durationMs }))
                         : t('Common.EmptyValue')}
                 </b>
             </span>

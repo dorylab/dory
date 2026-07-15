@@ -4,12 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import { and, asc, eq, inArray, lte } from 'drizzle-orm';
+import { and, asc, eq, lte, ne, notInArray, sql } from 'drizzle-orm';
 
 import { getDoryArtifactStore, joinObjectPath, safeObjectPathPart, type DoryArtifactStore } from '@dory/artifacts';
 import { getClient } from '@dory/database/postgres/client';
-import { agentRunResultSets, organizations, queryRuns, resultSets as resultSetsTable, workQueryResultSets } from '@dory/database/postgres/schemas';
-import { DEFAULT_RESULT_SET_RETENTION_DAYS, getResultSetRetentionDaysFromOrganizationMetadata } from '@dory/database/postgres/impl/organization';
+import { agentRunResultSets, organizations, queryRuns, resultSetExports, resultSets as resultSetsTable, workQueryResultSets } from '@dory/database/postgres/schemas';
+import {
+    DEFAULT_RESULT_SET_MAX_STORAGE_BYTES,
+    DEFAULT_RESULT_SET_RETENTION_DAYS,
+    getResultSetMaxStorageBytesFromOrganizationMetadata,
+    getResultSetRetentionDaysFromOrganizationMetadata,
+} from '@dory/database/postgres/impl/organization';
 import {
     buildResultSetPreview,
     configureResultSetDuckDb,
@@ -32,6 +37,9 @@ const DEFAULT_ROW_LIMIT = 1000;
 const MAX_ROW_LIMIT = 5000;
 const ROW_PAGE_CACHE_TTL_MS = 60_000;
 const ROW_PAGE_CACHE_MAX_ENTRIES = 128;
+const EXPORT_RETENTION_MS = 24 * 60 * 60 * 1000;
+const STORAGE_CLEANUP_BATCH_SIZE = 100;
+export const RESULT_SET_STORAGE_LIMIT_WARNING = 'Workspace storage limit reached; only the result preview was retained.';
 
 type RowPageCacheEntry = {
     createdAt: number;
@@ -86,6 +94,8 @@ export type PersistQueryResultSetOutput = {
     rowCount: number;
     schema: ResultSetColumn[];
     byteSize: number;
+    storageLimitApplied?: boolean;
+    warning?: string;
 };
 
 export type ReadResultRowsOutput = {
@@ -149,9 +159,21 @@ export type ResultSetExportObject = {
     byteSize?: number;
 };
 
+export type ResultSetStorageUsage = {
+    resultSetsBytes: number;
+    exportsBytes: number;
+    totalBytes: number;
+};
+
 export type CleanupExpiredResultSetsOutput = {
     scanned: number;
     deleted: number;
+    deletedResultSets: number;
+    deletedExports: number;
+    bytesFreed: number;
+    usageAfter: ResultSetStorageUsage;
+    hasMore: boolean;
+    failures: number;
 };
 
 export type ResultSetProfileReadOutput = {
@@ -823,6 +845,10 @@ export class PostgresResultSetsRepository {
             columns,
             rows,
         });
+        const maxStorageBytes = await this.getMaxStorageBytes(input.organizationId);
+        const previewByteSizeEstimate = Buffer.byteLength(JSON.stringify(preview), 'utf8');
+        const fullDataByteSize = fullData?.byteSize ?? fullData?.parts.reduce((total, part) => total + (part.byteSize ?? 0), 0) ?? 0;
+        const storageLimitApplied = Boolean(fullData && fullDataByteSize + previewByteSizeEstimate > maxStorageBytes);
 
         const { ref, manifest: persistedManifest } = await this.artifacts.resultSets
             .putResultSet({
@@ -830,7 +856,7 @@ export class PostgresResultSetsRepository {
                 artifactId,
                 manifest,
                 preview: rows.length || status === 'success' ? preview : null,
-                dataParts: fullData?.parts ?? null,
+                dataParts: storageLimitApplied ? null : (fullData?.parts ?? null),
             })
             .finally(() => fullData?.cleanup?.().catch(() => undefined));
 
@@ -883,6 +909,7 @@ export class PostgresResultSetsRepository {
                 createdByActorType: actorType,
                 createdByActorId: input.userId,
                 byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                storageLimitApplied,
                 expiresAt,
                 createdAt: now,
                 updatedAt: now,
@@ -902,6 +929,13 @@ export class PostgresResultSetsRepository {
             throw error;
         }
 
+        await this.enforceStorageLimit(input.organizationId, { protectedResultSetId: artifactId }).catch(error => {
+            console.warn('[resultSets] storage quota cleanup failed after query; query remains successful', {
+                artifactId,
+                error: getErrorMessage(error),
+            });
+        });
+
         return {
             resultSetId: artifactId,
             queryRunId,
@@ -912,6 +946,8 @@ export class PostgresResultSetsRepository {
             rowCount,
             schema: columns,
             byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+            storageLimitApplied,
+            warning: storageLimitApplied ? RESULT_SET_STORAGE_LIMIT_WARNING : undefined,
         };
     }
 
@@ -1090,6 +1126,10 @@ export class PostgresResultSetsRepository {
             columns,
             rows: countedRows,
         });
+        const maxStorageBytes = await this.getMaxStorageBytes(input.organizationId);
+        const previewByteSizeEstimate = Buffer.byteLength(JSON.stringify(preview), 'utf8');
+        const fullDataByteSize = fullData?.byteSize ?? fullData?.parts.reduce((total, part) => total + (part.byteSize ?? 0), 0) ?? 0;
+        const storageLimitApplied = Boolean(fullData && fullDataByteSize + previewByteSizeEstimate > maxStorageBytes);
         const completedAt = new Date();
         const durationMs = getDurationMs(resultSet.durationMs, resultSet.startedAt, completedAt);
         if (!fullData && streamedRowCount === 0 && status === 'success' && !streamReadError) {
@@ -1145,7 +1185,7 @@ export class PostgresResultSetsRepository {
                 artifactId,
                 manifest,
                 preview: previewRows.length || status === 'success' ? preview : null,
-                dataParts: fullData?.parts ?? null,
+                dataParts: storageLimitApplied ? null : (fullData?.parts ?? null),
             });
             latestRef = ref;
             latestManifest = persistedManifest;
@@ -1176,10 +1216,18 @@ export class PostgresResultSetsRepository {
                         artifactRefJson: ref,
                         dataAvailability,
                         byteSize,
+                        storageLimitApplied,
                         updatedAt: completedAt,
                     })
                     .where(eq(resultSetsTable.id, artifactId)),
             ]);
+
+            await this.enforceStorageLimit(input.organizationId, { protectedResultSetId: artifactId }).catch(error => {
+                console.warn('[resultSets] storage quota cleanup failed after streamed query; query remains successful', {
+                    artifactId,
+                    error: getErrorMessage(error),
+                });
+            });
 
             return {
                 resultSetId: artifactId,
@@ -1191,6 +1239,8 @@ export class PostgresResultSetsRepository {
                 rowCount,
                 schema: columns,
                 byteSize,
+                storageLimitApplied,
+                warning: storageLimitApplied ? RESULT_SET_STORAGE_LIMIT_WARNING : undefined,
             };
         } catch (error) {
             const message = getErrorMessage(error);
@@ -1230,51 +1280,151 @@ export class PostgresResultSetsRepository {
         }
     }
 
-    async cleanupExpiredResultSets(params: { organizationId: string; now?: Date; limit?: number }): Promise<CleanupExpiredResultSetsOutput> {
+    async getStorageUsage(organizationId: string): Promise<ResultSetStorageUsage> {
+        this.assertInited();
+
+        const [resultRows, exportRows] = await Promise.all([
+            this.db
+                .select({ bytes: sql<string>`coalesce(sum(${resultSetsTable.byteSize}), 0)` })
+                .from(resultSetsTable)
+                .where(eq(resultSetsTable.organizationId, organizationId)),
+            this.db
+                .select({ bytes: sql<string>`coalesce(sum(${resultSetExports.byteSize}), 0)` })
+                .from(resultSetExports)
+                .where(eq(resultSetExports.organizationId, organizationId)),
+        ]);
+        const resultSetsBytes = Number(resultRows[0]?.bytes ?? 0);
+        const exportsBytes = Number(exportRows[0]?.bytes ?? 0);
+        return {
+            resultSetsBytes,
+            exportsBytes,
+            totalBytes: resultSetsBytes + exportsBytes,
+        };
+    }
+
+    async cleanupWorkspaceStorage(params: {
+        organizationId: string;
+        now?: Date;
+        limit?: number;
+        maxStorageBytes?: number;
+        protectedResultSetId?: string;
+        protectedExportId?: string;
+    }): Promise<CleanupExpiredResultSetsOutput> {
         this.assertInited();
 
         const now = params.now ?? new Date();
-        const limit = Math.max(1, Math.min(params.limit ?? 100, 500));
-        const rows = await this.db
-            .select({
-                id: resultSetsTable.id,
-                artifactRefJson: resultSetsTable.artifactRefJson,
-            })
-            .from(resultSetsTable)
-            .where(and(eq(resultSetsTable.organizationId, params.organizationId), lte(resultSetsTable.expiresAt, now)))
-            .orderBy(asc(resultSetsTable.expiresAt))
-            .limit(limit);
-        const resultSetIds = rows.map(row => row.id);
+        const limit = Math.max(1, Math.min(params.limit ?? STORAGE_CLEANUP_BATCH_SIZE, 500));
+        const maxStorageBytes = params.maxStorageBytes ?? (await this.getMaxStorageBytes(params.organizationId));
+        let scanned = 0;
+        let deletedResultSets = 0;
+        let deletedExports = 0;
+        let bytesFreed = 0;
+        let failures = 0;
+        const failedExportIds = new Set<string>();
+        const failedResultSetIds = new Set<string>();
 
-        for (const row of rows) {
-            await this.artifacts.resultSets.deleteResultSet(row.artifactRefJson);
-        }
+        const legacy = await this.reconcileLegacyExports(params.organizationId, now).catch(error => {
+            console.warn('[resultSets] legacy export reconciliation failed', { organizationId: params.organizationId, error: getErrorMessage(error) });
+            return { scanned: 0, deleted: 0, bytesFreed: 0, failures: 1 };
+        });
+        scanned += legacy.scanned;
+        deletedExports += legacy.deleted;
+        bytesFreed += legacy.bytesFreed;
+        failures += legacy.failures;
 
-        if (resultSetIds.length) {
-            await Promise.all([
-                this.db.delete(agentRunResultSets).where(inArray(agentRunResultSets.resultSetId, resultSetIds)),
-                this.db
-                    .update(queryRuns)
-                    .set({
-                        resultSetId: null,
-                        updatedAt: now,
-                    })
-                    .where(and(eq(queryRuns.organizationId, params.organizationId), inArray(queryRuns.resultSetId, resultSetIds))),
-                this.db
-                    .update(workQueryResultSets)
-                    .set({
-                        resultSetId: null,
-                        artifactRefJson: null,
-                    })
-                    .where(inArray(workQueryResultSets.resultSetId, resultSetIds)),
-                this.db.delete(resultSetsTable).where(and(eq(resultSetsTable.organizationId, params.organizationId), inArray(resultSetsTable.id, resultSetIds))),
-            ]);
-        }
+        const deleteExportRows = async (expiredOnly: boolean) => {
+            while (true) {
+                const conditions = [eq(resultSetExports.organizationId, params.organizationId)];
+                if (expiredOnly) conditions.push(lte(resultSetExports.expiresAt, now));
+                if (params.protectedExportId) conditions.push(ne(resultSetExports.id, params.protectedExportId));
+                if (failedExportIds.size) conditions.push(notInArray(resultSetExports.id, [...failedExportIds]));
+                const rows = await this.db
+                    .select()
+                    .from(resultSetExports)
+                    .where(and(...conditions))
+                    .orderBy(asc(expiredOnly ? resultSetExports.expiresAt : resultSetExports.createdAt))
+                    .limit(limit);
+                if (!rows.length) break;
+                scanned += rows.length;
+                for (const row of rows) {
+                    try {
+                        await this.artifacts.objectStore.delete(row.objectPath);
+                        await this.db.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, row.id)));
+                        deletedExports += 1;
+                        bytesFreed += row.byteSize;
+                    } catch (error) {
+                        failures += 1;
+                        failedExportIds.add(row.id);
+                        console.warn('[resultSets] export artifact cleanup failed; retaining database record', { exportId: row.id, error: getErrorMessage(error) });
+                    }
+                }
+                if (!expiredOnly && (await this.getStorageUsage(params.organizationId)).totalBytes <= maxStorageBytes) break;
+            }
+        };
+
+        const deleteResultRows = async (expiredOnly: boolean) => {
+            while (true) {
+                const conditions = [eq(resultSetsTable.organizationId, params.organizationId)];
+                if (expiredOnly) conditions.push(lte(resultSetsTable.expiresAt, now));
+                if (params.protectedResultSetId) conditions.push(ne(resultSetsTable.id, params.protectedResultSetId));
+                if (failedResultSetIds.size) conditions.push(notInArray(resultSetsTable.id, [...failedResultSetIds]));
+                const rows = await this.db
+                    .select({ id: resultSetsTable.id, artifactRefJson: resultSetsTable.artifactRefJson, byteSize: resultSetsTable.byteSize })
+                    .from(resultSetsTable)
+                    .where(and(...conditions))
+                    .orderBy(asc(expiredOnly ? resultSetsTable.expiresAt : resultSetsTable.createdAt))
+                    .limit(limit);
+                if (!rows.length) break;
+                scanned += rows.length;
+                for (const row of rows) {
+                    try {
+                        await this.artifacts.resultSets.deleteResultSet(row.artifactRefJson);
+                        await this.deleteResultSetRecord(params.organizationId, row.id, now);
+                        deletedResultSets += 1;
+                        bytesFreed += row.byteSize ?? 0;
+                    } catch (error) {
+                        failures += 1;
+                        failedResultSetIds.add(row.id);
+                        console.warn('[resultSets] result artifact cleanup failed; retaining database record', { resultSetId: row.id, error: getErrorMessage(error) });
+                    }
+                }
+                if (!expiredOnly && (await this.getStorageUsage(params.organizationId)).totalBytes <= maxStorageBytes) break;
+            }
+        };
+
+        await deleteExportRows(true);
+        await deleteResultRows(true);
+        if ((await this.getStorageUsage(params.organizationId)).totalBytes > maxStorageBytes) await deleteExportRows(false);
+        if ((await this.getStorageUsage(params.organizationId)).totalBytes > maxStorageBytes) await deleteResultRows(false);
+
+        const usageAfter = await this.getStorageUsage(params.organizationId);
+        const [remainingExpiredExport, remainingExpiredResult] = await Promise.all([
+            this.db
+                .select({ id: resultSetExports.id })
+                .from(resultSetExports)
+                .where(and(eq(resultSetExports.organizationId, params.organizationId), lte(resultSetExports.expiresAt, now)))
+                .limit(1),
+            this.db
+                .select({ id: resultSetsTable.id })
+                .from(resultSetsTable)
+                .where(and(eq(resultSetsTable.organizationId, params.organizationId), lte(resultSetsTable.expiresAt, now)))
+                .limit(1),
+        ]);
 
         return {
-            scanned: rows.length,
-            deleted: resultSetIds.length,
+            scanned,
+            deleted: deletedResultSets + deletedExports,
+            deletedResultSets,
+            deletedExports,
+            bytesFreed,
+            usageAfter,
+            hasMore: Boolean(remainingExpiredExport.length || remainingExpiredResult.length || usageAfter.totalBytes > maxStorageBytes),
+            failures,
         };
+    }
+
+    async cleanupExpiredResultSets(params: { organizationId: string; now?: Date; limit?: number }): Promise<CleanupExpiredResultSetsOutput> {
+        return this.cleanupWorkspaceStorage(params);
     }
 
     async getQuerySession(params: { organizationId: string; sessionId: string }): Promise<QuerySessionReadOutput | null> {
@@ -1378,7 +1528,7 @@ export class PostgresResultSetsRepository {
                     errorCode: null,
                     errorSqlState: null,
                     errorMeta: null,
-                    warnings: null,
+                    warnings: row.storageLimitApplied ? [RESULT_SET_STORAGE_LIMIT_WARNING] : null,
                     startedAt: (run?.createdAt ?? row.createdAt) instanceof Date ? (run?.createdAt ?? row.createdAt).getTime() : null,
                     finishedAt: (run?.updatedAt ?? row.updatedAt) instanceof Date ? (run?.updatedAt ?? row.updatedAt).getTime() : null,
                     durationMs: run?.durationMs ?? null,
@@ -1510,17 +1660,84 @@ export class PostgresResultSetsRepository {
         });
 
         const stat = await this.artifacts.objectStore.stat(objectPath);
+        const byteSize = stat?.byteSize ?? 0;
+        const maxStorageBytes = await this.getMaxStorageBytes(params.organizationId);
+        if (byteSize > maxStorageBytes) {
+            await this.artifacts.objectStore.delete(objectPath).catch(() => undefined);
+            throw new DatabaseError('Export exceeds the Workspace storage limit', 413);
+        }
+
+        const now = new Date();
+        let exportRegistered = false;
+        try {
+            await this.db.insert(resultSetExports).values({
+                id: exportId,
+                organizationId: params.organizationId,
+                resultSetId: params.resultSetId,
+                objectPath,
+                format: params.format,
+                fileName,
+                byteSize,
+                expiresAt: new Date(now.getTime() + EXPORT_RETENTION_MS),
+                createdAt: now,
+            });
+            exportRegistered = true;
+            await this.enforceStorageLimit(params.organizationId, { protectedExportId: exportId });
+            if ((await this.getStorageUsage(params.organizationId)).totalBytes > maxStorageBytes) {
+                throw new DatabaseError('Workspace storage limit reached; export was not retained', 413);
+            }
+        } catch (error) {
+            try {
+                await this.artifacts.objectStore.delete(objectPath);
+                if (exportRegistered) await this.db.delete(resultSetExports).where(eq(resultSetExports.id, exportId));
+            } catch (cleanupError) {
+                console.warn('[resultSets] failed to discard rejected export; retaining its database record for retry', {
+                    exportId,
+                    error: getErrorMessage(cleanupError),
+                });
+            }
+            throw error;
+        }
+
         return {
             exportId,
             format: params.format,
             fileName,
-            byteSize: stat?.byteSize,
+            byteSize,
             downloadUrl: `/api/result-set-exports/${encodeURIComponent(exportId)}`,
         };
     }
 
     async openExport(params: { organizationId: string; exportId: string }): Promise<ResultSetExportObject> {
         this.assertInited();
+
+        const [record] = await this.db
+            .select()
+            .from(resultSetExports)
+            .where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)))
+            .limit(1);
+        if (record && record.expiresAt.getTime() <= Date.now()) {
+            try {
+                await this.artifacts.objectStore.delete(record.objectPath);
+                await this.db.delete(resultSetExports).where(eq(resultSetExports.id, record.id));
+            } catch (error) {
+                console.warn('[resultSets] expired export cleanup failed during download; retaining record for retry', {
+                    exportId: record.id,
+                    error: getErrorMessage(error),
+                });
+            }
+            throw new DatabaseError('Result set export has expired', 404);
+        }
+
+        if (record) {
+            if (!(await this.artifacts.objectStore.exists(record.objectPath))) throw new DatabaseError('Result set export not found', 404);
+            return {
+                stream: await this.artifacts.objectStore.get(record.objectPath),
+                fileName: record.fileName,
+                contentType: exportContentType(record.format),
+                byteSize: record.byteSize,
+            };
+        }
 
         const prefix = joinObjectPath('result-set-exports', organizationPathPart(params.organizationId), safeObjectPathPart(params.exportId));
         let selected: { path: string; byteSize?: number } | null = null;
@@ -1757,6 +1974,76 @@ export class PostgresResultSetsRepository {
         });
     }
 
+    private async enforceStorageLimit(
+        organizationId: string,
+        options: { protectedResultSetId?: string; protectedExportId?: string } = {},
+    ): Promise<CleanupExpiredResultSetsOutput> {
+        return this.cleanupWorkspaceStorage({
+            organizationId,
+            protectedResultSetId: options.protectedResultSetId,
+            protectedExportId: options.protectedExportId,
+        });
+    }
+
+    private async deleteResultSetRecord(organizationId: string, resultSetId: string, now: Date) {
+        await Promise.all([
+            this.db.delete(agentRunResultSets).where(eq(agentRunResultSets.resultSetId, resultSetId)),
+            this.db
+                .update(queryRuns)
+                .set({ resultSetId: null, updatedAt: now })
+                .where(and(eq(queryRuns.organizationId, organizationId), eq(queryRuns.resultSetId, resultSetId))),
+            this.db.update(workQueryResultSets).set({ resultSetId: null, artifactRefJson: null }).where(eq(workQueryResultSets.resultSetId, resultSetId)),
+        ]);
+        await this.db.delete(resultSetsTable).where(and(eq(resultSetsTable.organizationId, organizationId), eq(resultSetsTable.id, resultSetId)));
+    }
+
+    private async reconcileLegacyExports(organizationId: string, now: Date) {
+        const prefix = joinObjectPath('result-set-exports', organizationPathPart(organizationId));
+        const registered = await this.db.select({ objectPath: resultSetExports.objectPath }).from(resultSetExports).where(eq(resultSetExports.organizationId, organizationId));
+        const registeredPaths = new Set(registered.map(row => row.objectPath));
+        let scanned = 0;
+        let deleted = 0;
+        let bytesFreed = 0;
+        let failures = 0;
+
+        for await (const object of this.artifacts.objectStore.list(prefix)) {
+            if (registeredPaths.has(object.path)) continue;
+            scanned += 1;
+            const relative = object.path.slice(prefix.length).replace(/^\/+/, '');
+            const [exportId, fileName] = relative.split('/');
+            if (!exportId || !fileName) continue;
+            const createdAt = object.updatedAt ?? now;
+            if (createdAt.getTime() + EXPORT_RETENTION_MS <= now.getTime()) {
+                try {
+                    await this.artifacts.objectStore.delete(object.path);
+                    deleted += 1;
+                    bytesFreed += object.byteSize ?? 0;
+                } catch (error) {
+                    failures += 1;
+                    console.warn('[resultSets] legacy export cleanup failed', { objectPath: object.path, error: getErrorMessage(error) });
+                }
+                continue;
+            }
+            const format = fileName.endsWith('.parquet') ? 'parquet' : 'csv';
+            await this.db
+                .insert(resultSetExports)
+                .values({
+                    id: exportId,
+                    organizationId,
+                    resultSetId: null,
+                    objectPath: object.path,
+                    format,
+                    fileName,
+                    byteSize: object.byteSize ?? 0,
+                    expiresAt: new Date(createdAt.getTime() + EXPORT_RETENTION_MS),
+                    createdAt,
+                })
+                .catch(() => undefined);
+        }
+
+        return { scanned, deleted, bytesFreed, failures };
+    }
+
     private async getRecord(organizationId: string, resultSetId: string): Promise<ResultSetRecord> {
         const [record] = await this.db
             .select()
@@ -1807,6 +2094,11 @@ export class PostgresResultSetsRepository {
     private async getRetentionDays(organizationId: string): Promise<number> {
         const rows = await this.db.select({ metadata: organizations.metadata }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
         return rows.length ? getResultSetRetentionDaysFromOrganizationMetadata(rows[0]?.metadata) : DEFAULT_RESULT_SET_RETENTION_DAYS;
+    }
+
+    private async getMaxStorageBytes(organizationId: string): Promise<number> {
+        const rows = await this.db.select({ metadata: organizations.metadata }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+        return rows.length ? getResultSetMaxStorageBytesFromOrganizationMetadata(rows[0]?.metadata) : DEFAULT_RESULT_SET_MAX_STORAGE_BYTES;
     }
 
     private exportObjectPath(organizationId: string, exportId: string, fileName: string) {

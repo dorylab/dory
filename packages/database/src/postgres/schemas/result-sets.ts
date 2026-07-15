@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
 import type { ResultSetArtifactRef, ResultSetColumn, ResultSetDataAvailability, ResultSetSourceType } from '@dory/resultset';
 
@@ -77,7 +77,8 @@ export const resultSets = pgTable(
         createdByActorType: text('created_by_actor_type').$type<QueryRunActorType>().notNull(),
         createdByActorId: text('created_by_actor_id'),
         contentHash: text('content_hash'),
-        byteSize: integer('byte_size'),
+        byteSize: bigint('byte_size', { mode: 'number' }),
+        storageLimitApplied: boolean('storage_limit_applied').notNull().default(false),
         expiresAt: timestamp('expires_at', { withTimezone: true }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -91,6 +92,26 @@ export const resultSets = pgTable(
         index('idx_result_sets_session_set').on(t.organizationId, t.sessionId, t.setIndex),
         index('idx_result_sets_source_query_run').on(t.sourceQueryRunId),
         index('idx_result_sets_expires_at').on(t.expiresAt),
+    ],
+);
+
+export const resultSetExports = pgTable(
+    'result_set_exports',
+    {
+        id: text('id').primaryKey(),
+        organizationId: text('organization_id').notNull(),
+        resultSetId: text('result_set_id'),
+        objectPath: text('object_path').notNull(),
+        format: text('format').$type<'csv' | 'parquet'>().notNull(),
+        fileName: text('file_name').notNull(),
+        byteSize: bigint('byte_size', { mode: 'number' }).notNull(),
+        expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    t => [
+        index('idx_result_set_exports_org_created').on(t.organizationId, t.createdAt),
+        index('idx_result_set_exports_org_expires').on(t.organizationId, t.expiresAt),
+        index('idx_result_set_exports_result_set').on(t.resultSetId),
     ],
 );
 
@@ -115,4 +136,5 @@ export const agentRunResultSets = pgTable(
 
 export type QueryRun = typeof queryRuns.$inferSelect;
 export type ResultSet = typeof resultSets.$inferSelect;
+export type ResultSetExport = typeof resultSetExports.$inferSelect;
 export type AgentRunResultSet = typeof agentRunResultSets.$inferSelect;

@@ -2,7 +2,6 @@
 
 import { TrendingUp } from "lucide-react"
 import {
-  PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
   Radar,

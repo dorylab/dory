@@ -223,6 +223,8 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
 
     const limited = !!sessionMetas?.limited;
     const shouldShowLimitNotice = isResult && limited;
+    const storageLimitApplied =
+        Array.isArray(sessionMetas?.warnings) && sessionMetas.warnings.some(warning => typeof warning === 'string' && warning.includes('Workspace storage limit'));
     const expectedRowCount = typeof sessionMetas?.rowCount === 'number' ? sessionMetas.rowCount : null;
     const remoteResultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
     const isRemoteFullResult = Boolean(remoteResultSetId);
@@ -1151,6 +1153,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             )}
 
             {/* Table area */}
+            {storageLimitApplied ? <div className="border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{t('Results.StorageLimitPreviewOnly')}</div> : null}
             <div className="flex-1 min-h-0">{renderResult()}</div>
 
             {isResult && <ResultStatusBar meta={execMetaBySet?.[activeSet]} shouldShowLimitNotice={shouldShowLimitNotice} />}

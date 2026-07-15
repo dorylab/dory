@@ -9,10 +9,6 @@ type RuntimeHintProps = {
 };
 
 export function RuntimeHint({ className }: RuntimeHintProps) {
-    if (process.env.NODE_ENV !== 'development') {
-        return null;
-    }
-
     const env = useEnvContext();
 
     const { runtime, cloudUrl } = useMemo(() => {
@@ -23,6 +19,8 @@ export function RuntimeHint({ className }: RuntimeHintProps) {
             cloudUrl: cloudValue || null,
         };
     }, [env]);
+
+    if (process.env.NODE_ENV !== 'development') return null;
 
     if (!runtime && !cloudUrl) return null;
 

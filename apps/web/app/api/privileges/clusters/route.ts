@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { ResponseUtil } from '@/lib/result';
 import { resolvePrivilegesConnection, handlePrivilegesError } from '../_utils';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';

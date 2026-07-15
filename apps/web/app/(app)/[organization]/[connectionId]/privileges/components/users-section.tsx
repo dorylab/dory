@@ -1,4 +1,3 @@
-import Link from 'next/link';
 
 import type { ClickHouseUser } from '@dory/shared/types/privileges';
 

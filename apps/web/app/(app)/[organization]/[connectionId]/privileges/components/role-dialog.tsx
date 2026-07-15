@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import type { ClickHouseRole } from '@dory/shared/types/privileges';
 import type { FormMode, RoleFormValues } from '../types';

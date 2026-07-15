@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { CaseSensitive, Clipboard, Copy, Play, Scissors, Sparkles, Wand2 } from 'lucide-react';
+import { CaseSensitive, Clipboard, Copy, Play, Scissors, Wand2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useSetAtom } from 'jotai';
 

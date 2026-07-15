@@ -19,6 +19,8 @@ type FolderItemProps = {
     onDelete: (folder: FolderData) => void;
     children?: React.ReactNode;
     t: (key: string) => string;
+    // dnd-kit exposes listener callbacks through the built-in Function type.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     dragHandleListeners?: Record<string, Function>;
     dragHandleAttributes?: Record<string, any>;
     isDragging?: boolean;

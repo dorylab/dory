@@ -3,7 +3,6 @@
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { Sparkles } from 'lucide-react';
 import { AiOverview } from '../types';
 import { AISparkIcon } from '@/components/@dory/ui/ai-spark-icon';
 import { useTranslations } from 'next-intl';

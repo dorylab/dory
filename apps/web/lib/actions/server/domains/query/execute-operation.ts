@@ -572,6 +572,7 @@ async function runSqlExecution(
                         previewRowCount: persistedResult.previewRowCount,
                         rowCount: persistedResult.rowCount,
                         columns: persistedResult.schema,
+                        warnings: persistedResult.warning ? [persistedResult.warning] : qrs.warnings,
                     };
                     if (stream && markStreamFinished) {
                         const finishedAt = preciseDateNow();
