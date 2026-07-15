@@ -2,6 +2,7 @@
 
 import React, { Activity, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { cn } from '@dory/web-utils';
 
 import VTable from './vtable';
 import { InspectorPanel } from './vtable/InspectorPanel';
@@ -28,7 +29,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useVTableFilters, VTableFilters } from './vtable/VTableFilters';
 import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
-import type { ColumnFilter } from './vtable/type';
+import type { ColumnFilter, VTableRemoteSource } from './vtable/type';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
 import type { ResultSetMeta, ResultSetViewState } from '@/lib/client/type';
 import { isQueryHistoryRestoredSession } from '../../query-history-result-restore';
@@ -59,6 +60,18 @@ type SessionUiSnapshot = {
     sessionMetaBySet?: Record<number, CurrentSessionMeta>;
     meta?: MetaState;
     sessionStatus?: ResultSessionStatus | null;
+};
+type ResultTablePaneSnapshot = {
+    sessionId: string;
+    setIndex: number;
+    results: Array<{ rowData: Record<string, unknown> }>;
+    columnMetas: NonNullable<CurrentSessionMeta['columns']>;
+    remoteSource: VTableRemoteSource | null;
+    storageKey: string;
+    activeFilters: ColumnFilter[];
+    initialSort: { column: string; direction: 'asc' | 'desc' } | null;
+    selectedRowIndexes: number[];
+    serverSideOperations: boolean;
 };
 type ResultTableProps = {
     tabId?: string;
@@ -218,12 +231,14 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const [query, setQuery] = useState('');
     const [sortState, setSortState] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null);
     const [selectedRowIndexes, setSelectedRowIndexes] = useState<number[]>([]);
-    const hydratedViewStateKeyRef = useRef<string | null>(null);
+    const [hydratedViewStateKey, setHydratedViewStateKey] = useState<string | null>(null);
     const persistedViewStateRef = useRef<string | null>(null);
     const [chartStatesByKey, setChartStatesByKey] = useAtom(chartStatesByKeyAtom);
     const [chartStateVersionByTab, setChartStateVersionByTab] = useState<Record<string, number>>({});
     const [chartSnapshotsBySet, setChartSnapshotsBySet] = useState<Record<number, { rows: Array<{ rowData: Record<string, unknown> }>; columnsRaw?: unknown }>>({});
-    const [remoteEffectiveRowCount, setRemoteEffectiveRowCount] = useState<number | null>(null);
+    const [tablePaneSnapshotsBySet, setTablePaneSnapshotsBySet] = useState<Record<number, ResultTablePaneSnapshot>>({});
+    const [remoteEffectiveRowCountBySet, setRemoteEffectiveRowCountBySet] = useState<Record<number, number | null>>({});
+    const remoteEffectiveRowCount = activeSet >= 0 ? (remoteEffectiveRowCountBySet[activeSet] ?? null) : null;
     const rowCount = isRemoteFullResult ? (remoteEffectiveRowCount ?? remoteRowCount) : results.length;
     const showEmpty = isRemoteFullResult ? rowCount === 0 : results.length === 0;
 
@@ -352,8 +367,15 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const remoteOperationKey = useMemo(() => JSON.stringify(remoteOperations), [remoteOperations]);
 
     useEffect(() => {
-        setRemoteEffectiveRowCount(null);
-    }, [remoteOperationKey, remoteResultSetId, remoteRowCount]);
+        if (activeSet < 0) return;
+        setRemoteEffectiveRowCountBySet(prev => {
+            if (prev[activeSet] == null) return prev;
+            return {
+                ...prev,
+                [activeSet]: null,
+            };
+        });
+    }, [activeSet, remoteOperationKey, remoteResultSetId, remoteRowCount]);
 
     const remoteSource = useMemo(() => {
         if (!remoteResultSetId || !isRemoteFullResult || remoteRowCount <= 0) return null;
@@ -373,7 +395,10 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                     signal,
                 });
                 if (typeof response.rowCount === 'number') {
-                    setRemoteEffectiveRowCount(response.rowCount);
+                    setRemoteEffectiveRowCountBySet(prev => ({
+                        ...prev,
+                        [activeSet]: response.rowCount,
+                    }));
                 }
                 return response.rows.map((row, index) => ({
                     tabId,
@@ -382,11 +407,66 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 }));
             },
         };
-    }, [isRemoteFullResult, readResultSetRows, remoteEffectiveRowCount, remoteOperationKey, remoteOperations, remoteResultSetId, remoteRowCount, tabId]);
+    }, [activeSet, isRemoteFullResult, readResultSetRows, remoteEffectiveRowCount, remoteOperationKey, remoteOperations, remoteResultSetId, remoteRowCount, tabId]);
+
+    useEffect(() => {
+        if (!sessionId || activeSet < 0) return;
+        if (sessionMetas.sessionId !== sessionId || sessionMetas.setIndex !== activeSet) return;
+        if (hydratedViewStateKey !== `${sessionId}:${activeSet}`) return;
+
+        const nextSnapshot: ResultTablePaneSnapshot = {
+            sessionId,
+            setIndex: activeSet,
+            results: isRemoteFullResult ? EMPTY_RESULTS : columnFilteredResults,
+            columnMetas: sessionMetas.columns ?? [],
+            remoteSource,
+            storageKey,
+            activeFilters,
+            initialSort: sortState,
+            selectedRowIndexes,
+            serverSideOperations: isRemoteFullResult,
+        };
+
+        setTablePaneSnapshotsBySet(prev => {
+            const current = prev[activeSet];
+            if (
+                current?.sessionId === nextSnapshot.sessionId &&
+                current.results === nextSnapshot.results &&
+                current.columnMetas === nextSnapshot.columnMetas &&
+                current.remoteSource === nextSnapshot.remoteSource &&
+                current.storageKey === nextSnapshot.storageKey &&
+                current.activeFilters === nextSnapshot.activeFilters &&
+                current.initialSort === nextSnapshot.initialSort &&
+                current.selectedRowIndexes === nextSnapshot.selectedRowIndexes &&
+                current.serverSideOperations === nextSnapshot.serverSideOperations
+            ) {
+                return prev;
+            }
+
+            return {
+                ...prev,
+                [activeSet]: nextSnapshot,
+            };
+        });
+    }, [
+        activeFilters,
+        activeSet,
+        columnFilteredResults,
+        hydratedViewStateKey,
+        isRemoteFullResult,
+        remoteSource,
+        selectedRowIndexes,
+        sessionId,
+        sessionMetas.columns,
+        sessionMetas.sessionId,
+        sessionMetas.setIndex,
+        sortState,
+        storageKey,
+    ]);
 
     useEffect(() => {
         if (!sessionId || activeSet < 0) {
-            hydratedViewStateKeyRef.current = null;
+            setHydratedViewStateKey(null);
             setQuery('');
             setSortState(null);
             setSelectedRowIndexes([]);
@@ -400,11 +480,11 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         }
 
         const viewStateKey = `${sessionId}:${activeSet}`;
-        if (hydratedViewStateKeyRef.current === viewStateKey) {
+        if (hydratedViewStateKey === viewStateKey) {
             return;
         }
 
-        hydratedViewStateKeyRef.current = viewStateKey;
+        setHydratedViewStateKey(viewStateKey);
         const viewState = (sessionMetas.viewState ?? null) as ResultSetViewState | null;
         persistedViewStateRef.current = JSON.stringify({
             searchText: viewState?.searchText ?? undefined,
@@ -419,7 +499,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         setSortState(viewState?.sorts?.[0] ?? null);
         setSelectedRowIndexes(viewState?.selectedRowIndexes ?? []);
         replaceFilters(deserializeViewFilters(viewState?.filters));
-    }, [activeSet, replaceFilters, sessionId, sessionMetas.sessionId, sessionMetas.setIndex, sessionMetas.viewState]);
+    }, [activeSet, hydratedViewStateKey, replaceFilters, sessionId, sessionMetas.sessionId, sessionMetas.setIndex, sessionMetas.viewState]);
 
     useEffect(() => {
         if (activeSet < 0) {
@@ -545,13 +625,16 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             setSetsMeta([]);
             setMeta({});
             setSessionStatus(null);
+            setTablePaneSnapshotsBySet({});
+            setRemoteEffectiveRowCountBySet({});
             return;
         }
         if (lastSessionRef.current !== sessionId) {
             lastSessionRef.current = sessionId;
 
             setResults([]);
-            setRemoteEffectiveRowCount(null);
+            setTablePaneSnapshotsBySet({});
+            setRemoteEffectiveRowCountBySet({});
 
             const cached = sessionUiCacheRef.current[sessionId];
             if (cached) {
@@ -897,49 +980,52 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                         </div>
                     </div>
                 </div>
-                {currentViewMode === 'table' ? (
-                    <>
-                        <div className="flex-1 min-h-0">
-                            {shouldShowFilteredEmpty ? (
-                                <div className="h-full bg-card flex items-center justify-center text-sm text-muted-foreground">{t('Results.NoResults')}</div>
-                            ) : (
+                <div className="relative flex min-h-0 flex-1">
+                    {Object.values(tablePaneSnapshotsBySet).map(snapshot => {
+                        const visible =
+                            currentViewMode === 'table' &&
+                            snapshot.setIndex === activeSet &&
+                            sessionMetas.sessionId === snapshot.sessionId &&
+                            sessionMetas.setIndex === snapshot.setIndex &&
+                            hydratedViewStateKey === `${snapshot.sessionId}:${snapshot.setIndex}`;
+                        const paneActiveFilters = visible ? activeFilters : snapshot.activeFilters;
+
+                        return (
+                            <div
+                                key={`${snapshot.sessionId}:${snapshot.setIndex}`}
+                                data-testid={`result-set-table-${snapshot.setIndex}`}
+                                aria-hidden={!visible}
+                                inert={!visible}
+                                className={cn('absolute inset-0 min-h-0', visible ? 'visible z-10' : 'invisible z-0 pointer-events-none')}
+                            >
                                 <VTable
-                                    results={isRemoteFullResult ? EMPTY_RESULTS : columnFilteredResults}
-                                    columnMetas={sessionMetas.columns ?? []}
-                                    remoteSource={remoteSource}
-                                    storageKey={storageKey}
+                                    results={visible ? (isRemoteFullResult ? EMPTY_RESULTS : columnFilteredResults) : snapshot.results}
+                                    columnMetas={visible ? (sessionMetas.columns ?? []) : snapshot.columnMetas}
+                                    remoteSource={visible ? remoteSource : snapshot.remoteSource}
+                                    storageKey={visible ? storageKey : snapshot.storageKey}
                                     onStatsChange={onStatsChange}
-                                    setInspectorOpen={setInspectorOpen}
-                                    setInspectorMode={setInspectorMode}
-                                    setInspectorPayload={setInspectorPayload}
-                                    activeFilters={activeFilters}
-                                    onUpsertFilter={setColumnFilter}
-                                    onRemoveFilter={removeFilter}
-                                    onClearAllFilters={clearAllFilters}
+                                    setInspectorOpen={visible ? setInspectorOpen : undefined}
+                                    setInspectorMode={visible ? setInspectorMode : undefined}
+                                    setInspectorPayload={visible ? setInspectorPayload : undefined}
+                                    activeFilters={paneActiveFilters}
+                                    onUpsertFilter={visible ? setColumnFilter : undefined}
+                                    onRemoveFilter={visible ? removeFilter : undefined}
+                                    onClearAllFilters={visible ? clearAllFilters : undefined}
                                     showFiltersBar={false}
-                                    initialSort={sortState}
-                                    selectedRowIndexes={selectedRowIndexes}
-                                    isActive={tabId === activeTabId}
-                                    serverSideOperations={isRemoteFullResult}
-                                    onSortChange={setSortState}
-                                    onSelectedRowIndexesChange={handleSelectedRowIndexesChange}
+                                    initialSort={visible ? sortState : snapshot.initialSort}
+                                    selectedRowIndexes={visible ? selectedRowIndexes : snapshot.selectedRowIndexes}
+                                    isActive={visible && tabId === activeTabId}
+                                    serverSideOperations={visible ? isRemoteFullResult : snapshot.serverSideOperations}
+                                    onSortChange={visible ? setSortState : undefined}
+                                    onSelectedRowIndexesChange={visible ? handleSelectedRowIndexesChange : undefined}
                                 />
-                            )}
-                        </div>
-                        <InspectorPanel
-                            open={inspectorOpen}
-                            setOpen={setInspectorOpen}
-                            mode={inspectorMode}
-                            payload={inspectorPayload}
-                            rowViewMode={rowViewMode}
-                            setRowViewMode={setRowViewMode}
-                            inspectorWidth={inspectorWidth}
-                            setInspectorWidth={setInspectorWidth}
-                            inspectorTopOffset={44}
-                        />
-                    </>
-                ) : (
-                    <div className="flex min-h-0 flex-1">
+                            </div>
+                        );
+                    })}
+                    {currentViewMode === 'table' && shouldShowFilteredEmpty && (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center bg-card text-sm text-muted-foreground">{t('Results.NoResults')}</div>
+                    )}
+                    <div className={cn('absolute inset-0 min-h-0', currentViewMode === 'charts' ? 'visible z-10 flex' : 'invisible z-0 pointer-events-none')}>
                         {chartSetIndices.map(setIndex => {
                             const setChartStateKey = tabId ? `tab:${tabId}:set:${setIndex}` : 'unknown';
                             const snapshot =
@@ -1033,7 +1119,20 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                             );
                         })}
                     </div>
-                )}
+                    {currentViewMode === 'table' && (
+                        <InspectorPanel
+                            open={inspectorOpen}
+                            setOpen={setInspectorOpen}
+                            mode={inspectorMode}
+                            payload={inspectorPayload}
+                            rowViewMode={rowViewMode}
+                            setRowViewMode={setRowViewMode}
+                            inspectorWidth={inspectorWidth}
+                            setInspectorWidth={setInspectorWidth}
+                            inspectorTopOffset={44}
+                        />
+                    )}
+                </div>
             </div>
         );
     }
