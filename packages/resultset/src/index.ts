@@ -200,7 +200,7 @@ export class ParquetResultSetDataWriter implements ResultSetDataWriter {
             preparedRows.sampleRows.map(row => normalizeRecord(row)),
         );
         const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-${safeFilePart(input.artifactId)}-`));
-        const dataDir = path.join(tempDir, 'data');
+        const dataDir = path.join(/* turbopackIgnore: true */ tempDir, 'data');
         const partRows = normalizeParquetPartRows(process.env.DORY_RESULTSET_PARQUET_PART_ROWS);
         const parts: ResultSetDataWriterPart[] = [];
 

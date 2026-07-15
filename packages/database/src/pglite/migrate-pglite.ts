@@ -26,7 +26,7 @@ function createArchiveSuffix(date = new Date()) {
 }
 
 async function archivePgliteDataDir(dataDir: string) {
-    const archivedDataDir = path.join(path.dirname(dataDir), `${path.basename(dataDir)}.broken-${createArchiveSuffix()}`);
+    const archivedDataDir = path.join(/* turbopackIgnore: true */ path.dirname(dataDir), `${path.basename(dataDir)}.broken-${createArchiveSuffix()}`);
 
     await fs.rename(dataDir, archivedDataDir);
     console.warn('[PGlite migrate] Archived broken data directory', {

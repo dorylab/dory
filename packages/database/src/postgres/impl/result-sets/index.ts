@@ -2061,7 +2061,7 @@ export class PostgresResultSetsRepository {
         fn: (ctx: { connection: any; parquetPath: string; tempDir: string }) => Promise<T>,
     ): Promise<T> {
         const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-resultset-${resultSetId}-`));
-        const dataDir = path.join(tempDir, 'data');
+        const dataDir = path.join(/* turbopackIgnore: true */ tempDir, 'data');
         const parquetPath = path.join(dataDir, '*.parquet');
         let instance: any = null;
         try {

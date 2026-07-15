@@ -1,1 +1,3 @@
-export { GET, PATCH, runtime } from '../result-set-storage/route';
+export { GET, PATCH } from '../result-set-storage/route';
+
+export const runtime = 'nodejs';
