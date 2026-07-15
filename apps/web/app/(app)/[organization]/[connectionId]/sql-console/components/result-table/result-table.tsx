@@ -905,6 +905,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                                     showFiltersBar={false}
                                     initialSort={sortState}
                                     selectedRowIndexes={selectedRowIndexes}
+                                    isActive={tabId === activeTabId}
                                     serverSideOperations={isRemoteFullResult}
                                     onSortChange={setSortState}
                                     onSelectedRowIndexesChange={handleSelectedRowIndexesChange}

@@ -151,6 +151,14 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     }, [activeTabId, editorRef, ensureEditorRef]);
 
     useEffect(() => {
+        if (!activeTabId) return;
+        const timeoutId = window.setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('dory:sql-tab-activated', { detail: { tabId: activeTabId } }));
+        }, 250);
+        return () => window.clearTimeout(timeoutId);
+    }, [activeTabId]);
+
+    useEffect(() => {
         if (!activeTabId || activeTab?.tabType !== 'sql') return;
 
         let cancelled = false;

@@ -34,6 +34,7 @@ export interface VTableProps {
     showFiltersBar?: boolean;
     initialSort?: { column: string; direction: 'asc' | 'desc' } | null;
     selectedRowIndexes?: number[];
+    isActive?: boolean;
     onSortChange?: (sort: { column: string; direction: 'asc' | 'desc' } | null) => void;
     onSelectedRowIndexesChange?: (rowIndexes: number[]) => void;
 }

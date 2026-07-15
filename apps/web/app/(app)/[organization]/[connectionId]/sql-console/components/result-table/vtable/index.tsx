@@ -60,7 +60,7 @@ type MeasurableMultiGrid = MultiGrid & {
 };
 
 type VersionedMultiGridProps = MultiGridProps & {
-    dataVersion?: number;
+    dataVersion?: string;
 };
 
 const VersionedMultiGrid = MultiGrid as React.ComponentType<VersionedMultiGridProps>;
@@ -151,6 +151,7 @@ export default function VTable({
     showFiltersBar = true,
     initialSort = null,
     selectedRowIndexes,
+    isActive = true,
     onSortChange,
     onSelectedRowIndexesChange,
 }: VTableProps) {
@@ -1251,6 +1252,104 @@ export default function VTable({
         },
         [isRemote, requestRemoteRange, tableRowCount],
     );
+    const refreshGridAfterReveal = useCallback(() => {
+        if (isRemote) {
+            const renderedRows = [...(gridContainerRef.current?.querySelectorAll<HTMLElement>('[data-cell]') ?? [])]
+                .map(element => element.dataset.cell)
+                .filter((cell): cell is CellKey => Boolean(cell))
+                .map(cell => parseCK(cell).row)
+                .filter(Number.isFinite);
+            const start = renderedRows.length > 0 ? Math.min(...renderedRows) : visibleRowRangeRef.current.start;
+            const stop = renderedRows.length > 0 ? Math.max(...renderedRows) : visibleRowRangeRef.current.stop;
+            visibleRowRangeRef.current = { start, stop };
+            requestRemoteRange(Math.max(0, start - 30), Math.min(tableRowCount - 1, stop + 60));
+        }
+    }, [isRemote, requestRemoteRange, tableRowCount]);
+
+    const hydrateVisibleRemoteCells = useCallback(() => {
+        if (!isRemote) return;
+        const container = gridContainerRef.current;
+        if (!container) return;
+
+        container.querySelectorAll<HTMLElement>('[data-cell]').forEach(element => {
+            const rawCell = element.dataset.cell;
+            if (!rawCell) return;
+            const { row, col } = parseCK(rawCell as CellKey);
+            const displayRow = remoteRowsRef.current.get(row);
+            if (!displayRow) return;
+
+            const content = element.firstElementChild as HTMLElement | null;
+            if (!content) return;
+            const value = displayRow.rowData[col];
+            content.className = 'block truncate min-w-0 w-full';
+            content.textContent = formatValue(value);
+            element.title = formatTooltip(value);
+        });
+    }, [isRemote]);
+
+    useLayoutEffect(() => {
+        hydrateVisibleRemoteCells();
+    }, [hydrateVisibleRemoteCells, remoteRowsVersion]);
+
+    useEffect(() => {
+        const refreshActiveGrid = () => {
+            const container = gridContainerRef.current;
+            if (!container) return;
+            const { width, height } = container.getBoundingClientRect();
+            if (width > 0 && height > 0) {
+                refreshGridAfterReveal();
+                hydrateVisibleRemoteCells();
+            }
+        };
+
+        window.addEventListener('dory:sql-tab-activated', refreshActiveGrid);
+        return () => window.removeEventListener('dory:sql-tab-activated', refreshActiveGrid);
+    }, [hydrateVisibleRemoteCells, refreshGridAfterReveal]);
+
+    useLayoutEffect(() => {
+        if (!isActive) return;
+        const frameId = requestAnimationFrame(refreshGridAfterReveal);
+        return () => cancelAnimationFrame(frameId);
+    }, [isActive, refreshGridAfterReveal]);
+
+    useLayoutEffect(() => {
+        const container = gridContainerRef.current;
+        if (!container) return;
+
+        let wasVisible = false;
+        const refreshWhenVisible = () => {
+            const { width, height } = container.getBoundingClientRect();
+            const isVisible = width > 0 && height > 0;
+            if (!isVisible) {
+                wasVisible = false;
+                return;
+            }
+            if (wasVisible) return;
+
+            wasVisible = true;
+            refreshGridAfterReveal();
+            hydrateVisibleRemoteCells();
+        };
+
+        refreshWhenVisible();
+        const resizeObserver = new ResizeObserver(refreshWhenVisible);
+        resizeObserver.observe(container);
+
+        const visibilityObserver = new MutationObserver(refreshWhenVisible);
+        let ancestor = container.parentElement;
+        while (ancestor && ancestor !== document.body) {
+            visibilityObserver.observe(ancestor, {
+                attributes: true,
+                attributeFilter: ['class', 'hidden', 'style'],
+            });
+            ancestor = ancestor.parentElement;
+        }
+
+        return () => {
+            resizeObserver.disconnect();
+            visibilityObserver.disconnect();
+        };
+    }, [hydrateVisibleRemoteCells, refreshGridAfterReveal]);
     const getGridColumnWidth = useCallback(
         ({ index }: { index: number }) => {
             if (index === 0) return effectiveIndexColWidth;
@@ -1357,7 +1456,7 @@ export default function VTable({
             return (
                 <VersionedMultiGrid
                     ref={gridRef}
-                    dataVersion={remoteRowsVersion}
+                    dataVersion={String(remoteRowsVersion)}
                     onSectionRendered={stableSectionRendered}
                     width={width}
                     height={height}
@@ -1411,7 +1510,12 @@ export default function VTable({
                     )}
 
                     {/* Grid */}
-                    <div ref={gridContainerRef} className="flex-1 min-h-0 outline-none" tabIndex={0} onKeyDown={onGridKeyDown}>
+                    <div
+                        ref={gridContainerRef}
+                        className="flex-1 min-h-0 outline-none"
+                        tabIndex={0}
+                        onKeyDown={onGridKeyDown}
+                    >
                         {gridElement}
                     </div>
                 </div>
