@@ -114,6 +114,33 @@ test('can open SQL editor and run a query', async ({ page, appErrors }) => {
     await expectAppHealthy(appErrors);
 });
 
+test('keeps query results visible after switching SQL tabs', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
+    await openMockConnectionConsole(page, seededConnection);
+
+    const newConsoleButton = page.getByRole('button', { name: /New Console/i });
+    await expect(newConsoleButton).toBeEnabled();
+    await newConsoleButton.click();
+    await expect(page.locator('.sql-editor-container')).toBeVisible();
+
+    await setSqlEditorValue(page, 'SELECT 1 AS value');
+    await runQueryUntilRequest(page);
+
+    const firstSqlTab = page.getByRole('tab', { name: /SELECT 1|New Query|Untitled Query/i }).first();
+    const resultCell = page.getByRole('button', { name: '1' }).last();
+    await expect(firstSqlTab).toBeVisible();
+    await expect(resultCell).toBeVisible();
+
+    await page.getByRole('button', { name: /Add tab/i }).click();
+    await expect(firstSqlTab).toHaveAttribute('aria-selected', 'false');
+    await expect(page.locator('[aria-hidden="true"] [data-testid="result-table-content"]')).toHaveCount(1);
+    await firstSqlTab.click();
+
+    await expect(firstSqlTab).toHaveAttribute('aria-selected', 'true');
+    await expect(resultCell).toBeVisible();
+    await expectAppHealthy(appErrors);
+});
+
 test('shows a readable SQL error without crashing the page', async ({ page, appErrors }) => {
     await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
     await openMockConnectionConsole(page, seededConnection);

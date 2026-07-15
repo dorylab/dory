@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Activity, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
 import { Sparkles } from 'lucide-react';
@@ -149,14 +149,6 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
             editorRef.current = refForActive.current;
         }
     }, [activeTabId, editorRef, ensureEditorRef]);
-
-    useEffect(() => {
-        if (!activeTabId) return;
-        const timeoutId = window.setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('dory:sql-tab-activated', { detail: { tabId: activeTabId } }));
-        }, 250);
-        return () => window.clearTimeout(timeoutId);
-    }, [activeTabId]);
 
     useEffect(() => {
         if (!activeTabId || activeTab?.tabType !== 'sql') return;
@@ -496,7 +488,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                                     onRequestAITitle={manualRenameTab}
                                     onHeightChange={setTabHeaderHeight}
                                 />
-                                <div className="flex-1 min-h-0">
+                                <div className="relative flex-1 min-h-0">
                                     {tabs.map(tab => {
                                         const isActive = tab.tabId === activeTabId;
                                         const tabEditorRef = tab.tabType === 'sql' ? (ensureEditorRef(tab.tabId) ?? editorRef) : editorRef;
@@ -507,7 +499,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                                             }
 
                                             return (
-                                                <div key={tab.tabId} className="flex h-full flex-col">
+                                                <div key={tab.tabId} className="absolute inset-0 flex h-full min-h-0 flex-col">
                                                     <TableMode
                                                         tabs={tabs}
                                                         activeTab={tab}
@@ -526,26 +518,29 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                                         }
 
                                         return (
-                                            <Activity key={tab.tabId} mode={isActive ? 'visible' : 'hidden'}>
-                                                <div className={cn('flex h-full flex-col', isActive ? '' : 'hidden')}>
-                                                    <SqlMode
-                                                        tabs={tabs}
-                                                        activeTab={tab}
-                                                        activeTabId={tab.tabId}
-                                                        setActiveTabId={setActiveTabId}
-                                                        addTab={addTab}
-                                                        updateTab={updateTab}
-                                                        editorRef={tabEditorRef}
-                                                        runQuery={runQueryWithRef}
-                                                        cancelQuery={cancelQuery}
-                                                        runningTabs={runningTabs}
-                                                        showChatbot={shouldShowChatbot}
-                                                        chatWidth={normalizedChatWidth}
-                                                        setChatWidth={setClampedChatWidth}
-                                                        onCloseChatbot={closeChatbotPanel}
-                                                    />
-                                                </div>
-                                            </Activity>
+                                            <div
+                                                key={tab.tabId}
+                                                aria-hidden={!isActive}
+                                                inert={!isActive}
+                                                className={cn('absolute inset-0 flex h-full min-h-0 flex-col', isActive ? 'visible z-10' : 'invisible z-0 pointer-events-none')}
+                                            >
+                                                <SqlMode
+                                                    tabs={tabs}
+                                                    activeTab={tab}
+                                                    activeTabId={tab.tabId}
+                                                    setActiveTabId={setActiveTabId}
+                                                    addTab={addTab}
+                                                    updateTab={updateTab}
+                                                    editorRef={tabEditorRef}
+                                                    runQuery={runQueryWithRef}
+                                                    cancelQuery={cancelQuery}
+                                                    runningTabs={runningTabs}
+                                                    showChatbot={shouldShowChatbot}
+                                                    chatWidth={normalizedChatWidth}
+                                                    setChatWidth={setClampedChatWidth}
+                                                    onCloseChatbot={closeChatbotPanel}
+                                                />
+                                            </div>
                                         );
                                     })}
                                 </div>
