@@ -996,7 +996,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                                 data-testid={`result-set-table-${snapshot.setIndex}`}
                                 aria-hidden={!visible}
                                 inert={!visible}
-                                className={cn('absolute inset-0 min-h-0', visible ? 'visible z-10' : 'invisible z-0 pointer-events-none')}
+                                className={cn('absolute inset-0 min-h-0', visible ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none')}
                             >
                                 <VTable
                                     results={visible ? (isRemoteFullResult ? EMPTY_RESULTS : columnFilteredResults) : snapshot.results}
@@ -1025,7 +1025,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                     {currentViewMode === 'table' && shouldShowFilteredEmpty && (
                         <div className="absolute inset-0 z-20 flex items-center justify-center bg-card text-sm text-muted-foreground">{t('Results.NoResults')}</div>
                     )}
-                    <div className={cn('absolute inset-0 min-h-0', currentViewMode === 'charts' ? 'visible z-10 flex' : 'invisible z-0 pointer-events-none')}>
+                    <div className={cn('absolute inset-0 min-h-0', currentViewMode === 'charts' ? 'z-10 flex opacity-100' : 'z-0 opacity-0 pointer-events-none')}>
                         {chartSetIndices.map(setIndex => {
                             const setChartStateKey = tabId ? `tab:${tabId}:set:${setIndex}` : 'unknown';
                             const snapshot =

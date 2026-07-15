@@ -134,6 +134,7 @@ test('keeps query results visible after switching SQL tabs', async ({ page, appE
     await page.getByRole('button', { name: /Add tab/i }).click();
     await expect(firstSqlTab).toHaveAttribute('aria-selected', 'false');
     await expect(page.locator('[aria-hidden="true"] [data-testid="result-table-content"]')).toHaveCount(1);
+    await expect(resultCell.locator('xpath=ancestor::*[@aria-hidden="true"][1]')).toHaveCSS('opacity', '0');
     await firstSqlTab.click();
 
     await expect(firstSqlTab).toHaveAttribute('aria-selected', 'true');

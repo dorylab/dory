@@ -870,7 +870,10 @@ export default function AgentWorkspaceClient({
                                                     key={tab.tabId}
                                                     aria-hidden={!isActive}
                                                     inert={!isActive}
-                                                    className={cn('absolute inset-0 flex h-full min-h-0 flex-col', isActive ? 'visible z-10' : 'invisible z-0 pointer-events-none')}
+                                                    className={cn(
+                                                        'absolute inset-0 flex h-full min-h-0 flex-col',
+                                                        isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none',
+                                                    )}
                                                 >
                                                     <SqlMode
                                                         tabs={tabs}
