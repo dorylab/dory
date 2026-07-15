@@ -10,7 +10,6 @@ import type { useChatSessions } from '../../../chatbot/core/session-controller';
 
 import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Separator } from '@/registry/new-york-v4/ui/separator';
 import { useTranslations } from 'next-intl';
 
 type CopilotChatSessions = ReturnType<typeof useChatSessions>;

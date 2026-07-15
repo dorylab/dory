@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { AISparkIcon } from '@/components/@dory/ui/ai-spark-icon';
 import { useTranslations } from 'next-intl';
 

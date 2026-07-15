@@ -55,7 +55,7 @@ export interface DriverQueryResult<Row = any> {
 export type QueryResult<Row = any> = DriverQueryResult<Row>;
 
 export interface DriverQueryRowStream<Row = any> {
-    rows: AsyncIterable<Row>;
+    rows: AsyncIterable<Row> | Iterable<Row>;
     rowCount?: number | null;
     limited?: boolean;
     limit?: number;

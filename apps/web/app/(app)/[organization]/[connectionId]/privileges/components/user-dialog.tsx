@@ -5,7 +5,7 @@ import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
 import type { ClickHouseUser } from '@dory/shared/types/privileges';
 import type { FormMode, UserFormValues } from '../types';
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';

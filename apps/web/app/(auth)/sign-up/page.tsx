@@ -1,9 +1,6 @@
 // app/(auth)/sign-up/page.tsx
-import { BubbleBackground } from '@/components/animate-ui/components/backgrounds/bubble';
 import { SignUpForm } from '../components/SignUpform';
 import { cn } from '@/registry/new-york-v4/lib/utils';
-import localFont from 'next/font/local';
-import { StarsBackground } from '@/components/animate-ui/components/backgrounds/stars';
 import { HeroBackground } from '../components/bg';
 import { RuntimeHint } from '../components/runtime-hint';
 // import { StarsBackground } from '@/components/animate-ui/components/backgrounds/stars';

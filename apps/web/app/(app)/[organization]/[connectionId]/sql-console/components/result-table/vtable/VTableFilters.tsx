@@ -123,6 +123,7 @@ export function useVTableFilters({
     disableStorage?: boolean;
 }) {
     const hydratedStorageKeyRef = useRef<string | undefined>(undefined);
+    const hydratedInitialFiltersRef = useRef<ColumnFilter[] | undefined>(undefined);
 
     const readStoredFilters = useCallback((key?: string) => {
         if (typeof window !== 'undefined' && key) {
@@ -152,7 +153,14 @@ export function useVTableFilters({
     });
 
     useLayoutEffect(() => {
+        // React Activity reconnects layout effects when a hidden SQL tab becomes visible.
+        // Rehydrate only when the backing result set or explicit initial filters changed.
+        if (hydratedStorageKeyRef.current === storageKey && hydratedInitialFiltersRef.current === initialFilters) {
+            return;
+        }
+
         hydratedStorageKeyRef.current = storageKey;
+        hydratedInitialFiltersRef.current = initialFilters;
         if (initialFilters) {
             setActiveFilters(initialFilters);
             return;

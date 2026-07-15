@@ -2,7 +2,7 @@ import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { canManageOrganizationRole } from '@/lib/auth/organization-ac';
 import { resolveDesktopOrganizationAccess } from './authz.desktop';
 import { resolveLocalOrganizationAccess } from './authz.local';
-import type { OrganizationAccess, OrganizationAccessRole } from './types';
+import type { OrganizationAccess } from './types';
 
 export type { OrganizationAccess, OrganizationAccessRole } from './types';
 export type { DesktopOrganizationAccessResolution } from './authz.desktop';

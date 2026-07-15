@@ -56,6 +56,7 @@ export type QueryExecutionStreamEvent =
     | { type: 'session-finished'; payload: QueryExecutePayload };
 
 type QueryExecutionEventSink = (event: QueryExecutionStreamEvent) => Promise<void> | void;
+type QueryRows = Iterable<unknown> | AsyncIterable<unknown>;
 
 function preciseDateNow(): Date {
     return new Date(performance.timeOrigin + performance.now());
@@ -119,6 +120,77 @@ function toResultSetColumns(columns: ColumnMeta[] | undefined | null) {
         databaseType: column.type,
         logicalType: 'unknown' as const,
     }));
+}
+
+function isAsyncRows(rows: QueryRows): rows is AsyncIterable<unknown> {
+    return typeof (rows as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function';
+}
+
+function instrumentRows(
+    rows: QueryRows,
+    options: {
+        signal?: AbortSignal;
+        onEvent?: QueryExecutionEventSink;
+        sessionId: string;
+        setIndex: number;
+        startedAt: number;
+    },
+): QueryRows {
+    if (isAsyncRows(rows)) {
+        return (async function* () {
+            let observedRows = 0;
+            let lastProgressAt = 0;
+            for await (const row of rows) {
+                if (options.signal?.aborted) {
+                    throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
+                }
+                observedRows += 1;
+                const now = performance.now();
+                if (observedRows > 0 && now - lastProgressAt > 500) {
+                    lastProgressAt = now;
+                    await options.onEvent?.({
+                        type: 'result-progress',
+                        payload: {
+                            sessionId: options.sessionId,
+                            setIndex: options.setIndex,
+                            rowsWritten: observedRows,
+                            previewRowCount: 0,
+                            elapsedMs: Math.max(0, Math.round(now - options.startedAt)),
+                        },
+                    });
+                }
+                yield row;
+            }
+        })();
+    }
+
+    return (function* () {
+        let observedRows = 0;
+        let lastProgressAt = 0;
+        for (const row of rows) {
+            if (options.signal?.aborted) {
+                throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
+            }
+            observedRows += 1;
+            const now = performance.now();
+            if (observedRows > 0 && now - lastProgressAt > 500) {
+                lastProgressAt = now;
+                void Promise.resolve(
+                    options.onEvent?.({
+                        type: 'result-progress',
+                        payload: {
+                            sessionId: options.sessionId,
+                            setIndex: options.setIndex,
+                            rowsWritten: observedRows,
+                            previewRowCount: 0,
+                            elapsedMs: Math.max(0, Math.round(now - options.startedAt)),
+                        },
+                    }),
+                ).catch(() => undefined);
+            }
+            yield row;
+        }
+    })();
 }
 
 function buildPayload(input: {
@@ -345,10 +417,7 @@ async function executeOneStream(connection: BaseConnection, statement: string, c
     }
 }
 
-export async function executeSqlAction(
-    ctx: ActionContext<WebActionServices>,
-    input: QueryExecuteInput,
-) {
+export async function executeSqlAction(ctx: ActionContext<WebActionServices>, input: QueryExecuteInput) {
     return runSqlExecution(ctx, input);
 }
 
@@ -490,116 +559,120 @@ async function runSqlExecution(
                     setIndex: i,
                     ...execOne.qrs,
                 };
+                const publishPersistedResult = async (
+                    persistedResult: Awaited<ReturnType<typeof ctx.services.db.resultSets.persistQueryResultSet>>,
+                    resultStatus: 'running' | 'success' | 'error' | 'canceled',
+                    markStreamFinished: boolean,
+                ) => {
+                    qrs = {
+                        ...qrs,
+                        status: resultStatus,
+                        resultSetId: persistedResult.resultSetId,
+                        dataAvailability: persistedResult.dataAvailability,
+                        previewRowCount: persistedResult.previewRowCount,
+                        rowCount: persistedResult.rowCount,
+                        columns: persistedResult.schema,
+                        warnings: persistedResult.warning ? [persistedResult.warning] : qrs.warnings,
+                    };
+                    if (stream && markStreamFinished) {
+                        const finishedAt = preciseDateNow();
+                        const startedAt = qrs.startedAt instanceof Date ? qrs.startedAt : null;
+                        qrs = {
+                            ...qrs,
+                            finishedAt,
+                            durationMs: startedAt ? Math.max(0, Math.round(finishedAt.getTime() - startedAt.getTime())) : qrs.durationMs,
+                            limited: typeof stream.limit === 'number' ? persistedResult.rowCount >= stream.limit : qrs.limited,
+                        };
+                    }
+
+                    const existingIndex = queryResultSets.findIndex(resultSet => resultSet.setIndex === i);
+                    if (existingIndex >= 0) {
+                        queryResultSets[existingIndex] = qrs;
+                        results[existingIndex] = persistedResult.previewRows;
+                    } else {
+                        queryResultSets.push(qrs);
+                        results.push(persistedResult.previewRows);
+                    }
+
+                    await options?.onEvent?.({
+                        type: 'result-completed',
+                        payload: buildPayload({
+                            sessionId,
+                            userId: ctx.userId,
+                            tabId: input.tabId ?? null,
+                            connectionId,
+                            database: input.database ?? null,
+                            sqlText: input.sql,
+                            status: 'running',
+                            startedAt: overallStartedAt,
+                            resultSetCount: queryResultSets.length,
+                            stopOnError,
+                            source: input.source ?? null,
+                            queryResultSets: queryResultSets.slice(),
+                            results: results.slice(),
+                            refId,
+                        }),
+                    });
+                };
 
                 const stream = (execOne as { resultStream?: DriverQueryRowStream }).resultStream;
                 let rowsForPersist = stream?.rows;
                 const streamResultSetId = stream ? `rs_${newEntityId()}` : null;
                 const streamQueryRunId = stream ? `qr_${newEntityId()}` : null;
                 if (stream && options?.onEvent) {
-                    let observedRows = 0;
-                    let lastProgressAt = 0;
-
-                    rowsForPersist = (async function* () {
-                        try {
-                            for await (const row of stream.rows) {
-                                if (options.signal?.aborted) {
-                                    throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
-                                }
-                                observedRows += 1;
-                                const now = performance.now();
-                                if (observedRows > 0 && now - lastProgressAt > 500) {
-                                    lastProgressAt = now;
-                                    await options.onEvent?.({
-                                        type: 'result-progress',
-                                        payload: {
-                                            sessionId,
-                                            setIndex: i,
-                                            rowsWritten: observedRows,
-                                            previewRowCount: 0,
-                                            elapsedMs: Math.max(0, Math.round(now - sessT0)),
-                                        },
-                                    });
-                                }
-                                yield row;
-                            }
-                        } finally {
-                            await stream.close?.();
-                        }
-                    })();
-                }
-                const persisted = stream
-                    ? await ctx.services.db.resultSets.persistQueryResultSetStream({
-                          organizationId: ctx.organizationId,
-                          userId: ctx.userId,
-                          connectionId,
-                          tabId: input.tabId ?? null,
-                          sessionId,
-                          database: input.database ?? null,
-                          sessionSqlText: input.sql,
-                          source: input.source ?? null,
-                          resultSet: qrs as PersistableResultSet,
-                          rows: rowsForPersist ?? stream.rows,
-                          columns: toResultSetColumns(stream.columns),
-                          rowCount: stream.rowCount ?? null,
-                          resultSetId: streamResultSetId,
-                          queryRunId: streamQueryRunId,
-                          previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
-                      })
-                    : await ctx.services.db.resultSets.persistQueryResultSet({
-                          organizationId: ctx.organizationId,
-                          userId: ctx.userId,
-                          connectionId,
-                          tabId: input.tabId ?? null,
-                          sessionId,
-                          database: input.database ?? null,
-                          sessionSqlText: input.sql,
-                          source: input.source ?? null,
-                          resultSet: qrs as PersistableResultSet,
-                          rows: (execOne as { resultRows: unknown[] }).resultRows,
-                          previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
-                      });
-
-                qrs = {
-                    ...qrs,
-                    resultSetId: persisted.resultSetId,
-                    dataAvailability: persisted.dataAvailability,
-                    previewRowCount: persisted.previewRowCount,
-                    rowCount: persisted.rowCount,
-                    columns: persisted.schema,
-                };
-                if (stream) {
-                    const finishedAt = preciseDateNow();
-                    const startedAt = qrs.startedAt instanceof Date ? qrs.startedAt : null;
-                    qrs = {
-                        ...qrs,
-                        finishedAt,
-                        durationMs: startedAt ? Math.max(0, Math.round(finishedAt.getTime() - startedAt.getTime())) : qrs.durationMs,
-                        limited: typeof stream.limit === 'number' ? persisted.rowCount >= stream.limit : qrs.limited,
-                    };
-                }
-                results.push(persisted.previewRows);
-
-                queryResultSets.push(qrs);
-
-                await options?.onEvent?.({
-                    type: 'result-completed',
-                    payload: buildPayload({
+                    rowsForPersist = instrumentRows(stream.rows, {
+                        signal: options.signal,
+                        onEvent: options.onEvent,
                         sessionId,
+                        setIndex: i,
+                        startedAt: sessT0,
+                    });
+                }
+                let persisted: Awaited<ReturnType<typeof ctx.services.db.resultSets.persistQueryResultSet>>;
+                if (stream) {
+                    try {
+                        persisted = await ctx.services.db.resultSets.persistQueryResultSetStream(
+                            {
+                                organizationId: ctx.organizationId,
+                                userId: ctx.userId,
+                                connectionId,
+                                tabId: input.tabId ?? null,
+                                sessionId,
+                                database: input.database ?? null,
+                                sessionSqlText: input.sql,
+                                source: input.source ?? null,
+                                resultSet: qrs as PersistableResultSet,
+                                rows: rowsForPersist ?? stream.rows,
+                                columns: toResultSetColumns(stream.columns),
+                                rowCount: stream.rowCount ?? null,
+                                resultSetId: streamResultSetId,
+                                queryRunId: streamQueryRunId,
+                                previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
+                            },
+                            {
+                                onPreviewPersisted: previewPersisted => publishPersistedResult(previewPersisted, 'running', false),
+                            },
+                        );
+                    } finally {
+                        await stream.close?.();
+                    }
+                } else {
+                    persisted = await ctx.services.db.resultSets.persistQueryResultSet({
+                        organizationId: ctx.organizationId,
                         userId: ctx.userId,
-                        tabId: input.tabId ?? null,
                         connectionId,
+                        tabId: input.tabId ?? null,
+                        sessionId,
                         database: input.database ?? null,
-                        sqlText: input.sql,
-                        status: 'running',
-                        startedAt: overallStartedAt,
-                        resultSetCount: queryResultSets.length,
-                        stopOnError,
+                        sessionSqlText: input.sql,
                         source: input.source ?? null,
-                        queryResultSets: queryResultSets.slice(),
-                        results: results.slice(),
-                        refId,
-                    }),
-                });
+                        resultSet: qrs as PersistableResultSet,
+                        rows: (execOne as { resultRows: unknown[] }).resultRows,
+                        previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
+                    });
+                }
+
+                await publishPersistedResult(persisted, execOne.ok ? 'success' : 'error', Boolean(stream));
 
                 if (!execOne.ok) {
                     hitError = true;

@@ -17,19 +17,13 @@ interface TableBrowserProps {
 export default function TableBrowser({ activeTab, updateTab }: TableBrowserProps) {
     const t = useTranslations('TableBrowser');
     const currentConnection = useAtomValue(currentConnectionAtom);
-    if (!activeTab || activeTab.tabType !== 'table') {
-        return (
-            <Card className="m-6">
-                <CardContent className="text-sm text-muted-foreground">{t('Select table tab to browse schema')}</CardContent>
-            </Card>
-        );
-    }
+    const activeSubTab = activeTab?.tabType === 'table' ? activeTab.activeSubTab : undefined;
     const initialTab = useMemo<TableSubTab>(() => {
-        if (activeTab?.tabType === 'table' && activeTab.activeSubTab) {
-            return activeTab.activeSubTab as TableSubTab;
+        if (activeSubTab) {
+            return activeSubTab as TableSubTab;
         }
         return 'data';
-    }, [activeTab?.tabType, activeTab?.activeSubTab]);
+    }, [activeSubTab]);
 
     const [currentTab, setCurrentTab] = useState<TableSubTab>(initialTab);
     const driver = currentConnection?.connection?.id === activeTab?.connectionId ? currentConnection.connection.type : undefined;
@@ -51,7 +45,11 @@ export default function TableBrowser({ activeTab, updateTab }: TableBrowserProps
     );
 
     if (!activeTab || activeTab.tabType !== 'table') {
-        return <div className="p-6 text-sm text-muted-foreground">{t('Select table tab to browse schema')}</div>;
+        return (
+            <Card className="m-6">
+                <CardContent className="text-sm text-muted-foreground">{t('Select table tab to browse schema')}</CardContent>
+            </Card>
+        );
     }
 
     return (

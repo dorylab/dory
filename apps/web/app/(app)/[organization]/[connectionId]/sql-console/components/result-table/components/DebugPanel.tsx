@@ -3,7 +3,7 @@
 import React from 'react';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Timer, Database, HardDrive, RefreshCw, ShieldAlert, Clipboard } from 'lucide-react';
-import { formatDuration } from 'date-fns';
+import { formatDuration, intervalToDuration } from 'date-fns';
 import { formatTime, formatNumber, formatBytes } from '../utils/format';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -31,9 +31,10 @@ export interface DebugPayload {
 }
 
 export function DebugPanel({ visible, isLoading, payload }: { visible: boolean; isLoading: boolean; payload: DebugPayload }) {
-    if (!visible) return null;
     const t = useTranslations('SqlConsole');
     const locale = useLocale();
+
+    if (!visible) return null;
 
     const {
         sessionId,
@@ -59,10 +60,7 @@ export function DebugPanel({ visible, isLoading, payload }: { visible: boolean; 
                 {t('Debug.Duration')}: <b className="text-foreground">
                     {isLoading || durationMs === undefined
                         ? t('Common.NotAvailable')
-                        : formatDuration(
-                            // Convert ms to Duration object
-                            require('date-fns').intervalToDuration({ start: 0, end: durationMs })
-                        )
+                        : formatDuration(intervalToDuration({ start: 0, end: durationMs }))
                     }
                 </b>
             </span>

@@ -50,7 +50,35 @@ export class SqliteDatasource extends BaseConnection {
     }
 
     async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
-        return executeSqliteQueryRowStream<Row>(this.getDatabase(), sql, context?.params);
+        this.assertReady();
+        const streamDatabase = openSqliteDatabase(this.config);
+
+        try {
+            const stream = executeSqliteQueryRowStream<Row>(streamDatabase, sql, context?.params);
+            let closed = false;
+            const close = () => {
+                if (closed) return;
+                closed = true;
+                try {
+                    stream.close?.();
+                } finally {
+                    if (streamDatabase.open) {
+                        streamDatabase.close();
+                    }
+                }
+            };
+
+            return {
+                ...stream,
+                rows: rowsWithClose(stream.rows, close),
+                close,
+            };
+        } catch (error) {
+            if (streamDatabase.open) {
+                streamDatabase.close();
+            }
+            throw error;
+        }
     }
 
     async command(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<void> {
@@ -60,4 +88,28 @@ export class SqliteDatasource extends BaseConnection {
     get metadata(): SqliteMetadataAPI {
         return this.capabilities.metadata as SqliteMetadataAPI;
     }
+}
+
+function rowsWithClose<Row>(rows: DriverQueryRowStream<Row>['rows'], close: () => void): DriverQueryRowStream<Row>['rows'] {
+    if (typeof (rows as AsyncIterable<Row>)[Symbol.asyncIterator] === 'function') {
+        return (async function* () {
+            try {
+                for await (const row of rows as AsyncIterable<Row>) {
+                    yield row;
+                }
+            } finally {
+                close();
+            }
+        })();
+    }
+
+    return (function* () {
+        try {
+            for (const row of rows as Iterable<Row>) {
+                yield row;
+            }
+        } finally {
+            close();
+        }
+    })();
 }

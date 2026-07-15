@@ -102,6 +102,42 @@ const dedupeCompletionItems = (items: Monaco.languages.CompletionItem[]) => {
     });
 };
 
+type CompletionSyntaxContext = {
+    syntaxContextType: string;
+    wordRanges: Array<{ text?: string }>;
+};
+
+const normalizeCompletionSyntax = (syntax: unknown): CompletionSyntaxContext[] => {
+    if (!Array.isArray(syntax)) return [];
+
+    const out: CompletionSyntaxContext[] = [];
+    for (const item of syntax) {
+        if (!item || typeof item !== 'object') continue;
+        const value = item as Record<string, unknown>;
+        if (typeof value.syntaxContextType !== 'string') continue;
+        const wordRanges = Array.isArray(value.wordRanges)
+            ? value.wordRanges
+                  .filter(word => word && typeof word === 'object')
+                  .map(word => ({
+                      text: typeof (word as Record<string, unknown>).text === 'string' ? ((word as Record<string, unknown>).text as string) : undefined,
+                  }))
+            : [];
+        out.push({
+            syntaxContextType: value.syntaxContextType,
+            wordRanges,
+        });
+    }
+    return out;
+};
+
+const completionTextFromWordRanges = (wordRanges: Array<{ text?: string }> | undefined, fallback: string) => {
+    const text = (Array.isArray(wordRanges) ? wordRanges : [])
+        .map(word => (typeof word?.text === 'string' ? word.text : ''))
+        .join('')
+        .trim();
+    return text || fallback;
+};
+
 const resolveTablesForColumnContext = (
     parser: { getAllEntities?: (sql: string, caretPos: { lineNumber: number; column: number }) => any[] | null },
     sql: string,
@@ -176,9 +212,6 @@ const registerDtSqlCompletion = (
             const schemas = getSchemas() || [];
             const activeDb = getActiveDatabase?.() ?? '';
 
-            const offset = model.getOffsetAt(position);
-            const prefixText = sql.slice(0, offset);
-
             let suggestion: any = {};
             try {
                 suggestion = parser.getSuggestionAtCaretPosition?.(sql, caretPos) || {};
@@ -187,227 +220,221 @@ const registerDtSqlCompletion = (
                 suggestion = {};
             }
 
-            const { keywords, syntax } = suggestion as {
-                keywords?: string[];
-                syntax?: { syntaxContextType: string; wordRanges: { text?: string }[] }[];
-            };
+            try {
+                const { keywords, syntax } = suggestion as {
+                    keywords?: string[];
+                    syntax?: unknown;
+                };
 
-            console.log('DT SQL Completion Suggestion:', suggestion);
+                const items: Monaco.languages.CompletionItem[] = [];
+                const syntaxList = normalizeCompletionSyntax(syntax);
+                const columnPrefix = buildColumnPrefix(syntaxList, currentWord);
 
-            const items: Monaco.languages.CompletionItem[] = [];
-            const syntaxList = Array.isArray(syntax) ? syntax : [];
-            const columnPrefix = buildColumnPrefix(syntaxList, currentWord);
-
-            if (Array.isArray(keywords)) {
-                for (const kw of keywords) {
-                    items.push({
-                        label: kw,
-                        kind: monaco.languages.CompletionItemKind.Keyword,
-                        insertText: kw,
-                        detail: t('Editor.Completion.Keyword'),
-                        sortText: '2_' + kw,
-                        range,
-                    });
+                if (Array.isArray(keywords)) {
+                    for (const kw of keywords) {
+                        if (typeof kw !== 'string' || !kw) continue;
+                        items.push({
+                            label: kw,
+                            kind: monaco.languages.CompletionItemKind.Keyword,
+                            insertText: kw,
+                            detail: t('Editor.Completion.Keyword'),
+                            sortText: '2_' + kw,
+                            range,
+                        });
+                    }
                 }
-            }
 
-            if (syntaxList.length) {
-                const hasColumnContext = syntaxList.some(s => s.syntaxContextType === 'column');
-                const hasTableContext = syntaxList.some(s => s.syntaxContextType === 'table');
-                const hasDatabaseContext = syntaxList.some(s => s.syntaxContextType === 'database' || s.syntaxContextType === 'databaseCreate');
+                if (syntaxList.length) {
+                    const hasColumnContext = syntaxList.some(s => s.syntaxContextType === 'column');
+                    const hasTableContext = syntaxList.some(s => s.syntaxContextType === 'table');
+                    const hasDatabaseContext = syntaxList.some(s => s.syntaxContextType === 'database' || s.syntaxContextType === 'databaseCreate');
 
-                if (hasTableContext) {
-                    const tableSyntax = syntaxList.find(s => s.syntaxContextType === 'table');
-                    const typedTablePrefix =
-                        (tableSyntax?.wordRanges ?? [])
-                            .map(w => w?.text ?? '')
-                            .join('')
-                            .trim() || currentWord;
-                    const normalizedPrefix = (typedTablePrefix ?? '').toLowerCase();
+                    if (hasTableContext) {
+                        const tableSyntax = syntaxList.find(s => s.syntaxContextType === 'table');
+                        const typedTablePrefix = completionTextFromWordRanges(tableSyntax?.wordRanges, currentWord);
+                        const normalizedPrefix = (typedTablePrefix ?? '').toLowerCase();
 
-                    console.log('Table context detected, prefix:', typedTablePrefix);
+                        const hasQualifierPrefix = typedTablePrefix.includes('.');
+                        const qualifierPrefixRaw = hasQualifierPrefix ? typedTablePrefix.split('.')[0] : '';
+                        const qualifierPrefixLower = qualifierPrefixRaw.toLowerCase();
+                        const activeDbLower = activeDb?.toLowerCase?.() ?? '';
 
-                    const hasQualifierPrefix = typedTablePrefix.includes('.');
-                    const qualifierPrefixRaw = hasQualifierPrefix ? typedTablePrefix.split('.')[0] : '';
-                    const qualifierPrefixLower = qualifierPrefixRaw.toLowerCase();
-                    const activeDbLower = activeDb?.toLowerCase?.() ?? '';
+                        const isCrossDbPrefix = !isPostgres && hasQualifierPrefix && !!qualifierPrefixLower && !!activeDbLower && qualifierPrefixLower !== activeDbLower;
 
-                    const isCrossDbPrefix = !isPostgres && hasQualifierPrefix && !!qualifierPrefixLower && !!activeDbLower && qualifierPrefixLower !== activeDbLower;
+                        if (tables.length && !isCrossDbPrefix) {
+                            for (const table of tables) {
+                                const tableName = resolveTableName(table);
+                                const tableDisplayName = resolveTableDisplayName(table) || tableName;
+                                if (!tableName) continue;
 
-                    if (tables.length && !isCrossDbPrefix) {
-                        for (const table of tables) {
-                            const tableName = resolveTableName(table);
-                            const tableDisplayName = resolveTableDisplayName(table) || tableName;
-                            if (!tableName) continue;
+                                if (isPostgres) {
+                                    const qualifiedTable = resolveSchemaQualifiedTable(tableName);
+                                    const normalizedTableName = qualifiedTable.tableName.toLowerCase();
+                                    const normalizedDisplayName = tableDisplayName.toLowerCase();
 
-                            if (isPostgres) {
-                                const qualifiedTable = resolveSchemaQualifiedTable(tableName);
-                                const normalizedTableName = qualifiedTable.tableName.toLowerCase();
-                                const normalizedDisplayName = tableDisplayName.toLowerCase();
+                                    if (hasQualifierPrefix) {
+                                        const typedTableParts = typedTablePrefix.split('.');
+                                        const schemaPrefix = (typedTableParts[0] ?? '').toLowerCase();
+                                        const tablePrefix = typedTableParts.slice(1).join('.').toLowerCase();
 
-                                if (hasQualifierPrefix) {
-                                    const typedTableParts = typedTablePrefix.split('.');
-                                    const schemaPrefix = (typedTableParts[0] ?? '').toLowerCase();
-                                    const tablePrefix = typedTableParts.slice(1).join('.').toLowerCase();
-
-                                    if (qualifiedTable.schemaName.toLowerCase() !== schemaPrefix) continue;
-                                    if (tablePrefix && !normalizedTableName.startsWith(tablePrefix) && !normalizedDisplayName.startsWith(tablePrefix)) continue;
-                                } else if (normalizedPrefix && !tableName.toLowerCase().startsWith(normalizedPrefix) && !normalizedDisplayName.startsWith(normalizedPrefix)) {
+                                        if (qualifiedTable.schemaName.toLowerCase() !== schemaPrefix) continue;
+                                        if (tablePrefix && !normalizedTableName.startsWith(tablePrefix) && !normalizedDisplayName.startsWith(tablePrefix)) continue;
+                                    } else if (normalizedPrefix && !tableName.toLowerCase().startsWith(normalizedPrefix) && !normalizedDisplayName.startsWith(normalizedPrefix)) {
+                                        continue;
+                                    }
+                                } else if (
+                                    !hasQualifierPrefix &&
+                                    normalizedPrefix &&
+                                    !tableName.toLowerCase().startsWith(normalizedPrefix) &&
+                                    !tableDisplayName.toLowerCase().startsWith(normalizedPrefix)
+                                ) {
                                     continue;
                                 }
-                            } else if (
-                                !hasQualifierPrefix &&
-                                normalizedPrefix &&
-                                !tableName.toLowerCase().startsWith(normalizedPrefix) &&
-                                !tableDisplayName.toLowerCase().startsWith(normalizedPrefix)
-                            ) {
-                                continue;
-                            }
 
-                            items.push({
-                                label: tableDisplayName,
-                                kind: monaco.languages.CompletionItemKind.Class,
-                                insertText: tableName,
-                                detail: t('Editor.Completion.Table'),
-                                sortText: '1_' + tableDisplayName,
-                                range,
-                            });
-                        }
-                    }
-
-                    if (isPostgres) {
-                        const normalizedSchemaPrefix = (qualifierPrefixRaw || typedTablePrefix || currentWord).toLowerCase();
-
-                        for (const schema of schemas) {
-                            const schemaName = resolveSchemaName(schema);
-                            if (!schemaName) continue;
-                            if (normalizedSchemaPrefix && !schemaName.toLowerCase().startsWith(normalizedSchemaPrefix)) continue;
-
-                            items.push({
-                                label: schemaName,
-                                kind: monaco.languages.CompletionItemKind.Module,
-                                insertText: schemaName,
-                                detail: t('Editor.Completion.Database'),
-                                sortText: '1z_' + schemaName,
-                                range,
-                            });
-                        }
-                    } else if (databases.length) {
-                        const normalizedDbPrefix = (qualifierPrefixRaw || typedTablePrefix || currentWord).toLowerCase();
-
-                        for (const db of databases) {
-                            const dbName = resolveDatabaseName(db);
-                            if (!dbName) continue;
-                            if (normalizedDbPrefix && !dbName.toLowerCase().startsWith(normalizedDbPrefix)) continue;
-
-                            items.push({
-                                label: dbName,
-                                kind: monaco.languages.CompletionItemKind.Module,
-                                insertText: dbName,
-                                detail: t('Editor.Completion.Database'),
-                                sortText: '1z_' + dbName,
-                                range,
-                            });
-                        }
-                    }
-                }
-
-                if (hasDatabaseContext) {
-                    const databaseSyntax = syntaxList.find(s => s.syntaxContextType === 'database' || s.syntaxContextType === 'databaseCreate');
-                    const typedDatabasePrefix =
-                        (databaseSyntax?.wordRanges ?? [])
-                            .map(w => w?.text ?? '')
-                            .join('')
-                            .trim() || currentWord;
-                    const normalizedContextPrefix = (typedDatabasePrefix ?? '').toLowerCase();
-
-                    if (isPostgres) {
-                        for (const schema of schemas) {
-                            const schemaName = resolveSchemaName(schema);
-                            if (!schemaName) continue;
-                            if (normalizedContextPrefix && !schemaName.toLowerCase().startsWith(normalizedContextPrefix)) continue;
-
-                            items.push({
-                                label: schemaName,
-                                kind: monaco.languages.CompletionItemKind.Module,
-                                insertText: schemaName,
-                                detail: t('Editor.Completion.Database'),
-                                sortText: '1_' + schemaName,
-                                range,
-                            });
-                        }
-                    } else if (databases.length) {
-                        for (const db of databases) {
-                            const dbName = resolveDatabaseName(db);
-                            if (!dbName) continue;
-                            if (normalizedContextPrefix && !dbName.toLowerCase().startsWith(normalizedContextPrefix)) continue;
-
-                            items.push({
-                                label: dbName,
-                                kind: monaco.languages.CompletionItemKind.Module,
-                                insertText: dbName,
-                                detail: t('Editor.Completion.Database'),
-                                sortText: '1_' + dbName,
-                                range,
-                            });
-                        }
-                    }
-                }
-
-                if (hasColumnContext) {
-                    const rawPrefix = columnPrefix.trim();
-                    let targetTables: string[] = [];
-                    let filterPrefix = rawPrefix.toLowerCase();
-
-                    const aliasMatch = rawPrefix.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\.(.*)$/);
-                    if (aliasMatch) {
-                        const aliasPart = aliasMatch[1]; // c
-                        const afterDotPart = aliasMatch[2];
-
-                        const tableFromAlias = resolveTableFromAliasInSql(sql, aliasPart);
-                        if (tableFromAlias) {
-                            targetTables = [tableFromAlias];
-
-                            filterPrefix = (afterDotPart || '').toLowerCase();
-                        }
-                    }
-
-                    if (!targetTables.length) {
-                        const caretOffset = model.getOffsetAt(position);
-                        targetTables = resolveTablesForColumnContext(parser, sql, caretPos, tables, caretOffset);
-
-                        if (!targetTables.length) {
-                            targetTables = tables.map(t => normalizeTableName(resolveTableName(t))).filter(Boolean);
-                        }
-                    }
-
-                    if (targetTables.length) {
-                        const seen = new Set<string>();
-
-                        for (const target of targetTables) {
-                            const cols = (await getColumns(target)) ?? [];
-                            for (const col of cols) {
-                                const colName = (col as any)?.columnName ?? (col as any)?.name;
-                                if (!colName || seen.has(colName)) continue;
-
-                                if (filterPrefix && !colName.toLowerCase().startsWith(filterPrefix)) continue;
-
-                                seen.add(colName);
                                 items.push({
-                                    label: colName,
-                                    kind: monaco.languages.CompletionItemKind.Field,
-                                    insertText: colName,
-                                    detail: t('Editor.Completion.Column', { table: target }),
-                                    sortText: '1_' + colName,
+                                    label: tableDisplayName,
+                                    kind: monaco.languages.CompletionItemKind.Class,
+                                    insertText: tableName,
+                                    detail: t('Editor.Completion.Table'),
+                                    sortText: '1_' + tableDisplayName,
+                                    range,
+                                });
+                            }
+                        }
+
+                        if (isPostgres) {
+                            const normalizedSchemaPrefix = (qualifierPrefixRaw || typedTablePrefix || currentWord).toLowerCase();
+
+                            for (const schema of schemas) {
+                                const schemaName = resolveSchemaName(schema);
+                                if (!schemaName) continue;
+                                if (normalizedSchemaPrefix && !schemaName.toLowerCase().startsWith(normalizedSchemaPrefix)) continue;
+
+                                items.push({
+                                    label: schemaName,
+                                    kind: monaco.languages.CompletionItemKind.Module,
+                                    insertText: schemaName,
+                                    detail: t('Editor.Completion.Database'),
+                                    sortText: '1z_' + schemaName,
+                                    range,
+                                });
+                            }
+                        } else if (databases.length) {
+                            const normalizedDbPrefix = (qualifierPrefixRaw || typedTablePrefix || currentWord).toLowerCase();
+
+                            for (const db of databases) {
+                                const dbName = resolveDatabaseName(db);
+                                if (!dbName) continue;
+                                if (normalizedDbPrefix && !dbName.toLowerCase().startsWith(normalizedDbPrefix)) continue;
+
+                                items.push({
+                                    label: dbName,
+                                    kind: monaco.languages.CompletionItemKind.Module,
+                                    insertText: dbName,
+                                    detail: t('Editor.Completion.Database'),
+                                    sortText: '1z_' + dbName,
                                     range,
                                 });
                             }
                         }
                     }
-                }
-            }
 
-            return { suggestions: dedupeCompletionItems(items) };
+                    if (hasDatabaseContext) {
+                        const databaseSyntax = syntaxList.find(s => s.syntaxContextType === 'database' || s.syntaxContextType === 'databaseCreate');
+                        const typedDatabasePrefix = completionTextFromWordRanges(databaseSyntax?.wordRanges, currentWord);
+                        const normalizedContextPrefix = (typedDatabasePrefix ?? '').toLowerCase();
+
+                        if (isPostgres) {
+                            for (const schema of schemas) {
+                                const schemaName = resolveSchemaName(schema);
+                                if (!schemaName) continue;
+                                if (normalizedContextPrefix && !schemaName.toLowerCase().startsWith(normalizedContextPrefix)) continue;
+
+                                items.push({
+                                    label: schemaName,
+                                    kind: monaco.languages.CompletionItemKind.Module,
+                                    insertText: schemaName,
+                                    detail: t('Editor.Completion.Database'),
+                                    sortText: '1_' + schemaName,
+                                    range,
+                                });
+                            }
+                        } else if (databases.length) {
+                            for (const db of databases) {
+                                const dbName = resolveDatabaseName(db);
+                                if (!dbName) continue;
+                                if (normalizedContextPrefix && !dbName.toLowerCase().startsWith(normalizedContextPrefix)) continue;
+
+                                items.push({
+                                    label: dbName,
+                                    kind: monaco.languages.CompletionItemKind.Module,
+                                    insertText: dbName,
+                                    detail: t('Editor.Completion.Database'),
+                                    sortText: '1_' + dbName,
+                                    range,
+                                });
+                            }
+                        }
+                    }
+
+                    if (hasColumnContext) {
+                        const rawPrefix = columnPrefix.trim();
+                        let targetTables: string[] = [];
+                        let filterPrefix = rawPrefix.toLowerCase();
+
+                        const aliasMatch = rawPrefix.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\.(.*)$/);
+                        if (aliasMatch) {
+                            const aliasPart = aliasMatch[1]; // c
+                            const afterDotPart = aliasMatch[2];
+
+                            const tableFromAlias = resolveTableFromAliasInSql(sql, aliasPart);
+                            if (tableFromAlias) {
+                                targetTables = [tableFromAlias];
+
+                                filterPrefix = (afterDotPart || '').toLowerCase();
+                            }
+                        }
+
+                        if (!targetTables.length) {
+                            const caretOffset = model.getOffsetAt(position);
+                            targetTables = resolveTablesForColumnContext(parser, sql, caretPos, tables, caretOffset);
+
+                            if (!targetTables.length) {
+                                targetTables = tables.map(t => normalizeTableName(resolveTableName(t))).filter(Boolean);
+                            }
+                        }
+
+                        if (targetTables.length) {
+                            const seen = new Set<string>();
+
+                            for (const target of targetTables) {
+                                const cols = (await getColumns(target)) ?? [];
+                                for (const col of cols) {
+                                    const colName = (col as any)?.columnName ?? (col as any)?.name;
+                                    if (!colName || seen.has(colName)) continue;
+
+                                    if (filterPrefix && !colName.toLowerCase().startsWith(filterPrefix)) continue;
+
+                                    seen.add(colName);
+                                    items.push({
+                                        label: colName,
+                                        kind: monaco.languages.CompletionItemKind.Field,
+                                        insertText: colName,
+                                        detail: t('Editor.Completion.Column', { table: target }),
+                                        sortText: '1_' + colName,
+                                        range,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                return { suggestions: dedupeCompletionItems(items) };
+            } catch (err) {
+                console.warn('dt-sql-parser completion normalization error:', err);
+                return { suggestions: [] };
+            }
         },
     });
 };

@@ -1,13 +1,11 @@
 'use client';
 import { cn } from '@dory/web-utils';
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import { useMemo, useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { GridCellProps, AutoSizer, MultiGrid, MultiGridProps } from 'react-virtualized';
 import { ColumnFilterPopover } from './ColumnFIlter';
 import { VTableProps, ColWidths, CellKey, ck, parseCK } from './type';
 import { formatTooltip, formatValue } from './utils';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/registry/new-york-v4/ui/context-menu';
-import { useAtomValue } from 'jotai';
-import { currentSessionMetaAtom } from '../stores/result-table.atoms';
 import { buildEqualsFilterFromCell, mapDbTypeToTwoKinds } from './filter';
 import { useTranslations } from 'next-intl';
 import { useVTableFilterUi, useVTableFilters, VTableFilters } from './VTableFilters';
@@ -30,6 +28,12 @@ const PRIMARY_SELECTION_CLASS = 'bg-primary/10 text-foreground';
 const PRIMARY_SELECTION_SUBTLE_CLASS = 'bg-primary/6 text-foreground';
 const PRIMARY_SELECTION_SOFT_CLASS = 'bg-primary/8 text-foreground';
 const PRIMARY_SELECTION_RING_CLASS = 'ring-1 ring-inset ring-primary/40';
+const SELECTION_CLASS_NAMES = [...new Set(`${PRIMARY_SELECTION_CLASS} ${PRIMARY_SELECTION_SUBTLE_CLASS} ${PRIMARY_SELECTION_RING_CLASS}`.split(' '))];
+const TOP_RIGHT_GRID_STYLE = { overflowX: 'hidden', overflowY: 'hidden' } as const;
+const BOTTOM_LEFT_GRID_STYLE = { overflowY: 'hidden', overflowX: 'hidden' } as const;
+const TOP_LEFT_GRID_STYLE = { overflow: 'hidden' } as const;
+const BOTTOM_RIGHT_GRID_STYLE = { overflowY: 'auto', overflowX: 'auto' } as const;
+const GRID_STYLE = { outline: 'none' } as const;
 
 type ColumnMeta = {
     name: string;
@@ -52,6 +56,12 @@ type MeasurableMultiGrid = MultiGrid & {
     recomputeGridSize?: () => void;
     forceUpdateGrids?: () => void;
 };
+
+type VersionedMultiGridProps = MultiGridProps & {
+    dataVersion?: string;
+};
+
+const VersionedMultiGrid = MultiGrid as React.ComponentType<VersionedMultiGridProps>;
 
 type RemoteRowCacheEntry = {
     rows: Map<number, { rowData: Record<string, unknown> }>;
@@ -120,6 +130,7 @@ function getSampleRowIndices(start: number, stop: number, limit: number) {
 
 export default function VTable({
     results,
+    columnMetas,
     remoteSource,
     rowHeight = 32,
     defaultColMinWidth = 140,
@@ -139,32 +150,33 @@ export default function VTable({
     showFiltersBar = true,
     initialSort = null,
     selectedRowIndexes,
+    isActive = true,
     onSortChange,
     onSelectedRowIndexesChange,
 }: VTableProps) {
     const t = useTranslations('SqlConsole');
-    const metas = useAtomValue(currentSessionMetaAtom);
     const columnsRaw = useMemo<ColumnMeta[]>(() => {
-        const rawColumns = (metas?.columns ?? []) as RawColumnMeta[];
+        const rawColumns = columnMetas as RawColumnMeta[];
         return rawColumns
             .filter((column): column is RawColumnMeta & { name: string } => typeof column.name === 'string' && column.name.length > 0)
             .map(column => ({
                 name: column.name,
                 type: typeof column.type === 'string' || column.type === null ? column.type : undefined,
             }));
-    }, [metas?.columns]);
+    }, [columnMetas]);
     const columns = useMemo(() => columnsRaw.map(column => column.name), [columnsRaw]);
     const isRemote = Boolean(remoteSource);
     const operationsDisabled = false;
     const usesServerSideOperations = serverSideOperations || isRemote;
     const remotePageSize = Math.max(1, Math.min(remoteSource?.pageSize ?? REMOTE_DEFAULT_PAGE_SIZE, 5000));
-    const [, setRemoteRowsVersion] = useState(0);
+    const [remoteRowsVersion, setRemoteRowsVersion] = useState(0);
     const remoteRowsRef = useRef<Map<number, { rowData: Record<string, unknown> }>>(new Map());
     const remotePagesRef = useRef<Map<number, number>>(new Map());
     const remoteLoadingPagesRef = useRef<Set<number>>(new Set());
     const remotePageAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
     const activeRemoteCacheKeyRef = useRef<string | null>(remoteSource?.cacheKey ?? null);
     const activeRemoteSourceIdRef = useRef<string | null>(remoteSource?.sourceId ?? null);
+    const hydratedRemoteSourceRef = useRef<{ cacheKey: string | null; sourceId: string | null } | null>(null);
     const remoteRowsStaleRef = useRef(false);
 
     const clampColumnWidth = useCallback(
@@ -339,6 +351,11 @@ export default function VTable({
         return sorted;
     }, [filteredResults, numericColumns, usesServerSideOperations, sortBy, sortDirection]);
     const tableRowCount = isRemote ? Math.max(0, remoteSource?.rowCount ?? 0) : sortedResults.length;
+    const effectiveIndexColWidth = useMemo(() => {
+        const fontFamily = typeof document === 'undefined' ? 'system-ui, sans-serif' : getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
+        const maxRowLabel = String(Math.max(1, tableRowCount));
+        return Math.max(indexColWidth, measureTextWidth(maxRowLabel, `400 14px ${fontFamily}`) + CELL_TEXT_PAD);
+    }, [indexColWidth, measureTextWidth, tableRowCount]);
     const getDisplayRow = useCallback(
         (rowIndex: number) => {
             if (isRemote) return remoteRowsRef.current.get(rowIndex);
@@ -348,14 +365,30 @@ export default function VTable({
     );
 
     useEffect(() => {
-        for (const controller of remotePageAbortControllersRef.current.values()) {
-            controller.abort();
-        }
+        const resetRemoteRequests = () => {
+            for (const controller of remotePageAbortControllersRef.current.values()) {
+                controller.abort();
+            }
+            remoteLoadingPagesRef.current = new Set();
+            remotePageAbortControllersRef.current = new Map();
+        };
+
+        resetRemoteRequests();
         const nextCacheKey = remoteSource?.cacheKey ?? null;
         const nextSourceId = remoteSource?.sourceId ?? nextCacheKey;
+        const hydratedSource = hydratedRemoteSourceRef.current;
+        const isSameHydratedSource = hydratedSource?.cacheKey === nextCacheKey && hydratedSource.sourceId === nextSourceId;
+
+        // React Activity reconnects effects when a hidden SQL tab becomes visible.
+        // Preserve the current result pages on reconnect; only a real source change
+        // should replace the remote row cache.
+        if (isSameHydratedSource) {
+            return resetRemoteRequests;
+        }
+
+        hydratedRemoteSourceRef.current = { cacheKey: nextCacheKey, sourceId: nextSourceId };
         const cached = nextCacheKey ? getRemoteRowCache(nextCacheKey) : null;
         const canKeepStaleRows = Boolean(nextCacheKey && activeRemoteSourceIdRef.current === nextSourceId && remoteRowsRef.current.size > 0);
-
         activeRemoteCacheKeyRef.current = nextCacheKey;
         activeRemoteSourceIdRef.current = nextSourceId;
 
@@ -371,15 +404,9 @@ export default function VTable({
             remoteRowsStaleRef.current = canKeepStaleRows;
         }
 
-        remoteLoadingPagesRef.current = new Set();
-        remotePageAbortControllersRef.current = new Map();
         setRemoteRowsVersion(version => version + 1);
 
-        return () => {
-            for (const controller of remotePageAbortControllersRef.current.values()) {
-                controller.abort();
-            }
-        };
+        return resetRemoteRequests;
     }, [remoteSource?.cacheKey, remoteSource?.sourceId]);
 
     const requestRemoteRange = useCallback(
@@ -694,10 +721,10 @@ export default function VTable({
         }
     }, []);
     const totalWidth = useMemo(() => {
-        let sum = indexColWidth;
+        let sum = effectiveIndexColWidth;
         for (const c of columns) sum += Math.max((colWidths[c] ?? defaultColMinWidth) + HEADER_PAD, 60);
         return sum;
-    }, [columns, colWidths, indexColWidth, defaultColMinWidth]);
+    }, [columns, colWidths, defaultColMinWidth, effectiveIndexColWidth]);
 
     const dragState = useRef<{ col: string; startX: number; startW: number } | null>(null);
     const recomputeAll = () => {
@@ -778,20 +805,23 @@ export default function VTable({
         }
     };
 
-    const getSelectedRectBounds = (sel: Set<CellKey>) => {
-        if (sel.size === 0) return null;
-        const rows = new Set<number>();
-        const colsSet = new Set<string>();
-        for (const k of sel) {
-            const { row, col } = parseCK(k);
-            rows.add(row);
-            colsSet.add(col);
-        }
-        const rowList = [...rows].sort((a, b) => a - b);
-        const colList = [...colsSet].sort((a, b) => columns.indexOf(a) - columns.indexOf(b));
-        for (const r of rowList) for (const c of colList) if (!sel.has(ck(r, c))) return null;
-        return { rows: rowList, cols: colList };
-    };
+    const getSelectedRectBounds = useCallback(
+        (sel: Set<CellKey>) => {
+            if (sel.size === 0) return null;
+            const rows = new Set<number>();
+            const colsSet = new Set<string>();
+            for (const k of sel) {
+                const { row, col } = parseCK(k);
+                rows.add(row);
+                colsSet.add(col);
+            }
+            const rowList = [...rows].sort((a, b) => a - b);
+            const colList = [...colsSet].sort((a, b) => columns.indexOf(a) - columns.indexOf(b));
+            for (const r of rowList) for (const c of colList) if (!sel.has(ck(r, c))) return null;
+            return { rows: rowList, cols: colList };
+        },
+        [columns],
+    );
     const getSelectionAsRowsCols = () => {
         const rect = getSelectedRectBounds(selectedCells);
         if (rect) {
@@ -832,7 +862,7 @@ export default function VTable({
         }
         return null;
     };
-    const selectedRectBounds = useMemo(() => getSelectedRectBounds(selectedCells), [columns, selectedCells]);
+    const selectedRectBounds = useMemo(() => getSelectedRectBounds(selectedCells), [getSelectedRectBounds, selectedCells]);
     const copyTSV = async (withHeader = false) => {
         const sel = getSelectionAsRowsCols();
         if (!sel) return;
@@ -945,6 +975,8 @@ export default function VTable({
     };
     const onCellMouseDown = (e: React.MouseEvent, row: number, col: string) => {
         if (e.button !== 0) return;
+        e.preventDefault();
+        gridContainerRef.current?.focus({ preventScroll: true });
         lastMouseDownWasOnCell.current = true;
         setTimeout(() => (lastMouseDownWasOnCell.current = false), 0);
         setFocusedCell({ row, col });
@@ -978,6 +1010,35 @@ export default function VTable({
             else {
                 const v = getDisplayRow(rowIndex)?.rowData?.[col];
                 await copyText(typeof v === 'object' ? JSON.stringify(v) : v == null ? '' : String(v));
+            }
+        }
+    };
+    const onGridKeyDown = async (e: React.KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
+            e.preventDefault();
+            if (selectedCells.size > 1) {
+                await copySelectedCellsTSV();
+                return;
+            }
+
+            const cell = focusedCell ?? (selectedCells.size > 0 ? parseCK([...selectedCells][0]) : null);
+            if (cell) {
+                const v = getDisplayRow(cell.row)?.rowData?.[cell.col];
+                await copyText(typeof v === 'object' ? JSON.stringify(v) : v == null ? '' : String(v));
+                return;
+            }
+
+            if (selectedRowIds.size > 0) {
+                const indices = Array.from(selectedRowIds).sort((a, b) => a - b);
+                const lines = indices
+                    .map(i => {
+                        const row = getDisplayRow(i)?.rowData ?? {};
+                        return Object.values(row)
+                            .map(v => (v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v)))
+                            .join('\t');
+                    })
+                    .join('\n');
+                await copyText(lines);
             }
         }
     };
@@ -1141,7 +1202,7 @@ export default function VTable({
                 key={key}
                 role="button"
                 tabIndex={0}
-                data-cell={`${r}-${colKeyName}`}
+                data-cell={keyCell}
                 style={{ ...style, display: 'flex', alignItems: 'center', boxShadow: selectionEdgeShadow }}
                 className={cn(
                     'px-2 text-sm border-b border-r bg-card cursor-pointer outline-none select-none',
@@ -1180,11 +1241,193 @@ export default function VTable({
         );
     };
 
+    const latestCellRendererRef = useRef(cellRenderer);
+    latestCellRendererRef.current = cellRenderer;
+    const stableCellRenderer = useCallback((props: GridCellProps) => latestCellRendererRef.current(props), []);
+    const handleSectionRendered = useCallback<NonNullable<MultiGridProps['onSectionRendered']>>(
+        ({ columnStartIndex, columnStopIndex, rowStartIndex, rowStopIndex }) => {
+            const nextStart = Math.max(0, rowStartIndex - 1);
+            const nextStop = Math.max(nextStart, rowStopIndex - 1);
+            visibleRowRangeRef.current = { start: nextStart, stop: nextStop };
+
+            const nextColumnStart = Math.max(0, columnStartIndex - 1);
+            const nextColumnStop = Math.max(nextColumnStart, columnStopIndex - 1);
+            const prevColumnRange = visibleColumnRangeRef.current;
+            if (prevColumnRange.start !== nextColumnStart || prevColumnRange.stop !== nextColumnStop) {
+                visibleColumnRangeRef.current = { start: nextColumnStart, stop: nextColumnStop };
+            }
+            if (isRemote) {
+                requestRemoteRange(Math.max(0, nextStart - 30), Math.min(tableRowCount - 1, nextStop + 60));
+            }
+        },
+        [isRemote, requestRemoteRange, tableRowCount],
+    );
+    const refreshGridAfterReveal = useCallback(() => {
+        if (isRemote) {
+            const renderedRows = [...(gridContainerRef.current?.querySelectorAll<HTMLElement>('[data-cell]') ?? [])]
+                .map(element => element.dataset.cell)
+                .filter((cell): cell is CellKey => Boolean(cell))
+                .map(cell => parseCK(cell).row)
+                .filter(Number.isFinite);
+            const start = renderedRows.length > 0 ? Math.min(...renderedRows) : visibleRowRangeRef.current.start;
+            const stop = renderedRows.length > 0 ? Math.max(...renderedRows) : visibleRowRangeRef.current.stop;
+            visibleRowRangeRef.current = { start, stop };
+            requestRemoteRange(Math.max(0, start - 30), Math.min(tableRowCount - 1, stop + 60));
+        }
+    }, [isRemote, requestRemoteRange, tableRowCount]);
+
+    const hydrateVisibleRemoteCells = useCallback(() => {
+        if (!isRemote) return;
+        const container = gridContainerRef.current;
+        if (!container) return;
+
+        container.querySelectorAll<HTMLElement>('[data-cell]').forEach(element => {
+            const rawCell = element.dataset.cell;
+            if (!rawCell) return;
+            const { row, col } = parseCK(rawCell as CellKey);
+            const displayRow = remoteRowsRef.current.get(row);
+            if (!displayRow) return;
+
+            const content = element.firstElementChild as HTMLElement | null;
+            if (!content) return;
+            const value = displayRow.rowData[col];
+            content.className = 'block truncate min-w-0 w-full';
+            content.textContent = formatValue(value);
+            element.title = formatTooltip(value);
+        });
+    }, [isRemote]);
+
+    useLayoutEffect(() => {
+        hydrateVisibleRemoteCells();
+    }, [hydrateVisibleRemoteCells, remoteRowsVersion]);
+
+    useEffect(() => {
+        const refreshActiveGrid = () => {
+            const container = gridContainerRef.current;
+            if (!container) return;
+            const { width, height } = container.getBoundingClientRect();
+            if (width > 0 && height > 0) {
+                refreshGridAfterReveal();
+                hydrateVisibleRemoteCells();
+            }
+        };
+
+        window.addEventListener('dory:sql-tab-activated', refreshActiveGrid);
+        return () => window.removeEventListener('dory:sql-tab-activated', refreshActiveGrid);
+    }, [hydrateVisibleRemoteCells, refreshGridAfterReveal]);
+
+    useLayoutEffect(() => {
+        if (!isActive) return;
+        const frameId = requestAnimationFrame(refreshGridAfterReveal);
+        return () => cancelAnimationFrame(frameId);
+    }, [isActive, refreshGridAfterReveal]);
+
+    useLayoutEffect(() => {
+        const container = gridContainerRef.current;
+        if (!container) return;
+
+        let wasVisible = false;
+        const refreshWhenVisible = () => {
+            const { width, height } = container.getBoundingClientRect();
+            const isVisible = width > 0 && height > 0;
+            if (!isVisible) {
+                wasVisible = false;
+                return;
+            }
+            if (wasVisible) return;
+
+            wasVisible = true;
+            refreshGridAfterReveal();
+            hydrateVisibleRemoteCells();
+        };
+
+        refreshWhenVisible();
+        const resizeObserver = new ResizeObserver(refreshWhenVisible);
+        resizeObserver.observe(container);
+
+        const visibilityObserver = new MutationObserver(refreshWhenVisible);
+        let ancestor = container.parentElement;
+        while (ancestor && ancestor !== document.body) {
+            visibilityObserver.observe(ancestor, {
+                attributes: true,
+                attributeFilter: ['class', 'hidden', 'style'],
+            });
+            ancestor = ancestor.parentElement;
+        }
+
+        return () => {
+            resizeObserver.disconnect();
+            visibilityObserver.disconnect();
+        };
+    }, [hydrateVisibleRemoteCells, refreshGridAfterReveal]);
+    const getGridColumnWidth = useCallback(
+        ({ index }: { index: number }) => {
+            if (index === 0) return effectiveIndexColWidth;
+            const col = columns[index - 1];
+            const base = Math.max(colWidths[col] ?? defaultColMinWidth, 60);
+            return base + HEADER_PAD;
+        },
+        [colWidths, columns, defaultColMinWidth, effectiveIndexColWidth],
+    );
+    const getGridRowHeight = useCallback(({ index }: { index: number }) => (index === 0 ? Math.max(rowHeight, 32) : rowHeight), [rowHeight]);
+    const latestSectionRenderedRef = useRef(handleSectionRendered);
+    latestSectionRenderedRef.current = handleSectionRendered;
+    const stableSectionRendered = useCallback<NonNullable<MultiGridProps['onSectionRendered']>>(props => latestSectionRenderedRef.current(props), []);
+    const latestGridColumnWidthRef = useRef(getGridColumnWidth);
+    latestGridColumnWidthRef.current = getGridColumnWidth;
+    const stableGridColumnWidth = useCallback((props: { index: number }) => latestGridColumnWidthRef.current(props), []);
+    const latestGridRowHeightRef = useRef(getGridRowHeight);
+    latestGridRowHeightRef.current = getGridRowHeight;
+    const stableGridRowHeight = useCallback((props: { index: number }) => latestGridRowHeightRef.current(props), []);
+
+    useLayoutEffect(() => {
+        const container = gridContainerRef.current;
+        if (!container) return;
+
+        const rectBounds = getSelectedRectBounds(selectedCells);
+        const rectTopRow = rectBounds?.rows[0];
+        const rectBottomRow = rectBounds?.rows[rectBounds.rows.length - 1];
+        const rectLeftCol = rectBounds?.cols[0];
+        const rectRightCol = rectBounds?.cols[rectBounds.cols.length - 1];
+
+        container.querySelectorAll<HTMLElement>('[data-cell]').forEach(element => {
+            const rawCell = element.dataset.cell;
+            if (!rawCell) return;
+            const { row, col } = parseCK(rawCell as CellKey);
+            const isRowSelected = selectedRowIds.has(row);
+            const isCellSelected = selectedCells.has(rawCell as CellKey);
+            const isFocused = focusedCell?.row === row && focusedCell.col === col;
+
+            element.classList.remove(...SELECTION_CLASS_NAMES);
+            if (isRowSelected) element.classList.add(...PRIMARY_SELECTION_SUBTLE_CLASS.split(' '));
+            if (isCellSelected) element.classList.add(...PRIMARY_SELECTION_CLASS.split(' '));
+            if (isFocused && !rectBounds) element.classList.add(...PRIMARY_SELECTION_RING_CLASS.split(' '));
+
+            element.style.boxShadow =
+                rectBounds && isCellSelected
+                    ? [
+                          row === rectTopRow ? 'inset 0 1px 0 var(--primary)' : '',
+                          row === rectBottomRow ? 'inset 0 -1px 0 var(--primary)' : '',
+                          col === rectLeftCol ? 'inset 1px 0 0 var(--primary)' : '',
+                          col === rectRightCol ? 'inset -1px 0 0 var(--primary)' : '',
+                      ]
+                          .filter(Boolean)
+                          .join(', ')
+                    : '';
+        });
+
+        container.querySelectorAll<HTMLElement>('[data-row-index]').forEach(element => {
+            const rowIndex = Number(element.dataset.rowIndex);
+            element.classList.remove(...PRIMARY_SELECTION_CLASS.split(' '));
+            if (selectedRowIds.has(rowIndex)) element.classList.add(...PRIMARY_SELECTION_CLASS.split(' '));
+        });
+    }, [focusedCell, getSelectedRectBounds, selectedCells, selectedRowIds]);
+
     useEffect(() => {
         const g = gridRef.current as MeasurableMultiGrid | null;
         g?.recomputeGridSize?.();
         g?.forceUpdateGrids?.();
-    }, [colWidths, totalWidth]);
+    }, [colWidths, rowHeight, totalWidth]);
 
     useEffect(() => {
         const container = gridContainerRef.current;
@@ -1218,6 +1461,45 @@ export default function VTable({
         };
     }, [syncHeaderHorizontalScroll, columns.length, tableRowCount]);
 
+    const renderGrid = useCallback(
+        ({ width, height }: { width: number; height: number }) => {
+            return (
+                <VersionedMultiGrid
+                    ref={gridRef}
+                    dataVersion={String(remoteRowsVersion)}
+                    onSectionRendered={stableSectionRendered}
+                    width={width}
+                    height={height}
+                    columnCount={columns.length + 1}
+                    rowCount={tableRowCount + 1}
+                    fixedRowCount={1}
+                    fixedColumnCount={1}
+                    overscanRowCount={80}
+                    overscanColumnCount={2}
+                    enableFixedColumnScroll
+                    enableFixedRowScroll
+                    scrollToAlignment="start"
+                    columnWidth={stableGridColumnWidth}
+                    rowHeight={stableGridRowHeight}
+                    cellRenderer={stableCellRenderer}
+                    classNameTopLeftGrid="bg-muted"
+                    classNameTopRightGrid="bg-muted"
+                    classNameBottomLeftGrid="bg-card"
+                    classNameBottomRightGrid="bg-card"
+                    hideTopRightGridScrollbar
+                    hideBottomLeftGridScrollbar
+                    styleTopRightGrid={TOP_RIGHT_GRID_STYLE}
+                    styleBottomLeftGrid={BOTTOM_LEFT_GRID_STYLE}
+                    styleTopLeftGrid={TOP_LEFT_GRID_STYLE}
+                    styleBottomRightGrid={BOTTOM_RIGHT_GRID_STYLE}
+                    style={GRID_STYLE}
+                />
+            );
+        },
+        [columns.length, remoteRowsVersion, stableCellRenderer, stableGridColumnWidth, stableGridRowHeight, stableSectionRendered, tableRowCount],
+    );
+    const gridElement = useMemo(() => <AutoSizer>{renderGrid}</AutoSizer>, [renderGrid]);
+
     // const clearQuery = () => setGlobalQuery('');
 
     if (!isRemote && (!results || results.length === 0)) return null;
@@ -1238,61 +1520,8 @@ export default function VTable({
                     )}
 
                     {/* Grid */}
-                    <div ref={gridContainerRef} className="flex-1 min-h-0">
-                        <AutoSizer>
-                            {({ width, height }) => (
-                                <MultiGrid
-                                    ref={ref => {
-                                        gridRef.current = ref;
-                                    }}
-                                    onSectionRendered={({ columnStartIndex, columnStopIndex, rowStartIndex, rowStopIndex }) => {
-                                        const nextStart = Math.max(0, rowStartIndex - 1);
-                                        const nextStop = Math.max(nextStart, rowStopIndex - 1);
-                                        visibleRowRangeRef.current = { start: nextStart, stop: nextStop };
-
-                                        const nextColumnStart = Math.max(0, columnStartIndex - 1);
-                                        const nextColumnStop = Math.max(nextColumnStart, columnStopIndex - 1);
-                                        const prevColumnRange = visibleColumnRangeRef.current;
-                                        if (prevColumnRange.start !== nextColumnStart || prevColumnRange.stop !== nextColumnStop) {
-                                            visibleColumnRangeRef.current = { start: nextColumnStart, stop: nextColumnStop };
-                                        }
-                                        if (isRemote) {
-                                            requestRemoteRange(Math.max(0, nextStart - 30), Math.min(tableRowCount - 1, nextStop + 60));
-                                        }
-                                    }}
-                                    width={width}
-                                    height={height}
-                                    columnCount={columns.length + 1}
-                                    rowCount={tableRowCount + 1}
-                                    fixedRowCount={1}
-                                    fixedColumnCount={1}
-                                    overscanRowCount={80}
-                                    overscanColumnCount={2}
-                                    enableFixedColumnScroll
-                                    enableFixedRowScroll
-                                    scrollToAlignment="start"
-                                    columnWidth={({ index }) => {
-                                        if (index === 0) return indexColWidth;
-                                        const col = columns[index - 1];
-                                        const base = Math.max(colWidths[col] ?? defaultColMinWidth, 60);
-                                        return base + HEADER_PAD;
-                                    }}
-                                    rowHeight={({ index }) => (index === 0 ? Math.max(rowHeight, 32) : rowHeight)}
-                                    cellRenderer={cellRenderer as MultiGridProps['cellRenderer']}
-                                    classNameTopLeftGrid="bg-muted"
-                                    classNameTopRightGrid="bg-muted"
-                                    classNameBottomLeftGrid="bg-card"
-                                    classNameBottomRightGrid="bg-card"
-                                    hideTopRightGridScrollbar
-                                    hideBottomLeftGridScrollbar
-                                    styleTopRightGrid={{ overflowX: 'hidden', overflowY: 'hidden' }}
-                                    styleBottomLeftGrid={{ overflowY: 'hidden', overflowX: 'hidden' }}
-                                    styleTopLeftGrid={{ overflow: 'hidden' }}
-                                    styleBottomRightGrid={{ overflowY: 'auto', overflowX: 'auto' }}
-                                    style={{ outline: 'none' }}
-                                />
-                            )}
-                        </AutoSizer>
+                    <div ref={gridContainerRef} className="flex-1 min-h-0 outline-none" tabIndex={0} onKeyDown={onGridKeyDown}>
+                        {gridElement}
                     </div>
                 </div>
             </ContextMenuTrigger>

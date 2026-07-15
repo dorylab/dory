@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
-import { ChevronDown, Sparkles } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@dory/web-utils';
 import { useTranslations } from 'next-intl';
 

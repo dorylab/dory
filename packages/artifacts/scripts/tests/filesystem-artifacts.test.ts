@@ -36,18 +36,27 @@ try {
         updatedAt: new Date(0).toISOString(),
     };
 
-    const data = Buffer.from('PAR1-test');
-    const { ref } = await resultSets.putResultSet({ organizationId: 'org_test', artifactId: 'rs_test', manifest, preview, data });
+    const dataPart = Buffer.from('PAR1-test');
+    const { ref } = await resultSets.putResultSet({
+        organizationId: 'org_test',
+        artifactId: 'rs_test',
+        manifest,
+        preview,
+        dataParts: [{ path: 'data/part-00000.parquet', rowCount: rows.length, data: dataPart }],
+    });
     assert.equal(ref.basePath, 'artifacts/org_test/result-sets/rs_test');
-    assert.equal(ref.dataPath, 'data.parquet');
+    assert.equal(ref.dataPath, 'data');
     assert.equal(ref.dataAvailability, 'full');
     assert.deepEqual((await resultSets.readPreview(ref))?.rows, rows);
     const savedManifest = await resultSets.readManifest(ref);
     assert.equal(savedManifest.format, 'dory.resultset.v1');
-    assert.equal(savedManifest.files.data?.path, 'data.parquet');
-    assert.equal(savedManifest.files.data?.byteSize, data.byteLength);
+    assert.equal(savedManifest.files.data?.path, 'data');
+    assert.equal(savedManifest.files.data?.byteSize, dataPart.byteLength);
+    assert.deepEqual(savedManifest.files.data?.parts, [{ path: 'data/part-00000.parquet', format: 'parquet', rowCount: rows.length, byteSize: dataPart.byteLength }]);
     assert.equal(resultSetDataAvailability(savedManifest), 'full');
-    assert.deepEqual(await readableToBuffer((await resultSets.openData(ref))!), data);
+    const parts = await resultSets.openDataParts(ref, savedManifest);
+    assert.equal(parts.length, 1);
+    assert.deepEqual(await readableToBuffer(parts[0]!.stream), dataPart);
 
     const agentRuns = new AgentRunArtifactStore(objectStore, 'artifacts');
     const runRef = agentRuns.ref('org_test', 'run_test');
@@ -124,9 +133,18 @@ const s3Manifest: ResultSetManifest = {
     updatedAt: new Date(0).toISOString(),
 };
 const s3Data = Buffer.from('PAR1-s3-test');
-const { ref: s3Ref } = await s3ResultSets.putResultSet({ organizationId: 'org_test', artifactId: 'rs_s3', manifest: s3Manifest, preview: s3Preview, data: s3Data });
+const { ref: s3Ref } = await s3ResultSets.putResultSet({
+    organizationId: 'org_test',
+    artifactId: 'rs_s3',
+    manifest: s3Manifest,
+    preview: s3Preview,
+    dataParts: [{ path: 'data/part-00000.parquet', rowCount: 1, data: s3Data }],
+});
 assert.equal(s3Ref.store, 's3');
-assert.equal((await s3ResultSets.readManifest(s3Ref)).files.data?.byteSize, s3Data.byteLength);
-assert.deepEqual(await readableToBuffer((await s3ResultSets.openData(s3Ref))!), s3Data);
+const savedS3Manifest = await s3ResultSets.readManifest(s3Ref);
+assert.equal(savedS3Manifest.files.data?.byteSize, s3Data.byteLength);
+const s3Parts = await s3ResultSets.openDataParts(s3Ref, savedS3Manifest);
+assert.equal(s3Parts.length, 1);
+assert.deepEqual(await readableToBuffer(s3Parts[0]!.stream), s3Data);
 await s3ResultSets.deleteResultSet(s3Ref);
 assert.equal(await s3ResultSets.exists(s3Ref), false);

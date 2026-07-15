@@ -1464,7 +1464,8 @@
             "Charts": "Charts",
             "ResultTab": "Result {index}",
             "WaitingForResults": "Waiting for results...",
-            "DownloadCsvTitle": "Download CSV"
+            "DownloadCsvTitle": "Download CSV",
+            "StorageLimitPreviewOnly": "Workspace storage limit reached. The query succeeded, but only its preview was retained."
         },
         "Insights": {
             "Title": "Insights",
@@ -3054,12 +3055,19 @@
                     "FieldDescription": "Expired result files are removed in the background. Query history is kept.",
                     "SelectPlaceholder": "Select duration",
                     "DayOption": "{count, plural, one {# day} other {# days}}",
-                    "SaveAction": "Save retention",
+                    "QuotaLabel": "Maximum storage",
+                    "QuotaDescription": "Shared limit for saved result sets and CSV/Parquet exports.",
+                    "QuotaPlaceholder": "Select limit",
+                    "GigabyteOption": "{count} GB",
+                    "UsageLabel": "Current usage",
+                    "ResultUsage": "Results: {size}",
+                    "ExportUsage": "Exports: {size}",
+                    "SaveAction": "Save settings",
                     "Saving": "Saving...",
                     "ReadOnlyHint": "Your current role does not allow updating storage settings.",
                     "Toasts": {
-                        "Updated": "Result retention updated",
-                        "UpdateFailed": "Failed to update result retention"
+                        "Updated": "Storage settings updated",
+                        "UpdateFailed": "Failed to update storage settings"
                     }
                 }
             },

@@ -366,5 +366,18 @@
     "bps": true,
     "folderMillis": 1783728000000,
     "hash": "7b59e37520f5259c7683afff4f23dcf0417a2cf98538208729c832977bf0aad0"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"result_sets\" ALTER COLUMN \"byte_size\" SET DATA TYPE bigint;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"storage_limit_applied\" boolean DEFAULT false NOT NULL;\n",
+      "\n\nCREATE TABLE IF NOT EXISTS \"result_set_exports\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"result_set_id\" text,\n    \"object_path\" text NOT NULL,\n    \"format\" text NOT NULL,\n    \"file_name\" text NOT NULL,\n    \"byte_size\" bigint NOT NULL,\n    \"expires_at\" timestamp with time zone NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_org_created\" ON \"result_set_exports\" USING btree (\"organization_id\", \"created_at\");\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_org_expires\" ON \"result_set_exports\" USING btree (\"organization_id\", \"expires_at\");\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_result_set\" ON \"result_set_exports\" USING btree (\"result_set_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1784073600000,
+    "hash": "3b2de5789762fd221e851474f3cc5b76c78970455ca8fdcf131791d3b29d6e1f"
   }
 ]

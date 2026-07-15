@@ -1463,7 +1463,8 @@
             "Charts": "チャート",
             "ResultTab": "結果 {index}",
             "WaitingForResults": "結果を待機中...",
-            "DownloadCsvTitle": "CSV をダウンロード"
+            "DownloadCsvTitle": "CSV をダウンロード",
+            "StorageLimitPreviewOnly": "Workspace のストレージ上限に達しました。クエリは成功しましたが、プレビューのみ保持されました。"
         },
         "Insights": {
             "Title": "Insights",
@@ -3052,12 +3053,19 @@
                     "FieldDescription": "期限切れの結果ファイルはバックグラウンドで削除されます。クエリ履歴は保持されます。",
                     "SelectPlaceholder": "期間を選択",
                     "DayOption": "{count} 日",
-                    "SaveAction": "保存期間を保存",
+                    "QuotaLabel": "最大ストレージ",
+                    "QuotaDescription": "保存された結果セットと CSV/Parquet エクスポートで共有する上限です。",
+                    "QuotaPlaceholder": "上限を選択",
+                    "GigabyteOption": "{count} GB",
+                    "UsageLabel": "現在の使用量",
+                    "ResultUsage": "結果: {size}",
+                    "ExportUsage": "エクスポート: {size}",
+                    "SaveAction": "設定を保存",
                     "Saving": "保存中...",
                     "ReadOnlyHint": "現在のロールではストレージ設定を更新できません。",
                     "Toasts": {
-                        "Updated": "結果の保存期間を更新しました",
-                        "UpdateFailed": "結果の保存期間の更新に失敗しました"
+                        "Updated": "ストレージ設定を更新しました",
+                        "UpdateFailed": "ストレージ設定の更新に失敗しました"
                     }
                 }
             },

@@ -61,6 +61,11 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
     });
 }
 
+function isBusyConnectionError(err: unknown): boolean {
+    const message = err instanceof Error ? err.message : String(err);
+    return message.includes('database connection is busy executing a query');
+}
+
 async function reconnectEntry(entry: DatasourcePoolEntry): Promise<DatasourcePoolEntry> {
     const existing = reconnecting.get(entry.config.id);
     if (existing) return existing;
@@ -84,6 +89,10 @@ async function ensureHealthyEntry(entry: DatasourcePoolEntry): Promise<Datasourc
         resetIdleTimer(entry);
         return entry;
     } catch (err) {
+        if (isBusyConnectionError(err)) {
+            resetIdleTimer(entry);
+            return entry;
+        }
         console.warn('[datasource-pool] ping failed, reconnecting', err);
         return reconnectEntry(entry);
     }

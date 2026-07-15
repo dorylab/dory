@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, forwardRef, useImperativeHandle, useRef }
 import { cn } from '@dory/web-utils';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Filter, X } from 'lucide-react';
-import { StrOp, NumOp, ColumnFilter } from './type';
+import { ColumnFilter } from './type';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverTrigger, PopoverContent, PopoverAnchor } from '@/registry/new-york-v4/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
@@ -278,3 +278,5 @@ export const ColumnFilterPopover = forwardRef<
         </Popover>
     );
 });
+
+ColumnFilterPopover.displayName = 'ColumnFilterPopover';

@@ -62,7 +62,7 @@ export const ResultStatusBar: React.FC<
                 )}
 
 
-                {typeof executionMs === 'number' && (
+                {!isRunning && typeof executionMs === 'number' && (
                     <span className="inline-flex items-center gap-1.5">
                         <Clock className="h-3.5 w-3.5" />
                         <span>{t('ResultStatus.ExecMs', { value: Math.max(0, Math.round(executionMs)).toLocaleString(locale) })}</span>

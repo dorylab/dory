@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
-import { TableIcon, BarChart3, AlertCircle, ChevronsUpDown, MoreHorizontal } from 'lucide-react';
+import { AlertCircle, ChevronsUpDown, MoreHorizontal } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 
 import { toast } from 'sonner';

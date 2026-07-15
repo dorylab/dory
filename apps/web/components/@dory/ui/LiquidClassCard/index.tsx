@@ -1,6 +1,5 @@
 import { cn } from '@dory/web-utils';
 import Image from 'next/image';
-import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Check, Users, MessageSquare } from 'lucide-react';
 import { LiquidGlassButton } from '../LiquidGlassButton';

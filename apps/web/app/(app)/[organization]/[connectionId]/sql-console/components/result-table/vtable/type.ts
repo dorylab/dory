@@ -12,6 +12,7 @@ export type VTableInspectorPayload =
 
 export interface VTableProps {
     results: { rowData: Record<string, unknown> }[];
+    columnMetas: Array<{ name?: unknown; type?: unknown }>;
     remoteSource?: VTableRemoteSource | null;
     rowHeight?: number;
     maxHeight?: number;
@@ -34,6 +35,7 @@ export interface VTableProps {
     showFiltersBar?: boolean;
     initialSort?: { column: string; direction: 'asc' | 'desc' } | null;
     selectedRowIndexes?: number[];
+    isActive?: boolean;
     onSortChange?: (sort: { column: string; direction: 'asc' | 'desc' } | null) => void;
     onSelectedRowIndexesChange?: (rowIndexes: number[]) => void;
 }
