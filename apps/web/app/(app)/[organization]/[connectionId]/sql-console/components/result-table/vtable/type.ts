@@ -44,6 +44,7 @@ export interface VTableRemoteSource {
     sourceId?: string;
     rowCount: number;
     pageSize?: number;
+    initialRows?: { rowData: Record<string, unknown> }[];
     getRows: (offset: number, limit: number, signal?: AbortSignal) => Promise<{ rowData: Record<string, unknown> }[]>;
 }
 

@@ -358,10 +358,10 @@ export default function VTable({
     }, [indexColWidth, measureTextWidth, tableRowCount]);
     const getDisplayRow = useCallback(
         (rowIndex: number) => {
-            if (isRemote) return remoteRowsRef.current.get(rowIndex);
+            if (isRemote) return remoteRowsRef.current.get(rowIndex) ?? remoteSource?.initialRows?.[rowIndex];
             return sortedResults[rowIndex];
         },
-        [isRemote, sortedResults],
+        [isRemote, remoteSource?.initialRows, sortedResults],
     );
 
     useEffect(() => {

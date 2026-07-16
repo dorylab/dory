@@ -227,7 +227,18 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         Array.isArray(sessionMetas?.warnings) && sessionMetas.warnings.some(warning => typeof warning === 'string' && warning.includes('Workspace storage limit'));
     const expectedRowCount = typeof sessionMetas?.rowCount === 'number' ? sessionMetas.rowCount : null;
     const remoteResultSetId = typeof sessionMetas?.resultSetId === 'string' && sessionMetas.resultSetId ? sessionMetas.resultSetId : null;
-    const isRemoteFullResult = Boolean(remoteResultSetId);
+    const streamedPreviewResults = useMemo<ResultRow[]>(
+        () =>
+            (sessionMetas.previewRows ?? []).map((rowData, index) => ({
+                tabId,
+                rid: index,
+                rowData,
+            })),
+        [sessionMetas.previewRows, tabId],
+    );
+    const hasCompleteStreamedPreview = expectedRowCount !== null && streamedPreviewResults.length >= expectedRowCount;
+    const isRemoteFullResult = Boolean(remoteResultSetId) && !hasCompleteStreamedPreview;
+    const localResults = hasCompleteStreamedPreview ? streamedPreviewResults : results;
     const remoteRowCount = expectedRowCount ?? 0;
 
     const [query, setQuery] = useState('');
@@ -241,8 +252,8 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const [tablePaneSnapshotsBySet, setTablePaneSnapshotsBySet] = useState<Record<number, ResultTablePaneSnapshot>>({});
     const [remoteEffectiveRowCountBySet, setRemoteEffectiveRowCountBySet] = useState<Record<number, number | null>>({});
     const remoteEffectiveRowCount = activeSet >= 0 ? (remoteEffectiveRowCountBySet[activeSet] ?? null) : null;
-    const rowCount = isRemoteFullResult ? (remoteEffectiveRowCount ?? remoteRowCount) : results.length;
-    const showEmpty = isRemoteFullResult ? rowCount === 0 : results.length === 0;
+    const rowCount = isRemoteFullResult ? (remoteEffectiveRowCount ?? remoteRowCount) : localResults.length;
+    const showEmpty = isRemoteFullResult ? rowCount === 0 : localResults.length === 0;
 
     useEffect(() => {
         const savedViewMode = viewModesByKey[viewModeKey];
@@ -324,9 +335,9 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         if (isRemoteFullResult) return [];
         const hasGlobal = query.trim().length > 0;
         const gq = query.trim().toLowerCase();
-        if (!hasGlobal) return results;
+        if (!hasGlobal) return localResults;
 
-        return results.filter(row => {
+        return localResults.filter(row => {
             if (hasGlobal) {
                 let hit = false;
                 for (const c of (sessionMetas.columns ?? []).map((x: { name?: string }) => x.name)) {
@@ -342,7 +353,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             }
             return true;
         });
-    }, [isRemoteFullResult, results, sessionMetas, query]);
+    }, [isRemoteFullResult, localResults, sessionMetas, query]);
 
     const {
         activeFilters,
@@ -386,6 +397,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             sourceId: remoteResultSetId,
             rowCount: remoteEffectiveRowCount ?? remoteRowCount,
             pageSize: 5000,
+            initialRows: hasActiveResultOperations ? undefined : streamedPreviewResults,
             getRows: async (offset: number, limit: number, signal?: AbortSignal) => {
                 const response = await readResultSetRows({
                     resultSetId: remoteResultSetId,
@@ -409,7 +421,19 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 }));
             },
         };
-    }, [activeSet, isRemoteFullResult, readResultSetRows, remoteEffectiveRowCount, remoteOperationKey, remoteOperations, remoteResultSetId, remoteRowCount, tabId]);
+    }, [
+        activeSet,
+        hasActiveResultOperations,
+        isRemoteFullResult,
+        readResultSetRows,
+        remoteEffectiveRowCount,
+        remoteOperationKey,
+        remoteOperations,
+        remoteResultSetId,
+        remoteRowCount,
+        streamedPreviewResults,
+        tabId,
+    ]);
 
     useEffect(() => {
         if (!sessionId || activeSet < 0) return;
@@ -550,9 +574,9 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const stats = useMemo(
         () => ({
             filteredCount: isRemoteFullResult ? rowCount : columnFilteredResults.length,
-            totalCount: isRemoteFullResult ? remoteRowCount : results.length,
+            totalCount: isRemoteFullResult ? remoteRowCount : localResults.length,
         }),
-        [columnFilteredResults.length, isRemoteFullResult, remoteRowCount, results.length, rowCount],
+        [columnFilteredResults.length, isRemoteFullResult, localResults.length, remoteRowCount, rowCount],
     );
     const shouldShowWholeResultEmpty = showEmpty && !hasActiveResultOperations;
     const shouldShowFilteredEmpty = showEmpty && hasActiveResultOperations;
@@ -760,7 +784,9 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 });
                 setIndices(next);
 
-                if (activeSet >= 0 && !next.includes(activeSet)) {
+                if (activeSet === OVERVIEW_SET && !userPicked && next.length > 0) {
+                    autoSetActiveSet(next[next.length - 1]!);
+                } else if (activeSet >= 0 && !next.includes(activeSet)) {
                     setActiveSet(OVERVIEW_SET);
                 }
             } catch {}
@@ -768,7 +794,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         return () => {
             canceled = true;
         };
-    }, [activeSet, dbReady, sessionId, dataVersion, listResultSetsMeta, cacheSessionUi, setActiveSet]);
+    }, [activeSet, autoSetActiveSet, dbReady, sessionId, dataVersion, listResultSetsMeta, cacheSessionUi, setActiveSet, userPicked]);
 
     const overviewItems: OverviewItem[] = useMemo(() => {
         if (!sessionId) return [];
@@ -815,7 +841,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             const runningRemote = m?.status === 'running' || runningTabs[tabId] === 'running';
             const runningLocal = false;
 
-            const shownRows = isActive ? (isRemoteFullResult ? (expectedRowCount ?? 0) : results.length) : typeof m?.rowCount === 'number' ? m.rowCount : 0;
+            const shownRows = isActive ? (isRemoteFullResult ? (expectedRowCount ?? 0) : localResults.length) : typeof m?.rowCount === 'number' ? m.rowCount : 0;
 
             map[i] = {
                 runningRemote,
@@ -835,7 +861,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             };
         }
         return map;
-    }, [indices, activeSet, setsMeta, runningTabs, tabId, isRemoteFullResult, expectedRowCount, results.length, meta.truncated, meta.source]);
+    }, [indices, activeSet, setsMeta, runningTabs, tabId, isRemoteFullResult, expectedRowCount, localResults.length, meta.truncated, meta.source]);
 
     /* ---------- actions ---------- */
 
@@ -864,7 +890,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             const emptyResultMessage = workspaceScope.workspaceMode === 'agent' ? t('Results.AgentRunQueryFirst') : t('Results.RunQueryFirst');
             return <div className="h-full flex items-center justify-center px-4 text-center text-sm bg-card text-muted-foreground">{emptyResultMessage}</div>;
         }
-        const hasRenderableRows = activeSet >= 0 && (isRemoteFullResult ? rowCount > 0 : results.length > 0);
+        const hasRenderableRows = activeSet >= 0 && (isRemoteFullResult ? rowCount > 0 : localResults.length > 0);
         const hasRenderableResult = activeSet >= 0 && (hasRenderableRows || execMetaBySet?.[activeSet]?.errorMessage);
         if (runningTabs[tabId] === 'running' && !hasRenderableResult) {
             return (

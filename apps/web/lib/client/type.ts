@@ -37,6 +37,7 @@ export type ResultSetMeta = {
     resultSetId: string | null;
     dataAvailability: string | null;
     previewRowCount: number | null;
+    previewRows?: Record<string, unknown>[];
     affectedRows: number | null;
     status: 'success' | 'error' | 'running';
     errorMessage: string | null;

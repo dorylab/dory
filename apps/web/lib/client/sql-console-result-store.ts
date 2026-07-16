@@ -5,12 +5,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { executeActionClient, type ExecuteActionClientOptions } from '@/lib/actions/client';
 
 import type { ResultSetMeta, ResultSetRemoteFilter, ResultSetRemoteSearch, ResultSetRemoteSort, ResultSetStatsV1, ResultSetViewState } from './type';
+import { normalizeSqlConsoleResultSnapshot, type SqlConsoleResultSnapshot, type SqlConsoleResultUpdatePayload } from './sql-console-result-snapshot';
 
 export const SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT = 'sql-console-result-data-updated';
 
-export function notifySqlConsoleResultDataUpdated() {
+export function notifySqlConsoleResultDataUpdated(payload?: SqlConsoleResultUpdatePayload | null) {
     if (typeof window === 'undefined') return;
-    window.dispatchEvent(new Event(SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT));
+    window.dispatchEvent(new CustomEvent(SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT, { detail: payload ?? null }));
 }
 
 type ReadRowsInput = {
@@ -103,35 +104,57 @@ function actionOptions(signal?: AbortSignal): ExecuteActionClientOptions | undef
 
 export function useSqlConsoleResultStore() {
     const [dataVersion, setDataVersion] = useState(0);
+    const [snapshotsBySession, setSnapshotsBySession] = useState<Record<string, SqlConsoleResultSnapshot>>({});
 
     useEffect(() => {
-        const bump = () => setDataVersion(version => version + 1);
+        const bump = (event: Event) => {
+            const snapshot = normalizeSqlConsoleResultSnapshot(event instanceof CustomEvent ? (event.detail as SqlConsoleResultUpdatePayload | null) : null);
+            if (snapshot) {
+                setSnapshotsBySession(previous => ({
+                    ...previous,
+                    [snapshot.session.sessionId]: snapshot,
+                }));
+            }
+            setDataVersion(version => version + 1);
+        };
         window.addEventListener(SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT, bump);
         return () => window.removeEventListener(SQL_CONSOLE_RESULT_DATA_UPDATED_EVENT, bump);
     }, []);
 
-    const getSession = useCallback(async (sessionId: string) => {
-        const session = await executeActionClient<QuerySessionActionOutput>('query.session.get', { sessionId });
-        if (!session) return null;
-        return {
-            ...session,
-            startedAt: asDate(session.startedAt),
-            finishedAt: asDate(session.finishedAt),
-        };
-    }, []);
+    const getSession = useCallback(
+        async (sessionId: string) => {
+            const fallback = snapshotsBySession[sessionId]?.session ?? null;
+            if (fallback) return fallback;
 
-    const listResultSetsMeta = useCallback(async (sessionId: string): Promise<ResultSetMeta[]> => {
-        const output = await executeActionClient<QueryResultSetsListOutput>('query.resultSets.list', { sessionId });
-        return output.resultSets.map(meta => ({
-            ...meta,
-            columns: (meta.columns ?? []) as ResultSetMeta['columns'],
-            stats: meta.stats ?? null,
-            viewState: meta.viewState ?? null,
-            aiProfileVersion: meta.aiProfileVersion ?? 0,
-            resultSetId: meta.resultSetId,
-            dataAvailability: meta.dataAvailability,
-        }));
-    }, []);
+            const session = await executeActionClient<QuerySessionActionOutput>('query.session.get', { sessionId });
+            if (!session) return null;
+            return {
+                ...session,
+                startedAt: asDate(session.startedAt),
+                finishedAt: asDate(session.finishedAt),
+            };
+        },
+        [snapshotsBySession],
+    );
+
+    const listResultSetsMeta = useCallback(
+        async (sessionId: string): Promise<ResultSetMeta[]> => {
+            const fallback = snapshotsBySession[sessionId]?.resultSets ?? [];
+            if (fallback.length > 0) return fallback;
+
+            const output = await executeActionClient<QueryResultSetsListOutput>('query.resultSets.list', { sessionId });
+            return output.resultSets.map(meta => ({
+                ...meta,
+                columns: (meta.columns ?? []) as ResultSetMeta['columns'],
+                stats: meta.stats ?? null,
+                viewState: meta.viewState ?? null,
+                aiProfileVersion: meta.aiProfileVersion ?? 0,
+                resultSetId: meta.resultSetId,
+                dataAvailability: meta.dataAvailability,
+            }));
+        },
+        [snapshotsBySession],
+    );
 
     const listResultSetIndices = useCallback(
         async (sessionId: string) => {
