@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { Group, Panel, Separator as PanelSeparator, type Layout } from 'react-resizable-panels';
 import { Bot, Sparkles } from 'lucide-react';
@@ -34,7 +34,6 @@ import { SQLTabs } from './components/tabs';
 import { SqlMode } from './components/copilot-modes/sql-mode';
 import { TableMode } from './components/copilot-modes/table-mode';
 import { useSqlConsoleClient } from './hooks/useSqlConsoleClient';
-import type { SQLEditorHandle } from './components/sql-editor';
 import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
@@ -62,10 +61,6 @@ const INITIAL_LAYOUT = {
     },
     tabs: {
         defaultHeaderHeight: 36,
-    },
-    editorFocusRetry: {
-        maxAttempts: 5,
-        delayMs: 50,
     },
 } as const;
 
@@ -300,68 +295,18 @@ export default function AgentWorkspaceClient({
         setWorkspaceScope(workspaceScope);
     }, [setWorkspaceScope, workspaceScope]);
 
-    const sqlTabIds = useMemo(() => tabs.filter(tab => tab.tabType === 'sql').map(tab => tab.tabId), [tabs]);
-    const sqlTabIdKey = sqlTabIds.join('\0');
-    const editorRefsByTab = useMemo(
-        () => Object.fromEntries(sqlTabIds.map(tabId => [tabId, React.createRef<SQLEditorHandle>()])),
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [sqlTabIdKey],
-    );
-
-    const ensureEditorRef = useCallback(
-        (tabId: string | undefined | null) => {
-            if (!tabId) return null;
-            return editorRefsByTab[tabId] ?? null;
-        },
-        [editorRefsByTab],
-    );
-
-    useEffect(() => {
-        if (!activeTabId) return;
-        const refForActive = ensureEditorRef(activeTabId);
-        if (refForActive) {
-            editorRef.current = refForActive.current;
-        }
-    }, [activeTabId, editorRef, ensureEditorRef]);
-
-    useEffect(() => {
-        if (!activeTabId || activeTab?.tabType !== 'sql') return;
-
-        let cancelled = false;
-        let attempts = 0;
-
-        const focusAtEnd = () => {
-            if (cancelled) return;
-            const refForActive = ensureEditorRef(activeTabId);
-            const handle = refForActive?.current;
-            if (handle?.focusAtEnd) {
-                handle.focusAtEnd();
-                return;
-            }
-            if (attempts < INITIAL_LAYOUT.editorFocusRetry.maxAttempts) {
-                attempts += 1;
-                setTimeout(focusAtEnd, INITIAL_LAYOUT.editorFocusRetry.delayMs);
-            }
-        };
-
-        focusAtEnd();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [activeTab?.tabType, activeTabId, ensureEditorRef]);
+    const lastActiveSqlTabIdRef = useRef<string | null>(null);
+    if (activeTab?.tabType === 'sql') {
+        lastActiveSqlTabIdRef.current = activeTab.tabId;
+    }
+    const retainedSqlTab = (tabs.find(tab => tab.tabType === 'sql' && tab.tabId === lastActiveSqlTabIdRef.current) ?? tabs.find(tab => tab.tabType === 'sql')) || undefined;
 
     const runQueryWithRef = useCallback(
         (tab: Parameters<typeof runQuery>[0], options?: Parameters<typeof runQuery>[1]) => {
-            const refForTab = ensureEditorRef(tab?.tabId);
-            if (refForTab) {
-                editorRef.current = refForTab.current;
-            }
-
             if (tab?.tabType === 'sql' && tab.tabId) {
                 const selection = selectionByTab[tab.tabId];
                 if (selection) {
-                    const sqlText = editorRef.current?.getValue() ?? '';
+                    const sqlText = editorRef.current?.getValue(tab.tabId) ?? tab.content ?? '';
                     const start = Math.max(0, Math.min(selection.start, sqlText.length));
                     const end = Math.max(start, Math.min(selection.end, sqlText.length));
                     const selectionText = sqlText.slice(start, end).trim();
@@ -373,7 +318,7 @@ export default function AgentWorkspaceClient({
 
             return runQuery(tab, options);
         },
-        [ensureEditorRef, editorRef, runQuery, selectionByTab],
+        [editorRef, runQuery, selectionByTab],
     );
 
     const handleOpenQueryConsole = useCallback(async () => {
@@ -489,27 +434,19 @@ export default function AgentWorkspaceClient({
     };
 
     const getSqlContentsByTabId = useCallback(() => {
-        const contents: Record<string, string> = {};
+        const contents = editorRef.current?.getValuesByTabId() ?? {};
 
         for (const tab of tabs) {
             if (tab.tabType !== 'sql') continue;
-
-            const refForTab = ensureEditorRef(tab.tabId);
-            const editorHandle = refForTab?.current ?? (tab.tabId === activeTabId ? editorRef.current : null);
-            contents[tab.tabId] = editorHandle?.getValue?.() ?? tab.content ?? '';
+            contents[tab.tabId] ??= tab.content ?? '';
         }
 
         return contents;
-    }, [activeTabId, editorRef, ensureEditorRef, tabs]);
+    }, [editorRef, tabs]);
 
     const flushSqlEditorSaves = useCallback(() => {
-        for (const tab of tabs) {
-            if (tab.tabType !== 'sql') continue;
-            const refForTab = ensureEditorRef(tab.tabId);
-            const editorHandle = refForTab?.current ?? (tab.tabId === activeTabId ? editorRef.current : null);
-            editorHandle?.flushSave?.();
-        }
-    }, [activeTabId, editorRef, ensureEditorRef, tabs]);
+        editorRef.current?.flushSave();
+    }, [editorRef]);
 
     const recordWorkspaceSaveActivity = useCallback(
         async (changes: WorkspaceChangeSummary) => {
@@ -649,7 +586,7 @@ export default function AgentWorkspaceClient({
         '--agent-run-panel-width': `${AGENT_RUN_PANEL_WIDTH}px`,
         '--workspace-rail-width': `${WORKSPACE_RAIL_WIDTH}px`,
         '--workspace-reserved-right-width': `${reservedRightWidth}px`,
-    } as React.CSSProperties;
+    } as CSSProperties;
 
     useEffect(() => {
         const handler = (event: KeyboardEvent) => {
@@ -669,6 +606,7 @@ export default function AgentWorkspaceClient({
         const handler = (event: KeyboardEvent) => {
             const isNewTabShortcut = event.code === 'KeyL' && event.altKey && (event.metaKey || event.ctrlKey);
             if (!isNewTabShortcut) return;
+            if (activeTab?.tabType !== 'sql') return;
             event.preventDefault();
             void addTab({ activate: true });
         };
@@ -676,7 +614,7 @@ export default function AgentWorkspaceClient({
         return () => {
             window.removeEventListener('keydown', handler);
         };
-    }, [addTab]);
+    }, [activeTab?.tabType, addTab]);
 
     useEffect(() => {
         if (isLoading || savedWorkspaceFingerprint !== null) return;
@@ -696,7 +634,7 @@ export default function AgentWorkspaceClient({
                 return addTab({ tabName: item.title, content: sqlText, activate: true });
             }
 
-            editorRef.current?.applyContentWithUndo?.(sqlText);
+            editorRef.current?.applyContentWithUndo(sqlText, activeTabId);
             updateTab(activeTabId, { content: sqlText }, { immediate: true });
             return activeTabId;
         },
@@ -760,7 +698,7 @@ export default function AgentWorkspaceClient({
                 return;
             }
 
-            const current = editorRef.current?.getValue() ?? activeTab.content ?? '';
+            const current = editorRef.current?.getValue(activeTab.tabId) ?? activeTab.content ?? '';
             const hasContent = current.trim().length > 0 && current.trim() !== sqlText.trim();
             if (hasContent) {
                 setPendingSavedQuery(item);
@@ -836,65 +774,53 @@ export default function AgentWorkspaceClient({
                                         onRequestAITitle={manualRenameTab}
                                     />
                                     <div className="relative flex-1 min-h-0">
-                                        {tabs.map(tab => {
-                                            const isActive = tab.tabId === activeTabId;
-                                            const tabEditorRef = tab.tabType === 'sql' ? (ensureEditorRef(tab.tabId) ?? editorRef) : editorRef;
-
-                                            if (tab.tabType === 'table') {
-                                                if (!isActive) {
-                                                    return null;
-                                                }
-
-                                                return (
-                                                    <div key={tab.tabId} className="absolute inset-0 flex h-full min-h-0 flex-col">
-                                                        <TableMode
-                                                            tabs={tabs}
-                                                            activeTab={tab}
-                                                            activeTabId={tab.tabId}
-                                                            setActiveTabId={setActiveTabId}
-                                                            addTab={addTab}
-                                                            updateTab={updateTab}
-                                                            showChatbot={false}
-                                                            chatWidth={normalizedChatWidth}
-                                                            setChatWidth={setClampedChatWidth}
-                                                            runQuery={runQueryWithRef}
-                                                            onCloseChatbot={closeChatbotPanel}
-                                                            reserveRightRail={false}
-                                                        />
-                                                    </div>
-                                                );
-                                            }
-
-                                            return (
-                                                <div
-                                                    key={tab.tabId}
-                                                    aria-hidden={!isActive}
-                                                    inert={!isActive}
-                                                    className={cn(
-                                                        'absolute inset-0 flex h-full min-h-0 flex-col',
-                                                        isActive ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none',
-                                                    )}
-                                                >
-                                                    <SqlMode
-                                                        tabs={tabs}
-                                                        activeTab={tab}
-                                                        activeTabId={tab.tabId}
-                                                        setActiveTabId={setActiveTabId}
-                                                        addTab={addTab}
-                                                        updateTab={updateTab}
-                                                        editorRef={tabEditorRef}
-                                                        runQuery={runQueryWithRef}
-                                                        cancelQuery={cancelQuery}
-                                                        runningTabs={runningTabs}
-                                                        showChatbot={shouldShowChatbot}
-                                                        chatWidth={normalizedChatWidth}
-                                                        setChatWidth={setClampedChatWidth}
-                                                        onCloseChatbot={closeChatbotPanel}
-                                                        reserveRightRail={false}
-                                                    />
-                                                </div>
-                                            );
-                                        })}
+                                        {retainedSqlTab ? (
+                                            <div
+                                                aria-hidden={activeTab?.tabType !== 'sql'}
+                                                inert={activeTab?.tabType !== 'sql'}
+                                                className={cn(
+                                                    'absolute inset-0 flex h-full min-h-0 flex-col',
+                                                    activeTab?.tabType === 'sql' ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none',
+                                                )}
+                                            >
+                                                <SqlMode
+                                                    tabs={tabs}
+                                                    activeTab={retainedSqlTab}
+                                                    activeTabId={retainedSqlTab.tabId}
+                                                    setActiveTabId={setActiveTabId}
+                                                    addTab={addTab}
+                                                    updateTab={updateTab}
+                                                    editorRef={editorRef}
+                                                    runQuery={runQueryWithRef}
+                                                    cancelQuery={cancelQuery}
+                                                    runningTabs={runningTabs}
+                                                    showChatbot={shouldShowChatbot}
+                                                    chatWidth={normalizedChatWidth}
+                                                    setChatWidth={setClampedChatWidth}
+                                                    onCloseChatbot={closeChatbotPanel}
+                                                    reserveRightRail={false}
+                                                    workspaceActive={activeTab?.tabType === 'sql'}
+                                                />
+                                            </div>
+                                        ) : null}
+                                        {activeTab?.tabType === 'table' ? (
+                                            <div className="absolute inset-0 z-20 flex h-full min-h-0 flex-col">
+                                                <TableMode
+                                                    tabs={tabs}
+                                                    activeTab={activeTab}
+                                                    activeTabId={activeTab.tabId}
+                                                    setActiveTabId={setActiveTabId}
+                                                    addTab={addTab}
+                                                    updateTab={updateTab}
+                                                    showChatbot={false}
+                                                    chatWidth={normalizedChatWidth}
+                                                    setChatWidth={setClampedChatWidth}
+                                                    runQuery={runQueryWithRef}
+                                                    onCloseChatbot={closeChatbotPanel}
+                                                    reserveRightRail={false}
+                                                />
+                                            </div>
+                                        ) : null}
                                     </div>
                                 </>
                             )}

@@ -152,11 +152,73 @@ test('does not duplicate SQL completion items across open tabs', async ({ page, 
     await expect(page.getByText('numbers', { exact: true }).first()).toBeVisible();
 
     await page.getByRole('button', { name: /Add tab/i }).click();
+    await expect(page.locator('.monaco-editor')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getModelCount())).toBe(2);
     await setSqlEditorValue(page, 'SELECT * FROM n');
     await page.keyboard.press('Control+Space');
 
     const matchingCompletionItems = page.locator('.suggest-widget .monaco-list-row .label-name').filter({ hasText: /^numbers$/ });
     await expect(matchingCompletionItems).toHaveCount(1);
+    await expectAppHealthy(appErrors);
+});
+
+test('keeps one Monaco editor with independent SQL models', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
+    await openMockConnectionConsole(page, seededConnection);
+
+    await page.getByRole('button', { name: /New Console/i }).click();
+    const firstSql = Array.from({ length: 80 }, (_, index) => `SELECT ${index} AS first_tab;`).join('\n');
+    await setSqlEditorValue(page, firstSql);
+    await page.evaluate(() => {
+        window.__DORY_E2E_MONACO__?.setSelection({
+            startLineNumber: 10,
+            startColumn: 2,
+            endLineNumber: 10,
+            endColumn: 6,
+        });
+        window.__DORY_E2E_MONACO__?.setScrollTop(400);
+    });
+    const sqlTabs = page.locator('[role="tab"]').filter({ has: page.locator('svg.lucide-file-text') });
+    const firstTab = sqlTabs.first();
+
+    await page.getByRole('button', { name: /Add tab/i }).click();
+    await setSqlEditorValue(page, 'SELECT 2 AS second_tab');
+    await setSqlEditorValue(page, 'SELECT 3 AS second_tab');
+    const secondTab = sqlTabs.nth(1);
+
+    await expect(page.locator('.monaco-editor')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getModelCount())).toBe(2);
+
+    await firstTab.click();
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(firstSql);
+    await expect
+        .poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getSelection()))
+        .toEqual({
+            startLineNumber: 10,
+            startColumn: 2,
+            endLineNumber: 10,
+            endColumn: 6,
+        });
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getScrollTop() ?? 0)).toBeGreaterThan(350);
+    await secondTab.click();
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe('SELECT 3 AS second_tab');
+    await page.evaluate(() => window.__DORY_E2E_MONACO__?.undo());
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe('SELECT 2 AS second_tab');
+    await firstTab.click();
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(firstSql);
+    await secondTab.click();
+
+    await secondTab.locator('button').click({ force: true });
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getModelCount())).toBe(1);
+    await expect(page.locator('.monaco-editor')).toHaveCount(1);
+
+    await page.getByRole('button', { name: /Insert select for numbers/i }).click();
+    await expect(page.getByTestId('sql-editor')).toBeHidden();
+    await expect(page.locator('.monaco-editor')).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getModelCount())).toBe(1);
+    await firstTab.click();
+    await expect(page.getByTestId('sql-editor')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.__DORY_E2E_MONACO__?.getValue())).toBe(firstSql);
     await expectAppHealthy(appErrors);
 });
 

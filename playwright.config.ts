@@ -25,9 +25,7 @@ export default defineConfig({
         baseURL,
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
-        viewport: isDemoRecording
-            ? demoRecordingViewport
-            : undefined,
+        viewport: isDemoRecording ? demoRecordingViewport : undefined,
         video: isDemoRecording ? 'off' : (videoMode as 'off' | 'on' | 'retain-on-failure' | 'on-first-retry'),
         contextOptions: isDemoRecording
             ? {
@@ -58,8 +56,7 @@ export default defineConfig({
     webServer: process.env.PLAYWRIGHT_BASE_URL
         ? undefined
         : {
-              command:
-                  `cd apps/web && mkdir -p ./.tmp/playwright && DB_TYPE='pglite' PGLITE_DB_PATH='./.tmp/playwright/dory' DS_SECRET_KEY='MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' BETTER_AUTH_SECRET='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' NEXT_PUBLIC_DORY_CLOUD_API_URL='' BETTER_AUTH_URL='${baseURL}' yarn run prebuild && DB_TYPE='pglite' PGLITE_DB_PATH='./.tmp/playwright/dory' DS_SECRET_KEY='MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' BETTER_AUTH_SECRET='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' NEXT_PUBLIC_DORY_CLOUD_API_URL='' BETTER_AUTH_URL='${baseURL}' npx tsx ./scripts/dev-bootstrap.ts && DB_TYPE='pglite' PGLITE_DB_PATH='./.tmp/playwright/dory' DS_SECRET_KEY='MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' BETTER_AUTH_SECRET='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' NEXT_PUBLIC_DORY_CLOUD_API_URL='' BETTER_AUTH_URL='${baseURL}' yarn next dev --turbopack --hostname 127.0.0.1 --port ${defaultPort}`,
+              command: `cd apps/web && mkdir -p ./.tmp/playwright && DB_TYPE='pglite' PGLITE_DB_PATH='./.tmp/playwright/dory' DS_SECRET_KEY='MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' BETTER_AUTH_SECRET='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' NEXT_PUBLIC_DORY_CLOUD_API_URL='' BETTER_AUTH_URL='${baseURL}' npx tsx ./scripts/dev-bootstrap.ts && DB_TYPE='pglite' PGLITE_DB_PATH='./.tmp/playwright/dory' DS_SECRET_KEY='MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=' BETTER_AUTH_SECRET='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef' NEXT_PUBLIC_DORY_CLOUD_API_URL='' BETTER_AUTH_URL='${baseURL}' yarn next dev --turbopack --hostname 127.0.0.1 --port ${defaultPort}`,
               url: baseURL,
               reuseExistingServer: !process.env.CI,
               timeout: 180_000,

@@ -10,7 +10,6 @@ import type { UITabPayload } from '@dory/shared/types/tabs';
 import { useDebouncedTabSave } from './use-debounced-tab-save';
 import { useMonacoTheme } from './use-monaco-theme';
 import { useSqlMonacoEditor } from './use-sql-monaco-editor';
-import { useSyncEditorContent } from './use-sync-editor-content';
 import { SqlEditorContextMenu } from './sql-editor-context-menu';
 import { useSqlEditorActions } from './use-sql-editor-actions';
 import { useTranslations } from 'next-intl';
@@ -21,12 +20,25 @@ declare global {
         __DORY_E2E_MONACO__?: {
             getValue: () => string;
             setValue: (value: string) => void;
+            getModelCount: () => number;
+            getSelection: () => {
+                startLineNumber: number;
+                startColumn: number;
+                endLineNumber: number;
+                endColumn: number;
+            } | null;
+            setSelection: (selection: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number }) => void;
+            getScrollTop: () => number;
+            setScrollTop: (value: number) => void;
+            undo: () => void;
         };
     }
 }
 
 interface SQLEditorProps {
+    tabs: UITabPayload[];
     activeTab: UITabPayload | undefined;
+    workspaceActive: boolean;
     updateTab: (tabId: string, patch: Partial<UITabPayload>) => void;
     onRunQuery?: () => void;
     onNewTab?: () => void;
@@ -41,17 +53,20 @@ interface SQLEditorProps {
 }
 
 export interface SQLEditorHandle {
-    getValue: () => string;
-    flushSave: () => void;
-    applyContentWithUndo?: (next: string) => void;
-    insertContentWithUndo?: (next: string) => string | null;
-    focusAtEnd?: () => void;
+    getValue: (tabId?: string) => string;
+    getValuesByTabId: () => Record<string, string>;
+    flushSave: (tabId?: string) => void;
+    applyContentWithUndo: (next: string, tabId?: string) => void;
+    insertContentWithUndo: (next: string, tabId?: string) => string | null;
+    focus: () => void;
 }
 
 const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
     (
         {
+            tabs,
             activeTab,
+            workspaceActive,
             updateTab,
             onRunQuery,
             onNewTab,
@@ -71,10 +86,9 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         const editorSettings = useAtomValue(sqlEditorSettingsAtom);
         const editorTheme = resolveSqlEditorTheme(editorSettings, resolvedTheme);
         const t = useTranslations('SqlConsole');
-        const activeSqlContent = activeTab?.tabType === 'sql' ? (activeTab.content ?? '') : '';
-
         const containerRef = useRef<HTMLDivElement | null>(null);
         const { saveContent, flushSave } = useDebouncedTabSave(updateTab);
+        const previousTabIdRef = useRef<string | undefined>(activeTab?.tabId);
         const handleContentChange = useCallback(
             (tabId: string, content: string) => {
                 saveContent(tabId, content);
@@ -83,8 +97,10 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         );
         const formatHandlerRef = useRef<(() => void) | null>(null);
 
-        const { editorRef, monacoRef } = useSqlMonacoEditor({
+        const { editorRef, monacoRef, getModel, getValue, getValuesByTabId, modelsByTabRef } = useSqlMonacoEditor({
+            tabs,
             activeTab,
+            workspaceActive,
             editorTheme,
             editorSettings,
             currentConnectionId: currentConnection?.connection?.id,
@@ -98,7 +114,6 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         });
 
         useMonacoTheme(monacoRef, editorTheme);
-        useSyncEditorContent(editorRef, activeTab);
         const { hasSelection, handleCopy, handlePaste, handleCut, handleFormat, handleToggleCase, handleExecuteSelection, handleExecuteSql } = useSqlEditorActions({
             editorRef,
             currentConnectionType: currentConnection?.connection?.type,
@@ -109,28 +124,58 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         useImperativeHandle(
             ref,
             () => ({
-                getValue: () => editorRef.current?.getValue() ?? activeSqlContent,
-                flushSave: () => flushSave(),
-                applyContentWithUndo: (next: string) => {
+                getValue,
+                getValuesByTabId,
+                flushSave,
+                applyContentWithUndo: (next: string, tabId?: string) => {
                     const editor = editorRef.current;
-                    const model = editor?.getModel();
-                    if (!editor || !model) return;
+                    const model = getModel(tabId);
+                    if (!model) return;
 
                     const current = model.getValue();
                     if (current === next) return;
 
                     const fullRange = model.getFullModelRange();
 
-                    // Make the replacement a single undoable step.
-                    editor.pushUndoStop();
-                    editor.executeEdits('copilot.fix.apply', [{ range: fullRange, text: next }]);
-                    editor.pushUndoStop();
+                    if (editor?.getModel() === model) {
+                        editor.pushUndoStop();
+                        editor.executeEdits('copilot.fix.apply', [{ range: fullRange, text: next }]);
+                        editor.pushUndoStop();
+                    } else {
+                        model.pushStackElement();
+                        model.pushEditOperations([], [{ range: fullRange, text: next }], () => null);
+                        model.pushStackElement();
+                    }
                 },
-                insertContentWithUndo: (next: string) => {
+                insertContentWithUndo: (next: string, tabId?: string) => {
                     const editor = editorRef.current;
-                    const model = editor?.getModel();
-                    const selection = editor?.getSelection();
-                    if (!editor || !model || !selection) return null;
+                    const model = getModel(tabId);
+                    if (!model) return null;
+
+                    if (editor?.getModel() !== model) {
+                        const position = model.getPositionAt(model.getValueLength());
+                        model.pushStackElement();
+                        model.pushEditOperations(
+                            [],
+                            [
+                                {
+                                    range: {
+                                        startLineNumber: position.lineNumber,
+                                        startColumn: position.column,
+                                        endLineNumber: position.lineNumber,
+                                        endColumn: position.column,
+                                    },
+                                    text: next,
+                                },
+                            ],
+                            () => null,
+                        );
+                        model.pushStackElement();
+                        return model.getValue();
+                    }
+
+                    const selection = editor.getSelection();
+                    if (!selection) return null;
 
                     editor.pushUndoStop();
                     editor.executeEdits('copilot.inline-ask.insert', [{ range: selection, text: next }]);
@@ -139,31 +184,16 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
 
                     return model.getValue();
                 },
-                focusAtEnd: () => {
-                    const editor = editorRef.current;
-                    const model = editor?.getModel();
-                    if (!editor || !model) return;
-
-                    const lastLine = model.getLineCount();
-                    const lastColumn = model.getLineMaxColumn(lastLine);
-                    editor.setSelection({
-                        startLineNumber: lastLine,
-                        startColumn: lastColumn,
-                        endLineNumber: lastLine,
-                        endColumn: lastColumn,
-                    });
-                    editor.revealPositionInCenterIfOutsideViewport({ lineNumber: lastLine, column: lastColumn });
-                    editor.focus();
-                },
+                focus: () => editorRef.current?.focus(),
             }),
-            [activeSqlContent, flushSave],
+            [editorRef, flushSave, getModel, getValue, getValuesByTabId],
         );
 
         useEffect(() => {
             if (typeof window === 'undefined') return;
 
             window.__DORY_E2E_MONACO__ = {
-                getValue: () => editorRef.current?.getValue() ?? activeSqlContent,
+                getValue,
                 setValue: (next: string) => {
                     const editor = editorRef.current;
                     const model = editor?.getModel();
@@ -175,6 +205,21 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
                     editor.pushUndoStop();
                     editor.focus();
                 },
+                getModelCount: () => modelsByTabRef.current.size,
+                getSelection: () => {
+                    const selection = editorRef.current?.getSelection();
+                    if (!selection) return null;
+                    return {
+                        startLineNumber: selection.startLineNumber,
+                        startColumn: selection.startColumn,
+                        endLineNumber: selection.endLineNumber,
+                        endColumn: selection.endColumn,
+                    };
+                },
+                setSelection: selection => editorRef.current?.setSelection(selection),
+                getScrollTop: () => editorRef.current?.getScrollTop() ?? 0,
+                setScrollTop: value => editorRef.current?.setScrollTop(value),
+                undo: () => editorRef.current?.trigger('dory.e2e', 'undo', null),
             };
 
             return () => {
@@ -182,51 +227,18 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
                     delete window.__DORY_E2E_MONACO__;
                 }
             };
-        }, [activeSqlContent, editorRef]);
+        }, [editorRef, getValue, modelsByTabRef]);
 
         useEffect(() => {
-            if (!activeTab || activeTab.tabType !== 'sql') return;
-
-            let cancelled = false;
-            let attempts = 0;
-
-            const focusAtEnd = () => {
-                if (cancelled) return;
-                const editor = editorRef.current;
-                const model = editor?.getModel();
-                if (!editor || !model) {
-                    if (attempts < 5) {
-                        attempts += 1;
-                        setTimeout(focusAtEnd, 50);
-                    }
-                    return;
-                }
-
-                const lastLine = model.getLineCount();
-                const lastColumn = model.getLineMaxColumn(lastLine);
-                editor.setSelection({
-                    startLineNumber: lastLine,
-                    startColumn: lastColumn,
-                    endLineNumber: lastLine,
-                    endColumn: lastColumn,
-                });
-                editor.revealPositionInCenterIfOutsideViewport({ lineNumber: lastLine, column: lastColumn });
-                editor.focus();
-            };
-
-            focusAtEnd();
-
-            return () => {
-                cancelled = true;
-            };
-        }, [activeTab?.tabId, activeTab?.tabType]);
+            const previousTabId = previousTabIdRef.current;
+            if (previousTabId && previousTabId !== activeTab?.tabId) {
+                flushSave(previousTabId);
+            }
+            previousTabIdRef.current = activeTab?.tabId;
+        }, [activeTab?.tabId, activeTab?.tabType, flushSave]);
 
         if (!activeTab) {
             return <div>{t('Editor.NoActiveTab')}</div>;
-        }
-
-        if (activeTab.tabType !== 'sql') {
-            return <div>{t('Editor.NotSqlTab')}</div>;
         }
 
         return (

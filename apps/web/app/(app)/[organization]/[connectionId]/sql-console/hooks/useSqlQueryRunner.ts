@@ -68,14 +68,12 @@ function notifyQueryHistoryUpdated(connectionId?: string | null) {
 
 export function useSqlQueryRunner({
     activeDatabase,
-    activeTab,
     tabs,
     userId,
     requestAITabTitle,
     workspaceScope,
 }: {
     activeDatabase: string | null | undefined;
-    activeTab: SQLTab | undefined;
     tabs: SQLTab[];
     userId: string | undefined;
     requestAITabTitle: RequestAITabTitle;
@@ -100,7 +98,7 @@ export function useSqlQueryRunner({
             if (!tab || !userReady) return;
 
             const tabId = tab.tabId;
-            const sql = editorRef.current?.getValue() ?? (activeTab?.tabType === 'sql' ? (activeTab?.content ?? '') : '');
+            const sql = editorRef.current?.getValue(tabId) ?? (tab.tabType === 'sql' ? (tab.content ?? '') : '');
             const sqlText = (options?.sqlOverride ?? (tab.tabType === 'sql' ? (sql ?? '') : '')).trim();
             const finalSqlText = tab.tabType === 'sql' ? applyLimitToSql(sqlText, options?.limit, limitDialect) : sqlText;
             let database: string | null = null;
@@ -128,10 +126,7 @@ export function useSqlQueryRunner({
             const sessionId = genSessionId();
             setSessionIdMap(p => ({ ...p, [tabId]: sessionId }));
             try {
-                localStorage.setItem(
-                    getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: queryConnectionId }),
-                    sessionId,
-                );
+                localStorage.setItem(getSessionStorageKey(tabId, { ...normalizedWorkspaceScope, connectionId: queryConnectionId }), sessionId);
                 clearQueryHistoryRestoredSession(tabId);
             } catch {
                 // ignore
@@ -230,7 +225,6 @@ export function useSqlQueryRunner({
         },
         [
             userReady,
-            activeTab,
             activeDatabase,
             limitDialect,
             setRunningTabs,
