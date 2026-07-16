@@ -3054,7 +3054,7 @@
                     "SelectPlaceholder": "期間を選択",
                     "DayOption": "{count} 日",
                     "QuotaLabel": "最大ストレージ",
-                    "QuotaDescription": "保存された結果セットと CSV/Parquet エクスポートで共有する上限です。",
+                    "QuotaDescription": "保存された結果セットで共有する上限です。",
                     "QuotaPlaceholder": "上限を選択",
                     "GigabyteOption": "{count} GB",
                     "UsageLabel": "現在の使用量",

@@ -1739,7 +1739,7 @@ export class PostgresResultSetsRepository {
             };
         }
 
-        const prefix = joinObjectPath('result-set-exports', organizationPathPart(params.organizationId), safeObjectPathPart(params.exportId));
+        const prefix = this.exportPrefix(params.organizationId, params.exportId);
         let selected: { path: string; byteSize?: number } | null = null;
         for await (const object of this.artifacts.objectStore.list(prefix)) {
             selected = { path: object.path, byteSize: object.byteSize };
@@ -1755,6 +1755,23 @@ export class PostgresResultSetsRepository {
             contentType: exportContentType(format),
             byteSize: selected.byteSize,
         };
+    }
+
+    async deleteExport(params: { organizationId: string; exportId: string }): Promise<void> {
+        this.assertInited();
+
+        const [record] = await this.db
+            .select({ objectPath: resultSetExports.objectPath })
+            .from(resultSetExports)
+            .where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)))
+            .limit(1);
+        if (record) {
+            await this.artifacts.objectStore.delete(record.objectPath);
+            await this.db.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)));
+            return;
+        }
+
+        await this.artifacts.objectStore.deletePrefix(this.exportPrefix(params.organizationId, params.exportId));
     }
 
     async readChart(params: ResultSetChartReadInput) {
@@ -2103,6 +2120,10 @@ export class PostgresResultSetsRepository {
 
     private exportObjectPath(organizationId: string, exportId: string, fileName: string) {
         return joinObjectPath('result-set-exports', organizationPathPart(organizationId), safeObjectPathPart(exportId), safeObjectPathPart(fileName));
+    }
+
+    private exportPrefix(organizationId: string, exportId: string) {
+        return `${joinObjectPath('result-set-exports', organizationPathPart(organizationId), safeObjectPathPart(exportId))}/`;
     }
 
     private parseChartMetric(yKey: string, allowlist: Map<string, ResultSetColumn>) {

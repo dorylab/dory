@@ -475,3 +475,28 @@ test('reclaims unregistered legacy exports after 24 hours', async () => {
     assert.equal(cleanup.deletedExports, 1);
     assert.equal(cleanup.bytesFreed, Buffer.byteLength('legacy'));
 });
+
+test('deleting a completed export removes its file and database record only', async () => {
+    const { resultSetsRepo } = await createRepositories();
+    const requestedExportPath = 'result-set-exports/org_retention/rse_export/result.csv';
+    const similarlyNamedExportPath = 'result-set-exports/org_retention/rse_export_other/result.csv';
+    await objectStore.put(requestedExportPath, 'requested');
+    await objectStore.put(similarlyNamedExportPath, 'other');
+    await db.insert(resultSetExports).values({
+        id: 'rse_export',
+        organizationId: 'org_retention',
+        resultSetId: null,
+        objectPath: requestedExportPath,
+        format: 'csv',
+        fileName: 'result.csv',
+        byteSize: Buffer.byteLength('requested'),
+        expiresAt: new Date('2027-01-01T00:00:00.000Z'),
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+
+    await resultSetsRepo.deleteExport({ organizationId: 'org_retention', exportId: 'rse_export' });
+
+    assert.equal(await objectStore.exists(requestedExportPath), false);
+    assert.equal(await objectStore.exists(similarlyNamedExportPath), true);
+    assert.equal((await db.select().from(resultSetExports).where(eq(resultSetExports.id, 'rse_export'))).length, 0);
+});
