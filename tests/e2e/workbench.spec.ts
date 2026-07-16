@@ -142,6 +142,24 @@ test('keeps query results visible after switching SQL tabs', async ({ page, appE
     await expectAppHealthy(appErrors);
 });
 
+test('does not duplicate SQL completion items across open tabs', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
+    await openMockConnectionConsole(page, seededConnection);
+
+    const newConsoleButton = page.getByRole('button', { name: /New Console/i });
+    await expect(newConsoleButton).toBeEnabled();
+    await newConsoleButton.click();
+    await expect(page.getByText('numbers', { exact: true }).first()).toBeVisible();
+
+    await page.getByRole('button', { name: /Add tab/i }).click();
+    await setSqlEditorValue(page, 'SELECT * FROM n');
+    await page.keyboard.press('Control+Space');
+
+    const matchingCompletionItems = page.locator('.suggest-widget .monaco-list-row .label-name').filter({ hasText: /^numbers$/ });
+    await expect(matchingCompletionItems).toHaveCount(1);
+    await expectAppHealthy(appErrors);
+});
+
 test('shows a readable SQL error without crashing the page', async ({ page, appErrors }) => {
     await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
     await openMockConnectionConsole(page, seededConnection);

@@ -107,6 +107,65 @@ type CompletionSyntaxContext = {
     wordRanges: Array<{ text?: string }>;
 };
 
+type ModelScopedCompletionRegistration = {
+    ownsModel: (model: Monaco.editor.ITextModel) => boolean;
+    provideCompletionItems: Monaco.languages.CompletionItemProvider['provideCompletionItems'];
+};
+
+type ModelScopedCompletionRegistryEntry = {
+    registrations: Set<ModelScopedCompletionRegistration>;
+    disposable: Monaco.IDisposable;
+};
+
+const completionRegistries = new WeakMap<typeof import('monaco-editor'), Map<string, ModelScopedCompletionRegistryEntry>>();
+
+const registerModelScopedCompletion = (monaco: typeof import('monaco-editor'), languageId: string, registration: ModelScopedCompletionRegistration): Monaco.IDisposable => {
+    let languageRegistries = completionRegistries.get(monaco);
+    if (!languageRegistries) {
+        languageRegistries = new Map();
+        completionRegistries.set(monaco, languageRegistries);
+    }
+
+    let registryEntry = languageRegistries.get(languageId);
+    if (!registryEntry) {
+        const registrations = new Set<ModelScopedCompletionRegistration>();
+        const disposable = monaco.languages.registerCompletionItemProvider(languageId, {
+            triggerCharacters: [' ', '.', ',', '(', '=', '\n'],
+            provideCompletionItems(model, position, context, token) {
+                for (const candidate of registrations) {
+                    if (candidate.ownsModel(model)) {
+                        return candidate.provideCompletionItems(model, position, context, token);
+                    }
+                }
+
+                return { suggestions: [] };
+            },
+        });
+
+        registryEntry = { registrations, disposable };
+        languageRegistries.set(languageId, registryEntry);
+    }
+
+    registryEntry.registrations.add(registration);
+    let disposed = false;
+
+    return {
+        dispose() {
+            if (disposed) return;
+            disposed = true;
+
+            registryEntry.registrations.delete(registration);
+            if (registryEntry.registrations.size > 0) return;
+
+            registryEntry.disposable.dispose();
+            languageRegistries.delete(languageId);
+            if (languageRegistries.size === 0) {
+                completionRegistries.delete(monaco);
+            }
+        },
+    };
+};
+
 const normalizeCompletionSyntax = (syntax: unknown): CompletionSyntaxContext[] => {
     if (!Array.isArray(syntax)) return [];
 
@@ -187,12 +246,13 @@ const registerDtSqlCompletion = (
     getColumns: (tableName: string) => Promise<any[] | undefined>,
     getDatabases: () => any[],
     getSchemas: () => any[],
-    getActiveDatabase?: () => string,
+    getActiveDatabase: () => string,
+    ownsModel: (model: Monaco.editor.ITextModel) => boolean,
 ) => {
     const isPostgres = isPostgresFamilyConnectionType(currentConnectionType);
 
-    return monaco.languages.registerCompletionItemProvider(languageId, {
-        triggerCharacters: [' ', '.', ',', '(', '=', '\n'],
+    return registerModelScopedCompletion(monaco, languageId, {
+        ownsModel,
         async provideCompletionItems(model, position) {
             const sql = model.getValue();
             if (sql.length > MAX_SQL_LEN_FOR_PARSE) {
@@ -210,7 +270,7 @@ const registerDtSqlCompletion = (
             const tables = getTables() || [];
             const databases = getDatabases() || [];
             const schemas = getSchemas() || [];
-            const activeDb = getActiveDatabase?.() ?? '';
+            const activeDb = getActiveDatabase() ?? '';
 
             let suggestion: any = {};
             try {
@@ -595,6 +655,7 @@ export function useSqlMonacoEditor({
                 () => databasesRef.current,
                 () => schemasRef.current,
                 () => activeDatabaseRef.current,
+                model => model === localEditor?.getModel(),
             );
 
             if (disposed || !containerRef.current) return;
