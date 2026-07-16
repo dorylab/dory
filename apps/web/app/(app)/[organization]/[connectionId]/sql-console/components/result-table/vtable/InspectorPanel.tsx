@@ -25,10 +25,9 @@ interface InspectorPanelProps {
     setRowViewMode: (m: 'table' | 'json') => void;
     inspectorWidth: number;
     setInspectorWidth: (w: number) => void;
-    inspectorTopOffset?: number;
 }
 
-export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setRowViewMode, inspectorWidth, setInspectorWidth, inspectorTopOffset = 0 }: InspectorPanelProps) {
+export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setRowViewMode, inspectorWidth, setInspectorWidth }: InspectorPanelProps) {
     const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
     const [filter, setFilter] = useState('');
     const t = useTranslations('SqlConsole');
@@ -59,8 +58,8 @@ export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setR
 
     return (
         <aside
-            className="fixed z-[100] right-0 border-l bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-lg flex flex-col"
-            style={{ width: inspectorWidth, top: inspectorTopOffset, height: `calc(100% - ${inspectorTopOffset}px)` }}
+            className="fixed inset-y-0 right-0 z-[100] flex flex-col border-l bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/60"
+            style={{ width: inspectorWidth }}
         >
             {/* drag handle */}
             <div className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize" onMouseDown={startResize} title={t('VTable.Inspector.ResizeTitle')} />

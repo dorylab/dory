@@ -22,7 +22,6 @@ export interface VTableProps {
     colMinWidthMap?: Record<string, number>;
     colMaxWidthMap?: Record<string, number>;
     onStatsChange: (stats: { filteredCount: number }) => void;
-    inspectorTopOffset?: number;
     showSearchBar?: boolean;
     setInspectorOpen?: (open: boolean) => void;
     setInspectorMode?: (mode: 'cell' | 'row' | null) => void;

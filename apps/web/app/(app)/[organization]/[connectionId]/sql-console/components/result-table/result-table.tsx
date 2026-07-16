@@ -1131,7 +1131,6 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                             setRowViewMode={setRowViewMode}
                             inspectorWidth={inspectorWidth}
                             setInspectorWidth={setInspectorWidth}
-                            inspectorTopOffset={44}
                         />
                     )}
                 </div>
