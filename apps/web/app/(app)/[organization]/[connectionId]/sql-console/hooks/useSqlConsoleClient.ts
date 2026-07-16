@@ -36,7 +36,6 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
 
     const { editorRef, runQuery, cancelQuery, runningTabs } = useSqlQueryRunner({
         activeDatabase,
-        activeTab,
         tabs,
         userId,
         requestAITabTitle,

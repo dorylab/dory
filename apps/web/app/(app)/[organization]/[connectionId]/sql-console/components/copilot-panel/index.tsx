@@ -227,7 +227,7 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
         (sql: string, meta?: ApplySqlMeta) => {
             if (!activeTab || activeTab.tabType !== 'sql') return;
 
-            const previousSql = (editorRef?.current?.getValue?.() as string | undefined) ?? (typeof tabContent === 'string' ? tabContent : '');
+            const previousSql = (editorRef?.current?.getValue(activeTab.tabId) as string | undefined) ?? (typeof tabContent === 'string' ? tabContent : '');
 
             const currentSql = previousSql ?? '';
             const originalSql = meta?.originalSql;
@@ -258,8 +258,8 @@ export default function CopilotPanel({ tabs, activeTabId, activeTab, updateTab, 
 
             const handle = editorRef?.current;
             if (handle?.applyContentWithUndo) {
-                handle.applyContentWithUndo(nextSql);
-                handle.flushSave?.();
+                handle.applyContentWithUndo(nextSql, activeTab.tabId);
+                handle.flushSave(activeTab.tabId);
             } else if (activeTabId) {
                 updateTab(activeTabId, { content: nextSql }, { immediate: true });
             }

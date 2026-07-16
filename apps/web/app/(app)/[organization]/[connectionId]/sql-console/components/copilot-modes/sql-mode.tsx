@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
+import { Group, Panel, Separator, type Layout, useGroupRef } from 'react-resizable-panels';
 import { Check, ChevronDown, Loader2, Play, Save, Sparkles, Square } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -165,6 +165,7 @@ export function SqlMode({
     setChatWidth,
     onCloseChatbot,
     reserveRightRail = true,
+    workspaceActive,
 }: SqlModeProps) {
     const t = useTranslations('SqlConsole');
     const pathname = usePathname();
@@ -181,6 +182,7 @@ export function SqlMode({
     const [authSheetOpen, setAuthSheetOpen] = useState(false);
     const [savedQueries, setSavedQueries] = useState<SavedQueryItem[]>([]);
     const [queryLimit, setQueryLimit] = useState(editorSettings.queryLimit);
+    const editorResultGroupRef = useGroupRef();
     const selection = activeTab?.tabId ? selectionByTab[activeTab.tabId] : null;
     const hasSelection = !!selection && selection.end > selection.start;
     const isRunning = runningTabs[activeTab?.tabId ?? ''] === 'running';
@@ -209,6 +211,9 @@ export function SqlMode({
         }),
         [editorResultLayout],
     );
+    useEffect(() => {
+        editorResultGroupRef.current?.setLayout(editorResultDefaultLayout);
+    }, [editorResultDefaultLayout, editorResultGroupRef]);
     const handleEditorResultLayoutChanged = useCallback(
         (layout: Layout) => {
             const next = normalizeEditorResultLayout([layout['editor-panel'], layout['result-panel']]);
@@ -241,10 +246,9 @@ export function SqlMode({
         setQueryLimit(next);
         setEditorSettings(prev => normalizeSqlEditorSettings({ ...prev, queryLimit: next }));
     };
-    const getSqlText = useCallback(
-        () => editorRef.current?.getValue() ?? (activeTab?.tabType === 'sql' ? (activeTab?.content ?? '') : ''),
-        [activeTab?.tabType === 'sql' && activeTab?.content, activeTab?.tabType, editorRef],
-    );
+    const activeSqlTabId = activeTab?.tabType === 'sql' ? activeTab.tabId : undefined;
+    const activeSqlContent = activeTab?.tabType === 'sql' ? (activeTab.content ?? '') : '';
+    const getSqlText = useCallback(() => editorRef.current?.getValue(activeSqlTabId) ?? activeSqlContent, [activeSqlContent, activeSqlTabId, editorRef]);
     const currentSqlText = getSqlText().trim();
     const hasSqlLimit = hasSelectLimit(currentSqlText, limitDialect);
     const runLabel = hasSelection ? t('Toolbar.RunSelected') : t('Toolbar.Run');
@@ -275,12 +279,13 @@ export function SqlMode({
 
     const requestSave = useCallback(() => {
         if (!canSave) return;
+        editorRef.current?.flushSave();
         if (isAnonymous) {
             setAuthSheetOpen(true);
             return;
         }
         setSaveDialogOpen(true);
-    }, [canSave, isAnonymous]);
+    }, [canSave, editorRef, isAnonymous]);
 
     const fetchSavedQueries = useCallback(async () => {
         if (!connectionId) {
@@ -315,6 +320,7 @@ export function SqlMode({
 
     useEffect(() => {
         const handler = (event: KeyboardEvent) => {
+            if (!workspaceActive) return;
             const isSave = event.key.toLowerCase() === 's';
             const hasModifier = event.metaKey || event.ctrlKey;
             if (!isSave || !hasModifier) return;
@@ -325,7 +331,7 @@ export function SqlMode({
         return () => {
             window.removeEventListener('keydown', handler);
         };
-    }, [requestSave]);
+    }, [requestSave, workspaceActive]);
 
     const handleOpenInlineAsk = useCallback(() => {
         updateInlineAskState({
@@ -337,6 +343,7 @@ export function SqlMode({
 
     useEffect(() => {
         const handler = (event: KeyboardEvent) => {
+            if (!workspaceActive) return;
             const isAskShortcut = (event.key === '/' || event.code === 'Slash') && !event.metaKey && !event.ctrlKey && !event.altKey;
             if (!isAskShortcut) return;
             if (event.repeat) return;
@@ -352,7 +359,7 @@ export function SqlMode({
         return () => {
             window.removeEventListener('keydown', handler);
         };
-    }, [activeTab?.tabType, handleOpenInlineAsk, inlineAskState.mode]);
+    }, [activeTab?.tabType, handleOpenInlineAsk, inlineAskState.mode, workspaceActive]);
 
     const handleCancelInlineAsk = useCallback(() => {
         if (inlineAskState.isGenerating) return;
@@ -363,7 +370,7 @@ export function SqlMode({
         });
 
         window.setTimeout(() => {
-            editorRef.current?.focusAtEnd?.();
+            editorRef.current?.focus();
         }, 0);
     }, [editorRef, inlineAskState.isGenerating, updateInlineAskState]);
 
@@ -407,8 +414,8 @@ export function SqlMode({
 
             const promptComment = buildInlineAskSqlComment(prompt);
             const generatedBlock = [promptComment, generatedSql].filter(Boolean).join('\n');
-            const nextSql = editorRef.current?.insertContentWithUndo?.(generatedBlock) ?? `${getSqlText()}${generatedBlock}`;
-            editorRef.current?.flushSave?.();
+            const nextSql = editorRef.current?.insertContentWithUndo(generatedBlock, activeTab.tabId) ?? `${getSqlText()}${generatedBlock}`;
+            editorRef.current?.flushSave(activeTab.tabId);
             updateTab(activeTab.tabId, { content: nextSql }, { immediate: true });
 
             updateInlineAskState({
@@ -538,7 +545,7 @@ export function SqlMode({
                         </div>
 
                         <Group
-                            key={editorResultLayoutScopeKey}
+                            groupRef={editorResultGroupRef}
                             orientation="vertical"
                             className="flex-1 min-h-0"
                             defaultLayout={editorResultDefaultLayout}
@@ -548,7 +555,9 @@ export function SqlMode({
                                 <div className="flex flex-col h-full border-b min-h-0">
                                     <SQLEditor
                                         ref={editorRef}
+                                        tabs={tabs}
                                         activeTab={activeTab}
+                                        workspaceActive={workspaceActive}
                                         updateTab={updateTab}
                                         onRunQuery={handleRunQuery}
                                         onNewTab={() => void addTab({ activate: true })}
@@ -572,8 +581,25 @@ export function SqlMode({
                             <Separator className="h-1.5 bg-border transition-colors" />
 
                             <Panel id="result-panel" minSize={`${MIN_RESULT_PANEL_SIZE}%`} className="min-h-0">
-                                <div className="flex h-full flex-col min-h-0">
-                                    <ResultTable tabId={activeTabId} />
+                                <div className="relative flex h-full flex-col min-h-0">
+                                    {tabs
+                                        .filter(tab => tab.tabType === 'sql')
+                                        .map(tab => {
+                                            const isActiveResult = tab.tabId === activeTabId;
+                                            return (
+                                                <div
+                                                    key={tab.tabId}
+                                                    aria-hidden={!isActiveResult}
+                                                    inert={!isActiveResult}
+                                                    className={[
+                                                        'absolute inset-0 flex h-full min-h-0 flex-col',
+                                                        isActiveResult ? 'z-10 opacity-100' : 'z-0 opacity-0 pointer-events-none',
+                                                    ].join(' ')}
+                                                >
+                                                    <ResultTable tabId={tab.tabId} />
+                                                </div>
+                                            );
+                                        })}
                                 </div>
                             </Panel>
                         </Group>

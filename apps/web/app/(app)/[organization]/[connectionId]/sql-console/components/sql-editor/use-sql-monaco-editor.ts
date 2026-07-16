@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import type * as Monaco from 'monaco-editor';
 
@@ -27,10 +27,19 @@ type MonacoEnvironmentConfig = {
 };
 
 type ContentChangeHandler = (tabId: string, content: string) => void;
-type AfterEditorContentChange = () => void;
+
+type SqlModelEntry = {
+    model: Monaco.editor.ITextModel;
+    changeDisposable: Monaco.IDisposable;
+    viewState: Monaco.editor.ICodeEditorViewState | null;
+    lastExternalContent: string;
+    suppressChange: boolean;
+};
 
 interface UseSqlMonacoEditorProps {
+    tabs: UITabPayload[];
     activeTab: UITabPayload | undefined;
+    workspaceActive: boolean;
     editorTheme: string;
     editorSettings: SqlEditorSettings;
     currentConnectionId?: string;
@@ -42,14 +51,6 @@ interface UseSqlMonacoEditorProps {
     onInlineAskOpen?: () => void;
     onFormat?: () => void;
 }
-
-const bindEditorChange = (editor: Monaco.editor.IStandaloneCodeEditor, tabId: string, onContentChange: ContentChangeHandler, afterChange?: AfterEditorContentChange) => {
-    return editor.onDidChangeModelContent(() => {
-        const value = editor.getValue();
-        onContentChange(tabId, value);
-        afterChange?.();
-    });
-};
 
 const resolveTableName = (table: any) => {
     return (table?.value ?? table?.label ?? table?.name ?? table?.tableName ?? table?.table ?? '').toString();
@@ -187,7 +188,7 @@ const registerDtSqlCompletion = (
     getColumns: (tableName: string) => Promise<any[] | undefined>,
     getDatabases: () => any[],
     getSchemas: () => any[],
-    getActiveDatabase?: () => string,
+    getActiveDatabase: () => string,
 ) => {
     const isPostgres = isPostgresFamilyConnectionType(currentConnectionType);
 
@@ -210,7 +211,7 @@ const registerDtSqlCompletion = (
             const tables = getTables() || [];
             const databases = getDatabases() || [];
             const schemas = getSchemas() || [];
-            const activeDb = getActiveDatabase?.() ?? '';
+            const activeDb = getActiveDatabase() ?? '';
 
             let suggestion: any = {};
             try {
@@ -464,7 +465,9 @@ const ensureMonacoWorkerFactory = () => {
 };
 
 export function useSqlMonacoEditor({
+    tabs,
     activeTab,
+    workspaceActive,
     editorTheme,
     editorSettings,
     currentConnectionId,
@@ -478,6 +481,13 @@ export function useSqlMonacoEditor({
 }: UseSqlMonacoEditorProps) {
     const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoRef = useRef<typeof import('monaco-editor') | null>(null);
+    const modelsByTabRef = useRef(new Map<string, SqlModelEntry>());
+    const tabsRef = useRef(tabs);
+    const activeTabIdRef = useRef<string | null>(null);
+    const workspaceActiveRef = useRef(workspaceActive);
+    const onContentChangeRef = useRef(onContentChange);
+    const updateInlineAskPlaceholdersRef = useRef<() => void>(() => undefined);
+    const [editorGeneration, setEditorGeneration] = useState(0);
     const tablesRef = useRef<any[]>([]);
     const activeDatabaseRef = useRef<string>('');
     const databasesRef = useRef<any[]>([]);
@@ -542,6 +552,18 @@ export function useSqlMonacoEditor({
         editorSettingsRef.current = editorSettings;
     }, [editorSettings]);
 
+    useEffect(() => {
+        workspaceActiveRef.current = workspaceActive;
+    }, [workspaceActive]);
+
+    useEffect(() => {
+        onContentChangeRef.current = onContentChange;
+    }, [onContentChange]);
+
+    useEffect(() => {
+        tabsRef.current = tabs;
+    }, [tabs]);
+
     const fetchColumnsForCompletion = useCallback(async (tableName: string) => {
         const db = activeDatabaseRef.current;
         if (!db || !tableName) return [];
@@ -556,13 +578,12 @@ export function useSqlMonacoEditor({
     }, []);
 
     useEffect(() => {
-        if (!activeTab || activeTab.tabType !== 'sql') return;
         if (!containerRef.current) return;
 
+        const modelsByTab = modelsByTabRef.current;
         let disposed = false;
         let localEditor: Monaco.editor.IStandaloneCodeEditor | null = null;
         let dtCompletionDisposable: Monaco.IDisposable | null = null;
-        let contentDisposable: Monaco.IDisposable | null = null;
         let selectionDisposable: Monaco.IDisposable | null = null;
         const placeholderWidgets = new Map<number, Monaco.editor.IContentWidget>();
 
@@ -601,8 +622,7 @@ export function useSqlMonacoEditor({
 
             const editorOptions = buildSqlEditorOptions(editorSettingsRef.current);
             localEditor = monaco.editor.create(containerRef.current, {
-                value: activeTab.tabType === 'sql' ? (activeTab.content ?? '') : '',
-                language: languageId,
+                model: null,
                 automaticLayout: true,
                 contextmenu: false,
                 quickSuggestions: true,
@@ -644,7 +664,7 @@ export function useSqlMonacoEditor({
 
                 return {
                     suppressMouseDown: true,
-                    getId: () => `dory.sql-editor.inline-ask-placeholder.${activeTab.tabId}.${lineNumber}`,
+                    getId: () => `dory.sql-editor.inline-ask-placeholder.${lineNumber}`,
                     getDomNode: () => node,
                     getPosition: () => ({
                         position: { lineNumber, column: 1 },
@@ -679,14 +699,18 @@ export function useSqlMonacoEditor({
                     placeholderWidgets.delete(widgetLineNumber);
                 }
             };
+            updateInlineAskPlaceholdersRef.current = updateInlineAskPlaceholders;
             updateInlineAskPlaceholders();
             localEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+                if (!workspaceActiveRef.current) return;
                 onRunQueryRef.current?.();
             });
             localEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyL, () => {
+                if (!workspaceActiveRef.current) return;
                 onNewTabRef.current?.();
             });
             localEditor.addCommand(monaco.KeyCode.Slash, () => {
+                if (!workspaceActiveRef.current) return;
                 const editor = localEditor;
                 if (!editor) return;
 
@@ -701,15 +725,16 @@ export function useSqlMonacoEditor({
                 onInlineAskOpenRef.current?.();
             });
             localEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyF, () => {
+                if (!workspaceActiveRef.current) return;
                 onFormatRef.current?.();
             });
-            contentDisposable = bindEditorChange(localEditor, activeTab.tabId, onContentChange, updateInlineAskPlaceholders);
             selectionDisposable = localEditor.onDidChangeCursorSelection(() => {
                 updateInlineAskPlaceholders();
 
                 const model = localEditor?.getModel();
                 const selection = localEditor?.getSelection();
-                if (!model || !selection) return;
+                const tabId = activeTabIdRef.current;
+                if (!model || !selection || !tabId) return;
 
                 const startOffset = model.getOffsetAt({
                     lineNumber: selection.startLineNumber,
@@ -724,30 +749,133 @@ export function useSqlMonacoEditor({
                 const nextSelection = end > start ? { start, end } : null;
 
                 setSelectionByTab(prev => {
-                    const current = prev[activeTab.tabId] ?? null;
+                    const current = prev[tabId] ?? null;
                     if (current?.start === nextSelection?.start && current?.end === nextSelection?.end) return prev;
-                    return { ...prev, [activeTab.tabId]: nextSelection };
+                    return { ...prev, [tabId]: nextSelection };
                 });
             });
+            setEditorGeneration(value => value + 1);
         })();
 
         return () => {
             disposed = true;
-            contentDisposable?.dispose();
             selectionDisposable?.dispose();
             for (const widget of placeholderWidgets.values()) {
                 localEditor?.removeContentWidget(widget);
             }
             placeholderWidgets.clear();
+            updateInlineAskPlaceholdersRef.current = () => undefined;
             dtCompletionDisposable?.dispose();
+            localEditor?.setModel(null);
+            for (const entry of modelsByTab.values()) {
+                entry.changeDisposable.dispose();
+                entry.model.dispose();
+            }
+            modelsByTab.clear();
+            activeTabIdRef.current = null;
             localEditor?.dispose();
             editorRef.current = null;
-            setSelectionByTab(prev => {
-                if (!prev[activeTab.tabId]) return prev;
-                return { ...prev, [activeTab.tabId]: null };
-            });
+            monacoRef.current = null;
         };
-    }, [activeTab?.tabId, activeTab?.tabType, containerRef, currentConnectionId, currentConnectionType, onContentChange, setSelectionByTab, t]);
+    }, [containerRef, currentConnectionId, currentConnectionType, fetchColumnsForCompletion, setSelectionByTab, t]);
+
+    useEffect(() => {
+        const editor = editorRef.current;
+        const monaco = monacoRef.current;
+        if (!editor || !monaco) return;
+
+        const sqlTabs = tabs.filter(tab => tab.tabType === 'sql');
+        const liveTabIds = new Set(sqlTabs.map(tab => tab.tabId));
+        const languageId = getSqlDialectConfigForConnectionType(currentConnectionType).monacoLanguageId;
+
+        for (const tab of sqlTabs) {
+            const externalContent = tab.content ?? '';
+            let entry = modelsByTabRef.current.get(tab.tabId);
+
+            if (!entry) {
+                const connectionKey = encodeURIComponent(currentConnectionId ?? 'connection');
+                const tabKey = encodeURIComponent(tab.tabId);
+                const model = monaco.editor.createModel(externalContent, languageId, monaco.Uri.parse(`dory-sql://${connectionKey}/${tabKey}.sql`));
+                const nextEntry: SqlModelEntry = {
+                    model,
+                    changeDisposable: { dispose: () => undefined },
+                    viewState: null,
+                    lastExternalContent: externalContent,
+                    suppressChange: false,
+                };
+                nextEntry.changeDisposable = model.onDidChangeContent(() => {
+                    if (nextEntry.suppressChange) return;
+                    onContentChangeRef.current(tab.tabId, model.getValue());
+                    if (activeTabIdRef.current === tab.tabId) {
+                        updateInlineAskPlaceholdersRef.current();
+                    }
+                });
+                modelsByTabRef.current.set(tab.tabId, nextEntry);
+                entry = nextEntry;
+            } else if (entry.lastExternalContent !== externalContent) {
+                entry.lastExternalContent = externalContent;
+                if (entry.model.getValue() !== externalContent) {
+                    entry.suppressChange = true;
+                    try {
+                        entry.model.pushEditOperations([], [{ range: entry.model.getFullModelRange(), text: externalContent }], () => null);
+                    } finally {
+                        entry.suppressChange = false;
+                    }
+                }
+            }
+        }
+
+        for (const [tabId, entry] of modelsByTabRef.current) {
+            if (liveTabIds.has(tabId)) continue;
+
+            if (activeTabIdRef.current === tabId) {
+                entry.viewState = editor.saveViewState();
+                editor.setModel(null);
+                activeTabIdRef.current = null;
+            }
+            entry.changeDisposable.dispose();
+            entry.model.dispose();
+            modelsByTabRef.current.delete(tabId);
+        }
+
+        setSelectionByTab(previous => {
+            const next = Object.fromEntries(Object.entries(previous).filter(([tabId]) => liveTabIds.has(tabId)));
+            return Object.keys(next).length === Object.keys(previous).length ? previous : next;
+        });
+
+        const nextTabId = activeTab?.tabType === 'sql' ? activeTab.tabId : null;
+        const nextEntry = nextTabId ? modelsByTabRef.current.get(nextTabId) : undefined;
+        if (!nextEntry || editor.getModel() === nextEntry.model) return;
+
+        const previousTabId = activeTabIdRef.current;
+        if (previousTabId) {
+            const previousEntry = modelsByTabRef.current.get(previousTabId);
+            if (previousEntry) {
+                previousEntry.viewState = editor.saveViewState();
+            }
+        }
+
+        activeTabIdRef.current = nextTabId;
+        editor.setModel(nextEntry.model);
+        if (nextEntry.viewState) {
+            editor.restoreViewState(nextEntry.viewState);
+        } else {
+            const lastLine = nextEntry.model.getLineCount();
+            const lastColumn = nextEntry.model.getLineMaxColumn(lastLine);
+            editor.setPosition({ lineNumber: lastLine, column: lastColumn });
+            editor.revealPositionInCenterIfOutsideViewport({ lineNumber: lastLine, column: lastColumn });
+        }
+        updateInlineAskPlaceholdersRef.current();
+        if (workspaceActiveRef.current) {
+            editor.focus();
+        }
+    }, [activeTab?.tabId, activeTab?.tabType, currentConnectionId, currentConnectionType, editorGeneration, setSelectionByTab, tabs]);
+
+    useEffect(() => {
+        if (workspaceActive) {
+            editorRef.current?.focus();
+        }
+    }, [editorGeneration, workspaceActive]);
 
     useEffect(() => {
         const editor = editorRef.current;
@@ -758,5 +886,26 @@ export function useSqlMonacoEditor({
         });
     }, [editorSettings]);
 
-    return { editorRef, monacoRef };
+    const getModel = useCallback((tabId?: string) => {
+        const targetTabId = tabId ?? activeTabIdRef.current;
+        return targetTabId ? (modelsByTabRef.current.get(targetTabId)?.model ?? null) : null;
+    }, []);
+
+    const getValue = useCallback(
+        (tabId?: string) => {
+            const model = getModel(tabId);
+            if (model) return model.getValue();
+
+            const targetTabId = tabId ?? activeTabIdRef.current;
+            const targetTab = tabsRef.current.find(tab => tab.tabId === targetTabId);
+            return targetTab?.tabType === 'sql' ? (targetTab.content ?? '') : '';
+        },
+        [getModel],
+    );
+
+    const getValuesByTabId = useCallback(() => {
+        return Object.fromEntries(Array.from(modelsByTabRef.current, ([tabId, entry]) => [tabId, entry.model.getValue()]));
+    }, []);
+
+    return { editorRef, monacoRef, getModel, getValue, getValuesByTabId, modelsByTabRef };
 }

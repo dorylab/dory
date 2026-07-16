@@ -10,4 +10,7 @@ export type BaseModeProps = Pick<SqlConsoleState, 'tabs' | 'activeTab' | 'active
     reserveRightRail?: boolean;
 };
 
-export type SqlModeProps = BaseModeProps & Pick<SqlConsoleState, 'editorRef' | 'runQuery' | 'cancelQuery' | 'runningTabs'>;
+export type SqlModeProps = BaseModeProps &
+    Pick<SqlConsoleState, 'editorRef' | 'runQuery' | 'cancelQuery' | 'runningTabs'> & {
+        workspaceActive: boolean;
+    };
