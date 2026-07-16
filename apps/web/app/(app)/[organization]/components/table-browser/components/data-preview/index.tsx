@@ -657,7 +657,6 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 setRowViewMode={setRowViewMode}
                 inspectorWidth={inspectorWidth}
                 setInspectorWidth={setInspectorWidth}
-                inspectorTopOffset={56}
             />
         </div>
     );

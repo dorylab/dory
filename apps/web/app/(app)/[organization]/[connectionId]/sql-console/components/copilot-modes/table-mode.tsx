@@ -26,7 +26,6 @@ export function TableMode({
     return (
         <div className={['flex flex-1 flex-col min-h-0', reserveRightRail ? 'mr-10' : ''].join(' ')}>
             <Group
-                key={showChatbot ? 'table-with-copilot' : 'table-without-copilot'}
                 orientation="horizontal"
                 className="h-full min-h-0"
                 onLayoutChange={(layout: Layout) => {
@@ -42,10 +41,10 @@ export function TableMode({
                     </div>
                 </Panel>
 
-                <Separator className={['w-1.5 bg-border transition-colors', showChatbot ? '' : 'hidden'].join(' ')} />
+                {showChatbot && <Separator className="w-1.5 bg-border transition-colors" />}
 
-                <Panel id="copilot-panel" defaultSize={`${showChatbot ? chatWidth : 0}%`} minSize={`${showChatbot ? 15 : 0}%`} className="min-h-0">
-                    {showChatbot ? (
+                {showChatbot && (
+                    <Panel id="copilot-panel" defaultSize={`${chatWidth}%`} minSize="15%" className="min-h-0">
                         <div className="flex h-full flex-col border-l min-h-0 bg-card">
                             <CopilotPanel
                                 tabs={tabs}
@@ -57,8 +56,8 @@ export function TableMode({
                                 onClose={onCloseChatbot}
                             />
                         </div>
-                    ) : null}
-                </Panel>
+                    </Panel>
+                )}
             </Group>
         </div>
     );

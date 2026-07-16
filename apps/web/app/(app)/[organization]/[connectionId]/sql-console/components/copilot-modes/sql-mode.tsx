@@ -448,7 +448,6 @@ export function SqlMode({
     return (
         <div className={['flex flex-1 flex-col min-h-0', reserveRightRail ? 'mr-10' : ''].join(' ')}>
             <Group
-                key={showChatbot ? 'sql-with-copilot' : 'sql-without-copilot'}
                 orientation="horizontal"
                 className="h-full min-h-0"
                 onLayoutChange={(layout: Layout) => {
@@ -581,10 +580,10 @@ export function SqlMode({
                     </div>
                 </Panel>
 
-                <Separator className={['w-1.5 bg-border transition-colors', showChatbot ? '' : 'hidden'].join(' ')} />
+                {showChatbot && <Separator className="w-1.5 bg-border transition-colors" />}
 
-                <Panel id="copilot-panel" defaultSize={`${showChatbot ? chatWidth : 0}%`} minSize={`${showChatbot ? 30 : 0}%`} className="min-h-0">
-                    {showChatbot ? (
+                {showChatbot && (
+                    <Panel id="copilot-panel" defaultSize={`${chatWidth}%`} minSize="30%" className="min-h-0">
                         <div className="flex h-full flex-col min-h-0 border-l bg-card">
                             <CopilotPanel
                                 tabs={tabs}
@@ -597,8 +596,8 @@ export function SqlMode({
                                 editorRef={editorRef}
                             />
                         </div>
-                    ) : null}
-                </Panel>
+                    </Panel>
+                )}
             </Group>
             <SaveSqlDialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen} defaultTitle={defaultSaveTitle} getSqlText={getSqlText} onSaved={fetchSavedQueries} />
             <AuthLinkSheet open={authSheetOpen} onOpenChange={setAuthSheetOpen} callbackURL={callbackURL} />
