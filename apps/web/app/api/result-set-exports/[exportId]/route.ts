@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 
 import { withUserAndOrganizationHandler } from '@/app/api/utils/with-organization-handler';
 
@@ -13,6 +13,24 @@ export const GET = withUserAndOrganizationHandler(async ({ req, db, organization
     }
 
     const exportObject = await db.resultSets.openExport({ organizationId, exportId });
+    let downloadCompleted = false;
+    if (exportObject.stream instanceof Readable) {
+        exportObject.stream.once('end', () => {
+            downloadCompleted = true;
+        });
+    }
+    after(async () => {
+        if (!downloadCompleted) return;
+        try {
+            await db.resultSets.deleteExport({ organizationId, exportId });
+        } catch (error) {
+            console.warn('[resultSetExports] failed to delete completed export download', {
+                organizationId,
+                exportId,
+                error,
+            });
+        }
+    });
     const body = exportObject.stream instanceof Readable ? Readable.toWeb(exportObject.stream) : exportObject.stream;
     const headers = new Headers({
         'Content-Type': exportObject.contentType,

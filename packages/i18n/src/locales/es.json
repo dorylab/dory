@@ -3054,7 +3054,7 @@
                     "SelectPlaceholder": "Seleccionar duración",
                     "DayOption": "{count, plural, one {# día} other {# días}}",
                     "QuotaLabel": "Almacenamiento máximo",
-                    "QuotaDescription": "Límite compartido para resultados guardados y exportaciones CSV/Parquet.",
+                    "QuotaDescription": "Límite compartido para los resultados guardados.",
                     "QuotaPlaceholder": "Seleccionar límite",
                     "GigabyteOption": "{count} GB",
                     "UsageLabel": "Uso actual",

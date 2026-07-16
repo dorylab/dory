@@ -3060,7 +3060,7 @@
                     "SelectPlaceholder": "选择保存时间",
                     "DayOption": "{count} 天",
                     "QuotaLabel": "最大存储空间",
-                    "QuotaDescription": "查询结果集和 CSV/Parquet 导出共用此空间上限。",
+                    "QuotaDescription": "已保存的查询结果集共用此空间上限。",
                     "QuotaPlaceholder": "选择空间上限",
                     "GigabyteOption": "{count} GB",
                     "UsageLabel": "当前用量",

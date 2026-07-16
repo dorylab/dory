@@ -3056,7 +3056,7 @@
                     "SelectPlaceholder": "Select duration",
                     "DayOption": "{count, plural, one {# day} other {# days}}",
                     "QuotaLabel": "Maximum storage",
-                    "QuotaDescription": "Shared limit for saved result sets and CSV/Parquet exports.",
+                    "QuotaDescription": "Shared limit for saved result sets.",
                     "QuotaPlaceholder": "Select limit",
                     "GigabyteOption": "{count} GB",
                     "UsageLabel": "Current usage",
