@@ -344,3 +344,7 @@ everything — connections, tabs, results, and saved queries — is stored local
 ## 📄 License
 
 Apache-2.0
+
+<a href="https://www.foundrlist.com/product/github-2?utm_source=badge&amp;utm_medium=embed" target="_blank" rel="noopener">
+    <img src="https://www.foundrlist.com/api/badge/github-2" alt="Featured on FoundrList" width="150" height="48" />
+</a>
