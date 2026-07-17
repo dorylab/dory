@@ -4,7 +4,7 @@ export type ResultContextColumnInput = {
     name: string;
     type?: string | null;
     dbType?: string | null;
-    normalizedType: string;
+    normalizedType?: string | null;
     semanticRole?: string;
 };
 
@@ -248,7 +248,7 @@ export type InsightSignalsPayload = {
 export function toResultContextColumns(columns: ResultContextColumnInput[] | null | undefined, stats?: ResultContextStatsInput): ResultContextColumn[] {
     return (columns ?? []).map(column => ({
         name: column.name,
-        dataType: column.type ?? column.dbType ?? column.normalizedType,
+        dataType: column.type ?? column.dbType ?? column.normalizedType ?? 'unknown',
         semanticType:
             column.semanticRole === 'time' || column.semanticRole === 'dimension' || column.semanticRole === 'measure' || column.semanticRole === 'identifier'
                 ? column.semanticRole

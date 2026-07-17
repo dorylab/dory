@@ -220,8 +220,38 @@ function testAiPrimaryNextStepForLowVarianceRawRows() {
     assert.ok(!primary?.label.includes('最常见'));
 }
 
+function testMissingColumnTypeDoesNotCrashSuggestions() {
+    const resultContext = buildResultContext({
+        sessionId: 'session-with-legacy-columns',
+        setIndex: 0,
+        sqlText: 'select legacy_column from legacy_table',
+        rowCount: 1,
+        columns: [{ name: 'legacy_column' }],
+    });
+
+    assert.equal(resultContext.columns[0]?.dataType, 'unknown');
+    assert.doesNotThrow(() =>
+        buildAnalysisSuggestions({
+            resultContext,
+            draft: {
+                quickSummary: { title: 'Legacy result' },
+                facts: [],
+                patterns: [],
+                keyColumns: {
+                    measures: [],
+                    dimensions: ['legacy_column'],
+                    identifiers: [],
+                },
+                recommendedActions: [],
+            },
+            t: translate,
+        }),
+    );
+}
+
 testTrendAndServiceSuggestions();
 testNoInvalidSuggestionWithoutDimensions();
 testAiPrimaryNextStepForLowVarianceRawRows();
+testMissingColumnTypeDoesNotCrashSuggestions();
 
 console.log('analysis-suggestions tests passed');
