@@ -37,6 +37,7 @@ export type ResultSetMeta = {
     resultSetId: string | null;
     dataAvailability: string | null;
     previewRowCount: number | null;
+    previewRows?: Record<string, unknown>[];
     affectedRows: number | null;
     status: 'success' | 'error' | 'running';
     errorMessage: string | null;
@@ -47,6 +48,13 @@ export type ResultSetMeta = {
     startedAt?: number | null;
     finishedAt?: number | null;
     durationMs: number | null;
+    byteSize: number | null;
+    artifactStore: string | null;
+    storageFormat: 'parquet' | 'json' | null;
+    sourceConnectionType: string | null;
+    sourceDatabaseName: string | null;
+    createdAt: number | null;
+    expiresAt: number | null;
 };
 
 export type { AIResultContextPayload, ResultColumnMeta, ResultSetStatsV1, ResultSetViewState };

@@ -27,6 +27,7 @@ import type { RenameTablePayload, TableActionPayload } from '../../components/sq
 import { SavedQueriesSidebar, type SavedQueryItem } from './components/saved-queries/saved-queries-sidebar';
 import SQLTabEmpty from './components/tabs/tab-empty';
 import { SQLTabs } from './components/tabs';
+import { SqlConsoleOverlayHost } from './components/sql-console-overlay';
 import { SqlMode } from './components/copilot-modes/sql-mode';
 import { TableMode } from './components/copilot-modes/table-mode';
 import { useSqlConsoleClient } from './hooks/useSqlConsoleClient';
@@ -486,6 +487,8 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                     </div>
                 </Panel>
             </Group>
+
+            <SqlConsoleOverlayHost topOffset={isLoading || tabs.length === 0 ? 0 : tabHeaderHeight} />
 
             <div className="absolute right-0 bottom-0 z-20 flex" style={{ top: isLoading || tabs.length === 0 ? 0 : `${tabHeaderHeight}px` }}>
                 <div className="flex h-full w-10 flex-col items-center gap-2 border-l bg-background/95 py-3 shadow-xl backdrop-blur">

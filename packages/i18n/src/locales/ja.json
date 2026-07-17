@@ -1442,6 +1442,7 @@
             "ExecMs": "実行時間: {value} ms",
             "LimitNotice": "上限: {value}",
             "Returned": "返却: {value}",
+            "Rows": "{value} 行",
             "Affected": "影響: {value}",
             "Shown": "表示: {value}",
             "LimitSuffix": " / 上限 {value}",
@@ -1930,6 +1931,15 @@
             "Message": "メッセージ",
             "Duration": "時間",
             "Rows": "行数",
+            "Size": "サイズ",
+            "Storage": "ストレージ",
+            "Source": "ソース",
+            "Created": "作成日時",
+            "QueryDuration": "クエリ時間",
+            "SnapshotStatus": "スナップショット状態",
+            "Expires": "有効期限",
+            "Expired": "期限切れ",
+            "Actions": "結果の操作",
             "Empty": "結果がありません",
             "StatusRunning": "実行中",
             "StatusSuccess": "成功",
@@ -1940,7 +1950,21 @@
             "ViewResult": "結果を見る",
             "OpenResult": "結果を開く",
             "CopySql": "SQL をコピー",
-            "CopyError": "エラーをコピー"
+            "CopyError": "エラーをコピー",
+            "StorageValues": {
+                "LocalParquet": "ローカル Parquet",
+                "S3Parquet": "S3 Parquet",
+                "Parquet": "Parquet",
+                "LocalJsonPreview": "ローカル JSON プレビュー",
+                "S3JsonPreview": "S3 JSON プレビュー",
+                "JsonPreview": "JSON プレビュー",
+                "NotRetained": "保持されていません"
+            },
+            "SnapshotValues": {
+                "Saving": "保存中",
+                "Disconnected": "ソースから切断済み",
+                "Unavailable": "利用不可"
+            }
         },
         "Common": {
             "NotAvailable": "該当なし",
@@ -3059,7 +3083,6 @@
                     "GigabyteOption": "{count} GB",
                     "UsageLabel": "現在の使用量",
                     "ResultUsage": "結果: {size}",
-                    "ExportUsage": "エクスポート: {size}",
                     "SaveAction": "設定を保存",
                     "Saving": "保存中...",
                     "ReadOnlyHint": "現在のロールではストレージ設定を更新できません。",

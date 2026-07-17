@@ -5,42 +5,49 @@ export type SessionStatus = 'running' | 'success' | 'error' | 'canceled' | null;
 export type ApiExecStatus = 'idle' | 'running' | 'success' | 'error' | 'canceled';
 
 export interface ApiResultItem {
-    id: string; 
-    tabId?: string | null; 
-    sql?: string; 
-    status: ApiExecStatus; 
-    error?: string | null; 
-    info?: string | null; 
-    rowCount?: number; 
-    startedAt?: number; 
-    endedAt?: number; 
-    truncated?: boolean; 
-    setIndex?: number; 
+    id: string;
+    tabId?: string | null;
+    sql?: string;
+    status: ApiExecStatus;
+    error?: string | null;
+    info?: string | null;
+    rowCount?: number;
+    startedAt?: number;
+    endedAt?: number;
+    truncated?: boolean;
+    setIndex?: number;
 }
 
-
 export interface ResultBarProps {
-    status: ApiExecStatus; 
+    status: ApiExecStatus;
     rowCount?: number;
     truncated?: boolean;
-    indices: number[]; 
-    activeSet: number; 
+    indices: number[];
+    activeSet: number;
     onSetActiveSet: (n: number) => void;
 }
 
 export interface OverviewProps {
-    items: ApiResultItem[]; 
+    items: ApiResultItem[];
 }
 
-
 export type OverviewItem = {
-    id: string; 
-    setIndex: number; 
-    sql: string; 
+    id: string;
+    setIndex: number;
+    sql: string;
     status: 'running' | 'success' | 'error' | 'canceled';
-    startedAt?: number; 
-    finishedAt?: number; 
-    errorMessage?: string; 
-    rowsReturned?: number; 
-    rowsAffected?: number; 
+    startedAt?: number;
+    finishedAt?: number;
+    durationMs?: number;
+    errorMessage?: string;
+    rowsReturned?: number;
+    rowsAffected?: number;
+    byteSize?: number;
+    artifactStore?: string;
+    storageFormat?: 'parquet' | 'json';
+    dataAvailability?: string;
+    sourceConnectionType?: string;
+    sourceDatabaseName?: string;
+    createdAt?: number;
+    expiresAt?: number;
 };

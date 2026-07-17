@@ -1446,6 +1446,7 @@
             "ExecMs": "执行耗时：{value} ms",
             "LimitNotice": "限制：{value}",
             "Returned": "返回：{value}",
+            "Rows": "{value} 行",
             "Affected": "影响：{value}",
             "Shown": "显示：{value}",
             "LimitSuffix": " / 限制 {value}",
@@ -1935,6 +1936,15 @@
             "Message": "消息",
             "Duration": "耗时",
             "Rows": "行数",
+            "Size": "大小",
+            "Storage": "存储",
+            "Source": "来源",
+            "Created": "创建时间",
+            "QueryDuration": "查询耗时",
+            "SnapshotStatus": "快照状态",
+            "Expires": "过期时间",
+            "Expired": "已过期",
+            "Actions": "结果操作",
             "Empty": "无结果",
             "StatusRunning": "运行中",
             "StatusSuccess": "成功",
@@ -1945,7 +1955,21 @@
             "ViewResult": "查看结果",
             "OpenResult": "打开结果",
             "CopySql": "复制 SQL",
-            "CopyError": "复制错误"
+            "CopyError": "复制错误",
+            "StorageValues": {
+                "LocalParquet": "本地 Parquet",
+                "S3Parquet": "S3 Parquet",
+                "Parquet": "Parquet",
+                "LocalJsonPreview": "本地 JSON 预览",
+                "S3JsonPreview": "S3 JSON 预览",
+                "JsonPreview": "JSON 预览",
+                "NotRetained": "未保留"
+            },
+            "SnapshotValues": {
+                "Saving": "正在保存",
+                "Disconnected": "已与数据源断开",
+                "Unavailable": "不可用"
+            }
         },
         "Common": {
             "NotAvailable": "—",
@@ -3065,7 +3089,6 @@
                     "GigabyteOption": "{count} GB",
                     "UsageLabel": "当前用量",
                     "ResultUsage": "结果集：{size}",
-                    "ExportUsage": "导出：{size}",
                     "SaveAction": "保存设置",
                     "Saving": "保存中...",
                     "ReadOnlyHint": "你当前的角色不允许修改存储设置。",

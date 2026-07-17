@@ -65,6 +65,14 @@ async function initSchema() {
         )
     `);
     await db.execute(sql`
+        CREATE TABLE "connections" (
+            "id" text PRIMARY KEY NOT NULL,
+            "organization_id" text NOT NULL,
+            "type" text NOT NULL,
+            "database" text
+        )
+    `);
+    await db.execute(sql`
         CREATE TABLE "query_runs" (
             "id" text PRIMARY KEY NOT NULL,
             "organization_id" text NOT NULL,
@@ -91,6 +99,8 @@ async function initSchema() {
             "id" text PRIMARY KEY NOT NULL,
             "organization_id" text NOT NULL,
             "connection_id" text,
+            "source_connection_type" text,
+            "source_database_name" text,
             "workspace_id" text,
             "tab_id" text,
             "work_id" text,
@@ -247,6 +257,8 @@ test('writes expiresAt when persisting result sets and streams', async () => {
         organizationId: 'org_retention',
         userId: 'user_retention',
         connectionId: 'conn_retention',
+        sourceConnectionType: 'sqlite',
+        sourceDatabaseName: 'main',
         tabId: 'tab_retention',
         sessionId: 'session_retention',
         sessionSqlText: 'select 1',
@@ -266,7 +278,16 @@ test('writes expiresAt when persisting result sets and streams', async () => {
     assert.ok(persistedRow.expiresAt);
     assert.equal(persistedRow.sessionId, 'session_retention');
     assert.equal(persistedRow.setIndex, 0);
+    assert.equal(persistedRow.sourceConnectionType, 'sqlite');
+    assert.equal(persistedRow.sourceDatabaseName, 'main');
     assert.equal(persistedRow.expiresAt.getTime() - persistedRow.createdAt.getTime(), 14 * 24 * 60 * 60 * 1000);
+    assert.equal(persisted.artifactStore, 'filesystem');
+    assert.equal(persisted.storageFormat, 'json');
+    assert.equal(persisted.sourceConnectionType, 'sqlite');
+    assert.equal(persisted.sourceDatabaseName, 'main');
+    assert.equal(persisted.createdAt, persistedRow.createdAt.getTime());
+    assert.equal(persisted.expiresAt, persistedRow.expiresAt.getTime());
+    assert.ok(persisted.byteSize > 0);
     const [persistedRun] = await db.select().from(queryRuns).where(eq(queryRuns.resultSetId, persisted.resultSetId)).limit(1);
     assert.equal(persistedRun?.sessionId, 'session_retention');
     assert.equal(persistedRun?.setIndex, 0);
@@ -275,6 +296,8 @@ test('writes expiresAt when persisting result sets and streams', async () => {
         organizationId: 'org_retention',
         userId: 'user_retention',
         connectionId: 'conn_retention',
+        sourceConnectionType: 'sqlite',
+        sourceDatabaseName: 'main',
         tabId: 'tab_retention',
         sessionId: 'session_retention_stream',
         sessionSqlText: 'select 2',
@@ -296,7 +319,41 @@ test('writes expiresAt when persisting result sets and streams', async () => {
     assert.ok(streamedRow.expiresAt);
     assert.equal(streamedRow.sessionId, 'session_retention_stream');
     assert.equal(streamedRow.setIndex, 0);
+    assert.equal(streamedRow.sourceConnectionType, 'sqlite');
+    assert.equal(streamedRow.sourceDatabaseName, 'main');
     assert.equal(streamedRow.expiresAt.getTime() - streamedRow.createdAt.getTime(), 14 * 24 * 60 * 60 * 1000);
+    assert.equal(streamed.artifactStore, 'filesystem');
+    assert.equal(streamed.storageFormat, 'json');
+    assert.equal(streamed.sourceConnectionType, 'sqlite');
+    assert.equal(streamed.sourceDatabaseName, 'main');
+    assert.equal(streamed.createdAt, streamedRow.createdAt.getTime());
+    assert.equal(streamed.expiresAt, streamedRow.expiresAt.getTime());
+    assert.ok(streamed.byteSize > 0);
+
+    const [reloaded] = await resultSetsRepo.listSessionResultSets({
+        organizationId: 'org_retention',
+        sessionId: 'session_retention_stream',
+    });
+    assert.ok(reloaded);
+    assert.equal(reloaded.byteSize, streamed.byteSize);
+    assert.equal(reloaded.artifactStore, streamed.artifactStore);
+    assert.equal(reloaded.storageFormat, streamed.storageFormat);
+    assert.equal(reloaded.sourceConnectionType, streamed.sourceConnectionType);
+    assert.equal(reloaded.sourceDatabaseName, streamed.sourceDatabaseName);
+    assert.equal(reloaded.createdAt, streamed.createdAt);
+    assert.equal(reloaded.expiresAt, streamed.expiresAt);
+
+    await db.execute(sql`
+        INSERT INTO "connections" ("id", "organization_id", "type", "database")
+        VALUES ('conn_retention', 'org_retention', 'sqlite', 'changed_database')
+    `);
+    await db.update(resultSets).set({ sourceConnectionType: null, sourceDatabaseName: null }).where(eq(resultSets.id, streamed.resultSetId));
+    const [legacyReloaded] = await resultSetsRepo.listSessionResultSets({
+        organizationId: 'org_retention',
+        sessionId: 'session_retention_stream',
+    });
+    assert.equal(legacyReloaded?.sourceConnectionType, 'sqlite');
+    assert.equal(legacyReloaded?.sourceDatabaseName, 'main');
 });
 
 test('cleanup deletes expired artifacts and result set rows while keeping query history', async () => {

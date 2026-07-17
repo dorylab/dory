@@ -118,9 +118,8 @@ export function StoragePanel() {
                         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                             <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${usagePercent}%` }} />
                         </div>
-                        <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                        <div className="mt-2 text-xs text-muted-foreground">
                             <span>{t('ResultSets.ResultUsage', { size: formatBytes(storageSettings.resultSetsBytes) })}</span>
-                            <span>{t('ResultSets.ExportUsage', { size: formatBytes(storageSettings.exportsBytes) })}</span>
                         </div>
                     </div>
                 ) : null}

@@ -146,7 +146,7 @@ export function useSqlQueryRunner({
                         signal: controller.signal,
                     });
                     payload = isQueryExecutePayload(res.data) ? res.data : null;
-                    notifySqlConsoleResultDataUpdated();
+                    notifySqlConsoleResultDataUpdated(payload);
                 } else {
                     await runSqlQueryStream({
                         input: {
@@ -171,7 +171,7 @@ export function useSqlQueryRunner({
                             if ('payload' in event && event.payload && 'session' in event.payload) {
                                 payload = event.payload;
                                 if (event.type === 'result-completed' || event.type === 'session-finished') {
-                                    notifySqlConsoleResultDataUpdated();
+                                    notifySqlConsoleResultDataUpdated(event.payload);
                                 }
                             }
                         },

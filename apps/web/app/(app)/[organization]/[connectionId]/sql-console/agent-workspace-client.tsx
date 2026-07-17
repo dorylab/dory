@@ -31,6 +31,7 @@ import type { RenameTablePayload, TableActionPayload } from '../../components/sq
 import { SavedQueriesSidebar, type SavedQueryItem } from './components/saved-queries/saved-queries-sidebar';
 import SQLTabEmpty from './components/tabs/tab-empty';
 import { SQLTabs } from './components/tabs';
+import { SqlConsoleOverlayHost } from './components/sql-console-overlay';
 import { SqlMode } from './components/copilot-modes/sql-mode';
 import { TableMode } from './components/copilot-modes/table-mode';
 import { useSqlConsoleClient } from './hooks/useSqlConsoleClient';
@@ -282,6 +283,7 @@ export default function AgentWorkspaceClient({
         () => clamp(chatWidth ?? INITIAL_LAYOUT.copilot.defaultWidth, INITIAL_LAYOUT.copilot.minWidth, INITIAL_LAYOUT.copilot.maxWidth),
         [chatWidth],
     );
+    const [tabHeaderHeight, setTabHeaderHeight] = useState<number>(INITIAL_LAYOUT.tabs.defaultHeaderHeight);
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
     const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
@@ -772,6 +774,7 @@ export default function AgentWorkspaceClient({
                                         updateTab={updateTab}
                                         reorderTabs={reorderTabs}
                                         onRequestAITitle={manualRenameTab}
+                                        onHeightChange={setTabHeaderHeight}
                                     />
                                     <div className="relative flex-1 min-h-0">
                                         {retainedSqlTab ? (
@@ -828,6 +831,8 @@ export default function AgentWorkspaceClient({
                     </Panel>
                 </Group>
             </div>
+
+            <SqlConsoleOverlayHost topOffset={isLoading || tabs.length === 0 ? 0 : tabHeaderHeight} />
 
             <div className="absolute bottom-0 right-0 top-0 z-20 flex">
                 <div className="flex h-full w-10 flex-col items-center gap-2 border-l bg-background/95 py-3 shadow-xl backdrop-blur">

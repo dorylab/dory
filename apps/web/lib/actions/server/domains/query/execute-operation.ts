@@ -11,7 +11,7 @@ import type { QuerySource } from '@dory/shared/types/audit';
 import type { WebActionServices } from '../../types';
 
 export const MAX_ACTION_STATEMENTS = 100;
-const DEFAULT_RESULT_PREVIEW_ROWS = 200;
+const DEFAULT_RESULT_PREVIEW_ROWS = 1_000;
 
 type PersistableResultSet = Record<string, unknown> & {
     sessionId: string;
@@ -479,6 +479,8 @@ async function runSqlExecution(
     }
 
     const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);
+    const sourceConnectionType = entry.instance.config.type;
+    const sourceDatabaseName = input.database ?? entry.instance.config.database ?? null;
     return runWithSqlAudit(
         {
             organizationId: ctx.organizationId,
@@ -569,6 +571,13 @@ async function runSqlExecution(
                         status: resultStatus,
                         resultSetId: persistedResult.resultSetId,
                         dataAvailability: persistedResult.dataAvailability,
+                        byteSize: persistedResult.byteSize,
+                        artifactStore: persistedResult.artifactStore,
+                        storageFormat: persistedResult.storageFormat,
+                        sourceConnectionType: persistedResult.sourceConnectionType,
+                        sourceDatabaseName: persistedResult.sourceDatabaseName,
+                        createdAt: persistedResult.createdAt,
+                        expiresAt: persistedResult.expiresAt,
                         previewRowCount: persistedResult.previewRowCount,
                         rowCount: persistedResult.rowCount,
                         columns: persistedResult.schema,
@@ -636,6 +645,8 @@ async function runSqlExecution(
                                 organizationId: ctx.organizationId,
                                 userId: ctx.userId,
                                 connectionId,
+                                sourceConnectionType,
+                                sourceDatabaseName,
                                 tabId: input.tabId ?? null,
                                 sessionId,
                                 database: input.database ?? null,
@@ -661,6 +672,8 @@ async function runSqlExecution(
                         organizationId: ctx.organizationId,
                         userId: ctx.userId,
                         connectionId,
+                        sourceConnectionType,
+                        sourceDatabaseName,
                         tabId: input.tabId ?? null,
                         sessionId,
                         database: input.database ?? null,

@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useLayoutEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { CopyButton } from '@/components/@dory/ui/copy-button';
 import { useTranslations } from 'next-intl';
+import { SQL_CONSOLE_OVERLAY_ID } from '../../sql-console-overlay';
 
 type InspectorPayload =
     | {
@@ -30,7 +32,13 @@ interface InspectorPanelProps {
 export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setRowViewMode, inspectorWidth, setInspectorWidth }: InspectorPanelProps) {
     const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
     const [filter, setFilter] = useState('');
+    const [overlayContainer, setOverlayContainer] = useState<HTMLElement | null>(null);
     const t = useTranslations('SqlConsole');
+
+    useLayoutEffect(() => {
+        if (!open) return;
+        setOverlayContainer(document.getElementById(SQL_CONSOLE_OVERLAY_ID));
+    }, [open]);
 
     const startResize = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -54,11 +62,11 @@ export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setR
     const cellPayload = mode === 'cell' && payload && 'value' in payload ? payload : null;
     const rowPayload = mode === 'row' && payload && 'rowData' in payload ? payload : null;
 
-    if (!open) return null;
+    if (!open || !overlayContainer) return null;
 
-    return (
+    return createPortal(
         <aside
-            className="fixed inset-y-0 right-0 z-[100] flex flex-col border-l bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/60"
+            className="pointer-events-auto absolute inset-y-0 right-0 flex flex-col border-l bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/60"
             style={{ width: inspectorWidth }}
         >
             {/* drag handle */}
@@ -146,6 +154,7 @@ export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setR
                     </div>
                 )}
             </div>
-        </aside>
+        </aside>,
+        overlayContainer,
     );
 }
