@@ -1171,6 +1171,7 @@
         "Editor": {
             "NoActiveTab": "No active tab",
             "NotSqlTab": "This tab is not a SQL editor",
+            "Loading": "Preparing editor...",
             "Completion": {
                 "Keyword": "keyword",
                 "Table": "table",
@@ -1465,6 +1466,7 @@
             "Charts": "Charts",
             "ResultTab": "Result {index}",
             "LoadingResults": "Loading results...",
+            "RestoringResults": "Restoring results...",
             "WaitingForResults": "Waiting for results...",
             "DownloadCsvTitle": "Download CSV",
             "StorageLimitPreviewOnly": "Workspace storage limit reached. The query succeeded, but only its preview was retained."

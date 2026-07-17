@@ -19,12 +19,9 @@ import { useTranslations } from 'next-intl';
 import type { ConnectionType } from '@dory/shared/types/connections';
 import { getSqlDialectConfigForConnectionType, getSqlDialectParser, type SqlDialectParser } from '@/lib/sql/sql-dialect';
 import { isPostgresFamilyConnectionType } from '@dory/drivers/types';
+import { loadSqlMonaco } from './monaco-loader';
 
 const MAX_SQL_LEN_FOR_PARSE = 20000;
-
-type MonacoEnvironmentConfig = {
-    getWorker?: (moduleId: string, label: string) => Worker;
-};
 
 type ContentChangeHandler = (tabId: string, content: string) => void;
 
@@ -440,30 +437,6 @@ const registerDtSqlCompletion = (
     });
 };
 
-const ensureMonacoWorkerFactory = () => {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    const globalScope = globalThis as typeof globalThis & {
-        MonacoEnvironment?: MonacoEnvironmentConfig;
-    };
-
-    if (typeof globalScope.MonacoEnvironment?.getWorker === 'function') {
-        return;
-    }
-
-    globalScope.MonacoEnvironment = {
-        ...globalScope.MonacoEnvironment,
-        getWorker: () => {
-            return new Worker(new URL('monaco-editor/esm/vs/editor/editor.worker.js', import.meta.url), {
-                type: 'module',
-                name: 'dory-monaco-editor-worker',
-            });
-        },
-    };
-};
-
 export function useSqlMonacoEditor({
     tabs,
     activeTab,
@@ -488,6 +461,7 @@ export function useSqlMonacoEditor({
     const onContentChangeRef = useRef(onContentChange);
     const updateInlineAskPlaceholdersRef = useRef<() => void>(() => undefined);
     const [editorGeneration, setEditorGeneration] = useState(0);
+    const [activeModelTabId, setActiveModelTabId] = useState<string | null>(null);
     const tablesRef = useRef<any[]>([]);
     const activeDatabaseRef = useRef<string>('');
     const databasesRef = useRef<any[]>([]);
@@ -580,6 +554,7 @@ export function useSqlMonacoEditor({
     useEffect(() => {
         if (!containerRef.current) return;
 
+        setActiveModelTabId(null);
         const modelsByTab = modelsByTabRef.current;
         let disposed = false;
         let localEditor: Monaco.editor.IStandaloneCodeEditor | null = null;
@@ -588,37 +563,17 @@ export function useSqlMonacoEditor({
         const placeholderWidgets = new Map<number, Monaco.editor.IContentWidget>();
 
         (async () => {
-            ensureMonacoWorkerFactory();
-            const monaco = await import('monaco-editor');
+            const dialectConfig = getSqlDialectConfigForConnectionType(currentConnectionType);
+            const languageId = dialectConfig.monacoLanguageId;
+            const parserPromise = getSqlDialectParser(dialectConfig.dialect);
+            const monaco = await loadSqlMonaco();
             if (disposed || !containerRef.current) return;
 
             monacoRef.current = monaco;
-            const dialectConfig = getSqlDialectConfigForConnectionType(currentConnectionType);
-            const languageId = dialectConfig.monacoLanguageId;
-
-            const parser = await getSqlDialectParser(dialectConfig.dialect);
-            if (disposed || !containerRef.current) return;
-
-            console.log(`[useSqlMonacoEditor] Loaded parser for dialect=${dialectConfig.dialect}`);
 
             monaco.editor.defineTheme('github-dark', vsPlusTheme.darkThemeData);
             monaco.editor.defineTheme('github-light', vsPlusTheme.lightThemeData);
             monaco.editor.setTheme(editorThemeRef.current);
-
-            dtCompletionDisposable = registerDtSqlCompletion(
-                monaco,
-                languageId,
-                parser,
-                currentConnectionType,
-                t,
-                () => tablesRef.current,
-                fetchColumnsForCompletion,
-                () => databasesRef.current,
-                () => schemasRef.current,
-                () => activeDatabaseRef.current,
-            );
-
-            if (disposed || !containerRef.current) return;
 
             const editorOptions = buildSqlEditorOptions(editorSettingsRef.current);
             localEditor = monaco.editor.create(containerRef.current, {
@@ -638,6 +593,27 @@ export function useSqlMonacoEditor({
                 },
                 ...editorOptions,
             });
+
+            void parserPromise
+                .then(parser => {
+                    if (disposed || !containerRef.current) return;
+                    console.log(`[useSqlMonacoEditor] Loaded parser for dialect=${dialectConfig.dialect}`);
+                    dtCompletionDisposable = registerDtSqlCompletion(
+                        monaco,
+                        languageId,
+                        parser,
+                        currentConnectionType,
+                        t,
+                        () => tablesRef.current,
+                        fetchColumnsForCompletion,
+                        () => databasesRef.current,
+                        () => schemasRef.current,
+                        () => activeDatabaseRef.current,
+                    );
+                })
+                .catch(error => {
+                    if (!disposed) console.warn(`[useSqlMonacoEditor] Failed to load parser for dialect=${dialectConfig.dialect}`, error);
+                });
 
             editorRef.current = localEditor;
             const createInlineAskPlaceholderWidget = (lineNumber: number, placeholder: string): Monaco.editor.IContentWidget => {
@@ -845,7 +821,14 @@ export function useSqlMonacoEditor({
 
         const nextTabId = activeTab?.tabType === 'sql' ? activeTab.tabId : null;
         const nextEntry = nextTabId ? modelsByTabRef.current.get(nextTabId) : undefined;
-        if (!nextEntry || editor.getModel() === nextEntry.model) return;
+        if (!nextEntry) {
+            setActiveModelTabId(null);
+            return;
+        }
+        if (editor.getModel() === nextEntry.model) {
+            setActiveModelTabId(nextTabId);
+            return;
+        }
 
         const previousTabId = activeTabIdRef.current;
         if (previousTabId) {
@@ -866,6 +849,7 @@ export function useSqlMonacoEditor({
             editor.revealPositionInCenterIfOutsideViewport({ lineNumber: lastLine, column: lastColumn });
         }
         updateInlineAskPlaceholdersRef.current();
+        setActiveModelTabId(nextTabId);
         if (workspaceActiveRef.current) {
             editor.focus();
         }
@@ -907,5 +891,5 @@ export function useSqlMonacoEditor({
         return Object.fromEntries(Array.from(modelsByTabRef.current, ([tabId, entry]) => [tabId, entry.model.getValue()]));
     }, []);
 
-    return { editorRef, monacoRef, getModel, getValue, getValuesByTabId, modelsByTabRef };
+    return { editorRef, monacoRef, getModel, getValue, getValuesByTabId, modelsByTabRef, activeModelTabId };
 }

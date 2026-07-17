@@ -1175,6 +1175,7 @@
         "Editor": {
             "NoActiveTab": "没有活动标签",
             "NotSqlTab": "当前标签不是 SQL 编辑器",
+            "Loading": "正在准备编辑器...",
             "Completion": {
                 "Keyword": "关键字",
                 "Table": "表",
@@ -1469,6 +1470,7 @@
             "Charts": "图表",
             "ResultTab": "结果 {index}",
             "LoadingResults": "正在加载结果...",
+            "RestoringResults": "正在恢复结果...",
             "WaitingForResults": "等待结果中...",
             "DownloadCsvTitle": "下载 CSV",
             "StorageLimitPreviewOnly": "已达到 Workspace 存储上限。查询成功，但仅保留了结果预览。"

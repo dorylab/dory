@@ -1,17 +1,20 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslations } from 'next-intl';
 
-import { activeTabIdAtom, currentConnectionAtom, tabsAtom } from '@/shared/stores/app.store';
+import { activeTabIdByConnectionAtom, currentConnectionAtom, DEFAULT_CONNECTION_KEY, tabsByConnectionAtom } from '@/shared/stores/app.store';
 import { sessionIdByTabAtom } from '../../../sql-console.store';
 import { executeActionClient } from '@/lib/actions/client';
 import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
 import { debounce } from 'lodash-es';
 import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
-import { getActiveTabStorageKey, getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../../../workspace-scope';
+import { getActiveTabStorageKey, getSessionStorageKey, getTabsStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../../../workspace-scope';
+import { parseSqlTabsCache, serializeSqlTabsCache } from '../tab-cache';
+
+const EMPTY_TABS: UITabPayload[] = [];
 
 function toPersistedTabPayload(tab: UITabPayload, index: number, connectionId: string, workId: string | null): TabPayload {
     if (tab.tabType === 'table') {
@@ -65,14 +68,43 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
         [connectionId, normalizedWorkspaceScope, workId],
     );
     const activeStorageKey = useMemo(() => getActiveTabStorageKey(storageScope), [storageScope]);
+    const tabsStorageKey = useMemo(() => getTabsStorageKey(storageScope), [storageScope]);
 
-    const [tabs, setTabs] = useAtom(tabsAtom);
-    const [activeTabId, internalSetActiveTabId] = useAtom(activeTabIdAtom);
+    const tabsConnectionKey = connectionId ?? DEFAULT_CONNECTION_KEY;
+    const [tabsByConnection, setTabsByConnection] = useAtom(tabsByConnectionAtom);
+    const [activeTabIdByConnection, setActiveTabIdByConnection] = useAtom(activeTabIdByConnectionAtom);
+    const tabs = tabsByConnection[tabsConnectionKey] ?? EMPTY_TABS;
+    const activeTabId = activeTabIdByConnection[tabsConnectionKey] ?? '';
+    const setTabs = useCallback(
+        (updater: UITabPayload[] | ((previousTabs: UITabPayload[]) => UITabPayload[])) => {
+            setTabsByConnection(previousByConnection => {
+                const previousTabs = previousByConnection[tabsConnectionKey] ?? [];
+                const nextTabs = typeof updater === 'function' ? updater(previousTabs) : updater;
+                return {
+                    ...previousByConnection,
+                    [tabsConnectionKey]: nextTabs,
+                };
+            });
+        },
+        [setTabsByConnection, tabsConnectionKey],
+    );
+    const internalSetActiveTabId = useCallback(
+        (tabId: string) => {
+            setActiveTabIdByConnection(previousByConnection => ({
+                ...previousByConnection,
+                [tabsConnectionKey]: tabId,
+            }));
+        },
+        [setActiveTabIdByConnection, tabsConnectionKey],
+    );
 
     const sessionIdMap = useAtomValue(sessionIdByTabAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
 
     const [isLoading, setIsLoading] = useState(true);
+    const [hydratedTabsStorageKey, setHydratedTabsStorageKey] = useState<string | null>(null);
+    const tabsChangedDuringLoadRef = useRef(false);
+    const areTabsHydrated = hydratedTabsStorageKey === tabsStorageKey;
     const t = useTranslations('SqlConsole');
     const persistOrder = useCallback(
         async (orderedTabs: UITabPayload[]) => {
@@ -184,7 +216,6 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
         const effectiveSessionId = sessionIdMap[id] || persisted;
 
         setSessionIdMap(prev => (prev[id] ? prev : { ...prev, [id]: effectiveSessionId }));
-
     };
 
     // ---------------------------------------------------
@@ -210,7 +241,66 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
     // ---------------------------------------------------
 
     // ---------------------------------------------------
+    useLayoutEffect(() => {
+        if (!scopedRouteConnectionId || !connectionId) {
+            setIsLoading(false);
+            setTabs([]);
+            setSessionIdMap({});
+            internalSetActiveTabId('');
+            setHydratedTabsStorageKey(tabsStorageKey);
+            return;
+        }
+
+        setIsLoading(true);
+        let cachedTabs: UITabPayload[] = [];
+        try {
+            cachedTabs = parseSqlTabsCache(sessionStorage.getItem(tabsStorageKey));
+        } catch {
+            // Ignore unavailable browser storage and continue with the server copy.
+        }
+
+        setTabs(cachedTabs);
+
+        let nextActiveTabId = cachedTabs[0]?.tabId ?? '';
+        try {
+            const savedActiveTabId = localStorage.getItem(activeStorageKey);
+            if (savedActiveTabId && cachedTabs.some(tab => tab.tabId === savedActiveTabId)) {
+                nextActiveTabId = savedActiveTabId;
+            }
+        } catch {
+            // Ignore unavailable browser storage.
+        }
+
+        internalSetActiveTabId(nextActiveTabId);
+        const cachedSessionIds: Record<string, string> = {};
+        for (const tab of cachedTabs) {
+            try {
+                const cachedSessionId = localStorage.getItem(getSessionStorageKey(tab.tabId, storageScope));
+                if (cachedSessionId) cachedSessionIds[tab.tabId] = cachedSessionId;
+            } catch {
+                // Ignore unavailable browser storage.
+            }
+        }
+        setSessionIdMap(cachedSessionIds);
+        tabsChangedDuringLoadRef.current = false;
+        setHydratedTabsStorageKey(tabsStorageKey);
+    }, [activeStorageKey, connectionId, internalSetActiveTabId, scopedRouteConnectionId, setSessionIdMap, setTabs, storageScope, tabsStorageKey]);
+
     useEffect(() => {
+        if (!areTabsHydrated || !connectionId) return;
+
+        try {
+            sessionStorage.setItem(
+                tabsStorageKey,
+                serializeSqlTabsCache(tabs, (tab, index) => toPersistedTabPayload(tab, index, connectionId, workId)),
+            );
+        } catch {
+            // A server refresh remains the fallback when browser storage is unavailable.
+        }
+    }, [areTabsHydrated, connectionId, tabs, tabsStorageKey, workId]);
+
+    useEffect(() => {
+        if (!areTabsHydrated) return;
         if (!scopedRouteConnectionId) {
             setIsLoading(false);
             return;
@@ -249,19 +339,33 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
 
                     console.log('Loaded tabs from server:', serverTabs);
 
-                    setTabs(serverTabs);
-
-                    let nextActive = serverTabs[0]?.tabId ?? '';
-                    try {
-                        const saved = localStorage.getItem(activeStorageKey);
-                        if (saved && serverTabs.some(t => t.tabId === saved)) {
-                            nextActive = saved;
-                        }
-                    } catch {
-                        // ignore
+                    if (!tabsChangedDuringLoadRef.current) {
+                        setTabs(serverTabs);
                     }
 
-                    if (nextActive) setActiveTabId(nextActive);
+                    if (!tabsChangedDuringLoadRef.current) {
+                        let nextActive = serverTabs[0]?.tabId ?? '';
+                        try {
+                            const saved = localStorage.getItem(activeStorageKey);
+                            if (saved && serverTabs.some(t => t.tabId === saved)) {
+                                nextActive = saved;
+                            }
+                        } catch {
+                            // ignore
+                        }
+
+                        internalSetActiveTabId(nextActive);
+                        const nextSessionIds: Record<string, string> = {};
+                        for (const tab of serverTabs) {
+                            try {
+                                const cachedSessionId = localStorage.getItem(getSessionStorageKey(tab.tabId, storageScope));
+                                if (cachedSessionId) nextSessionIds[tab.tabId] = cachedSessionId;
+                            } catch {
+                                // ignore
+                            }
+                        }
+                        setSessionIdMap(nextSessionIds);
+                    }
                 } else {
                     setTabs([]);
                     setSessionIdMap({});
@@ -274,20 +378,19 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
                 }
             } catch (e) {
                 console.error('load tabs error', e);
-                setTabs([]);
-                setSessionIdMap({});
-                internalSetActiveTabId('');
             } finally {
+                tabsChangedDuringLoadRef.current = false;
                 setIsLoading(false);
             }
         })();
-    }, [activeStorageKey, connectionId, scopedRouteConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, workId]);
+    }, [activeStorageKey, areTabsHydrated, connectionId, scopedRouteConnectionId, setTabs, setSessionIdMap, internalSetActiveTabId, storageScope, workId]);
 
     // ---------------------------------------------------
 
     // ---------------------------------------------------
     const updateTab = useCallback(
         (tabId: string, patch: Partial<UITabPayload>, options?: { immediate?: boolean }) => {
+            tabsChangedDuringLoadRef.current = true;
             let updated: UITabPayload | undefined;
 
             setTabs(prevTabs => {
@@ -378,6 +481,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
 
     // ---------------------------------------------------
     const addTab = async (payload?: { tabName?: string; content?: string; activate?: boolean }) => {
+        tabsChangedDuringLoadRef.current = true;
         const tabId = uuidv4();
 
         const newTab: UITabPayload = {
@@ -409,6 +513,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
     };
 
     const addTableTab = async (payload: { tableName: string; databaseName?: string; tabName?: string }) => {
+        tabsChangedDuringLoadRef.current = true;
         const { tableName, databaseName, tabName } = payload;
         if (!tableName) return;
 
@@ -450,6 +555,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
 
     // ---------------------------------------------------
     const closeTab = async (tabId: string) => {
+        tabsChangedDuringLoadRef.current = true;
         if (!isAgentWorkspaceDraft && debouncedSaveRef.current) {
             debouncedSaveRef.current.flush();
         }
@@ -494,6 +600,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
 
     // ---------------------------------------------------
     const closeOtherTabs = async (tabId: string) => {
+        tabsChangedDuringLoadRef.current = true;
         if (!isAgentWorkspaceDraft && debouncedSaveRef.current) {
             debouncedSaveRef.current.flush();
         }
@@ -531,6 +638,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
     const reorderTabs = useCallback(
         (sourceId: string, targetId: string, options?: { persist?: boolean }) => {
             if (!sourceId || !targetId || sourceId === targetId) return;
+            tabsChangedDuringLoadRef.current = true;
             console.log('Reorder tabs:', sourceId, '->', targetId);
 
             const sourceIndex = tabs.findIndex(t => t.tabId === sourceId);
@@ -555,6 +663,7 @@ export function useSQLTabs(workspaceScope?: SqlWorkspaceScope) {
         tabs,
         activeTabId,
         isLoading,
+        areTabsHydrated,
         setActiveTabId,
         updateTab,
         addTab,

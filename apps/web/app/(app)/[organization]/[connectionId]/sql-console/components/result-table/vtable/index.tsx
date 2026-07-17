@@ -666,6 +666,10 @@ export default function VTable({
     const [focusedCell, setFocusedCell] = useState<{ row: number; col: string } | null>(null);
     const hasAnySelection = selectedCells.size > 0 || selectedRowIds.size > 0;
 
+    const selectedRowIdsRef = useRef(selectedRowIds);
+    selectedRowIdsRef.current = selectedRowIds;
+    const selectedCellsRef = useRef(selectedCells);
+    selectedCellsRef.current = selectedCells;
     const selectionAnchorRef = useRef<number | null>(null);
     const cellAnchorRef = useRef<{ row: number; col: string } | null>(null);
     const draggingRef = useRef(false);
@@ -795,11 +799,11 @@ export default function VTable({
             setCellAnchor(null);
         }
     };
-    const isCellAlreadySelected = (row: number, col: string) => selectedCells.has(ck(row, col)) || selectedRowIds.has(row);
+    const isCellAlreadySelected = (row: number, col: string) => selectedCellsRef.current.has(ck(row, col)) || selectedRowIdsRef.current.has(row);
     const rowHasSelection = (row: number) => {
-        if (selectedRowIds.has(row)) return true;
-        if (selectedCells.size === 0) return false;
-        for (const c of columns) if (selectedCells.has(ck(row, c))) return true;
+        if (selectedRowIdsRef.current.has(row)) return true;
+        if (selectedCellsRef.current.size === 0) return false;
+        for (const c of columns) if (selectedCellsRef.current.has(ck(row, c))) return true;
         return false;
     };
 
@@ -839,7 +843,9 @@ export default function VTable({
         [columns],
     );
     const getSelectionAsRowsCols = () => {
-        const rect = getSelectedRectBounds(selectedCells);
+        const currentSelectedCells = selectedCellsRef.current;
+        const currentSelectedRowIds = selectedRowIdsRef.current;
+        const rect = getSelectedRectBounds(currentSelectedCells);
         if (rect) {
             const { rows, cols } = rect;
             const rows2D = rows.map(r =>
@@ -850,23 +856,23 @@ export default function VTable({
             );
             return { rows, cols, rows2D };
         }
-        if (selectedCells.size > 0) {
-            const list = [...selectedCells].map(parseCK);
+        if (currentSelectedCells.size > 0) {
+            const list = [...currentSelectedCells].map(parseCK);
             const rowSet = new Set(list.map(c => c.row));
             const colSet = new Set(list.map(c => c.col));
             const rows = [...rowSet].sort((a, b) => a - b);
             const cols = [...colSet].sort((a, b) => columns.indexOf(a) - columns.indexOf(b));
             const rows2D = rows.map(r =>
                 cols.map(c => {
-                    const has = selectedCells.has(ck(r, c));
+                    const has = currentSelectedCells.has(ck(r, c));
                     const v = has ? getDisplayRow(r)?.rowData?.[c] : '';
                     return v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v);
                 }),
             );
             return { rows, cols, rows2D };
         }
-        if (selectedRowIds.size > 0) {
-            const rows = [...selectedRowIds].sort((a, b) => a - b);
+        if (currentSelectedRowIds.size > 0) {
+            const rows = [...currentSelectedRowIds].sort((a, b) => a - b);
             const cols = [...columns];
             const rows2D = rows.map(r =>
                 cols.map(c => {
@@ -951,9 +957,9 @@ export default function VTable({
     const onRowIndexKeyDown = async (e: React.KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
             e.preventDefault();
-            if (selectedCells.size > 0) await copySelectedCellsTSV();
+            if (selectedCellsRef.current.size > 0) await copySelectedCellsTSV();
             else {
-                const indices = Array.from(selectedRowIds).sort((a, b) => a - b);
+                const indices = Array.from(selectedRowIdsRef.current).sort((a, b) => a - b);
                 const lines = indices
                     .map(i => {
                         const row = getDisplayRow(i)?.rowData ?? {};
@@ -1022,7 +1028,7 @@ export default function VTable({
     const onCellKeyDown = async (e: React.KeyboardEvent, rowIndex: number, col: string) => {
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
             e.preventDefault();
-            if (selectedCells.size > 1) await copySelectedCellsTSV();
+            if (selectedCellsRef.current.size > 1) await copySelectedCellsTSV();
             else {
                 const v = getDisplayRow(rowIndex)?.rowData?.[col];
                 await copyText(typeof v === 'object' ? JSON.stringify(v) : v == null ? '' : String(v));

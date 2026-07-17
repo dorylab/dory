@@ -57,10 +57,10 @@ export const columnsCacheAtom = atomWithStorage<Record<string, ColumnsCacheEntry
 const activeDatabaseByConnectionAtom = atomWithStorage<Record<string, string>>('activeDatabaseByConnection', {});
 const activeSchemaByConnectionAtom = atomWithStorage<Record<string, string>>('activeSchemaByConnection', {});
 
-const DEFAULT_CONNECTION_KEY = '__default__';
+export const DEFAULT_CONNECTION_KEY = '__default__';
 
-const tabsByConnectionAtom = atomWithStorage<Record<string, UITabPayload[]>>('tabsByConnection', {});
-const activeTabIdByConnectionAtom = atomWithStorage<Record<string, string>>('activeTabIdByConnection', {});
+export const tabsByConnectionAtom = atomWithStorage<Record<string, UITabPayload[]>>('tabsByConnection', {});
+export const activeTabIdByConnectionAtom = atomWithStorage<Record<string, string>>('activeTabIdByConnection', {});
 
 const resolveConnectionKey = (get: Getter) => get(currentConnectionAtom)?.connection?.id ?? DEFAULT_CONNECTION_KEY;
 

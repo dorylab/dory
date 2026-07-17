@@ -930,6 +930,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         activeMetaSessionId: sessionMetas.sessionId,
         activeMetaSetIndex: sessionMetas.setIndex,
     });
+    const isRestoringPersistedResult = isResultMetadataLoading && runningTabs[tabId] !== 'running';
 
     function renderResult() {
         if (noSessionId) {
@@ -941,7 +942,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 <div className="flex h-full items-center justify-center bg-card text-sm text-muted-foreground">
                     <Badge variant="outline" className="gap-1">
                         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        {t('Results.LoadingResults')}
+                        {t(isRestoringPersistedResult ? 'Results.RestoringResults' : 'Results.LoadingResults')}
                     </Badge>
                 </div>
             );

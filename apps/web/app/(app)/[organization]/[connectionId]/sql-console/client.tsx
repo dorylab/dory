@@ -87,6 +87,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         activeTabId,
         setActiveTabId,
         isLoading,
+        areTabsHydrated,
         updateTab,
         addTab,
         reorderTabs,
@@ -419,7 +420,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                 {/* Middle */}
                 <Panel id="middle-panel" minSize={`${INITIAL_LAYOUT.horizontal.middlePanel.min}%`}>
                     <div className="flex h-full flex-col">
-                        {isLoading || tabs.length === 0 ? (
+                        {!areTabsHydrated || tabs.length === 0 ? (
                             <SQLTabEmpty addTab={addTab} disabled={isLoading} />
                         ) : (
                             <>

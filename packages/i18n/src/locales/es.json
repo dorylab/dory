@@ -1171,6 +1171,7 @@
         "Editor": {
             "NoActiveTab": "No hay pestaña activa",
             "NotSqlTab": "Esta pestaña no es un editor SQL",
+            "Loading": "Preparando el editor...",
             "Completion": {
                 "Keyword": "palabra clave",
                 "Table": "tabla",
@@ -1464,6 +1465,7 @@
             "Charts": "Gráficos",
             "ResultTab": "Resultado {index}",
             "LoadingResults": "Cargando resultados...",
+            "RestoringResults": "Restaurando resultados...",
             "WaitingForResults": "Esperando resultados...",
             "DownloadCsvTitle": "Descargar CSV",
             "StorageLimitPreviewOnly": "Se alcanzó el límite de almacenamiento del Workspace. La consulta finalizó correctamente, pero solo se conservó la vista previa."

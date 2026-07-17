@@ -389,6 +389,18 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
     await expect(resultTable).toBeVisible();
     await saveShot(page, '07-sql-orders-sample.png');
 
+    const selectionStartCell = resultTable.locator('[data-cell="0@@order_id"]');
+    const selectionEndCell = resultTable.locator('[data-cell="1@@user_id"]');
+    await expect(selectionStartCell).toBeVisible();
+    await expect(selectionEndCell).toBeVisible();
+    await selectionStartCell.click();
+    await selectionEndCell.click({ modifiers: ['Shift'] });
+    await selectionEndCell.click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Copy', exact: true })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'View cell', exact: true })).toHaveCount(0);
+    await expect(selectionStartCell).toHaveClass(/bg-primary\/10/);
+    await page.keyboard.press('Escape');
+
     const multiResult = await runSql(page, 'select 1 as value union all select 2; select 3 as value union all select 4;');
     expect(multiResult?.data?.queryResultSets).toHaveLength(2);
     const activeResultSet = multiResult?.data?.queryResultSets?.[1];

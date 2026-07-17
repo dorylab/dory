@@ -97,7 +97,7 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
         );
         const formatHandlerRef = useRef<(() => void) | null>(null);
 
-        const { editorRef, monacoRef, getModel, getValue, getValuesByTabId, modelsByTabRef } = useSqlMonacoEditor({
+        const { editorRef, monacoRef, getModel, getValue, getValuesByTabId, modelsByTabRef, activeModelTabId } = useSqlMonacoEditor({
             tabs,
             activeTab,
             workspaceActive,
@@ -254,6 +254,15 @@ const SQLEditor = forwardRef<SQLEditorHandle, SQLEditorProps>(
             >
                 <div className="relative flex-1 min-h-0 sql-editor-container" data-testid="sql-editor">
                     <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+                    {activeTab.tabType === 'sql' && activeModelTabId !== activeTab.tabId ? (
+                        <div className="absolute inset-0 z-10 overflow-auto bg-card" data-testid="sql-editor-fallback">
+                            {activeTab.content ? (
+                                <pre className="min-h-full whitespace-pre-wrap px-14 py-1 font-mono text-sm leading-5 text-foreground">{activeTab.content}</pre>
+                            ) : (
+                                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t('Editor.Loading')}</div>
+                            )}
+                        </div>
+                    ) : null}
                     <InlineAskOverlay
                         open={inlineAskMode}
                         promptDraft={inlineAskPromptDraft}

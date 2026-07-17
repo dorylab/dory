@@ -45,6 +45,14 @@ export function getActiveTabStorageKey(scope?: SqlWorkspaceScope | null) {
     return `sqlconsole:activeTabId:${connectionPart(normalized.connectionId)}:work:${normalized.workId ?? 'unknown'}`;
 }
 
+export function getTabsStorageKey(scope?: SqlWorkspaceScope | null) {
+    const normalized = normalizeSqlWorkspaceScope(scope);
+    if (normalized.workspaceMode === 'human') {
+        return `sqlconsole:tabs:${connectionPart(normalized.connectionId)}`;
+    }
+    return `sqlconsole:tabs:${connectionPart(normalized.connectionId)}:work:${normalized.workId ?? 'unknown'}`;
+}
+
 export function getSessionStorageKey(tabId: string, scope?: SqlWorkspaceScope | null) {
     const normalized = normalizeSqlWorkspaceScope(scope);
     if (normalized.workspaceMode === 'human') {

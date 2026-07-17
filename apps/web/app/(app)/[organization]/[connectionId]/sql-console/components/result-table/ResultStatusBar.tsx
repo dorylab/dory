@@ -64,6 +64,11 @@ export const ResultStatusBar: React.FC<
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
+            ) : isQueryHistoryResult ? (
+                <span className="inline-flex items-center gap-1.5">
+                    <History className="h-3.5 w-3.5" />
+                    <span>{t('ResultStatus.HistorySource')}</span>
+                </span>
             ) : (
                 <span className="inline-flex items-center gap-1.5 text-green-600">
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -91,15 +96,6 @@ export const ResultStatusBar: React.FC<
                 <>
                     <Separator />
                     <span className="text-amber-600">{t('ResultStatus.Truncated')}</span>
-                </>
-            ) : null}
-            {isQueryHistoryResult ? (
-                <>
-                    <Separator />
-                    <span className="inline-flex items-center gap-1.5">
-                        <History className="h-3.5 w-3.5" />
-                        {t('ResultStatus.HistorySource')}
-                    </span>
                 </>
             ) : null}
         </div>
