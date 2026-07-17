@@ -18,6 +18,7 @@ COPY apps/electron/package.json ./apps/electron/
 COPY apps/admin/package.json ./apps/admin/
 COPY packages/actions/package.json ./packages/actions/
 COPY packages/analysis/package.json ./packages/analysis/
+COPY packages/artifacts/package.json ./packages/artifacts/
 COPY packages/auth-core/package.json ./packages/auth-core/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/database/package.json ./packages/database/
@@ -26,6 +27,7 @@ COPY packages/ee/package.json ./packages/ee/
 COPY packages/files/package.json ./packages/files/
 COPY packages/i18n/package.json ./packages/i18n/
 COPY packages/mcp/package.json ./packages/mcp/
+COPY packages/resultset/package.json ./packages/resultset/
 COPY packages/server-core/package.json ./packages/server-core/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
