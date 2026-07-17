@@ -52,6 +52,14 @@ type ResultSetSummaryMeta = {
     errorMessage?: string | null;
     limited?: boolean;
     limit?: number | null;
+    byteSize?: number | null;
+    artifactStore?: string | null;
+    storageFormat?: 'parquet' | 'json' | null;
+    dataAvailability?: string | null;
+    sourceConnectionType?: string | null;
+    sourceDatabaseName?: string | null;
+    createdAt?: number | null;
+    expiresAt?: number | null;
 };
 type CurrentSessionMeta = Partial<ResultSetMeta> & { columns: ResultSetMeta['columns'] };
 type SessionUiSnapshot = {
@@ -773,6 +781,14 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                         errorMessage: m.errorMessage ?? null,
                         limited: m.limited ?? false,
                         limit: m.limit ?? null,
+                        byteSize: m.byteSize ?? null,
+                        artifactStore: m.artifactStore ?? null,
+                        storageFormat: m.storageFormat ?? null,
+                        dataAvailability: m.dataAvailability ?? null,
+                        sourceConnectionType: m.sourceConnectionType ?? null,
+                        sourceDatabaseName: m.sourceDatabaseName ?? null,
+                        createdAt: m.createdAt ?? null,
+                        expiresAt: m.expiresAt ?? null,
                     };
                 });
                 setSetsMeta(nextSetsMeta);
@@ -810,9 +826,18 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 status,
                 startedAt: m.startedAt ?? undefined,
                 finishedAt: m.finishedAt ?? undefined,
+                durationMs: m.durationMs ?? undefined,
                 errorMessage: m.errorMessage ?? undefined,
                 rowsReturned: typeof m.rowCount === 'number' ? m.rowCount : undefined,
                 rowsAffected: typeof m.affectedRows === 'number' ? m.affectedRows : undefined,
+                byteSize: typeof m.byteSize === 'number' ? m.byteSize : undefined,
+                artifactStore: m.artifactStore ?? undefined,
+                storageFormat: m.storageFormat ?? undefined,
+                dataAvailability: m.dataAvailability ?? undefined,
+                sourceConnectionType: m.sourceConnectionType ?? undefined,
+                sourceDatabaseName: m.sourceDatabaseName ?? undefined,
+                createdAt: m.createdAt ?? undefined,
+                expiresAt: m.expiresAt ?? undefined,
             };
         });
 
@@ -841,15 +866,13 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             const runningRemote = m?.status === 'running' || runningTabs[tabId] === 'running';
             const runningLocal = false;
 
-            const shownRows = isActive ? (isRemoteFullResult ? (expectedRowCount ?? 0) : localResults.length) : typeof m?.rowCount === 'number' ? m.rowCount : 0;
-
             map[i] = {
                 runningRemote,
                 runningLocal,
                 executionMs: m?.durationMs ?? undefined,
                 rowsReturned: typeof m?.rowCount === 'number' ? m!.rowCount! : undefined,
                 rowsAffected: typeof m?.affectedRows === 'number' ? m!.affectedRows! : undefined,
-                shownRows,
+                byteSize: typeof m?.byteSize === 'number' ? m.byteSize : undefined,
                 sqlText: m?.sqlText ?? undefined,
                 limitApplied: m?.limited ?? false,
                 limitValue: typeof m?.limit === 'number' ? m.limit : undefined,
@@ -861,7 +884,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             };
         }
         return map;
-    }, [indices, activeSet, setsMeta, runningTabs, tabId, isRemoteFullResult, expectedRowCount, localResults.length, meta.truncated, meta.source]);
+    }, [activeSet, indices, setsMeta, runningTabs, tabId, meta.truncated, meta.source]);
 
     /* ---------- actions ---------- */
 

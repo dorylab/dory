@@ -3,6 +3,8 @@ import path from 'node:path';
 
 import { expect, type Locator, type Response } from '@playwright/test';
 
+import { formatBytes } from '../../apps/web/app/(app)/[organization]/[connectionId]/sql-console/components/result-table/utils/format';
+
 import { expectAppHealthy, test } from './fixtures';
 
 const SCREENSHOT_DIR = process.env.E2E_DEMO_SCREENSHOT_DIR
@@ -339,7 +341,7 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
     const organization = await getOrganizationSlug(page);
     console.log(`[demo-flow] organization:${organization}`);
 
-    const mainHeading = page.getByRole('heading', { name: /connections/i });
+    const mainHeading = page.getByRole('heading', { name: /data sources|connections/i });
     await expect(mainHeading).toBeVisible();
     await focusLocator(page, mainHeading, { maxScale: 3, padding: 0.58 });
     await beat(page);
@@ -374,6 +376,10 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
     await focusLocator(page, resultTable, { maxScale: 2.8, padding: 0.58 });
     await expect(resultTable.getByText('main', { exact: true })).toBeVisible();
     await saveShot(page, '05-sql-db-schema.png');
+    await resultTable.getByRole('tab', { name: 'Overview' }).click();
+    await expect(resultTable.locator('[data-slot="accordion-item"]')).toHaveCount(1);
+    await expect(resultTable.locator('[data-slot="accordion-item"]')).toHaveAttribute('data-state', 'closed');
+    await resultTable.getByRole('tab', { name: 'Result 1' }).click();
 
     const userCountResult = await runSql(page, 'select count(*) as user_count from users;');
     expect(Number(userCountResult?.data?.results?.[0]?.[0]?.user_count)).toBe(100);
@@ -386,6 +392,55 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
     await focusLocator(page, resultTable, { maxScale: 2.4, padding: 0.56 });
     await expect(resultTable).toBeVisible();
     await saveShot(page, '07-sql-orders-sample.png');
+
+    const multiResult = await runSql(page, 'select 1 as value union all select 2; select 3 as value union all select 4;');
+    expect(multiResult?.data?.queryResultSets).toHaveLength(2);
+    const activeResultSet = multiResult?.data?.queryResultSets?.[1];
+    if (!activeResultSet) throw new Error('Expected the second ResultSet metadata payload.');
+    expect(activeResultSet.rowCount).toBe(2);
+    expect(activeResultSet.byteSize).toBeGreaterThan(0);
+    await expect(resultTable.getByText('Finished', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText(/Shown:/)).toHaveCount(0);
+    await expect(resultTable.getByText('2 rows', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText(formatBytes(activeResultSet.byteSize), { exact: true })).toBeVisible();
+
+    await resultTable.getByRole('tab', { name: 'Overview' }).click();
+    const resultCards = resultTable.locator('[data-slot="accordion-item"]');
+    await expect(resultCards).toHaveCount(2);
+    await expect(resultCards.nth(0)).toHaveAttribute('data-state', 'closed');
+    await expect(resultCards.nth(1)).toHaveAttribute('data-state', 'closed');
+    const firstCardCursorAndAlignment = await resultCards.nth(0).evaluate(card => {
+        const trigger = card.querySelector<HTMLElement>('[data-slot="accordion-trigger"]');
+        const menu = card.querySelector<HTMLElement>('[aria-label="Result actions"]');
+        const cardRect = card.getBoundingClientRect();
+        const menuRect = menu?.getBoundingClientRect();
+        return {
+            triggerCursor: trigger ? getComputedStyle(trigger).cursor : null,
+            menuCursor: menu ? getComputedStyle(menu).cursor : null,
+            menuRightGap: menuRect ? Math.round(cardRect.right - menuRect.right) : null,
+        };
+    });
+    expect(firstCardCursorAndAlignment).toEqual({ triggerCursor: 'pointer', menuCursor: 'pointer', menuRightGap: 16 });
+    await resultCards.nth(0).getByRole('button').first().click();
+    await expect(resultCards.nth(0)).toHaveAttribute('data-state', 'open');
+    await expect(resultTable.getByText('Size', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText('Storage', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText('SQLite / main', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText('Disconnected from source', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText('Expires', { exact: true })).toBeVisible();
+    await resultCards.nth(1).getByRole('button').first().click();
+    await expect(resultCards.nth(0)).toHaveAttribute('data-state', 'closed');
+    await expect(resultCards.nth(1)).toHaveAttribute('data-state', 'open');
+
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(resultTable).toBeVisible();
+    await resultTable.getByRole('tab', { name: 'Overview' }).click();
+    const restoredResultCards = resultTable.locator('[data-slot="accordion-item"]');
+    await expect(restoredResultCards).toHaveCount(2);
+    await expect(restoredResultCards.nth(0)).toHaveAttribute('data-state', 'closed');
+    await restoredResultCards.nth(0).getByRole('button').first().click();
+    await expect(resultTable.getByText('SQLite / main', { exact: true })).toBeVisible();
 
     await resetFocus(page);
     const relevantAppErrors = appErrors.filter(

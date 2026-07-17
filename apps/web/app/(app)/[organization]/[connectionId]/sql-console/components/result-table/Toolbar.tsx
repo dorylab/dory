@@ -10,7 +10,7 @@ export type ExecMeta = {
     executionMs?: number;
     rowsReturned?: number;
     rowsAffected?: number;
-    shownRows?: number;
+    byteSize?: number;
     sqlText?: string;
     limitApplied?: boolean;
     limitValue?: number;
@@ -33,9 +33,7 @@ export function Toolbar(props: {
 
     return (
         <div className={cn('flex flex-col', className)}>
-            
             <div className="flex items-center justify-between w-full border bg-muted">
-                
                 <Tabs value={String(activeSet)} onValueChange={v => onSetActiveSet(Number(v))} className="overflow-hidden">
                     <TabsList>
                         <TabsTrigger value="-1" className="px-2">

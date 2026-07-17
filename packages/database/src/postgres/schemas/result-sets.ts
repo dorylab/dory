@@ -49,6 +49,8 @@ export const resultSets = pgTable(
         id: text('id').primaryKey(),
         organizationId: text('organization_id').notNull(),
         connectionId: text('connection_id'),
+        sourceConnectionType: text('source_connection_type'),
+        sourceDatabaseName: text('source_database_name'),
         workspaceId: text('workspace_id'),
         tabId: text('tab_id'),
         workId: text('work_id'),

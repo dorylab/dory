@@ -35,6 +35,13 @@ const outputSchema = z.object({
             startedAt: z.number().nullable(),
             finishedAt: z.number().nullable(),
             durationMs: z.number().nullable(),
+            byteSize: z.number().nullable(),
+            artifactStore: z.string().nullable(),
+            storageFormat: z.enum(['parquet', 'json']).nullable(),
+            sourceConnectionType: z.string().nullable(),
+            sourceDatabaseName: z.string().nullable(),
+            createdAt: z.number().nullable(),
+            expiresAt: z.number().nullable(),
         }),
     ),
 });

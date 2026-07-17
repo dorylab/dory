@@ -56,6 +56,8 @@ export type ResultSetManifest = {
         type: ResultSetSourceType;
         queryRunId?: string | null;
         connectionId?: string | null;
+        connectionType?: string | null;
+        databaseName?: string | null;
         workspaceId?: string | null;
         tabId?: string | null;
         workId?: string | null;

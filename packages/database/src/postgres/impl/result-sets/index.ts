@@ -8,7 +8,7 @@ import { and, asc, eq, lte, ne, notInArray, sql } from 'drizzle-orm';
 
 import { getDoryArtifactStore, joinObjectPath, safeObjectPathPart, type DoryArtifactStore } from '@dory/artifacts';
 import { getClient } from '@dory/database/postgres/client';
-import { agentRunResultSets, organizations, queryRuns, resultSetExports, resultSets as resultSetsTable, workQueryResultSets } from '@dory/database/postgres/schemas';
+import { agentRunResultSets, connections, organizations, queryRuns, resultSetExports, resultSets as resultSetsTable, workQueryResultSets } from '@dory/database/postgres/schemas';
 import {
     DEFAULT_RESULT_SET_MAX_STORAGE_BYTES,
     DEFAULT_RESULT_SET_RETENTION_DAYS,
@@ -59,6 +59,8 @@ export type PersistQueryResultSetInput = {
     organizationId: string;
     userId: string;
     connectionId?: string | null;
+    sourceConnectionType?: string | null;
+    sourceDatabaseName?: string | null;
     workspaceId?: string | null;
     tabId?: string | null;
     workId?: string | null;
@@ -94,6 +96,12 @@ export type PersistQueryResultSetOutput = {
     rowCount: number;
     schema: ResultSetColumn[];
     byteSize: number;
+    artifactStore: string | null;
+    storageFormat: 'parquet' | 'json' | null;
+    sourceConnectionType: string | null;
+    sourceDatabaseName: string | null;
+    createdAt: number;
+    expiresAt: number;
     storageLimitApplied?: boolean;
     warning?: string;
 };
@@ -224,6 +232,13 @@ export type SessionResultSetMeta = {
     startedAt: number | null;
     finishedAt: number | null;
     durationMs: number | null;
+    byteSize: number | null;
+    artifactStore: string | null;
+    storageFormat: 'parquet' | 'json' | null;
+    sourceConnectionType: string | null;
+    sourceDatabaseName: string | null;
+    createdAt: number | null;
+    expiresAt: number | null;
 };
 
 type QueryClause = {
@@ -452,6 +467,12 @@ function getBoolean(value: unknown): boolean {
 
 function addDays(date: Date, days: number) {
     return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
+function storageFormatFor(dataAvailability: ResultSetDataAvailability): 'parquet' | 'json' | null {
+    if (dataAvailability === 'full') return 'parquet';
+    if (dataAvailability === 'preview-only') return 'json';
+    return null;
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -785,6 +806,8 @@ export class PostgresResultSetsRepository {
         const queryRunId = `qr_${newEntityId()}`;
         const actorType = inferActorType(input.source);
         const status = getString(resultSet.status) ?? 'success';
+        const sourceConnectionType = input.sourceConnectionType ?? null;
+        const sourceDatabaseName = input.sourceDatabaseName ?? input.database ?? null;
         const columns = inferResultSetColumns(rows, resultSet.columns);
         const rowCount = getNumber(resultSet.rowCount) ?? rows.length;
         const now = new Date();
@@ -806,6 +829,8 @@ export class PostgresResultSetsRepository {
                 type: 'query-run',
                 queryRunId,
                 connectionId: input.connectionId ?? null,
+                connectionType: sourceConnectionType,
+                databaseName: sourceDatabaseName,
                 workspaceId: input.workspaceId ?? null,
                 tabId: input.tabId ?? null,
                 workId: input.workId ?? null,
@@ -886,6 +911,8 @@ export class PostgresResultSetsRepository {
                 id: artifactId,
                 organizationId: input.organizationId,
                 connectionId: input.connectionId ?? null,
+                sourceConnectionType,
+                sourceDatabaseName,
                 workspaceId: input.workspaceId ?? null,
                 tabId: input.tabId ?? null,
                 workId: input.workId ?? null,
@@ -936,16 +963,23 @@ export class PostgresResultSetsRepository {
             });
         });
 
+        const dataAvailability = resultSetDataAvailability(persistedManifest);
         return {
             resultSetId: artifactId,
             queryRunId,
             artifactRef: ref,
-            dataAvailability: resultSetDataAvailability(persistedManifest),
+            dataAvailability,
             previewRows: preview.rows,
             previewRowCount: preview.previewRowCount,
             rowCount,
             schema: columns,
             byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+            artifactStore: ref.store,
+            storageFormat: storageFormatFor(dataAvailability),
+            sourceConnectionType,
+            sourceDatabaseName,
+            createdAt: now.getTime(),
+            expiresAt: expiresAt.getTime(),
             storageLimitApplied,
             warning: storageLimitApplied ? RESULT_SET_STORAGE_LIMIT_WARNING : undefined,
         };
@@ -959,6 +993,8 @@ export class PostgresResultSetsRepository {
         const queryRunId = input.queryRunId?.trim() || `qr_${newEntityId()}`;
         const actorType = inferActorType(input.source);
         const status = getString(resultSet.status) ?? 'success';
+        const sourceConnectionType = input.sourceConnectionType ?? null;
+        const sourceDatabaseName = input.sourceDatabaseName ?? input.database ?? null;
         const explicitColumns = input.columns?.length ? input.columns : inferResultSetColumns([], resultSet.columns);
         const now = new Date();
         const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
@@ -986,6 +1022,8 @@ export class PostgresResultSetsRepository {
                 type: 'query-run',
                 queryRunId,
                 connectionId: input.connectionId ?? null,
+                connectionType: sourceConnectionType,
+                databaseName: sourceDatabaseName,
                 workspaceId: input.workspaceId ?? null,
                 tabId: input.tabId ?? null,
                 workId: input.workId ?? null,
@@ -1053,6 +1091,8 @@ export class PostgresResultSetsRepository {
                 id: artifactId,
                 organizationId: input.organizationId,
                 connectionId: input.connectionId ?? null,
+                sourceConnectionType,
+                sourceDatabaseName,
                 workspaceId: input.workspaceId ?? null,
                 tabId: input.tabId ?? null,
                 workId: input.workId ?? null,
@@ -1095,16 +1135,23 @@ export class PostgresResultSetsRepository {
             throw error;
         }
 
+        const previewDataAvailability = resultSetDataAvailability(previewManifest);
         const previewOutput: PersistQueryResultSetOutput = {
             resultSetId: artifactId,
             queryRunId,
             artifactRef: previewRef,
-            dataAvailability: resultSetDataAvailability(previewManifest),
+            dataAvailability: previewDataAvailability,
             previewRows: preview.rows,
             previewRowCount: preview.previewRowCount,
             rowCount: initialRowCount ?? previewRows.length,
             schema: columns,
             byteSize: (previewManifest.files.preview?.byteSize ?? 0) + (previewManifest.files.data?.byteSize ?? 0),
+            artifactStore: previewRef.store,
+            storageFormat: storageFormatFor(previewDataAvailability),
+            sourceConnectionType,
+            sourceDatabaseName,
+            createdAt: now.getTime(),
+            expiresAt: expiresAt.getTime(),
         };
         await options.onPreviewPersisted?.(previewOutput);
 
@@ -1239,6 +1286,12 @@ export class PostgresResultSetsRepository {
                 rowCount,
                 schema: columns,
                 byteSize,
+                artifactStore: ref.store,
+                storageFormat: storageFormatFor(dataAvailability),
+                sourceConnectionType,
+                sourceDatabaseName,
+                createdAt: now.getTime(),
+                expiresAt: expiresAt.getTime(),
                 storageLimitApplied,
                 warning: storageLimitApplied ? RESULT_SET_STORAGE_LIMIT_WARNING : undefined,
             };
@@ -1477,8 +1530,12 @@ export class PostgresResultSetsRepository {
 
         const [rows, runs] = await Promise.all([
             this.db
-                .select()
+                .select({
+                    resultSet: resultSetsTable,
+                    fallbackConnectionType: connections.type,
+                })
                 .from(resultSetsTable)
+                .leftJoin(connections, and(eq(connections.id, resultSetsTable.connectionId), eq(connections.organizationId, resultSetsTable.organizationId)))
                 .where(and(eq(resultSetsTable.organizationId, params.organizationId), eq(resultSetsTable.sessionId, params.sessionId)))
                 .orderBy(asc(resultSetsTable.setIndex), asc(resultSetsTable.createdAt)),
             this.db
@@ -1491,20 +1548,26 @@ export class PostgresResultSetsRepository {
         const runsBySetIndex = new Map(runs.map(row => [row.setIndex, row]));
 
         return Promise.all(
-            rows.map(async row => {
-                let stats: ResultSetProfileReadOutput['stats'] | null = null;
-                try {
-                    const profile = await this.readProfile({
+            rows.map(async joinedRow => {
+                const row = joinedRow.resultSet;
+                const [stats, legacySourceDatabaseName] = await Promise.all([
+                    this.readProfile({
                         organizationId: params.organizationId,
                         resultSetId: row.id,
                         sampleRows: 200,
-                    });
-                    stats = profile.stats;
-                } catch {
-                    stats = null;
-                }
+                    })
+                        .then(profile => profile.stats)
+                        .catch(() => null),
+                    row.sourceDatabaseName
+                        ? Promise.resolve(null)
+                        : this.artifacts.resultSets
+                              .readManifest(row.artifactRefJson as ResultSetArtifactRef)
+                              .then(manifest => manifest.source.databaseName ?? manifest.sql?.dialect ?? null)
+                              .catch(() => null),
+                ]);
 
                 const run = runsByResultSetId.get(row.id) ?? runsBySetIndex.get(row.setIndex ?? 0) ?? null;
+                const artifactRef = row.artifactRefJson as ResultSetArtifactRef;
 
                 return {
                     sessionId: row.sessionId ?? params.sessionId,
@@ -1532,6 +1595,13 @@ export class PostgresResultSetsRepository {
                     startedAt: (run?.createdAt ?? row.createdAt) instanceof Date ? (run?.createdAt ?? row.createdAt).getTime() : null,
                     finishedAt: (run?.updatedAt ?? row.updatedAt) instanceof Date ? (run?.updatedAt ?? row.updatedAt).getTime() : null,
                     durationMs: run?.durationMs ?? null,
+                    byteSize: row.byteSize ?? null,
+                    artifactStore: artifactRef.store ?? null,
+                    storageFormat: storageFormatFor(row.dataAvailability),
+                    sourceConnectionType: row.sourceConnectionType ?? joinedRow.fallbackConnectionType ?? null,
+                    sourceDatabaseName: row.sourceDatabaseName ?? legacySourceDatabaseName ?? null,
+                    createdAt: row.createdAt instanceof Date ? row.createdAt.getTime() : null,
+                    expiresAt: row.expiresAt instanceof Date ? row.expiresAt.getTime() : null,
                 };
             }),
         );

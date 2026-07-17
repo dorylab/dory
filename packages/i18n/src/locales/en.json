@@ -1442,6 +1442,7 @@
             "ExecMs": "Execution: {value} ms",
             "LimitNotice": "Limit: {value}",
             "Returned": "Returned: {value}",
+            "Rows": "{value} rows",
             "Affected": "Affected: {value}",
             "Shown": "Shown: {value}",
             "LimitSuffix": " / limit {value}",
@@ -1931,6 +1932,15 @@
             "Message": "Message",
             "Duration": "Duration",
             "Rows": "Rows",
+            "Size": "Size",
+            "Storage": "Storage",
+            "Source": "Source",
+            "Created": "Created",
+            "QueryDuration": "Query duration",
+            "SnapshotStatus": "Snapshot status",
+            "Expires": "Expires",
+            "Expired": "Expired",
+            "Actions": "Result actions",
             "Empty": "No results",
             "StatusRunning": "Running",
             "StatusSuccess": "Success",
@@ -1941,7 +1951,21 @@
             "ViewResult": "View result",
             "OpenResult": "Open result",
             "CopySql": "Copy SQL",
-            "CopyError": "Copy error"
+            "CopyError": "Copy error",
+            "StorageValues": {
+                "LocalParquet": "Local Parquet",
+                "S3Parquet": "S3 Parquet",
+                "Parquet": "Parquet",
+                "LocalJsonPreview": "Local JSON preview",
+                "S3JsonPreview": "S3 JSON preview",
+                "JsonPreview": "JSON preview",
+                "NotRetained": "Not retained"
+            },
+            "SnapshotValues": {
+                "Saving": "Saving",
+                "Disconnected": "Disconnected from source",
+                "Unavailable": "Unavailable"
+            }
         },
         "Common": {
             "NotAvailable": "N/A",
@@ -3061,7 +3085,6 @@
                     "GigabyteOption": "{count} GB",
                     "UsageLabel": "Current usage",
                     "ResultUsage": "Results: {size}",
-                    "ExportUsage": "Exports: {size}",
                     "SaveAction": "Save settings",
                     "Saving": "Saving...",
                     "ReadOnlyHint": "Your current role does not allow updating storage settings.",

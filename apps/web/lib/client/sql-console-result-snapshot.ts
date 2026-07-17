@@ -98,6 +98,13 @@ export function normalizeSqlConsoleResultSnapshot(payload: SqlConsoleResultUpdat
                 startedAt: asTimestamp(resultSet.startedAt),
                 finishedAt: asTimestamp(resultSet.finishedAt),
                 durationMs: asNumber(resultSet.durationMs),
+                byteSize: asNumber(resultSet.byteSize),
+                artifactStore: asString(resultSet.artifactStore),
+                storageFormat: resultSet.storageFormat === 'parquet' || resultSet.storageFormat === 'json' ? resultSet.storageFormat : null,
+                sourceConnectionType: asString(resultSet.sourceConnectionType),
+                sourceDatabaseName: asString(resultSet.sourceDatabaseName),
+                createdAt: asTimestamp(resultSet.createdAt),
+                expiresAt: asTimestamp(resultSet.expiresAt),
             },
         ];
     });
