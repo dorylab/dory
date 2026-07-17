@@ -46,8 +46,6 @@ RUN yarn run build \
  && bun build scripts/bootstrap.ts --target=node --format=esm --outfile=dist-scripts/bootstrap.mjs \
  && cd /app \
  && cp -rn node_modules/@electric-sql/pglite/dist/. apps/web/dist-scripts/ \
- && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.data apps/web/dist-scripts/ \
- && cp node_modules/@electric-sql/pglite-legacy/dist/postgres.wasm apps/web/dist-scripts/ \
  && rm -f apps/web/.next/standalone/.env apps/web/.next/standalone/.env.local \
  && rm -rf \
     apps/web/.next/standalone/apps/web/__registry__ \
