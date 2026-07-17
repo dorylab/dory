@@ -33,6 +33,7 @@ import type { ColumnFilter, VTableRemoteSource } from './vtable/type';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
 import type { ResultSetMeta, ResultSetViewState } from '@/lib/client/type';
 import { isQueryHistoryRestoredSession } from '../../query-history-result-restore';
+import { resolveResultLoadingMode } from './result-loading-mode';
 /* =================================== constants =================================== */
 
 const OVERVIEW_SET = -1;
@@ -244,9 +245,15 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             })),
         [sessionMetas.previewRows, tabId],
     );
-    const hasCompleteStreamedPreview = expectedRowCount !== null && streamedPreviewResults.length >= expectedRowCount;
-    const isRemoteFullResult = Boolean(remoteResultSetId) && !hasCompleteStreamedPreview;
-    const localResults = hasCompleteStreamedPreview ? streamedPreviewResults : results;
+    const resultLoadingMode = resolveResultLoadingMode({
+        status: sessionMetas.status,
+        dataAvailability: sessionMetas.dataAvailability,
+        rowCount: expectedRowCount,
+        previewRowCount: streamedPreviewResults.length,
+    });
+    const isRemoteFullResult = Boolean(remoteResultSetId) && resultLoadingMode.shouldUseRemoteFullResult;
+    const shouldPrefetchRemoteResult = Boolean(remoteResultSetId) && resultLoadingMode.shouldPrefetchRemoteResult;
+    const localResults = streamedPreviewResults.length > 0 ? streamedPreviewResults : results;
     const remoteRowCount = expectedRowCount ?? 0;
 
     const [query, setQuery] = useState('');
@@ -260,8 +267,8 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const [tablePaneSnapshotsBySet, setTablePaneSnapshotsBySet] = useState<Record<number, ResultTablePaneSnapshot>>({});
     const [remoteEffectiveRowCountBySet, setRemoteEffectiveRowCountBySet] = useState<Record<number, number | null>>({});
     const remoteEffectiveRowCount = activeSet >= 0 ? (remoteEffectiveRowCountBySet[activeSet] ?? null) : null;
-    const rowCount = isRemoteFullResult ? (remoteEffectiveRowCount ?? remoteRowCount) : localResults.length;
-    const showEmpty = isRemoteFullResult ? rowCount === 0 : localResults.length === 0;
+    const rowCount = shouldPrefetchRemoteResult ? (remoteEffectiveRowCount ?? remoteRowCount) : localResults.length;
+    const showEmpty = shouldPrefetchRemoteResult ? rowCount === 0 : localResults.length === 0;
 
     useEffect(() => {
         const savedViewMode = viewModesByKey[viewModeKey];
@@ -399,9 +406,9 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     }, [activeSet, remoteOperationKey, remoteResultSetId, remoteRowCount]);
 
     const remoteSource = useMemo(() => {
-        if (!remoteResultSetId || !isRemoteFullResult || remoteRowCount <= 0) return null;
+        if (!remoteResultSetId || !shouldPrefetchRemoteResult || remoteRowCount <= 0) return null;
         return {
-            cacheKey: `${remoteResultSetId}:${remoteOperationKey}`,
+            cacheKey: `${remoteResultSetId}:${sessionMetas.dataAvailability ?? 'unknown'}:${remoteOperationKey}`,
             sourceId: remoteResultSetId,
             rowCount: remoteEffectiveRowCount ?? remoteRowCount,
             pageSize: 5000,
@@ -416,29 +423,34 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                     search: remoteOperations.search,
                     signal,
                 });
-                if (typeof response.rowCount === 'number') {
+                const ready = response.dataAvailability === 'full';
+                if (ready && typeof response.rowCount === 'number') {
                     setRemoteEffectiveRowCountBySet(prev => ({
                         ...prev,
                         [activeSet]: response.rowCount,
                     }));
                 }
-                return response.rows.map((row, index) => ({
-                    tabId,
-                    rid: offset + index,
-                    rowData: row,
-                }));
+                return {
+                    ready,
+                    rows: response.rows.map((row, index) => ({
+                        tabId,
+                        rid: offset + index,
+                        rowData: row,
+                    })),
+                };
             },
         };
     }, [
         activeSet,
         hasActiveResultOperations,
-        isRemoteFullResult,
         readResultSetRows,
         remoteEffectiveRowCount,
         remoteOperationKey,
         remoteOperations,
         remoteResultSetId,
         remoteRowCount,
+        sessionMetas.dataAvailability,
+        shouldPrefetchRemoteResult,
         streamedPreviewResults,
         tabId,
     ]);

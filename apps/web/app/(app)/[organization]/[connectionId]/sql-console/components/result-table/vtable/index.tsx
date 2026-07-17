@@ -21,6 +21,7 @@ const REMOTE_MAX_CACHED_PAGES = 24;
 const REMOTE_MAX_CACHED_SOURCES = 32;
 const REMOTE_PREFETCH_PAGES_BEFORE = 1;
 const REMOTE_PREFETCH_PAGES_AFTER = 2;
+const REMOTE_RESULT_NOT_READY_RETRY_MS = 300;
 const HEADER_TEXT_PAD = 44;
 const CELL_TEXT_PAD = 18;
 const FALLBACK_CHAR_WIDTH = 8;
@@ -174,6 +175,8 @@ export default function VTable({
     const remotePagesRef = useRef<Map<number, number>>(new Map());
     const remoteLoadingPagesRef = useRef<Set<number>>(new Set());
     const remotePageAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
+    const remoteRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [remoteRetryVersion, setRemoteRetryVersion] = useState(0);
     const activeRemoteCacheKeyRef = useRef<string | null>(remoteSource?.cacheKey ?? null);
     const activeRemoteSourceIdRef = useRef<string | null>(remoteSource?.sourceId ?? null);
     const hydratedRemoteSourceRef = useRef<{ cacheKey: string | null; sourceId: string | null } | null>(null);
@@ -369,6 +372,10 @@ export default function VTable({
             for (const controller of remotePageAbortControllersRef.current.values()) {
                 controller.abort();
             }
+            if (remoteRetryTimerRef.current !== null) {
+                clearTimeout(remoteRetryTimerRef.current);
+                remoteRetryTimerRef.current = null;
+            }
             remoteLoadingPagesRef.current = new Set();
             remotePageAbortControllersRef.current = new Map();
         };
@@ -453,14 +460,23 @@ export default function VTable({
 
                 remoteSource
                     .getRows(offset, remotePageSize, controller.signal)
-                    .then(rows => {
+                    .then(result => {
                         if (controller.signal.aborted) return;
                         if (activeRemoteCacheKeyRef.current !== remoteSource.cacheKey) return;
+                        if (!result.ready) {
+                            if (remoteRetryTimerRef.current === null) {
+                                remoteRetryTimerRef.current = setTimeout(() => {
+                                    remoteRetryTimerRef.current = null;
+                                    setRemoteRetryVersion(version => version + 1);
+                                }, REMOTE_RESULT_NOT_READY_RETRY_MS);
+                            }
+                            return;
+                        }
                         if (remoteRowsStaleRef.current) {
                             remoteRowsRef.current = new Map();
                             remoteRowsStaleRef.current = false;
                         }
-                        rows.forEach((row, index) => {
+                        result.rows.forEach((row, index) => {
                             remoteRowsRef.current.set(offset + index, row);
                         });
                         remotePagesRef.current.set(page, Date.now());
@@ -506,7 +522,7 @@ export default function VTable({
     useEffect(() => {
         if (!remoteSource || tableRowCount <= 0) return;
         requestRemoteRange(0, Math.min(tableRowCount - 1, remotePageSize - 1));
-    }, [remotePageSize, remoteSource, requestRemoteRange, tableRowCount]);
+    }, [remotePageSize, remoteRetryVersion, remoteSource, requestRemoteRange, tableRowCount]);
 
     const getVisibleSampleRowIndices = useCallback(
         (range?: { start: number; stop: number }) => {

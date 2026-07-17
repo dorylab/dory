@@ -11,7 +11,7 @@ import type { QuerySource } from '@dory/shared/types/audit';
 import type { WebActionServices } from '../../types';
 
 export const MAX_ACTION_STATEMENTS = 100;
-const DEFAULT_RESULT_PREVIEW_ROWS = 200;
+const DEFAULT_RESULT_PREVIEW_ROWS = 1_000;
 
 type PersistableResultSet = Record<string, unknown> & {
     sessionId: string;
