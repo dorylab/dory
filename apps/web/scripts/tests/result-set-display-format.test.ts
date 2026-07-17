@@ -5,7 +5,6 @@ import {
     formatBytes,
     formatCompactDuration,
     formatRelativeTimestamp,
-    formatResultSetSource,
     getResultSetStorageLabel,
 } from '../../app/(app)/[organization]/[connectionId]/sql-console/components/result-table/utils/format';
 
@@ -22,9 +21,7 @@ test('formats relative result set timestamps', () => {
     assert.equal(formatRelativeTimestamp(now + 7 * 24 * 60 * 60 * 1000, 'en', now), 'in 7 days');
 });
 
-test('formats source and storage metadata', () => {
-    assert.equal(formatResultSetSource('sqlite', 'main'), 'SQLite / main');
-    assert.equal(formatResultSetSource(null, null), '—');
+test('formats storage metadata', () => {
     assert.equal(getResultSetStorageLabel({ artifactStore: 'filesystem', storageFormat: 'parquet', dataAvailability: 'full' }), 'LocalParquet');
     assert.equal(getResultSetStorageLabel({ artifactStore: 's3', storageFormat: 'json', dataAvailability: 'preview-only' }), 'S3JsonPreview');
     assert.equal(getResultSetStorageLabel({ artifactStore: 'filesystem', storageFormat: null, dataAvailability: 'none' }), 'NotRetained');

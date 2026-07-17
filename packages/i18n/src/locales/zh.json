@@ -1938,10 +1938,8 @@
             "Rows": "行数",
             "Size": "大小",
             "Storage": "存储",
-            "Source": "来源",
             "Created": "创建时间",
             "QueryDuration": "查询耗时",
-            "SnapshotStatus": "快照状态",
             "Expires": "过期时间",
             "Expired": "已过期",
             "Actions": "结果操作",
@@ -1964,11 +1962,6 @@
                 "S3JsonPreview": "S3 JSON 预览",
                 "JsonPreview": "JSON 预览",
                 "NotRetained": "未保留"
-            },
-            "SnapshotValues": {
-                "Saving": "正在保存",
-                "Disconnected": "已与数据源断开",
-                "Unavailable": "不可用"
             }
         },
         "Common": {

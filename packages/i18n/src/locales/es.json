@@ -1933,10 +1933,8 @@
             "Rows": "Filas",
             "Size": "Tamaño",
             "Storage": "Almacenamiento",
-            "Source": "Origen",
             "Created": "Creado",
             "QueryDuration": "Duración de la consulta",
-            "SnapshotStatus": "Estado de la instantánea",
             "Expires": "Caduca",
             "Expired": "Caducado",
             "Actions": "Acciones del resultado",
@@ -1959,11 +1957,6 @@
                 "S3JsonPreview": "Vista previa JSON en S3",
                 "JsonPreview": "Vista previa JSON",
                 "NotRetained": "No conservado"
-            },
-            "SnapshotValues": {
-                "Saving": "Guardando",
-                "Disconnected": "Desconectado del origen",
-                "Unavailable": "No disponible"
             }
         },
         "Common": {

@@ -1934,10 +1934,8 @@
             "Rows": "Rows",
             "Size": "Size",
             "Storage": "Storage",
-            "Source": "Source",
             "Created": "Created",
             "QueryDuration": "Query duration",
-            "SnapshotStatus": "Snapshot status",
             "Expires": "Expires",
             "Expired": "Expired",
             "Actions": "Result actions",
@@ -1960,11 +1958,6 @@
                 "S3JsonPreview": "S3 JSON preview",
                 "JsonPreview": "JSON preview",
                 "NotRetained": "Not retained"
-            },
-            "SnapshotValues": {
-                "Saving": "Saving",
-                "Disconnected": "Disconnected from source",
-                "Unavailable": "Unavailable"
             }
         },
         "Common": {

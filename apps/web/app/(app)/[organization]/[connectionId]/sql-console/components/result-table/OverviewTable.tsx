@@ -11,7 +11,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 
 import type { OverviewItem } from './types';
-import { formatBytes, formatCompactDuration, formatRelativeTimestamp, formatResultSetSource, getResultSetStorageLabel } from './utils/format';
+import { formatBytes, formatCompactDuration, formatRelativeTimestamp, getResultSetStorageLabel } from './utils/format';
 
 function StatusBadge({ status }: { status: OverviewItem['status'] }) {
     const t = useTranslations('SqlConsole');
@@ -89,13 +89,6 @@ export function OverviewTable(props: { items: OverviewItem[]; onOpenResultById?:
                               ? t('Overview.Expired')
                               : (formatRelativeTimestamp(item.expiresAt, locale, now) ?? t('Common.EmptyValue'));
                     const storageLabel = getResultSetStorageLabel(item);
-                    const snapshotStatus =
-                        item.status === 'running'
-                            ? t('Overview.SnapshotValues.Saving')
-                            : item.dataAvailability && item.dataAvailability !== 'none'
-                              ? t('Overview.SnapshotValues.Disconnected')
-                              : t('Overview.SnapshotValues.Unavailable');
-
                     return (
                         <AccordionItem key={item.id} value={item.id} className="overflow-hidden rounded-lg border bg-background last:border-b">
                             <div className="flex w-full items-start gap-2 px-4 [&>h3]:min-w-0 [&>h3]:flex-1">
@@ -135,28 +128,26 @@ export function OverviewTable(props: { items: OverviewItem[]; onOpenResultById?:
                             </div>
                             <AccordionContent className="border-t px-4 pt-4">
                                 {item.status === 'error' && item.errorMessage ? (
-                                    <div className="mb-4 rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-300">
-                                        {item.errorMessage}
+                                    <div className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-700 dark:text-red-300">{item.errorMessage}</div>
+                                ) : null}
+                                {item.status !== 'error' ? (
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        <MetadataItem label={t('Overview.Rows')} value={rows} />
+                                        <MetadataItem label={t('Overview.Size')} value={formatBytes(item.byteSize)} />
+                                        <MetadataItem label={t('Overview.Storage')} value={t(`Overview.StorageValues.${storageLabel}`)} />
+                                        <MetadataItem
+                                            label={t('Overview.Created')}
+                                            value={createdRelative}
+                                            title={item.createdAt == null ? undefined : new Date(item.createdAt).toLocaleString(locale)}
+                                        />
+                                        <MetadataItem label={t('Overview.QueryDuration')} value={formatCompactDuration(durationMs)} />
+                                        <MetadataItem
+                                            label={t('Overview.Expires')}
+                                            value={expiresRelative}
+                                            title={item.expiresAt == null ? undefined : new Date(item.expiresAt).toLocaleString(locale)}
+                                        />
                                     </div>
                                 ) : null}
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                    <MetadataItem label={t('Overview.Rows')} value={rows} />
-                                    <MetadataItem label={t('Overview.Size')} value={formatBytes(item.byteSize)} />
-                                    <MetadataItem label={t('Overview.Storage')} value={t(`Overview.StorageValues.${storageLabel}`)} />
-                                    <MetadataItem label={t('Overview.Source')} value={formatResultSetSource(item.sourceConnectionType, item.sourceDatabaseName)} />
-                                    <MetadataItem
-                                        label={t('Overview.Created')}
-                                        value={createdRelative}
-                                        title={item.createdAt == null ? undefined : new Date(item.createdAt).toLocaleString(locale)}
-                                    />
-                                    <MetadataItem label={t('Overview.QueryDuration')} value={formatCompactDuration(durationMs)} />
-                                    <MetadataItem label={t('Overview.SnapshotStatus')} value={snapshotStatus} />
-                                    <MetadataItem
-                                        label={t('Overview.Expires')}
-                                        value={expiresRelative}
-                                        title={item.expiresAt == null ? undefined : new Date(item.expiresAt).toLocaleString(locale)}
-                                    />
-                                </div>
                             </AccordionContent>
                         </AccordionItem>
                     );

@@ -1933,10 +1933,8 @@
             "Rows": "行数",
             "Size": "サイズ",
             "Storage": "ストレージ",
-            "Source": "ソース",
             "Created": "作成日時",
             "QueryDuration": "クエリ時間",
-            "SnapshotStatus": "スナップショット状態",
             "Expires": "有効期限",
             "Expired": "期限切れ",
             "Actions": "結果の操作",
@@ -1959,11 +1957,6 @@
                 "S3JsonPreview": "S3 JSON プレビュー",
                 "JsonPreview": "JSON プレビュー",
                 "NotRetained": "保持されていません"
-            },
-            "SnapshotValues": {
-                "Saving": "保存中",
-                "Disconnected": "ソースから切断済み",
-                "Unavailable": "利用不可"
             }
         },
         "Common": {

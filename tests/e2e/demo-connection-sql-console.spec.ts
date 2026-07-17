@@ -7,9 +7,7 @@ import { formatBytes } from '../../apps/web/app/(app)/[organization]/[connection
 
 import { expectAppHealthy, test } from './fixtures';
 
-const SCREENSHOT_DIR = process.env.E2E_DEMO_SCREENSHOT_DIR
-    ? path.resolve(process.env.E2E_DEMO_SCREENSHOT_DIR)
-    : path.resolve(process.cwd(), 'apps/web/public/e2e-demo-flow');
+const SCREENSHOT_DIR = process.env.E2E_DEMO_SCREENSHOT_DIR ? path.resolve(process.env.E2E_DEMO_SCREENSHOT_DIR) : path.resolve(process.cwd(), 'apps/web/public/e2e-demo-flow');
 const CINEMATIC_MODE = process.env.E2E_DEMO_CINEMATIC === '1';
 const STEP_PAUSE_MS = Number(process.env.E2E_DEMO_STEP_PAUSE_MS ?? (CINEMATIC_MODE ? '900' : '0'));
 const SHORT_PAUSE_MS = Number(process.env.E2E_DEMO_SHORT_PAUSE_MS ?? (CINEMATIC_MODE ? '350' : '0'));
@@ -157,13 +155,11 @@ async function loginAsDemo(page: Parameters<typeof test>[0]['page']) {
     await page.goto('/sign-in');
     await installCamera(page);
 
-    const demoButton = page
-        .getByTestId('demo-sign-in')
-        .or(
-            page.getByRole('button', {
-                name: /enter as demo|login as demo|sign in as demo/i,
-            }),
-        );
+    const demoButton = page.getByTestId('demo-sign-in').or(
+        page.getByRole('button', {
+            name: /enter as demo|login as demo|sign in as demo/i,
+        }),
+    );
 
     await focusLocator(page, demoButton, { maxScale: 4, padding: 0.48 });
     await expect(demoButton).toBeVisible();
@@ -202,68 +198,71 @@ async function ensureSqlTab(page: Parameters<typeof test>[0]['page'], connection
     console.log('[demo-flow] sql-tab:check');
     console.log('[demo-flow] sql-tab:reset-and-bootstrap');
 
-    await page.evaluate(async ({ id }) => {
-        const existingTabsResponse = await fetch('/api/sql-console/tabs', {
-            method: 'GET',
-            headers: {
-                'X-Connection-ID': id,
-            },
-            credentials: 'include',
-        });
-
-        if (!existingTabsResponse.ok) {
-            throw new Error(`Failed to load SQL tabs: ${existingTabsResponse.status}`);
-        }
-
-        const existingTabsPayload = await existingTabsResponse.json();
-        const existingTabs = Array.isArray(existingTabsPayload?.data) ? existingTabsPayload.data : [];
-
-        for (const tab of existingTabs) {
-            if (!tab?.tabId) continue;
-
-            const deleteResponse = await fetch(`/api/sql-console/tabs?tabId=${encodeURIComponent(tab.tabId)}`, {
-                method: 'DELETE',
+    await page.evaluate(
+        async ({ id }) => {
+            const existingTabsResponse = await fetch('/api/sql-console/tabs', {
+                method: 'GET',
                 headers: {
                     'X-Connection-ID': id,
                 },
                 credentials: 'include',
             });
 
-            if (!deleteResponse.ok) {
-                throw new Error(`Failed to delete SQL tab ${tab.tabId}: ${deleteResponse.status}`);
+            if (!existingTabsResponse.ok) {
+                throw new Error(`Failed to load SQL tabs: ${existingTabsResponse.status}`);
             }
-        }
 
-        const tabId = crypto.randomUUID();
-        const response = await fetch('/api/sql-console/tabs', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Connection-ID': id,
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                tabId,
-                state: {
-                    tabId,
-                    tabType: 'sql',
-                    tabName: 'New Query',
-                    content: '',
-                    status: 'idle',
-                    userId: '',
-                    connectionId: id,
-                    orderIndex: 0,
-                    createdAt: new Date().toISOString(),
+            const existingTabsPayload = await existingTabsResponse.json();
+            const existingTabs = Array.isArray(existingTabsPayload?.data) ? existingTabsPayload.data : [];
+
+            for (const tab of existingTabs) {
+                if (!tab?.tabId) continue;
+
+                const deleteResponse = await fetch(`/api/sql-console/tabs?tabId=${encodeURIComponent(tab.tabId)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'X-Connection-ID': id,
+                    },
+                    credentials: 'include',
+                });
+
+                if (!deleteResponse.ok) {
+                    throw new Error(`Failed to delete SQL tab ${tab.tabId}: ${deleteResponse.status}`);
+                }
+            }
+
+            const tabId = crypto.randomUUID();
+            const response = await fetch('/api/sql-console/tabs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Connection-ID': id,
                 },
-            }),
-        });
+                credentials: 'include',
+                body: JSON.stringify({
+                    tabId,
+                    state: {
+                        tabId,
+                        tabType: 'sql',
+                        tabName: 'New Query',
+                        content: '',
+                        status: 'idle',
+                        userId: '',
+                        connectionId: id,
+                        orderIndex: 0,
+                        createdAt: new Date().toISOString(),
+                    },
+                }),
+            });
 
-        if (!response.ok) {
-            throw new Error(`Failed to create SQL tab: ${response.status}`);
-        }
+            if (!response.ok) {
+                throw new Error(`Failed to create SQL tab: ${response.status}`);
+            }
 
-        localStorage.setItem(`sqlconsole:activeTabId:${id}`, tabId);
-    }, { id: connectionId });
+            localStorage.setItem(`sqlconsole:activeTabId:${id}`, tabId);
+        },
+        { id: connectionId },
+    );
 
     await page.reload();
     await page.waitForLoadState('networkidle');
@@ -284,7 +283,7 @@ async function setEditorSql(page: Parameters<typeof test>[0]['page'], sql: strin
     }, sql);
 }
 
-async function runSql(page: Parameters<typeof test>[0]['page'], sql: string) {
+async function runSql(page: Parameters<typeof test>[0]['page'], sql: string, expectedStatus: 'success' | 'error' = 'success') {
     console.log(`[demo-flow] sql:run ${sql}`);
     await setEditorSql(page, sql);
     await page.waitForTimeout(CINEMATIC_MODE ? 900 : 500);
@@ -299,10 +298,7 @@ async function runSql(page: Parameters<typeof test>[0]['page'], sql: string) {
         });
 
         const queryResponse = page
-            .waitForResponse(
-                candidate => candidate.url().includes('/api/query') && candidate.request().method() === 'POST',
-                { timeout: 15_000 },
-            )
+            .waitForResponse(candidate => candidate.url().includes('/api/query') && candidate.request().method() === 'POST', { timeout: 15_000 })
             .catch(() => null);
 
         await runButton.click();
@@ -326,7 +322,7 @@ async function runSql(page: Parameters<typeof test>[0]['page'], sql: string) {
     const body = await response.json();
 
     expect(response.ok()).toBeTruthy();
-    expect(body?.data?.session?.status).toBe('success');
+    expect(body?.data?.session?.status).toBe(expectedStatus);
     await beat(page, CINEMATIC_MODE ? 1200 : 0);
     console.log('[demo-flow] sql:done');
 
@@ -425,8 +421,8 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
     await expect(resultCards.nth(0)).toHaveAttribute('data-state', 'open');
     await expect(resultTable.getByText('Size', { exact: true })).toBeVisible();
     await expect(resultTable.getByText('Storage', { exact: true })).toBeVisible();
-    await expect(resultTable.getByText('SQLite / main', { exact: true })).toBeVisible();
-    await expect(resultTable.getByText('Disconnected from source', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText('Source', { exact: true })).toHaveCount(0);
+    await expect(resultTable.getByText('Snapshot status', { exact: true })).toHaveCount(0);
     await expect(resultTable.getByText('Expires', { exact: true })).toBeVisible();
     await resultCards.nth(1).getByRole('button').first().click();
     await expect(resultCards.nth(0)).toHaveAttribute('data-state', 'closed');
@@ -440,7 +436,28 @@ test('demo login, SQLite demo connection, SQL console flow, and screenshots', as
     await expect(restoredResultCards).toHaveCount(2);
     await expect(restoredResultCards.nth(0)).toHaveAttribute('data-state', 'closed');
     await restoredResultCards.nth(0).getByRole('button').first().click();
-    await expect(resultTable.getByText('SQLite / main', { exact: true })).toBeVisible();
+    await expect(resultTable.getByText('Source', { exact: true })).toHaveCount(0);
+    await expect(resultTable.getByText('Snapshot status', { exact: true })).toHaveCount(0);
+
+    const errorResult = await runSql(page, 'select * from missing_table_for_overview;', 'error');
+    expect(errorResult?.data?.queryResultSets?.[0]?.resultSetId).toBeUndefined();
+    expect(errorResult?.data?.queryResultSets?.[0]?.byteSize).toBeUndefined();
+    await resultTable.getByRole('tab', { name: 'Overview' }).click();
+    const errorCard = resultTable.locator('[data-slot="accordion-item"]');
+    await expect(errorCard).toHaveCount(1);
+    await errorCard.getByRole('button').first().click();
+    await expect(errorCard.getByText(/no such table: missing_table_for_overview/i)).toBeVisible();
+    for (const label of ['Rows', 'Size', 'Storage', 'Created', 'Query duration', 'Expires']) {
+        await expect(errorCard.getByText(label, { exact: true })).toHaveCount(0);
+    }
+
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await resultTable.getByRole('tab', { name: 'Overview' }).click();
+    const restoredErrorCard = resultTable.locator('[data-slot="accordion-item"]');
+    await expect(restoredErrorCard).toHaveCount(1);
+    await restoredErrorCard.getByRole('button').first().click();
+    await expect(restoredErrorCard.getByText(/no such table: missing_table_for_overview/i)).toBeVisible();
 
     await resetFocus(page);
     const relevantAppErrors = appErrors.filter(
