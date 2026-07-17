@@ -141,6 +141,13 @@
       "when": 1783075200000,
       "tag": "0019_resultset_artifacts",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784296092000,
+      "tag": "0020_resultset_schema_updates",
+      "breakpoints": true
     }
   ]
 }

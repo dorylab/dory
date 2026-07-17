@@ -6,8 +6,6 @@ CREATE TABLE IF NOT EXISTS "query_runs" (
     "tab_id" text,
     "work_id" text,
     "agent_run_id" text,
-    "session_id" text,
-    "set_index" integer,
     "actor_type" text NOT NULL,
     "actor_id" text,
     "sql" text NOT NULL,
@@ -31,20 +29,14 @@ CREATE INDEX IF NOT EXISTS "idx_query_runs_agent_created" ON "query_runs" USING 
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_query_runs_result_set" ON "query_runs" USING btree ("result_set_id");
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_query_runs_session_set" ON "query_runs" USING btree ("organization_id","session_id","set_index");
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "result_sets" (
     "id" text PRIMARY KEY NOT NULL,
     "organization_id" text NOT NULL,
     "connection_id" text,
-    "source_connection_type" text,
-    "source_database_name" text,
     "workspace_id" text,
     "tab_id" text,
     "work_id" text,
     "agent_run_id" text,
-    "session_id" text,
-    "set_index" integer,
     "source_query_run_id" text,
     "source_type" text NOT NULL,
     "kind" text NOT NULL,
@@ -54,7 +46,6 @@ CREATE TABLE IF NOT EXISTS "result_sets" (
     "limited" boolean DEFAULT false NOT NULL,
     "limit" integer,
     "schema_json" jsonb DEFAULT '[]'::jsonb NOT NULL,
-    "view_state" jsonb,
     "sql" text,
     "operation" text,
     "error_message" text,
@@ -67,8 +58,7 @@ CREATE TABLE IF NOT EXISTS "result_sets" (
     "created_by_actor_type" text NOT NULL,
     "created_by_actor_id" text,
     "content_hash" text,
-    "byte_size" bigint,
-    "storage_limit_applied" boolean DEFAULT false NOT NULL,
+    "byte_size" integer,
     "expires_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL
@@ -85,28 +75,6 @@ CREATE INDEX IF NOT EXISTS "idx_result_sets_work_created" ON "result_sets" USING
 CREATE INDEX IF NOT EXISTS "idx_result_sets_agent_created" ON "result_sets" USING btree ("agent_run_id","created_at");
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "idx_result_sets_source_query_run" ON "result_sets" USING btree ("source_query_run_id");
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_result_sets_session_set" ON "result_sets" USING btree ("organization_id","session_id","set_index");
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_result_sets_expires_at" ON "result_sets" USING btree ("expires_at");
---> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "result_set_exports" (
-    "id" text PRIMARY KEY NOT NULL,
-    "organization_id" text NOT NULL,
-    "result_set_id" text,
-    "object_path" text NOT NULL,
-    "format" text NOT NULL,
-    "file_name" text NOT NULL,
-    "byte_size" bigint NOT NULL,
-    "expires_at" timestamp with time zone NOT NULL,
-    "created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_result_set_exports_org_created" ON "result_set_exports" USING btree ("organization_id", "created_at");
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_result_set_exports_org_expires" ON "result_set_exports" USING btree ("organization_id", "expires_at");
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "idx_result_set_exports_result_set" ON "result_set_exports" USING btree ("result_set_id");
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "agent_run_result_sets" (
     "id" text PRIMARY KEY NOT NULL,

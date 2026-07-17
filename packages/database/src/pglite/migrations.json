@@ -311,27 +311,20 @@
   },
   {
     "sql": [
-      "CREATE TABLE IF NOT EXISTS \"query_runs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"connection_id\" text,\n    \"workspace_id\" text,\n    \"tab_id\" text,\n    \"work_id\" text,\n    \"agent_run_id\" text,\n    \"session_id\" text,\n    \"set_index\" integer,\n    \"actor_type\" text NOT NULL,\n    \"actor_id\" text,\n    \"sql\" text NOT NULL,\n    \"status\" text DEFAULT 'running' NOT NULL,\n    \"duration_ms\" integer,\n    \"error_message\" text,\n    \"result_set_id\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "CREATE TABLE IF NOT EXISTS \"query_runs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"connection_id\" text,\n    \"workspace_id\" text,\n    \"tab_id\" text,\n    \"work_id\" text,\n    \"agent_run_id\" text,\n    \"actor_type\" text NOT NULL,\n    \"actor_id\" text,\n    \"sql\" text NOT NULL,\n    \"status\" text DEFAULT 'running' NOT NULL,\n    \"duration_ms\" integer,\n    \"error_message\" text,\n    \"result_set_id\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_org_created\" ON \"query_runs\" USING btree (\"organization_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_connection_created\" ON \"query_runs\" USING btree (\"organization_id\",\"connection_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_tab_created\" ON \"query_runs\" USING btree (\"tab_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_work_created\" ON \"query_runs\" USING btree (\"work_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_agent_created\" ON \"query_runs\" USING btree (\"agent_run_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_result_set\" ON \"query_runs\" USING btree (\"result_set_id\");\n",
-      "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_session_set\" ON \"query_runs\" USING btree (\"organization_id\",\"session_id\",\"set_index\");\n",
-      "\nCREATE TABLE IF NOT EXISTS \"result_sets\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"connection_id\" text,\n    \"source_connection_type\" text,\n    \"source_database_name\" text,\n    \"workspace_id\" text,\n    \"tab_id\" text,\n    \"work_id\" text,\n    \"agent_run_id\" text,\n    \"session_id\" text,\n    \"set_index\" integer,\n    \"source_query_run_id\" text,\n    \"source_type\" text NOT NULL,\n    \"kind\" text NOT NULL,\n    \"status\" text NOT NULL,\n    \"row_count\" integer,\n    \"preview_row_count\" integer DEFAULT 0 NOT NULL,\n    \"limited\" boolean DEFAULT false NOT NULL,\n    \"limit\" integer,\n    \"schema_json\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"view_state\" jsonb,\n    \"sql\" text,\n    \"operation\" text,\n    \"error_message\" text,\n    \"artifact_ref_json\" jsonb NOT NULL,\n    \"data_availability\" text DEFAULT 'none' NOT NULL,\n    \"parent_result_set_id\" text,\n    \"previous_result_set_id\" text,\n    \"refresh_of_result_set_id\" text,\n    \"derived_from_result_set_id\" text,\n    \"created_by_actor_type\" text NOT NULL,\n    \"created_by_actor_id\" text,\n    \"content_hash\" text,\n    \"byte_size\" bigint,\n    \"storage_limit_applied\" boolean DEFAULT false NOT NULL,\n    \"expires_at\" timestamp with time zone,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE IF NOT EXISTS \"result_sets\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"connection_id\" text,\n    \"workspace_id\" text,\n    \"tab_id\" text,\n    \"work_id\" text,\n    \"agent_run_id\" text,\n    \"source_query_run_id\" text,\n    \"source_type\" text NOT NULL,\n    \"kind\" text NOT NULL,\n    \"status\" text NOT NULL,\n    \"row_count\" integer,\n    \"preview_row_count\" integer DEFAULT 0 NOT NULL,\n    \"limited\" boolean DEFAULT false NOT NULL,\n    \"limit\" integer,\n    \"schema_json\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"sql\" text,\n    \"operation\" text,\n    \"error_message\" text,\n    \"artifact_ref_json\" jsonb NOT NULL,\n    \"data_availability\" text DEFAULT 'none' NOT NULL,\n    \"parent_result_set_id\" text,\n    \"previous_result_set_id\" text,\n    \"refresh_of_result_set_id\" text,\n    \"derived_from_result_set_id\" text,\n    \"created_by_actor_type\" text NOT NULL,\n    \"created_by_actor_id\" text,\n    \"content_hash\" text,\n    \"byte_size\" integer,\n    \"expires_at\" timestamp with time zone,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_org_created\" ON \"result_sets\" USING btree (\"organization_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_connection_created\" ON \"result_sets\" USING btree (\"organization_id\",\"connection_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_tab_created\" ON \"result_sets\" USING btree (\"tab_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_work_created\" ON \"result_sets\" USING btree (\"work_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_agent_created\" ON \"result_sets\" USING btree (\"agent_run_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_source_query_run\" ON \"result_sets\" USING btree (\"source_query_run_id\");\n",
-      "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_session_set\" ON \"result_sets\" USING btree (\"organization_id\",\"session_id\",\"set_index\");\n",
-      "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_expires_at\" ON \"result_sets\" USING btree (\"expires_at\");\n",
-      "\nCREATE TABLE IF NOT EXISTS \"result_set_exports\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"result_set_id\" text,\n    \"object_path\" text NOT NULL,\n    \"format\" text NOT NULL,\n    \"file_name\" text NOT NULL,\n    \"byte_size\" bigint NOT NULL,\n    \"expires_at\" timestamp with time zone NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
-      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_org_created\" ON \"result_set_exports\" USING btree (\"organization_id\", \"created_at\");\n",
-      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_org_expires\" ON \"result_set_exports\" USING btree (\"organization_id\", \"expires_at\");\n",
-      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_result_set\" ON \"result_set_exports\" USING btree (\"result_set_id\");\n",
       "\nCREATE TABLE IF NOT EXISTS \"agent_run_result_sets\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"agent_run_id\" text NOT NULL,\n    \"result_set_id\" text NOT NULL,\n    \"query_run_id\" text,\n    \"role\" text DEFAULT 'generated' NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_agent_run_result_sets_run\" ON \"agent_run_result_sets\" USING btree (\"agent_run_id\",\"created_at\");\n",
       "\nCREATE INDEX IF NOT EXISTS \"idx_agent_run_result_sets_result_set\" ON \"agent_run_result_sets\" USING btree (\"result_set_id\");\n",
@@ -343,6 +336,29 @@
     ],
     "bps": true,
     "folderMillis": 1783075200000,
-    "hash": "dbd41f326b2b46eaea4a308dba2bfe6d91e09a5acc380ed18b409a1e8ab9fd90"
+    "hash": "2e273d975e1613f47ee4b4e2bcb87b066a090fd5152031a8866debeeb037cddd"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"query_runs\" ADD COLUMN IF NOT EXISTS \"session_id\" text;\n",
+      "\nALTER TABLE \"query_runs\" ADD COLUMN IF NOT EXISTS \"set_index\" integer;\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_query_runs_session_set\" ON \"query_runs\" USING btree (\"organization_id\",\"session_id\",\"set_index\");\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"source_connection_type\" text;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"source_database_name\" text;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"session_id\" text;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"set_index\" integer;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"view_state\" jsonb;\n",
+      "\nALTER TABLE \"result_sets\" ALTER COLUMN \"byte_size\" SET DATA TYPE bigint;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN IF NOT EXISTS \"storage_limit_applied\" boolean DEFAULT false NOT NULL;\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_session_set\" ON \"result_sets\" USING btree (\"organization_id\",\"session_id\",\"set_index\");\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_sets_expires_at\" ON \"result_sets\" USING btree (\"expires_at\");\n",
+      "\nCREATE TABLE IF NOT EXISTS \"result_set_exports\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"result_set_id\" text,\n    \"object_path\" text NOT NULL,\n    \"format\" text NOT NULL,\n    \"file_name\" text NOT NULL,\n    \"byte_size\" bigint NOT NULL,\n    \"expires_at\" timestamp with time zone NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_org_created\" ON \"result_set_exports\" USING btree (\"organization_id\", \"created_at\");\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_org_expires\" ON \"result_set_exports\" USING btree (\"organization_id\", \"expires_at\");\n",
+      "\nCREATE INDEX IF NOT EXISTS \"idx_result_set_exports_result_set\" ON \"result_set_exports\" USING btree (\"result_set_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1784296092000,
+    "hash": "19c9cc670ede5de31efec1e30f8ffc7b0f8c8c076bea0320f5fe8eb85ccae45a"
   }
 ]
