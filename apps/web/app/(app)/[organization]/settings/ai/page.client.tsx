@@ -519,11 +519,13 @@ function LocalAgentCard({
 }) {
     const title = agent.id === 'codex-agent' ? 'Codex Agent' : 'Claude Code';
     const actionLabel =
-        !isDesktopRuntime && agent.id === 'codex-agent' && !bridge?.online
-            ? t('LocalAi.ConnectCodex')
-            : agent.id === 'codex-agent'
-              ? t('LocalAi.EnableCodex')
-              : t('LocalAi.EnableClaudeCode');
+        isDesktopRuntime && !agent.available
+            ? t('LocalAi.CheckInstallation')
+            : !isDesktopRuntime && agent.id === 'codex-agent' && !bridge?.online
+              ? t('LocalAi.ConnectCodex')
+              : agent.id === 'codex-agent'
+                ? t('LocalAi.EnableCodex')
+                : t('LocalAi.EnableClaudeCode');
     const active = Boolean(row?.isDefault);
     const bridgeNeedsUpdate = !isDesktopRuntime && agent.id === 'codex-agent' && Boolean(bridge?.online) && bridge?.supportsDoryMcpTools !== true;
     const configured = Boolean(row) && (isDesktopRuntime ? agent.available : Boolean(bridge?.online));
@@ -1085,8 +1087,9 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
               ? t('Fields.ApiKeyPlaceholder')
               : t('Fields.ApiKeyOptionalPlaceholder');
     const upgradeActionLabel = upgradeTarget === 'pro' ? t('Actions.UpgradeToPro') : t('Actions.UpgradeToEnterprise');
-    const doryOrigin = typeof window === 'undefined' ? '' : window.location.origin;
-    const localAiBridgeCommand = `npx -y @getdory/cli runtime install --codex-agent --url ${doryOrigin}`;
+    const doryOrigin = !isDesktopRuntime && typeof window !== 'undefined' ? window.location.origin : '';
+    const localAiBridgeCommand = doryOrigin ? `npx -y @getdory/cli runtime install --codex-agent --url ${doryOrigin}` : '';
+    const localAiSetupCommand = localAiSetupAgent?.command ?? 'codex';
 
     function renderProviderRow(row: AiProviderRow) {
         const providerDescription = row.source === 'organization' && row.isDefault ? t('OrganizationProvider.ActiveDescription') : t('OrganizationProvider.Description');
@@ -1331,40 +1334,47 @@ export default function AISettingsPageClient({ initialRuntime = null, onOpenBill
             <Dialog open={Boolean(localAiSetupAgent)} onOpenChange={open => !open && setLocalAiSetupAgent(null)}>
                 <DialogContent className="sm:max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>{t('LocalAi.SetupTitle')}</DialogTitle>
-                        <DialogDescription>{t('LocalAi.SetupDescription')}</DialogDescription>
+                        <DialogTitle>{isDesktopRuntime ? t('LocalAi.DesktopSetupTitle', { command: localAiSetupCommand }) : t('LocalAi.SetupTitle')}</DialogTitle>
+                        <DialogDescription>{isDesktopRuntime ? t('LocalAi.DesktopSetupDescription') : t('LocalAi.SetupDescription')}</DialogDescription>
                     </DialogHeader>
-                    <div className="min-w-0 space-y-4">
-                        <div className="min-w-0 space-y-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <Label>{t('LocalAi.BridgeCommand')}</Label>
-                                <CopyButton
-                                    text={localAiBridgeCommand}
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 px-2 text-xs"
-                                    label={
-                                        <>
-                                            <Copy className="size-3.5" />
-                                            {t('LocalAi.CopyCommand')}
-                                        </>
-                                    }
-                                    copiedLabel={
-                                        <>
-                                            <Check className="size-3.5" />
-                                            {t('LocalAi.CopiedCommand')}
-                                        </>
-                                    }
-                                    aria-label={t('LocalAi.CopyCommand')}
-                                    title={t('LocalAi.CopyCommand')}
-                                />
+                    {isDesktopRuntime ? (
+                        <Alert className="border-primary/20 bg-primary/10 text-primary">
+                            <CircleHelp className="size-4" />
+                            <AlertDescription className="text-primary/80">{t('LocalAi.DesktopSetupHint', { command: localAiSetupCommand })}</AlertDescription>
+                        </Alert>
+                    ) : (
+                        <div className="min-w-0 space-y-4">
+                            <div className="min-w-0 space-y-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <Label>{t('LocalAi.BridgeCommand')}</Label>
+                                    <CopyButton
+                                        text={localAiBridgeCommand}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs"
+                                        label={
+                                            <>
+                                                <Copy className="size-3.5" />
+                                                {t('LocalAi.CopyCommand')}
+                                            </>
+                                        }
+                                        copiedLabel={
+                                            <>
+                                                <Check className="size-3.5" />
+                                                {t('LocalAi.CopiedCommand')}
+                                            </>
+                                        }
+                                        aria-label={t('LocalAi.CopyCommand')}
+                                        title={t('LocalAi.CopyCommand')}
+                                    />
+                                </div>
+                                <pre className="max-w-full overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                                    <code className="block w-max min-w-full whitespace-pre">{localAiBridgeCommand}</code>
+                                </pre>
                             </div>
-                            <pre className="max-w-full overflow-x-auto rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                                <code className="block w-max min-w-full whitespace-pre">{localAiBridgeCommand}</code>
-                            </pre>
+                            <p className="text-sm text-muted-foreground">{t('LocalAi.SetupRefreshHint')}</p>
                         </div>
-                        <p className="text-sm text-muted-foreground">{t('LocalAi.SetupRefreshHint')}</p>
-                    </div>
+                    )}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => void queryClient.invalidateQueries({ queryKey: providersQueryKey })}>
                             {t('Actions.Refresh')}
