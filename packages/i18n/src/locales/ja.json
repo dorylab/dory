@@ -1463,6 +1463,7 @@
             "Table": "テーブル",
             "Charts": "チャート",
             "ResultTab": "結果 {index}",
+            "LoadingResults": "結果を読み込み中...",
             "WaitingForResults": "結果を待機中...",
             "DownloadCsvTitle": "CSV をダウンロード",
             "StorageLimitPreviewOnly": "Workspace のストレージ上限に達しました。クエリは成功しましたが、プレビューのみ保持されました。"

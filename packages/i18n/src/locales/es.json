@@ -1463,6 +1463,7 @@
             "Table": "Tabla",
             "Charts": "Gráficos",
             "ResultTab": "Resultado {index}",
+            "LoadingResults": "Cargando resultados...",
             "WaitingForResults": "Esperando resultados...",
             "DownloadCsvTitle": "Descargar CSV",
             "StorageLimitPreviewOnly": "Se alcanzó el límite de almacenamiento del Workspace. La consulta finalizó correctamente, pero solo se conservó la vista previa."

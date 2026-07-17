@@ -1464,6 +1464,7 @@
             "Table": "Table",
             "Charts": "Charts",
             "ResultTab": "Result {index}",
+            "LoadingResults": "Loading results...",
             "WaitingForResults": "Waiting for results...",
             "DownloadCsvTitle": "Download CSV",
             "StorageLimitPreviewOnly": "Workspace storage limit reached. The query succeeded, but only its preview was retained."

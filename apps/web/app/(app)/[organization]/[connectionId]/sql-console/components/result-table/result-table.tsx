@@ -33,7 +33,7 @@ import type { ColumnFilter, VTableRemoteSource } from './vtable/type';
 import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-scope';
 import type { ResultSetMeta, ResultSetViewState } from '@/lib/client/type';
 import { isQueryHistoryRestoredSession } from '../../query-history-result-restore';
-import { resolveResultLoadingMode } from './result-loading-mode';
+import { resolveResultLoadingMode, shouldShowResultMetadataLoading } from './result-loading-mode';
 /* =================================== constants =================================== */
 
 const OVERVIEW_SET = -1;
@@ -295,6 +295,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const setUserPickedFalse = useSetAtom(useMemo(() => makeSetUserPickedAtom(tabId, sessionId), [tabId, sessionId]));
 
     const [setsMeta, setSetsMeta] = useState<ResultSetSummaryMeta[]>([]);
+    const [loadedResultMetaSessionId, setLoadedResultMetaSessionId] = useState<string | null>(null);
 
     const cacheSessionUi = useCallback((cacheSessionId: string, snapshot: Partial<SessionUiSnapshot>) => {
         sessionUiCacheRef.current[cacheSessionId] = {
@@ -664,6 +665,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     useEffect(() => {
         if (!sessionId) {
             lastSessionRef.current = null;
+            setLoadedResultMetaSessionId(null);
             setResults([]);
             setIndices([]);
             setSetsMeta([]);
@@ -682,6 +684,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
 
             const cached = sessionUiCacheRef.current[sessionId];
             if (cached) {
+                setLoadedResultMetaSessionId(cached.setsMeta ? sessionId : null);
                 setIndices(cached.indices ?? []);
                 setSetsMeta(cached.setsMeta ?? []);
                 setSessionMetas(cached.sessionMetaBySet?.[activeSet] ?? { columns: [] });
@@ -692,6 +695,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
 
             setIndices([]);
             setSetsMeta([]);
+            setLoadedResultMetaSessionId(null);
             setSessionMetas({ columns: [] });
             setMeta({});
             setSessionStatus(null);
@@ -813,7 +817,11 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 } else if (activeSet >= 0 && !next.includes(activeSet)) {
                     setActiveSet(OVERVIEW_SET);
                 }
-            } catch {}
+            } catch {
+                // The metadata request has settled; render the confirmed empty/error state.
+            } finally {
+                if (!canceled) setLoadedResultMetaSessionId(sessionId);
+            }
         })();
         return () => {
             canceled = true;
@@ -914,10 +922,29 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         return <div className="h-full flex items-center justify-center text-sm text-muted-foreground bg-card">{t('Results.SelectTab')}</div>;
     }
 
+    const isResultMetadataLoading = shouldShowResultMetadataLoading({
+        sessionId,
+        loadedSessionId: loadedResultMetaSessionId,
+        hasCachedMetadata: Boolean(sessionId && sessionUiCacheRef.current[sessionId]?.setsMeta),
+        activeSet,
+        activeMetaSessionId: sessionMetas.sessionId,
+        activeMetaSetIndex: sessionMetas.setIndex,
+    });
+
     function renderResult() {
         if (noSessionId) {
             const emptyResultMessage = workspaceScope.workspaceMode === 'agent' ? t('Results.AgentRunQueryFirst') : t('Results.RunQueryFirst');
             return <div className="h-full flex items-center justify-center px-4 text-center text-sm bg-card text-muted-foreground">{emptyResultMessage}</div>;
+        }
+        if (isResultMetadataLoading) {
+            return (
+                <div className="flex h-full items-center justify-center bg-card text-sm text-muted-foreground">
+                    <Badge variant="outline" className="gap-1">
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        {t('Results.LoadingResults')}
+                    </Badge>
+                </div>
+            );
         }
         const hasRenderableRows = activeSet >= 0 && (isRemoteFullResult ? rowCount > 0 : localResults.length > 0);
         const hasRenderableResult = activeSet >= 0 && (hasRenderableRows || execMetaBySet?.[activeSet]?.errorMessage);

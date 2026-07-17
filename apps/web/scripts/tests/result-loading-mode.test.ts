@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveResultLoadingMode } from '../../app/(app)/[organization]/[connectionId]/sql-console/components/result-table/result-loading-mode';
+import { resolveResultLoadingMode, shouldShowResultMetadataLoading } from '../../app/(app)/[organization]/[connectionId]/sql-console/components/result-table/result-loading-mode';
 
 test('keeps the preview visible while the full result is being prepared', () => {
     assert.deepEqual(
@@ -68,5 +68,63 @@ test('does not poll forever when storage only retains a preview', () => {
             shouldPrefetchRemoteResult: false,
             shouldUseRemoteFullResult: false,
         },
+    );
+});
+
+test('shows loading while a newly selected session is hydrating result metadata', () => {
+    assert.equal(
+        shouldShowResultMetadataLoading({
+            sessionId: 'session-with-artifact',
+            loadedSessionId: null,
+            hasCachedMetadata: false,
+            activeSet: -1,
+        }),
+        true,
+    );
+});
+
+test('does not show metadata loading after hydration or on a cache hit', () => {
+    assert.equal(
+        shouldShowResultMetadataLoading({
+            sessionId: 'session-with-artifact',
+            loadedSessionId: 'session-with-artifact',
+            hasCachedMetadata: false,
+            activeSet: -1,
+        }),
+        false,
+    );
+    assert.equal(
+        shouldShowResultMetadataLoading({
+            sessionId: 'session-with-artifact',
+            loadedSessionId: null,
+            hasCachedMetadata: true,
+            activeSet: -1,
+        }),
+        false,
+    );
+});
+
+test('keeps loading when the selected artifact metadata has not hydrated yet', () => {
+    assert.equal(
+        shouldShowResultMetadataLoading({
+            sessionId: 'session-with-artifact',
+            loadedSessionId: 'session-with-artifact',
+            hasCachedMetadata: true,
+            activeSet: 0,
+            activeMetaSessionId: 'previous-session',
+            activeMetaSetIndex: 0,
+        }),
+        true,
+    );
+    assert.equal(
+        shouldShowResultMetadataLoading({
+            sessionId: 'session-with-artifact',
+            loadedSessionId: 'session-with-artifact',
+            hasCachedMetadata: true,
+            activeSet: 0,
+            activeMetaSessionId: 'session-with-artifact',
+            activeMetaSetIndex: 0,
+        }),
+        false,
     );
 });

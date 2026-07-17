@@ -18,3 +18,19 @@ export function resolveResultLoadingMode({ status, dataAvailability, rowCount, p
         shouldUseRemoteFullResult,
     };
 }
+
+export function shouldShowResultMetadataLoading(params: {
+    sessionId?: string | null;
+    loadedSessionId?: string | null;
+    hasCachedMetadata: boolean;
+    activeSet: number;
+    activeMetaSessionId?: string | null;
+    activeMetaSetIndex?: number | null;
+}) {
+    if (!params.sessionId) return false;
+
+    const isSessionMetadataPending = params.loadedSessionId !== params.sessionId && !params.hasCachedMetadata;
+    const isActiveResultMetadataPending = params.activeSet >= 0 && (params.activeMetaSessionId !== params.sessionId || params.activeMetaSetIndex !== params.activeSet);
+
+    return isSessionMetadataPending || isActiveResultMetadataPending;
+}
