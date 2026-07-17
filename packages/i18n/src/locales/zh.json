@@ -1468,6 +1468,7 @@
             "Table": "表格",
             "Charts": "图表",
             "ResultTab": "结果 {index}",
+            "LoadingResults": "正在加载结果...",
             "WaitingForResults": "等待结果中...",
             "DownloadCsvTitle": "下载 CSV",
             "StorageLimitPreviewOnly": "已达到 Workspace 存储上限。查询成功，但仅保留了结果预览。"
