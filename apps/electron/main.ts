@@ -9,6 +9,7 @@ import { getMainLogFilePath, setupMainLogger } from './main/logger.js';
 import { createMcpProxyManager } from './main/mcp-proxy.js';
 import { registerProtocolClient } from './main/protocol.js';
 import { createStandaloneServerManager } from './main/server.js';
+import { resolveDesktopDataPaths } from './main/storage-paths.js';
 import { parseDoryDeepLink } from './main/deep-link.js';
 import { setUpdaterLocale, setupUpdater } from './main/updater.js';
 import type { UpdateChannel } from './main/updater/types.js';
@@ -31,7 +32,7 @@ if (process.platform === 'win32') {
   app.setAppUserModelId(APP_ID);
 }
 
-const databasePath = path.join(getUserDataPath(), 'data/database');
+const databasePath = resolveDesktopDataPaths(getUserDataPath()).database;
 ensureDirectoryExists(databasePath);
 
 const { log, logWarn, logError } = setupMainLogger({
