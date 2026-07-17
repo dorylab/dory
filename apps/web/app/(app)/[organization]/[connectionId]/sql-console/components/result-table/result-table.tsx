@@ -57,8 +57,6 @@ type ResultSetSummaryMeta = {
     artifactStore?: string | null;
     storageFormat?: 'parquet' | 'json' | null;
     dataAvailability?: string | null;
-    sourceConnectionType?: string | null;
-    sourceDatabaseName?: string | null;
     createdAt?: number | null;
     expiresAt?: number | null;
 };
@@ -797,8 +795,6 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                         artifactStore: m.artifactStore ?? null,
                         storageFormat: m.storageFormat ?? null,
                         dataAvailability: m.dataAvailability ?? null,
-                        sourceConnectionType: m.sourceConnectionType ?? null,
-                        sourceDatabaseName: m.sourceDatabaseName ?? null,
                         createdAt: m.createdAt ?? null,
                         expiresAt: m.expiresAt ?? null,
                     };
@@ -846,8 +842,6 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 artifactStore: m.artifactStore ?? undefined,
                 storageFormat: m.storageFormat ?? undefined,
                 dataAvailability: m.dataAvailability ?? undefined,
-                sourceConnectionType: m.sourceConnectionType ?? undefined,
-                sourceDatabaseName: m.sourceDatabaseName ?? undefined,
                 createdAt: m.createdAt ?? undefined,
                 expiresAt: m.expiresAt ?? undefined,
             };

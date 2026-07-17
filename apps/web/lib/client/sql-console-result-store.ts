@@ -85,7 +85,7 @@ type QueryResultSetsListOutput = {
             stats: ResultSetStatsV1 | null;
             viewState: ResultSetViewState | null;
             aiProfileVersion: number | null;
-            resultSetId: string;
+            resultSetId: string | null;
             dataAvailability: string;
         }
     >;

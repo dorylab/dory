@@ -7,6 +7,7 @@ import { fork, type ChildProcess } from 'node:child_process';
 import { parse as parseDotEnv } from 'dotenv';
 import { APP_BASE_URL, DISTRIBUTION, PROTOCOL, isBetaDistribution } from './constants.js';
 import type { LogFn } from './logger.js';
+import { resolveDesktopDataPaths } from './storage-paths.js';
 
 interface CreateStandaloneServerManagerOptions {
     isDev: boolean;
@@ -326,6 +327,7 @@ function ensureDesktopSecrets(userDataPath: string, logWarn: LogFn): DesktopSecr
 
 function createDesktopServerEnv(options: DesktopServerEnvOptions): NodeJS.ProcessEnv {
     const desktopSecrets = ensureDesktopSecrets(options.userDataPath, options.logWarn);
+    const dataPaths = resolveDesktopDataPaths(options.userDataPath);
     const env: NodeJS.ProcessEnv = {
         ...options.childEnv,
         DORY_RUNTIME: 'desktop',
@@ -340,7 +342,9 @@ function createDesktopServerEnv(options: DesktopServerEnvOptions): NodeJS.Proces
         DORY_LOCAL_RUNTIME_OWNER: '1',
         DORY_LOCAL_RUNTIME_SECRET: options.localRuntimeSecret,
         DORY_DESKTOP_USER_DATA_PATH: options.userDataPath,
-        DORY_DEMO_RESOURCE_CACHE_DIR: path.join(options.userDataPath, 'demo-resources'),
+        DORY_ARTIFACTS_FILESYSTEM_DIR: dataPaths.artifacts,
+        DORY_DEMO_RESOURCE_CACHE_DIR: dataPaths.demoResources,
+        DORY_LOCAL_FILES_STORAGE_DIR: dataPaths.localFiles,
         BETTER_AUTH_SECRET: desktopSecrets.betterAuthSecret,
         DS_SECRET_KEY: desktopSecrets.dsSecretKey,
         NEXT_TELEMETRY_DISABLED: process.env.NEXT_TELEMETRY_DISABLED || '1',

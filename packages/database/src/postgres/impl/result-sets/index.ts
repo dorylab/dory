@@ -74,6 +74,8 @@ export type PersistQueryResultSetInput = {
     previewRows?: number;
 };
 
+export type PersistQueryErrorInput = Omit<PersistQueryResultSetInput, 'database' | 'previewRows' | 'rows' | 'sourceConnectionType' | 'sourceDatabaseName'>;
+
 export type PersistQueryResultSetStreamInput = Omit<PersistQueryResultSetInput, 'rows'> & {
     rows: ResultSetRowIterable;
     columns?: ResultSetColumn[];
@@ -219,7 +221,7 @@ export type SessionResultSetMeta = {
     rowCount: number | null;
     limited: boolean;
     limit: number | null;
-    resultSetId: string;
+    resultSetId: string | null;
     dataAvailability: string;
     previewRowCount: number | null;
     affectedRows: number | null;
@@ -795,6 +797,37 @@ export class PostgresResultSetsRepository {
         const client = await getClient();
         if (!client) throw new DatabaseError('Database connection failed', 500);
         this.db = client as PostgresDBClient;
+    }
+
+    async persistQueryError(input: PersistQueryErrorInput): Promise<{ queryRunId: string }> {
+        this.assertInited();
+
+        const resultSet = input.resultSet;
+        const queryRunId = `qr_${newEntityId()}`;
+        const now = new Date();
+
+        await this.db.insert(queryRuns).values({
+            id: queryRunId,
+            organizationId: input.organizationId,
+            connectionId: input.connectionId ?? null,
+            workspaceId: input.workspaceId ?? null,
+            tabId: input.tabId ?? null,
+            workId: input.workId ?? null,
+            agentRunId: input.agentRunId ?? null,
+            sessionId: input.sessionId,
+            setIndex: resultSet.setIndex,
+            actorType: inferActorType(input.source),
+            actorId: input.userId,
+            sql: resultSet.sqlText || input.sessionSqlText,
+            status: 'error',
+            durationMs: getNumber(resultSet.durationMs),
+            errorMessage: getString(resultSet.errorMessage),
+            resultSetId: null,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        return { queryRunId };
     }
 
     async persistQueryResultSet(input: PersistQueryResultSetInput): Promise<PersistQueryResultSetOutput> {
@@ -1520,7 +1553,7 @@ export class PostgresResultSetsRepository {
             startedAt,
             finishedAt,
             durationMs,
-            resultSetCount: sets.length || runs.length,
+            resultSetCount: Math.max(sets.length, runs.length),
             source: sets[0]?.sourceType ?? 'query-run',
         };
     }
@@ -1547,7 +1580,7 @@ export class PostgresResultSetsRepository {
         const runsByResultSetId = new Map(runs.map(row => [row.resultSetId, row]));
         const runsBySetIndex = new Map(runs.map(row => [row.setIndex, row]));
 
-        return Promise.all(
+        const persistedResultSets = await Promise.all(
             rows.map(async joinedRow => {
                 const row = joinedRow.resultSet;
                 const [stats, legacySourceDatabaseName] = await Promise.all([
@@ -1605,6 +1638,45 @@ export class PostgresResultSetsRepository {
                 };
             }),
         );
+
+        const errorRuns: SessionResultSetMeta[] = runs
+            .filter(run => run.status === 'error' && !run.resultSetId)
+            .map(run => ({
+                sessionId: run.sessionId ?? params.sessionId,
+                setIndex: run.setIndex ?? 0,
+                sqlText: run.sql,
+                sqlOp: null,
+                title: null,
+                columns: [],
+                stats: null,
+                viewState: null,
+                aiProfileVersion: null,
+                rowCount: null,
+                limited: false,
+                limit: null,
+                resultSetId: null,
+                dataAvailability: 'none',
+                previewRowCount: 0,
+                affectedRows: null,
+                status: 'error',
+                errorMessage: run.errorMessage ?? null,
+                errorCode: null,
+                errorSqlState: null,
+                errorMeta: null,
+                warnings: null,
+                startedAt: run.createdAt instanceof Date ? run.createdAt.getTime() : null,
+                finishedAt: run.updatedAt instanceof Date ? run.updatedAt.getTime() : null,
+                durationMs: run.durationMs ?? null,
+                byteSize: null,
+                artifactStore: null,
+                storageFormat: null,
+                sourceConnectionType: null,
+                sourceDatabaseName: null,
+                createdAt: run.createdAt instanceof Date ? run.createdAt.getTime() : null,
+                expiresAt: null,
+            }));
+
+        return [...persistedResultSets, ...errorRuns].sort((a, b) => a.setIndex - b.setIndex);
     }
 
     async updateResultSetViewState(params: { organizationId: string; sessionId: string; setIndex: number; viewState: unknown | null }) {

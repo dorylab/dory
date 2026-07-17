@@ -561,6 +561,36 @@ async function runSqlExecution(
                     setIndex: i,
                     ...execOne.qrs,
                 };
+                const publishResult = async (resultSet: Record<string, unknown>, resultRows: unknown[]) => {
+                    const existingIndex = queryResultSets.findIndex(item => item.setIndex === i);
+                    if (existingIndex >= 0) {
+                        queryResultSets[existingIndex] = resultSet;
+                        results[existingIndex] = resultRows;
+                    } else {
+                        queryResultSets.push(resultSet);
+                        results.push(resultRows);
+                    }
+
+                    await options?.onEvent?.({
+                        type: 'result-completed',
+                        payload: buildPayload({
+                            sessionId,
+                            userId: ctx.userId,
+                            tabId: input.tabId ?? null,
+                            connectionId,
+                            database: input.database ?? null,
+                            sqlText: input.sql,
+                            status: 'running',
+                            startedAt: overallStartedAt,
+                            resultSetCount: queryResultSets.length,
+                            stopOnError,
+                            source: input.source ?? null,
+                            queryResultSets: queryResultSets.slice(),
+                            results: results.slice(),
+                            refId,
+                        }),
+                    });
+                };
                 const publishPersistedResult = async (
                     persistedResult: Awaited<ReturnType<typeof ctx.services.db.resultSets.persistQueryResultSet>>,
                     resultStatus: 'running' | 'success' | 'error' | 'canceled',
@@ -594,35 +624,27 @@ async function runSqlExecution(
                         };
                     }
 
-                    const existingIndex = queryResultSets.findIndex(resultSet => resultSet.setIndex === i);
-                    if (existingIndex >= 0) {
-                        queryResultSets[existingIndex] = qrs;
-                        results[existingIndex] = persistedResult.previewRows;
-                    } else {
-                        queryResultSets.push(qrs);
-                        results.push(persistedResult.previewRows);
-                    }
-
-                    await options?.onEvent?.({
-                        type: 'result-completed',
-                        payload: buildPayload({
-                            sessionId,
-                            userId: ctx.userId,
-                            tabId: input.tabId ?? null,
-                            connectionId,
-                            database: input.database ?? null,
-                            sqlText: input.sql,
-                            status: 'running',
-                            startedAt: overallStartedAt,
-                            resultSetCount: queryResultSets.length,
-                            stopOnError,
-                            source: input.source ?? null,
-                            queryResultSets: queryResultSets.slice(),
-                            results: results.slice(),
-                            refId,
-                        }),
-                    });
+                    await publishResult(qrs, persistedResult.previewRows);
                 };
+
+                if (!execOne.ok) {
+                    await ctx.services.db.resultSets.persistQueryError({
+                        organizationId: ctx.organizationId,
+                        userId: ctx.userId,
+                        connectionId,
+                        tabId: input.tabId ?? null,
+                        sessionId,
+                        sessionSqlText: input.sql,
+                        source: input.source ?? null,
+                        resultSet: qrs as PersistableResultSet,
+                    });
+                    await publishResult(qrs, execOne.resultRows);
+
+                    hitError = true;
+                    if (!firstErrorMsg) firstErrorMsg = typeof qrs.errorMessage === 'string' ? qrs.errorMessage : null;
+                    if (stopOnError) break;
+                    continue;
+                }
 
                 const stream = (execOne as { resultStream?: DriverQueryRowStream }).resultStream;
                 let rowsForPersist = stream?.rows;
@@ -685,13 +707,7 @@ async function runSqlExecution(
                     });
                 }
 
-                await publishPersistedResult(persisted, execOne.ok ? 'success' : 'error', Boolean(stream));
-
-                if (!execOne.ok) {
-                    hitError = true;
-                    if (!firstErrorMsg) firstErrorMsg = typeof qrs.errorMessage === 'string' ? qrs.errorMessage : null;
-                    if (stopOnError) break;
-                }
+                await publishPersistedResult(persisted, 'success', Boolean(stream));
             }
 
             const sessT1 = performance.now();

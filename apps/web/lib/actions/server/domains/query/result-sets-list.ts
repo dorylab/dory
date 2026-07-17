@@ -22,7 +22,7 @@ const outputSchema = z.object({
             rowCount: z.number().nullable(),
             limited: z.boolean(),
             limit: z.number().nullable(),
-            resultSetId: z.string(),
+            resultSetId: z.string().nullable(),
             dataAvailability: z.string(),
             previewRowCount: z.number().nullable(),
             affectedRows: z.number().nullable(),

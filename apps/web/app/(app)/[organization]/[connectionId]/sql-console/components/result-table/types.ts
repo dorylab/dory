@@ -46,8 +46,6 @@ export type OverviewItem = {
     artifactStore?: string;
     storageFormat?: 'parquet' | 'json';
     dataAvailability?: string;
-    sourceConnectionType?: string;
-    sourceDatabaseName?: string;
     createdAt?: number;
     expiresAt?: number;
 };

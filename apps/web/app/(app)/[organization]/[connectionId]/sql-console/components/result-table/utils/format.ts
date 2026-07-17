@@ -55,26 +55,6 @@ export function formatRelativeTimestamp(timestamp?: number | null, locale = 'en'
     return new Intl.RelativeTimeFormat(locale, { numeric: 'always' }).format(Math.round(difference / selected.milliseconds), selected.unit);
 }
 
-const CONNECTION_TYPE_LABELS: Record<string, string> = {
-    'cloudflare-d1': 'Cloudflare D1',
-    clickhouse: 'ClickHouse',
-    duckdb: 'DuckDB',
-    mariadb: 'MariaDB',
-    mysql: 'MySQL',
-    neon: 'Neon',
-    oracle: 'Oracle',
-    postgres: 'PostgreSQL',
-    snowflake: 'Snowflake',
-    sqlite: 'SQLite',
-    sqlserver: 'SQL Server',
-    supabase: 'Supabase',
-};
-
-export function formatResultSetSource(connectionType?: string | null, databaseName?: string | null) {
-    const typeLabel = connectionType ? (CONNECTION_TYPE_LABELS[connectionType] ?? connectionType) : null;
-    return [typeLabel, databaseName].filter(Boolean).join(' / ') || '—';
-}
-
 export type ResultSetStorageLabel = 'LocalParquet' | 'S3Parquet' | 'Parquet' | 'LocalJsonPreview' | 'S3JsonPreview' | 'JsonPreview' | 'NotRetained';
 
 export function getResultSetStorageLabel(params: {

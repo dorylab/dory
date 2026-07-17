@@ -250,6 +250,49 @@ test('defaults result set retention to 7 days and preserves organization metadat
     });
 });
 
+test('persists failed queries as metadata without creating result data', async () => {
+    const { resultSetsRepo } = await createRepositories();
+    const storageBefore = await resultSetsRepo.getStorageUsage('org_retention');
+
+    const persisted = await resultSetsRepo.persistQueryError({
+        organizationId: 'org_retention',
+        userId: 'user_retention',
+        connectionId: 'conn_retention',
+        tabId: 'tab_error',
+        sessionId: 'session_error',
+        sessionSqlText: 'select * from missing_table',
+        source: 'sql-console',
+        resultSet: {
+            sessionId: 'session_error',
+            setIndex: 0,
+            sqlText: 'select * from missing_table',
+            status: 'error',
+            durationMs: 7,
+            errorMessage: 'no such table: missing_table',
+        },
+    });
+
+    const [run] = await db.select().from(queryRuns).where(eq(queryRuns.id, persisted.queryRunId)).limit(1);
+    const storedResults = await db.select().from(resultSets).where(eq(resultSets.sessionId, 'session_error'));
+    const storageAfter = await resultSetsRepo.getStorageUsage('org_retention');
+    const session = await resultSetsRepo.getQuerySession({ organizationId: 'org_retention', sessionId: 'session_error' });
+    const [errorMeta] = await resultSetsRepo.listSessionResultSets({ organizationId: 'org_retention', sessionId: 'session_error' });
+
+    assert.equal(run?.status, 'error');
+    assert.equal(run?.resultSetId, null);
+    assert.equal(run?.errorMessage, 'no such table: missing_table');
+    assert.equal(storedResults.length, 0);
+    assert.deepEqual(storageAfter, storageBefore);
+    assert.equal(session?.status, 'error');
+    assert.equal(session?.resultSetCount, 1);
+    assert.equal(errorMeta?.status, 'error');
+    assert.equal(errorMeta?.resultSetId, null);
+    assert.equal(errorMeta?.dataAvailability, 'none');
+    assert.equal(errorMeta?.byteSize, null);
+    assert.equal(errorMeta?.expiresAt, null);
+    assert.equal(errorMeta?.errorMessage, 'no such table: missing_table');
+});
+
 test('writes expiresAt when persisting result sets and streams', async () => {
     const { resultSetsRepo } = await createRepositories();
 

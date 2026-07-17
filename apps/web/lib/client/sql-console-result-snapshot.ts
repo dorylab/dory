@@ -61,7 +61,8 @@ export function normalizeSqlConsoleResultSnapshot(payload: SqlConsoleResultUpdat
         const resultSetId = asString(resultSet?.resultSetId);
         const resultSetSessionId = asString(resultSet?.sessionId) ?? sessionId;
         const setIndex = asNumber(resultSet?.setIndex);
-        if (!resultSet || !resultSetId || resultSetSessionId !== sessionId || setIndex === null || setIndex < 0 || !Number.isInteger(setIndex)) {
+        const status = asResultStatus(resultSet?.status);
+        if (!resultSet || (status !== 'error' && !resultSetId) || resultSetSessionId !== sessionId || setIndex === null || setIndex < 0 || !Number.isInteger(setIndex)) {
             return [];
         }
 
@@ -89,7 +90,7 @@ export function normalizeSqlConsoleResultSnapshot(payload: SqlConsoleResultUpdat
                       })
                     : [],
                 affectedRows: asNumber(resultSet.affectedRows),
-                status: asResultStatus(resultSet.status),
+                status,
                 errorMessage: asString(resultSet.errorMessage),
                 errorCode: asString(resultSet.errorCode),
                 errorSqlState: asString(resultSet.errorSqlState),

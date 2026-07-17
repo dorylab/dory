@@ -75,3 +75,51 @@ test('ignores stream events before a persisted result-set id is available', () =
 
     assert.equal(snapshot, null);
 });
+
+test('normalizes error metadata without a persisted result set', () => {
+    const snapshot = normalizeSqlConsoleResultSnapshot({
+        session: {
+            sessionId: 'session-error',
+            status: 'error',
+            errorMessage: 'no such table: missing_table',
+            durationMs: 7,
+        },
+        results: [[{ error: 'no such table: missing_table' }]],
+        queryResultSets: [
+            {
+                sessionId: 'session-error',
+                setIndex: 0,
+                sqlText: 'select * from missing_table',
+                status: 'error',
+                errorMessage: 'no such table: missing_table',
+                durationMs: 7,
+            },
+        ],
+    });
+
+    assert.ok(snapshot);
+    assert.equal(snapshot.resultSets.length, 1);
+    assert.equal(snapshot.resultSets[0]!.status, 'error');
+    assert.equal(snapshot.resultSets[0]!.resultSetId, null);
+    assert.equal(snapshot.resultSets[0]!.dataAvailability, null);
+    assert.equal(snapshot.resultSets[0]!.errorMessage, 'no such table: missing_table');
+    assert.deepEqual(snapshot.resultSets[0]!.previewRows, [{ error: 'no such table: missing_table' }]);
+});
+
+test('ignores successful results without a persisted result-set id', () => {
+    const snapshot = normalizeSqlConsoleResultSnapshot({
+        session: {
+            sessionId: 'session-success',
+            status: 'success',
+        },
+        queryResultSets: [
+            {
+                sessionId: 'session-success',
+                setIndex: 0,
+                status: 'success',
+            },
+        ],
+    });
+
+    assert.equal(snapshot, null);
+});
