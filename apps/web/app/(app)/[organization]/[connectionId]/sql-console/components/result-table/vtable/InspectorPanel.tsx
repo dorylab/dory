@@ -1,5 +1,6 @@
 'use client';
 
+import { cn } from '@dory/web-utils';
 import { useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { CopyButton } from '@/components/@dory/ui/copy-button';
@@ -23,22 +24,24 @@ interface InspectorPanelProps {
     setOpen: (open: boolean) => void;
     mode: 'cell' | 'row' | null;
     payload: InspectorPayload;
+    portalContainer?: HTMLElement | null;
+    position?: 'absolute' | 'fixed';
     rowViewMode: 'table' | 'json';
     setRowViewMode: (m: 'table' | 'json') => void;
     inspectorWidth: number;
     setInspectorWidth: (w: number) => void;
 }
 
-export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setRowViewMode, inspectorWidth, setInspectorWidth }: InspectorPanelProps) {
+export function InspectorPanel({ open, setOpen, mode, payload, portalContainer, position = 'absolute', rowViewMode, setRowViewMode, inspectorWidth, setInspectorWidth }: InspectorPanelProps) {
     const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
     const [filter, setFilter] = useState('');
-    const [overlayContainer, setOverlayContainer] = useState<HTMLElement | null>(null);
+    const [defaultPortalContainer, setDefaultPortalContainer] = useState<HTMLElement | null>(null);
     const t = useTranslations('SqlConsole');
 
     useLayoutEffect(() => {
-        if (!open) return;
-        setOverlayContainer(document.getElementById(SQL_CONSOLE_OVERLAY_ID));
-    }, [open]);
+        if (!open || portalContainer !== undefined) return;
+        setDefaultPortalContainer(document.getElementById(SQL_CONSOLE_OVERLAY_ID));
+    }, [open, portalContainer]);
 
     const startResize = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -61,12 +64,16 @@ export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setR
     const pretty = (v: unknown) => (v == null ? '' : typeof v === 'object' ? JSON.stringify(v, null, 2) : String(v));
     const cellPayload = mode === 'cell' && payload && 'value' in payload ? payload : null;
     const rowPayload = mode === 'row' && payload && 'rowData' in payload ? payload : null;
+    const resolvedPortalContainer = portalContainer === undefined ? defaultPortalContainer : portalContainer;
 
-    if (!open || !overlayContainer) return null;
+    if (!open || !resolvedPortalContainer) return null;
 
     return createPortal(
         <aside
-            className="pointer-events-auto absolute inset-y-0 right-0 flex flex-col border-l bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/60"
+            className={cn(
+                'pointer-events-auto inset-y-0 right-0 z-30 flex flex-col border-l bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/60',
+                position === 'fixed' ? 'fixed' : 'absolute',
+            )}
             style={{ width: inspectorWidth }}
         >
             {/* drag handle */}
@@ -155,6 +162,6 @@ export function InspectorPanel({ open, setOpen, mode, payload, rowViewMode, setR
                 )}
             </div>
         </aside>,
-        overlayContainer,
+        resolvedPortalContainer,
     );
 }

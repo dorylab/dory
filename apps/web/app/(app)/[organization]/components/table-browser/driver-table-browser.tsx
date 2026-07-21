@@ -20,6 +20,7 @@ type DriverTableBrowserProps = {
     connectionId?: string;
     databaseName?: string;
     tableName?: string;
+    inspectorPortalMode?: 'preview' | 'viewport';
     activeSubTab?: TableSubTab;
     initialSubTab?: TableSubTab;
     onSubTabChange?: (tab: TableSubTab) => void;
@@ -46,6 +47,7 @@ export function DriverTableBrowser({
     connectionId,
     databaseName,
     tableName,
+    inspectorPortalMode,
     activeSubTab,
     initialSubTab = DEFAULT_TAB,
     onSubTabChange,
@@ -76,6 +78,7 @@ export function DriverTableBrowser({
                     activeSubTab={currentTab}
                     initialSubTab={normalizeTab(driver, initialSubTab)}
                     onSubTabChange={handleTabChange}
+                    inspectorPortalMode={inspectorPortalMode}
                 />
             </div>
         );
@@ -97,7 +100,13 @@ export function DriverTableBrowser({
                         <TableOverview databaseName={databaseName} tableName={tableName} />
                     </TabsContent>
                     <TabsContent value="data" className="h-full mt-0">
-                        <TableDataPreview activeTab={activeTab} connectionId={connectionId} databaseName={databaseName} tableName={tableName} />
+                        <TableDataPreview
+                            activeTab={activeTab}
+                            connectionId={connectionId}
+                            databaseName={databaseName}
+                            tableName={tableName}
+                            inspectorPortalMode={inspectorPortalMode}
+                        />
                     </TabsContent>
                     <TabsContent value="structure" className="h-full mt-0">
                         <TableStructure databaseName={databaseName} tableName={tableName} />

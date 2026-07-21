@@ -12,5 +12,13 @@ type TableResourceViewProps = {
 export function TableResourceView({ resource }: TableResourceViewProps) {
     const { connectionId, driver, database, tableName } = useTable(resource);
 
-    return <DriverTableBrowser driver={driver.table.getTableBrowserDriver()} connectionId={connectionId} databaseName={database} tableName={tableName} />;
+    return (
+        <DriverTableBrowser
+            driver={driver.table.getTableBrowserDriver()}
+            connectionId={connectionId}
+            databaseName={database}
+            tableName={tableName}
+            inspectorPortalMode="viewport"
+        />
+    );
 }

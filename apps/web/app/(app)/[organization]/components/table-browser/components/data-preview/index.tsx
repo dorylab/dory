@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { FileText, RotateCw } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -70,6 +70,7 @@ type DataPreviewProps = {
     storageKey?: string;
     source?: string;
     emptyMessage?: string;
+    inspectorPortalMode?: 'preview' | 'viewport';
 };
 
 type TableDataPreviewProps = {
@@ -77,6 +78,7 @@ type TableDataPreviewProps = {
     connectionId?: string;
     databaseName?: string;
     tableName?: string;
+    inspectorPortalMode?: 'preview' | 'viewport';
 };
 
 const PREVIEW_STALE_TIME = 1000 * 60 * 5;
@@ -290,7 +292,7 @@ function DataPreview(props: DataPreviewProps) {
     return <DataPreviewInner key={resetKey} {...props} source={source} />;
 }
 
-function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, source = 'table-browser-data-preview', emptyMessage }: DataPreviewProps) {
+function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, source = 'table-browser-data-preview', emptyMessage, inspectorPortalMode = 'preview' }: DataPreviewProps) {
     const t = useTranslations('TableBrowser');
     const setSessionMeta = useSetAtom(currentSessionMetaAtom);
 
@@ -301,6 +303,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
+    const [inspectorPortalContainer, setInspectorPortalContainer] = useState<HTMLElement | null>(null);
     const [{ pageIndex, pageSize }, setPagination] = useQueryStates(dataPreviewPaginationParsers, {
         history: 'replace',
         shallow: true,
@@ -317,6 +320,11 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     useEffect(() => {
         void setPagination({ pageIndex: 0 });
     }, [connectionId, databaseName, source, storageKey, tableName, setPagination]);
+
+    useLayoutEffect(() => {
+        if (inspectorPortalMode !== 'viewport') return;
+        setInspectorPortalContainer(document.body);
+    }, [inspectorPortalMode]);
 
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
     const { data: tableStats } = useTableStatsQuery({ connectionId, databaseName, tableName });
@@ -613,7 +621,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     }
 
     return (
-        <div className="h-full min-h-0 flex flex-col">
+        <div className="relative h-full min-h-0 flex flex-col">
+            {inspectorPortalMode === 'preview' ? <div ref={setInspectorPortalContainer} className="pointer-events-none absolute inset-0 z-30" /> : null}
             {previewControls}
             {previewProgress}
 
@@ -653,6 +662,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 setOpen={setInspectorOpen}
                 mode={inspectorMode}
                 payload={inspectorPayload}
+                portalContainer={inspectorPortalContainer}
+                position={inspectorPortalMode === 'viewport' ? 'fixed' : 'absolute'}
                 rowViewMode={rowViewMode}
                 setRowViewMode={setRowViewMode}
                 inspectorWidth={inspectorWidth}
@@ -662,7 +673,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     );
 }
 
-export default function TableDataPreview({ activeTab, connectionId, databaseName, tableName }: TableDataPreviewProps) {
+export default function TableDataPreview({ activeTab, connectionId, databaseName, tableName, inspectorPortalMode }: TableDataPreviewProps) {
     const storageKey = useMemo(() => {
         if (activeTab?.tabId) return `${activeTab.tabId}:data-preview`;
         if (databaseName && tableName) return `preview:${databaseName}:${tableName}:data-preview`;
@@ -673,7 +684,16 @@ export default function TableDataPreview({ activeTab, connectionId, databaseName
     const resolvedDatabase = activeTab?.tabType === 'table' ? activeTab.databaseName : databaseName;
     const resolvedTable = activeTab?.tabType === 'table' ? activeTab.tableName : tableName;
 
-    return <DataPreview connectionId={resolvedConnectionId} databaseName={resolvedDatabase} tableName={resolvedTable} storageKey={storageKey} source="table-tab-data-preview" />;
+    return (
+        <DataPreview
+            connectionId={resolvedConnectionId}
+            databaseName={resolvedDatabase}
+            tableName={resolvedTable}
+            storageKey={storageKey}
+            source="table-tab-data-preview"
+            inspectorPortalMode={inspectorPortalMode}
+        />
+    );
 }
 
 export function UrlDataPreview() {

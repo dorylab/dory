@@ -15,12 +15,13 @@ type TableViewTabsProps = {
     databaseName?: string;
     tableName?: string;
     driver?: string;
+    inspectorPortalMode?: 'preview' | 'viewport';
     activeSubTab?: TableSubTab;
     initialSubTab?: TableSubTab;
     onSubTabChange?: (tab: TableSubTab) => void;
 };
 
-export function TableViewTabs({ connectionId, databaseName, tableName, driver, activeSubTab, initialSubTab = 'overview', onSubTabChange }: TableViewTabsProps) {
+export function TableViewTabs({ connectionId, databaseName, tableName, driver, inspectorPortalMode, activeSubTab, initialSubTab = 'overview', onSubTabChange }: TableViewTabsProps) {
     const t = useTranslations('TableBrowser');
     const subTabs = useMemo<TableSubTab[]>(() => (supportsTableStats(driver) ? ['overview', 'data', 'structure', 'stats'] : ['overview', 'data', 'structure']), [driver]);
     const contentKey = useMemo(() => `${databaseName ?? ''}:${tableName ?? ''}`, [databaseName, tableName]);
@@ -52,7 +53,12 @@ export function TableViewTabs({ connectionId, databaseName, tableName, driver, a
                     <TableOverview databaseName={databaseName} tableName={tableName} />
                 </TabsContent>
                 <TabsContent value="data" className="h-full">
-                    <TableDataPreview connectionId={connectionId} databaseName={databaseName} tableName={tableName} />
+                    <TableDataPreview
+                        connectionId={connectionId}
+                        databaseName={databaseName}
+                        tableName={tableName}
+                        inspectorPortalMode={inspectorPortalMode}
+                    />
                 </TabsContent>
                 <TabsContent value="structure" className="h-full">
                     <TableStructure databaseName={databaseName} tableName={tableName} />

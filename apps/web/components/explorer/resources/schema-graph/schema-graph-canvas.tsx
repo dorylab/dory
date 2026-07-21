@@ -22,7 +22,7 @@ import {
     type NodeProps,
 } from '@xyflow/react';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Columns3, Download, ExternalLink, Focus, GitFork, KeyRound, Maximize2, Network, RefreshCw, Search, X } from 'lucide-react';
+import { Check, Columns3, Download, Focus, GitFork, KeyRound, Maximize2, Network, RefreshCw, Search, X } from 'lucide-react';
 import { parseAsArrayOf, parseAsString, parseAsStringLiteral, useQueryState } from 'nuqs';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
@@ -151,12 +151,13 @@ function TableNodeComponent({ data }: NodeProps<TableNode>) {
                 )}
             </div>
             <div className="flex h-[34px] items-center justify-end border-t bg-muted/15 px-2">
-                <Button asChild variant="ghost" size="sm" className="nodrag nopan h-7 text-xs">
-                    <Link href={href} onClick={event => event.stopPropagation()}>
-                        {t('Open table')}
-                        <ExternalLink className="h-3.5 w-3.5" />
-                    </Link>
-                </Button>
+                <Link
+                    href={href}
+                    className="nodrag nopan text-xs font-medium text-primary underline-offset-4 hover:underline"
+                    onClick={event => event.stopPropagation()}
+                >
+                    {t('Open table')}
+                </Link>
             </div>
         </div>
     );
