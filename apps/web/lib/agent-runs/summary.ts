@@ -362,6 +362,7 @@ function eventTitle(event: AgentRunEventLike, snapshot: AgentRunSnapshotLike, fo
         case 'dory_list_connections':
             return formatter.eventTitle('listedDataSources');
         case 'dory_explore_schema':
+        case 'dory_get_schema_graph':
             return formatter.eventTitle('exploredSchema');
         case 'dory_workspace_tabs':
             return tabName ? formatter.eventTitle('updatedWorkspaceTab', { tabName }) : formatter.eventTitle('updatedWorkspaceTabs');

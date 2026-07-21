@@ -568,7 +568,8 @@
             "data": "Data",
             "structure": "Structure",
             "stats": "Stats",
-            "indexes": "Indexes"
+            "indexes": "Indexes",
+            "graph": "Graph"
         },
         "Schemas": {
             "SearchPlaceholder": "Search schemas",
@@ -607,6 +608,34 @@
         "Indexes": {
             "Empty": "No indexes"
         }
+    },
+    "SchemaGraph": {
+        "Objects": "Objects",
+        "Graph": "Graph",
+        "Relation count": "{count, plural, one {# relation} other {# relations}}",
+        "Open fullscreen": "Open fullscreen",
+        "Exit fullscreen": "Exit fullscreen",
+        "Fullscreen description": "Explore the schema graph in a fullscreen drawer.",
+        "Related": "Related",
+        "No key columns": "No key columns",
+        "Open table": "Open table",
+        "Enter a seed table": "Enter a table name and press Enter",
+        "Search tables": "Search tables",
+        "Schemas": "Schemas",
+        "All columns": "All columns",
+        "Keys only": "Keys only",
+        "Auto layout": "Auto layout",
+        "Fit view": "Fit view",
+        "Refresh": "Refresh",
+        "Export": "Export",
+        "Loading graph": "Loading schema graph…",
+        "Failed to load graph": "Unable to load the schema graph.",
+        "Graph is too large": "This graph is too large to render safely",
+        "Graph limits": "{tables} tables and {relationships} relationships exceed the limits of {maxTables} tables or {maxRelationships} relationships.",
+        "Narrow scope help": "Select fewer schemas, or enter a table name above and press Enter to load its neighborhood.",
+        "No tables": "No tables found in this scope.",
+        "No foreign keys": "No declared foreign keys were found.",
+        "Relationships unavailable": "This driver does not expose physical foreign-key relationships."
     },
     "TableStats": {
         "No available connection": "No available data source found.",
@@ -727,7 +756,8 @@
             "summary": "Summary",
             "tables": "Tables",
             "views": "Views",
-            "materialized-views": "Materialized Views"
+            "materialized-views": "Materialized Views",
+            "graph": "Graph"
         }
     },
     "CatalogSummary": {

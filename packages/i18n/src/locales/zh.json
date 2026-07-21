@@ -572,7 +572,8 @@
             "data": "数据",
             "structure": "结构",
             "stats": "统计",
-            "indexes": "索引"
+            "indexes": "索引",
+            "graph": "关系图"
         },
         "Schemas": {
             "SearchPlaceholder": "搜索模式",
@@ -611,6 +612,34 @@
         "Indexes": {
             "Empty": "暂无索引"
         }
+    },
+    "SchemaGraph": {
+        "Objects": "对象",
+        "Graph": "关系图",
+        "Relation count": "{count} 个关系",
+        "Open fullscreen": "全屏查看",
+        "Exit fullscreen": "退出全屏",
+        "Fullscreen description": "在全屏抽屉中查看 Schema Graph。",
+        "Related": "关联",
+        "No key columns": "暂无键字段",
+        "Open table": "打开表",
+        "Enter a seed table": "输入表名并按回车",
+        "Search tables": "搜索表",
+        "Schemas": "模式",
+        "All columns": "全部字段",
+        "Keys only": "仅键字段",
+        "Auto layout": "自动布局",
+        "Fit view": "适应画布",
+        "Refresh": "刷新",
+        "Export": "导出",
+        "Loading graph": "正在加载 Schema Graph…",
+        "Failed to load graph": "无法加载 Schema Graph。",
+        "Graph is too large": "关系图过大，无法安全渲染",
+        "Graph limits": "当前包含 {tables} 张表和 {relationships} 条关系，超过 {maxTables} 张表或 {maxRelationships} 条关系的限制。",
+        "Narrow scope help": "请选择更少的模式，或在上方输入表名并按回车查看邻域。",
+        "No tables": "当前范围内没有表。",
+        "No foreign keys": "未发现声明的外键关系。",
+        "Relationships unavailable": "当前驱动不提供物理外键关系。"
     },
     "TableStats": {
         "No available connection": "未找到可用的数据源。",
@@ -731,7 +760,8 @@
             "summary": "概览",
             "tables": "表",
             "views": "视图",
-            "materialized-views": "物化视图"
+            "materialized-views": "物化视图",
+            "graph": "关系图"
         }
     },
     "CatalogSummary": {

@@ -8,8 +8,11 @@ import type {
     DatabaseSummaryOptions,
     DatabaseSummaryTable,
     DatabaseRecentTable,
+    SchemaGraphOptions,
+    SchemaGraphResult,
     TableColumnInfo,
 } from '@dory/drivers/types';
+import { buildTablesOnlySchemaGraph, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { ClickhouseDatasource } from '../datasource';
 
 export type ClickhouseMetadataAPI = ConnectionMetadataAPI & {
@@ -21,6 +24,7 @@ export type ClickhouseMetadataAPI = ConnectionMetadataAPI & {
     getFunctionDetail: (database: string, functionName: string, schema?: string | null) => Promise<DatabaseFunctionDetail | null>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
+    getSchemaGraph: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
 };
 
 const VIEW_ENGINES = new Set(['VIEW', 'LIVEVIEW', 'LAZYVIEW', 'WINDOWVIEW']);
@@ -315,6 +319,51 @@ async function getTablesOnly(datasource: ClickhouseDatasource, database: string)
     });
 }
 
+async function getSchemaGraph(datasource: ClickhouseDatasource, options: SchemaGraphOptions): Promise<SchemaGraphResult> {
+    const [tableRows, columnResult] = await Promise.all([
+        getTablesOnly(datasource, options.database),
+        datasource.query<{
+            tableName?: string;
+            columnName?: string;
+            dataType?: string | null;
+            ordinal?: number | string | null;
+            primaryKey?: number | string | null;
+        }>(
+            `
+                SELECT
+                    table AS tableName,
+                    name AS columnName,
+                    type AS dataType,
+                    position AS ordinal,
+                    is_in_primary_key AS primaryKey
+                FROM system.columns
+                WHERE database = {db:String}
+                ORDER BY table, position
+            `,
+            { db: options.database },
+        ),
+    ]);
+    const tableNames = new Set(tableRows.map(table => table.name));
+    const tablesByName = new Map<string, SchemaGraphTableInput>();
+    for (const row of columnResult.rows) {
+        const tableName = row.tableName?.trim();
+        const columnName = row.columnName?.trim();
+        if (!tableName || !columnName || !tableNames.has(tableName)) continue;
+        const table = tablesByName.get(tableName) ?? { database: options.database, schema: null, name: tableName, columns: [] };
+        const ordinal = Number(row.ordinal);
+        table.columns.push({
+            name: columnName,
+            dataType: row.dataType ?? null,
+            ordinal: Number.isFinite(ordinal) ? ordinal : table.columns.length + 1,
+            nullable: null,
+            isPrimaryKey: row.primaryKey === 1 || row.primaryKey === '1',
+            isForeignKey: false,
+        });
+        tablesByName.set(tableName, table);
+    }
+    return buildTablesOnlySchemaGraph(options, Array.from(tablesByName.values()), null);
+}
+
 async function getViews(datasource: ClickhouseDatasource, database: string): Promise<DatabaseObjectRow[]> {
     const rows = await getDatabaseTablesDetail(datasource, database);
     return rows.filter(row => VIEW_ENGINES.has(normalizeEngine(row.engine)));
@@ -403,5 +452,6 @@ export function createClickhouseMetadataCapability(datasource: ClickhouseDatasou
         getFunctionDetail: (database, functionName) => getFunctionDetail(datasource, database, functionName),
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
+        getSchemaGraph: options => getSchemaGraph(datasource, options),
     };
 }

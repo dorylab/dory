@@ -1,7 +1,8 @@
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams, enforceSelectLimit } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, SchemaGraphOptions, SchemaGraphResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 import { CloudflareD1Dialect } from './dialect';
 
@@ -330,6 +331,85 @@ export async function getCloudflareD1TableColumns(config: BaseConfig, database: 
             defaultExpression: row.dflt_value,
             isPrimaryKey: row.pk > 0,
         }));
+}
+
+export async function getCloudflareD1SchemaGraph(config: BaseConfig, options: SchemaGraphOptions): Promise<SchemaGraphResult> {
+    const database = normalizeDatabaseName(options.database);
+    const tableRows = await getCloudflareD1Tables(config, database);
+    const entries = await Promise.all(
+        tableRows.map(async tableRow => {
+            const [columnResult, foreignKeyResult] = await Promise.all([
+                executeCloudflareD1Query<{
+                    cid: number;
+                    name: string;
+                    type: string | null;
+                    notnull: number;
+                    pk: number;
+                    hidden?: number;
+                }>(config, buildPragma(database, 'table_xinfo', tableRow.name)),
+                executeCloudflareD1Query<{
+                    id: number;
+                    seq: number;
+                    table: string;
+                    from: string;
+                    to: string;
+                    on_update?: string | null;
+                    on_delete?: string | null;
+                }>(config, buildPragma(database, 'foreign_key_list', tableRow.name)),
+            ]);
+            const foreignColumns = new Set(foreignKeyResult.rows.map(row => row.from));
+            const table: SchemaGraphTableInput = {
+                database,
+                schema: null,
+                name: tableRow.name,
+                columns: columnResult.rows
+                    .filter(row => !row.hidden)
+                    .map(row => ({
+                        name: row.name,
+                        dataType: row.type,
+                        ordinal: row.cid + 1,
+                        nullable: row.pk > 0 ? false : row.notnull === 0,
+                        isPrimaryKey: row.pk > 0,
+                        isForeignKey: foreignColumns.has(row.name),
+                    })),
+            };
+            const grouped = new Map<number, SchemaGraphRelationshipInput>();
+            for (const row of foreignKeyResult.rows.sort((left, right) => left.id - right.id || left.seq - right.seq)) {
+                const relationship = grouped.get(row.id) ?? {
+                    constraintName: `fk_${tableRow.name}_${row.id}`,
+                    sourceSchema: null,
+                    sourceTable: tableRow.name,
+                    sourceColumns: [],
+                    targetSchema: null,
+                    targetTable: row.table,
+                    targetColumns: [],
+                    sourceUnique: null,
+                    sourceOptional: false,
+                    onUpdate: row.on_update ?? null,
+                    onDelete: row.on_delete ?? null,
+                };
+                relationship.sourceColumns.push(row.from);
+                relationship.targetColumns.push(row.to);
+                const sourceColumn = columnResult.rows.find(column => column.name === row.from);
+                relationship.sourceOptional = Boolean(relationship.sourceOptional) || (sourceColumn?.pk === 0 && sourceColumn.notnull === 0);
+                grouped.set(row.id, relationship);
+            }
+            return { table, relationships: Array.from(grouped.values()) };
+        }),
+    );
+
+    return buildSchemaGraphResult(
+        options,
+        entries.map(entry => entry.table),
+        entries.flatMap(entry => entry.relationships),
+        {
+            relationships: true,
+            compositeForeignKeys: true,
+            cardinality: false,
+            referentialActions: true,
+            constraintsEnforced: true,
+        },
+    );
 }
 
 export async function getCloudflareD1TableDdl(config: BaseConfig, database: string, table: string): Promise<string | null> {

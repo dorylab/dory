@@ -8,8 +8,11 @@ import type {
     DatabaseSummaryOptions,
     DatabaseSummaryRecommendation,
     DatabaseSummaryTable,
+    SchemaGraphOptions,
+    SchemaGraphResult,
     TableColumnInfo,
 } from '@dory/drivers/types';
+import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { SqlServerDatasource } from '../datasource';
 import { parseSqlServerTableReference } from '../runtime';
 
@@ -23,6 +26,7 @@ export type SqlServerMetadataAPI = ConnectionMetadataAPI & {
     getSequences: (database?: string) => Promise<DatabaseObjectRow[]>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
+    getSchemaGraph: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
 };
 
 type ObjectRow = {
@@ -43,6 +47,29 @@ type ColumnCountRow = {
 type RelationshipRow = {
     sourceTableName?: string;
     targetTableName?: string;
+};
+
+type SchemaGraphColumnRow = {
+    schemaName?: string;
+    tableName?: string;
+    columnName?: string;
+    dataType?: string | null;
+    ordinal?: number | string | null;
+    nullable?: boolean | number | null;
+    primaryKey?: boolean | number | null;
+};
+
+type SchemaGraphRelationshipRow = {
+    constraintName?: string | null;
+    sourceSchemaName?: string;
+    sourceTableName?: string;
+    sourceColumnName?: string;
+    targetSchemaName?: string;
+    targetTableName?: string;
+    targetColumnName?: string;
+    sourceNullable?: boolean | number | null;
+    updateAction?: string | null;
+    deleteAction?: string | null;
 };
 
 type FunctionDetailRow = {
@@ -638,6 +665,119 @@ async function getSequences(datasource: SqlServerDatasource, database?: string):
         .filter((row): row is DatabaseObjectRow => Boolean(row));
 }
 
+async function getSchemaGraph(datasource: SqlServerDatasource, options: SchemaGraphOptions): Promise<SchemaGraphResult> {
+    const [columnResult, relationshipResult] = await Promise.all([
+        datasource.queryWithContext<SchemaGraphColumnRow>(
+            `
+                SELECT
+                    s.name AS schemaName,
+                    t.name AS tableName,
+                    c.name AS columnName,
+                    TYPE_NAME(c.user_type_id) AS dataType,
+                    c.column_id AS ordinal,
+                    c.is_nullable AS nullable,
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM sys.indexes i
+                        JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+                        WHERE i.object_id = t.object_id
+                          AND i.is_primary_key = 1
+                          AND ic.column_id = c.column_id
+                    ) THEN 1 ELSE 0 END AS primaryKey
+                FROM sys.tables t
+                JOIN sys.schemas s ON s.schema_id = t.schema_id
+                JOIN sys.columns c ON c.object_id = t.object_id
+                WHERE t.is_ms_shipped = 0
+                ORDER BY s.name, t.name, c.column_id
+            `,
+            { database: options.database },
+        ),
+        datasource.queryWithContext<SchemaGraphRelationshipRow>(
+            `
+                SELECT
+                    fk.name AS constraintName,
+                    src_schema.name AS sourceSchemaName,
+                    src_table.name AS sourceTableName,
+                    src_column.name AS sourceColumnName,
+                    tgt_schema.name AS targetSchemaName,
+                    tgt_table.name AS targetTableName,
+                    tgt_column.name AS targetColumnName,
+                    src_column.is_nullable AS sourceNullable,
+                    fk.update_referential_action_desc AS updateAction,
+                    fk.delete_referential_action_desc AS deleteAction
+                FROM sys.foreign_keys fk
+                JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+                JOIN sys.tables src_table ON src_table.object_id = fkc.parent_object_id
+                JOIN sys.schemas src_schema ON src_schema.schema_id = src_table.schema_id
+                JOIN sys.columns src_column ON src_column.object_id = src_table.object_id AND src_column.column_id = fkc.parent_column_id
+                JOIN sys.tables tgt_table ON tgt_table.object_id = fkc.referenced_object_id
+                JOIN sys.schemas tgt_schema ON tgt_schema.schema_id = tgt_table.schema_id
+                JOIN sys.columns tgt_column ON tgt_column.object_id = tgt_table.object_id AND tgt_column.column_id = fkc.referenced_column_id
+                WHERE src_table.is_ms_shipped = 0
+                  AND tgt_table.is_ms_shipped = 0
+                ORDER BY src_schema.name, src_table.name, fk.name, fkc.constraint_column_id
+            `,
+            { database: options.database },
+        ),
+    ]);
+
+    const tablesByKey = new Map<string, SchemaGraphTableInput>();
+    for (const row of columnResult.rows) {
+        const schema = row.schemaName?.trim();
+        const tableName = row.tableName?.trim();
+        const columnName = row.columnName?.trim();
+        if (!schema || !tableName || !columnName) continue;
+        const key = `${schema}\u0000${tableName}`;
+        const table = tablesByKey.get(key) ?? { database: options.database, schema, name: tableName, columns: [] };
+        table.columns.push({
+            name: columnName,
+            dataType: row.dataType ?? null,
+            ordinal: toNumberOrNull(row.ordinal) ?? table.columns.length + 1,
+            nullable: row.nullable == null ? null : Boolean(row.nullable),
+            isPrimaryKey: Boolean(row.primaryKey),
+            isForeignKey: false,
+        });
+        tablesByKey.set(key, table);
+    }
+
+    const relationshipsByKey = new Map<string, SchemaGraphRelationshipInput>();
+    for (const row of relationshipResult.rows) {
+        const sourceSchema = row.sourceSchemaName?.trim();
+        const sourceTable = row.sourceTableName?.trim();
+        const sourceColumn = row.sourceColumnName?.trim();
+        const targetSchema = row.targetSchemaName?.trim();
+        const targetTable = row.targetTableName?.trim();
+        const targetColumn = row.targetColumnName?.trim();
+        if (!sourceSchema || !sourceTable || !sourceColumn || !targetSchema || !targetTable || !targetColumn) continue;
+        const key = `${sourceSchema}\u0000${sourceTable}\u0000${row.constraintName ?? ''}`;
+        const relationship = relationshipsByKey.get(key) ?? {
+            constraintName: row.constraintName ?? null,
+            sourceSchema,
+            sourceTable,
+            sourceColumns: [],
+            targetSchema,
+            targetTable,
+            targetColumns: [],
+            sourceUnique: null,
+            sourceOptional: false,
+            onUpdate: row.updateAction ?? null,
+            onDelete: row.deleteAction ?? null,
+        };
+        relationship.sourceColumns.push(sourceColumn);
+        relationship.targetColumns.push(targetColumn);
+        relationship.sourceOptional = Boolean(relationship.sourceOptional) || Boolean(row.sourceNullable);
+        relationshipsByKey.set(key, relationship);
+    }
+
+    return buildSchemaGraphResult(options, Array.from(tablesByKey.values()), Array.from(relationshipsByKey.values()), {
+        relationships: true,
+        compositeForeignKeys: true,
+        cardinality: false,
+        referentialActions: true,
+        constraintsEnforced: true,
+    });
+}
+
 async function getDatabaseSummary(datasource: SqlServerDatasource, options: DatabaseSummaryOptions): Promise<DatabaseSummary> {
     const rows = await getDatabaseTablesDetail(datasource, options.database);
     const tables = rows.filter(row => row.engine !== 'VIEW');
@@ -743,5 +883,6 @@ export function createSqlServerMetadataCapability(datasource: SqlServerDatasourc
         getSequences: database => getSequences(datasource, database),
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
+        getSchemaGraph: options => getSchemaGraph(datasource, options),
     };
 }

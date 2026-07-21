@@ -568,7 +568,8 @@
             "data": "Data",
             "structure": "Estructura",
             "stats": "Estadísticas",
-            "indexes": "Índices"
+            "indexes": "Índices",
+            "graph": "Grafo"
         },
         "Schemas": {
             "SearchPlaceholder": "Buscar esquemas",
@@ -607,6 +608,34 @@
         "Indexes": {
             "Empty": "No hay índices"
         }
+    },
+    "SchemaGraph": {
+        "Objects": "Objetos",
+        "Graph": "Gráfico",
+        "Relation count": "{count, plural, one {# relación} other {# relaciones}}",
+        "Open fullscreen": "Abrir en pantalla completa",
+        "Exit fullscreen": "Salir de pantalla completa",
+        "Fullscreen description": "Explora el gráfico de esquema en un panel de pantalla completa.",
+        "Related": "Relacionada",
+        "No key columns": "Sin columnas clave",
+        "Open table": "Abrir tabla",
+        "Enter a seed table": "Escribe una tabla y pulsa Enter",
+        "Search tables": "Buscar tablas",
+        "Schemas": "Esquemas",
+        "All columns": "Todas las columnas",
+        "Keys only": "Solo claves",
+        "Auto layout": "Diseño automático",
+        "Fit view": "Ajustar vista",
+        "Refresh": "Actualizar",
+        "Export": "Exportar",
+        "Loading graph": "Cargando el grafo del esquema…",
+        "Failed to load graph": "No se pudo cargar el grafo del esquema.",
+        "Graph is too large": "El grafo es demasiado grande para mostrarse de forma segura",
+        "Graph limits": "{tables} tablas y {relationships} relaciones superan el límite de {maxTables} tablas o {maxRelationships} relaciones.",
+        "Narrow scope help": "Selecciona menos esquemas o escribe una tabla arriba y pulsa Enter para ver su vecindad.",
+        "No tables": "No hay tablas en este ámbito.",
+        "No foreign keys": "No se encontraron claves foráneas declaradas.",
+        "Relationships unavailable": "Este controlador no expone relaciones físicas de claves foráneas."
     },
     "TableStats": {
         "No available connection": "No se encontró ninguna fuente de datos disponible.",
@@ -727,7 +756,8 @@
             "summary": "Resumen",
             "tables": "Tablas",
             "views": "Vistas",
-            "materialized-views": "Vistas materializadas"
+            "materialized-views": "Vistas materializadas",
+            "graph": "Gráfico"
         }
     },
     "CatalogSummary": {

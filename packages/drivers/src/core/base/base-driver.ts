@@ -18,6 +18,8 @@ import type {
     DriverQueryRowStream,
     DriverQueryContext,
     DriverQueryResult,
+    SchemaGraphOptions,
+    SchemaGraphResult,
     DriverTableProfile,
     TableColumnInfo,
     TableMeta,
@@ -127,6 +129,10 @@ export abstract class BaseDriver {
 
     async getDatabaseTablesDetail(database: string): Promise<DatabaseObjectRow[]> {
         return this.requireMetadataCapability('getDatabaseTablesDetail')(database);
+    }
+
+    async getSchemaGraph(options: SchemaGraphOptions): Promise<SchemaGraphResult> {
+        return this.requireMetadataCapability('getSchemaGraph')(options);
     }
 
     async getTableProfile(database: string, table: string): Promise<DriverTableProfile> {

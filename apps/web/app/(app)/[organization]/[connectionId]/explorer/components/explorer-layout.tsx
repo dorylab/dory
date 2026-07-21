@@ -143,7 +143,7 @@ export function ExplorerLayout({ defaultLayout = [25, 85], children }: ExplorerL
         <main className="relative h-full w-full">
             <Group orientation="horizontal" id="explorer-horizontal" defaultLayout={{ sidebar: horizontalLayout[0], content: horizontalLayout[1] }} onLayoutChanged={onLayout}>
                 <Panel id="sidebar" minSize="15%" maxSize="40%">
-                    <div className="flex h-full min-h-0 flex-col bg-card">
+                    <div className="flex h-full min-h-0 flex-col bg-background">
                         <ExplorerSidebar
                             catalogName={catalog}
                             onSelectDatabase={handleSelectDatabase}

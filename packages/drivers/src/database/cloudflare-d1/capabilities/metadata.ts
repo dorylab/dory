@@ -1,8 +1,8 @@
 import type { ConnectionMetadataAPI } from '@dory/drivers/types';
 import type { CloudflareD1Datasource } from '../datasource';
-import { getCloudflareD1Databases, getCloudflareD1TableColumns, getCloudflareD1Tables, getCloudflareD1Views } from '../runtime';
+import { getCloudflareD1Databases, getCloudflareD1SchemaGraph, getCloudflareD1TableColumns, getCloudflareD1Tables, getCloudflareD1Views } from '../runtime';
 
-export type CloudflareD1MetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
+export type CloudflareD1MetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchemaGraph' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
 
 export function createCloudflareD1MetadataCapability(datasource: CloudflareD1Datasource): CloudflareD1MetadataAPI {
     return {
@@ -25,6 +25,9 @@ export function createCloudflareD1MetadataCapability(datasource: CloudflareD1Dat
         },
         async getViews(database) {
             return getCloudflareD1Views(datasource.config, database);
+        },
+        async getSchemaGraph(options) {
+            return getCloudflareD1SchemaGraph(datasource.config, options);
         },
     };
 }

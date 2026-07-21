@@ -568,7 +568,8 @@
             "data": "Data",
             "structure": "構造",
             "stats": "統計",
-            "indexes": "インデックス"
+            "indexes": "インデックス",
+            "graph": "グラフ"
         },
         "Schemas": {
             "SearchPlaceholder": "スキーマを検索",
@@ -607,6 +608,34 @@
         "Indexes": {
             "Empty": "インデックスがありません"
         }
+    },
+    "SchemaGraph": {
+        "Objects": "オブジェクト",
+        "Graph": "グラフ",
+        "Relation count": "{count} 件のリレーション",
+        "Open fullscreen": "全画面で表示",
+        "Exit fullscreen": "全画面を終了",
+        "Fullscreen description": "スキーマグラフを全画面ドロワーで表示します。",
+        "Related": "関連",
+        "No key columns": "キー列なし",
+        "Open table": "テーブルを開く",
+        "Enter a seed table": "テーブル名を入力して Enter",
+        "Search tables": "テーブルを検索",
+        "Schemas": "スキーマ",
+        "All columns": "すべての列",
+        "Keys only": "キー列のみ",
+        "Auto layout": "自動レイアウト",
+        "Fit view": "全体を表示",
+        "Refresh": "更新",
+        "Export": "エクスポート",
+        "Loading graph": "スキーマグラフを読み込み中…",
+        "Failed to load graph": "スキーマグラフを読み込めませんでした。",
+        "Graph is too large": "グラフが大きすぎて安全に表示できません",
+        "Graph limits": "{tables} テーブル、{relationships} リレーションが上限（{maxTables} テーブルまたは {maxRelationships} リレーション）を超えています。",
+        "Narrow scope help": "スキーマを減らすか、上にテーブル名を入力して Enter を押し、近傍を表示してください。",
+        "No tables": "この範囲にテーブルはありません。",
+        "No foreign keys": "宣言済みの外部キーが見つかりません。",
+        "Relationships unavailable": "このドライバーは物理外部キー関係を公開していません。"
     },
     "TableStats": {
         "No available connection": "利用可能なデータソースが見つかりません。",
@@ -727,7 +756,8 @@
             "summary": "概要",
             "tables": "テーブル",
             "views": "ビュー",
-            "materialized-views": "マテリアライズドビュー"
+            "materialized-views": "マテリアライズドビュー",
+            "graph": "グラフ"
         }
     },
     "CatalogSummary": {

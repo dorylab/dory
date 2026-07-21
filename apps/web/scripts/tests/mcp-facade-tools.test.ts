@@ -282,6 +282,7 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
             'dory_create_work',
             'dory_explore_schema',
             'dory_finish_work',
+            'dory_get_schema_graph',
             'dory_list_connections',
             'dory_read',
             'dory_run_readonly_sql',

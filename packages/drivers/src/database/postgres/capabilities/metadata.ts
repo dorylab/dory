@@ -9,8 +9,11 @@ import type {
     DatabaseSummary,
     DatabaseSummaryRecommendation,
     DatabaseSummaryOptions,
+    SchemaGraphOptions,
+    SchemaGraphResult,
     TableColumnInfo,
 } from '@dory/drivers/types';
+import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import { normalizePostgresTableKind } from '../runtime';
 import type { PostgresDatasource } from '../datasource';
 
@@ -26,6 +29,7 @@ export type PostgresMetadataAPI = ConnectionMetadataAPI & {
     getExtensions: (database?: string) => Promise<DatabaseExtensionMeta[]>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
+    getSchemaGraph: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
 };
 
 type ObjectRow = {
@@ -98,6 +102,30 @@ type RelationshipRow = {
     targetTableName?: string;
 };
 
+type SchemaGraphColumnRow = {
+    schemaName?: string;
+    tableName?: string;
+    columnName?: string;
+    dataType?: string | null;
+    ordinal?: number | string | null;
+    nullable?: boolean | string | number | null;
+    primaryKey?: boolean | string | number | null;
+};
+
+type SchemaGraphRelationshipRow = {
+    constraintName?: string | null;
+    sourceSchemaName?: string;
+    sourceTableName?: string;
+    sourceColumnName?: string;
+    targetSchemaName?: string;
+    targetTableName?: string;
+    targetColumnName?: string;
+    sourceUnique?: boolean | string | number | null;
+    sourceNullable?: boolean | string | number | null;
+    updateAction?: string | null;
+    deleteAction?: string | null;
+};
+
 type OwnerRow = {
     owner?: string | null;
 };
@@ -111,6 +139,27 @@ function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBoolean(value: unknown) {
+    return value === true || value === 1 || value === '1' || value === 't' || value === 'true';
+}
+
+function postgresReferentialAction(value?: string | null) {
+    switch (value) {
+        case 'a':
+            return 'NO ACTION';
+        case 'r':
+            return 'RESTRICT';
+        case 'c':
+            return 'CASCADE';
+        case 'n':
+            return 'SET NULL';
+        case 'd':
+            return 'SET DEFAULT';
+        default:
+            return null;
+    }
 }
 
 function toIsoString(value: unknown): string | null {
@@ -403,6 +452,139 @@ async function getForeignKeyRelationships(datasource: PostgresDatasource, databa
     );
 
     return result.rows;
+}
+
+async function getSchemaGraph(datasource: PostgresDatasource, options: SchemaGraphOptions): Promise<SchemaGraphResult> {
+    const [columnResult, relationshipResult] = await Promise.all([
+        datasource.queryWithContext<SchemaGraphColumnRow>(
+            `
+                SELECT
+                    ns.nspname AS "schemaName",
+                    cls.relname AS "tableName",
+                    att.attname AS "columnName",
+                    pg_catalog.format_type(att.atttypid, att.atttypmod) AS "dataType",
+                    att.attnum AS ordinal,
+                    NOT att.attnotnull AS nullable,
+                    EXISTS (
+                        SELECT 1
+                        FROM pg_index idx
+                        WHERE idx.indrelid = cls.oid
+                          AND idx.indisprimary
+                          AND att.attnum = ANY(idx.indkey)
+                    ) AS "primaryKey"
+                FROM pg_class cls
+                JOIN pg_namespace ns ON ns.oid = cls.relnamespace
+                JOIN pg_attribute att ON att.attrelid = cls.oid
+                WHERE ns.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND ns.nspname NOT LIKE 'pg_toast%'
+                  AND cls.relkind IN ('r', 'p', 'f')
+                  AND att.attnum > 0
+                  AND NOT att.attisdropped
+                ORDER BY ns.nspname, cls.relname, att.attnum
+            `,
+            { database: options.database },
+        ),
+        datasource.queryWithContext<SchemaGraphRelationshipRow>(
+            `
+                SELECT
+                    con.conname AS "constraintName",
+                    src_ns.nspname AS "sourceSchemaName",
+                    src.relname AS "sourceTableName",
+                    src_att.attname AS "sourceColumnName",
+                    tgt_ns.nspname AS "targetSchemaName",
+                    tgt.relname AS "targetTableName",
+                    tgt_att.attname AS "targetColumnName",
+                    EXISTS (
+                        SELECT 1
+                        FROM pg_index idx
+                        WHERE idx.indrelid = src.oid
+                          AND idx.indisunique
+                          AND idx.indpred IS NULL
+                          AND idx.indnkeyatts = cardinality(con.conkey)
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM unnest(con.conkey) AS key_column(attnum)
+                              WHERE NOT (key_column.attnum = ANY(idx.indkey))
+                          )
+                    ) AS "sourceUnique",
+                    NOT src_att.attnotnull AS "sourceNullable",
+                    con.confupdtype AS "updateAction",
+                    con.confdeltype AS "deleteAction"
+                FROM pg_constraint con
+                JOIN pg_class src ON src.oid = con.conrelid
+                JOIN pg_namespace src_ns ON src_ns.oid = src.relnamespace
+                JOIN pg_class tgt ON tgt.oid = con.confrelid
+                JOIN pg_namespace tgt_ns ON tgt_ns.oid = tgt.relnamespace
+                JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS src_key(attnum, ordinality) ON TRUE
+                JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS tgt_key(attnum, ordinality) ON tgt_key.ordinality = src_key.ordinality
+                JOIN pg_attribute src_att ON src_att.attrelid = src.oid AND src_att.attnum = src_key.attnum
+                JOIN pg_attribute tgt_att ON tgt_att.attrelid = tgt.oid AND tgt_att.attnum = tgt_key.attnum
+                WHERE con.contype = 'f'
+                  AND src_ns.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND src_ns.nspname NOT LIKE 'pg_toast%'
+                  AND tgt_ns.nspname NOT IN ('pg_catalog', 'information_schema')
+                  AND tgt_ns.nspname NOT LIKE 'pg_toast%'
+                ORDER BY src_ns.nspname, src.relname, con.conname, src_key.ordinality
+            `,
+            { database: options.database },
+        ),
+    ]);
+
+    const tablesByKey = new Map<string, SchemaGraphTableInput>();
+    for (const row of columnResult.rows) {
+        const schema = row.schemaName?.trim();
+        const tableName = row.tableName?.trim();
+        const columnName = row.columnName?.trim();
+        if (!schema || !tableName || !columnName) continue;
+        const key = `${schema}\u0000${tableName}`;
+        const table = tablesByKey.get(key) ?? { database: options.database, schema, name: tableName, columns: [] };
+        table.columns.push({
+            name: columnName,
+            dataType: row.dataType ?? null,
+            ordinal: toNumberOrNull(row.ordinal) ?? table.columns.length + 1,
+            nullable: row.nullable == null ? null : toBoolean(row.nullable),
+            isPrimaryKey: toBoolean(row.primaryKey),
+            isForeignKey: false,
+        });
+        tablesByKey.set(key, table);
+    }
+
+    const relationshipsByKey = new Map<string, SchemaGraphRelationshipInput>();
+    for (const row of relationshipResult.rows) {
+        const sourceSchema = row.sourceSchemaName?.trim();
+        const sourceTable = row.sourceTableName?.trim();
+        const sourceColumn = row.sourceColumnName?.trim();
+        const targetSchema = row.targetSchemaName?.trim();
+        const targetTable = row.targetTableName?.trim();
+        const targetColumn = row.targetColumnName?.trim();
+        if (!sourceSchema || !sourceTable || !sourceColumn || !targetSchema || !targetTable || !targetColumn) continue;
+        const key = `${sourceSchema}\u0000${sourceTable}\u0000${row.constraintName ?? ''}`;
+        const relationship = relationshipsByKey.get(key) ?? {
+            constraintName: row.constraintName ?? null,
+            sourceSchema,
+            sourceTable,
+            sourceColumns: [],
+            targetSchema,
+            targetTable,
+            targetColumns: [],
+            sourceUnique: row.sourceUnique == null ? null : toBoolean(row.sourceUnique),
+            sourceOptional: false,
+            onUpdate: postgresReferentialAction(row.updateAction),
+            onDelete: postgresReferentialAction(row.deleteAction),
+        };
+        relationship.sourceColumns.push(sourceColumn);
+        relationship.targetColumns.push(targetColumn);
+        relationship.sourceOptional = Boolean(relationship.sourceOptional) || toBoolean(row.sourceNullable);
+        relationshipsByKey.set(key, relationship);
+    }
+
+    return buildSchemaGraphResult(options, Array.from(tablesByKey.values()), Array.from(relationshipsByKey.values()), {
+        relationships: true,
+        compositeForeignKeys: true,
+        cardinality: true,
+        referentialActions: true,
+        constraintsEnforced: true,
+    });
 }
 
 async function getDatabases(datasource: PostgresDatasource) {
@@ -981,5 +1163,6 @@ export function createPostgresMetadataCapability(datasource: PostgresDatasource)
         getExtensions: database => getExtensions(datasource, database),
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
+        getSchemaGraph: options => getSchemaGraph(datasource, options),
     };
 }
