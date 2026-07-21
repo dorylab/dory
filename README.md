@@ -108,6 +108,19 @@ Agent database work should not disappear into a chat transcript.
 
 ---
 
+### Schema Explorer
+
+Understand unfamiliar databases at a glance with an interactive map of tables and relationships.
+
+- Visualize primary keys, foreign keys, and relationships across schemas
+- Search for tables, select schemas, and switch between all columns and keys only
+- Auto-arrange the graph, fit it to the viewport, and open any table directly
+- Export the complete schema graph as PNG or SVG
+
+![Dory Schema Explorer](./public/schema-graph.png)
+
+---
+
 ### Result Sets, Filters, and Charts
 
 - Inspect real result sets in a table view
