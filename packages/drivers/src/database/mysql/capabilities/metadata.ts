@@ -6,8 +6,11 @@ import type {
     DatabaseSummaryOptions,
     DatabaseSummaryRecommendation,
     DatabaseSummaryTable,
+    SchemaGraphOptions,
+    SchemaGraphResult,
     TableColumnInfo,
 } from '@dory/drivers/types';
+import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { MySqlDatasource } from '../datasource';
 
 export type MysqlMetadataAPI = ConnectionMetadataAPI & {
@@ -16,6 +19,7 @@ export type MysqlMetadataAPI = ConnectionMetadataAPI & {
     getViews: (database: string) => Promise<DatabaseObjectRow[]>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
+    getSchemaGraph: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
 };
 
 type TableMetaRow = {
@@ -38,6 +42,27 @@ type ColumnCountRow = {
 type RelationshipRow = {
     sourceTableName?: string;
     targetTableName?: string;
+};
+
+type SchemaGraphColumnRow = {
+    tableName?: string;
+    columnName?: string;
+    dataType?: string | null;
+    ordinal?: number | string | null;
+    nullable?: string | null;
+    columnKey?: string | null;
+};
+
+type SchemaGraphRelationshipRow = {
+    constraintName?: string | null;
+    sourceTableName?: string;
+    sourceColumnName?: string;
+    targetTableName?: string;
+    targetColumnName?: string;
+    sourceNullable?: string | null;
+    sourceColumnKey?: string | null;
+    updateAction?: string | null;
+    deleteAction?: string | null;
 };
 
 const TABLE_DETAIL_SQL = `
@@ -377,6 +402,112 @@ async function getTableColumns(datasource: MySqlDatasource, database: string, ta
     return Array.isArray(result.rows) ? result.rows : [];
 }
 
+async function getSchemaGraph(datasource: MySqlDatasource, options: SchemaGraphOptions): Promise<SchemaGraphResult> {
+    const [columnResult, relationshipResult] = await Promise.all([
+        datasource.queryWithContext<SchemaGraphColumnRow>(
+            `
+                SELECT
+                    table_name AS tableName,
+                    column_name AS columnName,
+                    column_type AS dataType,
+                    ordinal_position AS ordinal,
+                    is_nullable AS nullable,
+                    column_key AS columnKey
+                FROM information_schema.columns
+                WHERE table_schema = ?
+                ORDER BY table_name, ordinal_position
+            `,
+            { database: options.database, params: [options.database] },
+        ),
+        datasource.queryWithContext<SchemaGraphRelationshipRow>(
+            `
+                SELECT
+                    kcu.constraint_name AS constraintName,
+                    kcu.table_name AS sourceTableName,
+                    kcu.column_name AS sourceColumnName,
+                    kcu.referenced_table_name AS targetTableName,
+                    kcu.referenced_column_name AS targetColumnName,
+                    cols.is_nullable AS sourceNullable,
+                    cols.column_key AS sourceColumnKey,
+                    rc.update_rule AS updateAction,
+                    rc.delete_rule AS deleteAction
+                FROM information_schema.key_column_usage kcu
+                JOIN information_schema.columns cols
+                  ON cols.table_schema = kcu.table_schema
+                 AND cols.table_name = kcu.table_name
+                 AND cols.column_name = kcu.column_name
+                LEFT JOIN information_schema.referential_constraints rc
+                  ON rc.constraint_schema = kcu.constraint_schema
+                 AND rc.constraint_name = kcu.constraint_name
+                 AND rc.table_name = kcu.table_name
+                WHERE kcu.table_schema = ?
+                  AND kcu.referenced_table_schema = ?
+                  AND kcu.referenced_table_name IS NOT NULL
+                ORDER BY kcu.table_name, kcu.constraint_name, kcu.ordinal_position
+            `,
+            { database: options.database, params: [options.database, options.database] },
+        ),
+    ]);
+
+    const tablesByName = new Map<string, SchemaGraphTableInput>();
+    for (const row of columnResult.rows) {
+        const tableName = row.tableName?.trim();
+        const columnName = row.columnName?.trim();
+        if (!tableName || !columnName) continue;
+        const table = tablesByName.get(tableName) ?? { database: options.database, schema: null, name: tableName, columns: [] };
+        table.columns.push({
+            name: columnName,
+            dataType: row.dataType ?? null,
+            ordinal: toNumberOrNull(row.ordinal) ?? table.columns.length + 1,
+            nullable: row.nullable ? row.nullable.toUpperCase() === 'YES' : null,
+            isPrimaryKey: row.columnKey?.toUpperCase() === 'PRI',
+            isForeignKey: false,
+        });
+        tablesByName.set(tableName, table);
+    }
+
+    const relationshipsByKey = new Map<string, SchemaGraphRelationshipInput & { uniqueCandidate: boolean }>();
+    for (const row of relationshipResult.rows) {
+        const sourceTable = row.sourceTableName?.trim();
+        const sourceColumn = row.sourceColumnName?.trim();
+        const targetTable = row.targetTableName?.trim();
+        const targetColumn = row.targetColumnName?.trim();
+        if (!sourceTable || !sourceColumn || !targetTable || !targetColumn) continue;
+        const key = `${sourceTable}\u0000${row.constraintName ?? ''}`;
+        const relationship = relationshipsByKey.get(key) ?? {
+            constraintName: row.constraintName ?? null,
+            sourceSchema: null,
+            sourceTable,
+            sourceColumns: [],
+            targetSchema: null,
+            targetTable,
+            targetColumns: [],
+            sourceUnique: null,
+            sourceOptional: false,
+            onUpdate: row.updateAction ?? null,
+            onDelete: row.deleteAction ?? null,
+            uniqueCandidate: true,
+        };
+        relationship.sourceColumns.push(sourceColumn);
+        relationship.targetColumns.push(targetColumn);
+        relationship.sourceOptional = Boolean(relationship.sourceOptional) || row.sourceNullable?.toUpperCase() === 'YES';
+        relationship.uniqueCandidate = relationship.uniqueCandidate && ['PRI', 'UNI'].includes(row.sourceColumnKey?.toUpperCase() ?? '');
+        relationshipsByKey.set(key, relationship);
+    }
+    const relationships = Array.from(relationshipsByKey.values()).map(({ uniqueCandidate, ...relationship }) => ({
+        ...relationship,
+        sourceUnique: relationship.sourceColumns.length === 1 ? uniqueCandidate : null,
+    }));
+
+    return buildSchemaGraphResult(options, Array.from(tablesByName.values()), relationships, {
+        relationships: true,
+        compositeForeignKeys: true,
+        cardinality: true,
+        referentialActions: true,
+        constraintsEnforced: true,
+    });
+}
+
 async function getDatabaseTablesDetail(datasource: MySqlDatasource, database: string): Promise<DatabaseObjectRow[]> {
     const result = await datasource.queryWithContext<TableMetaRow>(TABLE_DETAIL_SQL, {
         database,
@@ -530,5 +661,6 @@ export function createMysqlMetadataCapability(datasource: MySqlDatasource): Mysq
         getViews: database => getViews(datasource, database),
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
+        getSchemaGraph: options => getSchemaGraph(datasource, options),
     };
 }

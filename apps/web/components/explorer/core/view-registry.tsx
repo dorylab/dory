@@ -9,7 +9,7 @@ import { ObjectView } from '../resources/table/views/object-view';
 import { FallbackSchemaView } from '../resources/schema/views/fallback-schema-view';
 
 const DEFAULT_VIEW_REGISTRY: ExplorerViewRegistry = {
-    namespace: ({ catalog, resource }) => <FallbackDatabaseView catalog={catalog} resource={resource} />,
+    namespace: ({ baseParams, catalog, resource }) => <FallbackDatabaseView baseParams={baseParams} catalog={catalog} resource={resource} />,
     schema: ({ baseParams, resource }) => <FallbackSchemaView baseParams={baseParams} resource={resource} />,
     object: ({ catalog, resource }) => <ObjectView catalog={catalog} resource={resource} />,
 };

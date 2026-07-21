@@ -6,8 +6,9 @@ import { ExtensionsTab } from '../tabs/extensions-tab';
 import { SchemasTab } from '../tabs/schemas-tab';
 import { SearchResourceTab } from '@/components/explorer/resources/search/tabs/search-tab';
 import { ExplorerTabsShell, type ExplorerTab } from '@/components/explorer/resources/shared/components/explorer-tabs-shell';
+import { SchemaGraphTab } from '@/components/explorer/resources/schema-graph/schema-graph-tab';
 
-type DatabaseTab = 'schemas' | 'search' | 'extensions';
+type DatabaseTab = 'schemas' | 'graph' | 'search' | 'extensions';
 
 type DatabaseViewProps = {
     baseParams: ExplorerBaseParams;
@@ -48,16 +49,15 @@ export function DatabaseResourceView({ baseParams, resource }: DatabaseViewProps
             ),
         },
         {
+            value: 'graph',
+            label: t('Tabs.graph'),
+            content: <SchemaGraphTab baseParams={baseParams} database={resource.database} />,
+            lazy: true,
+        },
+        {
             value: 'search',
             label: t('Tabs.search'),
-            content: (
-                <SearchResourceTab
-                    baseParams={baseParams}
-                    database={resource.database}
-                    placeholder={t('Search.Placeholder')}
-                    emptyText={t('Search.Empty')}
-                />
-            ),
+            content: <SearchResourceTab baseParams={baseParams} database={resource.database} placeholder={t('Search.Placeholder')} emptyText={t('Search.Empty')} />,
         },
         {
             value: 'extensions',
@@ -73,11 +73,5 @@ export function DatabaseResourceView({ baseParams, resource }: DatabaseViewProps
         },
     ];
 
-    return (
-        <ExplorerTabsShell
-            initialTab={initialTab}
-            tabs={tabs}
-            resetKey={`${resource.database}:${resource.kind === 'list' ? resource.listKind : 'schemas'}`}
-        />
-    );
+    return <ExplorerTabsShell initialTab={initialTab} tabs={tabs} resetKey={`${resource.database}:${resource.kind === 'list' ? resource.listKind : 'schemas'}`} />;
 }

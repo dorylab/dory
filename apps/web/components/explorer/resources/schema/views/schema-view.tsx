@@ -6,8 +6,9 @@ import type { ExplorerBaseParams, ExplorerListKind, ExplorerResource } from '@/l
 import { FunctionListResourceTab } from '@/components/explorer/resources/function/tabs/function-list-tab';
 import { ObjectListTab } from '@/components/explorer/resources/schema/tabs/object-list-tab';
 import { ExplorerTabsShell, type ExplorerTab } from '@/components/explorer/resources/shared/components/explorer-tabs-shell';
+import { SchemaGraphTab } from '@/components/explorer/resources/schema-graph/schema-graph-tab';
 
-type SchemaTab = 'summary' | 'tables' | 'views' | 'functions' | 'sequences';
+type SchemaTab = 'summary' | 'graph' | 'tables' | 'views' | 'functions' | 'sequences';
 
 type SchemaViewProps = {
     baseParams: ExplorerBaseParams;
@@ -40,6 +41,12 @@ export function SchemaResourceView({ baseParams, catalog, resource }: SchemaView
             value: 'summary',
             label: t('Tabs.summary'),
             content: <DatabaseSummary baseParams={baseParams} catalog={catalog} database={resource.database} schema={schemaName} />,
+        },
+        {
+            value: 'graph',
+            label: t('Tabs.graph'),
+            content: <SchemaGraphTab baseParams={baseParams} database={resource.database} schema={schemaName} />,
+            lazy: true,
         },
         {
             value: 'tables',

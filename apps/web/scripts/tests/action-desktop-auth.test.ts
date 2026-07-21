@@ -82,6 +82,7 @@ test('desktop auth metadata marks local workspace actions', () => {
     assert.equal(action('tab.list').desktopAuth, 'local-workspace');
     assert.equal(action('savedQuery.list').desktopAuth, 'local-workspace');
     assert.equal(action('schema.listTables').desktopAuth, 'local-workspace');
+    assert.equal(action('schema.getGraph').desktopAuth, 'local-workspace');
     assert.equal(action('table.preview').desktopAuth, 'local-workspace');
     assert.equal(action('query.execute').desktopAuth, 'local-workspace');
     assert.equal(action('query.readOnlyExecute').desktopAuth, 'local-workspace');

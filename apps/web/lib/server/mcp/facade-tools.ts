@@ -45,6 +45,26 @@ const schemaExploreInputSchema = z
     .merge(workResolutionInputSchema)
     .passthrough();
 
+const schemaGraphInputSchema = z
+    .object({
+        connectionId: z.string().min(1),
+        database: z.string().min(1),
+        schemas: z.array(z.string().min(1)).max(100).optional(),
+        focusTables: z
+            .array(
+                z.object({
+                    schema: z.string().min(1).nullable().optional(),
+                    name: z.string().min(1),
+                }),
+            )
+            .max(100)
+            .optional(),
+        depth: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+        columnMode: z.enum(['all', 'keys']).optional(),
+        identityId: z.string().min(1).optional(),
+    })
+    .merge(workResolutionInputSchema);
+
 const readonlySqlInputSchema = z
     .object({
         connectionId: z.string().min(1),
@@ -837,6 +857,20 @@ async function exploreSchemaFacade(ctx: ActionContext<WebActionServices>, rawInp
     return withWork(await run(), work);
 }
 
+async function getSchemaGraphFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
+    const input = schemaGraphInputSchema.parse(rawInput);
+    const result = await executeInternal(ctx, 'schema.getGraph', {
+        connectionId: input.connectionId,
+        database: input.database,
+        schemas: input.schemas,
+        focusTables: input.focusTables,
+        depth: input.depth,
+        columnMode: input.columnMode,
+        identityId: input.identityId,
+    });
+    return withWork(result, work);
+}
+
 async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = workspaceTabsInputSchema.parse(rawInput);
     switch (input.operation) {
@@ -1216,6 +1250,19 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 openWorldHint: true,
             },
             execute: (ctx, input) => executeWithWork(ctx, 'dory_explore_schema', input, (parsed, work) => exploreSchemaFacade(ctx, parsed, work)),
+        },
+        {
+            name: 'dory_get_schema_graph',
+            title: 'Get Dory schema graph',
+            description: `Return tables, columns, primary keys, and declared foreign-key relationships for a Dory connection. Supports schema scopes and one- or two-hop table neighborhoods. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
+            inputSchema: schemaGraphInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                idempotentHint: true,
+                openWorldHint: true,
+            },
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_get_schema_graph', input, (parsed, work) => getSchemaGraphFacade(ctx, parsed, work)),
         },
         {
             name: 'dory_run_readonly_sql',

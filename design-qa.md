@@ -1,45 +1,47 @@
-# ResultSet Overview Card Header QA
+# Schema Graph design QA
 
-- Source visual truth: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-38113e57-04bf-43bb-93d3-360654d3c3b0.png`
-- Implementation screenshot: `/tmp/dory-resultset-design-qa-blocked.png`
-- Comparison image: `/tmp/dory-resultset-design-qa-comparison.png`
-- Viewport: source 3024 × 1646; implementation capture 1280 × 720
-- Intended state: SQL Console Overview with two collapsed ResultSet cards
-- Captured implementation state: sign-in page
+## Source of visual truth
 
-## Full-view comparison evidence
+- Before-state screenshot: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-14819104-233c-47b4-adb3-46978ae3fd38.png`
+- Card reference screenshot: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-f87badf8-4e0a-42c1-a5c1-63de22386d71.png`
+- Compact-toolbar annotation: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-215f29b9-9267-4053-961f-5529d8dfb862.png`
 
-The source shows the SQL Console Overview and establishes the requested card alignment. The local app redirected the exact SQL Console route to sign-in, and both demo entry controls remained on sign-in after activation. The captured implementation therefore does not represent the same route or state and cannot be used for a valid fidelity judgment.
+## Implementation evidence
 
-## Focused region comparison evidence
-
-A focused comparison was not possible because the ResultSet card region was unavailable in the captured implementation state.
-
-## Findings
-
-- [P0] Visual verification is blocked by local authentication state.
-  - Location: local SQL Console route.
-  - Evidence: the source contains the ResultSet Overview; the implementation capture contains only sign-in.
-  - Impact: default collapsed state, right-edge action alignment, and pointer affordance cannot be visually confirmed in the browser.
-  - Fix: restore a working demo sign-in/session, then capture the Overview with two ResultSets and compare the card-header region at the same state.
-
-## Required fidelity surfaces
-
-- Fonts and typography: not comparable in the target component because it was not rendered.
-- Spacing and layout rhythm: source target inspected; implementation target unavailable.
-- Colors and visual tokens: existing themed components were preserved; browser comparison unavailable.
-- Image quality and asset fidelity: no new raster assets were introduced; existing icon components were preserved.
-- Copy and content: no copy changes were made.
+- Inline Graph: `/Users/jeffrey/.codex/visualizations/2026/07/21/019f8386-cb36-7a72-afc8-b6f100c45a78/schema-graph-inline.png`
+- Fullscreen Drawer: `/Users/jeffrey/.codex/visualizations/2026/07/21/019f8386-cb36-7a72-afc8-b6f100c45a78/schema-graph-fullscreen.png`
+- Focused reference region: `/Users/jeffrey/.codex/visualizations/2026/07/21/019f8386-cb36-7a72-afc8-b6f100c45a78/reference-card-focus.png`
+- Focused implementation region: `/Users/jeffrey/.codex/visualizations/2026/07/21/019f8386-cb36-7a72-afc8-b6f100c45a78/implementation-focus.png`
+- Compact toolbar: `/Users/jeffrey/.codex/visualizations/2026/07/21/019f8386-cb36-7a72-afc8-b6f100c45a78/schema-graph-compact-toolbar.png`
+- Viewport: 1280 × 720
+- State: dark theme, Demo Database, SQLite `main`, Graph tab, three tables and one relationship
 
 ## Comparison history
 
-- Initial pass: blocked before the target route rendered; no P1/P2 visual iteration could be performed.
+### Pass 1
 
-## Implementation checklist
+- P1: React Flow inherited no usable height after the compact spacing change, so the graph canvas rendered blank.
+- Fix: made the graph workspace explicitly fill its available height.
 
-- Re-run the SQL Console route with a valid demo session.
-- Confirm all cards start closed.
-- Confirm the chevron and overflow menu align at the right edge.
-- Confirm the trigger and overflow control use a pointer cursor.
+### Pass 2
 
-final result: blocked
+- Full-view comparison: passed. The Graph tab begins closer to the header, the toolbar remains readable, and the canvas fills the available explorer area.
+- Focused card comparison: passed. Cards now use a structured header, schema and relationship count, field-type icons, right-aligned data types, and required-field markers.
+- Relationship handles: passed. The demo graph contains exactly two rendered handles for its single relationship; ordinary columns render no endpoint circles.
+- Fullscreen interaction: passed. The fullscreen Drawer opens, renders the same graph and controls, and closes back to the inline view.
+
+### Pass 3
+
+- P2 annotation: the toolbar had an unnecessary full-width card border and too much accumulated space below the tabs.
+- Fix: removed the toolbar container border, radius, background, and padding; removed the tab-content margin and inline graph top padding.
+- Post-fix evidence: the controls now sit directly above the bordered graph canvas, with a compact gap below the Graph/Tables/Views tabs.
+- Interaction regression check: passed. Fullscreen opens and closes successfully after the layout refinement.
+
+## Notes
+
+- The implementation intentionally uses Dory's existing theme tokens rather than copying the reference's light palette.
+- Existing development-console hydration messages originate in the sidebar theme entry and breadcrumb markup; no Schema Graph runtime error was observed during the tested interactions.
+
+## Final result
+
+passed

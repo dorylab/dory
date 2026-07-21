@@ -499,6 +499,7 @@ test('MCP public catalog exposes only high-level facade tools', () => {
         'dory_create_work',
         'dory_explore_schema',
         'dory_finish_work',
+        'dory_get_schema_graph',
         'dory_list_connections',
         'dory_read',
         'dory_run_readonly_sql',
@@ -572,6 +573,8 @@ test('web registry enforces role and actor permission matrix', async () => {
     await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['connections:read']), { query: 'users' });
     await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['read']), { query: 'users' });
     await assertAllowed('schema.search', roleContext('viewer', 'mcp', ['write']), { query: 'users' });
+    await assertAllowed('schema.getGraph', roleContext('viewer', 'mcp', ['schema:read']), { database: 'app' });
+    await assertDenied('schema.getGraph', roleContext('viewer', 'mcp', ['connections:write']), /Missing action scope "schema:read"/, { database: 'app' });
     await assertAllowed('connection.delete', roleContext('owner', 'user', ['write']), { id: 'conn' });
     await assertAllowed('connection.delete', roleContext('owner', 'mcp', ['write']), { id: 'conn' });
     await assertDenied('connection.delete', roleContext('owner', 'mcp', ['read']), /Missing action scope "connections:write"/, { id: 'conn' });
@@ -593,6 +596,18 @@ test('web action manifest exposes tab.create as a single action contract across 
     assert.deepEqual(tabCreate.requiredScopes, ['tabs:write']);
     assert.deepEqual(tabCreate.allowedActors, ['user', 'agent', 'mcp', 'automation']);
     assert.equal(tabCreate.mcp?.name, 'dory_create_tab');
+});
+
+test('web action manifest exposes schema.getGraph to agents, MCP, and automation', () => {
+    const manifest = buildActionManifest(webActionRegistry, new Date('2026-06-01T00:00:00.000Z'));
+    const schemaGraph = manifest.actions.find(action => action.id === 'schema.getGraph');
+
+    assert.ok(schemaGraph);
+    assert.equal(schemaGraph.kind, 'query');
+    assert.equal(schemaGraph.risk, 'read');
+    assert.deepEqual(schemaGraph.requiredScopes, ['schema:read']);
+    assert.deepEqual(schemaGraph.allowedActors, ['user', 'agent', 'mcp', 'automation']);
+    assert.equal(schemaGraph.mcp?.name, 'dory_get_schema_graph');
 });
 
 test('web registry projects connection.list for MCP without leaking canonical connection shape', async () => {

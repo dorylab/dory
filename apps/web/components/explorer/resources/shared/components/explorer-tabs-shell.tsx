@@ -1,12 +1,14 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { parseAsString, useQueryState } from 'nuqs';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 
 export type ExplorerTab<Value extends string> = {
     value: Value;
     label: string;
     content: ReactNode;
+    lazy?: boolean;
 };
 
 type ExplorerTabsShellProps<Value extends string> = {
@@ -16,15 +18,28 @@ type ExplorerTabsShellProps<Value extends string> = {
 };
 
 export function ExplorerTabsShell<Value extends string>({ initialTab, tabs, resetKey }: ExplorerTabsShellProps<Value>) {
-    const [currentTab, setCurrentTab] = useState<Value>(initialTab);
+    const [urlTab, setUrlTab] = useQueryState('tab', parseAsString);
+    const tabValuesKey = tabs.map(tab => tab.value).join('\0');
+    const resolveTab = useCallback(
+        (value?: string | null): Value => (value && tabValuesKey.split('\0').includes(value) ? (value as Value) : initialTab),
+        [initialTab, tabValuesKey],
+    );
+    const [currentTab, setCurrentTab] = useState<Value>(() => resolveTab(urlTab));
 
     useEffect(() => {
-        setCurrentTab(initialTab);
-    }, [initialTab, resetKey]);
+        setCurrentTab(resolveTab(urlTab));
+    }, [resetKey, resolveTab, urlTab]);
 
     return (
-        <div className="p-6 h-full flex flex-col">
-            <Tabs value={currentTab} onValueChange={value => setCurrentTab(value as Value)} className="flex h-full flex-col">
+        <div className="flex h-full flex-col px-6 pb-6 pt-3">
+            <Tabs
+                value={currentTab}
+                onValueChange={value => {
+                    setCurrentTab(value as Value);
+                    void setUrlTab(value === initialTab ? null : value);
+                }}
+                className="flex h-full flex-col"
+            >
                 <TabsList className="justify-start">
                     {tabs.map(tab => (
                         <TabsTrigger key={tab.value} value={tab.value} className="cursor-pointer">
@@ -33,10 +48,10 @@ export function ExplorerTabsShell<Value extends string>({ initialTab, tabs, rese
                     ))}
                 </TabsList>
 
-                <div className="mt-1 flex-1 min-h-0">
+                <div className="mt-0 flex-1 min-h-0">
                     {tabs.map(tab => (
-                        <TabsContent key={tab.value} value={tab.value} className="h-full mt-0 data-[state=inactive]:hidden" forceMount>
-                            {tab.content}
+                        <TabsContent key={tab.value} value={tab.value} className="h-full mt-0 data-[state=inactive]:hidden" forceMount={tab.lazy ? undefined : true}>
+                            {tab.lazy && currentTab !== tab.value ? null : tab.content}
                         </TabsContent>
                     ))}
                 </div>

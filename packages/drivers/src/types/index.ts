@@ -253,6 +253,74 @@ export type DatabaseSummaryOptions = {
     timeoutMs?: number;
 };
 
+export type SchemaGraphColumnMode = 'all' | 'keys';
+
+export type SchemaGraphTableReference = {
+    schema?: string | null;
+    name: string;
+};
+
+export type SchemaGraphOptions = {
+    database: string;
+    schemas?: string[];
+    focusTables?: SchemaGraphTableReference[];
+    depth?: 0 | 1 | 2;
+    columnMode?: SchemaGraphColumnMode;
+};
+
+export type SchemaGraphColumn = {
+    name: string;
+    dataType: string | null;
+    ordinal: number;
+    nullable: boolean | null;
+    isPrimaryKey: boolean;
+    isForeignKey: boolean;
+};
+
+export type SchemaGraphTable = {
+    id: string;
+    database: string;
+    schema: string | null;
+    name: string;
+    kind: 'table';
+    scope: 'selected' | 'related';
+    columns: SchemaGraphColumn[];
+};
+
+export type SchemaGraphRelationship = {
+    id: string;
+    constraintName: string | null;
+    sourceTableId: string;
+    sourceColumns: string[];
+    targetTableId: string;
+    targetColumns: string[];
+    sourceUnique: boolean | null;
+    sourceOptional: boolean | null;
+    onUpdate: string | null;
+    onDelete: string | null;
+};
+
+export type SchemaGraphCapabilities = {
+    relationships: boolean;
+    compositeForeignKeys: boolean;
+    cardinality: boolean;
+    referentialActions: boolean;
+    constraintsEnforced: boolean | null;
+};
+
+export type SchemaGraphResult = {
+    status: 'ready' | 'too_large' | 'unsupported';
+    tables: SchemaGraphTable[];
+    relationships: SchemaGraphRelationship[];
+    totalTables: number;
+    totalRelationships: number;
+    limits: {
+        maxTables: number;
+        maxRelationships: number;
+    };
+    capabilities: SchemaGraphCapabilities;
+};
+
 export type Pagination = {
     pageIndex: number;
     pageSize: number;
@@ -334,6 +402,7 @@ export type ConnectionMetadataAPI = {
     getExtensions?: (database?: string) => Promise<DatabaseExtensionMeta[]>;
     getDatabaseSummary?: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail?: (database: string) => Promise<DatabaseObjectRow[]>;
+    getSchemaGraph?: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
 };
 
 export type DriverTableProfile = {

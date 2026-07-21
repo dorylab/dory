@@ -62,6 +62,7 @@ export const DORY_CODEX_MCP_ENABLED_TOOLS = [
     'dory_write',
     'dory_list_connections',
     'dory_explore_schema',
+    'dory_get_schema_graph',
     'dory_run_readonly_sql',
     'dory_workspace_tabs',
     'dory_saved_queries',

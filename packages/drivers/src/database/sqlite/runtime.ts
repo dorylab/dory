@@ -4,8 +4,9 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, SchemaGraphOptions, SchemaGraphResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
+import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 import { SqliteDialect } from './dialect';
 
@@ -227,6 +228,104 @@ export function getSqliteTableColumns(db: SqliteDatabase, database: string, tabl
             defaultExpression: row.dflt_value,
             isPrimaryKey: row.pk > 0,
         }));
+}
+
+export function getSqliteSchemaGraph(db: SqliteDatabase, options: SchemaGraphOptions): SchemaGraphResult {
+    const database = normalizeDatabaseName(options.database);
+    const tableRows = getSqliteTables(db, database);
+    const tables: SchemaGraphTableInput[] = [];
+    const relationships: SchemaGraphRelationshipInput[] = [];
+
+    for (const tableRow of tableRows) {
+        const columnRows = db.prepare(buildPragma(database, 'table_xinfo', tableRow.name)).all() as Array<{
+            cid: number;
+            name: string;
+            type: string | null;
+            notnull: number;
+            pk: number;
+            hidden?: number;
+        }>;
+        const foreignKeyRows = db.prepare(buildPragma(database, 'foreign_key_list', tableRow.name)).all() as Array<{
+            id: number;
+            seq: number;
+            table: string;
+            from: string;
+            to: string;
+            on_update?: string | null;
+            on_delete?: string | null;
+        }>;
+        const indexRows = db.prepare(buildPragma(database, 'index_list', tableRow.name)).all() as Array<{
+            name: string;
+            unique: number;
+            partial?: number;
+        }>;
+        const uniqueColumnSets: string[][] = [];
+        const primaryKeyColumns = columnRows
+            .filter(column => column.pk > 0)
+            .sort((left, right) => left.pk - right.pk)
+            .map(column => column.name);
+        if (primaryKeyColumns.length > 0) uniqueColumnSets.push(primaryKeyColumns);
+        for (const indexRow of indexRows.filter(row => row.unique === 1 && row.partial !== 1)) {
+            const indexColumns = db.prepare(buildPragma(database, 'index_info', indexRow.name)).all() as Array<{ seqno: number; name: string | null }>;
+            const names = indexColumns
+                .filter(column => column.name)
+                .sort((left, right) => left.seqno - right.seqno)
+                .map(column => column.name as string);
+            if (names.length > 0) uniqueColumnSets.push(names);
+        }
+        const foreignColumns = new Set(foreignKeyRows.map(row => row.from));
+        tables.push({
+            database,
+            schema: null,
+            name: tableRow.name,
+            columns: columnRows
+                .filter(row => !row.hidden)
+                .map(row => ({
+                    name: row.name,
+                    dataType: row.type,
+                    ordinal: row.cid + 1,
+                    nullable: row.pk > 0 ? false : row.notnull === 0,
+                    isPrimaryKey: row.pk > 0,
+                    isForeignKey: foreignColumns.has(row.name),
+                })),
+        });
+
+        const grouped = new Map<number, SchemaGraphRelationshipInput>();
+        for (const row of foreignKeyRows.sort((left, right) => left.id - right.id || left.seq - right.seq)) {
+            const relationship = grouped.get(row.id) ?? {
+                constraintName: `fk_${tableRow.name}_${row.id}`,
+                sourceSchema: null,
+                sourceTable: tableRow.name,
+                sourceColumns: [],
+                targetSchema: null,
+                targetTable: row.table,
+                targetColumns: [],
+                sourceUnique: null,
+                sourceOptional: false,
+                onUpdate: row.on_update ?? null,
+                onDelete: row.on_delete ?? null,
+            };
+            relationship.sourceColumns.push(row.from);
+            relationship.targetColumns.push(row.to);
+            const sourceColumn = columnRows.find(column => column.name === row.from);
+            relationship.sourceOptional = Boolean(relationship.sourceOptional) || (sourceColumn?.pk === 0 && sourceColumn.notnull === 0);
+            grouped.set(row.id, relationship);
+        }
+        for (const relationship of grouped.values()) {
+            relationship.sourceUnique = uniqueColumnSets.some(
+                columns => columns.length === relationship.sourceColumns.length && columns.every(column => relationship.sourceColumns.includes(column)),
+            );
+        }
+        relationships.push(...grouped.values());
+    }
+
+    return buildSchemaGraphResult(options, tables, relationships, {
+        relationships: true,
+        compositeForeignKeys: true,
+        cardinality: true,
+        referentialActions: true,
+        constraintsEnforced: true,
+    });
 }
 
 export function getSqliteTableDdl(db: SqliteDatabase, database: string, table: string): string | null {

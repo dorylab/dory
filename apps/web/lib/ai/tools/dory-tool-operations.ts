@@ -241,6 +241,30 @@ export async function getDatabaseSummaryOperation(
     }));
 }
 
+export async function getSchemaGraphOperation(
+    context: DoryToolOperationContext,
+    input: {
+        connectionId?: string | null;
+        database: string;
+        schemas?: string[] | null;
+        focusTables?: Array<{ schema?: string | null; name: string }> | null;
+        depth?: 0 | 1 | 2 | null;
+        columnMode?: 'all' | 'keys' | null;
+        identityId?: string | null;
+    },
+) {
+    const { entry } = await getConnectionEntry(context, input.connectionId, input.identityId);
+    return withDoryToolSqlAudit(context, input, metadataAuditSource(context), async () => ({
+        graph: await entry.instance.getSchemaGraph({
+            database: input.database,
+            schemas: input.schemas ?? undefined,
+            focusTables: input.focusTables ?? undefined,
+            depth: input.depth ?? undefined,
+            columnMode: input.columnMode ?? undefined,
+        }),
+    }));
+}
+
 export async function getTableProfileOperation(
     context: DoryToolOperationContext,
     input: { connectionId?: string | null; database: string; table: string; identityId?: string | null },

@@ -1,8 +1,8 @@
 import type { ConnectionMetadataAPI } from '@dory/drivers/types';
-import { getSqliteDatabases, getSqliteTableColumns, getSqliteTables, getSqliteViews } from '../runtime';
+import { getSqliteDatabases, getSqliteSchemaGraph, getSqliteTableColumns, getSqliteTables, getSqliteViews } from '../runtime';
 import type { SqliteDatasource } from '../datasource';
 
-export type SqliteMetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
+export type SqliteMetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchemaGraph' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
 
 export function createSqliteMetadataCapability(datasource: SqliteDatasource): SqliteMetadataAPI {
     return {
@@ -25,6 +25,9 @@ export function createSqliteMetadataCapability(datasource: SqliteDatasource): Sq
         },
         async getViews(database) {
             return getSqliteViews(datasource.getDatabase(), database);
+        },
+        async getSchemaGraph(options) {
+            return getSqliteSchemaGraph(datasource.getDatabase(), options);
         },
     };
 }

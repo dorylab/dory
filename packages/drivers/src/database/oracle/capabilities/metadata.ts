@@ -8,8 +8,11 @@ import type {
     DatabaseSummaryOptions,
     DatabaseSummaryRecommendation,
     DatabaseSummaryTable,
+    SchemaGraphOptions,
+    SchemaGraphResult,
     TableColumnInfo,
 } from '@dory/drivers/types';
+import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { OracleDatasource } from '../datasource';
 import { normalizeOracleCatalogName, parseOracleTableReference, resolveOracleServiceName } from '../runtime';
 
@@ -23,6 +26,7 @@ export type OracleMetadataAPI = ConnectionMetadataAPI & {
     getSequences: (database?: string) => Promise<DatabaseObjectRow[]>;
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
+    getSchemaGraph: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
 };
 
 type ObjectRow = {
@@ -56,6 +60,28 @@ type ColumnCountRow = {
 type RelationshipRow = {
     sourceTableName?: string | null;
     targetTableName?: string | null;
+};
+
+type SchemaGraphColumnRow = {
+    schemaName?: string | null;
+    tableName?: string | null;
+    columnName?: string | null;
+    dataType?: string | null;
+    ordinal?: number | string | null;
+    nullable?: string | null;
+    primaryKey?: number | string | null;
+};
+
+type SchemaGraphRelationshipRow = {
+    constraintName?: string | null;
+    sourceSchemaName?: string | null;
+    sourceTableName?: string | null;
+    sourceColumnName?: string | null;
+    targetSchemaName?: string | null;
+    targetTableName?: string | null;
+    targetColumnName?: string | null;
+    sourceNullable?: string | null;
+    deleteAction?: string | null;
 };
 
 type FunctionRow = {
@@ -202,6 +228,131 @@ async function getObjectRows(datasource: OracleDatasource, database: string, obj
     );
 
     return result.rows.map(normalizeOracleObjectRow).filter((row): row is DatabaseObjectRow => Boolean(row));
+}
+
+async function getSchemaGraph(datasource: OracleDatasource, options: SchemaGraphOptions): Promise<SchemaGraphResult> {
+    const [columnResult, relationshipResult] = await Promise.all([
+        datasource.queryWithContext<SchemaGraphColumnRow>(
+            `
+                SELECT
+                    col.owner AS "schemaName",
+                    col.table_name AS "tableName",
+                    col.column_name AS "columnName",
+                    col.data_type AS "dataType",
+                    col.column_id AS "ordinal",
+                    col.nullable AS "nullable",
+                    CASE WHEN EXISTS (
+                        SELECT 1
+                        FROM all_constraints pk
+                        JOIN all_cons_columns pk_col
+                          ON pk_col.owner = pk.owner
+                         AND pk_col.constraint_name = pk.constraint_name
+                        WHERE pk.owner = col.owner
+                          AND pk.table_name = col.table_name
+                          AND pk.constraint_type = 'P'
+                          AND pk_col.column_name = col.column_name
+                    ) THEN 1 ELSE 0 END AS "primaryKey"
+                FROM all_tab_columns col
+                JOIN all_tables tbl ON tbl.owner = col.owner AND tbl.table_name = col.table_name
+                JOIN all_users usr ON usr.username = col.owner
+                WHERE usr.oracle_maintained = 'N'
+                ORDER BY col.owner, col.table_name, col.column_id
+            `,
+            { database: options.database },
+        ),
+        datasource.queryWithContext<SchemaGraphRelationshipRow>(
+            `
+                SELECT
+                    fk.constraint_name AS "constraintName",
+                    fk.owner AS "sourceSchemaName",
+                    fk.table_name AS "sourceTableName",
+                    fk_col.column_name AS "sourceColumnName",
+                    pk.owner AS "targetSchemaName",
+                    pk.table_name AS "targetTableName",
+                    pk_col.column_name AS "targetColumnName",
+                    src_col.nullable AS "sourceNullable",
+                    fk.delete_rule AS "deleteAction"
+                FROM all_constraints fk
+                JOIN all_cons_columns fk_col
+                  ON fk_col.owner = fk.owner
+                 AND fk_col.constraint_name = fk.constraint_name
+                JOIN all_constraints pk
+                  ON pk.owner = fk.r_owner
+                 AND pk.constraint_name = fk.r_constraint_name
+                JOIN all_cons_columns pk_col
+                  ON pk_col.owner = pk.owner
+                 AND pk_col.constraint_name = pk.constraint_name
+                 AND pk_col.position = fk_col.position
+                JOIN all_tab_columns src_col
+                  ON src_col.owner = fk.owner
+                 AND src_col.table_name = fk.table_name
+                 AND src_col.column_name = fk_col.column_name
+                JOIN all_users src_user ON src_user.username = fk.owner
+                JOIN all_users tgt_user ON tgt_user.username = pk.owner
+                WHERE fk.constraint_type = 'R'
+                  AND src_user.oracle_maintained = 'N'
+                  AND tgt_user.oracle_maintained = 'N'
+                ORDER BY fk.owner, fk.table_name, fk.constraint_name, fk_col.position
+            `,
+            { database: options.database },
+        ),
+    ]);
+
+    const tablesByKey = new Map<string, SchemaGraphTableInput>();
+    for (const row of columnResult.rows) {
+        const schema = row.schemaName?.trim();
+        const tableName = row.tableName?.trim();
+        const columnName = row.columnName?.trim();
+        if (!schema || !tableName || !columnName) continue;
+        const key = `${schema}\u0000${tableName}`;
+        const table = tablesByKey.get(key) ?? { database: options.database, schema, name: tableName, columns: [] };
+        table.columns.push({
+            name: columnName,
+            dataType: row.dataType ?? null,
+            ordinal: toNumberOrNull(row.ordinal) ?? table.columns.length + 1,
+            nullable: row.nullable ? row.nullable.toUpperCase() === 'Y' : null,
+            isPrimaryKey: toNumberOrNull(row.primaryKey) === 1,
+            isForeignKey: false,
+        });
+        tablesByKey.set(key, table);
+    }
+
+    const relationshipsByKey = new Map<string, SchemaGraphRelationshipInput>();
+    for (const row of relationshipResult.rows) {
+        const sourceSchema = row.sourceSchemaName?.trim();
+        const sourceTable = row.sourceTableName?.trim();
+        const sourceColumn = row.sourceColumnName?.trim();
+        const targetSchema = row.targetSchemaName?.trim();
+        const targetTable = row.targetTableName?.trim();
+        const targetColumn = row.targetColumnName?.trim();
+        if (!sourceSchema || !sourceTable || !sourceColumn || !targetSchema || !targetTable || !targetColumn) continue;
+        const key = `${sourceSchema}\u0000${sourceTable}\u0000${row.constraintName ?? ''}`;
+        const relationship = relationshipsByKey.get(key) ?? {
+            constraintName: row.constraintName ?? null,
+            sourceSchema,
+            sourceTable,
+            sourceColumns: [],
+            targetSchema,
+            targetTable,
+            targetColumns: [],
+            sourceUnique: null,
+            sourceOptional: false,
+            onUpdate: null,
+            onDelete: row.deleteAction ?? null,
+        };
+        relationship.sourceColumns.push(sourceColumn);
+        relationship.targetColumns.push(targetColumn);
+        relationship.sourceOptional = Boolean(relationship.sourceOptional) || row.sourceNullable?.toUpperCase() === 'Y';
+        relationshipsByKey.set(key, relationship);
+    }
+
+    return buildSchemaGraphResult(options, Array.from(tablesByKey.values()), Array.from(relationshipsByKey.values()), {
+        relationships: true,
+        compositeForeignKeys: true,
+        cardinality: false,
+        referentialActions: true,
+        constraintsEnforced: true,
+    });
 }
 
 export function createOracleMetadataCapability(datasource: OracleDatasource): OracleMetadataAPI {
@@ -532,5 +683,6 @@ export function createOracleMetadataCapability(datasource: OracleDatasource): Or
                 oneLineSummary: `${tables.length} tables and ${views.length} views available in Oracle service ${database}.`,
             };
         },
+        getSchemaGraph: options => getSchemaGraph(datasource, options),
     };
 }
