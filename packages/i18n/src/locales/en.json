@@ -3095,6 +3095,11 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "Expose a local MCP endpoint for Codex, Claude Code, and other agents."
+                },
+                "DoryCli": {
+                    "Label": "CLI",
+                    "Title": "CLI",
+                    "Description": "Use Dory from anywhere."
                 }
             },
             "Storage": {
@@ -3268,6 +3273,38 @@
                 "ClientRevoked": "MCP client revoked.",
                 "ClientRevokeFailed": "Failed to revoke MCP client.",
                 "WebAuthorizationStatus": "Web MCP authorization is coming later. Desktop local MCP is available now."
+            },
+            "DoryCli": {
+                "Intro": "Dory CLI is the agent runtime for working with your Dory data workspace from terminals, CI, servers, and remote environments.",
+                "Benefits": {
+                    "Agents": "Connect Codex CLI and Claude Code",
+                    "Headless": "Run SQL workflows without opening Desktop",
+                    "Workspace": "Use an independent or shared Dory workspace",
+                    "Automation": "Build automated data workflows"
+                },
+                "Install": {
+                    "Title": "Install Dory CLI",
+                    "Description": "Install the CLI globally to use the dory command from any terminal.",
+                    "CommandTitle": "Terminal"
+                },
+                "Setup": {
+                    "Title": "Connect an agent",
+                    "Description": "Add Dory as a stdio MCP server with an independent workspace."
+                },
+                "WorkspaceModes": {
+                    "Title": "Workspace data",
+                    "Recommended": "Recommended",
+                    "Standalone": {
+                        "Title": "Independent workspace",
+                        "Description": "Stores CLI data in ~/.dory and can run alongside Dory Desktop."
+                    },
+                    "Desktop": {
+                        "Title": "Share Desktop data",
+                        "Description": "Uses the Dory Desktop data directory. Close Dory Desktop before starting this mode."
+                    }
+                },
+                "Copy": "Copy",
+                "LearnMore": "Learn more"
             }
         },
         "QueryClient": {
@@ -3804,6 +3841,7 @@
                 "Title": "Pro (Recommended)",
                 "Price": "Starting at $9/mo",
                 "Features": {
+                    "EverythingInHobby": "Everything in Hobby",
                     "UnlimitedDatabaseConnections": "Unlimited data sources",
                     "HigherAiQuotaAndFasterResponses": "Higher AI quota & faster responses",
                     "ByokAiFeatures": "BYOK (Use your own AI key)",

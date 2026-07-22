@@ -145,6 +145,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
         t('Hobby.Features.CommunitySupport'),
     ];
     const proFeatures = [
+        t('Pro.Features.EverythingInHobby'),
         t('Pro.Features.UnlimitedDatabaseConnections'),
         t('Pro.Features.HigherAiQuotaAndFasterResponses'),
         t('Pro.Features.ByokAiFeatures'),
@@ -153,6 +154,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
         t('Pro.Features.PrioritySupport'),
     ];
     const proUpgradeFeatures = [
+        t('Pro.Features.EverythingInHobby'),
         t('Pro.Features.UnlimitedDatabaseConnections'),
         t('Pro.Features.HigherAiQuotaAndFasterResponses'),
         t('Pro.Features.ByokAiFeatures'),

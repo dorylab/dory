@@ -3093,6 +3093,11 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "Expón un endpoint MCP local para Codex, Claude Code y otros agentes."
+                },
+                "DoryCli": {
+                    "Label": "CLI",
+                    "Title": "CLI",
+                    "Description": "Usa Dory desde cualquier lugar."
                 }
             },
             "Storage": {
@@ -3266,6 +3271,38 @@
                 "ClientRevoked": "Cliente MCP revocado.",
                 "ClientRevokeFailed": "No se pudo revocar el cliente MCP.",
                 "WebAuthorizationStatus": "La autorización MCP web llegará más adelante. El MCP local de escritorio ya está disponible."
+            },
+            "DoryCli": {
+                "Intro": "Dory CLI es el runtime para agentes que permite trabajar con tu espacio de datos de Dory desde terminales, CI, servidores y entornos remotos.",
+                "Benefits": {
+                    "Agents": "Conecta Codex CLI y Claude Code",
+                    "Headless": "Ejecuta flujos SQL sin abrir Desktop",
+                    "Workspace": "Usa un espacio de Dory independiente o compartido",
+                    "Automation": "Crea flujos de datos automatizados"
+                },
+                "Install": {
+                    "Title": "Instalar Dory CLI",
+                    "Description": "Instala la CLI globalmente para usar el comando dory desde cualquier terminal.",
+                    "CommandTitle": "Terminal"
+                },
+                "Setup": {
+                    "Title": "Conectar un agente",
+                    "Description": "Añade Dory como servidor MCP stdio con un espacio de trabajo independiente."
+                },
+                "WorkspaceModes": {
+                    "Title": "Datos del espacio de trabajo",
+                    "Recommended": "Recomendado",
+                    "Standalone": {
+                        "Title": "Espacio independiente",
+                        "Description": "Guarda los datos de la CLI en ~/.dory y puede ejecutarse junto con Dory Desktop."
+                    },
+                    "Desktop": {
+                        "Title": "Compartir datos de Desktop",
+                        "Description": "Usa el directorio de datos de Dory Desktop. Cierra Dory Desktop antes de iniciar este modo."
+                    }
+                },
+                "Copy": "Copiar",
+                "LearnMore": "Más información"
             }
         },
         "QueryClient": {
@@ -3802,6 +3839,7 @@
                 "Title": "Pro (Recomendado)",
                 "Price": "Starting at $9/mo",
                 "Features": {
+                    "EverythingInHobby": "Todo lo incluido en Hobby",
                     "UnlimitedDatabaseConnections": "Fuentes de datos ilimitadas",
                     "HigherAiQuotaAndFasterResponses": "Mayor cuota de IA y respuestas más rápidas",
                     "ByokAiFeatures": "BYOK (Usa tu propia clave de IA)",

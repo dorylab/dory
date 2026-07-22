@@ -10,6 +10,7 @@ import { ShortcutsPanel } from './ShortcutsPanel';
 import { SecurityPanel } from './SecurityPanel';
 import { AboutPanel } from './AboutPanel';
 import { AgentAccessPanel } from './AgentAccessPanel';
+import { DoryCliPanel } from './DoryCliPanel';
 import type { AISettingsPageClientProps } from '../../[organization]/settings/ai/page.client';
 import type { BillingSettingsPageClientProps } from '../../[organization]/settings/billing/page.client';
 import { OrganizationPanel } from './OrganizationPanel';
@@ -55,6 +56,8 @@ export function PanelByKey({
             return <DataPanel />;
         case 'agentAccess':
             return <AgentAccessPanel currentOrganizationId={currentOrganizationId} initialUserId={initialUserId} />;
+        case 'doryCli':
+            return <DoryCliPanel />;
         case 'shortcuts':
             return <ShortcutsPanel />;
         case 'security':
