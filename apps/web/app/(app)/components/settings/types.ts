@@ -1,5 +1,5 @@
 import type { ElementType } from 'react';
-import { Palette, Info, Code, Database, Bot, BadgeCheck, Building2, Cable, HardDrive } from 'lucide-react';
+import { Palette, Info, Code, Database, Bot, BadgeCheck, Building2, Cable, HardDrive, SquareTerminal } from 'lucide-react';
 
 export type CategoryKey =
     | 'organization'
@@ -11,6 +11,7 @@ export type CategoryKey =
     | 'notifications'
     | 'data'
     | 'agentAccess'
+    | 'doryCli'
     | 'shortcuts'
     | 'security'
     | 'about';
@@ -66,6 +67,14 @@ export function getCategories(
                   icon: Cable,
                   title: t('Categories.AgentAccess.Title'),
                   description: t('Categories.AgentAccess.Description'),
+              },
+              {
+                  key: 'doryCli',
+                  group: 'person',
+                  label: t('Categories.DoryCli.Label'),
+                  icon: SquareTerminal,
+                  title: t('Categories.DoryCli.Title'),
+                  description: t('Categories.DoryCli.Description'),
               },
               ...(options.includeBillingSettings
                   ? [

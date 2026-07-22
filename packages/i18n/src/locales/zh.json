@@ -3099,6 +3099,11 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "为 Codex、Claude Code 和其他 Agent 开启本地 MCP endpoint。"
+                },
+                "DoryCli": {
+                    "Label": "CLI",
+                    "Title": "CLI",
+                    "Description": "随时随地使用 Dory。"
                 }
             },
             "Storage": {
@@ -3272,6 +3277,38 @@
                 "ClientRevoked": "已撤销 MCP client。",
                 "ClientRevokeFailed": "撤销 MCP client 失败。",
                 "WebAuthorizationStatus": "Web MCP 授权稍后提供。现在可以使用桌面端本地 MCP。"
+            },
+            "DoryCli": {
+                "Intro": "Dory CLI 是面向 Agent 的运行时，让你可以在终端、CI、服务器和远程环境中操作 Dory 数据工作空间。",
+                "Benefits": {
+                    "Agents": "连接 Codex CLI 和 Claude Code",
+                    "Headless": "无需打开桌面端即可运行 SQL 工作流",
+                    "Workspace": "使用独立或共享的 Dory 工作空间",
+                    "Automation": "构建自动化数据工作流"
+                },
+                "Install": {
+                    "Title": "安装 Dory CLI",
+                    "Description": "全局安装后，即可在任意终端中使用 dory 命令。",
+                    "CommandTitle": "终端"
+                },
+                "Setup": {
+                    "Title": "连接 Agent",
+                    "Description": "将 Dory 添加为使用独立工作空间的 stdio MCP Server。"
+                },
+                "WorkspaceModes": {
+                    "Title": "工作空间数据",
+                    "Recommended": "推荐",
+                    "Standalone": {
+                        "Title": "独立工作空间",
+                        "Description": "CLI 数据存储在 ~/.dory，可与 Dory Desktop 同时运行。"
+                    },
+                    "Desktop": {
+                        "Title": "共享桌面端数据",
+                        "Description": "使用 Dory Desktop 数据目录。启动此模式前必须关闭 Dory Desktop。"
+                    }
+                },
+                "Copy": "复制",
+                "LearnMore": "了解更多"
             }
         },
         "QueryClient": {
@@ -3808,6 +3845,7 @@
                 "Title": "Pro（建议）",
                 "Price": "Starting at $9/mo",
                 "Features": {
+                    "EverythingInHobby": "包含 Hobby 的全部功能",
                     "UnlimitedDatabaseConnections": "无限数据源",
                     "HigherAiQuotaAndFasterResponses": "更高的 AI 额度和更快的响应",
                     "ByokAiFeatures": "BYOK（使用自己的 AI Key）",

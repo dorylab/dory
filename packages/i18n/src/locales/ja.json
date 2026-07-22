@@ -3093,6 +3093,11 @@
                     "Label": "MCP",
                     "Title": "MCP",
                     "Description": "Codex、Claude Code、その他の Agent 向けにローカル MCP エンドポイントを公開します。"
+                },
+                "DoryCli": {
+                    "Label": "CLI",
+                    "Title": "CLI",
+                    "Description": "どこからでも Dory を利用できます。"
                 }
             },
             "Storage": {
@@ -3266,6 +3271,38 @@
                 "ClientRevoked": "MCP クライアントを取り消しました。",
                 "ClientRevokeFailed": "MCP クライアントの取り消しに失敗しました。",
                 "WebAuthorizationStatus": "Web MCP authorization は後日提供予定です。現在はデスクトップのローカル MCP を利用できます。"
+            },
+            "DoryCli": {
+                "Intro": "Dory CLI はエージェント向けランタイムです。ターミナル、CI、サーバー、リモート環境から Dory データワークスペースを操作できます。",
+                "Benefits": {
+                    "Agents": "Codex CLI と Claude Code を接続",
+                    "Headless": "Desktop を開かずに SQL ワークフローを実行",
+                    "Workspace": "独立または共有の Dory ワークスペースを利用",
+                    "Automation": "自動データワークフローを構築"
+                },
+                "Install": {
+                    "Title": "Dory CLI をインストール",
+                    "Description": "グローバルにインストールすると、どのターミナルからでも dory コマンドを利用できます。",
+                    "CommandTitle": "ターミナル"
+                },
+                "Setup": {
+                    "Title": "エージェントを接続",
+                    "Description": "独立ワークスペースを使う stdio MCP サーバーとして Dory を追加します。"
+                },
+                "WorkspaceModes": {
+                    "Title": "ワークスペースデータ",
+                    "Recommended": "推奨",
+                    "Standalone": {
+                        "Title": "独立ワークスペース",
+                        "Description": "CLI データを ~/.dory に保存し、Dory Desktop と同時に実行できます。"
+                    },
+                    "Desktop": {
+                        "Title": "Desktop データを共有",
+                        "Description": "Dory Desktop のデータディレクトリを使用します。このモードを開始する前に Dory Desktop を終了してください。"
+                    }
+                },
+                "Copy": "コピー",
+                "LearnMore": "詳細を見る"
             }
         },
         "QueryClient": {
@@ -3802,6 +3839,7 @@
                 "Title": "Pro（おすすめ）",
                 "Price": "Starting at $9/mo",
                 "Features": {
+                    "EverythingInHobby": "Hobby のすべての機能",
                     "UnlimitedDatabaseConnections": "無制限のデータソース",
                     "HigherAiQuotaAndFasterResponses": "より高い AI クォータと高速な応答",
                     "ByokAiFeatures": "BYOK (Use your own AI key)",
