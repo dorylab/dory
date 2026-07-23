@@ -162,6 +162,44 @@ test('does not duplicate SQL completion items across open tabs', async ({ page, 
     await expectAppHealthy(appErrors);
 });
 
+test('completes partial JOIN tables and aliased columns in an unfinished query', async ({ page, appErrors }) => {
+    await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
+    await openMockConnectionConsole(page, seededConnection);
+
+    await page.getByRole('button', { name: /New Console/i }).click();
+    await expect(page.getByText('numbers', { exact: true }).first()).toBeVisible();
+
+    await setSqlEditorValue(
+        page,
+        `SELECT
+    story.number,
+    comment.label
+FROM numbers AS story
+JOIN num AS comment
+    ON comment.number = story.number;`,
+    );
+
+    for (const completion of [
+        { lineNumber: 5, column: 9, expected: 'numbers' },
+        { lineNumber: 2, column: 11, expected: 'number' },
+        { lineNumber: 3, column: 13, expected: 'label' },
+    ]) {
+        await page.evaluate(({ lineNumber, column }) => {
+            window.__DORY_E2E_MONACO__?.setSelection({
+                startLineNumber: lineNumber,
+                startColumn: column,
+                endLineNumber: lineNumber,
+                endColumn: column,
+            });
+        }, completion);
+        await page.keyboard.press('Control+Space');
+        await expect(page.locator('.suggest-widget .monaco-list-row .label-name').filter({ hasText: new RegExp(`^${completion.expected}$`) })).toBeVisible();
+        await page.keyboard.press('Escape');
+    }
+
+    await expectAppHealthy(appErrors);
+});
+
 test('keeps one Monaco editor with independent SQL models', async ({ page, appErrors }) => {
     await mockWorkbenchApis(page, { initialConnections: [seededConnection] });
     await openMockConnectionConsole(page, seededConnection);
