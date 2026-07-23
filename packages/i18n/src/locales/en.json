@@ -3381,6 +3381,7 @@
         "WorkspaceDataSourcesCount": "{count} data source",
         "WorkspaceDataSourcesCountPlural": "{count} data sources",
         "AgentRuns": "Agent Runs",
+        "SchemaCompare": "Schema Compare",
         "SQLConsole": "SQL Console",
         "Explorer": "Explorer",
         "Schema": "Schema",
@@ -3872,6 +3873,106 @@
                 "LoadOrganizationFailed": "Failed to load organization details.",
                 "UnresolvedFromUrl": "The current organization could not be resolved from this URL."
             }
+        }
+    },
+    "SchemaCompare": {
+        "Eyebrow": "Database evolution",
+        "Title": "Compare databases",
+        "Description": "Understand, review, and safely evolve database schemas. Dory captures a deterministic Current → Desired diff and explains the evidence.",
+        "Current": "Current",
+        "Desired": "Desired",
+        "Back": "All comparisons",
+        "Delete": "Delete",
+        "Cancel": "Cancel",
+        "Loading": "Loading comparison…",
+        "Create": {
+            "EndpointDescription": "Choose a connection, identity, database, and optional schema scope.",
+            "Connection": "Connection",
+            "SelectConnection": "Select a connection",
+            "Identity": "Identity",
+            "DefaultIdentity": "Default identity",
+            "Database": "Database",
+            "DatabasePlaceholder": "Database name",
+            "Schemas": "Schema scope",
+            "SchemasPlaceholder": "public, billing",
+            "SchemasHelp": "Comma-separated. Leave empty to compare all non-system schemas.",
+            "Compare": "Compare schemas"
+        },
+        "Recent": {
+            "Title": "Recent comparisons",
+            "Description": "Each run is an immutable point-in-time capture.",
+            "Direction": "Current → Desired",
+            "Family": "Dialect family",
+            "Changes": "Changes",
+            "Readiness": "Readiness",
+            "Created": "Captured",
+            "Empty": "No schema comparisons yet."
+        },
+        "Detail": {
+            "Coverage": "Coverage",
+            "CompareAgain": "Compare again",
+            "Failed": "Comparison failed",
+            "Capturing": "Capturing schema snapshots…"
+        },
+        "Summary": {
+            "Changes": "Changes",
+            "Breaking": "Breaking",
+            "High": "High risk",
+            "Medium": "Medium risk",
+            "Low": "Low risk",
+            "Readiness": "Deployment readiness"
+        },
+        "Changes": {
+            "Cards": "Cards",
+            "Table": "Table",
+            "Chart": "Chart",
+            "Search": "Search objects, reasons, or values…",
+            "Export": "Export",
+            "ObjectPath": "Object",
+            "Change": "Change",
+            "Risk": "Risk",
+            "Reason": "Reason",
+            "EstimatedRows": "Estimated rows",
+            "CumulativeScans": "Cumulative index scans",
+            "Count": "{count} changes"
+        },
+        "Risk": {
+            "all": "All risks",
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low",
+            "unknown": "Unknown"
+        },
+        "Object": {
+            "all": "All objects",
+            "table": "Tables",
+            "column": "Columns",
+            "index": "Indexes",
+            "constraint": "Constraints",
+            "view": "Views",
+            "materialized_view": "Materialized views"
+        },
+        "AI": {
+            "Title": "AI Review",
+            "Description": "Evidence-based explanation of the canonical diff. AI cannot change risk or readiness.",
+            "Retry": "Retry",
+            "Generating": "Reviewing deterministic evidence…",
+            "Risks": "Risk explanations",
+            "Recommendations": "Recommendations",
+            "Limitations": "Limitations",
+            "Failed": "AI Review returned an invalid response. Please retry.",
+            "Unavailable": "AI Review is unavailable.",
+            "DiffUnaffected": "The deterministic comparison and ResultSet remain available."
+        },
+        "DeleteDialog": {
+            "Title": "Delete comparison?",
+            "Description": "This removes the Dory job, snapshots, derived ResultSet, and exports. It never changes either connected database."
+        },
+        "Errors": {
+            "CreateFailed": "Unable to create schema comparison.",
+            "ConnectionChanged": "A selected connection is no longer available (it may have been deleted or recreated). The list was refreshed; select Current and Desired again.",
+            "DeleteFailed": "Unable to delete comparison.",
+            "ExportFailed": "Unable to export the schema diff."
         }
     },
     "Routes": {

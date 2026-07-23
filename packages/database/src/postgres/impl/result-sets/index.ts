@@ -108,6 +108,24 @@ export type PersistQueryResultSetOutput = {
     warning?: string;
 };
 
+export type PersistDerivedResultSetInput = {
+    organizationId: string;
+    userId: string;
+    comparisonId: string;
+    rows: Record<string, unknown>[];
+    kind: 'schema-diff';
+    workId?: string | null;
+    agentRunId?: string | null;
+    sourceConnectionType?: string | null;
+    sourceDatabaseName?: string | null;
+    contentHash?: string | null;
+    previewRows?: number;
+};
+
+export type PersistDerivedResultSetOutput = Omit<PersistQueryResultSetOutput, 'queryRunId'> & {
+    queryRunId: null;
+};
+
 export type ReadResultRowsOutput = {
     resultSetId: string;
     rows: Record<string, unknown>[];
@@ -797,6 +815,144 @@ export class PostgresResultSetsRepository {
         const client = await getClient();
         if (!client) throw new DatabaseError('Database connection failed', 500);
         this.db = client as PostgresDBClient;
+    }
+
+    async deleteResultSet(input: { organizationId: string; resultSetId: string }): Promise<void> {
+        this.assertInited();
+        const record = await this.getRecord(input.organizationId, input.resultSetId);
+        const exports = await this.db
+            .select()
+            .from(resultSetExports)
+            .where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, input.resultSetId)));
+        await Promise.all(exports.map(item => this.artifacts.objectStore.delete(item.objectPath).catch(() => undefined)));
+        await this.db.delete(resultSetExports).where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, input.resultSetId)));
+        await this.artifacts.resultSets.deleteResultSet(record.artifactRefJson).catch(() => undefined);
+        await this.deleteResultSetRecord(input.organizationId, input.resultSetId, new Date());
+    }
+
+    async persistDerivedResultSet(input: PersistDerivedResultSetInput): Promise<PersistDerivedResultSetOutput> {
+        this.assertInited();
+        const rows = input.rows;
+        const artifactId = `rs_${newEntityId()}`;
+        const now = new Date();
+        const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
+        const columns = inferResultSetColumns(rows);
+        const preview = buildResultSetPreview({
+            columns,
+            rows,
+            rowCount: rows.length,
+            maxRows: input.previewRows ?? DEFAULT_PREVIEW_ROWS,
+        });
+        const manifest: ResultSetManifest = {
+            format: 'dory.resultset.v1',
+            artifactId,
+            organizationId: input.organizationId,
+            kind: input.kind,
+            status: 'success',
+            source: {
+                type: 'comparison',
+                comparisonId: input.comparisonId,
+                connectionType: input.sourceConnectionType ?? null,
+                databaseName: input.sourceDatabaseName ?? null,
+                workId: input.workId ?? null,
+                agentRunId: input.agentRunId ?? null,
+                actorType: input.agentRunId ? 'agent' : 'user',
+                actorId: input.userId,
+            },
+            schema: columns,
+            rowCount: rows.length,
+            previewRowCount: preview.previewRowCount,
+            limited: false,
+            files: {},
+            lineage: {},
+            createdAt: now.toISOString(),
+            updatedAt: now.toISOString(),
+            contentHash: input.contentHash ?? null,
+        };
+
+        const fullData = await this.writeFullDataArtifact({
+            artifactId,
+            status: 'success',
+            columns,
+            rows,
+        });
+        const maxStorageBytes = await this.getMaxStorageBytes(input.organizationId);
+        const previewByteSizeEstimate = Buffer.byteLength(JSON.stringify(preview), 'utf8');
+        const fullDataByteSize = fullData?.byteSize ?? fullData?.parts.reduce((total, part) => total + (part.byteSize ?? 0), 0) ?? 0;
+        const storageLimitApplied = Boolean(fullData && fullDataByteSize + previewByteSizeEstimate > maxStorageBytes);
+        const { ref, manifest: persistedManifest } = await this.artifacts.resultSets
+            .putResultSet({
+                organizationId: input.organizationId,
+                artifactId,
+                manifest,
+                preview,
+                dataParts: storageLimitApplied ? null : (fullData?.parts ?? null),
+            })
+            .finally(() => fullData?.cleanup?.().catch(() => undefined));
+
+        try {
+            await this.db.insert(resultSetsTable).values({
+                id: artifactId,
+                organizationId: input.organizationId,
+                connectionId: null,
+                sourceConnectionType: input.sourceConnectionType ?? null,
+                sourceDatabaseName: input.sourceDatabaseName ?? null,
+                workId: input.workId ?? null,
+                agentRunId: input.agentRunId ?? null,
+                sourceQueryRunId: null,
+                comparisonId: input.comparisonId,
+                sourceType: 'comparison',
+                kind: input.kind,
+                status: 'success',
+                rowCount: rows.length,
+                previewRowCount: preview.previewRowCount,
+                limited: false,
+                schemaJson: columns,
+                artifactRefJson: ref,
+                dataAvailability: resultSetDataAvailability(persistedManifest),
+                createdByActorType: input.agentRunId ? 'agent' : 'user',
+                createdByActorId: input.userId,
+                contentHash: input.contentHash ?? null,
+                byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                storageLimitApplied,
+                expiresAt,
+                createdAt: now,
+                updatedAt: now,
+            });
+            if (input.agentRunId) {
+                await this.db.insert(agentRunResultSets).values({
+                    agentRunId: input.agentRunId,
+                    resultSetId: artifactId,
+                    queryRunId: null,
+                    role: 'derived',
+                    createdAt: now,
+                });
+            }
+        } catch (error) {
+            await this.artifacts.resultSets.deleteResultSet(ref).catch(() => undefined);
+            throw error;
+        }
+
+        const dataAvailability = resultSetDataAvailability(persistedManifest);
+        return {
+            resultSetId: artifactId,
+            queryRunId: null,
+            artifactRef: ref,
+            dataAvailability,
+            previewRows: preview.rows,
+            previewRowCount: preview.previewRowCount,
+            rowCount: rows.length,
+            schema: columns,
+            byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+            artifactStore: ref.store,
+            storageFormat: storageFormatFor(dataAvailability),
+            sourceConnectionType: input.sourceConnectionType ?? null,
+            sourceDatabaseName: input.sourceDatabaseName ?? null,
+            createdAt: now.getTime(),
+            expiresAt: expiresAt.getTime(),
+            storageLimitApplied,
+            warning: storageLimitApplied ? RESULT_SET_STORAGE_LIMIT_WARNING : undefined,
+        };
     }
 
     async persistQueryError(input: PersistQueryErrorInput): Promise<{ queryRunId: string }> {

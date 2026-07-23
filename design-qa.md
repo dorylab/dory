@@ -45,3 +45,105 @@
 ## Final result
 
 passed
+
+---
+
+# Schema Compare navigation and AI Review design QA
+
+## Source of visual truth
+
+- User screenshot: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-1e4df4f2-b96b-461c-a4f4-6c3cf9e75c83.png`
+- Source pixels: 2556 × 1576
+- Relevant source state: light theme, failed AI Review with a black robot icon and raw structured-output validation details
+
+## Implementation evidence
+
+- AI Review success state: `/Users/jeffrey/Documents/Code/agents/.tmp/schema-compare-ai-review-fixed.jpg`
+- Connection-scoped navigation: `/Users/jeffrey/Documents/Code/agents/.tmp/schema-compare-connection-nav-fixed.jpg`
+- Combined source/implementation comparison: `/Users/jeffrey/Documents/Code/agents/.tmp/schema-compare-ai-review-comparison.png`
+- Browser viewport and implementation screenshots: 1280 × 720 CSS px at 1× density
+- Combined comparison pixels: 1280 × 1182
+- Density normalization: the source AI Review region was cropped from the 2556 × 1576 screenshot and proportionally resized to 1280 px wide; the implementation was captured at its native 1280 px width
+- State: light theme, organization-level comparison detail, completed AI Review; connection-level SQL Console for navigation verification
+
+## Comparison history
+
+### Pass 1
+
+- P1: AI Review failed because the model was not instructed to return the five required top-level JSON fields, and the UI exposed the resulting Zod issue array.
+- P2: The AI Review heading used a generic black robot icon instead of Dory's violet AISpark icon.
+- P2: Schema Compare remained visible inside connection-scoped navigation, where the requested information architecture only calls for connection tools.
+- Fix: added an exact JSON output contract and compatible wrapper parsing, replaced the raw error with a localized retry state, reused `AISparkIcon`, and removed Schema Compare from the connection-scoped navigation branch only.
+
+### Pass 2
+
+- Full-view comparison: passed. AI Review now completes with a summary, change-ID evidence, recommendations, and limitations instead of exposing validation internals.
+- Focused icon comparison: passed. The existing AISpark icon renders at 20 × 20 CSS px in `rgb(148, 96, 255)`.
+- Navigation comparison: passed. The organization-level Data Sources page retains Schema Compare; the connection-level SQL Console shows SQL Console, Explorer, and Chatbot without Schema Compare.
+- Interaction check: passed. Retrying the previously failed comparison produced a successful persisted AI Review.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing Dory heading, body, evidence-ID, and muted-description styles are preserved.
+- Spacing and layout rhythm: the existing AI Review Card geometry is unchanged; the icon replacement does not alter heading alignment.
+- Colors and visual tokens: the AI icon now uses the existing AISpark violet `#9460FF`; all other Card and status colors continue to use the theme system.
+- Image and asset fidelity: the implementation reuses the product's existing `AISparkIcon`; no custom or approximate asset was introduced.
+- Copy and content: raw validation internals are removed from the user-facing state; successful output remains grounded in deterministic comparison evidence.
+
+## Verification notes
+
+- The reference and implementation intentionally show different AI states: the reference documents the bug, while the implementation evidence shows the requested successful state.
+- No new runtime error appeared in the development log during navigation, retry, or success-state verification.
+
+## Final result
+
+passed
+
+---
+
+# Schema Compare card header design QA
+
+## Source of visual truth
+
+- User screenshot: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-0d49b2bd-4008-4157-a05a-c260425a80a7.png`
+- Source pixels: 1916 × 1276
+- Focused normalized reference: `/Users/jeffrey/Documents/Code/agents/apps/web/.tmp/design-qa/schema-compare-card-header-reference-focused.png`
+
+## Implementation evidence
+
+- Browser-rendered full view: `/Users/jeffrey/Documents/Code/agents/apps/web/.tmp/design-qa/schema-compare-card-header-default-light.png`
+- Focused implementation: `/Users/jeffrey/Documents/Code/agents/apps/web/.tmp/design-qa/schema-compare-card-header-implementation-focused.png`
+- Side-by-side focused comparison: `/Users/jeffrey/Documents/Code/agents/apps/web/.tmp/design-qa/schema-compare-card-header-comparison-focused.png`
+- Browser viewport and screenshot: 1280 × 720 CSS px at 1× density
+- Focused comparison: both sides normalized to 1008 × 296 px; the 1916 × 1276 source was proportionally resized to 1008 px wide and cropped to the same visible header region
+- State: light theme, Cards view, unsafe SQLite fixture with low- and high-risk changes
+
+## Comparison history
+
+### Pass 1
+
+- P2: The risk badge occupied a third header row on the left, while inherited Card padding and gap made the header approximately 98 CSS px tall.
+- Fix: changed the header to an explicit horizontal flex layout, moved the risk badge to the right, removed inherited outer Card padding/gap, and set compact 20 px horizontal / 12 px vertical header padding.
+
+### Pass 2
+
+- Focused comparison: passed. Each header is 65 CSS px tall; the object path and change metadata remain left-aligned while the risk badge is right-aligned with a stable trailing inset.
+- Full-view comparison: passed. Two-column card density is preserved and the before/after content starts materially closer to the header.
+- Interaction check: passed. Table view opens and Cards view restores the compact headers.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing Dory mono object titles and small metadata hierarchy are preserved; no wrapping regression was observed.
+- Spacing and layout rhythm: header height is reduced, padding is balanced, and the badge no longer creates an extra row.
+- Colors and visual tokens: existing themed semantic risk colors and Card tokens are unchanged in light and dark themes.
+- Image and asset fidelity: this component contains no raster imagery or custom assets; existing library icons are unchanged.
+- Copy and content: object path, object/change metadata, risk value, Current/Desired labels, and reason text are unchanged.
+
+## Verification notes
+
+- Browser console contained existing sidebar/theme hydration warnings; no Schema Diff card-specific runtime error was observed.
+- Automated coverage passed for card header height, right-side badge placement, Cards/Table/Chart switching, filtering, export, and theme changes.
+
+## Final result
+
+passed

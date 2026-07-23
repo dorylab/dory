@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { eq, sql } from 'drizzle-orm';
 
-import { AgentRunArtifactStore, FilesystemObjectStore, ResultSetArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
+import { AgentRunArtifactStore, ComparisonArtifactStore, FilesystemObjectStore, ResultSetArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
 import { NoopFullDataWriter, type ResultSetDataWriter } from '@dory/resultset';
 
 const dbDir = await mkdtemp(path.join(os.tmpdir(), 'dory-result-set-retention-db-'));
@@ -33,6 +33,7 @@ const artifacts: DoryArtifactStore = {
     objectStore,
     resultSets: new ResultSetArtifactStore(objectStore, ''),
     agentRuns: new AgentRunArtifactStore(objectStore, ''),
+    comparisons: new ComparisonArtifactStore(objectStore, ''),
 };
 
 async function initSchema() {
@@ -108,6 +109,7 @@ async function initSchema() {
             "session_id" text,
             "set_index" integer,
             "source_query_run_id" text,
+            "comparison_id" text,
             "source_type" text NOT NULL,
             "kind" text NOT NULL,
             "status" text NOT NULL,

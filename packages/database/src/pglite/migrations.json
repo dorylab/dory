@@ -360,5 +360,20 @@
     "bps": true,
     "folderMillis": 1784296092000,
     "hash": "19c9cc670ede5de31efec1e30f8ffc7b0f8c8c076bea0320f5fe8eb85ccae45a"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"comparison_jobs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"created_by_user_id\" text NOT NULL,\n    \"work_id\" text,\n    \"kind\" text DEFAULT 'schema' NOT NULL,\n    \"status\" text DEFAULT 'running' NOT NULL,\n    \"current_endpoint\" jsonb NOT NULL,\n    \"desired_endpoint\" jsonb NOT NULL,\n    \"dialect_family\" text NOT NULL,\n    \"coverage\" jsonb,\n    \"summary\" jsonb,\n    \"current_snapshot_hash\" text,\n    \"desired_snapshot_hash\" text,\n    \"snapshot_artifact_ref\" jsonb,\n    \"result_set_id\" text,\n    \"ai_review_status\" text DEFAULT 'pending' NOT NULL,\n    \"ai_review\" jsonb,\n    \"ai_review_error\" text,\n    \"previous_comparison_id\" text,\n    \"failure_code\" text,\n    \"failure_message\" text,\n    \"expires_at\" timestamp with time zone,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"completed_at\" timestamp with time zone\n);\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN \"comparison_id\" text;\n",
+      "\nCREATE INDEX \"idx_result_sets_comparison\" ON \"result_sets\" USING btree (\"comparison_id\");\n",
+      "\nCREATE INDEX \"idx_comparison_jobs_org_created\" ON \"comparison_jobs\" USING btree (\"organization_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_jobs_work_created\" ON \"comparison_jobs\" USING btree (\"work_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_jobs_status_updated\" ON \"comparison_jobs\" USING btree (\"status\",\"updated_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_jobs_expires_at\" ON \"comparison_jobs\" USING btree (\"expires_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_jobs_previous\" ON \"comparison_jobs\" USING btree (\"previous_comparison_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1784780119152,
+    "hash": "2d5682cd8f62ce3492883952ab41ceb747e08db991ad0281afd6503c21eb38ec"
   }
 ]

@@ -1,6 +1,6 @@
 # Dory MCP Guide
 
-Dory exposes database work to MCP clients as editable Dory workspaces. Agents can list Dory connections, inspect schemas, run read-only SQL against connected databases, manage SQL tabs and saved queries, and use Dory Actions for connection setup and other app operations.
+Dory exposes database work to MCP clients as editable Dory workspaces. Agents can list Dory connections, inspect and compare schemas, run read-only SQL against connected databases, manage SQL tabs and saved queries, and use Dory Actions for connection setup and other app operations.
 
 Use this guide to choose the right MCP setup path. For full CLI command reference, see [`packages/cli/README.md`](../packages/cli/README.md). For the hosted bridge package, see [`packages/mcp/README.md`](../packages/mcp/README.md).
 
@@ -232,6 +232,8 @@ Dory MCP exposes a small set of workflow tools instead of one tool per business 
 - `dory_write`
 - `dory_list_connections`
 - `dory_explore_schema`
+- `dory_compare_schema`
+- `dory_analyze_database_changes`
 - `dory_run_readonly_sql`
 - `dory_workspace_tabs`
 - `dory_saved_queries`
@@ -239,8 +241,12 @@ Dory MCP exposes a small set of workflow tools instead of one tool per business 
 For database analysis, use this order:
 
 1. Call `dory_create_work` with a short title based on the user request.
-2. Pass the returned `work.workId` to work-scoped tools such as `dory_list_connections`, `dory_explore_schema`, `dory_run_readonly_sql`, `dory_workspace_tabs`, and `dory_saved_queries`.
+2. Pass the returned `work.workId` to work-scoped tools such as `dory_list_connections`, `dory_explore_schema`, `dory_compare_schema`, `dory_analyze_database_changes`, `dory_run_readonly_sql`, `dory_workspace_tabs`, and `dory_saved_queries`.
 3. Use `dory_finish_work` to save findings and execution steps.
+
+For deployment review, call `dory_compare_schema` with explicit `current` and `desired` endpoints. It creates an immutable comparison, returns a bounded deterministic summary and the highest-risk changes, and links the complete Schema Diff ResultSet to the Agent Run. Then call `dory_analyze_database_changes` with the same `workId` and returned `comparisonId` to generate or retry the evidence-cited AI Review.
+
+Schema Compare is read-only with respect to connected databases. It only reads system catalogs or information schemas and writes Dory job, snapshot, ResultSet, and Agent Run metadata. It does not generate or apply migration SQL.
 
 Use `dory_read` to list, describe, or run read-only and low-risk Dory Actions. Use `dory_write` for write-capable Actions such as `connection.create`, `connection.update`, and `connection.delete`. Before running an Action from an agent, describe it first:
 
@@ -288,6 +294,7 @@ Then run it through `dory_write` when the user has approved the change:
 - `read` scope can read Dory connections, schemas, saved queries, query-oriented metadata, and related low-risk Actions according to the user's organization permissions.
 - `write` scope covers create, update, and delete operations. It can satisfy destructive Action scope checks, so grant it only to trusted MCP clients.
 - `dory_run_readonly_sql` only allows read-only SQL against the target database. It still writes Dory workspace metadata, Agent Run context, SQL tabs, and result snapshots.
+- `dory_compare_schema` only reads safe catalog metadata from connected databases. It does not run `count(*)`, sample data, scan user tables, generate migration SQL, or apply database changes.
 - HTTP MCP requires bearer authentication. Keep tokens out of shell history where possible and pass them through environment variables.
 - Remote HTTP binds require `--host 0.0.0.0`, `--allow-remote`, and an existing token. Put remote deployments behind TLS.
 

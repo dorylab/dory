@@ -276,7 +276,7 @@ export function ConnectionSwitcher({ displayMode = 'active-connection' }: Connec
     const displayedIdentity = displayAllConnections ? null : activeIdentity;
     const displayedLabel = displayAllConnections
         ? t('All Connections')
-        : displayedConnection?.connection?.name ?? (isInitialLoading ? t('Loading connections') : t('No connections yet'));
+        : (displayedConnection?.connection?.name ?? (isInitialLoading ? t('Loading connections') : t('No connections yet')));
 
     const pendingLoadingKey = pendingConnection ? makeLoadingKey(pendingConnection.connection.id, pendingIdentity?.id) : null;
     const activeLoadingKey = displayedConnection ? makeLoadingKey(displayedConnection.connection.id, displayedIdentity?.id) : null;
@@ -476,7 +476,11 @@ export function ConnectionSwitcher({ displayMode = 'active-connection' }: Connec
                                                 </div>
                                                 <div className="flex flex-col min-w-0 max-w-[220px]">
                                                     <div className="flex items-center gap-2">
-                                                        {connectionLoading ? <Loader2 className="size-3 animate-spin text-muted-foreground" /> : renderHealth(connection.connection)}
+                                                        {connectionLoading ? (
+                                                            <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                                                        ) : (
+                                                            renderHealth(connection.connection)
+                                                        )}
                                                         <span className="truncate text-sm font-medium">{connection.connection.name ?? t('Unnamed connection')}</span>
                                                     </div>
                                                     <span className="truncate text-xs text-muted-foreground">{host}</span>
@@ -496,7 +500,9 @@ export function ConnectionSwitcher({ displayMode = 'active-connection' }: Connec
                                                     const identityLoading = Boolean(connectLoadings?.[identityKey]);
 
                                                     const isActive =
-                                                        (!displayAllConnections && activeConnection?.connection?.id === connection.connection.id && activeIdentity?.id === identity.id) ||
+                                                        (!displayAllConnections &&
+                                                            activeConnection?.connection?.id === connection.connection.id &&
+                                                            activeIdentity?.id === identity.id) ||
                                                         (pendingConnection?.connection?.id === connection.connection.id && pendingIdentity?.id === identity.id);
 
                                                     return (

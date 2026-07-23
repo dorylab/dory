@@ -3385,6 +3385,7 @@
         "WorkspaceDataSourcesCount": "{count} 个数据源",
         "WorkspaceDataSourcesCountPlural": "{count} 个数据源",
         "AgentRuns": "Agent Runs",
+        "SchemaCompare": "数据库对比",
         "SQLConsole": "SQL 控制台",
         "Explorer": "资源浏览",
         "Schema": "模式",
@@ -3876,6 +3877,106 @@
                 "LoadOrganizationFailed": "加载组织详情失败。",
                 "UnresolvedFromUrl": "无法从当前 URL 解析出组织信息。"
             }
+        }
+    },
+    "SchemaCompare": {
+        "Eyebrow": "数据库演进",
+        "Title": "数据库对比",
+        "Description": "理解、审查并安全演进数据库结构。Dory 采集确定性的 Current → Desired 差异，并解释证据。",
+        "Current": "Current（当前）",
+        "Desired": "Desired（目标）",
+        "Back": "全部对比",
+        "Delete": "删除",
+        "Cancel": "取消",
+        "Loading": "正在加载对比…",
+        "Create": {
+            "EndpointDescription": "选择连接、身份、数据库和可选的 Schema 范围。",
+            "Connection": "连接",
+            "SelectConnection": "选择连接",
+            "Identity": "身份",
+            "DefaultIdentity": "默认身份",
+            "Database": "数据库",
+            "DatabasePlaceholder": "数据库名称",
+            "Schemas": "Schema 范围",
+            "SchemasPlaceholder": "public, billing",
+            "SchemasHelp": "使用逗号分隔；留空时对比全部非系统 Schema。",
+            "Compare": "开始对比"
+        },
+        "Recent": {
+            "Title": "最近对比",
+            "Description": "每次运行都是不可变的时间点快照。",
+            "Direction": "Current → Desired",
+            "Family": "方言家族",
+            "Changes": "变化",
+            "Readiness": "部署结论",
+            "Created": "采集时间",
+            "Empty": "还没有数据库对比。"
+        },
+        "Detail": {
+            "Coverage": "覆盖度",
+            "CompareAgain": "再次对比",
+            "Failed": "对比失败",
+            "Capturing": "正在采集 Schema 快照…"
+        },
+        "Summary": {
+            "Changes": "变化",
+            "Breaking": "破坏性变化",
+            "High": "高风险",
+            "Medium": "中风险",
+            "Low": "低风险",
+            "Readiness": "部署结论"
+        },
+        "Changes": {
+            "Cards": "卡片",
+            "Table": "表格",
+            "Chart": "图表",
+            "Search": "搜索对象、原因或值…",
+            "Export": "导出",
+            "ObjectPath": "对象",
+            "Change": "变化",
+            "Risk": "风险",
+            "Reason": "原因",
+            "EstimatedRows": "估算行数",
+            "CumulativeScans": "累计索引扫描",
+            "Count": "共 {count} 项变化"
+        },
+        "Risk": {
+            "all": "全部风险",
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+            "unknown": "未知"
+        },
+        "Object": {
+            "all": "全部对象",
+            "table": "表",
+            "column": "列",
+            "index": "索引",
+            "constraint": "约束",
+            "view": "视图",
+            "materialized_view": "物化视图"
+        },
+        "AI": {
+            "Title": "AI Review",
+            "Description": "基于确定性 Diff 证据进行解释；AI 不能修改风险等级或部署结论。",
+            "Retry": "重试",
+            "Generating": "正在审查确定性证据…",
+            "Risks": "风险解释",
+            "Recommendations": "建议",
+            "Limitations": "限制",
+            "Failed": "AI Review 返回格式异常，请重试。",
+            "Unavailable": "AI Review 当前不可用。",
+            "DiffUnaffected": "确定性对比和 ResultSet 不受影响，仍可继续使用。"
+        },
+        "DeleteDialog": {
+            "Title": "删除这次对比？",
+            "Description": "这只会删除 Dory 中的 Job、快照、派生 ResultSet 和导出文件，绝不会修改任一连接数据库。"
+        },
+        "Errors": {
+            "CreateFailed": "无法创建数据库对比。",
+            "ConnectionChanged": "所选连接已失效（可能已被删除或重建）。连接列表已刷新，请重新选择 Current 和 Desired。",
+            "DeleteFailed": "无法删除这次对比。",
+            "ExportFailed": "无法导出 Schema Diff。"
         }
     },
     "Routes": {

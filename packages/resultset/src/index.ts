@@ -17,7 +17,8 @@ export type ResultSetColumn = {
 
 export type ResultSetOperation = 'select' | 'insert' | 'update' | 'delete' | 'ddl' | 'unknown' | (string & {});
 export type ResultSetStatus = 'success' | 'error' | 'canceled' | (string & {});
-export type ResultSetSourceType = 'query-run' | 'derived' | 'imported' | 'manual';
+export type ResultSetKind = 'sql-result-set' | 'schema-diff';
+export type ResultSetSourceType = 'query-run' | 'comparison' | 'derived' | 'imported' | 'manual';
 export type ResultSetActorType = 'user' | 'agent' | 'mcp' | 'automation' | (string & {});
 export type ResultSetDataAvailability = 'none' | 'preview-only' | 'full';
 
@@ -50,7 +51,7 @@ export type ResultSetManifest = {
     format: 'dory.resultset.v1';
     artifactId: string;
     organizationId: string;
-    kind: 'sql-result-set';
+    kind: ResultSetKind;
     status: ResultSetStatus;
     source: {
         type: ResultSetSourceType;
@@ -62,6 +63,7 @@ export type ResultSetManifest = {
         tabId?: string | null;
         workId?: string | null;
         agentRunId?: string | null;
+        comparisonId?: string | null;
         actorType?: ResultSetActorType | null;
         actorId?: string | null;
     };

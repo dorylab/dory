@@ -13,7 +13,8 @@ const DEFAULT_APPEND_SEPARATOR = '\n\n';
 const DEFAULT_WORK_TITLE = 'Agent Run';
 const MAX_WORK_TITLE_LENGTH = 240;
 const MAX_SHORT_WORK_TITLE_LENGTH = 64;
-const WORK_CONTEXT_INSTRUCTION = 'Call dory_create_work before query, schema exploration, SQL, workspace tab, or saved query tools, then pass the returned work.workId as workId.';
+const WORK_CONTEXT_INSTRUCTION =
+    'Call dory_create_work before query, schema exploration, schema comparison, SQL, workspace tab, or saved query tools, then pass the returned work.workId as workId.';
 
 const workResolutionInputSchema = z.object({
     workId: z.string().min(1).optional(),
@@ -62,6 +63,28 @@ const schemaGraphInputSchema = z
         depth: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
         columnMode: z.enum(['all', 'keys']).optional(),
         identityId: z.string().min(1).optional(),
+    })
+    .merge(workResolutionInputSchema);
+
+const comparisonEndpointInputSchema = z.object({
+    connectionId: z.string().min(1),
+    identityId: z.string().min(1).nullable().optional(),
+    database: z.string().min(1),
+    schemas: z.array(z.string().min(1)).max(100).optional(),
+});
+
+const compareSchemaInputSchema = z
+    .object({
+        current: comparisonEndpointInputSchema,
+        desired: comparisonEndpointInputSchema,
+        previousComparisonId: z.string().min(1).nullable().optional(),
+    })
+    .merge(workResolutionInputSchema);
+
+const analyzeDatabaseChangesInputSchema = z
+    .object({
+        comparisonId: z.string().min(1),
+        deploymentContext: z.string().max(4000).nullable().optional(),
     })
     .merge(workResolutionInputSchema);
 
@@ -369,8 +392,7 @@ function actionMetadata(action: ActionDefinition<any, any, WebActionServices>, p
         defaultProjection: action.exposure.defaultProjection ?? {},
         scopes: action.permission.scopes ?? [],
         organizationPermissions: action.permission.organization ?? [],
-        requiresConfirmation:
-            action.permission.confirmation?.required ?? (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false) ?? false,
+        requiresConfirmation: action.permission.confirmation?.required ?? (action.risk === 'destructive' && action.permission.destructive?.requireConfirmation !== false) ?? false,
         inputSchema: actionSchemaToJsonSchema(action.inputSchema),
         outputSchema: actionSchemaToJsonSchema(actionProjectionSchema(action, projection)),
     };
@@ -494,6 +516,16 @@ function buildWorkspaceUrl(
     return new URL(path, ctx.services.workspaceOrigin ?? ctx.services.requestOrigin ?? 'http://localhost:3000').toString();
 }
 
+function buildComparisonWorkspaceUrl(ctx: ActionContext<WebActionServices>, comparisonId: string) {
+    const path = `/${encodeURIComponent(ctx.organizationId)}/compare/${encodeURIComponent(comparisonId)}`;
+    if (ctx.runtime === 'desktop') {
+        const url = new URL(`${getDesktopProtocolSchemeForServer()}://open`);
+        url.searchParams.set('path', path);
+        return url.toString();
+    }
+    return new URL(path, ctx.services.workspaceOrigin ?? ctx.services.requestOrigin ?? 'http://localhost:3000').toString();
+}
+
 function withWork(data: unknown, work: ResolvedMcpWork): Record<string, unknown> & { work: { workId: string; workspaceUrl: string }; workspaceUrl: string } {
     const base = isRecord(data) ? data : { value: data };
     return {
@@ -562,6 +594,9 @@ function summarizeMcpOutput(output: unknown) {
         rowCount: value.rowCount ?? null,
         tabId: value.tabId ?? workspaceAction.tabId ?? null,
         sessionId: value.sessionId ?? null,
+        comparisonId: value.comparisonId ?? null,
+        resultSetId: value.resultSetId ?? null,
+        readiness: toRecord(value.summary).readiness ?? null,
         status: value.status ?? null,
     };
 }
@@ -871,6 +906,57 @@ async function getSchemaGraphFacade(ctx: ActionContext<WebActionServices>, rawIn
     return withWork(result, work);
 }
 
+async function compareSchemaFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
+    const input = compareSchemaInputSchema.parse(rawInput);
+    const output = toRecord(
+        await executeInternal(ctx, 'comparison.schema.create', {
+            current: input.current,
+            desired: input.desired,
+            workId: work.workId,
+            previousComparisonId: input.previousComparisonId,
+        }),
+    );
+    const job = toRecord(output.job);
+    const comparison = toRecord(output.comparison);
+    const summary = toRecord(comparison.summary);
+    const topChanges = (Array.isArray(output.topChanges) ? output.topChanges : []).slice(0, 10);
+    const comparisonId = requireString(job.id, 'comparisonId');
+    work.workspaceUrl = buildComparisonWorkspaceUrl(ctx, comparisonId);
+    return withWork(
+        {
+            comparisonId,
+            resultSetId: getString(job.resultSetId),
+            summary,
+            coverage: comparison.coverage ?? job.coverage ?? null,
+            highestRiskChanges: topChanges,
+        },
+        work,
+    );
+}
+
+async function analyzeDatabaseChangesFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
+    const input = analyzeDatabaseChangesInputSchema.parse(rawInput);
+    const output = toRecord(
+        await executeInternal(ctx, 'comparison.aiReview', {
+            comparisonId: input.comparisonId,
+            workId: work.workId,
+            deploymentContext: input.deploymentContext,
+        }),
+    );
+    const job = toRecord(output.job);
+    work.workspaceUrl = buildComparisonWorkspaceUrl(ctx, input.comparisonId);
+    return withWork(
+        {
+            comparisonId: input.comparisonId,
+            resultSetId: getString(job.resultSetId),
+            summary: job.summary ?? null,
+            coverage: job.coverage ?? null,
+            aiReview: output.review ?? null,
+        },
+        work,
+    );
+}
+
 async function workspaceTabsFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = workspaceTabsInputSchema.parse(rawInput);
     switch (input.operation) {
@@ -1164,7 +1250,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_create_work',
             title: 'Create Dory Work',
             description:
-                'Create or reuse one Dory Agent Run work context for query, analysis, SQL, schema exploration, workspace tab, or saved query tools. Use a short title based on the user question, then pass the returned work.workId as workId to those work-scoped tools.',
+                'Create or reuse one Dory Agent Run work context for query, analysis, SQL, schema exploration, schema comparison, workspace tab, or saved query tools. Use a short title based on the user question, then pass the returned work.workId as workId to those work-scoped tools.',
             inputSchema: createWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -1263,6 +1349,32 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                 openWorldHint: true,
             },
             execute: (ctx, input) => executeWithWork(ctx, 'dory_get_schema_graph', input, (parsed, work) => getSchemaGraphFacade(ctx, parsed, work)),
+        },
+        {
+            name: 'dory_compare_schema',
+            title: 'Compare database schemas',
+            description: `Capture and compare Current → Desired database schemas, persist the deterministic diff as a Dory ResultSet, and return a bounded deployment summary. Only same-family dialects are accepted. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
+            inputSchema: compareSchemaInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                openWorldHint: true,
+            },
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_compare_schema', input, (parsed, work) => compareSchemaFacade(ctx, parsed, work)),
+        },
+        {
+            name: 'dory_analyze_database_changes',
+            title: 'Analyze database changes',
+            description: `Generate or retry an evidence-cited AI Review for a schema comparison that belongs to the same Agent Run. The AI explains but cannot change canonical risk or readiness. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
+            inputSchema: analyzeDatabaseChangesInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                openWorldHint: true,
+            },
+            execute: (ctx, input) => executeWithWork(ctx, 'dory_analyze_database_changes', input, (parsed, work) => analyzeDatabaseChangesFacade(ctx, parsed, work)),
         },
         {
             name: 'dory_run_readonly_sql',

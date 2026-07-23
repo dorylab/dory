@@ -3379,6 +3379,7 @@
         "WorkspaceDataSourcesCount": "{count} fuente de datos",
         "WorkspaceDataSourcesCountPlural": "{count} fuentes de datos",
         "AgentRuns": "Ejecuciones de agente",
+        "SchemaCompare": "Comparar esquemas",
         "SQLConsole": "Consola SQL",
         "Explorer": "Explorador",
         "Schema": "Esquema",
@@ -3870,6 +3871,106 @@
                 "LoadOrganizationFailed": "No se pudieron cargar los detalles de la organización.",
                 "UnresolvedFromUrl": "No se pudo resolver la organización actual a partir de esta URL."
             }
+        }
+    },
+    "SchemaCompare": {
+        "Eyebrow": "Evolución de bases de datos",
+        "Title": "Comparar bases de datos",
+        "Description": "Comprende, revisa y evoluciona esquemas con seguridad. Dory captura un diff determinista Current → Desired y explica la evidencia.",
+        "Current": "Current (actual)",
+        "Desired": "Desired (objetivo)",
+        "Back": "Todas las comparaciones",
+        "Delete": "Eliminar",
+        "Cancel": "Cancelar",
+        "Loading": "Cargando comparación…",
+        "Create": {
+            "EndpointDescription": "Elige conexión, identidad, base de datos y un alcance de esquemas opcional.",
+            "Connection": "Conexión",
+            "SelectConnection": "Seleccionar conexión",
+            "Identity": "Identidad",
+            "DefaultIdentity": "Identidad predeterminada",
+            "Database": "Base de datos",
+            "DatabasePlaceholder": "Nombre de la base de datos",
+            "Schemas": "Alcance de esquemas",
+            "SchemasPlaceholder": "public, billing",
+            "SchemasHelp": "Separados por comas. Vacío compara todos los esquemas no internos.",
+            "Compare": "Comparar esquemas"
+        },
+        "Recent": {
+            "Title": "Comparaciones recientes",
+            "Description": "Cada ejecución es una captura inmutable de un momento.",
+            "Direction": "Current → Desired",
+            "Family": "Familia de dialecto",
+            "Changes": "Cambios",
+            "Readiness": "Preparación",
+            "Created": "Capturado",
+            "Empty": "Aún no hay comparaciones de esquemas."
+        },
+        "Detail": {
+            "Coverage": "Cobertura",
+            "CompareAgain": "Comparar de nuevo",
+            "Failed": "La comparación falló",
+            "Capturing": "Capturando esquemas…"
+        },
+        "Summary": {
+            "Changes": "Cambios",
+            "Breaking": "Incompatibles",
+            "High": "Riesgo alto",
+            "Medium": "Riesgo medio",
+            "Low": "Riesgo bajo",
+            "Readiness": "Preparación del despliegue"
+        },
+        "Changes": {
+            "Cards": "Tarjetas",
+            "Table": "Tabla",
+            "Chart": "Gráfico",
+            "Search": "Buscar objetos, razones o valores…",
+            "Export": "Exportar",
+            "ObjectPath": "Objeto",
+            "Change": "Cambio",
+            "Risk": "Riesgo",
+            "Reason": "Razón",
+            "EstimatedRows": "Filas estimadas",
+            "CumulativeScans": "Escaneos acumulados del índice",
+            "Count": "{count} cambios"
+        },
+        "Risk": {
+            "all": "Todos los riesgos",
+            "high": "Alto",
+            "medium": "Medio",
+            "low": "Bajo",
+            "unknown": "Desconocido"
+        },
+        "Object": {
+            "all": "Todos los objetos",
+            "table": "Tablas",
+            "column": "Columnas",
+            "index": "Índices",
+            "constraint": "Restricciones",
+            "view": "Vistas",
+            "materialized_view": "Vistas materializadas"
+        },
+        "AI": {
+            "Title": "AI Review",
+            "Description": "Explicación basada en la evidencia del diff canónico. La IA no puede cambiar el riesgo ni la preparación.",
+            "Retry": "Reintentar",
+            "Generating": "Revisando evidencia determinista…",
+            "Risks": "Explicaciones de riesgo",
+            "Recommendations": "Recomendaciones",
+            "Limitations": "Limitaciones",
+            "Failed": "AI Review devolvió una respuesta no válida. Inténtalo de nuevo.",
+            "Unavailable": "AI Review no está disponible.",
+            "DiffUnaffected": "La comparación determinista y el ResultSet siguen disponibles."
+        },
+        "DeleteDialog": {
+            "Title": "¿Eliminar la comparación?",
+            "Description": "Elimina el job, las capturas, el ResultSet derivado y las exportaciones de Dory. Nunca modifica las bases conectadas."
+        },
+        "Errors": {
+            "CreateFailed": "No se pudo crear la comparación.",
+            "ConnectionChanged": "Una conexión seleccionada ya no está disponible (puede haberse eliminado o vuelto a crear). La lista se actualizó; vuelve a seleccionar Current y Desired.",
+            "DeleteFailed": "No se pudo eliminar la comparación.",
+            "ExportFailed": "No se pudo exportar el diff."
         }
     },
     "Routes": {

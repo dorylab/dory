@@ -12,6 +12,7 @@ import type {
 } from '@dory/drivers/types';
 import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { MySqlDatasource } from '../datasource';
+import { getMysqlSchemaSnapshot } from './schema-snapshot';
 
 export type MysqlMetadataAPI = ConnectionMetadataAPI & {
     getTableColumns: (database: string, table: string) => Promise<TableColumnInfo[]>;
@@ -20,6 +21,7 @@ export type MysqlMetadataAPI = ConnectionMetadataAPI & {
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
     getSchemaGraph: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
+    getSchemaSnapshot: NonNullable<ConnectionMetadataAPI['getSchemaSnapshot']>;
 };
 
 type TableMetaRow = {
@@ -662,5 +664,6 @@ export function createMysqlMetadataCapability(datasource: MySqlDatasource): Mysq
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
         getSchemaGraph: options => getSchemaGraph(datasource, options),
+        getSchemaSnapshot: input => getMysqlSchemaSnapshot(datasource, datasource.config.type, input),
     };
 }

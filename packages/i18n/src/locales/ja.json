@@ -3379,6 +3379,7 @@
         "WorkspaceDataSourcesCount": "{count} 件のデータソース",
         "WorkspaceDataSourcesCountPlural": "{count} 件のデータソース",
         "AgentRuns": "Agent Runs",
+        "SchemaCompare": "スキーマ比較",
         "SQLConsole": "SQL コンソール",
         "Explorer": "エクスプローラー",
         "Schema": "スキーマ",
@@ -3870,6 +3871,106 @@
                 "LoadOrganizationFailed": "組織情報の読み込みに失敗しました。",
                 "UnresolvedFromUrl": "この URL から現在の組織を解決できませんでした。"
             }
+        }
+    },
+    "SchemaCompare": {
+        "Eyebrow": "データベースの進化",
+        "Title": "データベースを比較",
+        "Description": "データベース構造の変更を理解し、安全にレビューします。Dory は Current → Desired の決定的な差分と根拠を提供します。",
+        "Current": "Current（現在）",
+        "Desired": "Desired（目標）",
+        "Back": "比較一覧",
+        "Delete": "削除",
+        "Cancel": "キャンセル",
+        "Loading": "比較を読み込み中…",
+        "Create": {
+            "EndpointDescription": "接続、ID、データベース、任意のスキーマ範囲を選択します。",
+            "Connection": "接続",
+            "SelectConnection": "接続を選択",
+            "Identity": "ID",
+            "DefaultIdentity": "デフォルト ID",
+            "Database": "データベース",
+            "DatabasePlaceholder": "データベース名",
+            "Schemas": "スキーマ範囲",
+            "SchemasPlaceholder": "public, billing",
+            "SchemasHelp": "カンマ区切り。空欄の場合はシステム以外の全スキーマを比較します。",
+            "Compare": "スキーマを比較"
+        },
+        "Recent": {
+            "Title": "最近の比較",
+            "Description": "各実行は変更されない時点スナップショットです。",
+            "Direction": "Current → Desired",
+            "Family": "方言ファミリー",
+            "Changes": "変更",
+            "Readiness": "準備状況",
+            "Created": "取得日時",
+            "Empty": "スキーマ比較はまだありません。"
+        },
+        "Detail": {
+            "Coverage": "カバレッジ",
+            "CompareAgain": "再比較",
+            "Failed": "比較に失敗しました",
+            "Capturing": "スキーマスナップショットを取得中…"
+        },
+        "Summary": {
+            "Changes": "変更",
+            "Breaking": "破壊的変更",
+            "High": "高リスク",
+            "Medium": "中リスク",
+            "Low": "低リスク",
+            "Readiness": "デプロイ準備状況"
+        },
+        "Changes": {
+            "Cards": "カード",
+            "Table": "テーブル",
+            "Chart": "チャート",
+            "Search": "オブジェクト、理由、値を検索…",
+            "Export": "エクスポート",
+            "ObjectPath": "オブジェクト",
+            "Change": "変更",
+            "Risk": "リスク",
+            "Reason": "理由",
+            "EstimatedRows": "推定行数",
+            "CumulativeScans": "累積インデックススキャン",
+            "Count": "{count} 件の変更"
+        },
+        "Risk": {
+            "all": "すべてのリスク",
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+            "unknown": "不明"
+        },
+        "Object": {
+            "all": "すべてのオブジェクト",
+            "table": "テーブル",
+            "column": "カラム",
+            "index": "インデックス",
+            "constraint": "制約",
+            "view": "ビュー",
+            "materialized_view": "マテリアライズドビュー"
+        },
+        "AI": {
+            "Title": "AI Review",
+            "Description": "決定的な差分の根拠を説明します。AI はリスクや準備状況を変更できません。",
+            "Retry": "再試行",
+            "Generating": "決定的な根拠をレビュー中…",
+            "Risks": "リスクの説明",
+            "Recommendations": "推奨事項",
+            "Limitations": "制限",
+            "Failed": "AI Review の応答形式が正しくありません。再試行してください。",
+            "Unavailable": "AI Review を利用できません。",
+            "DiffUnaffected": "決定的な比較と ResultSet は引き続き利用できます。"
+        },
+        "DeleteDialog": {
+            "Title": "比較を削除しますか？",
+            "Description": "Dory のジョブ、スナップショット、派生 ResultSet、エクスポートのみを削除します。接続先データベースは変更しません。"
+        },
+        "Errors": {
+            "CreateFailed": "スキーマ比較を作成できませんでした。",
+            "ConnectionChanged": "選択した接続は利用できません（削除または再作成された可能性があります）。リストを更新したため、Current と Desired をもう一度選択してください。",
+            "DeleteFailed": "比較を削除できませんでした。",
+            "ExportFailed": "スキーマ差分をエクスポートできませんでした。"
         }
     },
     "Routes": {

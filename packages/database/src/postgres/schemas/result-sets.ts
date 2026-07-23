@@ -1,10 +1,9 @@
 import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { newEntityId } from '@dory/shared/id';
-import type { ResultSetArtifactRef, ResultSetColumn, ResultSetDataAvailability, ResultSetSourceType } from '@dory/resultset';
+import type { ResultSetArtifactRef, ResultSetColumn, ResultSetDataAvailability, ResultSetKind, ResultSetSourceType } from '@dory/resultset';
 
 export type QueryRunActorType = 'user' | 'agent' | 'mcp' | 'automation' | (string & {});
 export type QueryRunStatus = 'running' | 'success' | 'error' | 'canceled' | (string & {});
-export type ResultSetKind = 'sql-result-set';
 export type ResultSetStatus = 'success' | 'error' | 'canceled' | (string & {});
 export type AgentRunResultSetRole = 'generated' | 'referenced' | 'derived' | (string & {});
 
@@ -58,6 +57,7 @@ export const resultSets = pgTable(
         sessionId: text('session_id'),
         setIndex: integer('set_index'),
         sourceQueryRunId: text('source_query_run_id'),
+        comparisonId: text('comparison_id'),
         sourceType: text('source_type').$type<ResultSetSourceType>().notNull(),
         kind: text('kind').$type<ResultSetKind>().notNull(),
         status: text('status').$type<ResultSetStatus>().notNull(),
@@ -93,6 +93,7 @@ export const resultSets = pgTable(
         index('idx_result_sets_agent_created').on(t.agentRunId, t.createdAt),
         index('idx_result_sets_session_set').on(t.organizationId, t.sessionId, t.setIndex),
         index('idx_result_sets_source_query_run').on(t.sourceQueryRunId),
+        index('idx_result_sets_comparison').on(t.comparisonId),
         index('idx_result_sets_expires_at').on(t.expiresAt),
     ],
 );
