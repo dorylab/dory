@@ -13,7 +13,7 @@ import { activeDatabaseAtom } from '@/shared/stores/app.store';
 import { buildSqlEditorOptions, SqlEditorSettings } from '@/shared/stores/sql-editor-settings.store';
 import { useAtomValue, useSetAtom } from 'jotai';
 import type { UITabPayload } from '@dory/shared/types/tabs';
-import { buildColumnPrefix, normalizeTableName, resolveTableFromAliasInSql } from './utils';
+import { buildColumnPrefix, normalizeTableName, resolveSqlCompletionFallbackContext, resolveTableFromAliasInSql } from './utils';
 import { editorSelectionByTabAtom } from '../../sql-console.store';
 import { useTranslations } from 'next-intl';
 import type { ConnectionType } from '@dory/shared/types/connections';
@@ -205,6 +205,8 @@ const registerDtSqlCompletion = (
             const wordInfo = model.getWordUntilPosition(position);
             const range = new monaco.Range(position.lineNumber, wordInfo.startColumn, position.lineNumber, wordInfo.endColumn);
             const currentWord = wordInfo.word ?? '';
+            const caretOffset = model.getOffsetAt(position);
+            const fallbackContext = resolveSqlCompletionFallbackContext(sql, caretOffset);
             const tables = getTables() || [];
             const databases = getDatabases() || [];
             const schemas = getSchemas() || [];
@@ -226,7 +228,7 @@ const registerDtSqlCompletion = (
 
                 const items: Monaco.languages.CompletionItem[] = [];
                 const syntaxList = normalizeCompletionSyntax(syntax);
-                const columnPrefix = buildColumnPrefix(syntaxList, currentWord);
+                const columnPrefix = fallbackContext.columnPrefix ?? buildColumnPrefix(syntaxList, currentWord);
 
                 if (Array.isArray(keywords)) {
                     for (const kw of keywords) {
@@ -242,14 +244,14 @@ const registerDtSqlCompletion = (
                     }
                 }
 
-                if (syntaxList.length) {
-                    const hasColumnContext = syntaxList.some(s => s.syntaxContextType === 'column');
-                    const hasTableContext = syntaxList.some(s => s.syntaxContextType === 'table');
+                if (syntaxList.length || fallbackContext.tablePrefix !== null || fallbackContext.columnPrefix !== null) {
+                    const hasColumnContext = fallbackContext.columnPrefix !== null || syntaxList.some(s => s.syntaxContextType === 'column');
+                    const hasTableContext = fallbackContext.tablePrefix !== null || syntaxList.some(s => s.syntaxContextType === 'table');
                     const hasDatabaseContext = syntaxList.some(s => s.syntaxContextType === 'database' || s.syntaxContextType === 'databaseCreate');
 
                     if (hasTableContext) {
                         const tableSyntax = syntaxList.find(s => s.syntaxContextType === 'table');
-                        const typedTablePrefix = completionTextFromWordRanges(tableSyntax?.wordRanges, currentWord);
+                        const typedTablePrefix = fallbackContext.tablePrefix ?? completionTextFromWordRanges(tableSyntax?.wordRanges, currentWord);
                         const normalizedPrefix = (typedTablePrefix ?? '').toLowerCase();
 
                         const hasQualifierPrefix = typedTablePrefix.includes('.');
@@ -394,7 +396,6 @@ const registerDtSqlCompletion = (
                         }
 
                         if (!targetTables.length) {
-                            const caretOffset = model.getOffsetAt(position);
                             targetTables = resolveTablesForColumnContext(parser, sql, caretPos, tables, caretOffset);
 
                             if (!targetTables.length) {
