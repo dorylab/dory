@@ -64,6 +64,7 @@ export type ResultSetManifest = {
         workId?: string | null;
         agentRunId?: string | null;
         comparisonId?: string | null;
+        comparisonRunId?: string | null;
         actorType?: ResultSetActorType | null;
         actorId?: string | null;
     };

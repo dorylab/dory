@@ -6,4 +6,5 @@ export type WebActionServices = {
     req?: NextRequest;
     requestOrigin?: string | null;
     workspaceOrigin?: string | null;
+    defer?: (task: () => Promise<void> | void) => void;
 };

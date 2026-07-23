@@ -214,6 +214,18 @@ assert.equal(compareSchemaSnapshots(numericCurrent, numericNarrower).changes[0]?
 assert.deepEqual(compareSchemaSnapshots(current, current).changes, []);
 assert.equal(compareSchemaSnapshots(current, current).summary.readiness, 'compatible');
 
+const columnsOnly = compareSchemaSnapshots(current, desired, { objectTypes: ['column'] });
+assert.ok(columnsOnly.changes.length > 0);
+assert.ok(columnsOnly.changes.every(change => change.objectType === 'column'));
+assert.equal(columnsOnly.coverage.statistics, 'complete');
+
+const unavailableUnselectedIndexes = compareSchemaSnapshots(current, partialDesired, { objectTypes: ['table', 'column'] });
+assert.notEqual(unavailableUnselectedIndexes.summary.readiness, 'unknown');
+assert.equal(
+    unavailableUnselectedIndexes.warnings.some(warning => warning.includes('indexes coverage is unavailable')),
+    false,
+);
+
 assert.throws(
     () =>
         compareSchemaSnapshots(

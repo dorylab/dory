@@ -3381,7 +3381,7 @@
         "WorkspaceDataSourcesCount": "{count} data source",
         "WorkspaceDataSourcesCountPlural": "{count} data sources",
         "AgentRuns": "Agent Runs",
-        "SchemaCompare": "Schema Compare",
+        "SchemaCompare": "Comparisons",
         "SQLConsole": "SQL Console",
         "Explorer": "Explorer",
         "Schema": "Schema",
@@ -3877,15 +3877,33 @@
     },
     "SchemaCompare": {
         "Eyebrow": "Database evolution",
-        "Title": "Compare databases",
+        "Title": "Comparisons",
         "Description": "Understand, review, and safely evolve database schemas. Dory captures a deterministic Current → Desired diff and explains the evidence.",
-        "Current": "Current",
-        "Desired": "Desired",
+        "Source": "Source",
+        "Target": "Target",
+        "Current": "Source",
+        "Desired": "Target",
         "Back": "All comparisons",
         "Delete": "Delete",
         "Cancel": "Cancel",
         "Loading": "Loading comparison…",
+        "List": {
+            "Eyebrow": "Database evolution",
+            "Title": "Database Comparisons",
+            "Description": "Keep track of the database relationships whose schema changes matter to you.",
+            "New": "New Comparison",
+            "LastChecked": "Last checked {date}",
+            "NeverChecked": "Not checked yet",
+            "Risks": "{count} risky",
+            "Empty": "No saved comparisons yet.",
+            "EmptyDescription": "Create a permanent Source → Target comparison and Dory will preserve every run."
+        },
         "Create": {
+            "Eyebrow": "New Comparison",
+            "Title": "Create Comparison",
+            "Description": "Save a database relationship and run its first deterministic schema check.",
+            "Name": "Name",
+            "NamePlaceholder": "Production vs Staging",
             "EndpointDescription": "Choose a connection, identity, database, and optional schema scope.",
             "Connection": "Connection",
             "SelectConnection": "Select a connection",
@@ -3896,7 +3914,18 @@
             "Schemas": "Schema scope",
             "SchemasPlaceholder": "public, billing",
             "SchemasHelp": "Comma-separated. Leave empty to compare all non-system schemas.",
-            "Compare": "Compare schemas"
+            "CompareObjects": "Compare",
+            "CompareObjectsHelp": "Statistics are always collected as risk evidence and are not a selectable diff type.",
+            "Compare": "Compare schemas",
+            "Create": "Create",
+            "SaveAndRun": "Save changes"
+        },
+        "Status": {
+            "NotRun": "Not run",
+            "Running": "Running",
+            "Failed": "Failed",
+            "NoChanges": "No changes",
+            "ChangeCount": "{count} changes"
         },
         "Recent": {
             "Title": "Recent comparisons",
@@ -3911,11 +3940,20 @@
         "Detail": {
             "Coverage": "Coverage",
             "CompareAgain": "Compare again",
+            "RunNow": "Run now",
+            "LastChecked": "Last checked {date}",
+            "Configuration": "Configuration",
+            "ConfigurationVersion": "Configuration version {version}",
+            "AllSchemas": "All schemas",
+            "Highlights": "Important changes",
+            "ViewDiff": "View full diff",
             "Failed": "Comparison failed",
             "Capturing": "Capturing schema snapshots…"
         },
         "Summary": {
             "Changes": "Changes",
+            "Compatible": "Compatible",
+            "Warnings": "Warnings",
             "Breaking": "Breaking",
             "High": "High risk",
             "Medium": "Medium risk",
@@ -3956,7 +3994,9 @@
             "Title": "AI Review",
             "Description": "Evidence-based explanation of the canonical diff. AI cannot change risk or readiness.",
             "Retry": "Retry",
+            "Generate": "Generate review",
             "Generating": "Reviewing deterministic evidence…",
+            "NotNeeded": "No changes were detected, so an AI review is not needed.",
             "Risks": "Risk explanations",
             "Recommendations": "Recommendations",
             "Limitations": "Limitations",
@@ -3964,12 +4004,35 @@
             "Unavailable": "AI Review is unavailable.",
             "DiffUnaffected": "The deterministic comparison and ResultSet remain available."
         },
+        "Edit": {
+            "Action": "Edit",
+            "Eyebrow": "Comparison configuration",
+            "Title": "Edit Comparison",
+            "Description": "Changing Source, Target, schema scope, or object types creates a new immutable Run. Renaming does not.",
+            "BlockedTitle": "A comparison run is active",
+            "BlockedDescription": "Wait for the current run to finish before editing this Comparison.",
+            "BackToComparison": "Back to comparison"
+        },
+        "Runs": {
+            "Title": "Comparison Runs",
+            "Description": "Immutable point-in-time schema checks, like commits in a history.",
+            "ConfigurationVersion": "Configuration v{version}",
+            "Empty": "No runs yet."
+        },
+        "Run": {
+            "Title": "Comparison Run",
+            "SnapshotConfiguration": "Configuration snapshot",
+            "ImmutableDescription": "This configuration and deterministic result are preserved as historical facts.",
+            "Changes": "Changes",
+            "ChangesDescription": "Git-style before and after values, grouped by database object type."
+        },
         "DeleteDialog": {
             "Title": "Delete comparison?",
-            "Description": "This removes the Dory job, snapshots, derived ResultSet, and exports. It never changes either connected database."
+            "Description": "This permanently removes the Comparison, all Runs, snapshots, derived ResultSets, and exports. It never changes either connected database."
         },
         "Errors": {
             "CreateFailed": "Unable to create schema comparison.",
+            "RunFailed": "Unable to run schema comparison.",
             "ConnectionChanged": "A selected connection is no longer available (it may have been deleted or recreated). The list was refreshed; select Current and Desired again.",
             "DeleteFailed": "Unable to delete comparison.",
             "ExportFailed": "Unable to export the schema diff."

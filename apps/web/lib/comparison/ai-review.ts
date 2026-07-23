@@ -1,7 +1,6 @@
 import { getDoryArtifactStore } from '@dory/artifacts';
 import type { DBService } from '@dory/database';
 import type { ComparisonAiReview } from '@dory/database/postgres/schemas';
-import { compareSchemaSnapshots } from '@dory/schema-compare';
 import type { NextRequest } from 'next/server';
 
 import { buildSchemaComparisonAiReviewPrompt, schemaComparisonAiReviewSchema } from './ai-review-output';
@@ -16,19 +15,26 @@ export async function reviewSchemaComparison(input: {
     organizationId: string;
     userId: string;
     comparisonId: string;
+    runId: string;
     deploymentContext?: string | null;
     locale?: string | null;
     req?: NextRequest;
 }): Promise<ComparisonAiReview> {
-    const job = await input.db.comparisons.get(input.organizationId, input.comparisonId);
-    if (job.status !== 'success' || !job.snapshotArtifactRef || !job.summary || !job.coverage) {
+    const run = await input.db.comparisons.getRun(input.organizationId, input.comparisonId, input.runId);
+    if (run.aiReviewStatus === 'success' && run.aiReview) return run.aiReview;
+    if (run.status !== 'success' || !run.artifactRef || !run.summary || !run.coverage) {
         throw new Error('AI Review requires a successful deterministic schema comparison.');
     }
 
-    await input.db.comparisons.setAiReviewRunning(input.organizationId, input.comparisonId);
+    const claimed = await input.db.comparisons.claimAiReview(input.organizationId, input.comparisonId, input.runId);
+    if (!claimed) {
+        const latest = await input.db.comparisons.getRun(input.organizationId, input.comparisonId, input.runId);
+        if (latest.aiReviewStatus === 'success' && latest.aiReview) return latest.aiReview;
+        throw new Error('AI Review is already running or is not needed for this Comparison Run.');
+    }
     try {
-        const snapshots = await getDoryArtifactStore().comparisons.readSnapshots(job.snapshotArtifactRef);
-        const comparison = compareSchemaSnapshots(snapshots.current, snapshots.desired);
+        const artifacts = getDoryArtifactStore().comparisons;
+        const comparison = (await artifacts.readRun(run.artifactRef)).comparison;
         const changes = comparison.changes.slice(0, 100).map(change => ({
             changeId: change.changeId,
             objectType: change.objectType,
@@ -80,12 +86,14 @@ export async function reviewSchemaComparison(input: {
             ],
             generatedAt: new Date().toISOString(),
         };
-        await input.db.comparisons.setAiReviewSuccess(input.organizationId, input.comparisonId, review);
+        await artifacts.putAiReview(run.artifactRef, review).catch(() => undefined);
+        await input.db.comparisons.setAiReviewSuccess(input.organizationId, input.comparisonId, input.runId, review);
         return review;
     } catch (error) {
         await input.db.comparisons.setAiReviewFailure(
             input.organizationId,
             input.comparisonId,
+            input.runId,
             unavailableError(error) ? 'unavailable' : 'failed',
             error instanceof Error ? error.message : String(error),
         );

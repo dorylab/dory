@@ -9,7 +9,7 @@ import { organizations } from '@dory/database/postgres/schemas/organizations/org
 import type { ConnectionPayload } from '@dory/shared/types/connections';
 
 import { createCredentiallessDefaultIdentity } from '@/lib/connection/credentialless-identity';
-import { createSchemaComparison } from '@/lib/comparison/service';
+import { createComparisonAndRun } from '@/lib/comparison/service';
 import { generateSchemaCompareFixtures, type GeneratedSchemaCompareFixture, type SchemaCompareFixtureSide } from '@/lib/demo/schema-compare-fixtures';
 
 const appDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -119,39 +119,42 @@ async function main() {
             });
             const existingComparison = knownComparisons.find(
                 comparison =>
-                    comparison.status === 'success' &&
-                    comparison.currentEndpoint.connectionId === current.connection.connection.id &&
-                    comparison.desiredEndpoint.connectionId === desired.connection.connection.id &&
-                    comparison.currentEndpoint.database === 'main' &&
-                    comparison.desiredEndpoint.database === 'main',
+                    comparison.sourceEndpoint.connectionId === current.connection.connection.id &&
+                    comparison.targetEndpoint.connectionId === desired.connection.connection.id &&
+                    comparison.sourceEndpoint.database === 'main' &&
+                    comparison.targetEndpoint.database === 'main',
             );
-            const comparison = existingComparison
-                ? { job: existingComparison, comparison: null }
-                : await createSchemaComparison(db, {
+            const output = existingComparison
+                ? null
+                : await createComparisonAndRun(db, {
                       organizationId: organization.id,
                       userId: organization.ownerUserId,
-                      current: {
-                          connectionId: current.connection.connection.id,
-                          identityId: current.connection.identities.find(identity => identity.isDefault)?.id ?? null,
-                          database: 'main',
-                      },
-                      desired: {
-                          connectionId: desired.connection.connection.id,
-                          identityId: desired.connection.identities.find(identity => identity.isDefault)?.id ?? null,
-                          database: 'main',
+                      configuration: {
+                          name: fixture.title,
+                          source: {
+                              connectionId: current.connection.connection.id,
+                              identityId: current.connection.identities.find(identity => identity.isDefault)?.id ?? null,
+                              database: 'main',
+                          },
+                          target: {
+                              connectionId: desired.connection.connection.id,
+                              identityId: desired.connection.identities.find(identity => identity.isDefault)?.id ?? null,
+                              database: 'main',
+                          },
                       },
                   });
-            if (!existingComparison) knownComparisons.push(comparison.job);
+            const comparison = existingComparison ?? output?.comparison;
+            if (!existingComparison && comparison) knownComparisons.push(comparison);
 
             console.log(`  ${fixture.title}: ${current.status}/${desired.status}`);
             console.log(`    Current: ${fixture.current.name}`);
             console.log(`    Desired: ${fixture.desired.name}`);
             console.log(`    Expected: ${fixture.expected}`);
             console.log(
-                `    Comparison: ${comparison.job.id} (${existingComparison ? 'reused' : 'created'}, ${comparison.comparison?.summary.readiness ?? comparison.job.summary?.readiness ?? 'unknown'})`,
+                `    Comparison: ${comparison?.id ?? 'unknown'} (${existingComparison ? 'reused' : 'created'}, ${output?.result?.summary.readiness ?? comparison?.latestSuccessfulRun?.summary?.readiness ?? 'unknown'})`,
             );
         }
-        console.log(`  Open: /${organization.slug}/compare`);
+        console.log(`  Open: /${organization.slug}/comparisons`);
     }
 }
 

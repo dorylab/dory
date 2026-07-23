@@ -128,6 +128,13 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
             },
         ]),
     ) satisfies ChartConfig;
+    const groupedRows = Object.entries(
+        (rowsQuery.data?.rows ?? []).reduce<Record<string, DiffRow[]>>((groups, row) => {
+            const key = row.objectType === 'materialized_view' ? 'view' : row.objectType;
+            (groups[key] ??= []).push(row);
+            return groups;
+        }, {}),
+    );
     const toggleSort = (column: string) => {
         void setState({
             sort: column,
@@ -197,45 +204,58 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
                     {t('Loading')}
                 </div>
             ) : state.view === 'cards' ? (
-                <div className="grid gap-4 p-4 lg:grid-cols-2">
-                    {(rowsQuery.data?.rows ?? []).map(row => (
-                        <Card key={row.changeId} className="gap-0 overflow-hidden py-0">
-                            <CardHeader data-testid="schema-diff-card-header" className="flex flex-row items-center justify-between gap-3 border-b px-5 py-3 [.border-b]:pb-3">
-                                <div className="min-w-0">
-                                    <div className="truncate font-mono text-sm font-medium" title={row.objectPath}>
-                                        {row.objectPath}
-                                    </div>
-                                    <div className="mt-1 text-xs text-muted-foreground">
-                                        {row.objectType} · {row.changeType}
-                                        {row.attribute ? ` · ${row.attribute}` : ''}
-                                    </div>
-                                </div>
-                                <Badge variant="outline" className={`shrink-0 ${riskClass(row.riskLevel)}`}>
-                                    {row.riskLevel}
-                                </Badge>
-                            </CardHeader>
-                            <CardContent className="grid gap-4 p-5">
-                                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                                    <div className="rounded-md bg-muted/60 p-3">
-                                        <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Current')}</div>
-                                        <div className="break-words font-mono text-sm">{row.currentValue ?? '—'}</div>
-                                    </div>
-                                    <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" />
-                                    <div className="rounded-md bg-muted/60 p-3">
-                                        <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Desired')}</div>
-                                        <div className="break-words font-mono text-sm">{row.desiredValue ?? '—'}</div>
-                                    </div>
-                                </div>
-                                <p className="text-sm text-muted-foreground">{row.riskReason}</p>
-                                {row.estimatedRows != null || row.indexScans != null ? (
-                                    <div className="text-xs text-muted-foreground">
-                                        {row.estimatedRows != null ? `${t('Changes.EstimatedRows')}: ${row.estimatedRows.toLocaleString()} · ` : ''}
-                                        {row.indexScans != null ? `${t('Changes.CumulativeScans')}: ${row.indexScans.toLocaleString()} · ` : ''}
-                                        {row.statisticsSource}
-                                    </div>
-                                ) : null}
-                            </CardContent>
-                        </Card>
+                <div className="grid gap-7 p-4">
+                    {groupedRows.map(([objectType, rows]) => (
+                        <section key={objectType}>
+                            <div className="mb-3 flex items-center gap-2">
+                                <h3 className="text-sm font-semibold">{t(`Object.${objectType}`)}</h3>
+                                <Badge variant="secondary">{rows.length}</Badge>
+                            </div>
+                            <div className="grid gap-4 lg:grid-cols-2">
+                                {rows.map(row => (
+                                    <Card key={row.changeId} className="gap-0 overflow-hidden py-0">
+                                        <CardHeader
+                                            data-testid="schema-diff-card-header"
+                                            className="flex flex-row items-center justify-between gap-3 border-b px-5 py-3 [.border-b]:pb-3"
+                                        >
+                                            <div className="min-w-0">
+                                                <div className="truncate font-mono text-sm font-medium" title={row.objectPath}>
+                                                    {row.objectPath}
+                                                </div>
+                                                <div className="mt-1 text-xs text-muted-foreground">
+                                                    {row.changeType}
+                                                    {row.attribute ? ` · ${row.attribute}` : ''}
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className={`shrink-0 ${riskClass(row.riskLevel)}`}>
+                                                {row.riskLevel}
+                                            </Badge>
+                                        </CardHeader>
+                                        <CardContent className="grid gap-4 p-5">
+                                            <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                                                <div className="rounded-md bg-muted/60 p-3">
+                                                    <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Current')}</div>
+                                                    <div className="break-words font-mono text-sm">{row.currentValue ?? '—'}</div>
+                                                </div>
+                                                <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" />
+                                                <div className="rounded-md bg-muted/60 p-3">
+                                                    <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Desired')}</div>
+                                                    <div className="break-words font-mono text-sm">{row.desiredValue ?? '—'}</div>
+                                                </div>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground">{row.riskReason}</p>
+                                            {row.estimatedRows != null || row.indexScans != null ? (
+                                                <div className="text-xs text-muted-foreground">
+                                                    {row.estimatedRows != null ? `${t('Changes.EstimatedRows')}: ${row.estimatedRows.toLocaleString()} · ` : ''}
+                                                    {row.indexScans != null ? `${t('Changes.CumulativeScans')}: ${row.indexScans.toLocaleString()} · ` : ''}
+                                                    {row.statisticsSource}
+                                                </div>
+                                            ) : null}
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        </section>
                     ))}
                 </div>
             ) : state.view === 'table' ? (

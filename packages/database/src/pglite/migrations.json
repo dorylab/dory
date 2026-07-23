@@ -375,5 +375,29 @@
     "bps": true,
     "folderMillis": 1784780119152,
     "hash": "2d5682cd8f62ce3492883952ab41ceb747e08db991ad0281afd6503c21eb38ec"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"comparisons\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"created_by_user_id\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"kind\" text DEFAULT 'schema' NOT NULL,\n    \"source_endpoint\" jsonb NOT NULL,\n    \"target_endpoint\" jsonb NOT NULL,\n    \"schema_filter\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"object_types\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"dialect_family\" text NOT NULL,\n    \"configuration_version\" integer DEFAULT 1 NOT NULL,\n    \"latest_run_id\" text,\n    \"latest_successful_run_id\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"comparison_runs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"comparison_id\" text NOT NULL,\n    \"created_by_user_id\" text NOT NULL,\n    \"actor_type\" text DEFAULT 'user' NOT NULL,\n    \"work_id\" text,\n    \"status\" text DEFAULT 'running' NOT NULL,\n    \"configuration_snapshot\" jsonb NOT NULL,\n    \"coverage\" jsonb,\n    \"summary\" jsonb,\n    \"source_snapshot_hash\" text,\n    \"target_snapshot_hash\" text,\n    \"artifact_ref\" jsonb,\n    \"result_set_id\" text,\n    \"ai_review_status\" text DEFAULT 'pending' NOT NULL,\n    \"ai_review\" jsonb,\n    \"ai_review_error\" text,\n    \"failure_code\" text,\n    \"failure_message\" text,\n    \"started_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"completed_at\" timestamp with time zone\n);\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN \"comparison_run_id\" text;\n",
+      "\nDELETE FROM \"result_set_exports\"\nWHERE \"result_set_id\" IN (\n    SELECT \"id\"\n    FROM \"result_sets\"\n    WHERE \"comparison_id\" IS NOT NULL\n);\n",
+      "\nDELETE FROM \"agent_run_result_sets\"\nWHERE \"result_set_id\" IN (\n    SELECT \"id\"\n    FROM \"result_sets\"\n    WHERE \"comparison_id\" IS NOT NULL\n);\n",
+      "\nUPDATE \"query_runs\"\nSET \"result_set_id\" = NULL\nWHERE \"result_set_id\" IN (\n    SELECT \"id\"\n    FROM \"result_sets\"\n    WHERE \"comparison_id\" IS NOT NULL\n);\n",
+      "\nUPDATE \"tabs\"\nSET \"current_result_set_id\" = NULL\nWHERE \"current_result_set_id\" IN (\n    SELECT \"id\"\n    FROM \"result_sets\"\n    WHERE \"comparison_id\" IS NOT NULL\n);\n",
+      "\nUPDATE \"work_query_result_sets\"\nSET \"result_set_id\" = NULL,\n    \"artifact_ref_json\" = NULL\nWHERE \"result_set_id\" IN (\n    SELECT \"id\"\n    FROM \"result_sets\"\n    WHERE \"comparison_id\" IS NOT NULL\n);\n",
+      "\nDELETE FROM \"result_sets\"\nWHERE \"comparison_id\" IS NOT NULL;\n",
+      "\nDROP TABLE \"comparison_jobs\";\n",
+      "\nCREATE INDEX \"idx_comparisons_org_updated\" ON \"comparisons\" USING btree (\"organization_id\",\"updated_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_runs_comparison_started\" ON \"comparison_runs\" USING btree (\"comparison_id\",\"started_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_runs_org_started\" ON \"comparison_runs\" USING btree (\"organization_id\",\"started_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_runs_work_started\" ON \"comparison_runs\" USING btree (\"work_id\",\"started_at\");\n",
+      "\nCREATE INDEX \"idx_comparison_runs_status_updated\" ON \"comparison_runs\" USING btree (\"status\",\"updated_at\");\n",
+      "\nCREATE UNIQUE INDEX \"uidx_comparison_runs_active\" ON \"comparison_runs\" USING btree (\"comparison_id\") WHERE \"comparison_runs\".\"status\" = 'running';\n",
+      "\nCREATE INDEX \"idx_result_sets_comparison_run\" ON \"result_sets\" USING btree (\"comparison_run_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1784796637312,
+    "hash": "0b6d09a9b642b45b27135e0c353b59b466a447346ec2b56cd1d398ad8e5c240c"
   }
 ]

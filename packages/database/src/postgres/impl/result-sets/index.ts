@@ -112,6 +112,7 @@ export type PersistDerivedResultSetInput = {
     organizationId: string;
     userId: string;
     comparisonId: string;
+    comparisonRunId: string;
     rows: Record<string, unknown>[];
     kind: 'schema-diff';
     workId?: string | null;
@@ -120,10 +121,12 @@ export type PersistDerivedResultSetInput = {
     sourceDatabaseName?: string | null;
     contentHash?: string | null;
     previewRows?: number;
+    persistent?: boolean;
 };
 
-export type PersistDerivedResultSetOutput = Omit<PersistQueryResultSetOutput, 'queryRunId'> & {
+export type PersistDerivedResultSetOutput = Omit<PersistQueryResultSetOutput, 'expiresAt' | 'queryRunId'> & {
     queryRunId: null;
+    expiresAt: number | null;
 };
 
 export type ReadResultRowsOutput = {
@@ -835,7 +838,7 @@ export class PostgresResultSetsRepository {
         const rows = input.rows;
         const artifactId = `rs_${newEntityId()}`;
         const now = new Date();
-        const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
+        const expiresAt = input.persistent ? null : addDays(now, await this.getRetentionDays(input.organizationId));
         const columns = inferResultSetColumns(rows);
         const preview = buildResultSetPreview({
             columns,
@@ -852,6 +855,7 @@ export class PostgresResultSetsRepository {
             source: {
                 type: 'comparison',
                 comparisonId: input.comparisonId,
+                comparisonRunId: input.comparisonRunId,
                 connectionType: input.sourceConnectionType ?? null,
                 databaseName: input.sourceDatabaseName ?? null,
                 workId: input.workId ?? null,
@@ -901,6 +905,7 @@ export class PostgresResultSetsRepository {
                 agentRunId: input.agentRunId ?? null,
                 sourceQueryRunId: null,
                 comparisonId: input.comparisonId,
+                comparisonRunId: input.comparisonRunId,
                 sourceType: 'comparison',
                 kind: input.kind,
                 status: 'success',
@@ -949,7 +954,7 @@ export class PostgresResultSetsRepository {
             sourceConnectionType: input.sourceConnectionType ?? null,
             sourceDatabaseName: input.sourceDatabaseName ?? null,
             createdAt: now.getTime(),
-            expiresAt: expiresAt.getTime(),
+            expiresAt: expiresAt?.getTime() ?? null,
             storageLimitApplied,
             warning: storageLimitApplied ? RESULT_SET_STORAGE_LIMIT_WARNING : undefined,
         };

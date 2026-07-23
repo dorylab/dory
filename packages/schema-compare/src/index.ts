@@ -9,6 +9,18 @@ export type ComparisonEndpoint = {
     schemas?: string[];
 };
 
+export const SCHEMA_COMPARISON_OBJECT_TYPES = ['table', 'column', 'index', 'constraint', 'view'] as const;
+export type SchemaComparisonObjectType = (typeof SCHEMA_COMPARISON_OBJECT_TYPES)[number];
+
+export type SchemaComparisonConfiguration = {
+    source: Omit<ComparisonEndpoint, 'schemas'>;
+    target: Omit<ComparisonEndpoint, 'schemas'>;
+    schemaFilter: string[];
+    objectTypes: SchemaComparisonObjectType[];
+};
+
+export const DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES: SchemaComparisonObjectType[] = [...SCHEMA_COMPARISON_OBJECT_TYPES];
+
 export type SchemaCoverageStatus = 'complete' | 'partial' | 'unavailable' | 'not_applicable';
 export type SchemaCoverageKind = 'tables' | 'columns' | 'indexes' | 'constraints' | 'views' | 'statistics';
 export type SchemaSnapshotCoverage = Record<SchemaCoverageKind, SchemaCoverageStatus>;
@@ -247,6 +259,10 @@ export function schemaDialectFamily(type: string): SchemaDialectFamily | null {
         default:
             return null;
     }
+}
+
+export function supportsSchemaComparison(type: string) {
+    return ['postgres', 'neon', 'supabase', 'mysql', 'mariadb', 'sqlite', 'cloudflare-d1'].includes(type);
 }
 
 function coverageComparable(status: SchemaCoverageStatus) {
@@ -791,7 +807,7 @@ function compareTableAttributes(current: SchemaTable, desired: SchemaTable, chan
     }
 }
 
-export function compareSchemaSnapshots(current: SchemaSnapshot, desired: SchemaSnapshot): SchemaComparisonResult {
+export function compareSchemaSnapshots(current: SchemaSnapshot, desired: SchemaSnapshot, options: { objectTypes?: SchemaComparisonObjectType[] } = {}): SchemaComparisonResult {
     if (current.family !== desired.family) {
         throw new Error(`Schema comparison requires the same dialect family. Received ${current.family} and ${desired.family}.`);
     }
@@ -851,7 +867,9 @@ export function compareSchemaSnapshots(current: SchemaSnapshot, desired: SchemaS
     }
 
     compareViews(current, desired, coverage, changes);
-    changes.sort(
+    const selectedObjectTypes = new Set(options.objectTypes?.length ? options.objectTypes : DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES);
+    const selectedChanges = changes.filter(change => selectedObjectTypes.has(change.objectType === 'materialized_view' ? 'view' : change.objectType));
+    selectedChanges.sort(
         (left, right) =>
             RISK_ORDER[left.risk.level] - RISK_ORDER[right.risk.level] ||
             left.objectPath.localeCompare(right.objectPath) ||
@@ -859,29 +877,37 @@ export function compareSchemaSnapshots(current: SchemaSnapshot, desired: SchemaS
             (left.attribute ?? '').localeCompare(right.attribute ?? ''),
     );
 
-    const hasCoverageGap = COVERAGE_KINDS.some(kind => coverage[kind] === 'partial' || coverage[kind] === 'unavailable');
-    const breakingHigh = changes.some(change => change.risk.level === 'high' && change.risk.breaking);
-    const materialRisk = changes.some(change => change.risk.level === 'high' || change.risk.level === 'medium');
+    const selectedCoverageKinds = COVERAGE_KINDS.filter(kind => {
+        if (kind === 'statistics') return false;
+        if (kind === 'tables') return selectedObjectTypes.has('table');
+        if (kind === 'columns') return selectedObjectTypes.has('column');
+        if (kind === 'indexes') return selectedObjectTypes.has('index');
+        if (kind === 'constraints') return selectedObjectTypes.has('constraint');
+        return selectedObjectTypes.has('view');
+    });
+    const hasCoverageGap = selectedCoverageKinds.some(kind => coverage[kind] === 'partial' || coverage[kind] === 'unavailable');
+    const breakingHigh = selectedChanges.some(change => change.risk.level === 'high' && change.risk.breaking);
+    const materialRisk = selectedChanges.some(change => change.risk.level === 'high' || change.risk.level === 'medium');
     const readiness: SchemaComparisonReadiness = breakingHigh ? 'unsafe' : hasCoverageGap ? 'unknown' : materialRisk ? 'review_required' : 'compatible';
     const summary: SchemaComparisonSummary = {
-        totalChanges: changes.length,
-        breakingChanges: changes.filter(change => change.risk.breaking).length,
-        added: changes.filter(change => change.changeType === 'added').length,
-        removed: changes.filter(change => change.changeType === 'removed').length,
-        modified: changes.filter(change => change.changeType === 'modified').length,
-        renamed: changes.filter(change => change.changeType === 'renamed').length,
-        highRisk: changes.filter(change => change.risk.level === 'high').length,
-        mediumRisk: changes.filter(change => change.risk.level === 'medium').length,
-        lowRisk: changes.filter(change => change.risk.level === 'low').length,
-        unknownRisk: changes.filter(change => change.risk.level === 'unknown').length,
+        totalChanges: selectedChanges.length,
+        breakingChanges: selectedChanges.filter(change => change.risk.breaking).length,
+        added: selectedChanges.filter(change => change.changeType === 'added').length,
+        removed: selectedChanges.filter(change => change.changeType === 'removed').length,
+        modified: selectedChanges.filter(change => change.changeType === 'modified').length,
+        renamed: selectedChanges.filter(change => change.changeType === 'renamed').length,
+        highRisk: selectedChanges.filter(change => change.risk.level === 'high').length,
+        mediumRisk: selectedChanges.filter(change => change.risk.level === 'medium').length,
+        lowRisk: selectedChanges.filter(change => change.risk.level === 'low').length,
+        unknownRisk: selectedChanges.filter(change => change.risk.level === 'unknown').length,
         readiness,
     };
     const warnings = [
         ...(current.warnings ?? []).map(warning => `Current: ${warning}`),
         ...(desired.warnings ?? []).map(warning => `Desired: ${warning}`),
-        ...COVERAGE_KINDS.filter(kind => coverage[kind] === 'partial' || coverage[kind] === 'unavailable').map(
-            kind => `${kind} coverage is ${coverage[kind]}; missing objects were not treated as removals.`,
-        ),
+        ...selectedCoverageKinds
+            .filter(kind => coverage[kind] === 'partial' || coverage[kind] === 'unavailable')
+            .map(kind => `${kind} coverage is ${coverage[kind]}; missing objects were not treated as removals.`),
     ];
 
     return {
@@ -891,7 +917,7 @@ export function compareSchemaSnapshots(current: SchemaSnapshot, desired: SchemaS
         desiredHash: desired.contentHash,
         coverage,
         summary,
-        changes,
+        changes: selectedChanges,
         warnings,
     };
 }

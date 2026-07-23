@@ -1,29 +1,50 @@
-import { getDoryArtifactStore, type ComparisonSnapshotArtifactRef } from '@dory/artifacts';
+import { getDoryArtifactStore, type ComparisonRunArtifactRef } from '@dory/artifacts';
 import type { DBService } from '@dory/database';
+import type { Comparison, ComparisonConfigurationSnapshot, ComparisonEndpointConfiguration, ComparisonRun, ComparisonRunActorType } from '@dory/database/postgres/schemas';
 import {
     compareSchemaSnapshots,
+    DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES,
     schemaChangesToResultRows,
     schemaDialectFamily,
     stableSchemaHash,
-    type ComparisonEndpoint,
+    supportsSchemaComparison,
+    type SchemaComparisonObjectType,
     type SchemaComparisonResult,
 } from '@dory/schema-compare';
 
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 
-export type CreateSchemaComparisonInput = {
-    organizationId: string;
-    userId: string;
-    current: ComparisonEndpoint;
-    desired: ComparisonEndpoint;
-    workId?: string | null;
-    previousComparisonId?: string | null;
+export type SchemaComparisonConfigurationInput = {
+    name: string;
+    source: ComparisonEndpointConfiguration;
+    target: ComparisonEndpointConfiguration;
+    schemaFilter?: string[];
+    objectTypes?: SchemaComparisonObjectType[];
 };
 
-export type CreateSchemaComparisonOutput = {
-    job: Awaited<ReturnType<DBService['comparisons']['get']>>;
-    comparison: SchemaComparisonResult;
+export type RunSchemaComparisonInput = {
+    organizationId: string;
+    userId: string;
+    comparisonId: string;
+    actorType?: ComparisonRunActorType;
+    workId?: string | null;
+};
+
+export type RunSchemaComparisonOutput = {
+    comparison: Awaited<ReturnType<DBService['comparisons']['get']>>;
+    run: ComparisonRun;
+    result: SchemaComparisonResult | null;
     topChanges: SchemaComparisonResult['changes'];
+};
+
+export type CreateComparisonOutput = RunSchemaComparisonOutput;
+
+export type UpdateComparisonOutput = {
+    comparison: Awaited<ReturnType<DBService['comparisons']['get']>>;
+    run: ComparisonRun | null;
+    result: SchemaComparisonResult | null;
+    topChanges: SchemaComparisonResult['changes'];
+    configurationChanged: boolean;
 };
 
 function errorMessage(error: unknown) {
@@ -35,8 +56,154 @@ function errorCode(error: unknown) {
     return 'comparison_failed';
 }
 
-export async function createSchemaComparison(db: DBService, input: CreateSchemaComparisonInput): Promise<CreateSchemaComparisonOutput> {
-    await db.comparisons.markStaleRunningFailed(new Date(Date.now() - 15 * 60 * 1000)).catch(() => undefined);
+function normalizeConfiguration(input: SchemaComparisonConfigurationInput) {
+    const name = input.name.trim();
+    if (!name) throw new Error('Comparison name is required.');
+    const schemaFilter = [...new Set((input.schemaFilter ?? []).map(schema => schema.trim()).filter(Boolean))].sort();
+    const requestedTypes = input.objectTypes?.length ? input.objectTypes : DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES;
+    const objectTypes = DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES.filter(type => requestedTypes.includes(type));
+    if (!objectTypes.length) throw new Error('Select at least one schema object type to compare.');
+    return {
+        name,
+        source: {
+            connectionId: input.source.connectionId,
+            identityId: input.source.identityId ?? null,
+            database: input.source.database.trim(),
+        },
+        target: {
+            connectionId: input.target.connectionId,
+            identityId: input.target.identityId ?? null,
+            database: input.target.database.trim(),
+        },
+        schemaFilter,
+        objectTypes,
+    };
+}
+
+async function validateConfiguration(db: DBService, organizationId: string, rawInput: SchemaComparisonConfigurationInput) {
+    const input = normalizeConfiguration(rawInput);
+    if (!input.source.connectionId || !input.target.connectionId || !input.source.database || !input.target.database) {
+        throw new Error('Source and Target connections and databases are required.');
+    }
+    const [sourceRecord, targetRecord] = await Promise.all([
+        db.connections.getById(organizationId, input.source.connectionId),
+        db.connections.getById(organizationId, input.target.connectionId),
+    ]);
+    if (!sourceRecord || !targetRecord) throw new Error('One or both comparison connections were not found.');
+    if (!supportsSchemaComparison(sourceRecord.connection.type) || !supportsSchemaComparison(targetRecord.connection.type)) {
+        throw new Error('One or both connections do not support Schema Comparisons.');
+    }
+    const sourceFamily = schemaDialectFamily(sourceRecord.connection.type);
+    const targetFamily = schemaDialectFamily(targetRecord.connection.type);
+    if (!sourceFamily || !targetFamily || sourceFamily !== targetFamily) {
+        throw new Error(`Schema Compare requires the same dialect family. Source is ${sourceRecord.connection.type}; Target is ${targetRecord.connection.type}.`);
+    }
+    if (sourceFamily !== 'postgres') input.schemaFilter = [];
+    return { ...input, dialectFamily: sourceFamily };
+}
+
+function snapshotFor(comparison: Comparison): ComparisonConfigurationSnapshot {
+    return {
+        version: 1,
+        configurationVersion: comparison.configurationVersion,
+        name: comparison.name,
+        source: comparison.sourceEndpoint,
+        target: comparison.targetEndpoint,
+        schemaFilter: comparison.schemaFilter,
+        objectTypes: comparison.objectTypes,
+        dialectFamily: comparison.dialectFamily,
+    };
+}
+
+function comparableConfiguration(comparison: Comparison) {
+    return JSON.stringify({
+        source: comparison.sourceEndpoint,
+        target: comparison.targetEndpoint,
+        schemaFilter: comparison.schemaFilter,
+        objectTypes: comparison.objectTypes,
+        dialectFamily: comparison.dialectFamily,
+    });
+}
+
+export async function createComparisonAndRun(
+    db: DBService,
+    input: {
+        organizationId: string;
+        userId: string;
+        actorType?: ComparisonRunActorType;
+        workId?: string | null;
+        configuration: SchemaComparisonConfigurationInput;
+    },
+): Promise<CreateComparisonOutput> {
+    const validated = await validateConfiguration(db, input.organizationId, input.configuration);
+    const comparison = await db.comparisons.createComparison({
+        organizationId: input.organizationId,
+        userId: input.userId,
+        ...validated,
+    });
+    return runSchemaComparison(db, {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        comparisonId: comparison.id,
+        actorType: input.actorType,
+        workId: input.workId,
+    });
+}
+
+export async function updateComparisonAndRun(
+    db: DBService,
+    input: {
+        organizationId: string;
+        userId: string;
+        comparisonId: string;
+        actorType?: ComparisonRunActorType;
+        workId?: string | null;
+        configuration: SchemaComparisonConfigurationInput;
+    },
+): Promise<UpdateComparisonOutput> {
+    const existing = await db.comparisons.get(input.organizationId, input.comparisonId);
+    if (existing.latestRun?.status === 'running') throw new Error('Wait for the active comparison run to finish before editing this Comparison.');
+    const validated = await validateConfiguration(db, input.organizationId, input.configuration);
+    const nextConfiguration = JSON.stringify({
+        source: validated.source,
+        target: validated.target,
+        schemaFilter: validated.schemaFilter,
+        objectTypes: validated.objectTypes,
+        dialectFamily: validated.dialectFamily,
+    });
+    const configurationChanged = comparableConfiguration(existing) !== nextConfiguration;
+    await db.comparisons.updateComparison({
+        organizationId: input.organizationId,
+        comparisonId: input.comparisonId,
+        name: validated.name,
+        source: validated.source,
+        target: validated.target,
+        schemaFilter: validated.schemaFilter,
+        objectTypes: validated.objectTypes,
+        dialectFamily: validated.dialectFamily,
+        configurationVersion: existing.configurationVersion + (configurationChanged ? 1 : 0),
+    });
+    if (!configurationChanged) {
+        return {
+            comparison: await db.comparisons.get(input.organizationId, input.comparisonId),
+            run: null,
+            result: null,
+            topChanges: [],
+            configurationChanged: false,
+        };
+    }
+    const output = await runSchemaComparison(db, {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        comparisonId: input.comparisonId,
+        actorType: input.actorType,
+        workId: input.workId,
+    });
+    return { ...output, configurationChanged: true };
+}
+
+export async function runSchemaComparison(db: DBService, input: RunSchemaComparisonInput): Promise<RunSchemaComparisonOutput> {
+    await db.comparisons.markStaleRunningFailed(input.organizationId, new Date(Date.now() - 15 * 60 * 1000)).catch(() => undefined);
     if (input.workId) {
         const work = await db.works.getById({
             organizationId: input.organizationId,
@@ -45,113 +212,98 @@ export async function createSchemaComparison(db: DBService, input: CreateSchemaC
         });
         if (!work) throw new Error('Agent Run not found in this organization.');
     }
+    const comparisonRecord = await db.comparisons.get(input.organizationId, input.comparisonId);
+    if (comparisonRecord.latestRun?.status === 'running') throw new Error('A comparison run is already in progress.');
 
-    const [currentRecord, desiredRecord] = await Promise.all([
-        db.connections.getById(input.organizationId, input.current.connectionId),
-        db.connections.getById(input.organizationId, input.desired.connectionId),
-    ]);
-    if (!currentRecord || !desiredRecord) throw new Error('One or both comparison connections were not found.');
-
-    const currentFamily = schemaDialectFamily(currentRecord.connection.type);
-    const desiredFamily = schemaDialectFamily(desiredRecord.connection.type);
-    if (!currentFamily || !desiredFamily || currentFamily !== desiredFamily) {
-        throw new Error(`Schema Compare requires the same dialect family. Current is ${currentRecord.connection.type}; Desired is ${desiredRecord.connection.type}.`);
-    }
-
-    const job = await db.comparisons.create({
+    const configurationSnapshot = snapshotFor(comparisonRecord);
+    const run = await db.comparisons.createRun({
         organizationId: input.organizationId,
+        comparisonId: comparisonRecord.id,
         userId: input.userId,
-        currentEndpoint: input.current,
-        desiredEndpoint: input.desired,
-        dialectFamily: currentFamily,
+        actorType: input.actorType ?? 'user',
         workId: input.workId,
-        previousComparisonId: input.previousComparisonId,
+        configurationSnapshot,
     });
-    let snapshotArtifactRef: ComparisonSnapshotArtifactRef | null = null;
+    let artifactRef: ComparisonRunArtifactRef | null = null;
     let resultSetId: string | null = null;
 
     try {
-        const [currentPool, desiredPool] = await Promise.all([
-            ensureConnectionPoolForUser(input.userId, input.organizationId, input.current.connectionId, input.current.identityId ?? null),
-            ensureConnectionPoolForUser(input.userId, input.organizationId, input.desired.connectionId, input.desired.identityId ?? null),
+        const [sourcePool, targetPool] = await Promise.all([
+            ensureConnectionPoolForUser(input.userId, input.organizationId, configurationSnapshot.source.connectionId, configurationSnapshot.source.identityId ?? null),
+            ensureConnectionPoolForUser(input.userId, input.organizationId, configurationSnapshot.target.connectionId, configurationSnapshot.target.identityId ?? null),
         ]);
-        const [currentSnapshot, desiredSnapshot] = await Promise.all([
-            currentPool.entry.instance.getSchemaSnapshot({
-                database: input.current.database,
-                schemas: input.current.schemas,
+        const [sourceSnapshot, targetSnapshot] = await Promise.all([
+            sourcePool.entry.instance.getSchemaSnapshot({
+                database: configurationSnapshot.source.database,
+                schemas: configurationSnapshot.schemaFilter.length ? configurationSnapshot.schemaFilter : undefined,
             }),
-            desiredPool.entry.instance.getSchemaSnapshot({
-                database: input.desired.database,
-                schemas: input.desired.schemas,
+            targetPool.entry.instance.getSchemaSnapshot({
+                database: configurationSnapshot.target.database,
+                schemas: configurationSnapshot.schemaFilter.length ? configurationSnapshot.schemaFilter : undefined,
             }),
         ]);
-        const comparison = compareSchemaSnapshots(currentSnapshot, desiredSnapshot);
-        snapshotArtifactRef = await getDoryArtifactStore().comparisons.putSnapshots({
-            organizationId: input.organizationId,
-            comparisonId: job.id,
-            current: currentSnapshot,
-            desired: desiredSnapshot,
+        const result = compareSchemaSnapshots(sourceSnapshot, targetSnapshot, {
+            objectTypes: configurationSnapshot.objectTypes,
         });
-        await db.comparisons.setArtifacts({
+        artifactRef = await getDoryArtifactStore().comparisons.putRun({
             organizationId: input.organizationId,
-            comparisonId: job.id,
-            snapshotArtifactRef,
-            currentSnapshotHash: currentSnapshot.contentHash,
-            desiredSnapshotHash: desiredSnapshot.contentHash,
+            comparisonId: comparisonRecord.id,
+            runId: run.id,
+            configuration: configurationSnapshot,
+            source: sourceSnapshot,
+            target: targetSnapshot,
+            comparison: result,
         });
         const persisted = await db.resultSets.persistDerivedResultSet({
             organizationId: input.organizationId,
             userId: input.userId,
-            comparisonId: job.id,
-            rows: schemaChangesToResultRows(comparison.changes),
+            comparisonId: comparisonRecord.id,
+            comparisonRunId: run.id,
+            rows: schemaChangesToResultRows(result.changes),
             kind: 'schema-diff',
             workId: input.workId,
             agentRunId: input.workId,
-            sourceConnectionType: currentFamily,
-            sourceDatabaseName: `${input.current.database} → ${input.desired.database}`,
-            contentHash: stableSchemaHash(comparison),
+            sourceConnectionType: comparisonRecord.dialectFamily,
+            sourceDatabaseName: `${configurationSnapshot.source.database} → ${configurationSnapshot.target.database}`,
+            contentHash: stableSchemaHash(result),
+            persistent: true,
         });
         resultSetId = persisted.resultSetId;
-        await db.comparisons.setArtifacts({
+        const completed = await db.comparisons.completeRun({
             organizationId: input.organizationId,
-            comparisonId: job.id,
+            comparisonId: comparisonRecord.id,
+            runId: run.id,
+            comparison: result,
+            artifactRef,
             resultSetId,
-        });
-        const completed = await db.comparisons.complete({
-            organizationId: input.organizationId,
-            comparisonId: job.id,
-            comparison,
-            snapshotArtifactRef,
-            resultSetId,
-            expiresAt: new Date(persisted.expiresAt),
         });
         return {
-            job: completed,
-            comparison,
-            topChanges: comparison.changes.slice(0, 20),
+            comparison: await db.comparisons.get(input.organizationId, comparisonRecord.id),
+            run: completed,
+            result,
+            topChanges: result.changes.slice(0, 20),
         };
     } catch (error) {
         if (resultSetId) {
-            await db.resultSets
-                .deleteResultSet({
-                    organizationId: input.organizationId,
-                    resultSetId,
-                })
-                .catch(() => undefined);
+            await db.resultSets.deleteResultSet({ organizationId: input.organizationId, resultSetId }).catch(() => undefined);
         }
-        if (snapshotArtifactRef) {
+        if (artifactRef) {
             await getDoryArtifactStore()
-                .comparisons.deleteComparison(snapshotArtifactRef)
+                .comparisons.deleteRun(artifactRef)
                 .catch(() => undefined);
         }
-        await db.comparisons
-            .fail({
-                organizationId: input.organizationId,
-                comparisonId: job.id,
-                code: errorCode(error),
-                message: errorMessage(error),
-            })
-            .catch(() => undefined);
-        throw error;
+        const failed = await db.comparisons.failRun({
+            organizationId: input.organizationId,
+            comparisonId: comparisonRecord.id,
+            runId: run.id,
+            code: errorCode(error),
+            message: errorMessage(error),
+        });
+        return {
+            comparison: await db.comparisons.get(input.organizationId, comparisonRecord.id),
+            run: failed,
+            result: null,
+            topChanges: [],
+        };
     }
 }

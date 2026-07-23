@@ -6,23 +6,23 @@ Use this guide to choose the right MCP setup path. For full CLI command referenc
 
 ## Choose a Setup
 
-| Setup | Best for | Transport | Authentication | Long-running process |
-| --- | --- | --- | --- | --- |
-| [Desktop MCP](#desktop-mcp) | Local agents using Dory Desktop connections | Streamable HTTP | Desktop grant managed by Dory | Dory Desktop app or local runtime |
-| [Standalone stdio](#standalone-stdio) | Local Codex/Claude, CI, or single-user servers | stdio | Local token managed by CLI/runtime | No, MCP client starts it |
-| [HTTP headless runtime](#http-headless-runtime) | Shared or long-lived MCP endpoints | Streamable HTTP | Bearer token | Yes |
-| [Hosted Dory bridge](#hosted-dory-bridge) | MCP access to an existing Dory Web deployment | stdio bridge to hosted HTTP | Browser authorization token | No, MCP client starts bridge |
+| Setup                                           | Best for                                       | Transport                   | Authentication                     | Long-running process              |
+| ----------------------------------------------- | ---------------------------------------------- | --------------------------- | ---------------------------------- | --------------------------------- |
+| [Desktop MCP](#desktop-mcp)                     | Local agents using Dory Desktop connections    | Streamable HTTP             | Desktop grant managed by Dory      | Dory Desktop app or local runtime |
+| [Standalone stdio](#standalone-stdio)           | Local Codex/Claude, CI, or single-user servers | stdio                       | Local token managed by CLI/runtime | No, MCP client starts it          |
+| [HTTP headless runtime](#http-headless-runtime) | Shared or long-lived MCP endpoints             | Streamable HTTP             | Bearer token                       | Yes                               |
+| [Hosted Dory bridge](#hosted-dory-bridge)       | MCP access to an existing Dory Web deployment  | stdio bridge to hosted HTTP | Browser authorization token        | No, MCP client starts bridge      |
 
 ## Desktop MCP
 
 Use this when Dory Desktop is installed and the MCP client runs on the same machine.
 
-| Question | Answer |
-| --- | --- |
-| Good fit | Claude Code, Codex CLI, or another local MCP client using Dory Desktop connections |
-| Not a fit | Headless servers, CI, or remote clients |
-| Authentication | Desktop grant created and refreshed by Dory |
-| Long-running process | Dory Desktop or the Dory local runtime must be available |
+| Question             | Answer                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| Good fit             | Claude Code, Codex CLI, or another local MCP client using Dory Desktop connections |
+| Not a fit            | Headless servers, CI, or remote clients                                            |
+| Authentication       | Desktop grant created and refreshed by Dory                                        |
+| Long-running process | Dory Desktop or the Dory local runtime must be available                           |
 
 1. Open Dory Desktop.
 2. Go to **Settings -> Agent Access**.
@@ -55,12 +55,12 @@ Desktop MCP does not ask normal users to copy API tokens. Dory manages the local
 
 Use this when the MCP client and Dory runtime are on the same machine and you do not need a long-running HTTP endpoint.
 
-| Question | Answer |
-| --- | --- |
-| Good fit | Local Codex/Claude setup, CI, single-user Linux servers |
-| Not a fit | Remote MCP clients that need a network URL |
-| Authentication | Local credential created by Dory CLI/runtime |
-| Long-running process | No. The MCP client starts `dory mcp serve --stdio` |
+| Question             | Answer                                                  |
+| -------------------- | ------------------------------------------------------- |
+| Good fit             | Local Codex/Claude setup, CI, single-user Linux servers |
+| Not a fit            | Remote MCP clients that need a network URL              |
+| Authentication       | Local credential created by Dory CLI/runtime            |
+| Long-running process | No. The MCP client starts `dory mcp serve --stdio`      |
 
 Requirements:
 
@@ -101,12 +101,12 @@ This is different from Desktop MCP in the Dory app. `--data desktop` is a CLI st
 
 Use this when you need a stable URL for MCP clients or want a background Dory runtime service.
 
-| Question | Answer |
-| --- | --- |
-| Good fit | Long-running server, shared endpoint, Docker/headless deployment |
-| Not a fit | Simple local-only setup where stdio is enough |
-| Authentication | Bearer token in `Authorization` |
-| Long-running process | Yes. Run `dory mcp serve --http` or install the runtime service |
+| Question             | Answer                                                           |
+| -------------------- | ---------------------------------------------------------------- |
+| Good fit             | Long-running server, shared endpoint, Docker/headless deployment |
+| Not a fit            | Simple local-only setup where stdio is enough                    |
+| Authentication       | Bearer token in `Authorization`                                  |
+| Long-running process | Yes. Run `dory mcp serve --http` or install the runtime service  |
 
 Create a token. Use `read` for read-only clients. Use `write` only when the MCP client must create, update, or delete Dory resources such as connections.
 
@@ -188,12 +188,12 @@ Do not expose the plain HTTP server directly to the public internet. Put it behi
 
 Use this when a Dory Web deployment already exposes `/api/mcp` and you want a local stdio bridge for an MCP client.
 
-| Question | Answer |
-| --- | --- |
-| Good fit | Hosted or self-hosted Dory Web endpoint |
-| Not a fit | Local-only Desktop usage or standalone headless storage |
-| Authentication | Browser authorization creates a personal MCP token |
-| Long-running process | No. The MCP client starts the bridge |
+| Question             | Answer                                                  |
+| -------------------- | ------------------------------------------------------- |
+| Good fit             | Hosted or self-hosted Dory Web endpoint                 |
+| Not a fit            | Local-only Desktop usage or standalone headless storage |
+| Authentication       | Browser authorization creates a personal MCP token      |
+| Long-running process | No. The MCP client starts the bridge                    |
 
 Authorize once:
 
@@ -244,16 +244,16 @@ For database analysis, use this order:
 2. Pass the returned `work.workId` to work-scoped tools such as `dory_list_connections`, `dory_explore_schema`, `dory_compare_schema`, `dory_analyze_database_changes`, `dory_run_readonly_sql`, `dory_workspace_tabs`, and `dory_saved_queries`.
 3. Use `dory_finish_work` to save findings and execution steps.
 
-For deployment review, call `dory_compare_schema` with explicit `current` and `desired` endpoints. It creates an immutable comparison, returns a bounded deterministic summary and the highest-risk changes, and links the complete Schema Diff ResultSet to the Agent Run. Then call `dory_analyze_database_changes` with the same `workId` and returned `comparisonId` to generate or retry the evidence-cited AI Review.
+For deployment review, call `dory_compare_schema` with a saved `comparisonId`, or with `name`, `source`, and `target` to create one. It executes an immutable Comparison Run, returns stable `comparisonId` and `runId` values with a bounded deterministic summary and highest-risk changes, and links the complete Schema Diff ResultSet to the Agent Run. Then call `dory_analyze_database_changes` with the same `workId` and returned `runId` to generate or retry the evidence-cited AI Review.
 
-Schema Compare is read-only with respect to connected databases. It only reads system catalogs or information schemas and writes Dory job, snapshot, ResultSet, and Agent Run metadata. It does not generate or apply migration SQL.
+Schema Compare is read-only with respect to connected databases. It only reads system catalogs or information schemas and writes Dory Comparison, Run, Artifact, ResultSet, and Agent Run metadata. It does not generate or apply migration SQL.
 
 Use `dory_read` to list, describe, or run read-only and low-risk Dory Actions. Use `dory_write` for write-capable Actions such as `connection.create`, `connection.update`, and `connection.delete`. Before running an Action from an agent, describe it first:
 
 ```json
 {
-  "operation": "describe",
-  "actionId": "connection.create"
+    "operation": "describe",
+    "actionId": "connection.create"
 }
 ```
 
@@ -261,31 +261,31 @@ Then run it through `dory_write` when the user has approved the change:
 
 ```json
 {
-  "operation": "run",
-  "actionId": "connection.create",
-  "input": {
-    "payload": {
-      "connection": {
-        "type": "postgres",
-        "engine": "postgres",
-        "name": "Local Postgres",
-        "host": "127.0.0.1",
-        "port": 5432,
-        "database": "postgres"
-      },
-      "identities": [
-        {
-          "name": "Default",
-          "username": "postgres",
-          "password": "postgres",
-          "isDefault": true,
-          "database": "postgres",
-          "enabled": true
+    "operation": "run",
+    "actionId": "connection.create",
+    "input": {
+        "payload": {
+            "connection": {
+                "type": "postgres",
+                "engine": "postgres",
+                "name": "Local Postgres",
+                "host": "127.0.0.1",
+                "port": 5432,
+                "database": "postgres"
+            },
+            "identities": [
+                {
+                    "name": "Default",
+                    "username": "postgres",
+                    "password": "postgres",
+                    "isDefault": true,
+                    "database": "postgres",
+                    "enabled": true
+                }
+            ]
         }
-      ]
-    }
-  },
-  "projection": "mcp"
+    },
+    "projection": "mcp"
 }
 ```
 

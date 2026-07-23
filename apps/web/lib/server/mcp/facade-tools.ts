@@ -75,15 +75,32 @@ const comparisonEndpointInputSchema = z.object({
 
 const compareSchemaInputSchema = z
     .object({
-        current: comparisonEndpointInputSchema,
-        desired: comparisonEndpointInputSchema,
-        previousComparisonId: z.string().min(1).nullable().optional(),
+        comparisonId: z.string().min(1).optional(),
+        name: z.string().trim().min(1).max(160).optional(),
+        source: comparisonEndpointInputSchema.optional(),
+        target: comparisonEndpointInputSchema.optional(),
+        current: comparisonEndpointInputSchema.optional(),
+        desired: comparisonEndpointInputSchema.optional(),
+        schemaFilter: z.array(z.string().min(1)).max(100).optional(),
+        objectTypes: z
+            .array(z.enum(['table', 'column', 'index', 'constraint', 'view']))
+            .min(1)
+            .max(5)
+            .optional(),
     })
-    .merge(workResolutionInputSchema);
+    .merge(workResolutionInputSchema)
+    .superRefine((value, context) => {
+        if (value.comparisonId) return;
+        if ((value.source ?? value.current) && (value.target ?? value.desired)) return;
+        context.addIssue({
+            code: 'custom',
+            message: 'Provide comparisonId, or provide Source and Target endpoints to create a saved Comparison.',
+        });
+    });
 
 const analyzeDatabaseChangesInputSchema = z
     .object({
-        comparisonId: z.string().min(1),
+        runId: z.string().min(1),
         deploymentContext: z.string().max(4000).nullable().optional(),
     })
     .merge(workResolutionInputSchema);
@@ -516,8 +533,9 @@ function buildWorkspaceUrl(
     return new URL(path, ctx.services.workspaceOrigin ?? ctx.services.requestOrigin ?? 'http://localhost:3000').toString();
 }
 
-function buildComparisonWorkspaceUrl(ctx: ActionContext<WebActionServices>, comparisonId: string) {
-    const path = `/${encodeURIComponent(ctx.organizationId)}/compare/${encodeURIComponent(comparisonId)}`;
+function buildComparisonWorkspaceUrl(ctx: ActionContext<WebActionServices>, comparisonId: string, runId?: string | null) {
+    const basePath = `/${encodeURIComponent(ctx.organizationId)}/comparisons/${encodeURIComponent(comparisonId)}`;
+    const path = runId ? `${basePath}/runs/${encodeURIComponent(runId)}` : basePath;
     if (ctx.runtime === 'desktop') {
         const url = new URL(`${getDesktopProtocolSchemeForServer()}://open`);
         url.searchParams.set('path', path);
@@ -908,26 +926,49 @@ async function getSchemaGraphFacade(ctx: ActionContext<WebActionServices>, rawIn
 
 async function compareSchemaFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = compareSchemaInputSchema.parse(rawInput);
+    const source = input.source ?? input.current;
+    const target = input.target ?? input.desired;
     const output = toRecord(
-        await executeInternal(ctx, 'comparison.schema.create', {
-            current: input.current,
-            desired: input.desired,
-            workId: work.workId,
-            previousComparisonId: input.previousComparisonId,
-        }),
+        input.comparisonId
+            ? await executeInternal(ctx, 'comparison.run.create', {
+                  comparisonId: input.comparisonId,
+                  workId: work.workId,
+              })
+            : await executeInternal(ctx, 'comparison.create', {
+                  name: input.name ?? `${source!.database} → ${target!.database}`,
+                  source: {
+                      connectionId: source!.connectionId,
+                      identityId: source!.identityId,
+                      database: source!.database,
+                  },
+                  target: {
+                      connectionId: target!.connectionId,
+                      identityId: target!.identityId,
+                      database: target!.database,
+                  },
+                  schemaFilter: input.schemaFilter ?? source!.schemas,
+                  objectTypes: input.objectTypes,
+                  workId: work.workId,
+              }),
     );
-    const job = toRecord(output.job);
     const comparison = toRecord(output.comparison);
-    const summary = toRecord(comparison.summary);
+    const run = toRecord(output.run);
+    const result = toRecord(output.result);
+    const summary = toRecord(result.summary ?? run.summary);
     const topChanges = (Array.isArray(output.topChanges) ? output.topChanges : []).slice(0, 10);
-    const comparisonId = requireString(job.id, 'comparisonId');
-    work.workspaceUrl = buildComparisonWorkspaceUrl(ctx, comparisonId);
+    const comparisonId = requireString(comparison.id, 'comparisonId');
+    const runId = requireString(run.id, 'runId');
+    work.workspaceUrl = buildComparisonWorkspaceUrl(ctx, comparisonId, runId);
     return withWork(
         {
             comparisonId,
-            resultSetId: getString(job.resultSetId),
+            runId,
+            resultSetId: getString(run.resultSetId),
+            changes: Number(summary.totalChanges ?? 0),
+            risks: Number(summary.highRisk ?? 0) + Number(summary.mediumRisk ?? 0) + Number(summary.unknownRisk ?? 0),
+            readiness: summary.readiness ?? null,
             summary,
-            coverage: comparison.coverage ?? job.coverage ?? null,
+            coverage: result.coverage ?? run.coverage ?? null,
             highestRiskChanges: topChanges,
         },
         work,
@@ -936,21 +977,23 @@ async function compareSchemaFacade(ctx: ActionContext<WebActionServices>, rawInp
 
 async function analyzeDatabaseChangesFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = analyzeDatabaseChangesInputSchema.parse(rawInput);
+    const existingRun = await ctx.services.db.comparisons.getRunById(ctx.organizationId, input.runId);
     const output = toRecord(
-        await executeInternal(ctx, 'comparison.aiReview', {
-            comparisonId: input.comparisonId,
-            workId: work.workId,
+        await executeInternal(ctx, 'comparison.run.aiReview', {
+            comparisonId: existingRun.comparisonId,
+            runId: existingRun.id,
             deploymentContext: input.deploymentContext,
         }),
     );
-    const job = toRecord(output.job);
-    work.workspaceUrl = buildComparisonWorkspaceUrl(ctx, input.comparisonId);
+    const run = toRecord(output.run);
+    work.workspaceUrl = buildComparisonWorkspaceUrl(ctx, existingRun.comparisonId, existingRun.id);
     return withWork(
         {
-            comparisonId: input.comparisonId,
-            resultSetId: getString(job.resultSetId),
-            summary: job.summary ?? null,
-            coverage: job.coverage ?? null,
+            comparisonId: existingRun.comparisonId,
+            runId: existingRun.id,
+            resultSetId: getString(run.resultSetId),
+            summary: run.summary ?? null,
+            coverage: run.coverage ?? null,
             aiReview: output.review ?? null,
         },
         work,
@@ -1353,7 +1396,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_compare_schema',
             title: 'Compare database schemas',
-            description: `Capture and compare Current → Desired database schemas, persist the deterministic diff as a Dory ResultSet, and return a bounded deployment summary. Only same-family dialects are accepted. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
+            description: `Run a saved Dory Comparison by comparisonId, or create and run a saved Source → Target schema Comparison. Returns stable comparisonId and runId values plus a bounded deterministic summary. Only same-family dialects are accepted. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: compareSchemaInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -1366,7 +1409,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_analyze_database_changes',
             title: 'Analyze database changes',
-            description: `Generate or retry an evidence-cited AI Review for a schema comparison that belongs to the same Agent Run. The AI explains but cannot change canonical risk or readiness. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
+            description: `Generate or retry an evidence-cited AI Review for an accessible immutable Comparison Run by runId. The AI explains but cannot change canonical risk or readiness. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: analyzeDatabaseChangesInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {

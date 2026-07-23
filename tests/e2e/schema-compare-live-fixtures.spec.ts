@@ -32,7 +32,7 @@ const pairs = [
     },
 ];
 
-test('live fixture connections create deterministic comparison jobs', async ({ page, appErrors }) => {
+test('live fixture connections create deterministic saved Comparisons and Runs', async ({ page, appErrors }) => {
     const generated = generateSchemaCompareFixtures(path.join(process.cwd(), 'apps/web/.tmp/schema-compare-fixtures'));
     const fixturePairs = pairs.map(pair => {
         const fixture = generated.find(candidate => candidate.id === pair.id)!;
@@ -102,51 +102,53 @@ test('live fixture connections create deterministic comparison jobs', async ({ p
             const comparisonOutput = await action<{
                 rows: Array<{
                     id: string;
-                    status: string;
-                    currentEndpoint: { connectionId: string };
-                    desiredEndpoint: { connectionId: string };
-                    summary: Record<string, number | string> | null;
+                    sourceEndpoint: { connectionId: string };
+                    targetEndpoint: { connectionId: string };
+                    latestSuccessfulRun: { summary: Record<string, number | string> | null } | null;
                 }>;
             }>('comparison.list', { limit: 100 });
-            const jobs = [...comparisonOutput.rows];
+            const comparisons = [...comparisonOutput.rows];
 
             const results = [];
             for (const pair of fixturePairs) {
                 const current = await ensureConnection(pair.current, pair.currentPath, 'prod');
                 const desired = await ensureConnection(pair.desired, pair.desiredPath, 'staging');
 
-                const existing = jobs.find(
-                    job => job.status === 'success' && job.currentEndpoint.connectionId === current.connection.id && job.desiredEndpoint.connectionId === desired.connection.id,
+                const existing = comparisons.find(
+                    comparison => comparison.sourceEndpoint.connectionId === current.connection.id && comparison.targetEndpoint.connectionId === desired.connection.id,
                 );
                 if (existing) {
                     results.push({
                         fixtureId: pair.id,
                         comparisonId: existing.id,
-                        summary: existing.summary,
+                        summary: existing.latestSuccessfulRun?.summary,
                         reused: true,
                     });
                     continue;
                 }
 
                 const created = await action<{
-                    job: { id: string };
-                    comparison: { summary: Record<string, number | string> };
-                }>('comparison.schema.create', {
-                    current: {
+                    comparison: { id: string };
+                    result: { summary: Record<string, number | string> } | null;
+                }>('comparison.create', {
+                    name: `${pair.current} → ${pair.desired}`,
+                    source: {
                         connectionId: current.connection.id,
                         identityId: current.identities.find(identity => identity.isDefault)?.id ?? null,
                         database: 'main',
                     },
-                    desired: {
+                    target: {
                         connectionId: desired.connection.id,
                         identityId: desired.identities.find(identity => identity.isDefault)?.id ?? null,
                         database: 'main',
                     },
+                    schemaFilter: [],
+                    objectTypes: ['table', 'column', 'index', 'constraint', 'view'],
                 });
                 results.push({
                     fixtureId: pair.id,
-                    comparisonId: created.job.id,
-                    summary: created.comparison.summary,
+                    comparisonId: created.comparison.id,
+                    summary: created.result?.summary,
                     reused: false,
                 });
             }
@@ -168,7 +170,7 @@ test('live fixture connections create deterministic comparison jobs', async ({ p
     expect(Number(byId.get('04-unsafe-breaking')?.summary?.breakingChanges ?? 0)).toBeGreaterThanOrEqual(4);
 
     const unsafeComparisonId = byId.get('04-unsafe-breaking')!.comparisonId;
-    await page.goto(`/${organization}/compare/${unsafeComparisonId}`);
+    await page.goto(`/${organization}/comparisons/${unsafeComparisonId}`);
     await expect(page.getByText('unsafe', { exact: true })).toBeVisible();
     await expect(page.getByText('audit_log', { exact: false }).first()).toBeVisible();
     await expectAppHealthy(appErrors);

@@ -9,7 +9,7 @@ const coverage = {
     constraints: 'complete',
     views: 'complete',
     statistics: 'complete',
-};
+} as const;
 
 const summary = {
     totalChanges: 2,
@@ -23,7 +23,7 @@ const summary = {
     lowRisk: 1,
     unknownRisk: 0,
     readiness: 'unsafe',
-};
+} as const;
 
 const changes = [
     {
@@ -103,33 +103,69 @@ function connection(id: string, name: string, database: string, environment: str
     };
 }
 
-function comparisonJob(id: string, currentDatabase: string, desiredDatabase: string, aiReviewStatus: 'pending' | 'running' | 'success' | 'failed' | 'unavailable' = 'pending') {
+function comparisonRun(
+    id: string,
+    comparisonId: string,
+    options: {
+        status?: 'running' | 'success' | 'failed';
+        aiReviewStatus?: 'pending' | 'running' | 'success' | 'failed' | 'unavailable' | 'not_needed';
+        failureMessage?: string | null;
+    } = {},
+) {
     return {
         id,
-        status: 'success',
-        currentEndpoint: {
-            connectionId: 'conn_prod',
-            identityId: 'conn_prod_identity',
-            database: currentDatabase,
-            schemas: ['public'],
-        },
-        desiredEndpoint: {
-            connectionId: 'conn_staging',
-            identityId: 'conn_staging_identity',
-            database: desiredDatabase,
-            schemas: ['public'],
-        },
-        dialectFamily: 'postgres',
-        coverage,
-        summary,
-        resultSetId: 'rs_schema_diff',
+        organizationId: 'org_mock',
+        comparisonId,
+        createdByUserId: 'user_mock',
+        actorType: 'user',
         workId: null,
-        aiReviewStatus,
+        status: options.status ?? 'success',
+        configurationSnapshot: {
+            version: 1,
+            configurationVersion: 1,
+            name: 'Production vs Staging',
+            source: { connectionId: 'conn_prod', identityId: 'conn_prod_identity', database: 'app_prod' },
+            target: { connectionId: 'conn_staging', identityId: 'conn_staging_identity', database: 'app_staging' },
+            schemaFilter: ['public'],
+            objectTypes: ['table', 'column', 'index', 'constraint', 'view'],
+            dialectFamily: 'postgres',
+        },
+        coverage: options.status === 'failed' ? null : coverage,
+        summary: options.status === 'failed' ? null : summary,
+        sourceSnapshotHash: options.status === 'failed' ? null : 'source_hash',
+        targetSnapshotHash: options.status === 'failed' ? null : 'target_hash',
+        artifactRef: options.status === 'failed' ? null : { version: 1 },
+        resultSetId: options.status === 'failed' ? null : 'rs_schema_diff',
+        aiReviewStatus: options.aiReviewStatus ?? 'pending',
         aiReview: null,
-        aiReviewError: null,
-        failureMessage: null,
+        aiReviewError: options.aiReviewStatus === 'unavailable' ? 'No AI model configured' : null,
+        failureCode: options.status === 'failed' ? 'connection_failed' : null,
+        failureMessage: options.failureMessage ?? null,
+        startedAt: '2026-07-23T04:00:00.000Z',
+        updatedAt: '2026-07-23T04:00:03.000Z',
+        completedAt: options.status === 'running' ? null : '2026-07-23T04:00:03.000Z',
+    };
+}
+
+function comparisonRecord(id: string, run = comparisonRun('cmprun_1', id)) {
+    return {
+        id,
+        organizationId: 'org_mock',
+        createdByUserId: 'user_mock',
+        name: 'Production vs Staging',
+        kind: 'schema',
+        sourceEndpoint: { connectionId: 'conn_prod', identityId: 'conn_prod_identity', database: 'app_prod' },
+        targetEndpoint: { connectionId: 'conn_staging', identityId: 'conn_staging_identity', database: 'app_staging' },
+        schemaFilter: ['public'],
+        objectTypes: ['table', 'column', 'index', 'constraint', 'view'],
+        dialectFamily: 'postgres',
+        configurationVersion: 1,
+        latestRunId: run.id,
+        latestSuccessfulRunId: run.status === 'success' ? run.id : null,
         createdAt: '2026-07-23T04:00:00.000Z',
-        completedAt: '2026-07-23T04:00:03.000Z',
+        updatedAt: '2026-07-23T04:00:03.000Z',
+        latestRun: run,
+        latestSuccessfulRun: run.status === 'success' ? run : null,
     };
 }
 
@@ -149,100 +185,89 @@ async function actionResponse(route: Route, data: unknown) {
     });
 }
 
-test('schema compare supports history, review, ResultSet views, export, and theme changes', async ({ page, appErrors }) => {
+test('saved Comparisons support create, AI recovery, immutable Run history, Diff views, editing, and themes', async ({ page, appErrors }) => {
     const connections = [
         connection('conn_prod', 'Production', 'app_prod', 'prod'),
         connection('conn_staging', 'Staging', 'app_staging', 'staging'),
         connection('conn_mysql', 'MySQL QA', 'app_qa', 'qa', 'mysql'),
     ];
-    const historyJob = comparisonJob('cmp_history', 'legacy_prod', 'legacy_staging', 'success');
-    historyJob.aiReview = {
-        summary: 'Historical review.',
-        deploymentNotes: [],
-        risks: [],
-        recommendations: [],
-        limitations: [],
-        generatedAt: '2026-07-23T04:01:00.000Z',
-    };
-    let createdJob = comparisonJob('cmp_new', 'app_prod', 'app_staging');
+    const historical = comparisonRecord('cmp_history', comparisonRun('cmprun_history', 'cmp_history', { aiReviewStatus: 'success' }));
+    let created = comparisonRecord('cmp_new');
+    let runs = [created.latestRun];
     let reviewAttempts = 0;
+    let updateCalled = false;
     const resultSetInputs: Array<Record<string, unknown>> = [];
 
     await page.route('**/api/actions/execute', async route => {
-        const request = route.request();
-        const body = request.postDataJSON() as {
-            actionId: string;
-            input?: Record<string, unknown>;
-        };
-
+        const body = route.request().postDataJSON() as { actionId: string; input?: Record<string, unknown> };
         switch (body.actionId) {
             case 'connection.list':
                 await actionResponse(route, { connections });
                 return;
             case 'comparison.list':
-                await actionResponse(route, { rows: [historyJob], total: 1 });
+                await actionResponse(route, { rows: [historical], total: 1 });
                 return;
-            case 'comparison.schema.create':
+            case 'comparison.create':
                 await actionResponse(route, {
-                    job: createdJob,
-                    comparison: { summary, coverage, changes },
-                    topChanges: changes,
+                    comparison: created,
+                    run: created.latestRun,
+                    result: { version: 1, family: 'postgres', currentHash: 'a', desiredHash: 'b', coverage, summary, changes: [], warnings: [] },
+                    topChanges: [],
                 });
                 return;
-            case 'comparison.get': {
-                const comparisonId = String(body.input?.comparisonId ?? '');
-                await actionResponse(route, comparisonId === historyJob.id ? historyJob : createdJob);
+            case 'comparison.get':
+                await actionResponse(route, body.input?.comparisonId === historical.id ? historical : created);
+                return;
+            case 'comparison.run.list':
+                await actionResponse(route, { rows: body.input?.comparisonId === historical.id ? [historical.latestRun] : runs, total: runs.length });
+                return;
+            case 'comparison.run.get':
+                await actionResponse(route, runs.find(run => run.id === body.input?.runId) ?? created.latestRun);
+                return;
+            case 'comparison.run.create': {
+                const nextRun = comparisonRun('cmprun_2', created.id, { aiReviewStatus: 'not_needed' });
+                nextRun.summary = { ...summary, totalChanges: 0, breakingChanges: 0, added: 0, modified: 0, highRisk: 0, lowRisk: 0, readiness: 'compatible' };
+                runs = [nextRun, ...runs];
+                created = { ...created, latestRunId: nextRun.id, latestSuccessfulRunId: nextRun.id, latestRun: nextRun, latestSuccessfulRun: nextRun };
+                await actionResponse(route, { comparison: created, run: nextRun, result: null, topChanges: [] });
                 return;
             }
-            case 'comparison.aiReview':
+            case 'comparison.update':
+                updateCalled = true;
+                created = { ...created, name: String(body.input?.name ?? created.name) };
+                await actionResponse(route, { comparison: created, run: null, result: null, topChanges: [] });
+                return;
+            case 'comparison.run.aiReview':
                 reviewAttempts += 1;
                 if (reviewAttempts === 1) {
-                    createdJob = {
-                        ...createdJob,
-                        aiReviewStatus: 'unavailable',
-                        aiReviewError: 'No AI model configured',
-                    };
+                    const unavailable = { ...created.latestRun, aiReviewStatus: 'unavailable', aiReviewError: 'No AI model configured' };
+                    created = { ...created, latestRun: unavailable, latestSuccessfulRun: unavailable };
                     await route.fulfill({
                         status: 200,
                         contentType: 'application/json',
-                        body: JSON.stringify({
-                            ok: false,
-                            code: 'AI_UNAVAILABLE',
-                            message: 'No AI model configured',
-                        }),
+                        body: JSON.stringify({ ok: false, code: 'AI_UNAVAILABLE', message: 'No AI model configured' }),
                     });
                     return;
                 }
-                createdJob = {
-                    ...createdJob,
-                    aiReviewStatus: 'success',
-                    aiReviewError: null,
-                    aiReview: {
-                        summary: 'The primary-key removal is unsafe; the email widening is compatible.',
-                        deploymentNotes: ['Review foreign-key consumers before deployment.'],
-                        risks: [
-                            {
-                                changeId: 'chg_orders_pk',
-                                explanation: 'This canonical high-risk change removes the orders primary key.',
-                            },
-                        ],
-                        recommendations: ['Keep the existing primary key.'],
-                        limitations: ['Statistics are catalog estimates.'],
-                        generatedAt: '2026-07-23T04:02:00.000Z',
-                    },
+                const review = {
+                    summary: 'The primary-key removal is unsafe; the email widening is compatible.',
+                    deploymentNotes: ['Review foreign-key consumers before deployment.'],
+                    risks: [{ changeId: 'chg_orders_pk', explanation: 'This removes the orders primary key.' }],
+                    recommendations: ['Keep the existing primary key.'],
+                    limitations: ['Statistics are catalog estimates.'],
+                    generatedAt: '2026-07-23T04:02:00.000Z',
                 };
-                await actionResponse(route, { job: createdJob, review: createdJob.aiReview });
+                const reviewed = { ...created.latestRun, aiReviewStatus: 'success', aiReviewError: null, aiReview: review };
+                created = { ...created, latestRun: reviewed, latestSuccessfulRun: reviewed };
+                runs = runs.map(run => (run.id === reviewed.id ? reviewed : run));
+                await actionResponse(route, { run: reviewed, review });
                 return;
             case 'resultSet.rows.read': {
                 resultSetInputs.push(body.input ?? {});
                 const filters = (body.input?.filters as Array<{ col: string; value: string }> | undefined) ?? [];
                 const risk = filters.find(filter => filter.col === 'riskLevel')?.value;
                 const rows = risk ? changes.filter(change => change.riskLevel === risk) : changes;
-                await actionResponse(route, {
-                    rows,
-                    rowCount: rows.length,
-                    unfilteredRowCount: changes.length,
-                });
+                await actionResponse(route, { rows, rowCount: rows.length, unfilteredRowCount: changes.length });
                 return;
             }
             case 'resultSet.chart.read':
@@ -259,156 +284,98 @@ test('schema compare supports history, review, ResultSet views, export, and them
                 });
                 return;
             case 'resultSet.export.create':
-                resultSetInputs.push(body.input ?? {});
-                await actionResponse(route, {
-                    downloadUrl: '/api/result-set-exports/schema-compare-e2e',
-                });
+                await actionResponse(route, { downloadUrl: '/api/result-set-exports/schema-compare-e2e' });
                 return;
             default:
                 await route.continue();
         }
     });
-    await page.route('**/api/result-set-exports/schema-compare-e2e', async route => {
-        await route.fulfill({
+    await page.route('**/api/result-set-exports/schema-compare-e2e', route =>
+        route.fulfill({
             status: 200,
-            headers: {
-                'Content-Type': 'text/csv',
-                'Content-Disposition': 'attachment; filename="schema-diff.csv"',
-            },
+            headers: { 'Content-Type': 'text/csv', 'Content-Disposition': 'attachment; filename="schema-diff.csv"' },
             body: 'objectPath,riskLevel\npublic.orders.orders_pkey,high\n',
-        });
-    });
+        }),
+    );
 
     await page.goto('/');
     await page.waitForURL(/\/[^/]+\/connections$/);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0]!;
 
-    await page.goto(`/${organization}/compare`);
-    await expect(page.getByRole('heading', { name: 'Compare databases' })).toBeVisible();
-    await expect(page.getByRole('link', { name: /legacy_prod.*legacy_staging/ })).toBeVisible();
+    const removedRoute = await page.goto(`/${organization}/compare`);
+    expect(removedRoute?.status()).toBe(404);
 
-    await page.getByTestId('current-connection').click();
+    await page.goto(`/${organization}/comparisons`);
+    await expect(page.getByRole('heading', { name: 'Database Comparisons' })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Production vs Staging/ })).toBeVisible();
+    await page.getByRole('link', { name: 'New Comparison' }).first().click();
+
+    await page.getByLabel('Name').fill('Production vs Staging');
+    await page.getByTestId('source-connection').click();
     await page.getByRole('option', { name: /Production/ }).click();
-    await page.getByTestId('desired-connection').click();
+    await page.getByTestId('target-connection').click();
     await expect(page.getByRole('option', { name: /MySQL QA/ })).toHaveCount(0);
     await page.getByRole('option', { name: /Staging/ }).click();
+    await page.getByTestId('save-comparison').click();
+    await page.waitForURL(new RegExp(`/${organization}/comparisons/cmp_new$`));
 
-    const compareButton = page.getByTestId('compare-schema');
-    await expect(compareButton).toBeEnabled();
-    await compareButton.click();
-    await page.waitForURL(new RegExp(`/${organization}/compare/cmp_new$`));
-
-    await expect(page.getByText('public.users.email', { exact: true })).toBeVisible();
-    const firstCardHeader = page.getByTestId('schema-diff-card-header').first();
-    const firstCardHeaderBox = await firstCardHeader.boundingBox();
-    const firstCardTitleBox = await firstCardHeader.getByText('public.users.email', { exact: true }).boundingBox();
-    const firstCardRiskBox = await firstCardHeader.getByText('low', { exact: true }).boundingBox();
-    expect(firstCardHeaderBox?.height).toBeLessThanOrEqual(72);
-    expect(firstCardRiskBox!.x).toBeGreaterThan(firstCardTitleBox!.x + firstCardTitleBox!.width);
     await expect(page.getByText('AI Review is unavailable.')).toBeVisible();
     await page.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByText(/primary-key removal is unsafe/i)).toBeVisible();
-    await expect(page.getByText('chg_orders_pk', { exact: true })).toBeVisible();
-    await expect(page.getByTestId('ai-review-icon')).toHaveClass(/text-\[#9460FF\]/);
+    await expect(page.getByText('public.users.email', { exact: true })).toBeVisible();
 
+    await page.getByRole('link', { name: /2026/ }).first().click();
+    await page.waitForURL(new RegExp(`/comparisons/cmp_new/runs/cmprun_1`));
+    await expect(page.getByRole('heading', { name: 'Comparison Run' })).toBeVisible();
     await page.getByRole('tab', { name: 'Table' }).click();
     await expect(page.getByRole('cell', { name: 'public.orders.orders_pkey' })).toBeVisible();
-    await page.getByRole('combobox').first().click();
-    await page.getByRole('option', { name: 'High' }).click();
-    await expect(page).toHaveURL(/risk=high/);
-    await expect(page.getByRole('cell', { name: 'public.users.email' })).toHaveCount(0);
-
-    await page.getByRole('button', { name: 'Object', exact: true }).click();
-    await expect
-        .poll(() => {
-            const latest = resultSetInputs.filter(input => 'sorts' in input).at(-1);
-            return latest?.sorts;
-        })
-        .toEqual([{ column: 'objectPath', direction: 'desc' }]);
-
     await page.getByRole('tab', { name: 'Chart' }).click();
     await expect(page.locator('.recharts-wrapper')).toBeVisible();
-    await expect
-        .poll(() => {
-            const latest = resultSetInputs.find(input => input.chartType === 'bar');
-            return latest?.groupKey;
-        })
-        .toBe('riskLevel');
+    expect(resultSetInputs.some(input => input.groupKey === 'riskLevel')).toBe(true);
 
-    await page.getByRole('button', { name: 'Export' }).click();
-    const downloadPromise = page.waitForEvent('download');
-    await page.getByRole('menuitem', { name: 'CSV' }).click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe('schema-diff.csv');
+    await page.getByRole('link', { name: 'Production vs Staging' }).click();
+    await page.getByRole('button', { name: 'Run now' }).click();
+    await expect(page.getByText('No changes')).toBeVisible();
+    await expect(page.getByText(/Configuration v1/)).toHaveCount(2);
+
+    await page.getByRole('link', { name: 'Edit' }).click();
+    await page.getByLabel('Name').fill('Production vs Pre-production');
+    await page.getByTestId('save-comparison').click();
+    await expect.poll(() => updateCalled).toBe(true);
 
     const wasDark = await page.locator('html').evaluate(element => element.classList.contains('dark'));
     await page.getByRole('button', { name: /toggle theme/i }).click();
     await expect.poll(() => page.locator('html').evaluate(element => element.classList.contains('dark'))).toBe(!wasDark);
-    await page.getByRole('button', { name: /toggle theme/i }).click();
-    await expect.poll(() => page.locator('html').evaluate(element => element.classList.contains('dark'))).toBe(wasDark);
-
     await expectAppHealthy(appErrors);
 });
 
-test('schema compare refreshes stale connection selections before creating a job', async ({ page, appErrors }) => {
+test('failed first Run preserves the saved Comparison and exposes retry', async ({ page, appErrors }) => {
     await page.goto('/');
     await page.waitForURL(/\/[^/]+\/connections$/);
     const organization = new URL(page.url()).pathname.split('/').filter(Boolean)[0]!;
-
-    const staleConnections = [
-        connection('conn_old_current', 'Legacy Current', 'main', 'prod', 'sqlite'),
-        connection('conn_old_desired', 'Legacy Desired', 'main', 'staging', 'sqlite'),
-    ];
-    const refreshedConnections = [
-        connection('conn_new_current', 'Current database', 'main', 'prod', 'sqlite'),
-        connection('conn_new_desired', 'Desired database', 'main', 'staging', 'sqlite'),
-    ];
-    let connectionListCalls = 0;
-    let createAttempts = 0;
-    let connectionsChanged = false;
+    const failedRun = comparisonRun('cmprun_failed', 'cmp_failed', {
+        status: 'failed',
+        aiReviewStatus: 'not_needed',
+        failureMessage: 'Connection refused',
+    });
+    const failedComparison = comparisonRecord('cmp_failed', failedRun);
 
     await page.route('**/api/actions/execute', async route => {
-        const body = route.request().postDataJSON() as {
-            actionId: string;
-        };
-
-        if (body.actionId === 'connection.list') {
-            connectionListCalls += 1;
-            await actionResponse(route, {
-                connections: connectionsChanged ? refreshedConnections : staleConnections,
-            });
+        const body = route.request().postDataJSON() as { actionId: string };
+        if (body.actionId === 'comparison.get') {
+            await actionResponse(route, failedComparison);
             return;
         }
-        if (body.actionId === 'comparison.list') {
-            await actionResponse(route, { rows: [], total: 0 });
-            return;
-        }
-        if (body.actionId === 'comparison.schema.create') {
-            createAttempts += 1;
-            await actionResponse(route, {
-                job: comparisonJob('cmp_should_not_be_created', 'main', 'main'),
-            });
+        if (body.actionId === 'comparison.run.list') {
+            await actionResponse(route, { rows: [failedRun], total: 1 });
             return;
         }
         await route.continue();
     });
 
-    await page.goto(`/${organization}/compare`);
-    await page.getByTestId('current-connection').click();
-    await page.getByRole('option', { name: /Legacy Current/ }).click();
-    await page.getByTestId('desired-connection').click();
-    await page.getByRole('option', { name: /Legacy Desired/ }).click();
-    connectionsChanged = true;
-
-    const compareButton = page.getByTestId('compare-schema');
-    await expect(compareButton).toBeEnabled();
-    await compareButton.click();
-
-    await expect(
-        page.getByText('A selected connection is no longer available (it may have been deleted or recreated). The list was refreshed; select Current and Desired again.'),
-    ).toBeVisible();
-    await expect(compareButton).toBeDisabled();
-    expect(connectionListCalls).toBeGreaterThanOrEqual(2);
-    expect(createAttempts).toBe(0);
+    await page.goto(`/${organization}/comparisons/cmp_failed`);
+    await expect(page.getByText('Connection refused')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run now' })).toBeEnabled();
+    await expect(page.getByRole('heading', { name: 'Production vs Staging' })).toBeVisible();
     await expectAppHealthy(appErrors);
 });

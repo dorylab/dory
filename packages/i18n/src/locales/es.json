@@ -3379,7 +3379,7 @@
         "WorkspaceDataSourcesCount": "{count} fuente de datos",
         "WorkspaceDataSourcesCountPlural": "{count} fuentes de datos",
         "AgentRuns": "Ejecuciones de agente",
-        "SchemaCompare": "Comparar esquemas",
+        "SchemaCompare": "Comparaciones",
         "SQLConsole": "Consola SQL",
         "Explorer": "Explorador",
         "Schema": "Esquema",
@@ -3875,15 +3875,33 @@
     },
     "SchemaCompare": {
         "Eyebrow": "Evolución de bases de datos",
-        "Title": "Comparar bases de datos",
+        "Title": "Comparaciones",
         "Description": "Comprende, revisa y evoluciona esquemas con seguridad. Dory captura un diff determinista Current → Desired y explica la evidencia.",
-        "Current": "Current (actual)",
-        "Desired": "Desired (objetivo)",
+        "Source": "Origen",
+        "Target": "Destino",
+        "Current": "Origen",
+        "Desired": "Destino",
         "Back": "Todas las comparaciones",
         "Delete": "Eliminar",
         "Cancel": "Cancelar",
         "Loading": "Cargando comparación…",
+        "List": {
+            "Eyebrow": "Evolución de bases de datos",
+            "Title": "Comparaciones de bases de datos",
+            "Description": "Sigue las relaciones entre bases de datos cuyos cambios de esquema te importan.",
+            "New": "Nueva comparación",
+            "LastChecked": "Última comprobación {date}",
+            "NeverChecked": "Aún no comprobada",
+            "Risks": "{count} riesgos",
+            "Empty": "Aún no hay comparaciones guardadas.",
+            "EmptyDescription": "Crea una comparación permanente Origen → Destino y Dory conservará cada ejecución."
+        },
         "Create": {
+            "Eyebrow": "Nueva comparación",
+            "Title": "Crear comparación",
+            "Description": "Guarda una relación de bases de datos y ejecuta su primera comprobación de esquema.",
+            "Name": "Nombre",
+            "NamePlaceholder": "Producción vs Staging",
             "EndpointDescription": "Elige conexión, identidad, base de datos y un alcance de esquemas opcional.",
             "Connection": "Conexión",
             "SelectConnection": "Seleccionar conexión",
@@ -3894,7 +3912,18 @@
             "Schemas": "Alcance de esquemas",
             "SchemasPlaceholder": "public, billing",
             "SchemasHelp": "Separados por comas. Vacío compara todos los esquemas no internos.",
-            "Compare": "Comparar esquemas"
+            "CompareObjects": "Comparar",
+            "CompareObjectsHelp": "Las estadísticas siempre se recopilan como evidencia de riesgo.",
+            "Compare": "Comparar esquemas",
+            "Create": "Crear",
+            "SaveAndRun": "Guardar cambios"
+        },
+        "Status": {
+            "NotRun": "Sin ejecutar",
+            "Running": "En ejecución",
+            "Failed": "Fallida",
+            "NoChanges": "Sin cambios",
+            "ChangeCount": "{count} cambios"
         },
         "Recent": {
             "Title": "Comparaciones recientes",
@@ -3909,11 +3938,20 @@
         "Detail": {
             "Coverage": "Cobertura",
             "CompareAgain": "Comparar de nuevo",
+            "RunNow": "Ejecutar ahora",
+            "LastChecked": "Última comprobación {date}",
+            "Configuration": "Configuración",
+            "ConfigurationVersion": "Versión de configuración {version}",
+            "AllSchemas": "Todos los esquemas",
+            "Highlights": "Cambios importantes",
+            "ViewDiff": "Ver diff completo",
             "Failed": "La comparación falló",
             "Capturing": "Capturando esquemas…"
         },
         "Summary": {
             "Changes": "Cambios",
+            "Compatible": "Compatible",
+            "Warnings": "Advertencias",
             "Breaking": "Incompatibles",
             "High": "Riesgo alto",
             "Medium": "Riesgo medio",
@@ -3954,7 +3992,9 @@
             "Title": "AI Review",
             "Description": "Explicación basada en la evidencia del diff canónico. La IA no puede cambiar el riesgo ni la preparación.",
             "Retry": "Reintentar",
+            "Generate": "Generar revisión",
             "Generating": "Revisando evidencia determinista…",
+            "NotNeeded": "No se detectaron cambios, por lo que no hace falta una revisión de IA.",
             "Risks": "Explicaciones de riesgo",
             "Recommendations": "Recomendaciones",
             "Limitations": "Limitaciones",
@@ -3962,12 +4002,35 @@
             "Unavailable": "AI Review no está disponible.",
             "DiffUnaffected": "La comparación determinista y el ResultSet siguen disponibles."
         },
+        "Edit": {
+            "Action": "Editar",
+            "Eyebrow": "Configuración de comparación",
+            "Title": "Editar comparación",
+            "Description": "Cambiar origen, destino, esquemas u objetos crea una nueva ejecución inmutable. Cambiar el nombre no.",
+            "BlockedTitle": "Hay una ejecución activa",
+            "BlockedDescription": "Espera a que termine antes de editar esta comparación.",
+            "BackToComparison": "Volver a la comparación"
+        },
+        "Runs": {
+            "Title": "Ejecuciones de comparación",
+            "Description": "Comprobaciones de esquema inmutables, como commits en un historial.",
+            "ConfigurationVersion": "Configuración v{version}",
+            "Empty": "Aún no hay ejecuciones."
+        },
+        "Run": {
+            "Title": "Ejecución de comparación",
+            "SnapshotConfiguration": "Instantánea de configuración",
+            "ImmutableDescription": "Esta configuración y su resultado determinista se conservan como hechos históricos.",
+            "Changes": "Cambios",
+            "ChangesDescription": "Valores anteriores y posteriores, agrupados por tipo de objeto."
+        },
         "DeleteDialog": {
             "Title": "¿Eliminar la comparación?",
-            "Description": "Elimina el job, las capturas, el ResultSet derivado y las exportaciones de Dory. Nunca modifica las bases conectadas."
+            "Description": "Elimina permanentemente la comparación, sus ejecuciones, capturas, ResultSets y exportaciones. Nunca modifica las bases conectadas."
         },
         "Errors": {
             "CreateFailed": "No se pudo crear la comparación.",
+            "RunFailed": "No se pudo ejecutar la comparación.",
             "ConnectionChanged": "Una conexión seleccionada ya no está disponible (puede haberse eliminado o vuelto a crear). La lista se actualizó; vuelve a seleccionar Current y Desired.",
             "DeleteFailed": "No se pudo eliminar la comparación.",
             "ExportFailed": "No se pudo exportar el diff."

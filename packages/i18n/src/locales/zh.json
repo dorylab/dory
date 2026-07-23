@@ -3385,7 +3385,7 @@
         "WorkspaceDataSourcesCount": "{count} 个数据源",
         "WorkspaceDataSourcesCountPlural": "{count} 个数据源",
         "AgentRuns": "Agent Runs",
-        "SchemaCompare": "数据库对比",
+        "SchemaCompare": "Comparisons",
         "SQLConsole": "SQL 控制台",
         "Explorer": "资源浏览",
         "Schema": "模式",
@@ -3881,15 +3881,33 @@
     },
     "SchemaCompare": {
         "Eyebrow": "数据库演进",
-        "Title": "数据库对比",
+        "Title": "Comparisons",
         "Description": "理解、审查并安全演进数据库结构。Dory 采集确定性的 Current → Desired 差异，并解释证据。",
-        "Current": "Current（当前）",
-        "Desired": "Desired（目标）",
+        "Source": "Source（当前）",
+        "Target": "Target（目标）",
+        "Current": "Source（当前）",
+        "Desired": "Target（目标）",
         "Back": "全部对比",
         "Delete": "删除",
         "Cancel": "取消",
         "Loading": "正在加载对比…",
+        "List": {
+            "Eyebrow": "数据库演进",
+            "Title": "数据库 Comparisons",
+            "Description": "管理你长期关注的数据库关系，并持续理解 Schema 变化。",
+            "New": "新建 Comparison",
+            "LastChecked": "上次检查：{date}",
+            "NeverChecked": "尚未检查",
+            "Risks": "{count} 项风险",
+            "Empty": "还没有保存的 Comparison。",
+            "EmptyDescription": "创建一个永久的 Source → Target 对比，Dory 会保留每一次 Run。"
+        },
         "Create": {
+            "Eyebrow": "新建 Comparison",
+            "Title": "创建 Comparison",
+            "Description": "保存数据库关系，并立即执行首次确定性 Schema 检查。",
+            "Name": "名称",
+            "NamePlaceholder": "Production vs Staging",
             "EndpointDescription": "选择连接、身份、数据库和可选的 Schema 范围。",
             "Connection": "连接",
             "SelectConnection": "选择连接",
@@ -3900,7 +3918,18 @@
             "Schemas": "Schema 范围",
             "SchemasPlaceholder": "public, billing",
             "SchemasHelp": "使用逗号分隔；留空时对比全部非系统 Schema。",
-            "Compare": "开始对比"
+            "CompareObjects": "对比范围",
+            "CompareObjectsHelp": "Statistics 始终作为风险证据采集，不是可选的 Diff 类型。",
+            "Compare": "开始对比",
+            "Create": "创建",
+            "SaveAndRun": "保存修改"
+        },
+        "Status": {
+            "NotRun": "未运行",
+            "Running": "运行中",
+            "Failed": "失败",
+            "NoChanges": "无变化",
+            "ChangeCount": "{count} 项变化"
         },
         "Recent": {
             "Title": "最近对比",
@@ -3915,11 +3944,20 @@
         "Detail": {
             "Coverage": "覆盖度",
             "CompareAgain": "再次对比",
+            "RunNow": "立即运行",
+            "LastChecked": "上次检查：{date}",
+            "Configuration": "配置",
+            "ConfigurationVersion": "配置版本 {version}",
+            "AllSchemas": "全部 Schema",
+            "Highlights": "重点变化",
+            "ViewDiff": "查看完整 Diff",
             "Failed": "对比失败",
             "Capturing": "正在采集 Schema 快照…"
         },
         "Summary": {
             "Changes": "变化",
+            "Compatible": "兼容",
+            "Warnings": "警告",
             "Breaking": "破坏性变化",
             "High": "高风险",
             "Medium": "中风险",
@@ -3960,7 +3998,9 @@
             "Title": "AI Review",
             "Description": "基于确定性 Diff 证据进行解释；AI 不能修改风险等级或部署结论。",
             "Retry": "重试",
+            "Generate": "生成审查",
             "Generating": "正在审查确定性证据…",
+            "NotNeeded": "没有检测到变化，因此无需生成 AI Review。",
             "Risks": "风险解释",
             "Recommendations": "建议",
             "Limitations": "限制",
@@ -3968,12 +4008,35 @@
             "Unavailable": "AI Review 当前不可用。",
             "DiffUnaffected": "确定性对比和 ResultSet 不受影响，仍可继续使用。"
         },
+        "Edit": {
+            "Action": "编辑",
+            "Eyebrow": "Comparison 配置",
+            "Title": "编辑 Comparison",
+            "Description": "修改 Source、Target、Schema 或对象范围会创建新的不可变 Run；仅改名不会运行。",
+            "BlockedTitle": "Comparison Run 正在运行",
+            "BlockedDescription": "请等待当前 Run 完成后再编辑这个 Comparison。",
+            "BackToComparison": "返回 Comparison"
+        },
+        "Runs": {
+            "Title": "Comparison Runs",
+            "Description": "不可变的时间点 Schema 检查，类似提交历史。",
+            "ConfigurationVersion": "配置 v{version}",
+            "Empty": "还没有 Run。"
+        },
+        "Run": {
+            "Title": "Comparison Run",
+            "SnapshotConfiguration": "配置快照",
+            "ImmutableDescription": "该配置和确定性结果会作为历史事实永久保留。",
+            "Changes": "变化",
+            "ChangesDescription": "按数据库对象类型分组展示 Git-style before/after。"
+        },
         "DeleteDialog": {
-            "Title": "删除这次对比？",
-            "Description": "这只会删除 Dory 中的 Job、快照、派生 ResultSet 和导出文件，绝不会修改任一连接数据库。"
+            "Title": "删除这个 Comparison？",
+            "Description": "这会永久删除 Comparison、全部 Runs、快照、派生 ResultSet 和导出文件，绝不会修改任一连接数据库。"
         },
         "Errors": {
             "CreateFailed": "无法创建数据库对比。",
+            "RunFailed": "无法执行数据库对比。",
             "ConnectionChanged": "所选连接已失效（可能已被删除或重建）。连接列表已刷新，请重新选择 Current 和 Desired。",
             "DeleteFailed": "无法删除这次对比。",
             "ExportFailed": "无法导出 Schema Diff。"

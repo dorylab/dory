@@ -58,6 +58,7 @@ export const resultSets = pgTable(
         setIndex: integer('set_index'),
         sourceQueryRunId: text('source_query_run_id'),
         comparisonId: text('comparison_id'),
+        comparisonRunId: text('comparison_run_id'),
         sourceType: text('source_type').$type<ResultSetSourceType>().notNull(),
         kind: text('kind').$type<ResultSetKind>().notNull(),
         status: text('status').$type<ResultSetStatus>().notNull(),
@@ -94,6 +95,7 @@ export const resultSets = pgTable(
         index('idx_result_sets_session_set').on(t.organizationId, t.sessionId, t.setIndex),
         index('idx_result_sets_source_query_run').on(t.sourceQueryRunId),
         index('idx_result_sets_comparison').on(t.comparisonId),
+        index('idx_result_sets_comparison_run').on(t.comparisonRunId),
         index('idx_result_sets_expires_at').on(t.expiresAt),
     ],
 );

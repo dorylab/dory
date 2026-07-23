@@ -145,7 +145,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
               },
               {
                   title: t('SchemaCompare'),
-                  url: `/${organization}/compare`,
+                  url: `/${organization}/comparisons`,
                   icon: GitCompareArrows,
                   requiresConnection: false,
               },

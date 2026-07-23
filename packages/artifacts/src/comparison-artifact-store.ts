@@ -1,13 +1,47 @@
-import type { SchemaSnapshot } from '@dory/schema-compare';
+import type { SchemaComparisonResult, SchemaSnapshot } from '@dory/schema-compare';
 
 import { joinObjectPath, readableToBuffer, safeObjectPathPart, type ObjectStore } from './object-store';
 
-export type ComparisonSnapshotArtifactRef = {
+export type ComparisonRunArtifactManifest = {
+    format: 'dory.comparison-run.v1';
+    organizationId: string;
+    comparisonId: string;
+    runId: string;
+    configuration: unknown;
+    sourceSnapshotHash: string;
+    targetSnapshotHash: string;
+    createdAt: string;
+    files: {
+        source: string;
+        target: string;
+        diff: string;
+        summary: string;
+        aiReview: string;
+    };
+};
+
+export type ComparisonRunArtifactRef = {
+    version: 1;
     store: string;
     comparisonId: string;
+    runId: string;
     basePath: string;
-    currentPath: string;
-    desiredPath: string;
+    manifestPath: string;
+    sourcePath: string;
+    targetPath: string;
+    diffPath: string;
+    summaryPath: string;
+    aiReviewPath: string;
+};
+
+type PutRunInput = {
+    organizationId: string;
+    comparisonId: string;
+    runId: string;
+    configuration: unknown;
+    source: SchemaSnapshot;
+    target: SchemaSnapshot;
+    comparison: SchemaComparisonResult;
 };
 
 export class ComparisonArtifactStore {
@@ -16,49 +50,106 @@ export class ComparisonArtifactStore {
         private readonly prefix = 'artifacts',
     ) {}
 
-    async putSnapshots(input: { organizationId: string; comparisonId: string; current: SchemaSnapshot; desired: SchemaSnapshot }): Promise<ComparisonSnapshotArtifactRef> {
-        const basePath = this.basePath(input.organizationId, input.comparisonId);
-        const currentPath = 'current.json';
-        const desiredPath = 'desired.json';
+    async putRun(input: PutRunInput): Promise<ComparisonRunArtifactRef> {
+        const basePath = this.runBasePath(input.organizationId, input.comparisonId, input.runId);
+        const ref: ComparisonRunArtifactRef = {
+            version: 1,
+            store: this.objectStore.kind,
+            comparisonId: input.comparisonId,
+            runId: input.runId,
+            basePath,
+            manifestPath: 'manifest.json',
+            sourcePath: 'source.json',
+            targetPath: 'target.json',
+            diffPath: 'diff.json',
+            summaryPath: 'summary.json',
+            aiReviewPath: 'ai-review.json',
+        };
+        const manifest: ComparisonRunArtifactManifest = {
+            format: 'dory.comparison-run.v1',
+            organizationId: input.organizationId,
+            comparisonId: input.comparisonId,
+            runId: input.runId,
+            configuration: input.configuration,
+            sourceSnapshotHash: input.source.contentHash,
+            targetSnapshotHash: input.target.contentHash,
+            createdAt: new Date().toISOString(),
+            files: {
+                source: ref.sourcePath,
+                target: ref.targetPath,
+                diff: ref.diffPath,
+                summary: ref.summaryPath,
+                aiReview: ref.aiReviewPath,
+            },
+        };
+        if (await this.objectStore.exists(joinObjectPath(basePath, ref.manifestPath))) {
+            throw new Error(`Comparison Run artifact is immutable: ${input.runId}`);
+        }
+
         try {
             await Promise.all([
-                this.objectStore.put(joinObjectPath(basePath, currentPath), JSON.stringify(input.current), {
-                    contentType: 'application/json',
-                }),
-                this.objectStore.put(joinObjectPath(basePath, desiredPath), JSON.stringify(input.desired), {
-                    contentType: 'application/json',
+                this.putJson(basePath, ref.sourcePath, input.source),
+                this.putJson(basePath, ref.targetPath, input.target),
+                this.putJson(basePath, ref.diffPath, input.comparison),
+                this.putJson(basePath, ref.summaryPath, {
+                    coverage: input.comparison.coverage,
+                    summary: input.comparison.summary,
+                    warnings: input.comparison.warnings,
                 }),
             ]);
+            // The manifest is the commit marker and must be written last.
+            await this.putJson(basePath, ref.manifestPath, manifest);
+            return ref;
         } catch (error) {
             await this.objectStore.deletePrefix(basePath).catch(() => undefined);
             throw error;
         }
-        return {
-            store: this.objectStore.kind,
-            comparisonId: input.comparisonId,
-            basePath,
-            currentPath,
-            desiredPath,
-        };
     }
 
-    async readSnapshots(ref: ComparisonSnapshotArtifactRef): Promise<{ current: SchemaSnapshot; desired: SchemaSnapshot }> {
-        const [current, desired] = await Promise.all([
-            readableToBuffer(await this.objectStore.get(joinObjectPath(ref.basePath, ref.currentPath))),
-            readableToBuffer(await this.objectStore.get(joinObjectPath(ref.basePath, ref.desiredPath))),
+    async readRun(ref: ComparisonRunArtifactRef): Promise<{
+        manifest: ComparisonRunArtifactManifest;
+        source: SchemaSnapshot;
+        target: SchemaSnapshot;
+        comparison: SchemaComparisonResult;
+    }> {
+        const [manifest, source, target, comparison] = await Promise.all([
+            this.readJson<ComparisonRunArtifactManifest>(ref.basePath, ref.manifestPath),
+            this.readJson<SchemaSnapshot>(ref.basePath, ref.sourcePath),
+            this.readJson<SchemaSnapshot>(ref.basePath, ref.targetPath),
+            this.readJson<SchemaComparisonResult>(ref.basePath, ref.diffPath),
         ]);
-        return {
-            current: JSON.parse(current.toString('utf8')) as SchemaSnapshot,
-            desired: JSON.parse(desired.toString('utf8')) as SchemaSnapshot,
-        };
+        return { manifest, source, target, comparison };
     }
 
-    async deleteComparison(ref: ComparisonSnapshotArtifactRef): Promise<void> {
+    async putAiReview(ref: ComparisonRunArtifactRef, review: unknown): Promise<void> {
+        await this.putJson(ref.basePath, ref.aiReviewPath, review);
+    }
+
+    async deleteRun(ref: ComparisonRunArtifactRef): Promise<void> {
         await this.objectStore.deletePrefix(ref.basePath);
     }
 
-    basePath(organizationId: string, comparisonId: string) {
+    async deleteComparisonById(organizationId: string, comparisonId: string): Promise<void> {
+        await this.objectStore.deletePrefix(this.comparisonBasePath(organizationId, comparisonId));
+    }
+
+    private comparisonBasePath(organizationId: string, comparisonId: string) {
         const organization = safeObjectPathPart(organizationId);
         return joinObjectPath(this.prefix, organization.startsWith('org_') ? organization : `org_${organization}`, 'comparisons', safeObjectPathPart(comparisonId));
+    }
+
+    private runBasePath(organizationId: string, comparisonId: string, runId: string) {
+        return joinObjectPath(this.comparisonBasePath(organizationId, comparisonId), 'runs', safeObjectPathPart(runId));
+    }
+
+    private async putJson(basePath: string, filePath: string, value: unknown) {
+        await this.objectStore.put(joinObjectPath(basePath, filePath), JSON.stringify(value), {
+            contentType: 'application/json',
+        });
+    }
+
+    private async readJson<T>(basePath: string, filePath: string): Promise<T> {
+        const value = await readableToBuffer(await this.objectStore.get(joinObjectPath(basePath, filePath)));
+        return JSON.parse(value.toString('utf8')) as T;
     }
 }

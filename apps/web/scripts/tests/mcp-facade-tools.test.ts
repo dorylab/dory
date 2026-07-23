@@ -1019,7 +1019,28 @@ test('ordinary MCP facade tools require an existing work context', async () => {
             }),
         'MISSING_WORK_CONTEXT',
     );
-    await assertRejectsCode(() => getTool('dory_analyze_database_changes').execute(ctx, { comparisonId: 'cmp_1' }), 'MISSING_WORK_CONTEXT');
+    await assertRejectsCode(() => getTool('dory_analyze_database_changes').execute(ctx, { runId: 'cmprun_1' }), 'MISSING_WORK_CONTEXT');
+});
+
+test('schema Comparison MCP contracts accept saved and create-and-run paths', () => {
+    const compare = getTool('dory_compare_schema');
+    assert.equal(compare.inputSchema.safeParse({ comparisonId: 'cmp_1', workId: 'work-1' }).success, true);
+    assert.equal(
+        compare.inputSchema.safeParse({
+            name: 'Production vs Staging',
+            source: { connectionId: 'conn-source', database: 'app' },
+            target: { connectionId: 'conn-target', database: 'app' },
+            schemaFilter: ['public'],
+            objectTypes: ['table', 'column', 'index', 'constraint', 'view'],
+            workId: 'work-1',
+        }).success,
+        true,
+    );
+    assert.equal(compare.inputSchema.safeParse({ workId: 'work-1' }).success, false);
+
+    const analyze = getTool('dory_analyze_database_changes');
+    assert.equal(analyze.inputSchema.safeParse({ runId: 'cmprun_1', workId: 'work-1' }).success, true);
+    assert.equal(analyze.inputSchema.safeParse({ comparisonId: 'cmp_1', workId: 'work-1' }).success, false);
 });
 
 test('strict MCP output schemas accept structured error envelopes', () => {

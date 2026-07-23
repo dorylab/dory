@@ -1,4 +1,5 @@
 import type { NextRequest } from 'next/server';
+import { after } from 'next/server';
 import { randomUUID } from 'node:crypto';
 
 import { getDBService } from '@dory/database';
@@ -11,15 +12,9 @@ import type { OrganizationAccess } from '@/lib/server/authz/types';
 import { createWebActionAuditSink } from './action-audit';
 import type { WebActionServices } from './types';
 
-export const TRUSTED_USER_SCOPES = [
-    'read',
-    'write',
-];
+export const TRUSTED_USER_SCOPES = ['read', 'write'];
 
-export const AGENT_SCOPES = [
-    'read',
-    'write',
-];
+export const AGENT_SCOPES = ['read', 'write'];
 
 export type ActionRequestBody = {
     actionId?: string;
@@ -71,7 +66,7 @@ export async function createUserActionContext(options: {
         currentConnectionId,
         requestId: options.req.headers.get('x-request-id') ?? randomUUID(),
         audit: createWebActionAuditSink(db),
-        services: { db, req: options.req },
+        services: { db, req: options.req, defer: task => after(task) },
     };
 }
 
@@ -91,6 +86,11 @@ export async function createMcpActionContextFromAuth(context: McpAuthContext): P
         currentConnectionId: null,
         requestId: randomUUID(),
         audit: createWebActionAuditSink(db),
-        services: { db, requestOrigin: context.requestOrigin ?? null, workspaceOrigin: context.workspaceOrigin ?? null },
+        services: {
+            db,
+            requestOrigin: context.requestOrigin ?? null,
+            workspaceOrigin: context.workspaceOrigin ?? null,
+            defer: task => after(task),
+        },
     };
 }

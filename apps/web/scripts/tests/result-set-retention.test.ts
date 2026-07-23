@@ -26,6 +26,7 @@ const {
     isAllowedResultSetMaxStorageBytes,
 } = await import('@dory/database/postgres/impl/organization');
 const { PostgresResultSetsRepository } = await import('@dory/database/postgres/impl/result-sets');
+const { PostgresComparisonsRepository } = await import('@dory/database/postgres/impl/comparisons');
 
 const db = await getClient();
 const objectStore = new FilesystemObjectStore(artifactDir);
@@ -110,6 +111,7 @@ async function initSchema() {
             "set_index" integer,
             "source_query_run_id" text,
             "comparison_id" text,
+            "comparison_run_id" text,
             "source_type" text NOT NULL,
             "kind" text NOT NULL,
             "status" text NOT NULL,
@@ -160,6 +162,56 @@ async function initSchema() {
             "role" text NOT NULL DEFAULT 'generated',
             "created_at" timestamp with time zone NOT NULL
         )
+    `);
+    await db.execute(sql`
+        CREATE TABLE "comparisons" (
+            "id" text PRIMARY KEY NOT NULL,
+            "organization_id" text NOT NULL,
+            "created_by_user_id" text NOT NULL,
+            "name" text NOT NULL,
+            "kind" text NOT NULL DEFAULT 'schema',
+            "source_endpoint" jsonb NOT NULL,
+            "target_endpoint" jsonb NOT NULL,
+            "schema_filter" jsonb NOT NULL DEFAULT '[]'::jsonb,
+            "object_types" jsonb NOT NULL DEFAULT '[]'::jsonb,
+            "dialect_family" text NOT NULL,
+            "configuration_version" integer NOT NULL DEFAULT 1,
+            "latest_run_id" text,
+            "latest_successful_run_id" text,
+            "created_at" timestamp with time zone NOT NULL,
+            "updated_at" timestamp with time zone NOT NULL
+        )
+    `);
+    await db.execute(sql`
+        CREATE TABLE "comparison_runs" (
+            "id" text PRIMARY KEY NOT NULL,
+            "organization_id" text NOT NULL,
+            "comparison_id" text NOT NULL,
+            "created_by_user_id" text NOT NULL,
+            "actor_type" text NOT NULL DEFAULT 'user',
+            "work_id" text,
+            "status" text NOT NULL DEFAULT 'running',
+            "configuration_snapshot" jsonb NOT NULL,
+            "coverage" jsonb,
+            "summary" jsonb,
+            "source_snapshot_hash" text,
+            "target_snapshot_hash" text,
+            "artifact_ref" jsonb,
+            "result_set_id" text,
+            "ai_review_status" text NOT NULL DEFAULT 'pending',
+            "ai_review" jsonb,
+            "ai_review_error" text,
+            "failure_code" text,
+            "failure_message" text,
+            "started_at" timestamp with time zone NOT NULL,
+            "updated_at" timestamp with time zone NOT NULL,
+            "completed_at" timestamp with time zone
+        )
+    `);
+    await db.execute(sql`
+        CREATE UNIQUE INDEX "uidx_comparison_runs_active"
+        ON "comparison_runs" ("comparison_id")
+        WHERE "status" = 'running'
     `);
     await db.execute(sql`
         CREATE TABLE "work_query_result_sets" (
@@ -293,6 +345,145 @@ test('persists failed queries as metadata without creating result data', async (
     assert.equal(errorMeta?.byteSize, null);
     assert.equal(errorMeta?.expiresAt, null);
     assert.equal(errorMeta?.errorMessage, 'no such table: missing_table');
+});
+
+test('persists Comparison Run projections permanently with both stable identifiers', async () => {
+    const { resultSetsRepo } = await createRepositories();
+    const persisted = await resultSetsRepo.persistDerivedResultSet({
+        organizationId: 'org_retention',
+        userId: 'user_retention',
+        comparisonId: 'cmp_retention',
+        comparisonRunId: 'cmprun_retention',
+        rows: [{ changeId: 'chg_1', objectType: 'table', riskLevel: 'low' }],
+        kind: 'schema-diff',
+        sourceConnectionType: 'sqlite',
+        sourceDatabaseName: 'source → target',
+        persistent: true,
+    });
+
+    const [record] = await db.select().from(resultSets).where(eq(resultSets.id, persisted.resultSetId)).limit(1);
+    assert.equal(persisted.expiresAt, null);
+    assert.equal(record?.comparisonId, 'cmp_retention');
+    assert.equal(record?.comparisonRunId, 'cmprun_retention');
+    assert.equal(record?.expiresAt, null);
+});
+
+test('Comparison repository maintains immutable Run history, latest pointers, concurrency, and cascade deletion', async () => {
+    const { resultSetsRepo } = await createRepositories();
+    const comparisonsRepo = new PostgresComparisonsRepository(resultSetsRepo, artifacts);
+    await comparisonsRepo.init();
+    const comparison = await comparisonsRepo.createComparison({
+        organizationId: 'org_retention',
+        userId: 'user_retention',
+        name: 'Production vs Staging',
+        source: { connectionId: 'conn_source', identityId: null, database: 'source' },
+        target: { connectionId: 'conn_target', identityId: null, database: 'target' },
+        schemaFilter: ['public'],
+        objectTypes: ['table', 'column', 'index', 'constraint', 'view'],
+        dialectFamily: 'postgres',
+    });
+    const configurationSnapshot = {
+        version: 1 as const,
+        configurationVersion: 1,
+        name: comparison.name,
+        source: comparison.sourceEndpoint,
+        target: comparison.targetEndpoint,
+        schemaFilter: comparison.schemaFilter,
+        objectTypes: comparison.objectTypes,
+        dialectFamily: comparison.dialectFamily,
+    };
+    const firstRun = await comparisonsRepo.createRun({
+        organizationId: 'org_retention',
+        comparisonId: comparison.id,
+        userId: 'user_retention',
+        actorType: 'user',
+        configurationSnapshot,
+    });
+    await assert.rejects(
+        comparisonsRepo.createRun({
+            organizationId: 'org_retention',
+            comparisonId: comparison.id,
+            userId: 'user_retention',
+            actorType: 'user',
+            configurationSnapshot,
+        }),
+        /already in progress/,
+    );
+    await comparisonsRepo.failRun({
+        organizationId: 'org_retention',
+        comparisonId: comparison.id,
+        runId: firstRun.id,
+        code: 'connection_failed',
+        message: 'Connection refused',
+    });
+    const secondRun = await comparisonsRepo.createRun({
+        organizationId: 'org_retention',
+        comparisonId: comparison.id,
+        userId: 'user_retention',
+        actorType: 'agent',
+        workId: 'work_comparison',
+        configurationSnapshot,
+    });
+    await comparisonsRepo.completeRun({
+        organizationId: 'org_retention',
+        comparisonId: comparison.id,
+        runId: secondRun.id,
+        comparison: {
+            version: 1,
+            family: 'postgres',
+            currentHash: 'source_hash',
+            desiredHash: 'target_hash',
+            coverage: {
+                tables: 'complete',
+                columns: 'complete',
+                indexes: 'complete',
+                constraints: 'complete',
+                views: 'complete',
+                statistics: 'complete',
+            },
+            summary: {
+                totalChanges: 0,
+                breakingChanges: 0,
+                added: 0,
+                removed: 0,
+                modified: 0,
+                renamed: 0,
+                highRisk: 0,
+                mediumRisk: 0,
+                lowRisk: 0,
+                unknownRisk: 0,
+                readiness: 'compatible',
+            },
+            changes: [],
+            warnings: [],
+        },
+        artifactRef: {
+            version: 1,
+            store: 'filesystem',
+            comparisonId: comparison.id,
+            runId: secondRun.id,
+            basePath: `org_retention/comparisons/${comparison.id}/runs/${secondRun.id}`,
+            manifestPath: 'manifest.json',
+            sourcePath: 'source.json',
+            targetPath: 'target.json',
+            diffPath: 'diff.json',
+            summaryPath: 'summary.json',
+            aiReviewPath: 'ai-review.json',
+        },
+        resultSetId: 'rs_missing_cleanup_is_tolerated',
+    });
+
+    const loaded = await comparisonsRepo.get('org_retention', comparison.id);
+    assert.equal(loaded.latestRunId, secondRun.id);
+    assert.equal(loaded.latestSuccessfulRunId, secondRun.id);
+    assert.equal(loaded.latestSuccessfulRun?.aiReviewStatus, 'not_needed');
+    const history = await comparisonsRepo.listRuns('org_retention', comparison.id);
+    assert.equal(history.total, 2);
+    assert.deepEqual(new Set(history.rows.map(run => run.id)), new Set([firstRun.id, secondRun.id]));
+
+    await comparisonsRepo.delete('org_retention', comparison.id);
+    await assert.rejects(comparisonsRepo.get('org_retention', comparison.id), /not found/i);
+    assert.equal((await db.select().from(resultSets).where(eq(resultSets.comparisonId, comparison.id))).length, 0);
 });
 
 test('writes expiresAt when persisting result sets and streams', async () => {
