@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveDesktopSignInRedirect } from '../../lib/auth/desktop-sign-in';
+import { resolveDesktopSignInState } from '../../lib/auth/desktop-sign-in';
 import type { DesktopAuthSnapshot } from '../../lib/auth/desktop-auth-snapshot';
 
 function snapshot(): DesktopAuthSnapshot {
@@ -29,11 +29,21 @@ function snapshot(): DesktopAuthSnapshot {
 }
 
 test('desktop sign-in does not redirect without a local snapshot', () => {
-    assert.equal(resolveDesktopSignInRedirect(null, '/connections'), null);
+    assert.deepEqual(resolveDesktopSignInState(null, '/connections', false), {
+        redirectTo: null,
+        resumeAnonymousSession: false,
+    });
 });
 
 test('desktop sign-in redirects from a valid local snapshot', () => {
-    assert.equal(resolveDesktopSignInRedirect(snapshot(), null), '/');
-    assert.equal(resolveDesktopSignInRedirect(snapshot(), '/sign-in'), '/');
-    assert.equal(resolveDesktopSignInRedirect(snapshot(), '/team/connections'), '/team/connections');
+    assert.equal(resolveDesktopSignInState(snapshot(), null, false).redirectTo, '/');
+    assert.equal(resolveDesktopSignInState(snapshot(), '/sign-in', false).redirectTo, '/');
+    assert.equal(resolveDesktopSignInState(snapshot(), '/team/connections', false).redirectTo, '/team/connections');
+});
+
+test('desktop sign-in resumes an anonymous session from its recovery cookie', () => {
+    assert.deepEqual(resolveDesktopSignInState(null, null, true), {
+        redirectTo: null,
+        resumeAnonymousSession: true,
+    });
 });

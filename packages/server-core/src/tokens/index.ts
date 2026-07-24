@@ -8,11 +8,7 @@ import type { OrganizationPermissionMap, OrganizationRole } from '@dory/shared/t
 
 export const MCP_TOKEN_PREFIX = 'dory_mcp_';
 
-export const MCP_DEFAULT_SCOPES = [
-    'read',
-    'write',
-    'local_ai:run',
-] as const;
+export const MCP_DEFAULT_SCOPES = ['read', 'write', 'local_ai:run'] as const;
 
 export type DoryOrganizationAccess = {
     source: 'local' | 'desktop_cloud';
@@ -81,12 +77,6 @@ function asString(value: unknown): string | null {
     return typeof value === 'string' && value.trim() ? value : null;
 }
 
-function parseDateMs(value: unknown): number | null {
-    if (typeof value !== 'string') return null;
-    const ms = Date.parse(value);
-    return Number.isFinite(ms) ? ms : null;
-}
-
 function parseSnapshotOrganization(value: unknown): DoryOrganizationAccess['organization'] {
     const record = asRecord(value);
     if (!record) return null;
@@ -100,10 +90,7 @@ function parseSnapshotOrganization(value: unknown): DoryOrganizationAccess['orga
     };
 }
 
-function parseSnapshotAccess(value: unknown, now: number, accessExpiresAt: unknown): DoryOrganizationAccess | null {
-    const expiresAt = parseDateMs(accessExpiresAt);
-    if (expiresAt === null || expiresAt <= now) return null;
-
+function parseSnapshotAccess(value: unknown): DoryOrganizationAccess | null {
     const record = asRecord(value);
     if (!record) return null;
 
@@ -131,17 +118,13 @@ export function readDesktopAuthSnapshotAccess(options: { userDataDir?: string | 
     if (!existsSync(snapshotPath)) return null;
 
     try {
-        const now = options.now ?? Date.now();
         const record = asRecord(JSON.parse(readFileSync(snapshotPath, 'utf8')));
         if (!record || record.version !== 1) return null;
-
-        const expiresAt = parseDateMs(record.expiresAt);
-        if (expiresAt === null || expiresAt <= now) return null;
 
         const userRecord = asRecord(record.user);
         const userId = asString(userRecord?.id);
         const activeOrganizationId = asString(record.activeOrganizationId);
-        const access = parseSnapshotAccess(record.access, now, record.accessExpiresAt);
+        const access = parseSnapshotAccess(record.access);
         if (!userId || !activeOrganizationId || !access || access.userId !== userId || access.organizationId !== activeOrganizationId) return null;
 
         return {

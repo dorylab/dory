@@ -10,6 +10,8 @@ import {
     resolveRecoverableAnonymousPayload,
 } from '@/lib/auth/anonymous-recovery';
 import { buildSessionOrganizationPatch } from '@/lib/auth/migration-state';
+import { isDesktopAuthRequest, resolveSessionLifetime } from '@/lib/auth/session-lifetime';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -46,7 +48,18 @@ export async function POST(req: Request) {
 
     const auth = await getAuth();
     const ctx = await auth.$context;
-    const session = await ctx.internalAdapter.createSession(recoverableUser.userId, false);
+    const desktopRequest = isDesktopRuntime() || isDesktopAuthRequest(req.headers);
+    const lifetime = resolveSessionLifetime({
+        desktop: desktopRequest,
+    });
+    const session = await ctx.internalAdapter.createSession(
+        recoverableUser.userId,
+        false,
+        {
+            expiresAt: lifetime.expiresAt,
+        },
+        true,
+    );
 
     if (!session) {
         return NextResponse.json({ error: 'FAILED_TO_CREATE_SESSION' }, { status: 500 });
@@ -60,10 +73,9 @@ export async function POST(req: Request) {
     }
 
     const baseAttrs = ctx.authCookies.sessionToken.attributes ?? {};
-    const maxAge = ctx.sessionConfig?.expiresIn;
     const sessionCookie = await serializeSignedCookie(ctx.authCookies.sessionToken.name, session.token, ctx.secret, {
         ...baseAttrs,
-        ...(maxAge ? { maxAge } : {}),
+        maxAge: lifetime.cookieMaxAgeSeconds,
     });
 
     const response = NextResponse.json({ success: true });
@@ -73,6 +85,11 @@ export async function POST(req: Request) {
         activeOrganizationId: recoverableUser.activeOrganizationId,
     });
     appendAnonymousRecoveryCookieHeader(response.headers, {
+        ...(desktopRequest
+            ? {
+                  maxAgeSeconds: lifetime.cookieMaxAgeSeconds,
+              }
+            : {}),
         requestUrl: req.url,
         token: refreshedRecoveryToken,
     });
