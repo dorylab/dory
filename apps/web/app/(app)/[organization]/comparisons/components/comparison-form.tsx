@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES, schemaDialectFamily, supportsSchemaComparison, type SchemaComparisonObjectType } from '@dory/schema-compare';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { useConnections } from '@/app/(app)/[organization]/connections/hooks/use-connections';
 import type { ComparisonClient, ComparisonMutationClient } from '@/lib/comparison/client-types';
 import { executeActionClient } from '@/lib/actions/client';
@@ -126,7 +127,8 @@ function EndpointEditor({
 export function ComparisonForm({ organization, comparison = null }: { organization: string; comparison?: ComparisonClient | null }) {
     const t = useTranslations('SchemaCompare');
     const router = useRouter();
-    const connectionsQuery = useConnections();
+    const organizationId = useOrganizationId();
+    const connectionsQuery = useConnections(organizationId);
     const supportedConnections = useMemo(() => (connectionsQuery.data ?? []).filter(item => supportsSchemaComparison(item.connection.type)), [connectionsQuery.data]);
     const [name, setName] = useState(comparison?.name ?? '');
     const [source, setSource] = useState<EndpointDraft>(() => initialEndpoint(comparison, 'source'));
@@ -161,8 +163,8 @@ export function ComparisonForm({ organization, comparison = null }: { organizati
                 objectTypes,
             };
             return comparison
-                ? executeActionClient<ComparisonMutationClient>('comparison.update', { comparisonId: comparison.id, ...configuration }, { organizationId: organization })
-                : executeActionClient<ComparisonMutationClient>('comparison.create', configuration, { organizationId: organization });
+                ? executeActionClient<ComparisonMutationClient>('comparison.update', { comparisonId: comparison.id, ...configuration }, { organizationId })
+                : executeActionClient<ComparisonMutationClient>('comparison.create', configuration, { organizationId });
         },
         onSuccess: output => {
             router.push(`/${encodeURIComponent(organization)}/comparisons/${encodeURIComponent(output.comparison.id)}`);

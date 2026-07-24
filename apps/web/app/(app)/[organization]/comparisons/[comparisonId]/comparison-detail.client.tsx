@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Clock3, History, Loader2, Pencil, Play, ShieldAl
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import type { ComparisonClient, ComparisonMutationClient, ComparisonRunClient } from '@/lib/comparison/client-types';
 import { executeActionClient } from '@/lib/actions/client';
 import {
@@ -38,12 +39,13 @@ function endpointLabel(endpoint: ComparisonClient['sourceEndpoint']) {
 export function ComparisonDetailClient({ organization, comparisonId }: { organization: string; comparisonId: string }) {
     const t = useTranslations('SchemaCompare');
     const queryClient = useQueryClient();
+    const organizationId = useOrganizationId();
     const autoReviewRunId = useRef<string | null>(null);
-    const comparisonKey = ['comparison', organization, comparisonId] as const;
-    const runsKey = ['comparison-runs', organization, comparisonId] as const;
+    const comparisonKey = ['comparison', organizationId, comparisonId] as const;
+    const runsKey = ['comparison-runs', organizationId, comparisonId] as const;
     const comparisonQuery = useQuery({
         queryKey: comparisonKey,
-        queryFn: () => executeActionClient<ComparisonClient>('comparison.get', { comparisonId }, { organizationId: organization }),
+        queryFn: () => executeActionClient<ComparisonClient>('comparison.get', { comparisonId }, { organizationId }),
         refetchInterval: query => {
             const run = query.state.data?.latestRun;
             return run?.status === 'running' || run?.aiReviewStatus === 'running' ? 1500 : false;
@@ -51,18 +53,18 @@ export function ComparisonDetailClient({ organization, comparisonId }: { organiz
     });
     const runsQuery = useQuery({
         queryKey: runsKey,
-        queryFn: () => executeActionClient<RunListOutput>('comparison.run.list', { comparisonId, limit: 50 }, { organizationId: organization }),
+        queryFn: () => executeActionClient<RunListOutput>('comparison.run.list', { comparisonId, limit: 50 }, { organizationId }),
         refetchInterval: query => (query.state.data?.rows[0]?.status === 'running' ? 1500 : false),
     });
     const runMutation = useMutation({
-        mutationFn: () => executeActionClient<ComparisonMutationClient>('comparison.run.create', { comparisonId }, { organizationId: organization }),
+        mutationFn: () => executeActionClient<ComparisonMutationClient>('comparison.run.create', { comparisonId }, { organizationId }),
         onSuccess: async () => {
             await Promise.all([queryClient.invalidateQueries({ queryKey: comparisonKey }), queryClient.invalidateQueries({ queryKey: runsKey })]);
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.RunFailed')),
     });
     const reviewMutation = useMutation({
-        mutationFn: (runId: string) => executeActionClient<AiReviewOutput>('comparison.run.aiReview', { comparisonId, runId }, { organizationId: organization }),
+        mutationFn: (runId: string) => executeActionClient<AiReviewOutput>('comparison.run.aiReview', { comparisonId, runId }, { organizationId }),
         onSuccess: async output => {
             queryClient.setQueryData<ComparisonClient>(comparisonKey, current => {
                 if (!current) return current;
@@ -85,7 +87,7 @@ export function ComparisonDetailClient({ organization, comparisonId }: { organiz
                 'comparison.delete',
                 { comparisonId },
                 {
-                    organizationId: organization,
+                    organizationId,
                     confirmationToken: 'user-confirmed',
                     reason: 'Delete Comparison and immutable run history',
                 },

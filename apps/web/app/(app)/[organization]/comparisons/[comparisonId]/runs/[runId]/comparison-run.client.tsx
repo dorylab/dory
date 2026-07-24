@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Clock3, GitCommitHorizontal, Loader2, ShieldAlert } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { SchemaDiffViewer } from '@/components/result-set-artifact/schema-diff-viewer';
 import type { ComparisonClient, ComparisonRunClient } from '@/lib/comparison/client-types';
 import { executeActionClient } from '@/lib/actions/client';
@@ -19,22 +20,23 @@ import { ComparisonSummary } from '../../../components/comparison-summary';
 export function ComparisonRunClientPage({ organization, comparisonId, runId }: { organization: string; comparisonId: string; runId: string }) {
     const t = useTranslations('SchemaCompare');
     const queryClient = useQueryClient();
+    const organizationId = useOrganizationId();
     const autoReviewStarted = useRef(false);
-    const runKey = ['comparison-run', organization, comparisonId, runId] as const;
+    const runKey = ['comparison-run', organizationId, comparisonId, runId] as const;
     const comparisonQuery = useQuery({
-        queryKey: ['comparison', organization, comparisonId],
-        queryFn: () => executeActionClient<ComparisonClient>('comparison.get', { comparisonId }, { organizationId: organization }),
+        queryKey: ['comparison', organizationId, comparisonId],
+        queryFn: () => executeActionClient<ComparisonClient>('comparison.get', { comparisonId }, { organizationId }),
     });
     const runQuery = useQuery({
         queryKey: runKey,
-        queryFn: () => executeActionClient<ComparisonRunClient>('comparison.run.get', { comparisonId, runId }, { organizationId: organization }),
+        queryFn: () => executeActionClient<ComparisonRunClient>('comparison.run.get', { comparisonId, runId }, { organizationId }),
         refetchInterval: query => {
             const run = query.state.data;
             return run?.status === 'running' || run?.aiReviewStatus === 'running' ? 1500 : false;
         },
     });
     const reviewMutation = useMutation({
-        mutationFn: () => executeActionClient<{ run: ComparisonRunClient }>('comparison.run.aiReview', { comparisonId, runId }, { organizationId: organization }),
+        mutationFn: () => executeActionClient<{ run: ComparisonRunClient }>('comparison.run.aiReview', { comparisonId, runId }, { organizationId }),
         onSuccess: output => queryClient.setQueryData(runKey, output.run),
         onError: () => void runQuery.refetch(),
     });
@@ -147,7 +149,7 @@ export function ComparisonRunClientPage({ organization, comparisonId, runId }: {
                                 <p className="text-sm text-muted-foreground">{t('Run.ChangesDescription')}</p>
                             </div>
                             {run.resultSetId ? (
-                                <SchemaDiffViewer resultSetId={run.resultSetId} organization={organization} />
+                                <SchemaDiffViewer resultSetId={run.resultSetId} organization={organizationId} />
                             ) : (
                                 <Card>
                                     <CardContent className="py-10 text-center text-sm text-muted-foreground">{t('Status.NoChanges')}</CardContent>

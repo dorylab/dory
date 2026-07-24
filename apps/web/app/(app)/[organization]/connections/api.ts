@@ -59,8 +59,8 @@ export async function updateConnection(params: CreateConnectionPayload & { id?: 
     return actionResponse(await executeActionClient<ConnectionListItem>('connection.update', { id, patch: params }));
 }
 
-export async function getConnections(): Promise<{ data: ConnectionListItem[] }> {
-    const res = await executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {});
+export async function getConnections(organizationId?: string): Promise<{ data: ConnectionListItem[] }> {
+    const res = await executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {}, { organizationId });
     return { data: res.connections ?? [] };
 }
 

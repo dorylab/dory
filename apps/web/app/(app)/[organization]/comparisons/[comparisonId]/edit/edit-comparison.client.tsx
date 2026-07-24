@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Pencil } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import type { ComparisonClient } from '@/lib/comparison/client-types';
 import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -13,9 +14,10 @@ import { ComparisonForm } from '../../components/comparison-form';
 
 export function EditComparisonClient({ organization, comparisonId }: { organization: string; comparisonId: string }) {
     const t = useTranslations('SchemaCompare');
+    const organizationId = useOrganizationId();
     const comparisonQuery = useQuery({
-        queryKey: ['comparison', organization, comparisonId],
-        queryFn: () => executeActionClient<ComparisonClient>('comparison.get', { comparisonId }, { organizationId: organization }),
+        queryKey: ['comparison', organizationId, comparisonId],
+        queryFn: () => executeActionClient<ComparisonClient>('comparison.get', { comparisonId }, { organizationId }),
     });
 
     if (comparisonQuery.isLoading || !comparisonQuery.data) {

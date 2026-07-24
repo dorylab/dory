@@ -6,12 +6,7 @@ import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
 import type { McpAuthContext } from '@/lib/server/mcp/auth';
 import type { WebActionServices } from './types';
-import {
-    createMcpActionContextFromAuth,
-    createUserActionContext,
-    parseActionRequestBody,
-    type ResolvedActionRequest,
-} from './context.shared';
+import { createMcpActionContextFromAuth, createUserActionContext, parseActionRequestBody, type ResolvedActionRequest } from './context.shared';
 
 export async function resolveActionRequest(req: NextRequest): Promise<ResolvedActionRequest> {
     const body = await parseActionRequestBody(req);
@@ -37,7 +32,7 @@ export async function resolveActionRequest(req: NextRequest): Promise<ResolvedAc
         ctx: await createUserActionContext({
             req,
             body,
-            organizationId,
+            organizationId: access.organizationId,
             userId,
             access,
         }),

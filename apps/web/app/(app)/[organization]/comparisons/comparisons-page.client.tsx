@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Database, GitCompareArrows, Loader2, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import type { ComparisonClient } from '@/lib/comparison/client-types';
 import { executeActionClient } from '@/lib/actions/client';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -18,9 +19,10 @@ function endpointLabel(endpoint: ComparisonClient['sourceEndpoint']) {
 
 export function ComparisonsPageClient({ organization }: { organization: string }) {
     const t = useTranslations('SchemaCompare');
+    const organizationId = useOrganizationId();
     const comparisonsQuery = useQuery({
-        queryKey: ['comparisons', organization],
-        queryFn: () => executeActionClient<{ rows: ComparisonClient[]; total: number }>('comparison.list', { limit: 100 }, { organizationId: organization }),
+        queryKey: ['comparisons', organizationId],
+        queryFn: () => executeActionClient<{ rows: ComparisonClient[]; total: number }>('comparison.list', { limit: 100 }, { organizationId }),
         refetchInterval: query => (query.state.data?.rows.some(comparison => comparison.latestRun?.status === 'running') ? 1500 : false),
     });
 

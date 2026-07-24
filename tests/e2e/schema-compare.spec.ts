@@ -197,9 +197,14 @@ test('saved Comparisons support create, AI recovery, immutable Run history, Diff
     let reviewAttempts = 0;
     let updateCalled = false;
     const resultSetInputs: Array<Record<string, unknown>> = [];
+    const actionOrganizations: Array<{ actionId: string; organizationId?: string }> = [];
 
     await page.route('**/api/actions/execute', async route => {
-        const body = route.request().postDataJSON() as { actionId: string; input?: Record<string, unknown> };
+        const body = route.request().postDataJSON() as { actionId: string; input?: Record<string, unknown>; organizationId?: string };
+        actionOrganizations.push({
+            actionId: body.actionId,
+            organizationId: body.organizationId,
+        });
         switch (body.actionId) {
             case 'connection.list':
                 await actionResponse(route, { connections });
@@ -318,8 +323,12 @@ test('saved Comparisons support create, AI recovery, immutable Run history, Diff
     await page.getByRole('option', { name: /Staging/ }).click();
     await page.getByTestId('save-comparison').click();
     await page.waitForURL(new RegExp(`/${organization}/comparisons/cmp_new$`));
+    const createOrganizationId = actionOrganizations.find(request => request.actionId === 'comparison.create')?.organizationId;
+    expect(createOrganizationId).toBeTruthy();
+    expect(createOrganizationId).not.toBe(organization);
+    expect(actionOrganizations.some(request => request.actionId === 'connection.list' && request.organizationId === createOrganizationId)).toBe(true);
 
-    await expect(page.getByText('AI Review is unavailable.')).toBeVisible();
+    await expect(page.getByText('No AI model configured')).toBeVisible();
     await page.getByRole('button', { name: 'Retry' }).click();
     await expect(page.getByText(/primary-key removal is unsafe/i)).toBeVisible();
     await expect(page.getByText('public.users.email', { exact: true })).toBeVisible();
@@ -335,7 +344,7 @@ test('saved Comparisons support create, AI recovery, immutable Run history, Diff
 
     await page.getByRole('link', { name: 'Production vs Staging' }).click();
     await page.getByRole('button', { name: 'Run now' }).click();
-    await expect(page.getByText('No changes')).toBeVisible();
+    await expect(page.getByText('No changes', { exact: true })).toBeVisible();
     await expect(page.getByText(/Configuration v1/)).toHaveCount(2);
 
     await page.getByRole('link', { name: 'Edit' }).click();

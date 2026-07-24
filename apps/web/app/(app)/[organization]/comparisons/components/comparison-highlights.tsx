@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { executeActionClient } from '@/lib/actions/client';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -24,8 +25,9 @@ type DiffRow = {
 
 export function ComparisonHighlights({ organization, comparisonId, runId, resultSetId }: { organization: string; comparisonId: string; runId: string; resultSetId: string }) {
     const t = useTranslations('SchemaCompare');
+    const organizationId = useOrganizationId();
     const rowsQuery = useQuery({
-        queryKey: ['comparison-highlights', organization, resultSetId],
+        queryKey: ['comparison-highlights', organizationId, resultSetId],
         queryFn: () =>
             executeActionClient<{ rows: DiffRow[] }>(
                 'resultSet.rows.read',
@@ -40,7 +42,7 @@ export function ComparisonHighlights({ organization, comparisonId, runId, result
                     filters: [],
                     search: null,
                 },
-                { organizationId: organization },
+                { organizationId },
             ),
     });
 

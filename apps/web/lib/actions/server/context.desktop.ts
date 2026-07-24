@@ -6,13 +6,7 @@ import { resolveCurrentOrganizationId } from '@/lib/auth/current-organization';
 import { resolveOrganizationAccess } from '@/lib/server/authz';
 import type { McpAuthContext } from '@/lib/server/mcp/auth';
 import type { WebActionServices } from './types';
-import {
-    createMcpActionContextFromAuth,
-    createUserActionContext,
-    parseActionRequestBody,
-    type ActionRequestBody,
-    type ResolvedActionRequest,
-} from './context.shared';
+import { createMcpActionContextFromAuth, createUserActionContext, parseActionRequestBody, type ActionRequestBody, type ResolvedActionRequest } from './context.shared';
 import { resolveDesktopLocalActionSnapshot } from './context.desktop-local';
 
 async function resolveCloudActionRequest(req: NextRequest, body: ActionRequestBody): Promise<ResolvedActionRequest> {
@@ -38,7 +32,7 @@ async function resolveCloudActionRequest(req: NextRequest, body: ActionRequestBo
         ctx: await createUserActionContext({
             req,
             body,
-            organizationId,
+            organizationId: access.organizationId,
             userId,
             access,
         }),
