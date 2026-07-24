@@ -3899,6 +3899,7 @@
             "LastChecked": "上次检查：{date}",
             "NeverChecked": "尚未检查",
             "Risks": "{count} 项风险",
+            "Deleted": "Comparison 已删除。",
             "Empty": "还没有保存的 Comparison。",
             "EmptyDescription": "创建一个永久的 Source → Target 对比，Dory 会保留每一次 Run。"
         },

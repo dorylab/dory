@@ -3893,6 +3893,7 @@
             "LastChecked": "最終チェック {date}",
             "NeverChecked": "未チェック",
             "Risks": "{count} 件のリスク",
+            "Deleted": "Comparison を削除しました。",
             "Empty": "保存された Comparison はありません。",
             "EmptyDescription": "永続的な Source → Target 比較を作成すると、Dory がすべての Run を保存します。"
         },

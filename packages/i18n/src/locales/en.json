@@ -3895,6 +3895,7 @@
             "LastChecked": "Last checked {date}",
             "NeverChecked": "Not checked yet",
             "Risks": "{count} risky",
+            "Deleted": "Comparison deleted.",
             "Empty": "No saved comparisons yet.",
             "EmptyDescription": "Create a permanent Source → Target comparison and Dory will preserve every run."
         },

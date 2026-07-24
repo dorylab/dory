@@ -3893,6 +3893,7 @@
             "LastChecked": "Última comprobación {date}",
             "NeverChecked": "Aún no comprobada",
             "Risks": "{count} riesgos",
+            "Deleted": "Comparación eliminada.",
             "Empty": "Aún no hay comparaciones guardadas.",
             "EmptyDescription": "Crea una comparación permanente Origen → Destino y Dory conservará cada ejecución."
         },

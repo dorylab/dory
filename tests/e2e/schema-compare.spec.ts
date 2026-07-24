@@ -313,6 +313,13 @@ test('saved Comparisons support create, AI recovery, immutable Run history, Diff
     await page.goto(`/${organization}/comparisons`);
     await expect(page.getByRole('heading', { name: 'Database Comparisons' })).toBeVisible();
     await expect(page.getByRole('link', { name: /Production vs Staging/ })).toBeVisible();
+    await page.getByText('Production', { exact: true }).hover();
+    await expect(page.getByText('localhost:5432', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Production vs Staging: Edit / Delete' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Delete' }).click();
+    await expect(page.getByRole('alertdialog', { name: 'Delete comparison?' })).toBeVisible();
+    await page.getByRole('button', { name: 'Cancel' }).click();
     await page.getByRole('link', { name: 'New Comparison' }).first().click();
 
     await page.getByLabel('Name').fill('Production vs Staging');
