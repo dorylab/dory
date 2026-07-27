@@ -4020,6 +4020,9 @@
         },
         "Run": {
             "Title": "Ejecución de comparación",
+            "Context": "Contexto de la ejecución",
+            "RunId": "ID de ejecución",
+            "CopyRunId": "Copiar ID de ejecución",
             "SnapshotConfiguration": "Instantánea de configuración",
             "ImmutableDescription": "Esta configuración y su resultado determinista se conservan como hechos históricos.",
             "Changes": "Cambios",

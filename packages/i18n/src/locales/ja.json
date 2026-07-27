@@ -4020,6 +4020,9 @@
         },
         "Run": {
             "Title": "Comparison Run",
+            "Context": "Run コンテキスト",
+            "RunId": "Run ID",
+            "CopyRunId": "Run ID をコピー",
             "SnapshotConfiguration": "設定スナップショット",
             "ImmutableDescription": "この設定と決定的な結果は履歴上の事実として保存されます。",
             "Changes": "変更",

@@ -30,7 +30,7 @@ export function ComparisonSummary({ summary, coverage }: { summary: SchemaCompar
                     <Metric label={t('Summary.Compatible')} value={compatible} tone="text-emerald-600 dark:text-emerald-300" />
                     <Metric label={t('Summary.Warnings')} value={warnings} tone="text-amber-600 dark:text-amber-300" />
                     <Metric label={t('Summary.Breaking')} value={summary.breakingChanges} tone="text-destructive" />
-                    <div className="bg-card px-4 py-3.5">
+                    <div className="bg-card px-4 py-3.5 sm:col-span-2 lg:col-span-1">
                         <div className="text-xs text-muted-foreground">{t('Summary.Readiness')}</div>
                         <Badge variant="outline" className={`mt-1.5 ${riskBadgeClass(summary.readiness)}`}>
                             {summary.readiness}

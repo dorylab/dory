@@ -4026,6 +4026,9 @@
         },
         "Run": {
             "Title": "Comparison Run",
+            "Context": "运行上下文",
+            "RunId": "Run ID",
+            "CopyRunId": "复制 Run ID",
             "SnapshotConfiguration": "配置快照",
             "ImmutableDescription": "该配置和确定性结果会作为历史事实永久保留。",
             "Changes": "变化",

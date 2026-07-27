@@ -4022,6 +4022,9 @@
         },
         "Run": {
             "Title": "Comparison Run",
+            "Context": "Run context",
+            "RunId": "Run ID",
+            "CopyRunId": "Copy Run ID",
             "SnapshotConfiguration": "Configuration snapshot",
             "ImmutableDescription": "This configuration and deterministic result are preserved as historical facts.",
             "Changes": "Changes",
