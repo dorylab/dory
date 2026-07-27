@@ -1,11 +1,13 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Loader2, Maximize2 } from 'lucide-react';
 import { parseAsInteger, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useTranslations } from 'next-intl';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { toast } from 'sonner';
+
+import { cn } from '@dory/web-utils';
 
 import { executeActionClient } from '@/lib/actions/client';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -14,6 +16,7 @@ import { Card, CardContent, CardHeader } from '@/registry/new-york-v4/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/registry/new-york-v4/ui/chart';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
@@ -55,6 +58,42 @@ function riskClass(risk: string) {
     if (risk === 'medium') return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300';
     if (risk === 'low') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
     return 'border-muted-foreground/30 bg-muted text-muted-foreground';
+}
+
+function formatDiffValue(value: string) {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return value;
+
+    try {
+        return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch {
+        return value;
+    }
+}
+
+function DiffValue({ value, label, className }: { value: string | null; label: string; className?: string }) {
+    if (value == null) return <span className={cn('font-mono text-xs', className)}>—</span>;
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className={cn(
+                        'group flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-left font-mono text-xs transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        className,
+                    )}
+                >
+                    <span className="min-w-0 flex-1 truncate">{value}</span>
+                    <Maximize2 className="size-3 shrink-0 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="start" sideOffset={8} className="w-[min(36rem,calc(100vw-2rem))] overflow-hidden p-0">
+                <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">{label}</div>
+                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5">{formatDiffValue(value)}</pre>
+            </PopoverContent>
+        </Popover>
+    );
 }
 
 export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: string; organization: string }) {
@@ -233,14 +272,14 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
                                         </CardHeader>
                                         <CardContent className="grid gap-4 p-5">
                                             <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                                                <div className="rounded-md bg-muted/60 p-3">
+                                                <div className="min-w-0 rounded-md bg-muted/60 p-3">
                                                     <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Current')}</div>
-                                                    <div className="break-words font-mono text-sm">{row.currentValue ?? '—'}</div>
+                                                    <DiffValue value={row.currentValue} label={t('Current')} className="text-sm" />
                                                 </div>
                                                 <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" />
-                                                <div className="rounded-md bg-muted/60 p-3">
+                                                <div className="min-w-0 rounded-md bg-muted/60 p-3">
                                                     <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Desired')}</div>
-                                                    <div className="break-words font-mono text-sm">{row.desiredValue ?? '—'}</div>
+                                                    <DiffValue value={row.desiredValue} label={t('Desired')} className="text-sm" />
                                                 </div>
                                             </div>
                                             <p className="text-sm text-muted-foreground">{row.riskReason}</p>
@@ -260,43 +299,51 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
                 </div>
             ) : state.view === 'table' ? (
                 <div className="overflow-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>
+                    <Table className="min-w-[1420px] table-fixed">
+                        <TableHeader className="bg-muted/30">
+                            <TableRow className="border-0">
+                                <TableHead className="w-[220px] border-r border-b px-3">
                                     <Button variant="ghost" size="sm" onClick={() => toggleSort('objectPath')}>
                                         {t('Changes.ObjectPath')}
                                         {state.sort === 'objectPath' ? <SortIcon /> : null}
                                     </Button>
                                 </TableHead>
-                                <TableHead>{t('Changes.Change')}</TableHead>
-                                <TableHead>{t('Current')}</TableHead>
-                                <TableHead>{t('Desired')}</TableHead>
-                                <TableHead>
+                                <TableHead className="w-[180px] border-r border-b px-3">{t('Changes.Change')}</TableHead>
+                                <TableHead className="w-[280px] border-r border-b px-3">{t('Current')}</TableHead>
+                                <TableHead className="w-[280px] border-r border-b px-3">{t('Desired')}</TableHead>
+                                <TableHead className="w-[120px] border-r border-b px-3">
                                     <Button variant="ghost" size="sm" onClick={() => toggleSort('riskLevel')}>
                                         {t('Changes.Risk')}
                                         {state.sort === 'riskLevel' ? <SortIcon /> : null}
                                     </Button>
                                 </TableHead>
-                                <TableHead>{t('Changes.Reason')}</TableHead>
+                                <TableHead className="border-b px-3">{t('Changes.Reason')}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {(rowsQuery.data?.rows ?? []).map(row => (
-                                <TableRow key={row.changeId}>
-                                    <TableCell className="max-w-[280px] font-mono text-xs">{row.objectPath}</TableCell>
-                                    <TableCell>
+                                <TableRow key={row.changeId} className="border-0">
+                                    <TableCell className="border-r border-b px-3 py-2.5">
+                                        <DiffValue value={row.objectPath} label={t('Changes.ObjectPath')} />
+                                    </TableCell>
+                                    <TableCell className="border-r border-b px-3 py-2.5">
                                         {row.changeType}
                                         {row.attribute ? ` · ${row.attribute}` : ''}
                                     </TableCell>
-                                    <TableCell className="max-w-[240px] truncate font-mono text-xs">{row.currentValue ?? '—'}</TableCell>
-                                    <TableCell className="max-w-[240px] truncate font-mono text-xs">{row.desiredValue ?? '—'}</TableCell>
-                                    <TableCell>
+                                    <TableCell className="border-r border-b px-3 py-2.5">
+                                        <DiffValue value={row.currentValue} label={t('Current')} />
+                                    </TableCell>
+                                    <TableCell className="border-r border-b px-3 py-2.5">
+                                        <DiffValue value={row.desiredValue} label={t('Desired')} />
+                                    </TableCell>
+                                    <TableCell className="border-r border-b px-3 py-2.5">
                                         <Badge variant="outline" className={riskClass(row.riskLevel)}>
                                             {row.riskLevel}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="max-w-[360px] text-sm text-muted-foreground">{row.riskReason}</TableCell>
+                                    <TableCell className="border-b px-3 py-2.5">
+                                        <DiffValue value={row.riskReason} label={t('Changes.Reason')} className="font-sans text-sm text-muted-foreground" />
+                                    </TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

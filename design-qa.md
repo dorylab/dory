@@ -48,6 +48,55 @@ passed
 
 ---
 
+# Schema Diff overflow and table-grid design QA
+
+## Source of visual truth
+
+- Card overflow annotation: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-6d3cfc7e-1245-4631-93fd-f649a0754bbd.png`
+- Card source pixels: 2764 × 1486
+- Table-grid annotation: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-aa5bffa1-b3b7-4488-bb2c-615d0e8f5137.png`
+- Table source pixels: 2774 × 1334
+
+## Implementation evidence
+
+- Card full-value popover: `/tmp/schema-diff-card-popover.png`
+- Table grid: `/tmp/schema-diff-table-grid.png`
+- Table full-value popover: `/tmp/schema-diff-table-popover.png`
+- Combined source/implementation comparison: `/tmp/schema-diff-design-qa-comparison.png`
+- Browser viewport: 2048 × 1152 CSS px at 1× density
+- Implementation captures: 2011 × 1152 px
+- Density normalization: source and implementation panels were proportionally resized to 1200 px wide for the combined focused comparison.
+- State: light theme, unsafe SQLite comparison fixture, Cards and Table views, `accounts.email` Source value open.
+
+## Comparison history
+
+### Pass 1
+
+- P1: Source and Target values were clipped inside cards and table cells with no reliable way to inspect the full value.
+- P1: Table rows only had faint horizontal treatment and no persistent vertical cell boundaries, making column ownership unclear.
+- Fix: introduced a shared full-value popover with a visible expand affordance and formatted JSON content; applied fixed column widths plus explicit horizontal and vertical cell borders.
+
+### Pass 2
+
+- Full-view comparison: passed. Cards retain the same density while long values truncate cleanly inside their panels.
+- Focused popover comparison: passed. Clicking a truncated card or table value opens the complete content in a bounded, scrollable layer; JSON is formatted for scanning.
+- Table-grid comparison: passed. All tested data cells render a 1 px bottom border and the first five columns render a 1 px right border; the final column closes against the viewer border.
+- Interaction check: passed. Cards/Table switching, card popover, table popover, and dismissal through another control work without console errors.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing mono treatment remains on database values; popover JSON uses the same mono family with readable line height.
+- Spacing and layout rhythm: cards keep their existing dimensions; popovers are capped to the viewport and table columns use stable widths.
+- Colors and visual tokens: borders, popover surfaces, focus rings, and muted labels use the existing theme tokens.
+- Image and asset fidelity: no raster assets were required; the expand affordance uses the existing Lucide icon set already used by this screen.
+- Copy and content: Source, Target, object, risk, and reason values are unchanged; the popover only reformats valid JSON for readability.
+
+## Final result
+
+passed
+
+---
+
 # Schema Compare navigation and AI Review design QA
 
 ## Source of visual truth
