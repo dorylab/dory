@@ -3930,6 +3930,8 @@
             "Running": "运行中",
             "Failed": "失败",
             "NoChanges": "无变化",
+            "NoChangesIncomplete": "未检测到变化 · 覆盖不完整",
+            "NoChangesIncompleteDescription": "未检测到变化，但 Catalog 覆盖不完整，部署结论仍为未知。",
             "ChangeCount": "{count} 项变化"
         },
         "Recent": {
@@ -3978,6 +3980,41 @@
             "EstimatedRows": "估算行数",
             "CumulativeScans": "累计索引扫描",
             "Count": "共 {count} 项变化"
+        },
+        "Attributes": {
+            "DataType": "数据类型",
+            "Nullable": "可为空",
+            "Default": "默认值",
+            "Engine": "引擎",
+            "SortingKey": "排序键",
+            "PrimaryKey": "主键",
+            "PartitionKey": "分区键",
+            "SamplingKey": "采样键",
+            "Ttl": "TTL",
+            "ClusteringKey": "聚簇键",
+            "Identity": "Identity",
+            "IdentitySeed": "Identity 起始值",
+            "IdentityIncrement": "Identity 增量",
+            "ComputedExpression": "计算列表达式",
+            "ComputedPersisted": "持久化计算列",
+            "Codec": "编码器",
+            "DefaultKind": "默认值类型"
+        },
+        "Coverage": {
+            "Kind": {
+                "Tables": "表",
+                "Columns": "列",
+                "Indexes": "索引",
+                "Constraints": "约束",
+                "Views": "视图",
+                "Statistics": "统计"
+            },
+            "Status": {
+                "Complete": "完整",
+                "Partial": "部分覆盖",
+                "Unavailable": "不可用",
+                "NotApplicable": "不适用"
+            }
         },
         "Risk": {
             "all": "全部风险",

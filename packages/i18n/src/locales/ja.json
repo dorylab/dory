@@ -3924,6 +3924,8 @@
             "Running": "実行中",
             "Failed": "失敗",
             "NoChanges": "変更なし",
+            "NoChangesIncomplete": "変更なし・カバレッジ不完全",
+            "NoChangesIncompleteDescription": "変更は検出されませんでしたが、カタログのカバレッジが不完全なため準備状況は不明です。",
             "ChangeCount": "{count} 件の変更"
         },
         "Recent": {
@@ -3972,6 +3974,41 @@
             "EstimatedRows": "推定行数",
             "CumulativeScans": "累積インデックススキャン",
             "Count": "{count} 件の変更"
+        },
+        "Attributes": {
+            "DataType": "データ型",
+            "Nullable": "NULL 許可",
+            "Default": "デフォルト",
+            "Engine": "エンジン",
+            "SortingKey": "ソートキー",
+            "PrimaryKey": "主キー",
+            "PartitionKey": "パーティションキー",
+            "SamplingKey": "サンプリングキー",
+            "Ttl": "TTL",
+            "ClusteringKey": "クラスタリングキー",
+            "Identity": "Identity",
+            "IdentitySeed": "Identity シード",
+            "IdentityIncrement": "Identity 増分",
+            "ComputedExpression": "計算式",
+            "ComputedPersisted": "永続化された計算列",
+            "Codec": "コーデック",
+            "DefaultKind": "デフォルト種別"
+        },
+        "Coverage": {
+            "Kind": {
+                "Tables": "テーブル",
+                "Columns": "カラム",
+                "Indexes": "インデックス",
+                "Constraints": "制約",
+                "Views": "ビュー",
+                "Statistics": "統計"
+            },
+            "Status": {
+                "Complete": "完全",
+                "Partial": "一部",
+                "Unavailable": "利用不可",
+                "NotApplicable": "該当なし"
+            }
         },
         "Risk": {
             "all": "すべてのリスク",

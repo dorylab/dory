@@ -21,6 +21,29 @@ export type SchemaComparisonConfiguration = {
 
 export const DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES: SchemaComparisonObjectType[] = [...SCHEMA_COMPARISON_OBJECT_TYPES];
 
+export type SchemaComparisonCapabilities = {
+    supported: boolean;
+    objectTypes: readonly SchemaComparisonObjectType[];
+    supportsSchemaFilter: boolean;
+};
+
+const UNSUPPORTED_SCHEMA_COMPARISON_CAPABILITIES: SchemaComparisonCapabilities = {
+    supported: false,
+    objectTypes: [],
+    supportsSchemaFilter: false,
+};
+
+const SCHEMA_COMPARISON_CAPABILITIES: Record<SchemaDialectFamily, SchemaComparisonCapabilities> = {
+    postgres: { supported: true, objectTypes: SCHEMA_COMPARISON_OBJECT_TYPES, supportsSchemaFilter: true },
+    mysql: { supported: true, objectTypes: SCHEMA_COMPARISON_OBJECT_TYPES, supportsSchemaFilter: false },
+    sqlite: { supported: true, objectTypes: SCHEMA_COMPARISON_OBJECT_TYPES, supportsSchemaFilter: false },
+    duckdb: { supported: true, objectTypes: SCHEMA_COMPARISON_OBJECT_TYPES, supportsSchemaFilter: true },
+    sqlserver: { supported: true, objectTypes: SCHEMA_COMPARISON_OBJECT_TYPES, supportsSchemaFilter: true },
+    snowflake: { supported: true, objectTypes: ['table', 'column', 'constraint', 'view'], supportsSchemaFilter: true },
+    clickhouse: { supported: true, objectTypes: ['table', 'column', 'index', 'view'], supportsSchemaFilter: false },
+    oracle: UNSUPPORTED_SCHEMA_COMPARISON_CAPABILITIES,
+};
+
 export type SchemaCoverageStatus = 'complete' | 'partial' | 'unavailable' | 'not_applicable';
 export type SchemaCoverageKind = 'tables' | 'columns' | 'indexes' | 'constraints' | 'views' | 'statistics';
 export type SchemaSnapshotCoverage = Record<SchemaCoverageKind, SchemaCoverageStatus>;
@@ -31,6 +54,7 @@ export type SchemaColumn = {
     nullable: boolean | null;
     defaultExpression?: string | null;
     ordinal?: number | null;
+    attributes?: Record<string, string | number | boolean | null>;
 };
 
 export type SchemaIndex = {
@@ -261,8 +285,13 @@ export function schemaDialectFamily(type: string): SchemaDialectFamily | null {
     }
 }
 
+export function getSchemaComparisonCapabilities(type: string): SchemaComparisonCapabilities {
+    const family = schemaDialectFamily(type);
+    return family ? SCHEMA_COMPARISON_CAPABILITIES[family] : UNSUPPORTED_SCHEMA_COMPARISON_CAPABILITIES;
+}
+
 export function supportsSchemaComparison(type: string) {
-    return ['postgres', 'neon', 'supabase', 'mysql', 'mariadb', 'sqlite', 'cloudflare-d1'].includes(type);
+    return getSchemaComparisonCapabilities(type).supported;
 }
 
 function coverageComparable(status: SchemaCoverageStatus) {
@@ -297,6 +326,10 @@ function mapBy<T>(items: T[], key: (value: T) => string) {
 function canonicalType(family: SchemaDialectFamily, value: string | null | undefined) {
     let type = normalizedSql(value).toLowerCase();
     if (!type) return '';
+    if (family === 'clickhouse') {
+        const nullable = /^nullable\((.*)\)$/.exec(type);
+        if (nullable) type = nullable[1];
+    }
     type = type
         .replace(/\bcharacter varying\b/g, 'varchar')
         .replace(/\bdouble precision\b/g, 'double')
@@ -313,12 +346,24 @@ function canonicalType(family: SchemaDialectFamily, value: string | null | undef
     if (family === 'mysql') {
         type = type.replace(/\btinyint\(1\)\b/g, 'bool').replace(/\bdouble precision\b/g, 'double');
     }
+    if (family === 'snowflake') {
+        type = type.replace(/\bnumber\b/g, 'decimal').replace(/\btext\b/g, 'varchar');
+    }
+    if (family === 'sqlserver') {
+        type = type.replace(/\bboolean\b/g, 'bit');
+    }
     return type;
 }
 
 function varcharLength(type: string) {
-    const match = /^(?:n?var)?char\((\d+)\)$/.exec(type);
-    return match ? Number(match[1]) : type === 'text' || type === 'varchar' || type === 'nvarchar' ? Number.POSITIVE_INFINITY : null;
+    const match = /^(?:n?var)?char\((\d+|max)\)$/.exec(type);
+    return match
+        ? match[1] === 'max'
+            ? Number.POSITIVE_INFINITY
+            : Number(match[1])
+        : type === 'text' || type === 'varchar' || type === 'nvarchar'
+          ? Number.POSITIVE_INFINITY
+          : null;
 }
 
 function numericShape(type: string) {
@@ -408,6 +453,7 @@ function tableEvidence(table: SchemaTable | undefined, index?: SchemaIndex) {
 }
 
 function risk(input: {
+    family?: SchemaDialectFamily;
     objectType: SchemaChangeObjectType;
     changeType: SchemaChangeType;
     attribute?: string | null;
@@ -479,6 +525,37 @@ function risk(input: {
         };
     }
 
+    if (input.objectType === 'column' && (input.attribute?.startsWith('identity') || input.attribute?.startsWith('computed_'))) {
+        return {
+            level: 'high',
+            breaking: true,
+            code: `${input.family ?? 'database'}_${input.attribute}_modified`,
+            reason: 'Changing generated column behavior can alter writes, keys, or dependent expressions.',
+        };
+    }
+
+    if (input.objectType === 'table' && input.attribute === 'ttl') {
+        return {
+            level: 'high',
+            breaking: true,
+            code: 'clickhouse_ttl_modified',
+            reason: 'Changing TTL rules can automatically move or delete existing data.',
+        };
+    }
+
+    if (
+        input.objectType === 'table' &&
+        ((input.family === 'clickhouse' && ['engine', 'sorting_key', 'primary_key', 'partition_key'].includes(input.attribute ?? '')) ||
+            (input.family === 'snowflake' && input.attribute === 'clustering_key'))
+    ) {
+        return {
+            level: 'medium',
+            breaking: false,
+            code: `${input.family}_${input.attribute}_modified`,
+            reason: 'This physical database attribute change requires review for storage, performance, and operational impact.',
+        };
+    }
+
     if (input.objectType === 'constraint' && (input.constraintKind === 'primary_key' || input.constraintKind === 'unique')) {
         return { level: 'high', breaking: true, code: 'key_constraint_modified', reason: 'Changing a primary or unique constraint changes key semantics.' };
     }
@@ -539,6 +616,7 @@ function compareColumns(family: SchemaDialectFamily, current: SchemaTable, desir
                     currentValue: left ? scalar(left) : null,
                     desiredValue: right ? scalar(right) : null,
                     risk: risk({
+                        family,
                         objectType: 'column',
                         changeType,
                         desiredNullable: target.nullable,
@@ -563,7 +641,7 @@ function compareColumns(family: SchemaDialectFamily, current: SchemaTable, desir
                     attribute: 'data_type',
                     currentValue: left.dataType ?? null,
                     desiredValue: right.dataType ?? null,
-                    risk: risk({ objectType: 'column', changeType: 'modified', attribute: 'data_type', typeChange }),
+                    risk: risk({ family, objectType: 'column', changeType: 'modified', attribute: 'data_type', typeChange }),
                     evidence: tableEvidence(current),
                 }),
             );
@@ -581,6 +659,7 @@ function compareColumns(family: SchemaDialectFamily, current: SchemaTable, desir
                     currentValue: scalar(left.nullable),
                     desiredValue: scalar(right.nullable),
                     risk: risk({
+                        family,
                         objectType: 'column',
                         changeType: 'modified',
                         attribute: 'nullable',
@@ -603,7 +682,27 @@ function compareColumns(family: SchemaDialectFamily, current: SchemaTable, desir
                     attribute: 'default',
                     currentValue: left.defaultExpression ?? null,
                     desiredValue: right.defaultExpression ?? null,
-                    risk: risk({ objectType: 'column', changeType: 'modified', attribute: 'default' }),
+                    risk: risk({ family, objectType: 'column', changeType: 'modified', attribute: 'default' }),
+                    evidence: tableEvidence(current),
+                }),
+            );
+        }
+        const leftAttributes = left.attributes ?? {};
+        const rightAttributes = right.attributes ?? {};
+        for (const attribute of [...new Set([...Object.keys(leftAttributes), ...Object.keys(rightAttributes)])].sort()) {
+            if (scalar(leftAttributes[attribute]) === scalar(rightAttributes[attribute])) continue;
+            changes.push(
+                makeChange({
+                    objectType: 'column',
+                    changeType: 'modified',
+                    schema: current.schema,
+                    table: current.name,
+                    objectName: name,
+                    objectPath,
+                    attribute,
+                    currentValue: scalar(leftAttributes[attribute]),
+                    desiredValue: scalar(rightAttributes[attribute]),
+                    risk: risk({ family, objectType: 'column', changeType: 'modified', attribute }),
                     evidence: tableEvidence(current),
                 }),
             );
@@ -784,7 +883,7 @@ function compareViews(current: SchemaSnapshot, desired: SchemaSnapshot, coverage
     }
 }
 
-function compareTableAttributes(current: SchemaTable, desired: SchemaTable, changes: SchemaChange[]) {
+function compareTableAttributes(family: SchemaDialectFamily, current: SchemaTable, desired: SchemaTable, changes: SchemaChange[]) {
     const left = current.attributes ?? {};
     const right = desired.attributes ?? {};
     for (const key of [...new Set([...Object.keys(left), ...Object.keys(right)])].sort()) {
@@ -800,7 +899,7 @@ function compareTableAttributes(current: SchemaTable, desired: SchemaTable, chan
                 attribute: key,
                 currentValue: scalar(left[key]),
                 desiredValue: scalar(right[key]),
-                risk: risk({ objectType: 'table', changeType: 'modified', attribute: key }),
+                risk: risk({ family, objectType: 'table', changeType: 'modified', attribute: key }),
                 evidence: tableEvidence(current),
             }),
         );
@@ -844,7 +943,7 @@ export function compareSchemaSnapshots(current: SchemaSnapshot, desired: SchemaS
             continue;
         }
 
-        compareTableAttributes(left, right, changes);
+        compareTableAttributes(current.family, left, right, changes);
         compareColumns(current.family, left, right, coverageComparable(coverage.columns), changes);
         compareNamedObjects({
             objectType: 'index',

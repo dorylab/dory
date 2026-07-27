@@ -8,6 +8,22 @@ import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { riskBadgeClass } from './comparison-status';
 
+const COVERAGE_KIND_KEYS = {
+    tables: 'Coverage.Kind.Tables',
+    columns: 'Coverage.Kind.Columns',
+    indexes: 'Coverage.Kind.Indexes',
+    constraints: 'Coverage.Kind.Constraints',
+    views: 'Coverage.Kind.Views',
+    statistics: 'Coverage.Kind.Statistics',
+} as const;
+
+const COVERAGE_STATUS_KEYS = {
+    complete: 'Coverage.Status.Complete',
+    partial: 'Coverage.Status.Partial',
+    unavailable: 'Coverage.Status.Unavailable',
+    not_applicable: 'Coverage.Status.NotApplicable',
+} as const;
+
 function Metric({ label, value, tone }: { label: string; value: number; tone?: string }) {
     return (
         <div className="bg-card px-4 py-3.5">
@@ -42,7 +58,7 @@ export function ComparisonSummary({ summary, coverage }: { summary: SchemaCompar
                         <span className="mr-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('Detail.Coverage')}</span>
                         {Object.entries(coverage).map(([kind, status]) => (
                             <Badge key={kind} variant={status === 'complete' || status === 'not_applicable' ? 'secondary' : 'outline'} className="h-5 px-2 text-[11px] font-normal">
-                                {kind}: {status}
+                                {t(COVERAGE_KIND_KEYS[kind as keyof typeof COVERAGE_KIND_KEYS])}: {t(COVERAGE_STATUS_KEYS[status])}
                             </Badge>
                         ))}
                     </div>

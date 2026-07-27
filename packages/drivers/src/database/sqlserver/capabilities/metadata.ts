@@ -15,8 +15,10 @@ import type {
 import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { SqlServerDatasource } from '../datasource';
 import { parseSqlServerTableReference } from '../runtime';
+import { getSqlServerSchemaSnapshot } from './schema-snapshot';
 
 export type SqlServerMetadataAPI = ConnectionMetadataAPI & {
+    getSchemaSnapshot: NonNullable<ConnectionMetadataAPI['getSchemaSnapshot']>;
     getSchemas: (database: string) => Promise<Array<{ label: string; value: string }>>;
     getTableColumns: (database: string, table: string) => Promise<TableColumnInfo[]>;
     getTablesOnly: (database: string) => Promise<DatabaseObjectRow[]>;
@@ -884,5 +886,6 @@ export function createSqlServerMetadataCapability(datasource: SqlServerDatasourc
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
         getSchemaGraph: options => getSchemaGraph(datasource, options),
+        getSchemaSnapshot: input => getSqlServerSchemaSnapshot(datasource, input),
     };
 }

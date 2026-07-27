@@ -14,8 +14,10 @@ import type {
 } from '@dory/drivers/types';
 import { buildTablesOnlySchemaGraph, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { ClickhouseDatasource } from '../datasource';
+import { getClickHouseSchemaSnapshot } from './schema-snapshot';
 
 export type ClickhouseMetadataAPI = ConnectionMetadataAPI & {
+    getSchemaSnapshot: NonNullable<ConnectionMetadataAPI['getSchemaSnapshot']>;
     getTableColumns: (database: string, table: string) => Promise<TableColumnInfo[]>;
     getTablesOnly: (database: string) => Promise<DatabaseObjectRow[]>;
     getViews: (database: string) => Promise<DatabaseObjectRow[]>;
@@ -453,5 +455,6 @@ export function createClickhouseMetadataCapability(datasource: ClickhouseDatasou
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
         getSchemaGraph: options => getSchemaGraph(datasource, options),
+        getSchemaSnapshot: input => getClickHouseSchemaSnapshot(datasource, input),
     };
 }

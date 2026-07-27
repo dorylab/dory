@@ -10,6 +10,10 @@ export function dialectFamilyLabel(family: string) {
     if (family === 'postgres') return 'PostgreSQL';
     if (family === 'mysql') return 'MySQL / MariaDB';
     if (family === 'sqlite') return 'SQLite / D1';
+    if (family === 'duckdb') return 'DuckDB';
+    if (family === 'sqlserver') return 'SQL Server';
+    if (family === 'snowflake') return 'Snowflake';
+    if (family === 'clickhouse') return 'ClickHouse';
     return family;
 }
 
@@ -51,6 +55,14 @@ export function ComparisonRunStatus({ run }: { run: ComparisonRunClient | null }
         );
     }
     if (!run.summary?.totalChanges) {
+        if (run.summary?.readiness === 'unknown') {
+            return (
+                <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300">
+                    <AlertTriangle />
+                    {t('Status.NoChangesIncomplete')}
+                </Badge>
+            );
+        }
         return (
             <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 />

@@ -23,6 +23,25 @@ import { Tabs, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 
 const VIEW_MODES = ['cards', 'table', 'chart'] as const;
 const PAGE_SIZE = 50;
+const SCHEMA_ATTRIBUTE_TRANSLATIONS = {
+    data_type: 'Attributes.DataType',
+    nullable: 'Attributes.Nullable',
+    default: 'Attributes.Default',
+    engine: 'Attributes.Engine',
+    sorting_key: 'Attributes.SortingKey',
+    primary_key: 'Attributes.PrimaryKey',
+    partition_key: 'Attributes.PartitionKey',
+    sampling_key: 'Attributes.SamplingKey',
+    ttl: 'Attributes.Ttl',
+    clustering_key: 'Attributes.ClusteringKey',
+    identity: 'Attributes.Identity',
+    identity_seed: 'Attributes.IdentitySeed',
+    identity_increment: 'Attributes.IdentityIncrement',
+    computed_expression: 'Attributes.ComputedExpression',
+    computed_persisted: 'Attributes.ComputedPersisted',
+    codec: 'Attributes.Codec',
+    default_kind: 'Attributes.DefaultKind',
+} as const;
 
 type DiffRow = {
     changeId: string;
@@ -71,9 +90,198 @@ function formatDiffValue(value: string) {
     }
 }
 
-function DiffValue({ value, label, className }: { value: string | null; label: string; className?: string }) {
-    if (value == null) return <span className={cn('font-mono text-xs', className)}>—</span>;
+type DiffLine = {
+    text: string;
+    changed: boolean;
+};
 
+function buildLineDiff(currentValue: string | null, desiredValue: string | null) {
+    const currentLines = currentValue == null ? [] : formatDiffValue(currentValue).split('\n');
+    const desiredLines = desiredValue == null ? [] : formatDiffValue(desiredValue).split('\n');
+    const longestCommonSubsequence = Array.from({ length: currentLines.length + 1 }, () => Array(desiredLines.length + 1).fill(0));
+
+    for (let currentIndex = currentLines.length - 1; currentIndex >= 0; currentIndex -= 1) {
+        for (let desiredIndex = desiredLines.length - 1; desiredIndex >= 0; desiredIndex -= 1) {
+            longestCommonSubsequence[currentIndex][desiredIndex] =
+                currentLines[currentIndex] === desiredLines[desiredIndex]
+                    ? longestCommonSubsequence[currentIndex + 1][desiredIndex + 1] + 1
+                    : Math.max(longestCommonSubsequence[currentIndex + 1][desiredIndex], longestCommonSubsequence[currentIndex][desiredIndex + 1]);
+        }
+    }
+
+    const unchangedCurrent = new Set<number>();
+    const unchangedDesired = new Set<number>();
+    let currentIndex = 0;
+    let desiredIndex = 0;
+
+    while (currentIndex < currentLines.length && desiredIndex < desiredLines.length) {
+        if (currentLines[currentIndex] === desiredLines[desiredIndex]) {
+            unchangedCurrent.add(currentIndex);
+            unchangedDesired.add(desiredIndex);
+            currentIndex += 1;
+            desiredIndex += 1;
+        } else if (longestCommonSubsequence[currentIndex + 1][desiredIndex] >= longestCommonSubsequence[currentIndex][desiredIndex + 1]) {
+            currentIndex += 1;
+        } else {
+            desiredIndex += 1;
+        }
+    }
+
+    return {
+        current: currentLines.map((text, index): DiffLine => ({ text, changed: !unchangedCurrent.has(index) })),
+        desired: desiredLines.map((text, index): DiffLine => ({ text, changed: !unchangedDesired.has(index) })),
+    };
+}
+
+function getChangedTextParts(text: string, counterpart: string) {
+    let prefixLength = 0;
+    const maxPrefixLength = Math.min(text.length, counterpart.length);
+
+    while (prefixLength < maxPrefixLength && text[prefixLength] === counterpart[prefixLength]) {
+        prefixLength += 1;
+    }
+
+    let suffixLength = 0;
+    const maxSuffixLength = Math.min(text.length - prefixLength, counterpart.length - prefixLength);
+
+    while (suffixLength < maxSuffixLength && text[text.length - suffixLength - 1] === counterpart[counterpart.length - suffixLength - 1]) {
+        suffixLength += 1;
+    }
+
+    return {
+        prefix: text.slice(0, prefixLength),
+        changed: text.slice(prefixLength, suffixLength === 0 ? text.length : text.length - suffixLength),
+        suffix: suffixLength === 0 ? '' : text.slice(text.length - suffixLength),
+    };
+}
+
+function DiffLineText({ line, counterpart, tone }: { line: DiffLine; counterpart?: DiffLine; tone: 'removed' | 'added' }) {
+    if (!line.changed || !counterpart?.changed) return <>{line.text || ' '}</>;
+
+    const parts = getChangedTextParts(line.text, counterpart.text);
+    const emphasisClass = tone === 'removed' ? 'bg-destructive/25' : 'bg-emerald-500/25';
+
+    return (
+        <>
+            {parts.prefix}
+            {parts.changed ? <mark className={cn('rounded-[2px] font-semibold text-inherit', emphasisClass)}>{parts.changed}</mark> : null}
+            {parts.suffix}
+        </>
+    );
+}
+
+function DiffPane({
+    label,
+    lines,
+    counterpartLines,
+    marker,
+    tone,
+}: {
+    label: string;
+    lines: DiffLine[];
+    counterpartLines: DiffLine[];
+    marker: '−' | '+';
+    tone: 'removed' | 'added';
+}) {
+    const changedClass = tone === 'removed' ? 'bg-destructive/10 text-destructive' : 'bg-emerald-500/10 text-emerald-800 dark:text-emerald-200';
+    const markerClass = tone === 'removed' ? 'text-destructive' : 'text-emerald-700 dark:text-emerald-300';
+
+    return (
+        <section className="min-w-0">
+            <div className="flex h-10 items-center gap-2 border-b bg-muted/30 px-3 text-xs font-medium">
+                <span className={cn('font-mono text-sm', markerClass)}>{marker}</span>
+                {label}
+            </div>
+            <div className="max-h-[50vh] min-h-28 overflow-auto bg-card py-2 font-mono text-xs leading-5">
+                {lines.length > 0 ? (
+                    lines.map((line, index) => (
+                        <div key={`${index}-${line.text}`} className={cn('grid min-w-max grid-cols-[2.5rem_1.25rem_minmax(0,1fr)] px-2', line.changed && changedClass)}>
+                            <span className="select-none pr-2 text-right text-muted-foreground/60">{index + 1}</span>
+                            <span className={cn('select-none', line.changed && markerClass)}>{line.changed ? marker : ' '}</span>
+                            <code className="whitespace-pre pr-4">
+                                <DiffLineText line={line} counterpart={counterpartLines[index]} tone={tone} />
+                            </code>
+                        </div>
+                    ))
+                ) : (
+                    <div className="px-4 py-6 text-center text-muted-foreground">—</div>
+                )}
+            </div>
+        </section>
+    );
+}
+
+function DiffComparison({
+    currentValue,
+    desiredValue,
+    currentLabel,
+    desiredLabel,
+}: {
+    currentValue: string | null;
+    desiredValue: string | null;
+    currentLabel: string;
+    desiredLabel: string;
+}) {
+    const lines = buildLineDiff(currentValue, desiredValue);
+
+    return (
+        <div className="grid divide-y md:grid-cols-2 md:divide-x md:divide-y-0" data-testid="schema-value-diff">
+            <DiffPane label={currentLabel} lines={lines.current} counterpartLines={lines.desired} marker="−" tone="removed" />
+            <DiffPane label={desiredLabel} lines={lines.desired} counterpartLines={lines.current} marker="+" tone="added" />
+        </div>
+    );
+}
+
+function SchemaValueDiff({
+    currentValue,
+    desiredValue,
+    displaySide,
+    objectPath,
+    changeLabel,
+    currentLabel,
+    desiredLabel,
+    className,
+}: {
+    currentValue: string | null;
+    desiredValue: string | null;
+    displaySide: 'current' | 'desired';
+    objectPath: string;
+    changeLabel: string;
+    currentLabel: string;
+    desiredLabel: string;
+    className?: string;
+}) {
+    const displayValue = displaySide === 'current' ? currentValue : desiredValue;
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className={cn(
+                        'group flex w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-left font-mono text-xs transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        className,
+                    )}
+                    aria-label={`${objectPath}: ${currentLabel} → ${desiredLabel}`}
+                >
+                    <span className="min-w-0 flex-1 truncate">{displayValue ?? '—'}</span>
+                    <Maximize2 className="size-3 shrink-0 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="center" sideOffset={8} className="w-[min(64rem,calc(100vw-2rem))] overflow-hidden p-0">
+                <div className="border-b px-4 py-3">
+                    <div className="truncate font-mono text-sm font-medium" title={objectPath}>
+                        {objectPath}
+                    </div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{changeLabel}</div>
+                </div>
+                <DiffComparison currentValue={currentValue} desiredValue={desiredValue} currentLabel={currentLabel} desiredLabel={desiredLabel} />
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+function TextPreview({ value, label, className }: { value: string; label: string; className?: string }) {
     return (
         <Popover>
             <PopoverTrigger asChild>
@@ -90,7 +298,7 @@ function DiffValue({ value, label, className }: { value: string | null; label: s
             </PopoverTrigger>
             <PopoverContent align="start" sideOffset={8} className="w-[min(36rem,calc(100vw-2rem))] overflow-hidden p-0">
                 <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">{label}</div>
-                <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words p-3 font-mono text-xs leading-5">{formatDiffValue(value)}</pre>
+                <div className="max-h-72 overflow-auto whitespace-pre-wrap break-words p-3 text-sm leading-5">{value}</div>
             </PopoverContent>
         </Popover>
     );
@@ -98,6 +306,11 @@ function DiffValue({ value, label, className }: { value: string | null; label: s
 
 export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: string; organization: string }) {
     const t = useTranslations('SchemaCompare');
+    const attributeLabel = (attribute: string | null) => {
+        if (!attribute) return null;
+        const key = SCHEMA_ATTRIBUTE_TRANSLATIONS[attribute as keyof typeof SCHEMA_ATTRIBUTE_TRANSLATIONS];
+        return key ? t(key) : attribute;
+    };
     const [state, setState] = useQueryStates({
         view: parseAsStringLiteral(VIEW_MODES).withDefault('cards'),
         risk: parseAsString.withDefault('all'),
@@ -263,7 +476,7 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
                                                 </div>
                                                 <div className="mt-1 text-xs text-muted-foreground">
                                                     {row.changeType}
-                                                    {row.attribute ? ` · ${row.attribute}` : ''}
+                                                    {row.attribute ? ` · ${attributeLabel(row.attribute)}` : ''}
                                                 </div>
                                             </div>
                                             <Badge variant="outline" className={`shrink-0 ${riskClass(row.riskLevel)}`}>
@@ -274,12 +487,30 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
                                             <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                                                 <div className="min-w-0 rounded-md bg-muted/60 p-3">
                                                     <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Current')}</div>
-                                                    <DiffValue value={row.currentValue} label={t('Current')} className="text-sm" />
+                                                    <SchemaValueDiff
+                                                        currentValue={row.currentValue}
+                                                        desiredValue={row.desiredValue}
+                                                        displaySide="current"
+                                                        objectPath={row.objectPath}
+                                                        changeLabel={`${row.changeType}${row.attribute ? ` · ${attributeLabel(row.attribute)}` : ''}`}
+                                                        currentLabel={t('Current')}
+                                                        desiredLabel={t('Desired')}
+                                                        className="text-sm"
+                                                    />
                                                 </div>
                                                 <ChevronRight className="hidden h-4 w-4 text-muted-foreground sm:block" />
                                                 <div className="min-w-0 rounded-md bg-muted/60 p-3">
                                                     <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('Desired')}</div>
-                                                    <DiffValue value={row.desiredValue} label={t('Desired')} className="text-sm" />
+                                                    <SchemaValueDiff
+                                                        currentValue={row.currentValue}
+                                                        desiredValue={row.desiredValue}
+                                                        displaySide="desired"
+                                                        objectPath={row.objectPath}
+                                                        changeLabel={`${row.changeType}${row.attribute ? ` · ${attributeLabel(row.attribute)}` : ''}`}
+                                                        currentLabel={t('Current')}
+                                                        desiredLabel={t('Desired')}
+                                                        className="text-sm"
+                                                    />
                                                 </div>
                                             </div>
                                             <p className="text-sm text-muted-foreground">{row.riskReason}</p>
@@ -324,17 +555,33 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
                             {(rowsQuery.data?.rows ?? []).map(row => (
                                 <TableRow key={row.changeId} className="border-0">
                                     <TableCell className="border-r border-b px-3 py-2.5">
-                                        <DiffValue value={row.objectPath} label={t('Changes.ObjectPath')} />
+                                        <TextPreview value={row.objectPath} label={t('Changes.ObjectPath')} />
                                     </TableCell>
                                     <TableCell className="border-r border-b px-3 py-2.5">
                                         {row.changeType}
-                                        {row.attribute ? ` · ${row.attribute}` : ''}
+                                        {row.attribute ? ` · ${attributeLabel(row.attribute)}` : ''}
                                     </TableCell>
                                     <TableCell className="border-r border-b px-3 py-2.5">
-                                        <DiffValue value={row.currentValue} label={t('Current')} />
+                                        <SchemaValueDiff
+                                            currentValue={row.currentValue}
+                                            desiredValue={row.desiredValue}
+                                            displaySide="current"
+                                            objectPath={row.objectPath}
+                                            changeLabel={`${row.changeType}${row.attribute ? ` · ${attributeLabel(row.attribute)}` : ''}`}
+                                            currentLabel={t('Current')}
+                                            desiredLabel={t('Desired')}
+                                        />
                                     </TableCell>
                                     <TableCell className="border-r border-b px-3 py-2.5">
-                                        <DiffValue value={row.desiredValue} label={t('Desired')} />
+                                        <SchemaValueDiff
+                                            currentValue={row.currentValue}
+                                            desiredValue={row.desiredValue}
+                                            displaySide="desired"
+                                            objectPath={row.objectPath}
+                                            changeLabel={`${row.changeType}${row.attribute ? ` · ${attributeLabel(row.attribute)}` : ''}`}
+                                            currentLabel={t('Current')}
+                                            desiredLabel={t('Desired')}
+                                        />
                                     </TableCell>
                                     <TableCell className="border-r border-b px-3 py-2.5">
                                         <Badge variant="outline" className={riskClass(row.riskLevel)}>
@@ -342,7 +589,7 @@ export function SchemaDiffViewer({ resultSetId, organization }: { resultSetId: s
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="border-b px-3 py-2.5">
-                                        <DiffValue value={row.riskReason} label={t('Changes.Reason')} className="font-sans text-sm text-muted-foreground" />
+                                        <TextPreview value={row.riskReason} label={t('Changes.Reason')} className="font-sans text-sm text-muted-foreground" />
                                     </TableCell>
                                 </TableRow>
                             ))}

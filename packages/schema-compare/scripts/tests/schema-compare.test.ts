@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 
-import { compareSchemaSnapshots, finalizeSchemaSnapshot, schemaChangesToResultRows, type SchemaSnapshot, type SchemaSnapshotCoverage } from '../../src/index';
+import {
+    compareSchemaSnapshots,
+    finalizeSchemaSnapshot,
+    getSchemaComparisonCapabilities,
+    schemaChangesToResultRows,
+    supportsSchemaComparison,
+    type SchemaSnapshot,
+    type SchemaSnapshotCoverage,
+} from '../../src/index';
 
 const fullCoverage: SchemaSnapshotCoverage = {
     tables: 'complete',
@@ -236,5 +244,122 @@ assert.throws(
         ),
     /same dialect family/,
 );
+
+assert.equal(supportsSchemaComparison('oracle'), false);
+assert.equal(supportsSchemaComparison('duckdb'), true);
+assert.deepEqual(getSchemaComparisonCapabilities('snowflake').objectTypes, ['table', 'column', 'constraint', 'view']);
+assert.equal(getSchemaComparisonCapabilities('snowflake').supportsSchemaFilter, true);
+assert.deepEqual(getSchemaComparisonCapabilities('clickhouse').objectTypes, ['table', 'column', 'index', 'view']);
+assert.equal(getSchemaComparisonCapabilities('clickhouse').supportsSchemaFilter, false);
+assert.equal(getSchemaComparisonCapabilities('sqlserver').supportsSchemaFilter, true);
+
+const snowflakeCurrent = snapshot({
+    family: 'snowflake',
+    engine: 'snowflake',
+    tables: [
+        {
+            schema: 'PUBLIC',
+            name: 'ORDERS',
+            attributes: { clustering_key: null },
+            columns: [{ name: 'AMOUNT', dataType: 'NUMBER(12,2)', nullable: false }],
+            indexes: [],
+            constraints: [],
+        },
+    ],
+});
+const snowflakeDesired = snapshot({
+    family: 'snowflake',
+    engine: 'snowflake',
+    tables: [
+        {
+            schema: 'PUBLIC',
+            name: 'ORDERS',
+            attributes: { clustering_key: 'LINEAR(CUSTOMER_ID)' },
+            columns: [{ name: 'AMOUNT', dataType: 'DECIMAL(12,2)', nullable: false }],
+            indexes: [],
+            constraints: [],
+        },
+    ],
+});
+const snowflakeComparison = compareSchemaSnapshots(snowflakeCurrent, snowflakeDesired);
+assert.equal(snowflakeComparison.changes.length, 1);
+assert.equal(snowflakeComparison.changes[0]?.risk.code, 'snowflake_clustering_key_modified');
+assert.equal(snowflakeComparison.summary.readiness, 'review_required');
+
+const sqlServerCurrent = snapshot({
+    family: 'sqlserver',
+    engine: 'sqlserver',
+    tables: [
+        {
+            schema: 'dbo',
+            name: 'users',
+            columns: [{ name: 'id', dataType: 'int', nullable: false, attributes: { identity: true } }],
+            indexes: [],
+            constraints: [],
+        },
+    ],
+});
+const sqlServerDesired = snapshot({
+    family: 'sqlserver',
+    engine: 'sqlserver',
+    tables: [
+        {
+            schema: 'dbo',
+            name: 'users',
+            columns: [{ name: 'id', dataType: 'int', nullable: false, attributes: { identity: false } }],
+            indexes: [],
+            constraints: [],
+        },
+    ],
+});
+const identityChange = compareSchemaSnapshots(sqlServerCurrent, sqlServerDesired).changes[0];
+assert.equal(identityChange?.attribute, 'identity');
+assert.equal(identityChange?.risk.level, 'high');
+assert.equal(identityChange?.risk.breaking, true);
+
+const clickHouseCurrent = snapshot({
+    family: 'clickhouse',
+    engine: 'clickhouse',
+    schemas: [],
+    tables: [
+        {
+            schema: null,
+            name: 'events',
+            attributes: { engine: 'MergeTree', ttl: null },
+            columns: [{ name: 'id', dataType: 'Nullable(Int32)', nullable: true, attributes: { codec: 'LZ4' } }],
+            indexes: [],
+            constraints: [],
+        },
+    ],
+});
+const clickHouseDesired = snapshot({
+    family: 'clickhouse',
+    engine: 'clickhouse',
+    schemas: [],
+    tables: [
+        {
+            schema: null,
+            name: 'events',
+            attributes: { engine: 'MergeTree', ttl: 'created_at + INTERVAL 30 DAY' },
+            columns: [{ name: 'id', dataType: 'Int32', nullable: true, attributes: { codec: 'ZSTD(1)' } }],
+            indexes: [],
+            constraints: [],
+        },
+    ],
+});
+const clickHouseChanges = compareSchemaSnapshots(clickHouseCurrent, clickHouseDesired).changes;
+assert.equal(
+    clickHouseChanges.some(change => change.attribute === 'data_type'),
+    false,
+);
+assert.equal(clickHouseChanges.find(change => change.attribute === 'ttl')?.risk.code, 'clickhouse_ttl_modified');
+assert.equal(clickHouseChanges.find(change => change.attribute === 'codec')?.risk.level, 'medium');
+
+const incompleteZeroChange = compareSchemaSnapshots(
+    snapshot({ coverage: { ...fullCoverage, constraints: 'partial' } }),
+    snapshot({ coverage: { ...fullCoverage, constraints: 'partial' } }),
+);
+assert.equal(incompleteZeroChange.summary.totalChanges, 0);
+assert.equal(incompleteZeroChange.summary.readiness, 'unknown');
 
 console.log('schema comparison core tests passed');

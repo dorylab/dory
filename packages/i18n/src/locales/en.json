@@ -3926,6 +3926,8 @@
             "Running": "Running",
             "Failed": "Failed",
             "NoChanges": "No changes",
+            "NoChangesIncomplete": "No changes · incomplete coverage",
+            "NoChangesIncompleteDescription": "No changes were detected, but catalog coverage is incomplete. Readiness remains unknown.",
             "ChangeCount": "{count} changes"
         },
         "Recent": {
@@ -3974,6 +3976,41 @@
             "EstimatedRows": "Estimated rows",
             "CumulativeScans": "Cumulative index scans",
             "Count": "{count} changes"
+        },
+        "Attributes": {
+            "DataType": "Data type",
+            "Nullable": "Nullable",
+            "Default": "Default",
+            "Engine": "Engine",
+            "SortingKey": "Sorting key",
+            "PrimaryKey": "Primary key",
+            "PartitionKey": "Partition key",
+            "SamplingKey": "Sampling key",
+            "Ttl": "TTL",
+            "ClusteringKey": "Clustering key",
+            "Identity": "Identity",
+            "IdentitySeed": "Identity seed",
+            "IdentityIncrement": "Identity increment",
+            "ComputedExpression": "Computed expression",
+            "ComputedPersisted": "Persisted computed column",
+            "Codec": "Codec",
+            "DefaultKind": "Default kind"
+        },
+        "Coverage": {
+            "Kind": {
+                "Tables": "Tables",
+                "Columns": "Columns",
+                "Indexes": "Indexes",
+                "Constraints": "Constraints",
+                "Views": "Views",
+                "Statistics": "Statistics"
+            },
+            "Status": {
+                "Complete": "complete",
+                "Partial": "partial",
+                "Unavailable": "unavailable",
+                "NotApplicable": "not applicable"
+            }
         },
         "Risk": {
             "all": "All risks",

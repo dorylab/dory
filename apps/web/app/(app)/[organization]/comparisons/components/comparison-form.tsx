@@ -7,7 +7,13 @@ import { ArrowRight, Loader2, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES, schemaDialectFamily, supportsSchemaComparison, type SchemaComparisonObjectType } from '@dory/schema-compare';
+import {
+    DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES,
+    getSchemaComparisonCapabilities,
+    schemaDialectFamily,
+    supportsSchemaComparison,
+    type SchemaComparisonObjectType,
+} from '@dory/schema-compare';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
@@ -137,9 +143,12 @@ export function ComparisonForm({ organization, comparison = null }: { organizati
     const [objectTypes, setObjectTypes] = useState<SchemaComparisonObjectType[]>(comparison?.objectTypes.length ? comparison.objectTypes : DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES);
     const sourceConnection = supportedConnections.find(item => item.connection.id === source.connectionId);
     const sourceFamily = schemaDialectFamily(sourceConnection?.connection.type ?? '');
+    const sourceCapabilities = getSchemaComparisonCapabilities(sourceConnection?.connection.type ?? '');
     const targetConnections = sourceFamily ? supportedConnections.filter(item => schemaDialectFamily(item.connection.type) === sourceFamily) : supportedConnections;
     const targetFamily = schemaDialectFamily(targetConnections.find(item => item.connection.id === target.connectionId)?.connection.type ?? '');
-    const showSchemaFilter = sourceFamily === 'postgres';
+    const showSchemaFilter = sourceCapabilities.supportsSchemaFilter;
+    const availableObjectTypes = sourceCapabilities.supported ? sourceCapabilities.objectTypes : DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES;
+    const selectedObjectTypes = objectTypes.filter(type => availableObjectTypes.includes(type));
     const mutation = useMutation({
         mutationFn: () => {
             const configuration = {
@@ -160,7 +169,7 @@ export function ComparisonForm({ organization, comparison = null }: { organizati
                           .map(value => value.trim())
                           .filter(Boolean)
                     : [],
-                objectTypes,
+                objectTypes: selectedObjectTypes,
             };
             return comparison
                 ? executeActionClient<ComparisonMutationClient>('comparison.update', { comparisonId: comparison.id, ...configuration }, { organizationId })
@@ -179,12 +188,19 @@ export function ComparisonForm({ organization, comparison = null }: { organizati
         target.database.trim().length > 0 &&
         sourceFamily != null &&
         sourceFamily === targetFamily &&
-        objectTypes.length > 0 &&
+        selectedObjectTypes.length > 0 &&
         !connectionsQuery.isFetching;
 
     const updateSource = (next: EndpointDraft) => {
         setSource(next);
-        const nextFamily = schemaDialectFamily(supportedConnections.find(item => item.connection.id === next.connectionId)?.connection.type ?? '');
+        const nextConnection = supportedConnections.find(item => item.connection.id === next.connectionId);
+        const nextFamily = schemaDialectFamily(nextConnection?.connection.type ?? '');
+        const nextCapabilities = getSchemaComparisonCapabilities(nextConnection?.connection.type ?? '');
+        setObjectTypes(current => {
+            const retained = current.filter(type => nextCapabilities.objectTypes.includes(type));
+            return retained.length ? retained : [...nextCapabilities.objectTypes];
+        });
+        if (!nextCapabilities.supportsSchemaFilter) setSchemaFilter('');
         if (nextFamily !== targetFamily) setTarget(defaultEndpoint());
     };
     const toggleObjectType = (type: SchemaComparisonObjectType, checked: boolean) => {
@@ -228,9 +244,9 @@ export function ComparisonForm({ organization, comparison = null }: { organizati
                     <p className="mt-1 text-xs text-muted-foreground">{t('Create.CompareObjectsHelp')}</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                    {DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES.map(type => (
+                    {availableObjectTypes.map(type => (
                         <label key={type} className="flex cursor-pointer items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
-                            <Checkbox checked={objectTypes.includes(type)} onCheckedChange={checked => toggleObjectType(type, checked === true)} />
+                            <Checkbox checked={selectedObjectTypes.includes(type)} onCheckedChange={checked => toggleObjectType(type, checked === true)} />
                             {t(`Object.${type}`)}
                         </label>
                     ))}

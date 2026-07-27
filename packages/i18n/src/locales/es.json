@@ -3924,6 +3924,8 @@
             "Running": "En ejecución",
             "Failed": "Fallida",
             "NoChanges": "Sin cambios",
+            "NoChangesIncomplete": "Sin cambios · cobertura incompleta",
+            "NoChangesIncompleteDescription": "No se detectaron cambios, pero la cobertura del catálogo está incompleta. La preparación sigue siendo desconocida.",
             "ChangeCount": "{count} cambios"
         },
         "Recent": {
@@ -3972,6 +3974,41 @@
             "EstimatedRows": "Filas estimadas",
             "CumulativeScans": "Escaneos acumulados del índice",
             "Count": "{count} cambios"
+        },
+        "Attributes": {
+            "DataType": "Tipo de dato",
+            "Nullable": "Anulable",
+            "Default": "Valor predeterminado",
+            "Engine": "Motor",
+            "SortingKey": "Clave de ordenación",
+            "PrimaryKey": "Clave primaria",
+            "PartitionKey": "Clave de partición",
+            "SamplingKey": "Clave de muestreo",
+            "Ttl": "TTL",
+            "ClusteringKey": "Clave de agrupación",
+            "Identity": "Identidad",
+            "IdentitySeed": "Inicio de identidad",
+            "IdentityIncrement": "Incremento de identidad",
+            "ComputedExpression": "Expresión calculada",
+            "ComputedPersisted": "Columna calculada persistente",
+            "Codec": "Códec",
+            "DefaultKind": "Tipo predeterminado"
+        },
+        "Coverage": {
+            "Kind": {
+                "Tables": "Tablas",
+                "Columns": "Columnas",
+                "Indexes": "Índices",
+                "Constraints": "Restricciones",
+                "Views": "Vistas",
+                "Statistics": "Estadísticas"
+            },
+            "Status": {
+                "Complete": "completa",
+                "Partial": "parcial",
+                "Unavailable": "no disponible",
+                "NotApplicable": "no aplicable"
+            }
         },
         "Risk": {
             "all": "Todos los riesgos",

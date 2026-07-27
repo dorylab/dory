@@ -4,10 +4,10 @@ import type { Comparison, ComparisonConfigurationSnapshot, ComparisonEndpointCon
 import {
     compareSchemaSnapshots,
     DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES,
+    getSchemaComparisonCapabilities,
     schemaChangesToResultRows,
     schemaDialectFamily,
     stableSchemaHash,
-    supportsSchemaComparison,
     type SchemaComparisonObjectType,
     type SchemaComparisonResult,
 } from '@dory/schema-compare';
@@ -60,9 +60,9 @@ function normalizeConfiguration(input: SchemaComparisonConfigurationInput) {
     const name = input.name.trim();
     if (!name) throw new Error('Comparison name is required.');
     const schemaFilter = [...new Set((input.schemaFilter ?? []).map(schema => schema.trim()).filter(Boolean))].sort();
-    const requestedTypes = input.objectTypes?.length ? input.objectTypes : DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES;
+    if (input.objectTypes && !input.objectTypes.length) throw new Error('Select at least one schema object type to compare.');
+    const requestedTypes = input.objectTypes ?? [];
     const objectTypes = DEFAULT_SCHEMA_COMPARISON_OBJECT_TYPES.filter(type => requestedTypes.includes(type));
-    if (!objectTypes.length) throw new Error('Select at least one schema object type to compare.');
     return {
         name,
         source: {
@@ -90,7 +90,9 @@ async function validateConfiguration(db: DBService, organizationId: string, rawI
         db.connections.getById(organizationId, input.target.connectionId),
     ]);
     if (!sourceRecord || !targetRecord) throw new Error('One or both comparison connections were not found.');
-    if (!supportsSchemaComparison(sourceRecord.connection.type) || !supportsSchemaComparison(targetRecord.connection.type)) {
+    const sourceCapabilities = getSchemaComparisonCapabilities(sourceRecord.connection.type);
+    const targetCapabilities = getSchemaComparisonCapabilities(targetRecord.connection.type);
+    if (!sourceCapabilities.supported || !targetCapabilities.supported) {
         throw new Error('One or both connections do not support Schema Comparisons.');
     }
     const sourceFamily = schemaDialectFamily(sourceRecord.connection.type);
@@ -98,7 +100,13 @@ async function validateConfiguration(db: DBService, organizationId: string, rawI
     if (!sourceFamily || !targetFamily || sourceFamily !== targetFamily) {
         throw new Error(`Schema Compare requires the same dialect family. Source is ${sourceRecord.connection.type}; Target is ${targetRecord.connection.type}.`);
     }
-    if (sourceFamily !== 'postgres') input.schemaFilter = [];
+    if (rawInput.objectTypes == null) input.objectTypes = [...sourceCapabilities.objectTypes];
+    if (!input.objectTypes.length) throw new Error('Select at least one schema object type to compare.');
+    const unsupportedObjectTypes = input.objectTypes.filter(type => !sourceCapabilities.objectTypes.includes(type));
+    if (unsupportedObjectTypes.length) {
+        throw new Error(`Schema Compare does not support these objects for ${sourceRecord.connection.type}: ${unsupportedObjectTypes.join(', ')}.`);
+    }
+    if (!sourceCapabilities.supportsSchemaFilter) input.schemaFilter = [];
     return { ...input, dialectFamily: sourceFamily };
 }
 

@@ -65,6 +65,7 @@ export function ComparisonRunClientPage({ organization, comparisonId, runId }: {
     const schemaScope = configuration.schemaFilter.length ? configuration.schemaFilter.join(', ') : t('Detail.AllSchemas');
     const objectScope = configuration.objectTypes.length ? configuration.objectTypes.map(type => t(`Object.${type}`)).join(' · ') : t('Object.all');
     const hasNoChanges = run.summary?.totalChanges === 0;
+    const hasIncompleteCoverage = hasNoChanges && run.summary?.readiness === 'unknown';
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
@@ -178,7 +179,9 @@ export function ComparisonRunClientPage({ organization, comparisonId, runId }: {
                         </div>
                         {hasNoChanges || !run.resultSetId ? (
                             <Card>
-                                <CardContent className="py-8 text-center text-sm text-muted-foreground">{t('Status.NoChanges')}</CardContent>
+                                <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                                    {t(hasIncompleteCoverage ? 'Status.NoChangesIncompleteDescription' : 'Status.NoChanges')}
+                                </CardContent>
                             </Card>
                         ) : (
                             <SchemaDiffViewer resultSetId={run.resultSetId} organization={organizationId} />

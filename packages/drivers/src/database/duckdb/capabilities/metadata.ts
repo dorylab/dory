@@ -3,8 +3,11 @@ import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaG
 
 import type { DuckDbDatasource } from '../datasource';
 import { getDuckDbDatabases, getDuckDbTableColumns, getDuckDbTables } from '../runtime';
+import { getDuckDbSchemaSnapshot } from './schema-snapshot';
 
-export type DuckDbMetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchemaGraph' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
+export type DuckDbMetadataAPI = Required<
+    Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchemaGraph' | 'getSchemaSnapshot' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>
+>;
 
 type SchemaGraphColumnRow = {
     schemaName?: string;
@@ -215,5 +218,6 @@ export function createDuckDbMetadataCapability(datasource: DuckDbDatasource): Du
         async getSchemaGraph(options) {
             return getSchemaGraph(datasource, options);
         },
+        getSchemaSnapshot: input => getDuckDbSchemaSnapshot(datasource, input),
     };
 }
