@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 
 import type { ComparisonRunClient } from '@/lib/comparison/client-types';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 
 export function AiReviewCard({ run, retrying, onRetry }: { run: ComparisonRunClient; retrying: boolean; onRetry: () => void }) {
     const t = useTranslations('SchemaCompare');
@@ -13,33 +13,37 @@ export function AiReviewCard({ run, retrying, onRetry }: { run: ComparisonRunCli
     const canRetry = ['pending', 'failed', 'unavailable'].includes(run.aiReviewStatus);
 
     return (
-        <Card>
-            <CardHeader className="flex-row items-start justify-between gap-4">
-                <div>
-                    <CardTitle className="flex items-center gap-2">
-                        <Sparkles className="h-4 w-4" />
-                        {t('AI.Title')}
-                    </CardTitle>
-                    <CardDescription>{t('AI.Description')}</CardDescription>
+        <Card className="gap-0 border-violet-500/20 py-0">
+            <CardHeader className="px-4 pt-4 pb-3">
+                <div className="flex items-start gap-3">
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-300">
+                        <Sparkles className="size-4" />
+                    </div>
+                    <div className="min-w-0">
+                        <CardTitle className="text-base">{t('AI.Title')}</CardTitle>
+                        <CardDescription className="mt-1">{t('AI.Description')}</CardDescription>
+                    </div>
                 </div>
                 {canRetry ? (
-                    <Button variant="outline" size="sm" onClick={onRetry} disabled={retrying}>
-                        {retrying ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                        {run.aiReviewStatus === 'pending' ? t('AI.Generate') : t('AI.Retry')}
-                    </Button>
+                    <CardAction>
+                        <Button variant="outline" size="sm" onClick={onRetry} disabled={retrying}>
+                            {retrying ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                            {run.aiReviewStatus === 'pending' ? t('AI.Generate') : t('AI.Retry')}
+                        </Button>
+                    </CardAction>
                 ) : null}
             </CardHeader>
-            <CardContent className="grid gap-5">
+            <CardContent className="grid gap-4 px-4 pb-4">
                 {run.aiReviewStatus === 'not_needed' ? (
-                    <p className="text-sm text-muted-foreground">{t('AI.NotNeeded')}</p>
+                    <p className="rounded-lg bg-violet-500/5 px-3 py-2.5 text-sm text-muted-foreground">{t('AI.NotNeeded')}</p>
                 ) : run.aiReviewStatus === 'pending' || run.aiReviewStatus === 'running' ? (
-                    <div className="flex items-center text-sm text-muted-foreground">
+                    <div className="flex items-center rounded-lg bg-violet-500/5 px-3 py-2.5 text-sm text-muted-foreground">
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         {t('AI.Generating')}
                     </div>
                 ) : review ? (
                     <>
-                        <p className="text-sm leading-6">{review.summary}</p>
+                        <p className="rounded-lg bg-violet-500/5 px-3 py-2.5 text-sm leading-6">{review.summary}</p>
                         {review.risks.length ? (
                             <div>
                                 <h3 className="mb-2 text-sm font-medium">{t('AI.Risks')}</h3>

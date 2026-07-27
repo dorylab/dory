@@ -1,13 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Clock3, History, Loader2, Pencil, Play, ShieldAlert, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
+import type { ConnectionListItem } from '@dory/shared/types/connections';
+
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
+import { useConnections } from '@/app/(app)/[organization]/connections/hooks/use-connections';
+import { DataSourceCell, type DataSourceCellInfo } from '@/components/data-source/data-source-cell';
 import type { ComparisonClient, ComparisonMutationClient, ComparisonRunClient } from '@/lib/comparison/client-types';
 import { executeActionClient } from '@/lib/actions/client';
 import {
@@ -21,7 +25,6 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { AiReviewCard } from '../components/ai-review-card';
@@ -34,6 +37,27 @@ type AiReviewOutput = { run: ComparisonRunClient };
 
 function endpointLabel(endpoint: ComparisonClient['sourceEndpoint']) {
     return endpoint.database;
+}
+
+function endpointDataSource(endpoint: ComparisonClient['sourceEndpoint'], connectionsById: Map<string, ConnectionListItem>): DataSourceCellInfo {
+    const connectionItem = connectionsById.get(endpoint.connectionId);
+    const connection = connectionItem?.connection;
+    const identity =
+        connectionItem?.identities.find(item => item.id === endpoint.identityId) ?? (endpoint.identityId ? undefined : connectionItem?.identities.find(item => item.isDefault));
+
+    return {
+        connectionId: endpoint.connectionId,
+        connectionName: connection?.name ?? endpoint.connectionId,
+        connectionType: connection?.type,
+        connectionHost: connection?.host,
+        connectionPort: connection?.port,
+        connectionHttpPort: connection?.httpPort,
+        connectionEndpoint: connection?.path,
+        databaseName: endpoint.database,
+        identityName: identity?.name,
+        identityUsername: identity?.username,
+        identityRole: identity?.role,
+    };
 }
 
 export function ComparisonDetailClient({ organization, comparisonId }: { organization: string; comparisonId: string }) {
@@ -51,6 +75,8 @@ export function ComparisonDetailClient({ organization, comparisonId }: { organiz
             return run?.status === 'running' || run?.aiReviewStatus === 'running' ? 1500 : false;
         },
     });
+    const connectionsQuery = useConnections(organizationId);
+    const connectionsById = useMemo(() => new Map((connectionsQuery.data ?? []).map(item => [item.connection.id, item])), [connectionsQuery.data]);
     const runsQuery = useQuery({
         queryKey: runsKey,
         queryFn: () => executeActionClient<RunListOutput>('comparison.run.list', { comparisonId, limit: 50 }, { organizationId }),
@@ -118,13 +144,14 @@ export function ComparisonDetailClient({ organization, comparisonId }: { organiz
     const latestRun = comparison.latestRun;
     const successfulRun = comparison.latestSuccessfulRun;
     const active = latestRun?.status === 'running';
+    const objectTypesLabel = comparison.objectTypes.map(type => t(`Object.${type}`)).join(' · ');
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
-            <main className="container mx-auto flex flex-col gap-6 px-12 pt-8 pb-12 lg:px-12 xl:px-8 2xl:px-4">
+            <main className="container mx-auto flex flex-col gap-4 px-12 pt-8 pb-12 lg:px-12 xl:px-8 2xl:px-4">
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
-                        <Button asChild variant="ghost" size="sm" className="-ml-3 mb-3">
+                        <Button asChild variant="ghost" size="sm" className="-ml-3 mb-2">
                             <Link href={`/${encodeURIComponent(organization)}/comparisons`}>
                                 <ArrowLeft />
                                 {t('Back')}
@@ -132,16 +159,10 @@ export function ComparisonDetailClient({ organization, comparisonId }: { organiz
                         </Button>
                         <div className="flex flex-wrap items-center gap-2">
                             <h1 className="text-2xl font-semibold">{comparison.name}</h1>
-                            <Badge variant="outline">{dialectFamilyLabel(comparison.dialectFamily)}</Badge>
                             <ComparisonRunStatus run={latestRun} />
                         </div>
-                        <div className="mt-3 flex min-w-0 items-center gap-2 font-mono text-sm text-muted-foreground">
-                            <span className="truncate">{endpointLabel(comparison.sourceEndpoint)}</span>
-                            <ArrowRight className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{endpointLabel(comparison.targetEndpoint)}</span>
-                        </div>
                         {latestRun ? (
-                            <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
+                            <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <Clock3 className="h-3.5 w-3.5" />
                                 {t('Detail.LastChecked', { date: new Date(latestRun.startedAt).toLocaleString() })}
                             </div>
@@ -182,32 +203,44 @@ export function ComparisonDetailClient({ organization, comparisonId }: { organiz
                     </div>
                 </header>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>{t('Detail.Configuration')}</CardTitle>
-                        <CardDescription>{t('Detail.ConfigurationVersion', { version: comparison.configurationVersion })}</CardDescription>
+                <Card className="gap-0 py-0">
+                    <CardHeader className="px-4 pt-4 pb-3">
+                        <CardTitle className="text-base">{t('Detail.Configuration')}</CardTitle>
+                        <CardDescription>
+                            {t('Detail.ConfigurationVersion', { version: comparison.configurationVersion })} · {dialectFamilyLabel(comparison.dialectFamily)}
+                        </CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-5 md:grid-cols-3">
-                        <div>
-                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('Source')}</div>
-                            <div className="mt-1 font-mono text-sm">{comparison.sourceEndpoint.database}</div>
+                    <CardContent className="grid gap-4 px-4 pb-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)] lg:items-center">
+                        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-lg bg-muted/35 px-3 py-2.5">
+                            <div className="min-w-0">
+                                <span className="sr-only">{t('Current')}</span>
+                                <DataSourceCell dataSource={endpointDataSource(comparison.sourceEndpoint, connectionsById)} className="max-w-full" />
+                                <div className="mt-0.5 truncate px-1 font-mono text-xs text-muted-foreground" title={endpointLabel(comparison.sourceEndpoint)}>
+                                    {endpointLabel(comparison.sourceEndpoint)}
+                                </div>
+                            </div>
+                            <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                            <div className="min-w-0">
+                                <span className="sr-only">{t('Desired')}</span>
+                                <DataSourceCell dataSource={endpointDataSource(comparison.targetEndpoint, connectionsById)} className="max-w-full" />
+                                <div className="mt-0.5 truncate px-1 font-mono text-xs text-muted-foreground" title={endpointLabel(comparison.targetEndpoint)}>
+                                    {endpointLabel(comparison.targetEndpoint)}
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('Target')}</div>
-                            <div className="mt-1 font-mono text-sm">{comparison.targetEndpoint.database}</div>
-                        </div>
-                        <div>
-                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('Create.Schemas')}</div>
-                            <div className="mt-1 text-sm">{comparison.schemaFilter.join(', ') || t('Detail.AllSchemas')}</div>
-                        </div>
-                        <div className="md:col-span-3">
-                            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('Create.CompareObjects')}</div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                                {comparison.objectTypes.map(type => (
-                                    <Badge key={type} variant="secondary">
-                                        {t(`Object.${type}`)}
-                                    </Badge>
-                                ))}
+
+                        <div className="grid gap-2 text-sm">
+                            <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
+                                <span className="text-muted-foreground">{t('Create.Schemas')}</span>
+                                <span className="truncate font-medium" title={comparison.schemaFilter.join(', ') || t('Detail.AllSchemas')}>
+                                    {comparison.schemaFilter.join(', ') || t('Detail.AllSchemas')}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3">
+                                <span className="text-muted-foreground">{t('Create.CompareObjects')}</span>
+                                <span className="truncate font-medium" title={objectTypesLabel}>
+                                    {objectTypesLabel}
+                                </span>
                             </div>
                         </div>
                     </CardContent>
@@ -244,21 +277,21 @@ export function ComparisonDetailClient({ organization, comparisonId }: { organiz
                     </>
                 ) : null}
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                <Card className="gap-0 py-0">
+                    <CardHeader className="px-4 pt-4 pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base">
                             <History className="h-4 w-4" />
                             {t('Runs.Title')}
                         </CardTitle>
                         <CardDescription>{t('Runs.Description')}</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="px-4 pb-4">
                         <div className="divide-y">
                             {(runsQuery.data?.rows ?? []).map(run => (
                                 <Link
                                     key={run.id}
                                     href={`/${encodeURIComponent(organization)}/comparisons/${encodeURIComponent(comparisonId)}/runs/${encodeURIComponent(run.id)}`}
-                                    className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0 hover:text-foreground"
+                                    className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0 hover:text-foreground"
                                 >
                                     <div>
                                         <div className="text-sm font-medium">{new Date(run.startedAt).toLocaleString()}</div>
