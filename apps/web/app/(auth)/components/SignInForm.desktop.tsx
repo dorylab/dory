@@ -348,7 +348,7 @@ export function SignInForm({ className, callbackURL: callbackURLOverride, onRequ
                                                         <span>{t('SignIn.Guest.Starting')}</span>
                                                     </>
                                                 ) : (
-                                                    t('SignIn.Guest.Link')
+                                                    t(resumeAnonymousSession ? 'SignIn.Guest.ResumeAction' : 'SignIn.Guest.Link')
                                                 )}
                                             </button>
                                         </div>
