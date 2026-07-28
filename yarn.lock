@@ -2946,6 +2946,7 @@ __metadata:
   resolution: "@dory/shared@workspace:packages/shared"
   dependencies:
     "@types/pg": "npm:^8.20.0"
+    dbgate-query-splitter: "npm:^4.12.0"
     drizzle-orm: "npm:^0.45.2"
     pg: "npm:^8.20.0"
     typescript: "npm:^6.0.2"
@@ -5019,6 +5020,13 @@ __metadata:
     "@parcel/watcher-win32-x64":
       optional: true
   checksum: 10c0/1e1d91f92e94e4640089a7cead243b2b81ca9aa8e1c862a97a25f589e84fbf1ad93abeb503f325c43a8c0e024ae0e74b48ec42c1cd84e8e423a3a87d25ded4f2
+  languageName: node
+  linkType: hard
+
+"@pgsql/types@npm:^18.0.0":
+  version: 18.0.0
+  resolution: "@pgsql/types@npm:18.0.0"
+  checksum: 10c0/81e0739d8f76957f3bda88a68bed58064ad4ba4fdb87b522e46073162d747aaa8fbebee30efd12387241c1a7d65b6eb3df841db013e9504a1f12087824dcfc6c
   languageName: node
   linkType: hard
 
@@ -11752,6 +11760,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"dbgate-query-splitter@npm:^4.12.0":
+  version: 4.12.0
+  resolution: "dbgate-query-splitter@npm:4.12.0"
+  checksum: 10c0/35328e4b185aafe2c8796d60212880b3e32a8a39e5d24a6e9ecd6d57b4ba12a48b811f716e09e18eaae95a46cea439fd10a1ae8ce62bac36113baa3b0cad6212
+  languageName: node
+  linkType: hard
+
 "debounce-fn@npm:^6.0.0":
   version: 6.0.0
   resolution: "debounce-fn@npm:6.0.0"
@@ -16109,6 +16124,15 @@ __metadata:
     proc-log: "npm:^6.0.0"
     semver: "npm:^7.3.7"
   checksum: 10c0/c280dc1fb50e3868a858f29633387565df49635a1fae8fc30f5d6fd5559057352c7bee95516f649b5b24cf5d15343d5bf230031cc26619a6205b05c469caa5eb
+  languageName: node
+  linkType: hard
+
+"libpg-query@npm:^18.1.2":
+  version: 18.1.2
+  resolution: "libpg-query@npm:18.1.2"
+  dependencies:
+    "@pgsql/types": "npm:^18.0.0"
+  checksum: 10c0/ce45f0aaddc1cb91af7dd7586d5294c21ae74644332a72ed5758a20fdaa7862c19f726b1d9db39d8db36d3193d610f11d7b71e730ac965cc136d8ae77a91e1aa
   languageName: node
   linkType: hard
 
@@ -23059,6 +23083,7 @@ __metadata:
     i: "npm:^0.3.7"
     input-otp: "npm:^1.4.2"
     jotai: "npm:^2.19.0"
+    libpg-query: "npm:^18.1.2"
     lodash: "npm:^4.18.1"
     lodash-es: "npm:^4.18.1"
     lucide-react: "npm:^1.7.0"

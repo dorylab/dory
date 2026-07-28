@@ -479,7 +479,7 @@ export async function runReadonlySqlOperation(
     const auditSource = context.auditSource ?? readonlySqlAuditSource(input.source);
     let statements: string[];
     try {
-        statements = getReadonlyMcpStatements(input.sql);
+        statements = await getReadonlyMcpStatements(input.sql, entry.instance.config.type);
     } catch (error) {
         await logDeniedSqlAudit(
             {

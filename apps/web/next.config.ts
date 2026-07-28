@@ -41,7 +41,7 @@ type NextWebpackOptionsShape = {
 const nextConfig = {
     output: 'standalone',
     transpilePackages: ['@dory/actions', '@dory/artifacts', '@dory/database', '@dory/i18n', '@dory/resultset', '@dory/shared', '@dory/ui', '@dory/web-utils'],
-    serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron', 'snowflake-sdk'],
+    serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron', 'libpg-query', 'snowflake-sdk'],
     outputFileTracingRoot: path.join(__dirname, '../../'),
     outputFileTracingIncludes: {
         '/*': [
@@ -55,6 +55,7 @@ const nextConfig = {
             '../../node_modules/async-function/**/*',
             '../../node_modules/async-generator-function/**/*',
             '../../node_modules/generator-function/**/*',
+            '../../node_modules/libpg-query/wasm/**/*',
         ],
     },
     logging: {

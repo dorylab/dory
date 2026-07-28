@@ -149,6 +149,7 @@
         "i": "^0.3.7",
         "input-otp": "^1.4.2",
         "jotai": "^2.19.0",
+        "libpg-query": "^18.1.2",
         "lodash": "^4.18.1",
         "lodash-es": "^4.18.1",
         "lucide-react": "^1.7.0",
