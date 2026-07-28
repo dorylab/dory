@@ -5,6 +5,8 @@ import { getSessionFromRequest } from '@/lib/auth/session';
 import { bootstrapAnonymousOrganization } from '@/lib/auth/anonymous';
 import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { appendAnonymousRecoveryCookieHeader, issueAnonymousRecoveryToken } from '@/lib/auth/anonymous-recovery';
+import { isDesktopAuthRequest, resolveSessionLifetime } from '@/lib/auth/session-lifetime';
+import { isDesktopRuntime } from '@dory/shared/runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
+        const desktopRequest = isDesktopRuntime() || isDesktopAuthRequest(req.headers);
         const auth = await getAuth();
         const organization = await bootstrapAnonymousOrganization({
             auth,
@@ -42,6 +45,13 @@ export async function POST(req: NextRequest) {
             activeOrganizationId: organization.id,
         });
         appendAnonymousRecoveryCookieHeader(response.headers, {
+            ...(desktopRequest
+                ? {
+                      maxAgeSeconds: resolveSessionLifetime({
+                          desktop: true,
+                      }).cookieMaxAgeSeconds,
+                  }
+                : {}),
             requestUrl: req.url,
             token,
         });

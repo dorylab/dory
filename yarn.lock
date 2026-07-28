@@ -2827,6 +2827,7 @@ __metadata:
   dependencies:
     "@aws-sdk/client-s3": "npm:^3.1051.0"
     "@dory/resultset": "npm:0.1.0"
+    "@dory/schema-compare": "npm:0.1.0"
     "@types/node": "npm:^25.5.2"
     typescript: "npm:^6.0.2"
   languageName: unknown
@@ -2844,6 +2845,7 @@ __metadata:
   dependencies:
     "@dory/artifacts": "npm:0.1.0"
     "@dory/resultset": "npm:0.1.0"
+    "@dory/schema-compare": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@electric-sql/pglite": "npm:^0.4.3"
     "@types/node": "npm:^25.5.2"
@@ -2859,6 +2861,7 @@ __metadata:
   resolution: "@dory/drivers@workspace:packages/drivers"
   dependencies:
     "@clickhouse/client": "npm:^1.18.2"
+    "@dory/schema-compare": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@types/better-sqlite3": "npm:^7.6.13"
     "@types/mssql": "npm:^9.1.11"
@@ -2916,6 +2919,15 @@ __metadata:
   dependencies:
     "@dory/shared": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
+    "@types/node": "npm:^25.5.2"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
+"@dory/schema-compare@npm:0.1.0, @dory/schema-compare@workspace:packages/schema-compare":
+  version: 0.0.0-use.local
+  resolution: "@dory/schema-compare@workspace:packages/schema-compare"
+  dependencies:
     "@types/node": "npm:^25.5.2"
     typescript: "npm:^6.0.2"
   languageName: unknown
@@ -22973,6 +22985,7 @@ __metadata:
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
     "@dory/resultset": "npm:0.1.0"
+    "@dory/schema-compare": "npm:0.1.0"
     "@dory/server-core": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@dory/ui": "npm:0.1.0"

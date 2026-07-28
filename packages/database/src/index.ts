@@ -16,6 +16,7 @@ import { PostgresOrganizationAiProvidersRepository } from './postgres/impl/organ
 import { PostgresActionAuditRepository } from './postgres/impl/action-audit';
 import { PostgresWorksRepository } from './postgres/impl/works';
 import { PostgresResultSetsRepository } from './postgres/impl/result-sets';
+import { PostgresComparisonsRepository } from './postgres/impl/comparisons';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -41,6 +42,7 @@ export type PostgresDBService = {
     organizationAiProviders: PostgresOrganizationAiProvidersRepository;
     works: PostgresWorksRepository;
     resultSets: PostgresResultSetsRepository;
+    comparisons: PostgresComparisonsRepository;
 };
 
 /**
@@ -110,6 +112,9 @@ export async function getDBService(): Promise<DBService> {
             const resultSetsRepo = new PostgresResultSetsRepository();
             await resultSetsRepo.init();
 
+            const comparisonsRepo = new PostgresComparisonsRepository(resultSetsRepo);
+            await comparisonsRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
@@ -128,6 +133,7 @@ export async function getDBService(): Promise<DBService> {
                 organizationAiProviders: organizationAiProvidersRepo,
                 works: worksRepo,
                 resultSets: resultSetsRepo,
+                comparisons: comparisonsRepo,
             };
             break;
         }

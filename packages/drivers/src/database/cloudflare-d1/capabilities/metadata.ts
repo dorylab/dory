@@ -1,8 +1,11 @@
 import type { ConnectionMetadataAPI } from '@dory/drivers/types';
 import type { CloudflareD1Datasource } from '../datasource';
 import { getCloudflareD1Databases, getCloudflareD1SchemaGraph, getCloudflareD1TableColumns, getCloudflareD1Tables, getCloudflareD1Views } from '../runtime';
+import { getSqliteFamilySchemaSnapshot } from '../../sqlite/capabilities/schema-snapshot';
 
-export type CloudflareD1MetadataAPI = Required<Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchemaGraph' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>>;
+export type CloudflareD1MetadataAPI = Required<
+    Pick<ConnectionMetadataAPI, 'getDatabases' | 'getSchemaGraph' | 'getSchemaSnapshot' | 'getTableColumns' | 'getTables' | 'getTablesOnly' | 'getViews'>
+>;
 
 export function createCloudflareD1MetadataCapability(datasource: CloudflareD1Datasource): CloudflareD1MetadataAPI {
     return {
@@ -28,6 +31,9 @@ export function createCloudflareD1MetadataCapability(datasource: CloudflareD1Dat
         },
         async getSchemaGraph(options) {
             return getCloudflareD1SchemaGraph(datasource.config, options);
+        },
+        async getSchemaSnapshot(input) {
+            return getSqliteFamilySchemaSnapshot(datasource, datasource.config.type, input);
         },
     };
 }

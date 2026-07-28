@@ -18,6 +18,8 @@
             "@dory/database/*": ["./src/*"],
             "@dory/resultset": ["../resultset/src/index.ts"],
             "@dory/resultset/*": ["../resultset/src/*"],
+            "@dory/schema-compare": ["../schema-compare/src/index.ts"],
+            "@dory/schema-compare/*": ["../schema-compare/src/*"],
             "@dory/shared": ["../shared/src/index.ts"],
             "@dory/shared/*": ["../shared/src/*"]
         }

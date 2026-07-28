@@ -41,6 +41,8 @@
             "@dory/i18n/*": ["../../packages/i18n/src/*"],
             "@dory/resultset": ["../../packages/resultset/src/index.ts"],
             "@dory/resultset/*": ["../../packages/resultset/src/*"],
+            "@dory/schema-compare": ["../../packages/schema-compare/src/index.ts"],
+            "@dory/schema-compare/*": ["../../packages/schema-compare/src/*"],
             "@dory/server-core": ["../../packages/server-core/src/index.ts"],
             "@dory/server-core/*": ["../../packages/server-core/src/*"],
             "@dory/shared": ["../../packages/shared/src/index.ts"],
@@ -60,8 +62,7 @@
         "scripts/build-registry.mts",
         "hooks/use-queryts",
         "scripts/generate-sql-bundle.ts",
-        ".next/dev/types/**/*.ts",
-        "app/(auth)/components/bg.tsx.back"
+        ".next/dev/types/**/*.ts"
     ],
     "exclude": ["node_modules", "dist", "release"]
 }

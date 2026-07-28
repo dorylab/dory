@@ -279,6 +279,8 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
             .map((tool: any) => tool.name)
             .sort(),
         [
+            'dory_analyze_database_changes',
+            'dory_compare_schema',
             'dory_create_work',
             'dory_explore_schema',
             'dory_finish_work',
@@ -298,7 +300,7 @@ test('public Dory MCP descriptions scope work context to query and workspace too
     const write = getTool('dory_write');
     const listConnections = getTool('dory_list_connections');
 
-    assert.match(createWork.description, /query, analysis, SQL, schema exploration, workspace tab, or saved query tools/);
+    assert.match(createWork.description, /query, analysis, SQL, schema exploration, schema comparison, workspace tab, or saved query tools/);
     assert.doesNotMatch(createWork.description, /every later Dory tool call/);
     assert.match(write.description, /connection\.create, connection\.update, and connection\.delete/);
     assert.match(write.description, /do not require workId/);
@@ -1009,6 +1011,36 @@ test('ordinary MCP facade tools require an existing work context', async () => {
     } as unknown as WebActionServices);
 
     await assertRejectsCode(() => getTool('dory_list_connections').execute(ctx, { includeRecent: true }), 'MISSING_WORK_CONTEXT');
+    await assertRejectsCode(
+        () =>
+            getTool('dory_compare_schema').execute(ctx, {
+                current: { connectionId: 'current', database: 'app' },
+                desired: { connectionId: 'desired', database: 'app' },
+            }),
+        'MISSING_WORK_CONTEXT',
+    );
+    await assertRejectsCode(() => getTool('dory_analyze_database_changes').execute(ctx, { runId: 'cmprun_1' }), 'MISSING_WORK_CONTEXT');
+});
+
+test('schema Comparison MCP contracts accept saved and create-and-run paths', () => {
+    const compare = getTool('dory_compare_schema');
+    assert.equal(compare.inputSchema.safeParse({ comparisonId: 'cmp_1', workId: 'work-1' }).success, true);
+    assert.equal(
+        compare.inputSchema.safeParse({
+            name: 'Production vs Staging',
+            source: { connectionId: 'conn-source', database: 'app' },
+            target: { connectionId: 'conn-target', database: 'app' },
+            schemaFilter: ['public'],
+            objectTypes: ['table', 'column', 'index', 'constraint', 'view'],
+            workId: 'work-1',
+        }).success,
+        true,
+    );
+    assert.equal(compare.inputSchema.safeParse({ workId: 'work-1' }).success, false);
+
+    const analyze = getTool('dory_analyze_database_changes');
+    assert.equal(analyze.inputSchema.safeParse({ runId: 'cmprun_1', workId: 'work-1' }).success, true);
+    assert.equal(analyze.inputSchema.safeParse({ comparisonId: 'cmp_1', workId: 'work-1' }).success, false);
 });
 
 test('strict MCP output schemas accept structured error envelopes', () => {

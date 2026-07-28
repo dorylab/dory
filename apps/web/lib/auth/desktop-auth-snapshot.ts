@@ -3,8 +3,7 @@ import path from 'node:path';
 
 import { normalizeRuntime } from '@dory/shared/runtime';
 import type { OrganizationAccess } from '@/lib/server/authz/types';
-
-export const DESKTOP_AUTH_SNAPSHOT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+import { PERMANENT_SESSION_EXPIRES_AT } from './session-lifetime';
 
 const DESKTOP_AUTH_SNAPSHOT_FILE_NAME = 'desktop-auth-snapshot.json';
 const DESKTOP_AUTH_SNAPSHOT_VERSION = 1;
@@ -147,11 +146,8 @@ function parseOrganization(value: unknown): DesktopAuthSnapshotOrganization | nu
     };
 }
 
-function parseAccess(value: unknown, now: number, accessExpiresAt: unknown): OrganizationAccess | null {
+function parseAccess(value: unknown): OrganizationAccess | null {
     if (value === null || value === undefined) return null;
-
-    const expiresAtMs = parseDateMs(accessExpiresAt);
-    if (expiresAtMs === null || expiresAtMs <= now) return null;
 
     const record = asRecord(value);
     if (!record) return null;
@@ -174,7 +170,7 @@ function parseAccess(value: unknown, now: number, accessExpiresAt: unknown): Org
     };
 }
 
-function parseSnapshot(value: unknown, now: number): DesktopAuthSnapshot | null {
+function parseSnapshot(value: unknown): DesktopAuthSnapshot | null {
     const record = asRecord(value);
     if (!record || record.version !== DESKTOP_AUTH_SNAPSHOT_VERSION) return null;
 
@@ -182,12 +178,11 @@ function parseSnapshot(value: unknown, now: number): DesktopAuthSnapshot | null 
     const activeOrganizationId = asNullableString(record.activeOrganizationId);
     const organization = parseOrganization(record.organization);
     const accessUpdatedAtMs = parseDateMs(record.accessUpdatedAt);
-    const accessExpiresAtMs = parseDateMs(record.accessExpiresAt);
-    const access = parseAccess(record.access, now, record.accessExpiresAt);
+    const access = parseAccess(record.access);
     const updatedAtMs = parseDateMs(record.updatedAt);
     const expiresAtMs = parseDateMs(record.expiresAt);
 
-    if (!user || updatedAtMs === null || expiresAtMs === null || expiresAtMs <= now) {
+    if (!user || updatedAtMs === null || expiresAtMs === null) {
         return null;
     }
 
@@ -198,9 +193,9 @@ function parseSnapshot(value: unknown, now: number): DesktopAuthSnapshot | null 
         organization,
         access,
         accessUpdatedAt: accessUpdatedAtMs === null ? null : new Date(accessUpdatedAtMs).toISOString(),
-        accessExpiresAt: accessExpiresAtMs === null ? null : new Date(accessExpiresAtMs).toISOString(),
+        accessExpiresAt: access ? PERMANENT_SESSION_EXPIRES_AT : null,
         updatedAt: new Date(updatedAtMs).toISOString(),
-        expiresAt: new Date(expiresAtMs).toISOString(),
+        expiresAt: PERMANENT_SESSION_EXPIRES_AT,
     };
 }
 
@@ -210,16 +205,13 @@ export function readDesktopAuthSnapshot(options: { env?: RuntimeEnv; now?: numbe
 
     try {
         const raw = fs.readFileSync(snapshotPath, 'utf8');
-        return parseSnapshot(JSON.parse(raw), options.now ?? Date.now());
+        return parseSnapshot(JSON.parse(raw));
     } catch {
         return null;
     }
 }
 
-export function writeDesktopAuthSnapshot(
-    input: DesktopAuthSnapshotInput,
-    options: { env?: RuntimeEnv; now?: number; ttlMs?: number } = {},
-): DesktopAuthSnapshot | null {
+export function writeDesktopAuthSnapshot(input: DesktopAuthSnapshotInput, options: { env?: RuntimeEnv; now?: number } = {}): DesktopAuthSnapshot | null {
     const snapshotPath = getDesktopAuthSnapshotPath(options.env);
     if (!snapshotPath || !input.user.id) return null;
 
@@ -231,9 +223,9 @@ export function writeDesktopAuthSnapshot(
         organization: input.organization,
         access: input.access ?? null,
         accessUpdatedAt: input.access ? new Date(now).toISOString() : null,
-        accessExpiresAt: input.access ? new Date(now + (options.ttlMs ?? DESKTOP_AUTH_SNAPSHOT_TTL_MS)).toISOString() : null,
+        accessExpiresAt: input.access ? PERMANENT_SESSION_EXPIRES_AT : null,
         updatedAt: new Date(now).toISOString(),
-        expiresAt: new Date(now + (options.ttlMs ?? DESKTOP_AUTH_SNAPSHOT_TTL_MS)).toISOString(),
+        expiresAt: PERMANENT_SESSION_EXPIRES_AT,
     };
 
     const dir = path.dirname(snapshotPath);
@@ -273,10 +265,7 @@ export function buildDesktopAuthSnapshotSession(snapshot: DesktopAuthSnapshot): 
     };
 }
 
-export function buildDesktopAuthSnapshotBootstrapState(
-    snapshot: DesktopAuthSnapshot,
-    options: { organizationSlugOrId?: string | null } = {},
-): DesktopAuthSnapshotBootstrapState {
+export function buildDesktopAuthSnapshotBootstrapState(snapshot: DesktopAuthSnapshot, options: { organizationSlugOrId?: string | null } = {}): DesktopAuthSnapshotBootstrapState {
     const requestedOrganization = options.organizationSlugOrId ?? null;
     const snapshotOrganizationMatches =
         !requestedOrganization ||

@@ -16,6 +16,7 @@ import * as localFilesSchema from './local-files';
 import * as organizationAiProvidersSchema from './organization-ai-providers';
 import * as worksSchema from './works';
 import * as resultSetsSchema from './result-sets';
+import * as comparisonsSchema from './comparisons';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -35,6 +36,7 @@ export * from './local-files';
 export * from './organization-ai-providers';
 export * from './works';
 export * from './result-sets';
+export * from './comparisons';
 
 export const schema = {
     ...tabsSchema,
@@ -55,6 +57,7 @@ export const schema = {
     ...organizationAiProvidersSchema,
     ...worksSchema,
     ...resultSetsSchema,
+    ...comparisonsSchema,
 };
 
 export type DBSchema = typeof schema;

@@ -1,153 +1,167 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1774064729618,
-      "tag": "0000_fantastic_thanos",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1774065386733,
-      "tag": "0001_mighty_nomad",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1774112951843,
-      "tag": "0002_yummy_pyro",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1774155701241,
-      "tag": "0003_mute_human_fly",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1774367010423,
-      "tag": "0004_short_quasimodo",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1774538755994,
-      "tag": "0005_good_vector",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1775056342854,
-      "tag": "0006_aberrant_texas_twister",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1775064413388,
-      "tag": "0007_empty_supernaut",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1778517567589,
-      "tag": "0008_wandering_abomination",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1778574691122,
-      "tag": "0009_personal_mcp_tokens",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1778648400000,
-      "tag": "0010_local_files",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1779285907000,
-      "tag": "0011_organization_ai_providers",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1780045857584,
-      "tag": "0012_query_audit_identity_snapshot",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1780045857585,
-      "tag": "0013_action_audit",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1780303200000,
-      "tag": "0014_mcp_authorization_requests",
-      "breakpoints": true
-    },
-    {
-      "idx": 15,
-      "version": "7",
-      "when": 1780476000000,
-      "tag": "0015_connection_tls",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "7",
-      "when": 1781712000000,
-      "tag": "0016_works",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "7",
-      "when": 1782748800000,
-      "tag": "0017_local_ai_bridge",
-      "breakpoints": true
-    },
-    {
-      "idx": 18,
-      "version": "7",
-      "when": 1782986582920,
-      "tag": "0018_round_black_widow",
-      "breakpoints": true
-    },
-    {
-      "idx": 19,
-      "version": "7",
-      "when": 1783075200000,
-      "tag": "0019_resultset_artifacts",
-      "breakpoints": true
-    },
-    {
-      "idx": 20,
-      "version": "7",
-      "when": 1784296092000,
-      "tag": "0020_resultset_schema_updates",
-      "breakpoints": true
-    }
-  ]
+    "version": "7",
+    "dialect": "postgresql",
+    "entries": [
+        {
+            "idx": 0,
+            "version": "7",
+            "when": 1774064729618,
+            "tag": "0000_fantastic_thanos",
+            "breakpoints": true
+        },
+        {
+            "idx": 1,
+            "version": "7",
+            "when": 1774065386733,
+            "tag": "0001_mighty_nomad",
+            "breakpoints": true
+        },
+        {
+            "idx": 2,
+            "version": "7",
+            "when": 1774112951843,
+            "tag": "0002_yummy_pyro",
+            "breakpoints": true
+        },
+        {
+            "idx": 3,
+            "version": "7",
+            "when": 1774155701241,
+            "tag": "0003_mute_human_fly",
+            "breakpoints": true
+        },
+        {
+            "idx": 4,
+            "version": "7",
+            "when": 1774367010423,
+            "tag": "0004_short_quasimodo",
+            "breakpoints": true
+        },
+        {
+            "idx": 5,
+            "version": "7",
+            "when": 1774538755994,
+            "tag": "0005_good_vector",
+            "breakpoints": true
+        },
+        {
+            "idx": 6,
+            "version": "7",
+            "when": 1775056342854,
+            "tag": "0006_aberrant_texas_twister",
+            "breakpoints": true
+        },
+        {
+            "idx": 7,
+            "version": "7",
+            "when": 1775064413388,
+            "tag": "0007_empty_supernaut",
+            "breakpoints": true
+        },
+        {
+            "idx": 8,
+            "version": "7",
+            "when": 1778517567589,
+            "tag": "0008_wandering_abomination",
+            "breakpoints": true
+        },
+        {
+            "idx": 9,
+            "version": "7",
+            "when": 1778574691122,
+            "tag": "0009_personal_mcp_tokens",
+            "breakpoints": true
+        },
+        {
+            "idx": 10,
+            "version": "7",
+            "when": 1778648400000,
+            "tag": "0010_local_files",
+            "breakpoints": true
+        },
+        {
+            "idx": 11,
+            "version": "7",
+            "when": 1779285907000,
+            "tag": "0011_organization_ai_providers",
+            "breakpoints": true
+        },
+        {
+            "idx": 12,
+            "version": "7",
+            "when": 1780045857584,
+            "tag": "0012_query_audit_identity_snapshot",
+            "breakpoints": true
+        },
+        {
+            "idx": 13,
+            "version": "7",
+            "when": 1780045857585,
+            "tag": "0013_action_audit",
+            "breakpoints": true
+        },
+        {
+            "idx": 14,
+            "version": "7",
+            "when": 1780303200000,
+            "tag": "0014_mcp_authorization_requests",
+            "breakpoints": true
+        },
+        {
+            "idx": 15,
+            "version": "7",
+            "when": 1780476000000,
+            "tag": "0015_connection_tls",
+            "breakpoints": true
+        },
+        {
+            "idx": 16,
+            "version": "7",
+            "when": 1781712000000,
+            "tag": "0016_works",
+            "breakpoints": true
+        },
+        {
+            "idx": 17,
+            "version": "7",
+            "when": 1782748800000,
+            "tag": "0017_local_ai_bridge",
+            "breakpoints": true
+        },
+        {
+            "idx": 18,
+            "version": "7",
+            "when": 1782986582920,
+            "tag": "0018_round_black_widow",
+            "breakpoints": true
+        },
+        {
+            "idx": 19,
+            "version": "7",
+            "when": 1783075200000,
+            "tag": "0019_resultset_artifacts",
+            "breakpoints": true
+        },
+        {
+            "idx": 20,
+            "version": "7",
+            "when": 1784296092000,
+            "tag": "0020_resultset_schema_updates",
+            "breakpoints": true
+        },
+        {
+            "idx": 21,
+            "version": "7",
+            "when": 1784780119152,
+            "tag": "0021_skinny_squirrel_girl",
+            "breakpoints": true
+        },
+        {
+            "idx": 22,
+            "version": "7",
+            "when": 1784796637312,
+            "tag": "0022_first_class_comparisons",
+            "breakpoints": true
+        }
+    ]
 }

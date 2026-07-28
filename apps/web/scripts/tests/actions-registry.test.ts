@@ -381,12 +381,9 @@ test('destructive actions require write scope and confirmation', async () => {
 
     await assert.rejects(() => executeAction(registry, context(['read']), 'connection.delete', { id: 'conn' }), /Missing action scope "connections:write"/);
     await assert.rejects(() => executeAction(registry, context(['write']), 'connection.delete', { id: 'conn' }), /requires confirmation/);
-    assert.deepEqual(
-        (await executeAction(registry, context(['write']), 'connection.delete', { id: 'conn' }, { confirmationToken: 'confirm' })).data,
-        {
-            ok: true,
-        },
-    );
+    assert.deepEqual((await executeAction(registry, context(['write']), 'connection.delete', { id: 'conn' }, { confirmationToken: 'confirm' })).data, {
+        ok: true,
+    });
 });
 
 test('write actions must explicitly declare confirmation policy', async () => {
@@ -496,6 +493,8 @@ test('MCP public catalog exposes only high-level facade tools', () => {
         .sort();
 
     assert.deepEqual(publicTools, [
+        'dory_analyze_database_changes',
+        'dory_compare_schema',
         'dory_create_work',
         'dory_explore_schema',
         'dory_finish_work',

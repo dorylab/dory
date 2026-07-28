@@ -16,6 +16,7 @@ import type {
 import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import { normalizePostgresTableKind } from '../runtime';
 import type { PostgresDatasource } from '../datasource';
+import { getPostgresSchemaSnapshot } from './schema-snapshot';
 
 export type PostgresMetadataAPI = ConnectionMetadataAPI & {
     getSchemas: (database: string) => Promise<{ label: string; value: string }[]>;
@@ -30,6 +31,7 @@ export type PostgresMetadataAPI = ConnectionMetadataAPI & {
     getDatabaseSummary: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail: (database: string) => Promise<DatabaseObjectRow[]>;
     getSchemaGraph: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
+    getSchemaSnapshot: NonNullable<ConnectionMetadataAPI['getSchemaSnapshot']>;
 };
 
 type ObjectRow = {
@@ -1164,5 +1166,6 @@ export function createPostgresMetadataCapability(datasource: PostgresDatasource)
         getDatabaseSummary: options => getDatabaseSummary(datasource, options),
         getDatabaseTablesDetail: database => getDatabaseTablesDetail(datasource, database),
         getSchemaGraph: options => getSchemaGraph(datasource, options),
+        getSchemaSnapshot: input => getPostgresSchemaSnapshot(datasource, datasource.config.type, input),
     };
 }

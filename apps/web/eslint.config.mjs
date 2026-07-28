@@ -22,6 +22,17 @@ const eslintConfig = defineConfig([
             'react-hooks/refs': 'off',
             'react-hooks/set-state-in-effect': 'off',
             'react-hooks/static-components': 'off',
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: 'lodash-es',
+                            message: 'Import from a lodash-es subpath to keep the TypeScript declaration graph small.',
+                        },
+                    ],
+                },
+            ],
             'unused-imports/no-unused-imports': 1,
             'unused-imports/no-unused-vars': [
                 1,

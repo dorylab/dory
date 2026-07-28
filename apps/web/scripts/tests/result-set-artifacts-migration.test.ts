@@ -45,26 +45,44 @@ test('keeps the PostgreSQL and PGlite ResultSet migrations in sync', async () =>
         const pglite = await readMigration(migrationRoots.PGlite, name);
         assert.equal(postgres, pglite, `${name} differs between PostgreSQL and PGlite`);
     }
+    assert.equal(
+        await readMigration(migrationRoots.PostgreSQL, '0021_romantic_paibok.sql'),
+        await readMigration(migrationRoots.PGlite, '0021_skinny_squirrel_girl.sql'),
+        '0021 Schema Compare migration differs between PostgreSQL and PGlite',
+    );
+    const firstClassComparisons = await readMigration(migrationRoots.PostgreSQL, '0022_first_class_comparisons.sql');
+    const pgliteFirstClassComparisons = await readMigration(migrationRoots.PGlite, '0022_first_class_comparisons.sql');
+    assert.equal(firstClassComparisons, pgliteFirstClassComparisons, '0022_first_class_comparisons.sql differs between PostgreSQL and PGlite');
 });
 
-test('keeps the compiled PGlite bundle on the released 0019 and the new 0020', async () => {
+test('keeps the compiled PGlite bundle on the released 0019 through first-class Comparisons', async () => {
     const bundleUrl = new URL('../../../../packages/database/src/pglite/migrations.json', import.meta.url);
     const bundle = JSON.parse(await readFile(bundleUrl, 'utf8')) as Array<{
         folderMillis: number;
         hash: string;
         sql: string[];
     }>;
-    const releasedMigration = bundle.at(-2);
-    const schemaUpdateMigration = bundle.at(-1);
+    const releasedMigration = bundle.at(-4);
+    const schemaUpdateMigration = bundle.at(-3);
+    const comparisonMigration = bundle.at(-2);
+    const firstClassComparisonMigration = bundle.at(-1);
 
     assert.ok(releasedMigration);
     assert.ok(schemaUpdateMigration);
+    assert.ok(comparisonMigration);
+    assert.ok(firstClassComparisonMigration);
     assert.equal(releasedMigration.folderMillis, 1783075200000);
     assert.equal(releasedMigration.hash, releasedMigrationHash);
     assert.equal(schemaUpdateMigration.folderMillis, 1784296092000);
+    assert.equal(comparisonMigration.folderMillis, 1784780119152);
+    assert.equal(firstClassComparisonMigration.folderMillis, 1784796637312);
 
     const schemaUpdateSql = await readMigration(migrationRoots.PGlite, '0020_resultset_schema_updates.sql');
     assert.equal(schemaUpdateMigration.hash, createHash('sha256').update(schemaUpdateSql).digest('hex'));
+    const comparisonSql = await readMigration(migrationRoots.PGlite, '0021_skinny_squirrel_girl.sql');
+    assert.equal(comparisonMigration.hash, createHash('sha256').update(comparisonSql).digest('hex'));
+    const firstClassComparisonSql = await readMigration(migrationRoots.PGlite, '0022_first_class_comparisons.sql');
+    assert.equal(firstClassComparisonMigration.hash, createHash('sha256').update(firstClassComparisonSql).digest('hex'));
 });
 
 for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
@@ -76,6 +94,8 @@ for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
 
             const releasedMigration = await readMigration(migrationRoot, '0019_resultset_artifacts.sql');
             const schemaUpdateMigration = await readMigration(migrationRoot, '0020_resultset_schema_updates.sql');
+            const comparisonMigration = await readMigration(migrationRoot, dialect === 'PostgreSQL' ? '0021_romantic_paibok.sql' : '0021_skinny_squirrel_girl.sql');
+            const firstClassComparisonMigration = await readMigration(migrationRoot, '0022_first_class_comparisons.sql');
 
             assert.equal(createHash('sha256').update(releasedMigration).digest('hex'), releasedMigrationHash);
             await executeMigration(client, releasedMigration);
@@ -129,10 +149,63 @@ for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
             assert.equal(resultSetColumns.get('storage_limit_applied'), 'boolean');
             assert.equal(await tableExists(client, 'result_set_exports'), true);
 
-            const existingResultSet = await client.query<{ byte_size: string; storage_limit_applied: boolean }>(
-                `SELECT byte_size::text AS byte_size, storage_limit_applied FROM result_sets WHERE id = 'rs_existing'`,
-            );
-            assert.deepEqual(existingResultSet.rows, [{ byte_size: '2147483647', storage_limit_applied: false }]);
+            await executeMigration(client, comparisonMigration);
+            assert.equal(await tableExists(client, 'comparison_jobs'), true);
+            const comparisonColumns = await getColumnTypes(client, 'comparison_jobs');
+            assert.equal(comparisonColumns.get('current_endpoint'), 'jsonb');
+            assert.equal(comparisonColumns.get('desired_endpoint'), 'jsonb');
+            assert.equal(comparisonColumns.get('snapshot_artifact_ref'), 'jsonb');
+            const resultSetColumnsAfterComparison = await getColumnTypes(client, 'result_sets');
+            assert.equal(resultSetColumnsAfterComparison.get('comparison_id'), 'text');
+
+            await client.exec(`
+                INSERT INTO "comparison_jobs" (
+                    "id",
+                    "organization_id",
+                    "created_by_user_id",
+                    "status",
+                    "current_endpoint",
+                    "desired_endpoint",
+                    "dialect_family",
+                    "summary",
+                    "result_set_id",
+                    "created_at",
+                    "updated_at",
+                    "completed_at"
+                ) VALUES (
+                    'job_obsolete',
+                    'org_existing',
+                    'user_existing',
+                    'success',
+                    '{"connectionId":"conn_source","identityId":null,"database":"source","schemas":["public"]}'::jsonb,
+                    '{"connectionId":"conn_target","identityId":null,"database":"target","schemas":["public"]}'::jsonb,
+                    'postgres',
+                    '{"totalChanges":1,"breakingChanges":0,"added":1,"removed":0,"modified":0,"renamed":0,"highRisk":0,"mediumRisk":0,"lowRisk":1,"unknownRisk":0,"readiness":"compatible"}'::jsonb,
+                    'rs_existing',
+                    '2026-07-23T00:00:00.000Z',
+                    '2026-07-23T00:00:01.000Z',
+                    '2026-07-23T00:00:01.000Z'
+                );
+                UPDATE "result_sets"
+                SET "comparison_id" = 'job_obsolete',
+                    "expires_at" = now()
+                WHERE "id" = 'rs_existing';
+            `);
+
+            await executeMigration(client, firstClassComparisonMigration);
+            assert.equal(await tableExists(client, 'comparison_jobs'), false);
+            assert.equal(await tableExists(client, 'comparisons'), true);
+            assert.equal(await tableExists(client, 'comparison_runs'), true);
+            const comparisons = await client.query<{ id: string }>(`SELECT id FROM comparisons`);
+            assert.deepEqual(comparisons.rows, []);
+            const runs = await client.query<{ id: string }>(`SELECT id FROM comparison_runs`);
+            assert.deepEqual(runs.rows, []);
+            const runColumns = await getColumnTypes(client, 'comparison_runs');
+            assert.equal(runColumns.get('comparison_id'), 'text');
+            assert.equal(runColumns.get('configuration_snapshot'), 'jsonb');
+            assert.equal(runColumns.get('artifact_ref'), 'jsonb');
+            const discardedProjection = await client.query<{ id: string }>(`SELECT id FROM result_sets WHERE id = 'rs_existing'`);
+            assert.deepEqual(discardedProjection.rows, []);
 
             const indexes = await client.query<{ indexname: string }>(`
                 SELECT indexname

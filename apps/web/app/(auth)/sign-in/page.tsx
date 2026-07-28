@@ -6,7 +6,7 @@ import { SignInForm } from '@/app/(auth)/components/SignInForm';
 import { getAnonymousRecoveryCookieName, resolveRecoverableAnonymousUser } from '@/lib/auth/anonymous-recovery';
 import { shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { readDesktopAuthSnapshot } from '@/lib/auth/desktop-auth-snapshot';
-import { resolveDesktopSignInRedirect } from '@/lib/auth/desktop-sign-in';
+import { resolveDesktopSignInState } from '@/lib/auth/desktop-sign-in';
 import { getSessionFromRequest } from '@/lib/auth/session';
 import { getRuntimeForServer } from '@dory/shared/runtime';
 // import { BubbleBackground } from '@/components/animate-ui/components/backgrounds/bubble';
@@ -44,12 +44,15 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
     const runtime = getRuntimeForServer() ?? 'web';
 
     if (runtime === 'desktop') {
-        const redirectTo = resolveDesktopSignInRedirect(readDesktopAuthSnapshot(), callbackURL);
-        if (redirectTo) {
-            redirect(redirectTo);
+        const recoveryToken = (await cookies()).get(getAnonymousRecoveryCookieName())?.value;
+        const hasRecoverableAnonymousSession = shouldProxyAuthRequest() ? Boolean(recoveryToken) : Boolean(await resolveRecoverableAnonymousUser(recoveryToken));
+        const signInState = resolveDesktopSignInState(readDesktopAuthSnapshot(), callbackURL, hasRecoverableAnonymousSession);
+
+        if (signInState.redirectTo) {
+            redirect(signInState.redirectTo);
         }
 
-        return <SignInShell runtime={runtime} resumeAnonymousSession={false} />;
+        return <SignInShell runtime={runtime} resumeAnonymousSession={signInState.resumeAnonymousSession} />;
     }
 
     const cookieStore = await cookies();

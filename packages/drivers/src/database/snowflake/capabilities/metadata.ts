@@ -2,8 +2,10 @@ import type { ConnectionMetadataAPI, ConnectionSchemaMap, DatabaseObjectRow, Sch
 import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import type { SnowflakeDatasource } from '../datasource';
 import { parseSnowflakeTableReference, quoteSnowflakeIdentifier } from '../runtime';
+import { getSnowflakeSchemaSnapshot } from './schema-snapshot';
 
 export type SnowflakeMetadataAPI = ConnectionMetadataAPI & {
+    getSchemaSnapshot: NonNullable<ConnectionMetadataAPI['getSchemaSnapshot']>;
     getSchemas: (database: string) => Promise<{ label: string; value: string }[]>;
     getTableColumns: (database: string, table: string) => Promise<TableColumnInfo[]>;
     getTablesOnly: (database: string) => Promise<DatabaseObjectRow[]>;
@@ -362,5 +364,6 @@ export function createSnowflakeMetadataCapability(datasource: SnowflakeDatasourc
         getViews: database => getObjects(datasource, database, ['VIEW']),
         getTableColumns: (database, table) => getTableColumns(datasource, database, table),
         getSchemaGraph: options => getSchemaGraph(datasource, options),
+        getSchemaSnapshot: input => getSnowflakeSchemaSnapshot(datasource, input),
     };
 }

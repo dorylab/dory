@@ -1,0 +1,20 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "tsBuildInfoFile": ".next/cache/typecheck/support.tsbuildinfo"
+    },
+    "include": [
+        "next-env.d.ts",
+        "global.d.ts",
+        "lib/**/*.ts",
+        "lib/**/*.tsx",
+        "shared/**/*.ts",
+        "shared/**/*.tsx",
+        "scripts/**/*.ts",
+        "scripts/**/*.mts",
+        "next.config.ts",
+        "drizzle.config.ts",
+        "drizzle.pglite.config.ts"
+    ],
+    "exclude": ["node_modules", ".next/dev", "dist", "dist-scripts", "release", "localdata"]
+}

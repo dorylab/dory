@@ -13,6 +13,7 @@ import {
     writeDesktopAuthSnapshot,
     type DesktopAuthSnapshotInput,
 } from '../../lib/auth/desktop-auth-snapshot';
+import { PERMANENT_SESSION_EXPIRES_AT } from '../../lib/auth/session-lifetime';
 import type { OrganizationAccess } from '../../lib/server/authz/types';
 
 function createTempUserDataPath() {
@@ -98,20 +99,31 @@ test('desktop auth snapshot ignores corrupt json', () => {
     assert.equal(readDesktopAuthSnapshot({ env, now: 1_000 }), null);
 });
 
-test('desktop auth snapshot ignores expired snapshot', () => {
+test('desktop auth snapshot keeps legacy data after its recorded expiry', () => {
     const userDataPath = createTempUserDataPath();
     const env = desktopEnv(userDataPath);
+    const snapshotPath = getDesktopAuthSnapshotPath(env);
 
-    writeDesktopAuthSnapshot(snapshotInput(), { env, now: 1_000, ttlMs: 500 });
+    writeDesktopAuthSnapshot(snapshotInput(), { env, now: 1_000 });
+    assert.ok(snapshotPath);
 
-    assert.equal(readDesktopAuthSnapshot({ env, now: 1_501 }), null);
+    const legacySnapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+    legacySnapshot.expiresAt = '2020-01-01T00:00:00.000Z';
+    legacySnapshot.accessExpiresAt = '2020-01-01T00:00:00.000Z';
+    fs.writeFileSync(snapshotPath, JSON.stringify(legacySnapshot));
+
+    const read = readDesktopAuthSnapshot({ env, now: Date.parse('2030-01-01T00:00:00.000Z') });
+    assert.equal(read?.user.id, 'user_1');
+    assert.equal(read?.access?.userId, 'user_1');
+    assert.equal(read?.expiresAt, PERMANENT_SESSION_EXPIRES_AT);
+    assert.equal(read?.accessExpiresAt, PERMANENT_SESSION_EXPIRES_AT);
 });
 
 test('desktop auth snapshot writes, reads, and builds bootstrap session', () => {
     const userDataPath = createTempUserDataPath();
     const env = desktopEnv(userDataPath);
 
-    const written = writeDesktopAuthSnapshot(snapshotInput(), { env, now: 1_000, ttlMs: 10_000 });
+    const written = writeDesktopAuthSnapshot(snapshotInput(), { env, now: 1_000 });
     const read = readDesktopAuthSnapshot({ env, now: 2_000 });
 
     assert.deepEqual(read, written);
@@ -120,7 +132,7 @@ test('desktop auth snapshot writes, reads, and builds bootstrap session', () => 
     assert.equal(read?.access?.userId, 'user_1');
     assert.equal(read?.access?.permissions.connection.read, true);
     assert.equal(read?.accessUpdatedAt, '1970-01-01T00:00:01.000Z');
-    assert.equal(read?.accessExpiresAt, '1970-01-01T00:00:11.000Z');
+    assert.equal(read?.accessExpiresAt, PERMANENT_SESSION_EXPIRES_AT);
 
     const session = buildDesktopAuthSnapshotSession(read!);
     assert.equal(session.user.id, 'user_1');
@@ -129,10 +141,22 @@ test('desktop auth snapshot writes, reads, and builds bootstrap session', () => 
     assert.equal(session.session.expiresAt.toISOString(), read?.expiresAt);
 });
 
+test('desktop auth snapshot and cached access do not expire with time', () => {
+    const userDataPath = createTempUserDataPath();
+    const env = desktopEnv(userDataPath);
+    const written = writeDesktopAuthSnapshot(snapshotInput(), { env, now: 1_000 });
+    const farFuture = Date.parse('2500-01-01T00:00:00.000Z');
+
+    assert.equal(written?.expiresAt, PERMANENT_SESSION_EXPIRES_AT);
+    assert.equal(written?.accessExpiresAt, PERMANENT_SESSION_EXPIRES_AT);
+    assert.equal(readDesktopAuthSnapshot({ env, now: farFuture })?.user.id, 'user_1');
+    assert.equal(readDesktopAuthSnapshot({ env, now: farFuture })?.access?.userId, 'user_1');
+});
+
 test('desktop auth snapshot keeps legacy snapshots without access usable for bootstrap', () => {
     const userDataPath = createTempUserDataPath();
     const env = desktopEnv(userDataPath);
-    const snapshot = writeDesktopAuthSnapshot(snapshotInput({ access: null }), { env, now: 1_000, ttlMs: 10_000 });
+    const snapshot = writeDesktopAuthSnapshot(snapshotInput({ access: null }), { env, now: 1_000 });
     const read = readDesktopAuthSnapshot({ env, now: 2_000 });
 
     assert.deepEqual(read, snapshot);
@@ -146,7 +170,7 @@ test('desktop auth snapshot keeps legacy snapshots without access usable for boo
 test('desktop auth snapshot bootstrap state reuses matching organization', () => {
     const userDataPath = createTempUserDataPath();
     const env = desktopEnv(userDataPath);
-    const snapshot = writeDesktopAuthSnapshot(snapshotInput(), { env, now: 1_000, ttlMs: 10_000 });
+    const snapshot = writeDesktopAuthSnapshot(snapshotInput(), { env, now: 1_000 });
 
     assert.ok(snapshot);
 

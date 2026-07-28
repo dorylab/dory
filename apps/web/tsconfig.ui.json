@@ -1,0 +1,19 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "tsBuildInfoFile": ".next/cache/typecheck/ui.tsbuildinfo"
+    },
+    "include": [
+        "next-env.d.ts",
+        "global.d.ts",
+        "components/**/*.ts",
+        "components/**/*.tsx",
+        "hooks/**/*.ts",
+        "hooks/**/*.tsx",
+        "registry/**/*.ts",
+        "registry/**/*.tsx",
+        "__registry__/**/*.ts",
+        "__registry__/**/*.tsx"
+    ],
+    "exclude": ["node_modules", ".next/dev", "dist", "dist-scripts", "release", "localdata"]
+}

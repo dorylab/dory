@@ -1,3 +1,5 @@
+import type { SchemaSnapshot, SchemaSnapshotInput } from '@dory/schema-compare';
+
 import { NotInitializedError, UnsupportedDriverCapabilityError } from './errors';
 import type { ConnectionParameterDialect } from '../registry/types';
 import type {
@@ -27,6 +29,7 @@ import type {
 } from '../../types';
 import type { DriverQueryParams } from './params/types';
 import { SshTunnel, createSshTunnel, type SshOptions } from '../ssh/ssh-tunnel';
+import { collectGenericSchemaSnapshot } from '../schema-snapshot';
 
 export abstract class BaseDriver {
     protected _initialized = false;
@@ -133,6 +136,17 @@ export abstract class BaseDriver {
 
     async getSchemaGraph(options: SchemaGraphOptions): Promise<SchemaGraphResult> {
         return this.requireMetadataCapability('getSchemaGraph')(options);
+    }
+
+    async getSchemaSnapshot(input: SchemaSnapshotInput): Promise<SchemaSnapshot> {
+        const metadata = this.capabilities.metadata;
+        if (!metadata) {
+            throw new UnsupportedDriverCapabilityError('getSchemaSnapshot', this.config.type);
+        }
+        if (metadata.getSchemaSnapshot) {
+            return metadata.getSchemaSnapshot(input);
+        }
+        return collectGenericSchemaSnapshot(this.config, metadata, input);
     }
 
     async getTableProfile(database: string, table: string): Promise<DriverTableProfile> {

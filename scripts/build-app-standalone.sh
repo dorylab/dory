@@ -8,6 +8,10 @@ ELECTRON_DIR="${ROOT_DIR}/apps/electron"
 
 cd "${ROOT_DIR}"
 
+if [[ "${NODE_OPTIONS:-}" != *"--max-old-space-size="* && "${NODE_OPTIONS:-}" != *"--max_old_space_size="* ]]; then
+  export NODE_OPTIONS="${NODE_OPTIONS:+${NODE_OPTIONS} }--max-old-space-size=4096"
+fi
+
 echo "Running build..."
 yarn run build
 

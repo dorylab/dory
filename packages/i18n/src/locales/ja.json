@@ -3379,6 +3379,7 @@
         "WorkspaceDataSourcesCount": "{count} 件のデータソース",
         "WorkspaceDataSourcesCountPlural": "{count} 件のデータソース",
         "AgentRuns": "Agent Runs",
+        "SchemaCompare": "Comparisons",
         "SQLConsole": "SQL コンソール",
         "Explorer": "エクスプローラー",
         "Schema": "スキーマ",
@@ -3870,6 +3871,210 @@
                 "LoadOrganizationFailed": "組織情報の読み込みに失敗しました。",
                 "UnresolvedFromUrl": "この URL から現在の組織を解決できませんでした。"
             }
+        }
+    },
+    "SchemaCompare": {
+        "Eyebrow": "データベースの進化",
+        "Title": "Comparisons",
+        "Description": "データベース構造の変更を理解し、安全にレビューします。Dory は Current → Desired の決定的な差分と根拠を提供します。",
+        "Source": "Source",
+        "Target": "Target",
+        "Current": "Source",
+        "Desired": "Target",
+        "Back": "比較一覧",
+        "Delete": "削除",
+        "Cancel": "キャンセル",
+        "Loading": "比較を読み込み中…",
+        "List": {
+            "Eyebrow": "データベースの進化",
+            "Title": "データベース Comparisons",
+            "Description": "継続的に確認したいデータベース間のスキーマ変更を管理します。",
+            "New": "新しい Comparison",
+            "LastChecked": "最終チェック {date}",
+            "NeverChecked": "未チェック",
+            "Risks": "{count} 件のリスク",
+            "Deleted": "Comparison を削除しました。",
+            "Empty": "保存された Comparison はありません。",
+            "EmptyDescription": "永続的な Source → Target 比較を作成すると、Dory がすべての Run を保存します。"
+        },
+        "Create": {
+            "Eyebrow": "新しい Comparison",
+            "Title": "Comparison を作成",
+            "Description": "データベース関係を保存し、最初の決定的なスキーマチェックを実行します。",
+            "Name": "名前",
+            "NamePlaceholder": "Production vs Staging",
+            "EndpointDescription": "接続、ID、データベース、任意のスキーマ範囲を選択します。",
+            "Connection": "接続",
+            "SelectConnection": "接続を選択",
+            "Identity": "ID",
+            "DefaultIdentity": "デフォルト ID",
+            "Database": "データベース",
+            "DatabasePlaceholder": "データベース名",
+            "Schemas": "スキーマ範囲",
+            "SchemasPlaceholder": "public, billing",
+            "SchemasHelp": "カンマ区切り。空欄の場合はシステム以外の全スキーマを比較します。",
+            "CompareObjects": "比較対象",
+            "CompareObjectsHelp": "統計情報は常にリスクの根拠として収集されます。",
+            "Compare": "スキーマを比較",
+            "Create": "作成",
+            "SaveAndRun": "変更を保存"
+        },
+        "Status": {
+            "NotRun": "未実行",
+            "Running": "実行中",
+            "Failed": "失敗",
+            "NoChanges": "変更なし",
+            "NoChangesIncomplete": "変更なし・カバレッジ不完全",
+            "NoChangesIncompleteDescription": "変更は検出されませんでしたが、カタログのカバレッジが不完全なため準備状況は不明です。",
+            "ChangeCount": "{count} 件の変更"
+        },
+        "Recent": {
+            "Title": "最近の比較",
+            "Description": "各実行は変更されない時点スナップショットです。",
+            "Direction": "Current → Desired",
+            "Family": "方言ファミリー",
+            "Changes": "変更",
+            "Readiness": "準備状況",
+            "Created": "取得日時",
+            "Empty": "スキーマ比較はまだありません。"
+        },
+        "Detail": {
+            "Coverage": "カバレッジ",
+            "CompareAgain": "再比較",
+            "RunNow": "今すぐ実行",
+            "LastChecked": "最終チェック {date}",
+            "Configuration": "設定",
+            "ConfigurationVersion": "設定バージョン {version}",
+            "AllSchemas": "すべてのスキーマ",
+            "Highlights": "重要な変更",
+            "ViewDiff": "完全な差分を表示",
+            "Failed": "比較に失敗しました",
+            "Capturing": "スキーマスナップショットを取得中…"
+        },
+        "Summary": {
+            "Changes": "変更",
+            "Compatible": "互換",
+            "Warnings": "警告",
+            "Breaking": "破壊的変更",
+            "High": "高リスク",
+            "Medium": "中リスク",
+            "Low": "低リスク",
+            "Readiness": "デプロイ準備状況"
+        },
+        "Changes": {
+            "Cards": "カード",
+            "Table": "テーブル",
+            "Chart": "チャート",
+            "Search": "オブジェクト、理由、値を検索…",
+            "Export": "エクスポート",
+            "ObjectPath": "オブジェクト",
+            "Change": "変更",
+            "Risk": "リスク",
+            "Reason": "理由",
+            "EstimatedRows": "推定行数",
+            "CumulativeScans": "累積インデックススキャン",
+            "Count": "{count} 件の変更"
+        },
+        "Attributes": {
+            "DataType": "データ型",
+            "Nullable": "NULL 許可",
+            "Default": "デフォルト",
+            "Engine": "エンジン",
+            "SortingKey": "ソートキー",
+            "PrimaryKey": "主キー",
+            "PartitionKey": "パーティションキー",
+            "SamplingKey": "サンプリングキー",
+            "Ttl": "TTL",
+            "ClusteringKey": "クラスタリングキー",
+            "Identity": "Identity",
+            "IdentitySeed": "Identity シード",
+            "IdentityIncrement": "Identity 増分",
+            "ComputedExpression": "計算式",
+            "ComputedPersisted": "永続化された計算列",
+            "Codec": "コーデック",
+            "DefaultKind": "デフォルト種別"
+        },
+        "Coverage": {
+            "Kind": {
+                "Tables": "テーブル",
+                "Columns": "カラム",
+                "Indexes": "インデックス",
+                "Constraints": "制約",
+                "Views": "ビュー",
+                "Statistics": "統計"
+            },
+            "Status": {
+                "Complete": "完全",
+                "Partial": "一部",
+                "Unavailable": "利用不可",
+                "NotApplicable": "該当なし"
+            }
+        },
+        "Risk": {
+            "all": "すべてのリスク",
+            "high": "高",
+            "medium": "中",
+            "low": "低",
+            "unknown": "不明"
+        },
+        "Object": {
+            "all": "すべてのオブジェクト",
+            "table": "テーブル",
+            "column": "カラム",
+            "index": "インデックス",
+            "constraint": "制約",
+            "view": "ビュー",
+            "materialized_view": "マテリアライズドビュー"
+        },
+        "AI": {
+            "Title": "AI Review",
+            "Description": "決定的な差分の根拠を説明します。AI はリスクや準備状況を変更できません。",
+            "Retry": "再試行",
+            "Generate": "レビューを生成",
+            "Generating": "決定的な根拠をレビュー中…",
+            "NotNeeded": "変更が検出されなかったため、AI Review は不要です。",
+            "Risks": "リスクの説明",
+            "Recommendations": "推奨事項",
+            "Limitations": "制限",
+            "Failed": "AI Review の応答形式が正しくありません。再試行してください。",
+            "Unavailable": "AI Review を利用できません。",
+            "DiffUnaffected": "決定的な比較と ResultSet は引き続き利用できます。"
+        },
+        "Edit": {
+            "Action": "編集",
+            "Eyebrow": "Comparison 設定",
+            "Title": "Comparison を編集",
+            "Description": "Source、Target、スキーマ、対象を変更すると新しい不変 Run が作成されます。名前変更だけでは実行されません。",
+            "BlockedTitle": "Comparison Run が実行中です",
+            "BlockedDescription": "現在の Run が完了してから編集してください。",
+            "BackToComparison": "Comparison に戻る"
+        },
+        "Runs": {
+            "Title": "Comparison Runs",
+            "Description": "履歴内の commit のような、不変の時点スキーマチェックです。",
+            "ConfigurationVersion": "設定 v{version}",
+            "Empty": "Run はまだありません。"
+        },
+        "Run": {
+            "Title": "Comparison Run",
+            "Context": "Run コンテキスト",
+            "RunId": "Run ID",
+            "CopyRunId": "Run ID をコピー",
+            "SnapshotConfiguration": "設定スナップショット",
+            "ImmutableDescription": "この設定と決定的な結果は履歴上の事実として保存されます。",
+            "Changes": "変更",
+            "ChangesDescription": "データベースオブジェクト種別ごとに before / after を表示します。"
+        },
+        "DeleteDialog": {
+            "Title": "比較を削除しますか？",
+            "Description": "Comparison、すべての Run、スナップショット、ResultSet、エクスポートを完全に削除します。接続先データベースは変更しません。"
+        },
+        "Errors": {
+            "CreateFailed": "スキーマ比較を作成できませんでした。",
+            "RunFailed": "スキーマ比較を実行できませんでした。",
+            "ConnectionChanged": "選択した接続は利用できません（削除または再作成された可能性があります）。リストを更新したため、Current と Desired をもう一度選択してください。",
+            "DeleteFailed": "比較を削除できませんでした。",
+            "ExportFailed": "スキーマ差分をエクスポートできませんでした。"
         }
     },
     "Routes": {

@@ -204,6 +204,11 @@ export function createHeadlessActionContext(input: {
             db: input.db,
             requestOrigin: input.requestOrigin ?? input.auth.requestOrigin ?? null,
             workspaceOrigin: input.workspaceOrigin ?? input.auth.workspaceOrigin ?? null,
+            defer: task => {
+                void Promise.resolve()
+                    .then(task)
+                    .catch(() => undefined);
+            },
         },
     };
 }
@@ -222,10 +227,7 @@ export async function createHeadlessUserActionContext(input: {
         access,
         actor: {
             type: input.actorType ?? 'user',
-            scopes: [
-                'read',
-                'write',
-            ],
+            scopes: ['read', 'write'],
             id: input.userId,
         },
         runtime: 'headless',
@@ -236,6 +238,11 @@ export async function createHeadlessUserActionContext(input: {
         services: {
             db: input.db,
             requestOrigin: input.requestOrigin ?? null,
+            defer: task => {
+                void Promise.resolve()
+                    .then(task)
+                    .catch(() => undefined);
+            },
         },
     };
 }

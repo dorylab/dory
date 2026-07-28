@@ -2,6 +2,7 @@ import { getAuth } from '@/lib/auth';
 import { buildSessionOrganizationPatch } from '@/lib/auth/migration-state';
 import { linkAnonymousOrganizationToUser } from '@/lib/auth/anonymous-lifecycle/link';
 import { appendClearAnonymousRecoveryCookieHeader } from '@/lib/auth/anonymous-recovery';
+import { resolveSessionLifetime } from '@/lib/auth/session-lifetime';
 import { serializeSignedCookie } from 'better-call';
 import { proxyAuthRequest, shouldProxyAuthRequest } from '@/lib/auth/auth-proxy';
 import { getClient } from '@dory/database/postgres/client';
@@ -102,7 +103,15 @@ async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: 
         return NextResponse.json({ error: 'invalid_ticket_user' }, { status: 400 });
     }
 
-    const session = await ctx.internalAdapter.createSession(user.id, false);
+    const lifetime = resolveSessionLifetime({ desktop: true });
+    const session = await ctx.internalAdapter.createSession(
+        user.id,
+        false,
+        {
+            expiresAt: lifetime.expiresAt,
+        },
+        true,
+    );
     if (!session) {
         return NextResponse.json({ error: 'failed_to_create_session' }, { status: 500 });
     }
@@ -126,10 +135,9 @@ async function consumeTicketLocally(params: { ticket: string; anonymousUserId?: 
     }
 
     const baseAttrs = ctx.authCookies.sessionToken.attributes ?? {};
-    const maxAge = ctx.sessionConfig?.expiresIn;
     const cookieAttrs = {
         ...baseAttrs,
-        ...(maxAge ? { maxAge } : {}),
+        maxAge: lifetime.cookieMaxAgeSeconds,
     };
     const cookie = await serializeSignedCookie(ctx.authCookies.sessionToken.name, session.token, ctx.secret, cookieAttrs);
 

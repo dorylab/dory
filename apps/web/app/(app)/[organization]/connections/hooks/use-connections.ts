@@ -58,13 +58,13 @@ function useConnectionsCache() {
     return { setAll, getSnapshot, invalidate };
 }
 
-export function useConnections() {
+export function useConnections(organizationId?: string) {
     const syncConnections = useSyncConnectionsState();
 
     return useQuery<ConnectionListItem[]>({
-        queryKey: CONNECTIONS_QUERY_KEY,
+        queryKey: organizationId ? [...CONNECTIONS_QUERY_KEY, { organizationId }] : CONNECTIONS_QUERY_KEY,
         queryFn: async () => {
-            const res = (await getConnections()) as ConnectionListResponse;
+            const res = (await getConnections(organizationId)) as ConnectionListResponse;
             const data = res.data ?? [];
 
             syncConnections(data);

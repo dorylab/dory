@@ -2,6 +2,7 @@ import { ActionRegistry } from '@dory/actions';
 import type { WebActionServices } from './types';
 import { aiActions } from './domains/ai';
 import { chartActions } from './domains/chart';
+import { comparisonActions } from './domains/comparison';
 import { connectionActions } from './domains/connection';
 import { queryActions } from './domains/query';
 import { resultSetActions } from './domains/result-set';
@@ -12,4 +13,15 @@ import { tableActions } from './domains/table';
 
 export const webActionRegistry = new ActionRegistry<WebActionServices>();
 
-webActionRegistry.registerMany([...connectionActions, ...queryActions, ...resultSetActions, ...schemaActions, ...tableActions, ...tabActions, ...savedQueryActions, ...chartActions, ...aiActions]);
+webActionRegistry.registerMany([
+    ...connectionActions,
+    ...queryActions,
+    ...resultSetActions,
+    ...schemaActions,
+    ...tableActions,
+    ...tabActions,
+    ...savedQueryActions,
+    ...chartActions,
+    ...aiActions,
+    ...comparisonActions,
+]);

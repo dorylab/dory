@@ -1,3 +1,5 @@
+import type { SchemaSnapshot, SchemaSnapshotInput } from '@dory/schema-compare';
+
 import type { QueryInsightsFilters, QueryInsightsRow, QueryInsightsSummary, QueryTimelinePoint } from './monitoring';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from './table-info';
 export * from './monitoring';
@@ -403,6 +405,7 @@ export type ConnectionMetadataAPI = {
     getDatabaseSummary?: (options: DatabaseSummaryOptions) => Promise<DatabaseSummary>;
     getDatabaseTablesDetail?: (database: string) => Promise<DatabaseObjectRow[]>;
     getSchemaGraph?: (options: SchemaGraphOptions) => Promise<SchemaGraphResult>;
+    getSchemaSnapshot?: (input: SchemaSnapshotInput) => Promise<SchemaSnapshot>;
 };
 
 export type DriverTableProfile = {

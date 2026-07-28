@@ -10,4 +10,5 @@ export * from './pool-store';
 export * from './registry';
 export * from './registry/types';
 export * from './schema-graph';
+export * from './schema-snapshot';
 export * from './ssh/ssh-tunnel';

@@ -123,13 +123,13 @@ export function getAnonymousRecoveryCookieName() {
     return ANONYMOUS_RECOVERY_COOKIE_NAME;
 }
 
-export function appendAnonymousRecoveryCookieHeader(headers: Headers, options: { requestUrl?: string | null; token: string }) {
+export function appendAnonymousRecoveryCookieHeader(headers: Headers, options: { maxAgeSeconds?: number; requestUrl?: string | null; token: string }) {
     headers.append(
         'set-cookie',
         buildCookieValue({
             name: ANONYMOUS_RECOVERY_COOKIE_NAME,
             value: options.token,
-            maxAge: ANONYMOUS_RECOVERY_COOKIE_TTL_SECONDS,
+            maxAge: options.maxAgeSeconds ?? ANONYMOUS_RECOVERY_COOKIE_TTL_SECONDS,
             secure: getSecureCookieFlag(options.requestUrl),
         }),
     );

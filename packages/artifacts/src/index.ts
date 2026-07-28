@@ -1,12 +1,14 @@
 import path from 'node:path';
 
 import { AgentRunArtifactStore } from './agent-run-artifact-store';
+import { ComparisonArtifactStore } from './comparison-artifact-store';
 import { FilesystemObjectStore } from './filesystem-object-store';
 import { type ObjectStore } from './object-store';
 import { ResultSetArtifactStore } from './result-set-artifact-store';
 import { S3CompatibleObjectStore } from './s3-object-store';
 
 export * from './agent-run-artifact-store';
+export * from './comparison-artifact-store';
 export * from './filesystem-object-store';
 export * from './object-store';
 export * from './result-set-artifact-store';
@@ -16,6 +18,7 @@ export type DoryArtifactStore = {
     objectStore: ObjectStore;
     resultSets: ResultSetArtifactStore;
     agentRuns: AgentRunArtifactStore;
+    comparisons: ComparisonArtifactStore;
 };
 
 let singleton: DoryArtifactStore | null = null;
@@ -33,6 +36,7 @@ export function createDoryArtifactStore(): DoryArtifactStore {
         objectStore,
         resultSets: new ResultSetArtifactStore(objectStore, prefix),
         agentRuns: new AgentRunArtifactStore(objectStore, prefix),
+        comparisons: new ComparisonArtifactStore(objectStore, prefix),
     };
 }
 

@@ -7,8 +7,9 @@ export async function resolveLocalOrganizationAccess(organizationId: string, use
     if (!db) throw new Error('Database service not initialized');
 
     const organization = await db.organizations.getOrganizationBySlugOrId(organizationId);
+    const resolvedOrganizationId = organization?.id ?? organizationId;
     const members = await db.organizations.listByUser(userId);
-    const member = members.find(item => item.organizationId === organizationId && (item.status === 'active' || item.status == null));
+    const member = members.find(item => item.organizationId === resolvedOrganizationId && (item.status === 'active' || item.status == null));
 
     if (!member && organization?.ownerUserId !== userId) {
         return null;
@@ -16,7 +17,7 @@ export async function resolveLocalOrganizationAccess(organizationId: string, use
 
     return {
         source: 'local',
-        organizationId,
+        organizationId: resolvedOrganizationId,
         userId,
         isMember: true,
         role: member?.role ?? (organization?.ownerUserId === userId ? 'owner' : null),
@@ -28,9 +29,9 @@ export async function resolveLocalOrganizationAccess(organizationId: string, use
                   name: organization.name ?? null,
               }
             : {
-                  id: organizationId,
-                  slug: organizationId,
-                  name: organizationId,
+                  id: resolvedOrganizationId,
+                  slug: resolvedOrganizationId,
+                  name: resolvedOrganizationId,
               },
     };
 }

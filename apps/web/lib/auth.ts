@@ -1,6 +1,7 @@
 import { ensureOrganizationDefaults } from '@/lib/demo/organization-defaults';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { createAuthMiddleware, setShouldSkipSessionRefresh } from 'better-auth/api';
 import { anonymous, jwt, organization } from 'better-auth/plugins';
 import { stripe as stripePlugin } from '@better-auth/stripe';
 import { dash, sentinel } from '@better-auth/infra';
@@ -26,6 +27,7 @@ import { isAnonymousUser } from './auth/anonymous-user';
 import { appendClearAnonymousRecoveryCookieHeader } from './auth/anonymous-recovery';
 import { createElectronEmailVerificationState } from './auth/electron-email-verification';
 import { ensureConfiguredInitUser } from './auth/init-user';
+import { isDesktopAuthRequest, PERMANENT_SESSION_EXPIRES_AT, resolveSessionLifetime, SESSION_REFRESH_AGE_SECONDS, WEB_SESSION_TTL_SECONDS } from './auth/session-lifetime';
 
 const REQUIRE_EMAIL_VERIFICATION = parseEnvFlag(process.env.NEXT_PUBLIC_REQUIRE_EMAIL_VERIFICATION);
 
@@ -498,6 +500,38 @@ function createAuth() {
                     .filter(Boolean) ?? []),
             ],
 
+            session: {
+                expiresIn: WEB_SESSION_TTL_SECONDS,
+                updateAge: SESSION_REFRESH_AGE_SECONDS,
+            },
+
+            hooks: {
+                before: createAuthMiddleware(async ctx => {
+                    if (ctx.path === '/get-session' && (isDesktop || isDesktopAuthRequest(ctx.headers))) {
+                        await setShouldSkipSessionRefresh(true);
+                    }
+                }),
+                after: createAuthMiddleware(async ctx => {
+                    const desktopRequest = isDesktop || isDesktopAuthRequest(ctx.headers);
+                    if (!desktopRequest) return;
+
+                    const activeSession = ctx.context.newSession ?? (ctx.path === '/get-session' ? ctx.context.session : null);
+                    if (!activeSession?.session?.token) return;
+
+                    if (activeSession.session.expiresAt.toISOString() !== PERMANENT_SESSION_EXPIRES_AT) {
+                        await ctx.context.internalAdapter.updateSession(activeSession.session.token, {
+                            expiresAt: new Date(PERMANENT_SESSION_EXPIRES_AT),
+                        });
+                    }
+
+                    const lifetime = resolveSessionLifetime({ desktop: true });
+                    await ctx.setSignedCookie(ctx.context.authCookies.sessionToken.name, activeSession.session.token, ctx.context.secret, {
+                        ...ctx.context.authCookies.sessionToken.attributes,
+                        maxAge: lifetime.cookieMaxAgeSeconds,
+                    });
+                }),
+            },
+
             /**
              * ✅ Database hooks:
              * user.create.after: runs after any new-user creation (email / social / magic link, etc.)
@@ -541,11 +575,10 @@ function createAuth() {
                     },
                 },
                 session: {
-                    expiresIn: 60 * 60 * 24 * 30, // 30 days
-                    updateAge: 60 * 60 * 24, // 1 day (every 1 day the session expiration is updated)
                     create: {
-                        before: async rawSession => {
+                        before: async (rawSession, context) => {
                             const session = rawSession as SessionWithActiveOrganization;
+                            const desktopSession = isDesktop || isDesktopAuthRequest(context?.headers);
                             const activeOrganizationId = resolveOrganizationIdForSession({
                                 activeOrganizationId: session.activeOrganizationId ?? null,
                                 membershipOrganizationId: await findInitialOrganizationId(session.userId),
@@ -555,6 +588,13 @@ function createAuth() {
                                 data: {
                                     ...session,
                                     activeOrganizationId,
+                                    ...(desktopSession
+                                        ? {
+                                              expiresAt: resolveSessionLifetime({
+                                                  desktop: true,
+                                              }).expiresAt,
+                                          }
+                                        : {}),
                                 },
                             };
                         },

@@ -3,6 +3,8 @@
 import { CircleUserRound, Database, Link2, Plug, User } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { cn } from '@dory/web-utils';
+
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/registry/new-york-v4/ui/hover-card';
 import { DatabaseTypeIcon, getDatabaseTypeMeta } from '@/app/(app)/[organization]/connections/components/database-type-icon';
 
@@ -21,7 +23,7 @@ export type DataSourceCellInfo = {
     source?: string | null;
 };
 
-export function DataSourceCell({ dataSource, emptyLabel = 'Unknown' }: { dataSource: DataSourceCellInfo; emptyLabel?: string }) {
+export function DataSourceCell({ dataSource, emptyLabel = 'Unknown', className }: { dataSource: DataSourceCellInfo; emptyLabel?: string; className?: string }) {
     const connectionLabel = dataSource.connectionName || dataSource.connectionId || emptyLabel;
     const connectionType = dataSource.connectionType ?? 'unknown';
     const typeMeta = getDatabaseTypeMeta(connectionType);
@@ -39,7 +41,10 @@ export function DataSourceCell({ dataSource, emptyLabel = 'Unknown' }: { dataSou
         <HoverCard openDelay={120} closeDelay={80}>
             <HoverCardTrigger asChild>
                 <div
-                    className="group flex w-fit max-w-[280px] cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                    className={cn(
+                        'group flex w-fit max-w-[280px] cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring',
+                        className,
+                    )}
                     tabIndex={0}
                 >
                     <div className="flex size-6 shrink-0 items-center justify-center rounded-md border bg-background transition-colors group-hover:border-foreground/30">

@@ -4,6 +4,7 @@ import MonacoWebpackPlugin from 'monaco-editor-webpack-plugin';
 import path from 'path';
 
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
+const isProductionBuild = process.env.NODE_ENV === 'production';
 const runtime = process.env.DORY_RUNTIME?.trim() || process.env.NEXT_PUBLIC_DORY_RUNTIME?.trim() || 'web';
 const isDesktopRuntime = runtime === 'desktop';
 const desktopRuntimeAliases: Record<string, string> = isDesktopRuntime
@@ -40,6 +41,9 @@ type NextWebpackOptionsShape = {
 
 const nextConfig = {
     output: 'standalone',
+    typescript: {
+        tsconfigPath: isProductionBuild ? 'tsconfig.build.json' : 'tsconfig.json',
+    },
     transpilePackages: ['@dory/actions', '@dory/artifacts', '@dory/database', '@dory/i18n', '@dory/resultset', '@dory/shared', '@dory/ui', '@dory/web-utils'],
     serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron', 'snowflake-sdk'],
     outputFileTracingRoot: path.join(__dirname, '../../'),

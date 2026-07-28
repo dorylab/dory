@@ -16,7 +16,19 @@ type CreateDoryChatToolsOptions = {
     locale?: Locale;
 };
 
-const AGENT_SCOPES = ['connections:read', 'schema:read', 'query:read', 'tabs:read', 'tabs:write', 'saved_queries:read', 'saved_queries:write', 'analysis:run', 'monitoring:read'];
+const AGENT_SCOPES = [
+    'connections:read',
+    'schema:read',
+    'query:read',
+    'tabs:read',
+    'tabs:write',
+    'saved_queries:read',
+    'saved_queries:write',
+    'analysis:run',
+    'monitoring:read',
+    'comparisons:read',
+    'comparisons:write',
+];
 
 async function createActionContext(options: CreateDoryChatToolsOptions): Promise<ActionContext<WebActionServices>> {
     const access = await resolveOrganizationAccess(options.organizationId, options.userId);

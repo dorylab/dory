@@ -27,6 +27,7 @@
     "dependencies": {
         "@dory/artifacts": "0.1.0",
         "@dory/resultset": "0.1.0",
+        "@dory/schema-compare": "0.1.0",
         "@dory/shared": "0.1.0",
         "@electric-sql/pglite": "^0.4.3",
         "drizzle-orm": "^0.45.2",
