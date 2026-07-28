@@ -104,6 +104,21 @@ test('does not show metadata loading after hydration or on a cache hit', () => {
     );
 });
 
+test('does not show persisted-result restoration during a live execution', () => {
+    assert.equal(
+        shouldShowResultMetadataLoading({
+            sessionId: 'live-session',
+            loadedSessionId: null,
+            hasCachedMetadata: false,
+            activeSet: 1,
+            activeMetaSessionId: null,
+            activeMetaSetIndex: null,
+            isLiveExecution: true,
+        }),
+        false,
+    );
+});
+
 test('keeps loading when the selected artifact metadata has not hydrated yet', () => {
     assert.equal(
         shouldShowResultMetadataLoading({

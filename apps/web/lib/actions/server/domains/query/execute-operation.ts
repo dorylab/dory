@@ -232,6 +232,7 @@ function buildPayload(input: {
     source?: string | null;
     queryResultSets: Array<Record<string, unknown>>;
     results: unknown[][];
+    plannedResultSets: Array<{ setIndex: number; sqlText: string }>;
     refId: string;
 }) {
     return {
@@ -256,7 +257,8 @@ function buildPayload(input: {
         meta: {
             refId: input.refId,
             durationMs: input.durationMs ?? 0,
-            totalSets: input.resultSetCount,
+            totalSets: input.plannedResultSets.length,
+            plannedResultSets: input.plannedResultSets,
             stopOnError: input.stopOnError,
             resultStorage: 'artifact',
             previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
@@ -496,6 +498,7 @@ async function runSqlExecution(
                 refId,
                 durationMs: 0,
                 totalSets: 0,
+                plannedResultSets: [],
                 stopOnError,
             },
         };
@@ -528,6 +531,10 @@ async function runSqlExecution(
             const overallStartedAt = Math.round(performance.timeOrigin + sessT0);
             const queryResultSets: Array<Record<string, unknown>> = [];
             const results: unknown[][] = [];
+            const plannedResultSets = statements.map((sqlText, setIndex) => ({
+                setIndex,
+                sqlText,
+            }));
             let hitError = false;
             let firstErrorMsg: string | null = null;
             await options?.onEvent?.({
@@ -546,6 +553,7 @@ async function runSqlExecution(
                     source: input.source ?? null,
                     queryResultSets: [],
                     results: [],
+                    plannedResultSets,
                     refId,
                 }),
             });
@@ -574,6 +582,7 @@ async function runSqlExecution(
                         source: input.source ?? null,
                         queryResultSets: queryResultSets.slice(),
                         results: results.slice(),
+                        plannedResultSets,
                         refId,
                     }),
                 });
@@ -612,6 +621,7 @@ async function runSqlExecution(
                             source: input.source ?? null,
                             queryResultSets: queryResultSets.slice(),
                             results: results.slice(),
+                            plannedResultSets,
                             refId,
                         }),
                     });
@@ -757,6 +767,7 @@ async function runSqlExecution(
                 source: input.source ?? null,
                 queryResultSets,
                 results,
+                plannedResultSets,
                 refId,
             });
             await options?.onEvent?.({ type: 'session-finished', payload });

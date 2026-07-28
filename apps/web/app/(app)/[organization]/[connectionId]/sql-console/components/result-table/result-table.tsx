@@ -922,6 +922,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         return <div className="h-full flex items-center justify-center text-sm text-muted-foreground bg-card">{t('Results.SelectTab')}</div>;
     }
 
+    const isLiveExecution = runningTabs[tabId] === 'running' || sessionStatus === 'running';
     const isResultMetadataLoading = shouldShowResultMetadataLoading({
         sessionId,
         loadedSessionId: loadedResultMetaSessionId,
@@ -929,8 +930,9 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         activeSet,
         activeMetaSessionId: sessionMetas.sessionId,
         activeMetaSetIndex: sessionMetas.setIndex,
+        isLiveExecution,
     });
-    const isRestoringPersistedResult = isResultMetadataLoading && runningTabs[tabId] !== 'running';
+    const isRestoringPersistedResult = isResultMetadataLoading && !isLiveExecution;
 
     function renderResult() {
         if (noSessionId) {
@@ -949,7 +951,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
         }
         const hasRenderableRows = activeSet >= 0 && (isRemoteFullResult ? rowCount > 0 : localResults.length > 0);
         const hasRenderableResult = activeSet >= 0 && (hasRenderableRows || execMetaBySet?.[activeSet]?.errorMessage);
-        if (runningTabs[tabId] === 'running' && !hasRenderableResult) {
+        if (isLiveExecution && !hasRenderableResult) {
             return (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
                     <Badge variant="outline" className="gap-1">
@@ -1224,15 +1226,13 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     return (
         <div className="flex h-full flex-col" data-testid="result-table">
             {/* Top toolbar */}
-            {runningTabs[tabId] !== 'running' && (
-                <Toolbar
-                    indices={indices}
-                    activeSet={activeSet} // -1 = Overview，>=0 = Result i
-                    onSetActiveSet={n => {
-                        setActiveSet(n);
-                    }}
-                />
-            )}
+            <Toolbar
+                indices={indices}
+                activeSet={activeSet} // -1 = Overview，>=0 = Result i
+                onSetActiveSet={n => {
+                    setActiveSet(n);
+                }}
+            />
 
             {/* Table area */}
             {storageLimitApplied ? <div className="border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{t('Results.StorageLimitPreviewOnly')}</div> : null}

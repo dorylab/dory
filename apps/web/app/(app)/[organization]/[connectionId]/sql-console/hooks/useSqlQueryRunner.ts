@@ -144,7 +144,7 @@ export function useSqlQueryRunner({
 
                             if ('payload' in event && event.payload && 'session' in event.payload) {
                                 payload = event.payload;
-                                if (event.type === 'result-completed' || event.type === 'session-finished') {
+                                if (event.type === 'session-started' || event.type === 'result-completed' || event.type === 'session-finished') {
                                     notifySqlConsoleResultDataUpdated(event.payload);
                                 }
                             }

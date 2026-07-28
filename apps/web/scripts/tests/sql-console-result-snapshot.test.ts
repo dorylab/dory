@@ -76,6 +76,99 @@ test('ignores stream events before a persisted result-set id is available', () =
     assert.equal(snapshot, null);
 });
 
+test('prepares every planned result set before streamed results are persisted', () => {
+    const snapshot = normalizeSqlConsoleResultSnapshot({
+        session: {
+            sessionId: 'session-planned',
+            status: 'running',
+            resultSetCount: 0,
+        },
+        queryResultSets: [],
+        results: [],
+        meta: {
+            totalSets: 2,
+            plannedResultSets: [
+                {
+                    setIndex: 0,
+                    sqlText: 'select * from logs',
+                },
+                {
+                    setIndex: 1,
+                    sqlText: 'select * from orders',
+                },
+            ],
+        },
+    });
+
+    assert.ok(snapshot);
+    assert.equal(snapshot.session.resultSetCount, 0);
+    assert.deepEqual(
+        snapshot.resultSets.map(resultSet => ({
+            setIndex: resultSet.setIndex,
+            sqlText: resultSet.sqlText,
+            status: resultSet.status,
+            resultSetId: resultSet.resultSetId,
+        })),
+        [
+            {
+                setIndex: 0,
+                sqlText: 'select * from logs',
+                status: 'running',
+                resultSetId: null,
+            },
+            {
+                setIndex: 1,
+                sqlText: 'select * from orders',
+                status: 'running',
+                resultSetId: null,
+            },
+        ],
+    );
+});
+
+test('fills completed results without removing pending planned result sets', () => {
+    const snapshot = normalizeSqlConsoleResultSnapshot({
+        session: {
+            sessionId: 'session-streaming',
+            status: 'running',
+            resultSetCount: 1,
+        },
+        queryResultSets: [
+            {
+                sessionId: 'session-streaming',
+                setIndex: 0,
+                sqlText: 'select * from logs',
+                status: 'success',
+                resultSetId: 'result-logs',
+                columns: [{ name: 'id' }],
+                rowCount: 1,
+                previewRowCount: 1,
+            },
+        ],
+        results: [[{ id: 1 }]],
+        meta: {
+            totalSets: 2,
+            plannedResultSets: [
+                {
+                    setIndex: 0,
+                    sqlText: 'select * from logs',
+                },
+                {
+                    setIndex: 1,
+                    sqlText: 'select * from orders',
+                },
+            ],
+        },
+    });
+
+    assert.ok(snapshot);
+    assert.equal(snapshot.resultSets.length, 2);
+    assert.equal(snapshot.resultSets[0]!.resultSetId, 'result-logs');
+    assert.deepEqual(snapshot.resultSets[0]!.previewRows, [{ id: 1 }]);
+    assert.equal(snapshot.resultSets[1]!.status, 'running');
+    assert.equal(snapshot.resultSets[1]!.resultSetId, null);
+});
+
 test('normalizes error metadata without a persisted result set', () => {
     const snapshot = normalizeSqlConsoleResultSnapshot({
         session: {
