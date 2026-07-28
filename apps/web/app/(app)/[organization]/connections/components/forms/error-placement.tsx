@@ -1,7 +1,7 @@
 // components/form/error-placeholder.tsx
 import { cn } from '@dory/web-utils';
 import { FormMessage } from '@/registry/new-york-v4/ui/form';
-import { get } from 'lodash-es';
+import get from 'lodash-es/get';
 import { useTranslations } from 'next-intl';
 
 interface ErrorPlaceholderProps {
@@ -18,7 +18,7 @@ export function ErrorPlaceholder({ name, form }: ErrorPlaceholderProps) {
         <p
             className={cn('text-xs', 'text-transparent', {
                 'h-4': hasError,
-                'hidden': !hasError,
+                hidden: !hasError,
             })}
         >
             {t('Placeholder')}

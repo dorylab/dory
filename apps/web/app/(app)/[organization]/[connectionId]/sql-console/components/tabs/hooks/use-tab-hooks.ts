@@ -9,7 +9,7 @@ import { activeTabIdByConnectionAtom, currentConnectionAtom, DEFAULT_CONNECTION_
 import { sessionIdByTabAtom } from '../../../sql-console.store';
 import { executeActionClient } from '@/lib/actions/client';
 import { TabPayload, UITabPayload } from '@dory/shared/types/tabs';
-import { debounce } from 'lodash-es';
+import debounce from 'lodash-es/debounce';
 import { useRouteConnectionId } from '../../../hooks/useRouteConnectionId';
 import { getActiveTabStorageKey, getSessionStorageKey, getTabsStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../../../workspace-scope';
 import { parseSqlTabsCache, serializeSqlTabsCache } from '../tab-cache';

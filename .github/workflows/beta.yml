@@ -189,6 +189,8 @@ jobs:
           EOF
 
       - name: Typecheck web workspace
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: yarn workspace web run typecheck
 
       - name: Build web workspace

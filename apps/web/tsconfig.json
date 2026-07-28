@@ -62,8 +62,7 @@
         "scripts/build-registry.mts",
         "hooks/use-queryts",
         "scripts/generate-sql-bundle.ts",
-        ".next/dev/types/**/*.ts",
-        "app/(auth)/components/bg.tsx.back"
+        ".next/dev/types/**/*.ts"
     ],
     "exclude": ["node_modules", "dist", "release"]
 }

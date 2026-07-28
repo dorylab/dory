@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef } from 'react';
-import { debounce } from 'lodash-es';
-import type { DebouncedFunc } from 'lodash-es';
+import debounce, { type DebouncedFunc } from 'lodash-es/debounce';
 
 import type { UITabPayload } from '@dory/shared/types/tabs';
 
