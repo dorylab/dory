@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { FileText, RotateCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { FileText, PanelRightOpen, Redo2, RotateCw, Undo2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createParser, parseAsIndex, useQueryStates } from 'nuqs';
+import { toast } from 'sonner';
 
 import { fetchTablePreview } from '../../lib/fetch-table-preview';
 import { isSuccess } from '@/lib/result';
@@ -14,22 +15,54 @@ import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
-import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { ResultRow } from '@dory/shared/types/sql-console';
 import { SQLTab } from '@dory/shared/types/tabs';
 import { VTableSearchBar } from '../../../../[connectionId]/sql-console/components/result-table/components/TableSearchBar';
 import { currentSessionMetaAtom } from '../../../../[connectionId]/sql-console/components/result-table/stores/result-table.atoms';
 import VTable from '../../../../[connectionId]/sql-console/components/result-table/vtable';
-import { InspectorPanel } from '../../../../[connectionId]/sql-console/components/result-table/vtable/InspectorPanel';
 import { VTableFilters } from '../../../../[connectionId]/sql-console/components/result-table/vtable/VTableFilters';
 import type { ColumnFilter } from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { useTablePropertiesQuery, useTableStatsQuery, useTableStructureColumnsQuery } from '../table-queries';
 import { DataPreviewPaginationBar } from './DataPreviewPaginationBar';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
+import { buildTableUpdatePreview } from '@dory/drivers/table-mutations';
+import type { TableMutationDialect, TablePreviewFilter, TablePreviewSort, TableUpdateBatch } from '@dory/drivers/types';
+import { commitTableUpdates } from '../../lib/commit-table-updates';
+import {
+    applyTableCellEdit,
+    clearTableEdits,
+    createEmptyTableEditSession,
+    getPendingEditCounts,
+    getRowKey,
+    overlayPendingRow,
+    pendingRowsToUpdates,
+    redoTableEdit,
+    revertTableCellEdit,
+    revertTableRowEdit,
+    tableEditSessionsAtom,
+    toTableMutationValue,
+    undoTableEdit,
+    type PendingRowChange,
+    type TableEditViewSnapshot,
+} from './table-editor-store';
+import { TableEditorUtilityPanel, type TableEditorInspectorPayload } from './table-editor-utility-panel';
 
 type PreviewColumn = {
     name: string;
+    type: string;
+    nullable?: boolean;
+    isPrimaryKey?: boolean;
 };
 
 type PreviewResultSet = {
@@ -51,18 +84,6 @@ type PreviewCacheEntry = {
     stats: PreviewStats;
 };
 
-type InspectorPayload =
-    | {
-          row: number;
-          col: string;
-          value: unknown;
-      }
-    | {
-          row: number;
-          rowData: Record<string, unknown>;
-      }
-    | null;
-
 type DataPreviewProps = {
     connectionId?: string;
     databaseName?: string;
@@ -71,6 +92,7 @@ type DataPreviewProps = {
     source?: string;
     emptyMessage?: string;
     inspectorPortalMode?: 'preview' | 'viewport';
+    driver?: string;
 };
 
 type TableDataPreviewProps = {
@@ -79,6 +101,7 @@ type TableDataPreviewProps = {
     databaseName?: string;
     tableName?: string;
     inspectorPortalMode?: 'preview' | 'viewport';
+    driver?: string;
 };
 
 const PREVIEW_STALE_TIME = 1000 * 60 * 5;
@@ -117,6 +140,21 @@ function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toOptionalBoolean(value: unknown) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') return ['true', 'yes', '1'].includes(value.toLowerCase());
+    return undefined;
+}
+
+function getMutationDialect(driver?: string): TableMutationDialect | null {
+    if (driver === 'postgres' || driver === 'neon' || driver === 'supabase') return 'postgres';
+    if (driver === 'mysql' || driver === 'mariadb') return 'mysql';
+    if (driver === 'sqlite') return 'sqlite';
+    if (driver === 'duckdb') return 'duckdb';
+    return null;
 }
 
 function buildPreviewQueryKey({
@@ -158,18 +196,26 @@ function mapPreviewRows(rows: Record<string, unknown>[], rowKeyPrefix: string): 
 }
 
 function buildColumns(rows: Record<string, unknown>[], resultSet?: PreviewResultSet | null): PreviewColumn[] {
-    const resultColumns = (resultSet?.columns ?? [])
+    const resultColumns: PreviewColumn[] = (resultSet?.columns ?? [])
         .map(column => {
             const name = column?.name ?? column?.columnName;
-            return typeof name === 'string' && name.trim() ? { name } : null;
+            const type = column?.type ?? column?.columnType;
+            return typeof name === 'string' && name.trim()
+                ? {
+                      name,
+                      type: typeof type === 'string' ? type : '',
+                      nullable: toOptionalBoolean(column?.nullable ?? column?.isNullable),
+                      isPrimaryKey: toOptionalBoolean(column?.isPrimaryKey),
+                  }
+                : null;
         })
-        .filter((column): column is PreviewColumn => Boolean(column));
+        .filter(column => column !== null);
 
     if (resultColumns.length > 0) {
         return resultColumns;
     }
 
-    return Object.keys(rows[0] ?? {}).map(name => ({ name }));
+    return Object.keys(rows[0] ?? {}).map(name => ({ name, type: '' }));
 }
 
 function quoteSqlIdentifier(identifier: string) {
@@ -286,24 +332,36 @@ function DataPreviewLoadingBar({ ariaLabel }: { ariaLabel: string }) {
 }
 
 function DataPreview(props: DataPreviewProps) {
-    const { connectionId, databaseName, tableName, source = 'table-browser-data-preview' } = props;
-    const resetKey = [source, connectionId, databaseName, tableName].join('::');
+    const { connectionId, databaseName, tableName, driver, source = 'table-browser-data-preview' } = props;
+    const resetKey = [source, connectionId, databaseName, tableName, driver].join('::');
 
     return <DataPreviewInner key={resetKey} {...props} source={source} />;
 }
 
-function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, source = 'table-browser-data-preview', emptyMessage, inspectorPortalMode = 'preview' }: DataPreviewProps) {
+function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, source = 'table-browser-data-preview', emptyMessage, driver }: DataPreviewProps) {
     const t = useTranslations('TableBrowser');
     const setSessionMeta = useSetAtom(currentSessionMetaAtom);
+    const currentConnection = useAtomValue(currentConnectionAtom);
+    const queryClient = useQueryClient();
+    const [editSessions, setEditSessions] = useAtom(tableEditSessionsAtom);
+    const sessionKey = storageKey ?? `preview:${connectionId ?? 'unknown'}:${databaseName ?? 'unknown'}:${tableName ?? 'unknown'}`;
+    const editSession = editSessions[sessionKey] ?? createEmptyTableEditSession();
+    const currentConnectionValue = currentConnection?.connection;
+    const resolvedDriver = driver ?? (currentConnectionValue && currentConnectionValue.id === connectionId ? currentConnectionValue.type : undefined);
+    const mutationDialect = getMutationDialect(resolvedDriver);
 
     const [query, setQuery] = useState('');
     const [searchInput, setSearchInput] = useState('');
-    const [inspectorOpen, setInspectorOpen] = useState(false);
-    const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
-    const [inspectorPayload, setInspectorPayload] = useState<InspectorPayload>(null);
-    const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
-    const [inspectorWidth, setInspectorWidth] = useState(360);
-    const [inspectorPortalContainer, setInspectorPortalContainer] = useState<HTMLElement | null>(null);
+    const [utilityPanelOpen, setUtilityPanelOpen] = useState(false);
+    const [utilityPanelMode, setUtilityPanelMode] = useState<'changes' | 'inspector'>('changes');
+    const [changesView, setChangesView] = useState<'visual' | 'sql'>('visual');
+    const [, setInspectorMode] = useState<'cell' | 'row' | null>(null);
+    const [inspectorPayload, setInspectorPayload] = useState<TableEditorInspectorPayload>(null);
+    const [utilityPanelWidth, setUtilityPanelWidth] = useState(380);
+    const [commitDialogOpen, setCommitDialogOpen] = useState(false);
+    const [selectionSummary, setSelectionSummary] = useState({ cellCount: 0, rowCount: 0 });
+    const [focusRequest, setFocusRequest] = useState<{ rowIndex: number; column: string; requestId: number } | null>(null);
+    const [pendingJump, setPendingJump] = useState<{ rowKey: string; column: string; view: TableEditViewSnapshot } | null>(null);
     const [{ pageIndex, pageSize }, setPagination] = useQueryStates(dataPreviewPaginationParsers, {
         history: 'replace',
         shallow: true,
@@ -320,11 +378,6 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     useEffect(() => {
         void setPagination({ pageIndex: 0 });
     }, [connectionId, databaseName, source, storageKey, tableName, setPagination]);
-
-    useLayoutEffect(() => {
-        if (inspectorPortalMode !== 'viewport') return;
-        setInspectorPortalContainer(document.body);
-    }, [inspectorPortalMode]);
 
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
     const { data: tableStats } = useTableStatsQuery({ connectionId, databaseName, tableName });
@@ -422,7 +475,56 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     });
 
     const previewData = previewQuery.data;
-    const rows = useMemo(() => previewData?.rows ?? EMPTY_ROWS, [previewData]);
+    const baseRows = useMemo(() => previewData?.rows ?? EMPTY_ROWS, [previewData]);
+    const columns = useMemo<PreviewColumn[]>(() => {
+        const metadataByName = new Map((tableColumns?.columns ?? []).map(column => [column.name, column]));
+        const previewColumns = previewData?.columns ?? [];
+        const sourceColumns = previewColumns.length > 0 ? previewColumns : (tableColumns?.columns ?? []);
+        return sourceColumns.map(column => {
+            const metadata = metadataByName.get(column.name);
+            return {
+                ...column,
+                type: metadata?.type ?? column.type ?? '',
+                nullable: metadata?.nullable ?? column.nullable,
+                isPrimaryKey: metadata?.isPrimaryKey ?? column.isPrimaryKey,
+            };
+        });
+    }, [previewData?.columns, tableColumns?.columns]);
+    const primaryKeyColumns = useMemo(() => columns.filter(column => column.isPrimaryKey).map(column => column.name), [columns]);
+    const columnsByName = useMemo(() => new Map(columns.map(column => [column.name, column])), [columns]);
+    const tableIsEditable = Boolean(mutationDialect && primaryKeyColumns.length > 0);
+    const rows = useMemo(
+        () =>
+            baseRows.map(row => {
+                const rowIdentity = getRowKey(row.rowData, primaryKeyColumns);
+                return rowIdentity
+                    ? {
+                          ...row,
+                          rowData: overlayPendingRow(row.rowData, rowIdentity.rowKey, editSession),
+                      }
+                    : row;
+            }),
+        [baseRows, editSession, primaryKeyColumns],
+    );
+    const editCounts = useMemo(() => getPendingEditCounts(editSession), [editSession]);
+    const pendingUpdates = useMemo(() => pendingRowsToUpdates(editSession), [editSession]);
+    const updateBatch = useMemo<TableUpdateBatch | null>(() => {
+        if (!databaseName || !tableName || !primaryKeyColumns.length || !pendingUpdates.length) return null;
+        return {
+            database: databaseName,
+            table: tableName,
+            primaryKeyColumns,
+            rows: pendingUpdates,
+        };
+    }, [databaseName, pendingUpdates, primaryKeyColumns, tableName]);
+    const updateSqlPreview = useMemo(() => {
+        if (!mutationDialect || !updateBatch) return '';
+        try {
+            return buildTableUpdatePreview(mutationDialect, updateBatch);
+        } catch {
+            return '';
+        }
+    }, [mutationDialect, updateBatch]);
     const totalRowEstimate = previewData?.totalRows ?? metadataTotalRowEstimate;
     const loading = previewQuery.isLoading;
     const refreshing = previewQuery.isFetching;
@@ -434,8 +536,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             return;
         }
 
-        setSessionMeta({ columns: previewData.columns });
-    }, [previewData, setSessionMeta]);
+        setSessionMeta({ columns });
+    }, [columns, previewData, setSessionMeta]);
 
     const handleVTableStatsChange = useCallback(() => {}, []);
 
@@ -519,6 +621,182 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         void previewQuery.refetch();
     }, [previewQuery, refreshing]);
 
+    const updateEditSession = useCallback(
+        (updater: (session: ReturnType<typeof createEmptyTableEditSession>) => ReturnType<typeof createEmptyTableEditSession>) => {
+            setEditSessions(current => ({
+                ...current,
+                [sessionKey]: updater(current[sessionKey] ?? createEmptyTableEditSession()),
+            }));
+        },
+        [sessionKey, setEditSessions],
+    );
+
+    const currentView = useMemo<TableEditViewSnapshot>(
+        () => ({
+            pageIndex,
+            pageSize,
+            search: query,
+            filters: activeFilters as TablePreviewFilter[],
+            sort: sortState,
+        }),
+        [activeFilters, pageIndex, pageSize, query, sortState],
+    );
+
+    const handleCellChange = useCallback(
+        ({ rowIndex, column, originalValue, nextValue }: { rowIndex: number; column: string; originalValue: unknown; nextValue: unknown }) => {
+            const row = baseRows[rowIndex]?.rowData;
+            if (!row) return;
+            const identity = getRowKey(row, primaryKeyColumns);
+            const original = toTableMutationValue(originalValue);
+            const next = toTableMutationValue(nextValue);
+            if (!identity || original === undefined || next === undefined) return;
+            updateEditSession(session =>
+                applyTableCellEdit(session, {
+                    ...identity,
+                    column,
+                    originalValue: original,
+                    nextValue: next,
+                    sourceRowIndex: rowIndex,
+                    sourceView: currentView,
+                }),
+            );
+        },
+        [baseRows, currentView, primaryKeyColumns, updateEditSession],
+    );
+
+    const getRowIdentityAt = useCallback(
+        (rowIndex: number) => {
+            const row = baseRows[rowIndex]?.rowData;
+            return row ? getRowKey(row, primaryKeyColumns) : null;
+        },
+        [baseRows, primaryKeyColumns],
+    );
+
+    const handleRevertCellAt = useCallback(
+        (rowIndex: number, column: string) => {
+            const identity = getRowIdentityAt(rowIndex);
+            if (identity) updateEditSession(session => revertTableCellEdit(session, identity.rowKey, column));
+        },
+        [getRowIdentityAt, updateEditSession],
+    );
+
+    const getCellEditState = useCallback(
+        (rowIndex: number, column: string) => {
+            const identity = getRowIdentityAt(rowIndex);
+            const metadata = columnsByName.get(column);
+            const isComplex = /(json|array|struct|map|blob|binary|bytea|geometry|geography|interval)/i.test(metadata?.type ?? '');
+            const isPrimaryKey = primaryKeyColumns.includes(column);
+            const readOnlyReason = isPrimaryKey
+                ? t('Editor.PrimaryKeyReadOnly')
+                : isComplex
+                  ? t('Editor.ComplexTypeReadOnly')
+                  : !mutationDialect
+                    ? t('Editor.UnsupportedDriver')
+                    : primaryKeyColumns.length === 0
+                      ? t('Editor.NoPrimaryKey')
+                      : undefined;
+            return {
+                editable: tableIsEditable && !isPrimaryKey && !isComplex,
+                changed: Boolean(identity && editSession.rows[identity.rowKey]?.changes[column]),
+                nullable: metadata?.nullable,
+                readOnlyReason,
+            };
+        },
+        [columnsByName, editSession.rows, getRowIdentityAt, mutationDialect, primaryKeyColumns, t, tableIsEditable],
+    );
+
+    const isRowChanged = useCallback(
+        (rowIndex: number) => {
+            const identity = getRowIdentityAt(rowIndex);
+            return Boolean(identity && editSession.rows[identity.rowKey]);
+        },
+        [editSession.rows, getRowIdentityAt],
+    );
+
+    const handleInspectorPayload = useCallback(
+        (payload: TableEditorInspectorPayload) => {
+            if (payload && 'col' in payload) {
+                setInspectorPayload({
+                    ...payload,
+                    rowData: rows[payload.row]?.rowData,
+                });
+            } else {
+                setInspectorPayload(payload);
+            }
+        },
+        [rows],
+    );
+
+    const handleInspectorOpen = useCallback((open: boolean) => {
+        setUtilityPanelOpen(open);
+        if (open) setUtilityPanelMode('inspector');
+    }, []);
+
+    const handleJumpToCell = useCallback(
+        (row: PendingRowChange, column: string) => {
+            const change = row.changes[column];
+            if (!change) return;
+            const view = change.sourceView;
+            setSearchInput(view.search);
+            setQuery(view.search);
+            setActiveFilters(view.filters as ColumnFilter[]);
+            setSortState(view.sort);
+            void setPagination({ pageIndex: view.pageIndex, pageSize: view.pageSize });
+            setPendingJump({ rowKey: row.rowKey, column, view });
+        },
+        [setPagination],
+    );
+
+    useEffect(() => {
+        if (!pendingJump || previewQuery.isFetching) return;
+        const isTargetView =
+            pageIndex === pendingJump.view.pageIndex &&
+            pageSize === pendingJump.view.pageSize &&
+            query === pendingJump.view.search &&
+            JSON.stringify(activeFilters) === JSON.stringify(pendingJump.view.filters) &&
+            JSON.stringify(sortState) === JSON.stringify(pendingJump.view.sort);
+        if (!isTargetView) return;
+        const rowIndex = baseRows.findIndex(row => getRowKey(row.rowData, primaryKeyColumns)?.rowKey === pendingJump.rowKey);
+        if (rowIndex < 0) {
+            toast.warning(t('Editor.JumpTargetChanged'));
+        } else {
+            setFocusRequest({
+                rowIndex,
+                column: pendingJump.column,
+                requestId: Date.now(),
+            });
+        }
+        setPendingJump(null);
+    }, [activeFilters, baseRows, pageIndex, pageSize, pendingJump, previewQuery.isFetching, primaryKeyColumns, query, sortState, t]);
+
+    const commitMutation = useMutation({
+        mutationFn: async () => {
+            if (!connectionId || !databaseName || !tableName || !updateBatch) {
+                throw new Error(t('Editor.NothingToCommit'));
+            }
+            return commitTableUpdates({
+                connectionId,
+                database: databaseName,
+                table: tableName,
+                rows: updateBatch.rows,
+            });
+        },
+        onSuccess: async result => {
+            setEditSessions(current => {
+                const next = { ...current };
+                delete next[sessionKey];
+                return next;
+            });
+            setCommitDialogOpen(false);
+            await queryClient.invalidateQueries({ queryKey: ['table-preview'] });
+            await previewQuery.refetch();
+            toast.success(t('Editor.CommitSuccess', { rows: result.updatedRows, fields: result.updatedCells }));
+        },
+        onError: error => {
+            toast.error(error instanceof Error ? error.message : t('Editor.CommitFailed'));
+        },
+    });
+
     const rowsSummaryValue = previewData?.totalRows ?? metadataTotalRowEstimate;
     const rowsSummaryTotal = previewData?.unfilteredTotalRows ?? metadataTotalRowEstimate ?? rowsSummaryValue;
     const totalRowsLabel = rowsSummaryTotal != null ? t('Pagination.TotalLabel', { total: rowsSummaryTotal.toLocaleString() }) : null;
@@ -535,8 +813,38 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     onSearchSubmit={handleSearchSubmit}
                 />
                 {totalRowsLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{totalRowsLabel}</div>}
+                {selectionSummary.cellCount > 0 || selectionSummary.rowCount > 0 ? (
+                    <div className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        {t('Editor.SelectionSummary', {
+                            cells: selectionSummary.cellCount,
+                            rows: selectionSummary.rowCount,
+                        })}
+                    </div>
+                ) : null}
+                {columns.length > 0 && !tableIsEditable ? (
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="shrink-0 cursor-help text-xs text-muted-foreground">{t('Editor.ReadOnly')}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>{mutationDialect ? t('Editor.NoPrimaryKey') : t('Editor.UnsupportedDriver')}</TooltipContent>
+                    </Tooltip>
+                ) : null}
             </div>
             <div className="flex min-w-0 items-center gap-2">
+                <div className="flex items-center">
+                    <Button variant="ghost" size="icon-sm" aria-label={t('Editor.Undo')} disabled={editSession.past.length === 0} onClick={() => updateEditSession(undoTableEdit)}>
+                        <Undo2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t('Editor.Redo')}
+                        disabled={editSession.future.length === 0}
+                        onClick={() => updateEditSession(redoTableEdit)}
+                    >
+                        <Redo2 className="h-4 w-4" />
+                    </Button>
+                </div>
                 <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
                     <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     {t('Refresh')}
@@ -561,11 +869,78 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                         </div>
                     </PopoverContent>
                 </Popover>
+                <Button
+                    variant={utilityPanelOpen && utilityPanelMode === 'changes' ? 'secondary' : 'outline'}
+                    size="sm"
+                    className="gap-2 tabular-nums"
+                    onClick={() => {
+                        setUtilityPanelMode('changes');
+                        setUtilityPanelOpen(true);
+                    }}
+                >
+                    <PanelRightOpen className="h-4 w-4" />
+                    {t('Editor.Changes', { count: editCounts.cellCount })}
+                </Button>
             </div>
         </div>
     );
 
     const previewProgress = <div className="h-0.5 flex-none">{refreshing ? <DataPreviewLoadingBar ariaLabel={t('Loading Data')} /> : null}</div>;
+    const utilityPanel = tableName ? (
+        <TableEditorUtilityPanel
+            open={utilityPanelOpen}
+            width={utilityPanelWidth}
+            mode={utilityPanelMode}
+            changesView={changesView}
+            tableName={tableName}
+            columns={columns}
+            primaryKeyColumns={primaryKeyColumns}
+            session={editSession}
+            sqlPreview={updateSqlPreview}
+            inspector={inspectorPayload}
+            onOpenChange={setUtilityPanelOpen}
+            onModeChange={setUtilityPanelMode}
+            onChangesViewChange={setChangesView}
+            onWidthChange={setUtilityPanelWidth}
+            onRevertCell={(rowKey, column) => updateEditSession(session => revertTableCellEdit(session, rowKey, column))}
+            onRevertRow={rowKey => updateEditSession(session => revertTableRowEdit(session, rowKey))}
+            onJumpToCell={handleJumpToCell}
+            onClearAll={() => updateEditSession(clearTableEdits)}
+            onCommitAll={() => setCommitDialogOpen(true)}
+            isCommitting={commitMutation.isPending}
+        />
+    ) : null;
+    const commitDialog = (
+        <AlertDialog open={commitDialogOpen} onOpenChange={setCommitDialogOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{t('Editor.ConfirmCommitTitle')}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        {t('Editor.ConfirmCommitDescription', {
+                            fields: editCounts.cellCount,
+                            updates: editCounts.rowCount,
+                            rows: editCounts.rowCount,
+                        })}
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="max-h-72 overflow-auto rounded-sm border bg-muted/20 p-1">
+                    <SmartCodeBlock value={updateSqlPreview || ' '} type="sql" maxHeightClassName="max-h-64" />
+                </div>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={commitMutation.isPending}>{t('Editor.Cancel')}</AlertDialogCancel>
+                    <AlertDialogAction
+                        disabled={commitMutation.isPending || !updateBatch}
+                        onClick={event => {
+                            event.preventDefault();
+                            commitMutation.mutate();
+                        }}
+                    >
+                        {commitMutation.isPending ? t('Editor.Committing') : t('Editor.CommitNow')}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
 
     if (!connectionId || !databaseName || !tableName) {
         return <div className="h-full flex items-center justify-center text-sm text-muted-foreground">{emptyMessage ?? t('No table preview')}</div>;
@@ -573,12 +948,20 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     if (error) {
         return (
-            <div className="h-full flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-                <div>{error}</div>
-                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-                    <RotateCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                    {t('Refresh')}
-                </Button>
+            <div className="flex h-full min-h-0 flex-col">
+                {previewControls}
+                {previewProgress}
+                <div className="flex min-h-0 flex-1">
+                    <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+                        <div>{error}</div>
+                        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+                            <RotateCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                            {t('Refresh')}
+                        </Button>
+                    </div>
+                    {utilityPanel}
+                </div>
+                {commitDialog}
             </div>
         );
     }
@@ -588,7 +971,11 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             <div className="h-full min-h-0 flex flex-col">
                 {previewControls}
                 {previewProgress}
-                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">{hasUserRequestedPreviewUpdate ? null : t('Loading Data')}</div>
+                <div className="flex min-h-0 flex-1">
+                    <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">{hasUserRequestedPreviewUpdate ? null : t('Loading Data')}</div>
+                    {utilityPanel}
+                </div>
+                {commitDialog}
             </div>
         );
     }
@@ -598,14 +985,19 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
             <div className="h-full min-h-0 flex flex-col">
                 {previewControls}
                 {previewProgress}
-                <VTableFilters
-                    activeFilters={activeFilters}
-                    columnsRaw={previewData?.columns ?? []}
-                    onUpsertFilter={handleUpsertFilter}
-                    onRemoveFilter={handleRemoveFilter}
-                    onClearAllFilters={handleClearAllFilters}
-                />
-                <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">{t('No data')}</div>
+                <div className="flex min-h-0 flex-1">
+                    <div className="flex min-h-0 flex-1 flex-col">
+                        <VTableFilters
+                            activeFilters={activeFilters}
+                            columnsRaw={columns}
+                            onUpsertFilter={handleUpsertFilter}
+                            onRemoveFilter={handleRemoveFilter}
+                            onClearAllFilters={handleClearAllFilters}
+                        />
+                        <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">{t('No data')}</div>
+                    </div>
+                    {utilityPanel}
+                </div>
                 <DataPreviewPaginationBar
                     pageIndex={pageIndex}
                     pageSize={pageSize}
@@ -616,34 +1008,49 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     onPageChange={handlePageChange}
                     onPageSizeChange={handlePageSizeChange}
                 />
+                {commitDialog}
             </div>
         );
     }
 
     return (
         <div className="relative h-full min-h-0 flex flex-col">
-            {inspectorPortalMode === 'preview' ? <div ref={setInspectorPortalContainer} className="pointer-events-none absolute inset-0 z-30" /> : null}
             {previewControls}
             {previewProgress}
 
-            <div className="flex-1 min-h-0">
-                <VTable
-                    results={rows}
-                    columnMetas={previewData?.columns ?? []}
-                    storageKey={storageKey}
-                    onStatsChange={handleVTableStatsChange}
-                    showSearchBar={true}
-                    activeFilters={activeFilters}
-                    onUpsertFilter={handleUpsertFilter}
-                    onRemoveFilter={handleRemoveFilter}
-                    onClearAllFilters={handleClearAllFilters}
-                    serverSideOperations={true}
-                    initialSort={sortState}
-                    onSortChange={handleSortChange}
-                    setInspectorOpen={setInspectorOpen}
-                    setInspectorMode={setInspectorMode}
-                    setInspectorPayload={setInspectorPayload}
-                />
+            <div className="flex min-h-0 flex-1">
+                <div className="min-w-0 flex-1">
+                    <VTable
+                        results={rows}
+                        columnMetas={columns}
+                        storageKey={storageKey}
+                        onStatsChange={handleVTableStatsChange}
+                        showSearchBar={true}
+                        activeFilters={activeFilters}
+                        onUpsertFilter={handleUpsertFilter}
+                        onRemoveFilter={handleRemoveFilter}
+                        onClearAllFilters={handleClearAllFilters}
+                        serverSideOperations={true}
+                        initialSort={sortState}
+                        onSortChange={handleSortChange}
+                        setInspectorOpen={handleInspectorOpen}
+                        setInspectorMode={setInspectorMode}
+                        setInspectorPayload={handleInspectorPayload}
+                        editable={tableIsEditable}
+                        getCellEditState={getCellEditState}
+                        isRowChanged={isRowChanged}
+                        onCellChange={handleCellChange}
+                        onRevertCell={handleRevertCellAt}
+                        onUndo={() => updateEditSession(undoTableEdit)}
+                        onRedo={() => updateEditSession(redoTableEdit)}
+                        onCommitAll={() => {
+                            if (editCounts.cellCount > 0) setCommitDialogOpen(true);
+                        }}
+                        onSelectionChange={setSelectionSummary}
+                        focusRequest={focusRequest}
+                    />
+                </div>
+                {utilityPanel}
             </div>
 
             <DataPreviewPaginationBar
@@ -656,24 +1063,12 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                 onPageChange={handlePageChange}
                 onPageSizeChange={handlePageSizeChange}
             />
-
-            <InspectorPanel
-                open={inspectorOpen}
-                setOpen={setInspectorOpen}
-                mode={inspectorMode}
-                payload={inspectorPayload}
-                portalContainer={inspectorPortalContainer}
-                position={inspectorPortalMode === 'viewport' ? 'fixed' : 'absolute'}
-                rowViewMode={rowViewMode}
-                setRowViewMode={setRowViewMode}
-                inspectorWidth={inspectorWidth}
-                setInspectorWidth={setInspectorWidth}
-            />
+            {commitDialog}
         </div>
     );
 }
 
-export default function TableDataPreview({ activeTab, connectionId, databaseName, tableName, inspectorPortalMode }: TableDataPreviewProps) {
+export default function TableDataPreview({ activeTab, connectionId, databaseName, tableName, inspectorPortalMode, driver }: TableDataPreviewProps) {
     const storageKey = useMemo(() => {
         if (activeTab?.tabId) return `${activeTab.tabId}:data-preview`;
         if (databaseName && tableName) return `preview:${databaseName}:${tableName}:data-preview`;
@@ -692,6 +1087,7 @@ export default function TableDataPreview({ activeTab, connectionId, databaseName
             storageKey={storageKey}
             source="table-tab-data-preview"
             inspectorPortalMode={inspectorPortalMode}
+            driver={driver}
         />
     );
 }
@@ -709,5 +1105,14 @@ export function UrlDataPreview() {
         return `url:${connectionId}:${databaseName}:${tableName}:data-preview`;
     }, [currentConnection?.connection?.id, databaseName, tableName]);
 
-    return <DataPreview connectionId={currentConnection?.connection?.id} databaseName={databaseName} tableName={tableName} storageKey={storageKey} source="catalog-data-preview" />;
+    return (
+        <DataPreview
+            connectionId={currentConnection?.connection?.id}
+            databaseName={databaseName}
+            tableName={tableName}
+            storageKey={storageKey}
+            source="catalog-data-preview"
+            driver={currentConnection?.connection?.type}
+        />
+    );
 }

@@ -9,8 +9,10 @@ import { TableOverview } from './components/overview';
 import TableDataPreview from './components/data-preview';
 import type { TableSubTab } from './types';
 import { supportsTableStats } from './utils';
+import type { SQLTab } from '@dory/shared/types/tabs';
 
 type TableViewTabsProps = {
+    activeTab?: SQLTab;
     connectionId?: string;
     databaseName?: string;
     tableName?: string;
@@ -21,7 +23,17 @@ type TableViewTabsProps = {
     onSubTabChange?: (tab: TableSubTab) => void;
 };
 
-export function TableViewTabs({ connectionId, databaseName, tableName, driver, inspectorPortalMode, activeSubTab, initialSubTab = 'overview', onSubTabChange }: TableViewTabsProps) {
+export function TableViewTabs({
+    activeTab,
+    connectionId,
+    databaseName,
+    tableName,
+    driver,
+    inspectorPortalMode,
+    activeSubTab,
+    initialSubTab = 'overview',
+    onSubTabChange,
+}: TableViewTabsProps) {
     const t = useTranslations('TableBrowser');
     const subTabs = useMemo<TableSubTab[]>(() => (supportsTableStats(driver) ? ['overview', 'data', 'structure', 'stats'] : ['overview', 'data', 'structure']), [driver]);
     const contentKey = useMemo(() => `${databaseName ?? ''}:${tableName ?? ''}`, [databaseName, tableName]);
@@ -54,10 +66,12 @@ export function TableViewTabs({ connectionId, databaseName, tableName, driver, i
                 </TabsContent>
                 <TabsContent value="data" className="h-full">
                     <TableDataPreview
+                        activeTab={activeTab}
                         connectionId={connectionId}
                         databaseName={databaseName}
                         tableName={tableName}
                         inspectorPortalMode={inspectorPortalMode}
+                        driver={driver}
                     />
                 </TabsContent>
                 <TabsContent value="structure" className="h-full">

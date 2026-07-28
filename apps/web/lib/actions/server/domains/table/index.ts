@@ -4,5 +4,14 @@ import { tableGetPropertiesAction } from './properties';
 import { tableGetStatsAction } from './stats';
 import { tableGetDdlAction } from './ddl';
 import { tablePreviewAction } from './preview';
+import { tableCommitUpdatesAction } from './commit-updates';
 
-export const tableActions = [tableGetProfileAction, tableGetIndexesAction, tableGetPropertiesAction, tableGetStatsAction, tableGetDdlAction, tablePreviewAction];
+export const tableActions = [
+    tableGetProfileAction,
+    tableGetIndexesAction,
+    tableGetPropertiesAction,
+    tableGetStatsAction,
+    tableGetDdlAction,
+    tablePreviewAction,
+    tableCommitUpdatesAction,
+];

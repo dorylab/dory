@@ -71,6 +71,7 @@ export function DriverTableBrowser({
         return (
             <div className="h-full flex flex-col px-6 pb-2 pt-3">
                 <TableViewTabs
+                    activeTab={activeTab}
                     connectionId={connectionId}
                     databaseName={databaseName}
                     tableName={tableName}
@@ -106,6 +107,7 @@ export function DriverTableBrowser({
                             databaseName={databaseName}
                             tableName={tableName}
                             inspectorPortalMode={inspectorPortalMode}
+                            driver={driver}
                         />
                     </TabsContent>
                     <TabsContent value="structure" className="h-full mt-0">

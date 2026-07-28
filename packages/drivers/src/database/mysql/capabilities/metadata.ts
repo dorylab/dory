@@ -388,6 +388,7 @@ async function getTableColumns(datasource: MySqlDatasource, database: string, ta
                     ELSE NULL
                 END AS defaultKind,
                 column_default AS defaultExpression,
+                CASE WHEN is_nullable = 'YES' THEN 1 ELSE 0 END AS nullable,
                 CASE WHEN column_key = 'PRI' THEN 1 ELSE 0 END AS isPrimaryKey,
                 column_comment AS comment
             FROM information_schema.columns

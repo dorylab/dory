@@ -1,6 +1,7 @@
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 
 import { createDuckDbMetadataCapability, type DuckDbMetadataAPI } from './capabilities/metadata';
 import { createDuckDbTableInfoCapability } from './capabilities/table-info';
@@ -18,6 +19,10 @@ export class DuckDbDatasource extends BaseConnection {
         super(config);
         this.capabilities.metadata = createDuckDbMetadataCapability(this);
         this.capabilities.tableInfo = createDuckDbTableInfoCapability(this);
+        this.capabilities.tableMutations = {
+            dialect: 'duckdb',
+            commitUpdates: input => this.commitUpdates(input),
+        };
     }
 
     protected async _init(): Promise<void> {
@@ -56,6 +61,29 @@ export class DuckDbDatasource extends BaseConnection {
 
     async command(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<void> {
         await executeDuckDbQuery(this.getHandle(), sql, params);
+    }
+
+    private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        const statements = buildTableUpdateStatements('duckdb', input);
+        const connection = this.getHandle().connection;
+
+        try {
+            await connection.run('BEGIN TRANSACTION');
+            for (const statement of statements) {
+                const reader = await connection.runAndReadAll(statement.sql, statement.params as any);
+                if (reader.rowsChanged !== 1) {
+                    throw new TableMutationConflictError(undefined, statement.rowIndex);
+                }
+            }
+            await connection.run('COMMIT');
+            return {
+                updatedRows: statements.length,
+                updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+            };
+        } catch (error) {
+            await connection.run('ROLLBACK').catch(() => undefined);
+            throw error;
+        }
     }
 
     get metadata(): DuckDbMetadataAPI {

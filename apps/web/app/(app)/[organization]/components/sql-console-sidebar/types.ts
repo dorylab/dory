@@ -3,6 +3,12 @@ import type { ConnectionType } from '@dory/shared/types/connections';
 export type TableColumn = {
     columnName: string;
     columnType: string;
+    defaultKind?: string | null;
+    defaultExpression?: string | null;
+    isPrimaryKey?: boolean | number | string | null;
+    nullable?: boolean | number | string | null;
+    isNullable?: boolean | number | string | null;
+    comment?: string | null;
 };
 
 export type SidebarOption = {

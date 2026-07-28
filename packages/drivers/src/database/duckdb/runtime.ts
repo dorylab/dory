@@ -255,15 +255,33 @@ export async function getDuckDbTableColumns(handle: DuckDbConnectionHandle, data
         data_type: string;
         column_default: string | null;
         is_nullable: string | null;
+        is_primary_key: boolean | null;
     }>(
         handle,
         `
-            SELECT column_name, data_type, column_default, is_nullable
-            FROM information_schema.columns
-            WHERE table_catalog = ${quoteLiteral(database)}
-              AND table_schema = ${quoteLiteral(schema)}
-              AND table_name = ${quoteLiteral(tableName)}
-            ORDER BY ordinal_position
+            SELECT
+                cols.column_name,
+                cols.data_type,
+                cols.column_default,
+                cols.is_nullable,
+                EXISTS (
+                    SELECT 1
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                      ON tc.constraint_catalog = kcu.constraint_catalog
+                     AND tc.constraint_schema = kcu.constraint_schema
+                     AND tc.constraint_name = kcu.constraint_name
+                    WHERE tc.constraint_type = 'PRIMARY KEY'
+                      AND tc.table_catalog = cols.table_catalog
+                      AND tc.table_schema = cols.table_schema
+                      AND tc.table_name = cols.table_name
+                      AND kcu.column_name = cols.column_name
+                ) AS is_primary_key
+            FROM information_schema.columns cols
+            WHERE cols.table_catalog = ${quoteLiteral(database)}
+              AND cols.table_schema = ${quoteLiteral(schema)}
+              AND cols.table_name = ${quoteLiteral(tableName)}
+            ORDER BY cols.ordinal_position
         `,
     );
 
@@ -271,6 +289,8 @@ export async function getDuckDbTableColumns(handle: DuckDbConnectionHandle, data
         columnName: row.column_name,
         columnType: row.data_type,
         defaultExpression: row.column_default,
+        nullable: row.is_nullable?.toUpperCase() === 'YES',
+        isPrimaryKey: Boolean(row.is_primary_key),
     }));
 }
 

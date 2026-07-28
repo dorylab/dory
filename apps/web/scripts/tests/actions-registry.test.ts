@@ -609,6 +609,46 @@ test('web action manifest exposes schema.getGraph to agents, MCP, and automation
     assert.equal(schemaGraph.mcp?.name, 'dory_get_schema_graph');
 });
 
+test('table.commitUpdates is a user-only write action with redacted audit summaries', async () => {
+    const actionId = 'table.commitUpdates' as ActionId;
+    const input = {
+        connectionId: 'conn',
+        database: 'app',
+        table: 'users',
+        rows: [
+            {
+                key: { id: 1 },
+                changes: [{ column: 'email', originalValue: 'old@example.com', nextValue: 'new@example.com' }],
+            },
+        ],
+    };
+
+    await assertAllowed(actionId, roleContext('member', 'user', ['query:write']), input);
+    await assertDenied(actionId, roleContext('viewer', 'user', ['query:write']), /Missing permission workspace:write/, input);
+    await assertDenied(actionId, roleContext('member', 'mcp', ['query:write']), /Actor type "mcp" is not allowed/, input);
+
+    const manifest = buildActionManifest(webActionRegistry, new Date('2026-07-29T00:00:00.000Z'));
+    const manifestAction = manifest.actions.find(item => item.id === actionId);
+    assert.ok(manifestAction);
+    assert.equal(manifestAction.kind, 'command');
+    assert.equal(manifestAction.risk, 'write');
+    assert.deepEqual(manifestAction.requiredScopes, ['query:write']);
+    assert.deepEqual(manifestAction.allowedActors, ['user']);
+
+    const action = webActionRegistry.get(actionId)!;
+    const summary = (action.audit as any).inputSummary(input);
+    assert.deepEqual(summary, {
+        connectionId: 'conn',
+        identityId: null,
+        database: 'app',
+        table: 'users',
+        rowCount: 1,
+        cellCount: 1,
+    });
+    assert.equal(JSON.stringify(summary).includes('old@example.com'), false);
+    assert.equal(JSON.stringify(summary).includes('new@example.com'), false);
+});
+
 test('web registry projects connection.list for MCP without leaking canonical connection shape', async () => {
     const fakeConnection = {
         connection: {

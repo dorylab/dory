@@ -1,6 +1,7 @@
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { SqliteDialect } from './dialect';
 import { createSqliteMetadataCapability, type SqliteMetadataAPI } from './capabilities/metadata';
 import { createSqliteTableInfoCapability } from './capabilities/table-info';
@@ -15,6 +16,10 @@ export class SqliteDatasource extends BaseConnection {
         super(config);
         this.capabilities.metadata = createSqliteMetadataCapability(this);
         this.capabilities.tableInfo = createSqliteTableInfoCapability(this);
+        this.capabilities.tableMutations = {
+            dialect: 'sqlite',
+            commitUpdates: input => this.commitUpdates(input),
+        };
     }
 
     protected async _init(): Promise<void> {
@@ -83,6 +88,25 @@ export class SqliteDatasource extends BaseConnection {
 
     async command(sql: string, params?: DriverQueryParams, _context?: ConnectionQueryContext): Promise<void> {
         executeSqliteQuery(this.getDatabase(), sql, params);
+    }
+
+    private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        const statements = buildTableUpdateStatements('sqlite', input);
+        const database = this.getDatabase();
+        const commit = database.transaction(() => {
+            for (const statement of statements) {
+                const result = database.prepare(statement.sql).run(...statement.params);
+                if (result.changes !== 1) {
+                    throw new TableMutationConflictError(undefined, statement.rowIndex);
+                }
+            }
+        });
+
+        commit();
+        return {
+            updatedRows: statements.length,
+            updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+        };
     }
 
     get metadata(): SqliteMetadataAPI {

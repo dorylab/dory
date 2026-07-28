@@ -1,8 +1,9 @@
-import type { Pool } from 'mysql2/promise';
+import type { Pool, ResultSetHeader } from 'mysql2/promise';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { isTlsNegotiationError, isTlsPreferMode, withTlsDisabledOptions } from '@dory/drivers/core/tls';
+import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { createMysqlMetadataCapability, type MysqlMetadataAPI } from './capabilities/metadata';
 import { createMysqlTableInfoCapability } from './capabilities/table-info';
 import { MySqlDialect } from './dialect';
@@ -19,6 +20,10 @@ export class MySqlDatasource extends BaseConnection {
         super(config);
         this.capabilities.metadata = createMysqlMetadataCapability(this);
         this.capabilities.tableInfo = createMysqlTableInfoCapability(this);
+        this.capabilities.tableMutations = {
+            dialect: 'mysql',
+            commitUpdates: input => this.commitUpdates(input),
+        };
     }
 
     protected async _init(): Promise<void> {
@@ -159,6 +164,34 @@ export class MySqlDatasource extends BaseConnection {
         const targetDatabase = context?.database ?? this.config.database;
         const pool = this.resolvePool(targetDatabase);
         await executeMySqlCommand(pool, this.config, sql, params, context);
+    }
+
+    private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        this.assertReady();
+        const statements = buildTableUpdateStatements('mysql', input);
+        const pool = this.resolvePool(input.database);
+        const connection = await pool.getConnection();
+
+        try {
+            await connection.beginTransaction();
+            for (const statement of statements) {
+                const [result] = await connection.query(statement.sql, statement.params);
+                const affectedRows = (result as ResultSetHeader).affectedRows;
+                if (affectedRows !== 1) {
+                    throw new TableMutationConflictError(undefined, statement.rowIndex);
+                }
+            }
+            await connection.commit();
+            return {
+                updatedRows: statements.length,
+                updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+            };
+        } catch (error) {
+            await connection.rollback().catch(() => undefined);
+            throw error;
+        } finally {
+            connection.release();
+        }
     }
 
     async cancelQuery(queryId: string): Promise<void> {

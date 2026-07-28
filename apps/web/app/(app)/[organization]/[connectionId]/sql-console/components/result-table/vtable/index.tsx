@@ -36,14 +36,65 @@ const TOP_LEFT_GRID_STYLE = { overflow: 'hidden' } as const;
 const BOTTOM_RIGHT_GRID_STYLE = { overflowY: 'auto', overflowX: 'auto' } as const;
 const GRID_STYLE = { outline: 'none' } as const;
 
+type CellEditorKind = 'text' | 'number' | 'precise-number' | 'boolean' | 'date' | 'complex';
+
+function getCellEditorKind(type?: string | null): CellEditorKind {
+    const normalized = type?.toLowerCase() ?? '';
+    if (/(json|array|struct|map|blob|binary|bytea|geometry|geography|interval)/.test(normalized)) return 'complex';
+    if (/(bool|boolean)/.test(normalized)) return 'boolean';
+    if (/(bigint|bigserial|decimal|numeric|number)/.test(normalized)) return 'precise-number';
+    if (/(tinyint|smallint|mediumint|integer|int|serial|float|double|real)/.test(normalized)) return 'number';
+    if (/(date|time|timestamp)/.test(normalized)) return 'date';
+    return 'text';
+}
+
+function toEditDraft(value: unknown) {
+    if (value == null) return '';
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+}
+
+function toDateEditDraft(value: unknown, type?: string | null) {
+    const draft = toEditDraft(value);
+    if (/timestamp|datetime/i.test(type ?? '')) return draft.replace(' ', 'T').replace(/Z$/, '');
+    if (/\btime\b/i.test(type ?? '')) return draft.match(/\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?/)?.[0] ?? draft;
+    return draft.slice(0, 10);
+}
+
+function parseEditDraft(kind: CellEditorKind, draft: string, messages: { chooseBoolean: string; invalidNumber: string }): unknown {
+    if (kind === 'boolean') {
+        if (draft !== 'true' && draft !== 'false') throw new Error(messages.chooseBoolean);
+        return draft === 'true';
+    }
+    if (kind === 'number') {
+        const value = Number(draft);
+        if (!draft.trim() || !Number.isFinite(value)) {
+            throw new Error(messages.invalidNumber);
+        }
+        return value;
+    }
+    if (kind === 'precise-number') {
+        const trimmed = draft.trim();
+        if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(trimmed)) {
+            throw new Error(messages.invalidNumber);
+        }
+        return trimmed;
+    }
+    return draft;
+}
+
 type ColumnMeta = {
     name: string;
     type?: string | null;
+    nullable?: boolean;
+    isPrimaryKey?: boolean;
 };
 
 type RawColumnMeta = {
     name?: unknown;
     type?: unknown;
+    nullable?: unknown;
+    isPrimaryKey?: unknown;
 };
 
 type GridScrollPane = {
@@ -56,6 +107,7 @@ type MeasurableMultiGrid = MultiGrid & {
     _bottomRightGrid?: GridScrollPane;
     recomputeGridSize?: () => void;
     forceUpdateGrids?: () => void;
+    scrollToCell?: (params: { columnIndex: number; rowIndex: number }) => void;
 };
 
 type VersionedMultiGridProps = MultiGridProps & {
@@ -154,6 +206,16 @@ export default function VTable({
     isActive = true,
     onSortChange,
     onSelectedRowIndexesChange,
+    editable = false,
+    getCellEditState,
+    isRowChanged,
+    onCellChange,
+    onRevertCell,
+    onUndo,
+    onRedo,
+    onCommitAll,
+    onSelectionChange,
+    focusRequest,
 }: VTableProps) {
     const t = useTranslations('SqlConsole');
     const columnsRaw = useMemo<ColumnMeta[]>(() => {
@@ -163,6 +225,22 @@ export default function VTable({
             .map(column => ({
                 name: column.name,
                 type: typeof column.type === 'string' || column.type === null ? column.type : undefined,
+                nullable:
+                    typeof column.nullable === 'boolean'
+                        ? column.nullable
+                        : typeof column.nullable === 'number'
+                          ? column.nullable !== 0
+                          : typeof column.nullable === 'string'
+                            ? ['true', 'yes', '1'].includes(column.nullable.toLowerCase())
+                            : undefined,
+                isPrimaryKey:
+                    typeof column.isPrimaryKey === 'boolean'
+                        ? column.isPrimaryKey
+                        : typeof column.isPrimaryKey === 'number'
+                          ? column.isPrimaryKey !== 0
+                          : typeof column.isPrimaryKey === 'string'
+                            ? ['true', 'yes', '1'].includes(column.isPrimaryKey.toLowerCase())
+                            : undefined,
             }));
     }, [columnMetas]);
     const columns = useMemo(() => columnsRaw.map(column => column.name), [columnsRaw]);
@@ -664,6 +742,13 @@ export default function VTable({
     const [selectedCells, setSelectedCells] = useState<Set<CellKey>>(new Set());
     const [, setCellAnchor] = useState<{ row: number; col: string } | null>(null);
     const [focusedCell, setFocusedCell] = useState<{ row: number; col: string } | null>(null);
+    const [editingCell, setEditingCell] = useState<{
+        row: number;
+        col: string;
+        draft: string;
+        error: string | null;
+    } | null>(null);
+    const editingCancelledRef = useRef(false);
     const hasAnySelection = selectedCells.size > 0 || selectedRowIds.size > 0;
 
     const selectedRowIdsRef = useRef(selectedRowIds);
@@ -678,6 +763,110 @@ export default function VTable({
     const gridContainerRef = useRef<HTMLDivElement | null>(null);
     const gridRef = useRef<MultiGrid | null>(null);
     const lastEmittedSelectedRowsRef = useRef<number[]>(selectedRowIndexes ?? []);
+
+    const getColumnMeta = useCallback((column: string) => columnsRaw.find(item => item.name === column), [columnsRaw]);
+    const getEffectiveCellState = useCallback(
+        (row: number, column: string) => {
+            const meta = getColumnMeta(column);
+            const kind = getCellEditorKind(meta?.type);
+            const externalState = getCellEditState?.(row, column);
+            const canEdit = Boolean(editable && externalState?.editable !== false && !meta?.isPrimaryKey && kind !== 'complex');
+            return {
+                kind,
+                meta,
+                editable: canEdit,
+                changed: Boolean(externalState?.changed),
+                nullable: externalState?.nullable ?? meta?.nullable ?? false,
+                readOnlyReason: externalState?.readOnlyReason,
+            };
+        },
+        [editable, getCellEditState, getColumnMeta],
+    );
+
+    const focusGridCell = useCallback(
+        (row: number, column: string) => {
+            const columnIndex = columns.indexOf(column);
+            if (row < 0 || row >= tableRowCount || columnIndex < 0) return;
+            const cell = { row, col: column };
+            setFocusedCell(cell);
+            setSelectedCells(new Set([ck(row, column)]));
+            setSelectedRowIds(new Set());
+            cellAnchorRef.current = cell;
+            setCellAnchor(cell);
+            (gridRef.current as MeasurableMultiGrid | null)?.scrollToCell?.({
+                rowIndex: row + 1,
+                columnIndex: columnIndex + 1,
+            });
+            requestAnimationFrame(() => gridContainerRef.current?.focus({ preventScroll: true }));
+        },
+        [columns, tableRowCount],
+    );
+
+    const moveFocusedCell = useCallback(
+        (rowDelta: number, columnDelta: number, from = focusedCell) => {
+            if (!from || columns.length === 0 || tableRowCount === 0) return;
+            const currentColumnIndex = Math.max(0, columns.indexOf(from.col));
+            let nextRow = from.row + rowDelta;
+            let nextColumnIndex = currentColumnIndex + columnDelta;
+            if (nextColumnIndex >= columns.length) {
+                nextColumnIndex = 0;
+                nextRow += 1;
+            } else if (nextColumnIndex < 0) {
+                nextColumnIndex = columns.length - 1;
+                nextRow -= 1;
+            }
+            nextRow = Math.max(0, Math.min(tableRowCount - 1, nextRow));
+            focusGridCell(nextRow, columns[nextColumnIndex]);
+        },
+        [columns, focusGridCell, focusedCell, tableRowCount],
+    );
+
+    const beginCellEdit = useCallback(
+        (row: number, column: string, initialDraft?: string) => {
+            const state = getEffectiveCellState(row, column);
+            if (!state.editable) return;
+            const value = getDisplayRow(row)?.rowData?.[column];
+            editingCancelledRef.current = false;
+            setEditingCell({
+                row,
+                col: column,
+                draft: initialDraft ?? (state.kind === 'date' ? toDateEditDraft(value, state.meta?.type) : toEditDraft(value)),
+                error: null,
+            });
+            focusGridCell(row, column);
+        },
+        [focusGridCell, getDisplayRow, getEffectiveCellState],
+    );
+
+    const commitCellEdit = useCallback(
+        (move?: 'next' | 'previous') => {
+            if (!editingCell) return true;
+            const state = getEffectiveCellState(editingCell.row, editingCell.col);
+            try {
+                const nextValue = parseEditDraft(state.kind, editingCell.draft, {
+                    chooseBoolean: t('VTable.Edit.ChooseBoolean'),
+                    invalidNumber: t('VTable.Edit.InvalidNumber'),
+                });
+                const originalValue = getDisplayRow(editingCell.row)?.rowData?.[editingCell.col];
+                onCellChange?.({
+                    rowIndex: editingCell.row,
+                    column: editingCell.col,
+                    originalValue,
+                    nextValue,
+                });
+                const committedCell = { row: editingCell.row, col: editingCell.col };
+                setEditingCell(null);
+                if (move) {
+                    requestAnimationFrame(() => moveFocusedCell(0, move === 'next' ? 1 : -1, committedCell));
+                }
+                return true;
+            } catch (error) {
+                setEditingCell(current => (current ? { ...current, error: error instanceof Error ? error.message : String(error) } : current));
+                return false;
+            }
+        },
+        [editingCell, getDisplayRow, getEffectiveCellState, moveFocusedCell, onCellChange, t],
+    );
 
     useEffect(() => {
         if (!selectedRowIndexes) {
@@ -709,6 +898,30 @@ export default function VTable({
         lastEmittedSelectedRowsRef.current = nextRows;
         onSelectedRowIndexesChange?.(nextRows);
     }, [onSelectedRowIndexesChange, selectedRowIds]);
+
+    useEffect(() => {
+        const selectedCellRows = new Set([...selectedCells].map(cell => parseCK(cell).row));
+        const selectedRows = new Set([...selectedRowIds, ...selectedCellRows]);
+        onSelectionChange?.({
+            cellCount: selectedCells.size,
+            rowCount: selectedRows.size,
+        });
+    }, [onSelectionChange, selectedCells, selectedRowIds]);
+
+    useEffect(() => {
+        if (!focusRequest) return;
+        focusGridCell(focusRequest.rowIndex, focusRequest.column);
+    }, [focusGridCell, focusRequest]);
+
+    useEffect(() => {
+        const grid = gridRef.current as MeasurableMultiGrid | null;
+        grid?.forceUpdateGrids?.();
+    }, [editingCell]);
+
+    useLayoutEffect(() => {
+        const grid = gridRef.current as MeasurableMultiGrid | null;
+        grid?.forceUpdateGrids?.();
+    }, [getCellEditState, isRowChanged, results]);
 
     const syncHeaderHorizontalScroll = useCallback((deltaX: number) => {
         const grid = gridRef.current as MeasurableMultiGrid | null;
@@ -972,18 +1185,16 @@ export default function VTable({
             }
         }
     };
+    const endDrag = useCallback(() => {
+        draggingRef.current = false;
+        document.body.style.userSelect = '';
+    }, []);
     const beginDragRect = (row: number, col: string) => {
         draggingRef.current = true;
         document.body.style.userSelect = 'none';
-        window.addEventListener('mouseup', endDrag);
         cellAnchorRef.current = { row, col };
         setCellAnchor(cellAnchorRef.current);
         setSelectedCells(new Set([ck(row, col)]));
-    };
-    const endDrag = () => {
-        draggingRef.current = false;
-        document.body.style.userSelect = '';
-        window.removeEventListener('mouseup', endDrag);
     };
     const updateRectSelection = (row: number, col: string) => {
         const a = cellAnchorRef.current;
@@ -997,6 +1208,10 @@ export default function VTable({
     };
     const onCellMouseDown = (e: React.MouseEvent, row: number, col: string) => {
         if (e.button !== 0) return;
+        if (editingCell && (editingCell.row !== row || editingCell.col !== col) && !commitCellEdit()) {
+            e.preventDefault();
+            return;
+        }
         e.preventDefault();
         gridContainerRef.current?.focus({ preventScroll: true });
         lastMouseDownWasOnCell.current = true;
@@ -1019,13 +1234,16 @@ export default function VTable({
         setCellAnchor(cellAnchorRef.current);
         setSelectedCells(new Set([ck(row, col)]));
         beginDragRect(row, col);
-        setSelectedRowIds(new Set([row]));
+        setSelectedRowIds(editable ? new Set() : new Set([row]));
     };
     const onCellMouseEnter = (_e: React.MouseEvent, row: number, col: string) => {
         if (!draggingRef.current) return;
         updateRectSelection(row, col);
     };
     const onCellKeyDown = async (e: React.KeyboardEvent, rowIndex: number, col: string) => {
+        if (editingCell?.row === rowIndex && editingCell.col === col) {
+            return;
+        }
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
             e.preventDefault();
             if (selectedCellsRef.current.size > 1) await copySelectedCellsTSV();
@@ -1036,6 +1254,38 @@ export default function VTable({
         }
     };
     const onGridKeyDown = async (e: React.KeyboardEvent) => {
+        if (editingCell) {
+            return;
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            if (e.shiftKey) onRedo?.();
+            else onUndo?.();
+            return;
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && editable) {
+            e.preventDefault();
+            onCommitAll?.();
+            return;
+        }
+        if (focusedCell && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                beginCellEdit(focusedCell.row, focusedCell.col);
+                return;
+            }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                e.preventDefault();
+                moveFocusedCell(e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0, e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0);
+                return;
+            }
+            if (editable && e.key.length === 1) {
+                e.preventDefault();
+                const state = getEffectiveCellState(focusedCell.row, focusedCell.col);
+                beginCellEdit(focusedCell.row, focusedCell.col, state.kind === 'boolean' || state.kind === 'date' ? undefined : e.key);
+                return;
+            }
+        }
         if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
             e.preventDefault();
             if (selectedCells.size > 1) {
@@ -1070,7 +1320,7 @@ export default function VTable({
         };
         window.addEventListener('mouseup', onUp);
         return () => window.removeEventListener('mouseup', onUp);
-    }, []);
+    }, [endDrag]);
 
     /* ===== Inspector ===== */
     function getSelectionInfo() {
@@ -1085,6 +1335,8 @@ export default function VTable({
         return { mode: 'none' } as const;
     }
     const sel = getSelectionInfo();
+    const contextCell = focusedCell ?? (selectedCells.size > 0 ? parseCK([...selectedCells][0]) : null);
+    const contextCellState = contextCell ? getEffectiveCellState(contextCell.row, contextCell.col) : null;
     const openCellInspector = (row: number, col: string) => {
         const v = getDisplayRow(row)?.rowData?.[col];
         setInspectorMode?.('cell');
@@ -1154,6 +1406,7 @@ export default function VTable({
         const r = rowIndex - 1;
         if (columnIndex === 0) {
             const isRowSelected = selectedRowIds.has(r);
+            const hasPendingChanges = Boolean(isRowChanged?.(r));
             return (
                 <div
                     key={key}
@@ -1190,7 +1443,10 @@ export default function VTable({
                     }}
                     title={t('VTable.RowIndexHint')}
                 >
-                    {r + 1}
+                    <span className="relative inline-flex items-center justify-center">
+                        {r + 1}
+                        {hasPendingChanges ? <span className="absolute -right-3 h-1.5 w-1.5 rounded-full bg-primary" aria-label={t('VTable.ChangedRow')} /> : null}
+                    </span>
                 </div>
             );
         }
@@ -1203,6 +1459,8 @@ export default function VTable({
         const isCellSelected = selectedCells.has(keyCell);
         const isFocused = focusedCell?.row === r && focusedCell?.col === colKeyName;
         const cellValue = displayRow?.rowData?.[colKeyName];
+        const cellEditState = getEffectiveCellState(r, colKeyName);
+        const isEditing = editingCell?.row === r && editingCell.col === colKeyName;
         const isRectSelectedCell = Boolean(selectedRectBounds && isCellSelected);
         const rectTopRow = selectedRectBounds?.rows[0];
         const rectBottomRow = selectedRectBounds?.rows[selectedRectBounds.rows.length - 1];
@@ -1229,6 +1487,7 @@ export default function VTable({
                 className={cn(
                     'px-2 text-sm border-b border-r bg-card cursor-pointer outline-none select-none',
                     'min-w-0 overflow-hidden',
+                    cellEditState.changed && 'bg-primary/8 ring-1 ring-inset ring-primary/40',
                     isRowSelected && PRIMARY_SELECTION_SUBTLE_CLASS,
                     isCellSelected && PRIMARY_SELECTION_CLASS,
                     isFocused && !isRectSelectedCell && PRIMARY_SELECTION_RING_CLASS,
@@ -1239,7 +1498,11 @@ export default function VTable({
                 onDoubleClick={e => {
                     e.preventDefault();
                     e.stopPropagation();
-                    openCellInspector(r, colKeyName);
+                    if (cellEditState.editable) {
+                        beginCellEdit(r, colKeyName);
+                    } else {
+                        openCellInspector(r, colKeyName);
+                    }
                 }}
                 onKeyDown={e => onCellKeyDown(e, r, colKeyName)}
                 onContextMenu={() => {
@@ -1249,15 +1512,103 @@ export default function VTable({
                         cellAnchorRef.current = { row: r, col: colKeyName };
                         setCellAnchor(cellAnchorRef.current);
                         setSelectedCells(new Set([ck(r, colKeyName)]));
-                        setSelectedRowIds(new Set([r]));
+                        setSelectedRowIds(editable ? new Set() : new Set([r]));
                     }
                 }}
-                title={formatTooltip(cellValue)}
+                title={cellEditState.readOnlyReason ?? formatTooltip(cellValue)}
             >
                 {isRemoteRowLoading ? (
                     <span className="block h-3 w-20 max-w-[70%] rounded-sm bg-muted" />
+                ) : isEditing ? (
+                    cellEditState.kind === 'boolean' ? (
+                        <select
+                            autoFocus
+                            value={editingCell.draft}
+                            className="h-full w-full min-w-0 border-0 bg-transparent px-0 text-sm outline-none"
+                            onMouseDown={event => event.stopPropagation()}
+                            onChange={event => setEditingCell(current => (current ? { ...current, draft: event.target.value, error: null } : current))}
+                            onBlur={() => {
+                                if (editingCancelledRef.current) {
+                                    editingCancelledRef.current = false;
+                                    return;
+                                }
+                                commitCellEdit();
+                            }}
+                            onKeyDown={event => {
+                                event.stopPropagation();
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    editingCancelledRef.current = true;
+                                    setEditingCell(null);
+                                    gridContainerRef.current?.focus({ preventScroll: true });
+                                } else if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    commitCellEdit();
+                                } else if (event.key === 'Tab') {
+                                    event.preventDefault();
+                                    commitCellEdit(event.shiftKey ? 'previous' : 'next');
+                                }
+                            }}
+                        >
+                            {editingCell.draft === '' ? (
+                                <option value="" disabled>
+                                    NULL
+                                </option>
+                            ) : null}
+                            <option value="true">true</option>
+                            <option value="false">false</option>
+                        </select>
+                    ) : (
+                        <input
+                            autoFocus
+                            value={editingCell.draft}
+                            type={
+                                cellEditState.kind === 'date'
+                                    ? /timestamp|datetime/i.test(cellEditState.meta?.type ?? '')
+                                        ? 'datetime-local'
+                                        : /time/i.test(cellEditState.meta?.type ?? '')
+                                          ? 'time'
+                                          : 'date'
+                                    : 'text'
+                            }
+                            inputMode={cellEditState.kind === 'number' || cellEditState.kind === 'precise-number' ? 'decimal' : undefined}
+                            aria-invalid={Boolean(editingCell.error)}
+                            title={editingCell.error ?? undefined}
+                            className={cn(
+                                'h-full w-full min-w-0 border-0 bg-transparent px-0 text-sm outline-none',
+                                (cellEditState.kind === 'number' || cellEditState.kind === 'precise-number') && 'font-mono tabular-nums',
+                                editingCell.error && 'text-destructive',
+                            )}
+                            onMouseDown={event => event.stopPropagation()}
+                            onChange={event => setEditingCell(current => (current ? { ...current, draft: event.target.value, error: null } : current))}
+                            onBlur={() => {
+                                if (editingCancelledRef.current) {
+                                    editingCancelledRef.current = false;
+                                    return;
+                                }
+                                commitCellEdit();
+                            }}
+                            onKeyDown={event => {
+                                event.stopPropagation();
+                                if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    editingCancelledRef.current = true;
+                                    setEditingCell(null);
+                                    gridContainerRef.current?.focus({ preventScroll: true });
+                                } else if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    commitCellEdit();
+                                } else if (event.key === 'Tab') {
+                                    event.preventDefault();
+                                    commitCellEdit(event.shiftKey ? 'previous' : 'next');
+                                }
+                            }}
+                        />
+                    )
                 ) : (
-                    <span className="block truncate min-w-0 w-full">{formatValue(cellValue)}</span>
+                    <span className={cn('block min-w-0 w-full truncate', editable && cellValue == null && 'font-mono text-xs italic text-muted-foreground')}>
+                        {editable && cellValue == null ? 'NULL' : formatValue(cellValue)}
+                    </span>
                 )}
             </div>
         );
@@ -1560,7 +1911,7 @@ export default function VTable({
                                 if (row != null && col != null) openCellInspector(row, col);
                             }}
                         >
-                            {t('VTable.Context.ViewCell')}
+                            {editable ? t('VTable.Context.OpenCellInspector') : t('VTable.Context.ViewCell')}
                         </ContextMenuItem>
                         <ContextMenuItem
                             inset
@@ -1571,6 +1922,42 @@ export default function VTable({
                         >
                             {t('VTable.Context.ViewRowDetails')}
                         </ContextMenuItem>
+                        {editable && contextCellState?.editable && contextCell ? (
+                            <ContextMenuItem
+                                inset
+                                onSelect={() => {
+                                    beginCellEdit(contextCell.row, contextCell.col);
+                                }}
+                            >
+                                {t('VTable.Context.EditCell')}
+                            </ContextMenuItem>
+                        ) : null}
+                        {editable && contextCellState?.nullable && contextCellState.editable && contextCell ? (
+                            <ContextMenuItem
+                                inset
+                                onSelect={() => {
+                                    const originalValue = getDisplayRow(contextCell.row)?.rowData?.[contextCell.col];
+                                    onCellChange?.({
+                                        rowIndex: contextCell.row,
+                                        column: contextCell.col,
+                                        originalValue,
+                                        nextValue: null,
+                                    });
+                                }}
+                            >
+                                {t('VTable.Context.SetToNull')}
+                            </ContextMenuItem>
+                        ) : null}
+                        {editable && contextCellState?.changed && contextCell ? (
+                            <ContextMenuItem
+                                inset
+                                onSelect={() => {
+                                    onRevertCell?.(contextCell.row, contextCell.col);
+                                }}
+                            >
+                                {t('VTable.Context.RevertCell')}
+                            </ContextMenuItem>
+                        ) : null}
                     </>
                 )}
                 {sel.mode === 'singleRow' && (
@@ -1606,8 +1993,20 @@ export default function VTable({
                         await copySelectedCellsTSV();
                     }}
                 >
-                    {t('VTable.Context.Copy')}
+                    {editable && sel.mode === 'singleCell' ? t('VTable.Context.CopyValue') : t('VTable.Context.Copy')}
                 </ContextMenuItem>
+                {editable && contextCell ? (
+                    <ContextMenuItem
+                        inset
+                        onSelect={async e => {
+                            e.stopPropagation();
+                            const row = getDisplayRow(contextCell.row)?.rowData ?? {};
+                            await copyText(JSON.stringify(row, null, 2));
+                        }}
+                    >
+                        {t('VTable.Context.CopyRowAsJson')}
+                    </ContextMenuItem>
+                ) : null}
                 <ContextMenuItem
                     inset
                     disabled={!hasAnySelection}

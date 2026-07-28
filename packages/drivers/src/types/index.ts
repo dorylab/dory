@@ -94,7 +94,41 @@ export type TableColumnInfo = {
     defaultKind?: string | null;
     defaultExpression?: string | null;
     isPrimaryKey?: boolean | number | string | null;
+    nullable?: boolean | number | string | null;
+    isNullable?: boolean | number | string | null;
     comment?: string | null;
+};
+
+export type TableMutationDialect = 'postgres' | 'mysql' | 'sqlite' | 'duckdb';
+
+export type TableMutationValue = string | number | boolean | null;
+
+export type TableUpdateCell = {
+    column: string;
+    originalValue: TableMutationValue;
+    nextValue: TableMutationValue;
+};
+
+export type TableUpdateRow = {
+    key: Record<string, TableMutationValue>;
+    changes: TableUpdateCell[];
+};
+
+export type TableUpdateBatch = {
+    database: string;
+    table: string;
+    primaryKeyColumns: string[];
+    rows: TableUpdateRow[];
+};
+
+export type TableUpdateResult = {
+    updatedRows: number;
+    updatedCells: number;
+};
+
+export type TableMutationAPI = {
+    dialect: TableMutationDialect;
+    commitUpdates: (input: TableUpdateBatch) => Promise<TableUpdateResult>;
 };
 
 export type DatabaseObjectRow = {
@@ -427,6 +461,7 @@ export type ConnectionCapabilities = {
     metadata?: ConnectionMetadataAPI;
     queryInsights?: QueryInsightsAPI;
     tableInfo?: GetTableInfoAPI;
+    tableMutations?: TableMutationAPI;
     privileges?: Record<string, unknown>;
 };
 export type DriverCapabilities = ConnectionCapabilities;

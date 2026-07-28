@@ -703,6 +703,7 @@ async function getTableColumns(datasource: PostgresDatasource, database: string,
                 cols.udt_name AS "columnType",
                 CASE WHEN cols.column_default IS NULL THEN NULL ELSE 'DEFAULT' END AS "defaultKind",
                 cols.column_default AS "defaultExpression",
+                cols.is_nullable = 'YES' AS nullable,
                 EXISTS (
                     SELECT 1
                     FROM information_schema.table_constraints tc
