@@ -26,8 +26,10 @@ export function shouldShowResultMetadataLoading(params: {
     activeSet: number;
     activeMetaSessionId?: string | null;
     activeMetaSetIndex?: number | null;
+    isLiveExecution?: boolean;
 }) {
     if (!params.sessionId) return false;
+    if (params.isLiveExecution) return false;
 
     const isSessionMetadataPending = params.loadedSessionId !== params.sessionId && !params.hasCachedMetadata;
     const isActiveResultMetadataPending = params.activeSet >= 0 && (params.activeMetaSessionId !== params.sessionId || params.activeMetaSetIndex !== params.activeSet);
