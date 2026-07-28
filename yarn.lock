@@ -2979,10 +2979,8 @@ __metadata:
     "@dory/i18n": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@types/node": "npm:^25.5.2"
-    "@types/pako": "npm:^2.0.4"
     clsx: "npm:^2.1.1"
     next: "npm:16.2.7"
-    pako: "npm:^2.1.0"
     tailwind-merge: "npm:^3.5.0"
     typescript: "npm:^6.0.2"
   languageName: unknown
@@ -8818,13 +8816,6 @@ __metadata:
   dependencies:
     "@types/node": "npm:*"
   checksum: 10c0/5d23feeb7d737dd05233fd02f35e8a8e32a7cee27495109616443a8fb5970a15388101c36d3f41ba9cb2024c1c7942f66c46ca93ad1b7a054308a2ad5edc4231
-  languageName: node
-  linkType: hard
-
-"@types/pako@npm:^2.0.4":
-  version: 2.0.4
-  resolution: "@types/pako@npm:2.0.4"
-  checksum: 10c0/5765bf8bc7e77ee141c454118f03e544b8f6cb51eb257d82dc5830feeab8cd00818af3a1eabefdfbe8dd3ae9916ed5403937bf1031a0ee51deea27fdf4dccdfb
   languageName: node
   linkType: hard
 
@@ -18726,13 +18717,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pako@npm:^2.1.0":
-  version: 2.1.0
-  resolution: "pako@npm:2.1.0"
-  checksum: 10c0/8e8646581410654b50eb22a5dfd71159cae98145bd5086c9a7a816ec0370b5f72b4648d08674624b3870a521e6a3daffd6c2f7bc00fdefc7063c9d8232ff5116
-  languageName: node
-  linkType: hard
-
 "parent-module@npm:^1.0.0":
   version: 1.0.1
   resolution: "parent-module@npm:1.0.1"
@@ -23037,7 +23021,6 @@ __metadata:
     "@types/better-sqlite3": "npm:^7.6.13"
     "@types/lodash-es": "npm:^4.17.12"
     "@types/node": "npm:^25.5.2"
-    "@types/pako": "npm:^2.0.4"
     "@types/pg": "npm:^8.20.0"
     "@types/react": "npm:19.2.14"
     "@types/react-dom": "npm:19.2.3"
@@ -23092,7 +23075,6 @@ __metadata:
     next-themes: "npm:^0.4.6"
     npm: "npm:^11.12.1"
     nuqs: "npm:^2.8.9"
-    pako: "npm:^2.1.0"
     pg: "npm:^8.20.0"
     pino: "npm:^10.3.1"
     pino-pretty: "npm:^13.1.3"

@@ -7,15 +7,13 @@
     "types": "./src/index.ts",
     "exports": {
         ".": "./src/index.ts",
-        "./binary-codec": "./src/binary-codec.ts",
         "./compute-schema-hash": "./src/compute-schema-hash.ts",
         "./crypto": "./src/crypto.ts",
         "./enforce-select-limit": "./src/enforce-select-limit.ts",
         "./format-type-for-prompt": "./src/format-type-for-prompt.ts",
         "./request": "./src/request.ts",
         "./schema-tags": "./src/schema-tags.ts",
-        "./split-multi-sql": "./src/split-multi-sql.ts",
-        "./worker-pool": "./src/worker-pool.ts"
+        "./split-multi-sql": "./src/split-multi-sql.ts"
     },
     "scripts": {
         "typecheck": "tsc --noEmit"
@@ -26,12 +24,10 @@
         "@dory/shared": "0.1.0",
         "clsx": "^2.1.1",
         "next": "16.2.7",
-        "pako": "^2.1.0",
         "tailwind-merge": "^3.5.0"
     },
     "devDependencies": {
         "@types/node": "^25.5.2",
-        "@types/pako": "^2.0.4",
         "typescript": "^6.0.2"
     }
 }
