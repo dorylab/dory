@@ -479,15 +479,16 @@ test('isAllowedMcpOrigin rejects untrusted remote origins', () => {
     );
 });
 
-test('getReadonlyMcpStatements accepts supported read-only SQL prefixes', () => {
-    assert.deepEqual(getReadonlyMcpStatements('SELECT * FROM users; SHOW TABLES;'), ['SELECT * FROM users', 'SHOW TABLES']);
-    assert.deepEqual(getReadonlyMcpStatements('WITH cte AS (SELECT 1) SELECT * FROM cte'), ['WITH cte AS (SELECT 1) SELECT * FROM cte']);
-    assert.deepEqual(getReadonlyMcpStatements('PRAGMA table_info(users)'), ['PRAGMA table_info(users)']);
+test('getReadonlyMcpStatements accepts supported read-only SQL prefixes', async () => {
+    assert.deepEqual(await getReadonlyMcpStatements('SELECT * FROM users; SHOW TABLES;', 'sqlite'), ['SELECT * FROM users', 'SHOW TABLES']);
+    assert.deepEqual(await getReadonlyMcpStatements('WITH cte AS (SELECT 1) SELECT * FROM cte', 'sqlite'), ['WITH cte AS (SELECT 1) SELECT * FROM cte']);
+    assert.deepEqual(await getReadonlyMcpStatements('PRAGMA table_info(users)', 'sqlite'), ['PRAGMA table_info(users)']);
 });
 
-test('getReadonlyMcpStatements rejects write operations and mixed multi-statements', () => {
-    assert.throws(() => getReadonlyMcpStatements('INSERT INTO users VALUES (1)'), /Only read-only SQL is allowed/);
-    assert.throws(() => getReadonlyMcpStatements('SELECT * FROM users; DROP TABLE users;'), /Only read-only SQL is allowed/);
+test('getReadonlyMcpStatements rejects write operations and mixed multi-statements', async () => {
+    await assert.rejects(getReadonlyMcpStatements('INSERT INTO users VALUES (1)', 'sqlite'), /Only read-only SQL is allowed/);
+    await assert.rejects(getReadonlyMcpStatements('SELECT * FROM users; DROP TABLE users;', 'sqlite'), /Only read-only SQL is allowed/);
+    await assert.rejects(getReadonlyMcpStatements('WITH changed AS (DELETE FROM users RETURNING *) SELECT * FROM changed', 'postgres'), /Only read-only SQL is allowed/);
 });
 
 test('normalizeMonitoringFilters applies monitoring defaults and clamps min duration', () => {

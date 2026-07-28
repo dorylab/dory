@@ -1,9 +1,9 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
-import { isReadOnlyQuery } from '../../utils/sql-readonly';
 import { Locale } from '@dory/i18n/routing';
 import { translateApi } from '@/app/api/utils/i18n';
+import { getReadonlySqlStatements } from '@/lib/server/mcp/sql-safety';
 import { logDeniedSqlAudit, runWithSqlAudit } from '@/lib/server/sql-audit';
 
 type CreateSqlRunnerOptions = {
@@ -39,37 +39,45 @@ export function createSqlRunnerTool({ userId, organizationId, datasourceId, mess
             if (!trimmed) {
                 return buildErrorResult(sql, requestedDatabase, t('Api.Chat.SqlRunner.SqlRequired'));
             }
-            const limitedSql = enforceSqlResultRowLimit(trimmed, MAX_SQL_RESULT_ROWS);
-
-            if (!isReadOnlyQuery(trimmed)) {
-                await logDeniedSqlAudit(
-                    {
-                        organizationId,
-                        userId,
-                        source: 'ai_sql_runner',
-                        connectionId: datasourceId,
-                        databaseName: requestedDatabase,
-                        tabId: 'chatbot',
-                        extraJson: {
-                            chatId,
-                            messageId,
-                        },
-                    },
-                    {
-                        sqlText: trimmed,
-                        databaseName: requestedDatabase,
-                        errorMessage: t('Api.Chat.SqlRunner.ReadOnlyOnly'),
-                    },
-                );
-                return buildErrorResult(trimmed, requestedDatabase, t('Api.Chat.SqlRunner.ReadOnlyOnly'), undefined, {
-                    required: true,
-                    reason: 'non-readonly-query',
-                });
-            }
+            let limitedSql = trimmed;
 
             try {
                 const { entry, config } = await ensureConnectionPoolForUser(userId, organizationId, datasourceId, null);
                 const instance = entry.instance;
+                let statements: string[] = [];
+                try {
+                    statements = await getReadonlySqlStatements(trimmed, instance.config.type);
+                } catch {
+                    // The translated response remains intentionally generic; the denied SQL is recorded below.
+                }
+
+                if (statements.length !== 1) {
+                    await logDeniedSqlAudit(
+                        {
+                            organizationId,
+                            userId,
+                            source: 'ai_sql_runner',
+                            connectionId: datasourceId,
+                            databaseName: requestedDatabase,
+                            tabId: 'chatbot',
+                            extraJson: {
+                                chatId,
+                                messageId,
+                            },
+                        },
+                        {
+                            sqlText: trimmed,
+                            databaseName: requestedDatabase,
+                            errorMessage: t('Api.Chat.SqlRunner.ReadOnlyOnly'),
+                        },
+                    );
+                    return buildErrorResult(trimmed, requestedDatabase, t('Api.Chat.SqlRunner.ReadOnlyOnly'), undefined, {
+                        required: true,
+                        reason: 'non-readonly-query',
+                    });
+                }
+
+                limitedSql = enforceSqlResultRowLimit(statements[0]!, MAX_SQL_RESULT_ROWS);
 
                 const targetDatabase = requestedDatabase ?? sanitizeDatabase(defaultDatabase) ?? sanitizeDatabase(config.database);
                 const performanceGuardResult = await validateSqlPerformance({

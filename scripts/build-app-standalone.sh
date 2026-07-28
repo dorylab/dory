@@ -290,6 +290,9 @@ if [[ -d "${ROOT_DIR}/node_modules/@duckdb" ]]; then
   done < <(find "${ROOT_DIR}/node_modules/@duckdb" -mindepth 1 -maxdepth 1 -type d -print0)
 fi
 
+copy_node_package_to_standalone "libpg-query"
+copy_node_package_to_standalone "@pgsql/types"
+
 BETTER_SQLITE3_DIR="${OUT_DIR}/node_modules/better-sqlite3"
 if [[ -d "${BETTER_SQLITE3_DIR}" ]]; then
   ROOT_BETTER_SQLITE3_DIR="${ROOT_DIR}/node_modules/better-sqlite3"

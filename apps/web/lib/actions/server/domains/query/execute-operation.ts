@@ -1,17 +1,19 @@
 import { randomUUID } from 'node:crypto';
 
-import { splitMultiSQL } from '@dory/shared/utils/split-multi-sql';
 import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
+import { splitSqlStatements } from '@/lib/server/sql-splitter';
 import { runWithSqlAudit } from '@/lib/server/sql-audit';
 import type { ActionContext } from '@dory/actions';
 import type { BaseConnection } from '@dory/drivers/core';
-import type { ColumnMeta, DriverQueryRowStream } from '@dory/drivers/types';
+import type { ColumnMeta, DriverQueryRowStream, DriverType } from '@dory/drivers/types';
 import { newEntityId } from '@dory/shared/id';
 import type { QuerySource } from '@dory/shared/types/audit';
+import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
 import type { WebActionServices } from '../../types';
 
 export const MAX_ACTION_STATEMENTS = 100;
 const DEFAULT_RESULT_PREVIEW_ROWS = 1_000;
+const LEADING_COMMENTS_REGEX = /^\s*(?:(?:--[^\n]*\n)|(?:#[^\n]*\n)|(?:\/\*[\s\S]*?\*\/\s*))*/;
 
 type PersistableResultSet = Record<string, unknown> & {
     sessionId: string;
@@ -30,6 +32,7 @@ export type QueryExecuteInput = {
     tabId?: string | null;
     source?: string | null;
     refId?: string | null;
+    limit?: number | null;
 };
 
 export type QueryExecutePayload = {
@@ -95,6 +98,25 @@ function getAffectedRows(rows: unknown) {
 
 function isStreamableResultStatement(sql: string) {
     return /^\s*(select|with|from|show|describe|explain|pragma)\b/i.test(sql);
+}
+
+function getSelectLimitDialect(driverType: DriverType): SelectLimitDialect {
+    if (driverType === 'sqlserver' || driverType === 'oracle') return driverType;
+    return 'default';
+}
+
+function applyLimitToStatement(statement: string, limit: number | null | undefined, dialect: SelectLimitDialect) {
+    if (!limit || !Number.isFinite(limit) || limit <= 0) return statement;
+    const normalizedLimit = Math.floor(limit);
+
+    const match = statement.match(LEADING_COMMENTS_REGEX);
+    const prefix = match?.[0] ?? '';
+    const body = statement.slice(prefix.length);
+    const trimmedBody = body.trim();
+    if (!trimmedBody) return statement;
+
+    const limited = enforceSelectLimit(trimmedBody, normalizedLimit, dialect);
+    return limited === trimmedBody ? statement : `${prefix}${limited}`;
 }
 
 function supportsStreamingResultSets(connection: BaseConnection) {
@@ -438,11 +460,16 @@ async function runSqlExecution(
         throw new Error('Missing connectionId.');
     }
 
-    const statements = splitMultiSQL(input.sql).filter(s => !!s.trim());
     const stopOnError = input.stopOnError ?? false;
     const sessionId = input.sessionId || randomUUID();
     const auditSource = queryAuditSource(ctx, input.source);
     const refId = input.refId || randomUUID();
+    const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);
+    const sourceConnectionType = entry.instance.config.type;
+    const limitDialect = getSelectLimitDialect(sourceConnectionType);
+    const statements = (await splitSqlStatements(input.sql, sourceConnectionType))
+        .filter(statement => !!statement.trim())
+        .map(statement => applyLimitToStatement(statement, input.limit, limitDialect));
 
     if (!statements.length) {
         const now = Math.round(performance.timeOrigin + performance.now());
@@ -478,8 +505,6 @@ async function runSqlExecution(
         throw new Error(`Too many statements (${statements.length}). Maximum is ${MAX_ACTION_STATEMENTS}.`);
     }
 
-    const { entry } = await ensureConnectionPoolForUser(ctx.userId, ctx.organizationId, connectionId, input.identityId ?? null);
-    const sourceConnectionType = entry.instance.config.type;
     const sourceDatabaseName = input.database ?? entry.instance.config.database ?? null;
     return runWithSqlAudit(
         {

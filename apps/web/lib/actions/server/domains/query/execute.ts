@@ -19,6 +19,7 @@ export const queryExecuteAction = defineWebAction({
         tabId: z.string().optional(),
         source: z.string().optional(),
         refId: z.string().optional(),
+        limit: z.number().int().positive().optional().nullable(),
     }),
     outputSchema: queryExecutionOutputSchema,
     permissions: writeWorkspace,
@@ -30,7 +31,7 @@ export const queryExecuteAction = defineWebAction({
             user: 'user_sql_console',
             automation: 'automation_sql',
         },
-        allowInputFields: ['connectionId', 'identityId', 'database', 'sessionId', 'tabId', 'source', 'refId'],
+        allowInputFields: ['connectionId', 'identityId', 'database', 'sessionId', 'tabId', 'source', 'refId', 'limit'],
         inputSummary: input => ({
             connectionId: input.connectionId ?? null,
             identityId: input.identityId ?? null,
@@ -39,6 +40,7 @@ export const queryExecuteAction = defineWebAction({
             tabId: input.tabId ?? null,
             source: input.source ?? null,
             refId: input.refId ?? null,
+            limit: input.limit ?? null,
             sqlLength: input.sql.length,
         }),
         resource: (_ctx, input) => ({

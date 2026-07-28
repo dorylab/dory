@@ -1,90 +1,50 @@
-export function splitMultiSQL(input: string): string[] {
-    const out: string[] = [];
-    let buf = '';
-    let i = 0,
-        n = input.length;
-    let inS = false,
-        inD = false,
-        inB = false; // ' " `
-    let inLine = false,
-        inBlock = false; // --  /* */
+import {
+    defaultSplitterOptions,
+    mssqlSplitterOptions,
+    mysqlSplitterOptions,
+    oracleSplitterOptions,
+    postgreSplitterOptions,
+    splitQuery,
+    sqliteSplitterOptions,
+    type SplitterOptions,
+} from 'dbgate-query-splitter';
 
-    while (i < n) {
-        const ch = input[i];
-        const next = i + 1 < n ? input[i + 1] : '';
+export type SqlSplitterDialect = 'default' | 'clickhouse' | 'dollar-quoted' | 'mysql' | 'oracle' | 'sqlite' | 'sqlserver';
 
-        if (inLine) {
-            if (ch === '\n') {
-                inLine = false;
-                buf += ch;
-            } else buf += ch;
-            i++;
-            continue;
-        }
-        if (inBlock) {
-            if (ch === '*' && next === '/') {
-                inBlock = false;
-                buf += '*/';
-                i += 2;
-                continue;
-            }
-            buf += ch;
-            i++;
-            continue;
-        }
+const DEFAULT_OPTIONS: SplitterOptions = {
+    ...defaultSplitterOptions,
+    stringsBegins: ["'", '"', '`'],
+    stringsEnds: { "'": "'", '"': '"', '`': '`' },
+    stringEscapes: { "'": "'", '"': '"', '`': '`' },
+};
 
-        if (!inS && !inD && !inB) {
-            if (ch === '-' && next === '-') {
-                inLine = true;
-                buf += '--';
-                i += 2;
-                continue;
-            }
-            if (ch === '/' && next === '*') {
-                inBlock = true;
-                buf += '/*';
-                i += 2;
-                continue;
-            }
-            if (ch === '#') {
-                inLine = true;
-                buf += '#';
-                i++;
-                continue;
-            } // MySQL-style line comments
-        }
+const CLICKHOUSE_OPTIONS: SplitterOptions = {
+    ...DEFAULT_OPTIONS,
+    stringEscapes: { "'": '\\', '"': '\\', '`': '\\' },
+};
 
-        if (!inD && !inB && ch === "'") {
-            inS = !inS;
-            buf += ch;
-            i++;
-            continue;
-        }
-        if (!inS && !inB && ch === '"') {
-            inD = !inD;
-            buf += ch;
-            i++;
-            continue;
-        }
-        if (!inS && !inD && ch === '`') {
-            inB = !inB;
-            buf += ch;
-            i++;
-            continue;
-        }
+const SQLSERVER_OPTIONS: SplitterOptions = {
+    ...mssqlSplitterOptions,
+    allowSemicolon: true,
+    keepSemicolonInCommands: false,
+    skipSeparatorBeginEnd: true,
+};
 
-        if (!inS && !inD && !inB && ch === ';') {
-            const trimmed = buf.trim();
-            if (trimmed) out.push(trimmed);
-            buf = '';
-            i++;
-            continue;
-        }
+const ORACLE_OPTIONS: SplitterOptions = {
+    ...oracleSplitterOptions,
+    skipSeparatorBeginEnd: true,
+};
 
-        buf += ch;
-        i++;
-    }
-    const tail = buf.trim();
-    if (tail) out.push(tail);
-    return out;
+const OPTIONS_BY_DIALECT: Record<SqlSplitterDialect, SplitterOptions> = {
+    default: DEFAULT_OPTIONS,
+    clickhouse: CLICKHOUSE_OPTIONS,
+    'dollar-quoted': postgreSplitterOptions,
+    mysql: mysqlSplitterOptions,
+    oracle: ORACLE_OPTIONS,
+    sqlite: sqliteSplitterOptions,
+    sqlserver: SQLSERVER_OPTIONS,
+};
+
+export function splitMultiSQL(input: string, dialect: SqlSplitterDialect = 'default'): string[] {
+    return splitQuery(input, OPTIONS_BY_DIALECT[dialect]).map(item => (typeof item === 'string' ? item : item.text));
 }
