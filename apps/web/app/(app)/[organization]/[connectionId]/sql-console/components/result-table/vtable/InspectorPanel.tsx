@@ -82,10 +82,7 @@ export function InspectorPanel({
     return createPortal(
         <aside
             data-testid="cell-inspector-panel"
-            className={cn(
-                'pointer-events-auto inset-y-0 right-0 z-30 flex flex-col border-l bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/60',
-                position === 'fixed' ? 'fixed' : 'absolute',
-            )}
+            className={cn('pointer-events-auto inset-y-0 right-0 z-30 flex flex-col border-l bg-card shadow-lg', position === 'fixed' ? 'fixed' : 'absolute')}
             style={{ width: inspectorWidth }}
         >
             {/* drag handle */}

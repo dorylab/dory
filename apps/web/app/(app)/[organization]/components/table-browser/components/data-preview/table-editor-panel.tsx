@@ -86,7 +86,7 @@ export function TableEditorPanel({
     return createPortal(
         <aside
             data-testid="table-editor-panel"
-            className={`pointer-events-auto inset-y-0 right-0 z-30 flex min-h-0 flex-col border-l bg-background shadow-lg ${position === 'fixed' ? 'fixed' : 'absolute'}`}
+            className={`pointer-events-auto inset-y-0 right-0 z-30 flex min-h-0 flex-col border-l bg-card shadow-lg ${position === 'fixed' ? 'fixed' : 'absolute'}`}
             style={{ width }}
         >
             <div role="separator" aria-orientation="vertical" className="absolute -left-1 top-0 z-10 h-full w-2 cursor-col-resize" onMouseDown={startResize} />
@@ -121,7 +121,7 @@ export function TableEditorPanel({
                                     key={`${row.rowKey}:${change.column}`}
                                     data-testid="pending-change-card"
                                     data-column={change.column}
-                                    className="rounded-lg border bg-card p-3 shadow-sm"
+                                    className="rounded-lg border bg-background p-3 shadow-sm"
                                 >
                                     <div className="flex items-center gap-2">
                                         <div

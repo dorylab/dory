@@ -263,6 +263,45 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(page.getByTestId('table-editor-panel')).toHaveCount(0);
     const inspectorBox = await inspectorPanel.boundingBox();
     expect(inspectorBox).not.toBeNull();
+    expect(inspectorBox!.y).toBeCloseTo(0, 0);
+    expect(inspectorBox!.height).toBeCloseTo(page.viewportSize()!.height, 0);
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    const inspectorSurfaceColors = await page.evaluate(() => {
+        const appSidebar = Array.from(document.querySelectorAll<HTMLElement>('[data-sidebar="sidebar"]')).find(element => element.getClientRects().length > 0) ?? null;
+        const tableSidebarGutter = document.querySelector<HTMLElement>('[data-testid="sql-console-sidebar-gutter"]');
+        const tableSidebar = document.querySelector<HTMLElement>('[data-testid="sql-console-sidebar-surface"]');
+        const tableSurface = document.querySelector<HTMLElement>('[data-testid="vtable-surface"]');
+        const inspector = document.querySelector<HTMLElement>('[data-testid="cell-inspector-panel"]');
+        const backgroundAlpha = (element: HTMLElement | null) => {
+            if (!element) return null;
+            const color = getComputedStyle(element).backgroundColor;
+            const slashAlpha = color.match(/\/\s*([\d.]+)(%)?\s*\)$/);
+            if (slashAlpha) {
+                const alpha = Number(slashAlpha[1]);
+                return slashAlpha[2] ? alpha / 100 : alpha;
+            }
+            const rgbaAlpha = color.match(/^rgba\((?:[^,]+,){3}\s*([\d.]+)\s*\)$/);
+            return rgbaAlpha ? Number(rgbaAlpha[1]) : 1;
+        };
+
+        return {
+            appSidebar: appSidebar ? getComputedStyle(appSidebar).backgroundColor : null,
+            tableSidebarGutter: tableSidebarGutter ? getComputedStyle(tableSidebarGutter).backgroundColor : null,
+            tableSidebarGutterWidth: tableSidebarGutter ? getComputedStyle(tableSidebarGutter).paddingLeft : null,
+            tableSidebar: tableSidebar ? getComputedStyle(tableSidebar).backgroundColor : null,
+            table: tableSurface ? getComputedStyle(tableSurface).backgroundColor : null,
+            inspector: inspector ? getComputedStyle(inspector).backgroundColor : null,
+            inspectorAlpha: backgroundAlpha(inspector),
+        };
+    });
+    expect(inspectorSurfaceColors.appSidebar).not.toBeNull();
+    expect(inspectorSurfaceColors.tableSidebarGutter).not.toBe(inspectorSurfaceColors.appSidebar);
+    expect(inspectorSurfaceColors.tableSidebarGutterWidth).toBe('6px');
+    expect(inspectorSurfaceColors.tableSidebar).toBe(inspectorSurfaceColors.appSidebar);
+    expect(inspectorSurfaceColors.table).toBe(inspectorSurfaceColors.appSidebar);
+    expect(inspectorSurfaceColors.inspector).toBe(inspectorSurfaceColors.appSidebar);
+    expect(inspectorSurfaceColors.inspectorAlpha).toBe(1);
+    await page.evaluate(() => document.documentElement.classList.remove('dark'));
     await inspectorPanel.getByRole('button', { name: 'Close' }).click();
 
     await nameCell.click({ button: 'right' });
@@ -301,6 +340,45 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     expect(editorBox).not.toBeNull();
     expect(editorBox!.y).toBeCloseTo(inspectorBox!.y, 0);
     expect(editorBox!.height).toBeCloseTo(inspectorBox!.height, 0);
+    expect(editorBox!.y).toBeCloseTo(0, 0);
+    expect(editorBox!.height).toBeCloseTo(page.viewportSize()!.height, 0);
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    const darkSurfaceColors = await page.evaluate(() => {
+        const appSidebar = Array.from(document.querySelectorAll<HTMLElement>('[data-sidebar="sidebar"]')).find(element => element.getClientRects().length > 0) ?? null;
+        const tableSidebar = document.querySelector<HTMLElement>('[data-testid="sql-console-sidebar-surface"]');
+        const tableSurface = document.querySelector<HTMLElement>('[data-testid="vtable-surface"]');
+        const editorPanelElement = document.querySelector<HTMLElement>('[data-testid="table-editor-panel"]');
+        const card = document.querySelector<HTMLElement>('[data-testid="pending-change-card"]');
+        const backgroundAlpha = (element: HTMLElement | null) => {
+            if (!element) return null;
+            const color = getComputedStyle(element).backgroundColor;
+            const slashAlpha = color.match(/\/\s*([\d.]+)(%)?\s*\)$/);
+            if (slashAlpha) {
+                const alpha = Number(slashAlpha[1]);
+                return slashAlpha[2] ? alpha / 100 : alpha;
+            }
+            const rgbaAlpha = color.match(/^rgba\((?:[^,]+,){3}\s*([\d.]+)\s*\)$/);
+            return rgbaAlpha ? Number(rgbaAlpha[1]) : 1;
+        };
+
+        return {
+            appSidebar: appSidebar ? getComputedStyle(appSidebar).backgroundColor : null,
+            tableSidebar: tableSidebar ? getComputedStyle(tableSidebar).backgroundColor : null,
+            table: tableSurface ? getComputedStyle(tableSurface).backgroundColor : null,
+            editor: editorPanelElement ? getComputedStyle(editorPanelElement).backgroundColor : null,
+            card: card ? getComputedStyle(card).backgroundColor : null,
+            editorAlpha: backgroundAlpha(editorPanelElement),
+        };
+    });
+    expect(darkSurfaceColors.appSidebar).not.toBeNull();
+    expect(darkSurfaceColors.tableSidebar).toBe(darkSurfaceColors.appSidebar);
+    expect(darkSurfaceColors.table).toBe(darkSurfaceColors.appSidebar);
+    expect(darkSurfaceColors.editor).not.toBeNull();
+    expect(darkSurfaceColors.card).not.toBeNull();
+    expect(darkSurfaceColors.editor).toBe(darkSurfaceColors.appSidebar);
+    expect(darkSurfaceColors.editorAlpha).toBe(1);
+    expect(darkSurfaceColors.card).not.toBe(darkSurfaceColors.editor);
+    await page.evaluate(() => document.documentElement.classList.remove('dark'));
 
     const commitAllButton = editorPanel.getByRole('button', { name: 'Commit All (2)' });
     await expect(editorPanel.getByText('All updates commit atomically.')).toHaveCount(0);

@@ -1897,7 +1897,7 @@ export default function VTable({
     return (
         <ContextMenu>
             <ContextMenuTrigger asChild>
-                <div className="w-full h-full border overflow-hidden flex flex-col bg-card">
+                <div className="w-full h-full border overflow-hidden flex flex-col bg-card" data-testid="vtable-surface">
                     {showFiltersBar && (
                         <VTableFilters
                             activeFilters={activeFilters}
