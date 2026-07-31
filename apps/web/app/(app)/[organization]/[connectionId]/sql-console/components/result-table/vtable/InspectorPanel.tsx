@@ -32,7 +32,18 @@ interface InspectorPanelProps {
     setInspectorWidth: (w: number) => void;
 }
 
-export function InspectorPanel({ open, setOpen, mode, payload, portalContainer, position = 'absolute', rowViewMode, setRowViewMode, inspectorWidth, setInspectorWidth }: InspectorPanelProps) {
+export function InspectorPanel({
+    open,
+    setOpen,
+    mode,
+    payload,
+    portalContainer,
+    position = 'absolute',
+    rowViewMode,
+    setRowViewMode,
+    inspectorWidth,
+    setInspectorWidth,
+}: InspectorPanelProps) {
     const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
     const [filter, setFilter] = useState('');
     const [defaultPortalContainer, setDefaultPortalContainer] = useState<HTMLElement | null>(null);
@@ -70,6 +81,7 @@ export function InspectorPanel({ open, setOpen, mode, payload, portalContainer, 
 
     return createPortal(
         <aside
+            data-testid="cell-inspector-panel"
             className={cn(
                 'pointer-events-auto inset-y-0 right-0 z-30 flex flex-col border-l bg-background/95 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/60',
                 position === 'fixed' ? 'fixed' : 'absolute',

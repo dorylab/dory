@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { FileText, PanelRightOpen, Redo2, RotateCw, Undo2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
@@ -20,8 +21,9 @@ import { SQLTab } from '@dory/shared/types/tabs';
 import { VTableSearchBar } from '../../../../[connectionId]/sql-console/components/result-table/components/TableSearchBar';
 import { currentSessionMetaAtom } from '../../../../[connectionId]/sql-console/components/result-table/stores/result-table.atoms';
 import VTable from '../../../../[connectionId]/sql-console/components/result-table/vtable';
+import { InspectorPanel } from '../../../../[connectionId]/sql-console/components/result-table/vtable/InspectorPanel';
 import { VTableFilters } from '../../../../[connectionId]/sql-console/components/result-table/vtable/VTableFilters';
-import type { ColumnFilter } from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
+import type { ColumnFilter, VTableInspectorPayload } from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { useTablePropertiesQuery, useTableStatsQuery, useTableStructureColumnsQuery } from '../table-queries';
@@ -49,14 +51,13 @@ import {
     pendingRowsToUpdates,
     redoTableEdit,
     revertTableCellEdit,
-    revertTableRowEdit,
     tableEditSessionsAtom,
     toTableMutationValue,
     undoTableEdit,
     type PendingRowChange,
     type TableEditViewSnapshot,
 } from './table-editor-store';
-import { TableEditorUtilityPanel, type TableEditorInspectorPayload } from './table-editor-utility-panel';
+import { TableEditorPanel } from './table-editor-panel';
 
 type PreviewColumn = {
     name: string;
@@ -92,6 +93,7 @@ type DataPreviewProps = {
     source?: string;
     emptyMessage?: string;
     inspectorPortalMode?: 'preview' | 'viewport';
+    paginationPortalContainer?: HTMLElement | null;
     driver?: string;
 };
 
@@ -101,6 +103,7 @@ type TableDataPreviewProps = {
     databaseName?: string;
     tableName?: string;
     inspectorPortalMode?: 'preview' | 'viewport';
+    paginationPortalContainer?: HTMLElement | null;
     driver?: string;
 };
 
@@ -338,7 +341,17 @@ function DataPreview(props: DataPreviewProps) {
     return <DataPreviewInner key={resetKey} {...props} source={source} />;
 }
 
-function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, source = 'table-browser-data-preview', emptyMessage, driver }: DataPreviewProps) {
+function DataPreviewInner({
+    connectionId,
+    databaseName,
+    tableName,
+    storageKey,
+    source = 'table-browser-data-preview',
+    emptyMessage,
+    inspectorPortalMode = 'preview',
+    paginationPortalContainer,
+    driver,
+}: DataPreviewProps) {
     const t = useTranslations('TableBrowser');
     const setSessionMeta = useSetAtom(currentSessionMetaAtom);
     const currentConnection = useAtomValue(currentConnectionAtom);
@@ -352,12 +365,15 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     const [query, setQuery] = useState('');
     const [searchInput, setSearchInput] = useState('');
-    const [utilityPanelOpen, setUtilityPanelOpen] = useState(false);
-    const [utilityPanelMode, setUtilityPanelMode] = useState<'changes' | 'inspector'>('changes');
+    const [editorPanelOpen, setEditorPanelOpen] = useState(false);
     const [changesView, setChangesView] = useState<'visual' | 'sql'>('visual');
-    const [, setInspectorMode] = useState<'cell' | 'row' | null>(null);
-    const [inspectorPayload, setInspectorPayload] = useState<TableEditorInspectorPayload>(null);
-    const [utilityPanelWidth, setUtilityPanelWidth] = useState(380);
+    const [editorPanelWidth, setEditorPanelWidth] = useState(380);
+    const [inspectorOpen, setInspectorOpen] = useState(false);
+    const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
+    const [inspectorPayload, setInspectorPayload] = useState<VTableInspectorPayload>(null);
+    const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
+    const [inspectorWidth, setInspectorWidth] = useState(360);
+    const [panelPortalContainer, setPanelPortalContainer] = useState<HTMLElement | null>(null);
     const [commitDialogOpen, setCommitDialogOpen] = useState(false);
     const [selectionSummary, setSelectionSummary] = useState({ cellCount: 0, rowCount: 0 });
     const [focusRequest, setFocusRequest] = useState<{ rowIndex: number; column: string; requestId: number } | null>(null);
@@ -378,6 +394,11 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
     useEffect(() => {
         void setPagination({ pageIndex: 0 });
     }, [connectionId, databaseName, source, storageKey, tableName, setPagination]);
+
+    useLayoutEffect(() => {
+        if (inspectorPortalMode !== 'viewport') return;
+        setPanelPortalContainer(document.body);
+    }, [inspectorPortalMode]);
 
     const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
     const { data: tableStats } = useTableStatsQuery({ connectionId, databaseName, tableName });
@@ -713,23 +734,9 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
         [editSession.rows, getRowIdentityAt],
     );
 
-    const handleInspectorPayload = useCallback(
-        (payload: TableEditorInspectorPayload) => {
-            if (payload && 'col' in payload) {
-                setInspectorPayload({
-                    ...payload,
-                    rowData: rows[payload.row]?.rowData,
-                });
-            } else {
-                setInspectorPayload(payload);
-            }
-        },
-        [rows],
-    );
-
     const handleInspectorOpen = useCallback((open: boolean) => {
-        setUtilityPanelOpen(open);
-        if (open) setUtilityPanelMode('inspector');
+        setInspectorOpen(open);
+        if (open) setEditorPanelOpen(false);
     }, []);
 
     const handleJumpToCell = useCallback(
@@ -870,46 +877,79 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                     </PopoverContent>
                 </Popover>
                 <Button
-                    variant={utilityPanelOpen && utilityPanelMode === 'changes' ? 'secondary' : 'outline'}
+                    variant={editorPanelOpen ? 'secondary' : 'outline'}
                     size="sm"
-                    className="gap-2 tabular-nums"
+                    className={`gap-2 tabular-nums ${
+                        editCounts.cellCount > 0
+                            ? 'border-orange-500/40 text-orange-700 hover:border-orange-500/60 hover:text-orange-800 dark:text-orange-300 dark:hover:text-orange-200'
+                            : ''
+                    }`}
                     onClick={() => {
-                        setUtilityPanelMode('changes');
-                        setUtilityPanelOpen(true);
+                        setInspectorOpen(false);
+                        setEditorPanelOpen(true);
                     }}
                 >
                     <PanelRightOpen className="h-4 w-4" />
                     {t('Editor.Changes', { count: editCounts.cellCount })}
+                    {editCounts.cellCount > 0 ? <span data-testid="pending-changes-indicator" className="size-2 rounded-full bg-orange-500" aria-hidden="true" /> : null}
                 </Button>
             </div>
         </div>
     );
 
     const previewProgress = <div className="h-0.5 flex-none">{refreshing ? <DataPreviewLoadingBar ariaLabel={t('Loading Data')} /> : null}</div>;
-    const utilityPanel = tableName ? (
-        <TableEditorUtilityPanel
-            open={utilityPanelOpen}
-            width={utilityPanelWidth}
-            mode={utilityPanelMode}
-            changesView={changesView}
-            tableName={tableName}
-            columns={columns}
-            primaryKeyColumns={primaryKeyColumns}
-            session={editSession}
-            sqlPreview={updateSqlPreview}
-            inspector={inspectorPayload}
-            onOpenChange={setUtilityPanelOpen}
-            onModeChange={setUtilityPanelMode}
-            onChangesViewChange={setChangesView}
-            onWidthChange={setUtilityPanelWidth}
-            onRevertCell={(rowKey, column) => updateEditSession(session => revertTableCellEdit(session, rowKey, column))}
-            onRevertRow={rowKey => updateEditSession(session => revertTableRowEdit(session, rowKey))}
-            onJumpToCell={handleJumpToCell}
-            onClearAll={() => updateEditSession(clearTableEdits)}
-            onCommitAll={() => setCommitDialogOpen(true)}
-            isCommitting={commitMutation.isPending}
-        />
+    const sidePanels = tableName ? (
+        <>
+            <TableEditorPanel
+                open={editorPanelOpen}
+                width={editorPanelWidth}
+                changesView={changesView}
+                tableName={tableName}
+                session={editSession}
+                sqlPreview={updateSqlPreview}
+                portalContainer={panelPortalContainer}
+                position={inspectorPortalMode === 'viewport' ? 'fixed' : 'absolute'}
+                onOpenChange={setEditorPanelOpen}
+                onChangesViewChange={setChangesView}
+                onWidthChange={setEditorPanelWidth}
+                onRevertCell={(rowKey, column) => updateEditSession(session => revertTableCellEdit(session, rowKey, column))}
+                onJumpToCell={handleJumpToCell}
+                onClearAll={() => updateEditSession(clearTableEdits)}
+                onCommitAll={() => setCommitDialogOpen(true)}
+                isCommitting={commitMutation.isPending}
+            />
+            <InspectorPanel
+                open={inspectorOpen}
+                setOpen={setInspectorOpen}
+                mode={inspectorMode}
+                payload={inspectorPayload}
+                portalContainer={panelPortalContainer}
+                position={inspectorPortalMode === 'viewport' ? 'fixed' : 'absolute'}
+                rowViewMode={rowViewMode}
+                setRowViewMode={setRowViewMode}
+                inspectorWidth={inspectorWidth}
+                setInspectorWidth={setInspectorWidth}
+            />
+        </>
     ) : null;
+    const panelPortal =
+        inspectorPortalMode === 'preview' ? (
+            <div ref={setPanelPortalContainer} className="pointer-events-none absolute inset-0 z-30" data-testid="table-preview-panel-portal" />
+        ) : null;
+    const paginationBar = (
+        <DataPreviewPaginationBar
+            pageIndex={pageIndex}
+            pageSize={pageSize}
+            totalRowEstimate={totalRowEstimate}
+            currentPageRowCount={rows.length}
+            rowsLabel={rowsLabel}
+            loading={refreshing}
+            variant={paginationPortalContainer === undefined ? 'footer' : 'inline'}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+        />
+    );
+    const pagination = paginationPortalContainer === undefined ? paginationBar : paginationPortalContainer ? createPortal(paginationBar, paginationPortalContainer) : null;
     const commitDialog = (
         <AlertDialog open={commitDialogOpen} onOpenChange={setCommitDialogOpen}>
             <AlertDialogContent>
@@ -923,7 +963,7 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                         })}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
-                <div className="max-h-72 overflow-auto rounded-sm border bg-muted/20 p-1">
+                <div data-testid="commit-sql-preview" className="max-h-72 overflow-auto">
                     <SmartCodeBlock value={updateSqlPreview || ' '} type="sql" maxHeightClassName="max-h-64" />
                 </div>
                 <AlertDialogFooter>
@@ -948,7 +988,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     if (error) {
         return (
-            <div className="flex h-full min-h-0 flex-col">
+            <div className="relative flex h-full min-h-0 flex-col">
+                {panelPortal}
                 {previewControls}
                 {previewProgress}
                 <div className="flex min-h-0 flex-1">
@@ -959,8 +1000,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                             {t('Refresh')}
                         </Button>
                     </div>
-                    {utilityPanel}
                 </div>
+                {sidePanels}
                 {commitDialog}
             </div>
         );
@@ -968,13 +1009,14 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     if (loading && rows.length === 0) {
         return (
-            <div className="h-full min-h-0 flex flex-col">
+            <div className="relative h-full min-h-0 flex flex-col">
+                {panelPortal}
                 {previewControls}
                 {previewProgress}
                 <div className="flex min-h-0 flex-1">
                     <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">{hasUserRequestedPreviewUpdate ? null : t('Loading Data')}</div>
-                    {utilityPanel}
                 </div>
+                {sidePanels}
                 {commitDialog}
             </div>
         );
@@ -982,7 +1024,8 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     if (rows.length === 0 && !loading) {
         return (
-            <div className="h-full min-h-0 flex flex-col">
+            <div className="relative h-full min-h-0 flex flex-col">
+                {panelPortal}
                 {previewControls}
                 {previewProgress}
                 <div className="flex min-h-0 flex-1">
@@ -996,18 +1039,9 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
                         />
                         <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">{t('No data')}</div>
                     </div>
-                    {utilityPanel}
                 </div>
-                <DataPreviewPaginationBar
-                    pageIndex={pageIndex}
-                    pageSize={pageSize}
-                    totalRowEstimate={totalRowEstimate}
-                    currentPageRowCount={rows.length}
-                    rowsLabel={rowsLabel}
-                    loading={refreshing}
-                    onPageChange={handlePageChange}
-                    onPageSizeChange={handlePageSizeChange}
-                />
+                {pagination}
+                {sidePanels}
                 {commitDialog}
             </div>
         );
@@ -1015,60 +1049,50 @@ function DataPreviewInner({ connectionId, databaseName, tableName, storageKey, s
 
     return (
         <div className="relative h-full min-h-0 flex flex-col">
+            {panelPortal}
             {previewControls}
             {previewProgress}
 
-            <div className="flex min-h-0 flex-1">
-                <div className="min-w-0 flex-1">
-                    <VTable
-                        results={rows}
-                        columnMetas={columns}
-                        storageKey={storageKey}
-                        onStatsChange={handleVTableStatsChange}
-                        showSearchBar={true}
-                        activeFilters={activeFilters}
-                        onUpsertFilter={handleUpsertFilter}
-                        onRemoveFilter={handleRemoveFilter}
-                        onClearAllFilters={handleClearAllFilters}
-                        serverSideOperations={true}
-                        initialSort={sortState}
-                        onSortChange={handleSortChange}
-                        setInspectorOpen={handleInspectorOpen}
-                        setInspectorMode={setInspectorMode}
-                        setInspectorPayload={handleInspectorPayload}
-                        editable={tableIsEditable}
-                        getCellEditState={getCellEditState}
-                        isRowChanged={isRowChanged}
-                        onCellChange={handleCellChange}
-                        onRevertCell={handleRevertCellAt}
-                        onUndo={() => updateEditSession(undoTableEdit)}
-                        onRedo={() => updateEditSession(redoTableEdit)}
-                        onCommitAll={() => {
-                            if (editCounts.cellCount > 0) setCommitDialogOpen(true);
-                        }}
-                        onSelectionChange={setSelectionSummary}
-                        focusRequest={focusRequest}
-                    />
-                </div>
-                {utilityPanel}
+            <div className="min-h-0 flex-1">
+                <VTable
+                    results={rows}
+                    columnMetas={columns}
+                    storageKey={storageKey}
+                    onStatsChange={handleVTableStatsChange}
+                    showSearchBar={true}
+                    activeFilters={activeFilters}
+                    onUpsertFilter={handleUpsertFilter}
+                    onRemoveFilter={handleRemoveFilter}
+                    onClearAllFilters={handleClearAllFilters}
+                    serverSideOperations={true}
+                    initialSort={sortState}
+                    onSortChange={handleSortChange}
+                    setInspectorOpen={handleInspectorOpen}
+                    setInspectorMode={setInspectorMode}
+                    setInspectorPayload={setInspectorPayload}
+                    editable={tableIsEditable}
+                    getCellEditState={getCellEditState}
+                    isRowChanged={isRowChanged}
+                    onCellChange={handleCellChange}
+                    onRevertCell={handleRevertCellAt}
+                    onUndo={() => updateEditSession(undoTableEdit)}
+                    onRedo={() => updateEditSession(redoTableEdit)}
+                    onCommitAll={() => {
+                        if (editCounts.cellCount > 0) setCommitDialogOpen(true);
+                    }}
+                    onSelectionChange={setSelectionSummary}
+                    focusRequest={focusRequest}
+                />
             </div>
 
-            <DataPreviewPaginationBar
-                pageIndex={pageIndex}
-                pageSize={pageSize}
-                totalRowEstimate={totalRowEstimate}
-                currentPageRowCount={rows.length}
-                rowsLabel={rowsLabel}
-                loading={refreshing}
-                onPageChange={handlePageChange}
-                onPageSizeChange={handlePageSizeChange}
-            />
+            {pagination}
+            {sidePanels}
             {commitDialog}
         </div>
     );
 }
 
-export default function TableDataPreview({ activeTab, connectionId, databaseName, tableName, inspectorPortalMode, driver }: TableDataPreviewProps) {
+export default function TableDataPreview({ activeTab, connectionId, databaseName, tableName, inspectorPortalMode, paginationPortalContainer, driver }: TableDataPreviewProps) {
     const storageKey = useMemo(() => {
         if (activeTab?.tabId) return `${activeTab.tabId}:data-preview`;
         if (databaseName && tableName) return `preview:${databaseName}:${tableName}:data-preview`;
@@ -1087,6 +1111,7 @@ export default function TableDataPreview({ activeTab, connectionId, databaseName
             storageKey={storageKey}
             source="table-tab-data-preview"
             inspectorPortalMode={inspectorPortalMode}
+            paginationPortalContainer={paginationPortalContainer}
             driver={driver}
         />
     );

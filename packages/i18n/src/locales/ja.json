@@ -469,7 +469,7 @@
         "Editor": {
             "PendingChanges": "保留中の変更",
             "CellInspector": "セルインスペクター",
-            "ClosePanel": "ユーティリティパネルを閉じる",
+            "CloseEditorPanel": "編集パネルを閉じる",
             "Visual": "ビジュアル",
             "NoPendingChanges": "保留中の変更はありません",
             "RevertRow": "行の変更を元に戻す",

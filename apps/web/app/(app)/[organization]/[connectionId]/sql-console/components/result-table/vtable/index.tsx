@@ -1445,7 +1445,9 @@ export default function VTable({
                 >
                     <span className="relative inline-flex items-center justify-center">
                         {r + 1}
-                        {hasPendingChanges ? <span className="absolute -right-3 h-1.5 w-1.5 rounded-full bg-primary" aria-label={t('VTable.ChangedRow')} /> : null}
+                        {hasPendingChanges ? (
+                            <span data-testid="pending-row-indicator" className="absolute -right-3 h-1.5 w-1.5 rounded-full bg-orange-500" aria-label={t('VTable.ChangedRow')} />
+                        ) : null}
                     </span>
                 </div>
             );
@@ -1476,6 +1478,13 @@ export default function VTable({
                   .filter(Boolean)
                   .join(', ')
             : undefined;
+        const cellStateShadow =
+            selectionEdgeShadow ??
+            (isFocused || isCellSelected
+                ? 'inset 0 0 0 1px var(--primary)'
+                : cellEditState.changed
+                  ? 'inset 0 0 0 1px color-mix(in oklab, var(--color-orange-500) 50%, transparent)'
+                  : undefined);
 
         return (
             <div
@@ -1483,13 +1492,20 @@ export default function VTable({
                 role="button"
                 tabIndex={0}
                 data-cell={keyCell}
-                style={{ ...style, display: 'flex', alignItems: 'center', boxShadow: selectionEdgeShadow }}
+                data-changed={cellEditState.changed ? 'true' : undefined}
+                style={{
+                    ...style,
+                    display: 'flex',
+                    alignItems: 'center',
+                    backgroundColor: cellEditState.changed ? 'color-mix(in oklab, var(--color-orange-500) 15%, var(--card))' : undefined,
+                    boxShadow: cellStateShadow,
+                }}
                 className={cn(
                     'px-2 text-sm border-b border-r bg-card cursor-pointer outline-none select-none',
                     'min-w-0 overflow-hidden',
-                    cellEditState.changed && 'bg-primary/8 ring-1 ring-inset ring-primary/40',
                     isRowSelected && PRIMARY_SELECTION_SUBTLE_CLASS,
                     isCellSelected && PRIMARY_SELECTION_CLASS,
+                    cellEditState.changed && '!text-orange-700 dark:!text-orange-300',
                     isFocused && !isRectSelectedCell && PRIMARY_SELECTION_RING_CLASS,
                     !isCellSelected && 'focus:ring-1 focus:ring-inset focus:ring-primary/40',
                 )}

@@ -473,7 +473,7 @@
         "Editor": {
             "PendingChanges": "待提交更改",
             "CellInspector": "单元格检查器",
-            "ClosePanel": "关闭工具面板",
+            "CloseEditorPanel": "关闭编辑面板",
             "Visual": "可视化",
             "NoPendingChanges": "暂无待提交更改",
             "RevertRow": "撤销此行更改",

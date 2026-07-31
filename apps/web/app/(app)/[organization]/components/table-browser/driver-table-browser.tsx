@@ -58,6 +58,7 @@ export function DriverTableBrowser({
         key: resetKey,
         tab: normalizeTab(driver, activeSubTab ?? initialSubTab),
     }));
+    const [paginationPortalContainer, setPaginationPortalContainer] = useState<HTMLElement | null>(null);
     const localTab = localTabState.key === resetKey ? localTabState.tab : normalizeTab(driver, activeSubTab ?? initialSubTab);
     const currentTab = normalizeTab(driver, activeSubTab ?? localTab);
 
@@ -69,7 +70,7 @@ export function DriverTableBrowser({
 
     if (!isPostgresFamilyConnectionType(driver)) {
         return (
-            <div className="h-full flex flex-col px-6 pb-2 pt-3">
+            <div className="flex h-full flex-col px-6" data-testid="table-browser-layout">
                 <TableViewTabs
                     activeTab={activeTab}
                     connectionId={connectionId}
@@ -86,16 +87,8 @@ export function DriverTableBrowser({
     }
 
     return (
-        <div className="h-full flex flex-col px-6 pb-2 pt-3">
-            <Tabs value={currentTab} onValueChange={handleTabChange} className="flex h-full flex-col gap-1" key={resetKey}>
-                <TabsList className="h-9 justify-start">
-                    {POSTGRES_SUB_TABS.map(tab => (
-                        <TabsTrigger key={tab} value={tab} className="h-8 cursor-pointer px-3">
-                            {t(`Tabs.${tab}`)}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
-
+        <div className="flex h-full flex-col px-6" data-testid="table-browser-layout">
+            <Tabs value={currentTab} onValueChange={handleTabChange} className="flex h-full flex-col gap-0" key={resetKey}>
                 <div className="flex-1 min-h-0">
                     <TabsContent value="overview" className="h-full mt-0">
                         <TableOverview databaseName={databaseName} tableName={tableName} />
@@ -107,6 +100,7 @@ export function DriverTableBrowser({
                             databaseName={databaseName}
                             tableName={tableName}
                             inspectorPortalMode={inspectorPortalMode}
+                            paginationPortalContainer={paginationPortalContainer}
                             driver={driver}
                         />
                     </TabsContent>
@@ -124,6 +118,17 @@ export function DriverTableBrowser({
                             emptyText={t('Indexes.Empty')}
                         />
                     </TabsContent>
+                </div>
+
+                <div className="no-scrollbar flex h-7 shrink-0 items-center gap-4 overflow-x-auto overflow-y-hidden border-t bg-card" data-testid="table-subtabs-footer">
+                    <TabsList className="h-7 shrink-0 justify-start p-0.5">
+                        {POSTGRES_SUB_TABS.map(tab => (
+                            <TabsTrigger key={tab} value={tab} className="h-6 cursor-pointer px-3 py-0 text-xs after:hidden">
+                                {t(`Tabs.${tab}`)}
+                            </TabsTrigger>
+                        ))}
+                    </TabsList>
+                    <div ref={setPaginationPortalContainer} className="flex min-w-max flex-1 items-center justify-end" />
                 </div>
             </Tabs>
         </div>

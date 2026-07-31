@@ -469,7 +469,7 @@
         "Editor": {
             "PendingChanges": "Pending Changes",
             "CellInspector": "Cell Inspector",
-            "ClosePanel": "Close utility panel",
+            "CloseEditorPanel": "Close editor panel",
             "Visual": "Visual",
             "NoPendingChanges": "No pending changes",
             "RevertRow": "Revert row",

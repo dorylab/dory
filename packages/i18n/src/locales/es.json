@@ -469,7 +469,7 @@
         "Editor": {
             "PendingChanges": "Cambios pendientes",
             "CellInspector": "Inspector de celdas",
-            "ClosePanel": "Cerrar panel de utilidades",
+            "CloseEditorPanel": "Cerrar panel de edición",
             "Visual": "Visual",
             "NoPendingChanges": "No hay cambios pendientes",
             "RevertRow": "Revertir fila",
