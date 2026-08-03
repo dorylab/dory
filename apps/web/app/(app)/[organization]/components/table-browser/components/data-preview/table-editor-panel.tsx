@@ -41,6 +41,7 @@ export function TableEditorPanel({
     onClearAll,
     onCommitAll,
     isCommitting,
+    atomicity,
 }: {
     open: boolean;
     width: number;
@@ -58,6 +59,7 @@ export function TableEditorPanel({
     onClearAll: () => void;
     onCommitAll: () => void;
     isCommitting: boolean;
+    atomicity: 'atomic' | 'best-effort';
 }) {
     const t = useTranslations('TableBrowser.Editor');
     const pendingRows = Object.values(session.rows);
@@ -181,6 +183,9 @@ export function TableEditorPanel({
             </Tabs>
             {pendingRows.length > 0 ? (
                 <div className="shrink-0 border-t">
+                    {atomicity === 'best-effort' ? (
+                        <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-800 dark:text-amber-200">{t('BestEffortWarning')}</div>
+                    ) : null}
                     <div className="flex items-center justify-between gap-3 px-4 py-3">
                         <Button variant="ghost" size="sm" onClick={onClearAll} disabled={isCommitting}>
                             {t('ClearAll')}
@@ -191,7 +196,7 @@ export function TableEditorPanel({
                                     {isCommitting ? t('Committing') : t('CommitAll', { count: pendingCellCount })}
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent side="top">{t('AtomicCommitHint')}</TooltipContent>
+                            <TooltipContent side="top">{atomicity === 'atomic' ? t('AtomicCommitHint') : t('BestEffortCommitHint')}</TooltipContent>
                         </Tooltip>
                     </div>
                 </div>

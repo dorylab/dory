@@ -163,6 +163,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
             await success({
                 updatedRows: payload.input?.rows?.length ?? 0,
                 updatedCells: payload.input?.rows?.reduce((total, row) => total + row.changes.length, 0) ?? 0,
+                atomicity: 'atomic',
             });
             return;
         }
@@ -525,12 +526,15 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(page.getByTestId('pending-changes-indicator')).toHaveCount(0);
     await page.getByRole('button', { name: /Insert select for read_only/i }).click();
     await expect(page.getByText('Read-only', { exact: true })).toBeVisible();
-    const readOnlyCell = page.locator('[data-cell="0@@name"]');
-    await readOnlyCell.click();
+    await page.getByRole('button', { name: 'Select row identity' }).click();
+    await page.getByRole('checkbox').first().click();
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await expect(page.getByRole('button', { name: 'Row identity: id' })).toBeVisible();
+    await expect(page.getByText('Read-only', { exact: true })).toHaveCount(0);
+    const identityCell = page.locator('[data-cell="0@@id"]');
+    await identityCell.click();
     await expect(inspectorPanel).toBeVisible();
-    await expect(inspectorPanel.getByLabel('name', { exact: true })).toBeDisabled();
-    await expect(inspectorPanel.getByText('This table has no primary key, so editing is disabled.')).toBeVisible();
-    await readOnlyCell.dblclick();
-    await expect(readOnlyCell.locator('input')).toHaveCount(0);
+    await expect(inspectorPanel.getByLabel('id', { exact: true })).toBeDisabled();
+    await expect(inspectorPanel.getByText('Row identity columns are read-only.')).toBeVisible();
     await expectAppHealthy(appErrors);
 });

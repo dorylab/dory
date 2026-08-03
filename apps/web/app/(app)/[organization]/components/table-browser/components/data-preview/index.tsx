@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { FileText, PanelRightOpen, Redo2, RotateCw, Undo2 } from 'lucide-react';
+import { FileText, KeyRound, PanelRightOpen, Redo2, RotateCw, Undo2 } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +14,7 @@ import { fetchTablePreview } from '../../lib/fetch-table-preview';
 import { isSuccess } from '@/lib/result';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { Button } from '@/registry/new-york-v4/ui/button';
+import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { ResultRow } from '@dory/shared/types/sql-console';
@@ -38,8 +39,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import { buildTableUpdatePreview } from '@dory/drivers/table-mutations';
-import type { TableMutationDialect, TablePreviewFilter, TablePreviewSort, TableUpdateBatch } from '@dory/drivers/types';
+import { buildTableUpdatePreview, getTableMutationProfile, isEditableTableMutationColumnType } from '@dory/drivers/table-mutations';
+import type { TablePreviewFilter, TablePreviewSort, TableUpdateBatch } from '@dory/drivers/types';
 import { commitTableUpdates } from '../../lib/commit-table-updates';
 import {
     applyTableCellEdit,
@@ -50,8 +51,10 @@ import {
     overlayPendingRow,
     pendingRowsToUpdates,
     redoTableEdit,
+    removeCommittedTableEdits,
     revertTableCellEdit,
     tableEditSessionsAtom,
+    tableIdentitySelectionsAtom,
     toTableMutationValue,
     undoTableEdit,
     type PendingRowChange,
@@ -150,14 +153,6 @@ function toOptionalBoolean(value: unknown) {
     if (typeof value === 'number') return value !== 0;
     if (typeof value === 'string') return ['true', 'yes', '1'].includes(value.toLowerCase());
     return undefined;
-}
-
-function getMutationDialect(driver?: string): TableMutationDialect | null {
-    if (driver === 'postgres' || driver === 'neon' || driver === 'supabase') return 'postgres';
-    if (driver === 'mysql' || driver === 'mariadb') return 'mysql';
-    if (driver === 'sqlite') return 'sqlite';
-    if (driver === 'duckdb') return 'duckdb';
-    return null;
 }
 
 function buildPreviewQueryKey({
@@ -357,11 +352,13 @@ function DataPreviewInner({
     const currentConnection = useAtomValue(currentConnectionAtom);
     const queryClient = useQueryClient();
     const [editSessions, setEditSessions] = useAtom(tableEditSessionsAtom);
+    const [identitySelections, setIdentitySelections] = useAtom(tableIdentitySelectionsAtom);
     const sessionKey = storageKey ?? `preview:${connectionId ?? 'unknown'}:${databaseName ?? 'unknown'}:${tableName ?? 'unknown'}`;
     const editSession = editSessions[sessionKey] ?? createEmptyTableEditSession();
     const currentConnectionValue = currentConnection?.connection;
     const resolvedDriver = driver ?? (currentConnectionValue && currentConnectionValue.id === connectionId ? currentConnectionValue.type : undefined);
-    const mutationDialect = getMutationDialect(resolvedDriver);
+    const mutationProfile = getTableMutationProfile(resolvedDriver);
+    const mutationDialect = mutationProfile?.dialect ?? null;
 
     const [query, setQuery] = useState('');
     const [searchInput, setSearchInput] = useState('');
@@ -376,6 +373,9 @@ function DataPreviewInner({
     const [inspectorWidth, setInspectorWidth] = useState(360);
     const [panelPortalContainer, setPanelPortalContainer] = useState<HTMLElement | null>(null);
     const [commitDialogOpen, setCommitDialogOpen] = useState(false);
+    const [identityPopoverOpen, setIdentityPopoverOpen] = useState(false);
+    const [identityDraft, setIdentityDraft] = useState<string[]>([]);
+    const [pendingIdentitySelection, setPendingIdentitySelection] = useState<string[] | null>(null);
     const [selectionSummary, setSelectionSummary] = useState({ cellCount: 0, rowCount: 0 });
     const [focusRequest, setFocusRequest] = useState<{ rowIndex: number; column: string; requestId: number } | null>(null);
     const [pendingJump, setPendingJump] = useState<{ rowKey: string; column: string; view: TableEditViewSnapshot } | null>(null);
@@ -513,12 +513,19 @@ function DataPreviewInner({
         });
     }, [previewData?.columns, tableColumns?.columns]);
     const primaryKeyColumns = useMemo(() => columns.filter(column => column.isPrimaryKey).map(column => column.name), [columns]);
+    const selectableIdentityColumns = useMemo(() => columns.filter(column => isEditableTableMutationColumnType(column.type)), [columns]);
+    const identityColumns = useMemo(() => {
+        const selectableNames = new Set(selectableIdentityColumns.map(column => column.name));
+        return Array.from(new Set([...primaryKeyColumns, ...(identitySelections[sessionKey] ?? [])])).filter(column => selectableNames.has(column));
+    }, [identitySelections, primaryKeyColumns, selectableIdentityColumns, sessionKey]);
     const columnsByName = useMemo(() => new Map(columns.map(column => [column.name, column])), [columns]);
-    const tableIsEditable = Boolean(mutationDialect && primaryKeyColumns.length > 0);
+    const clickhouseMutationAllowed = resolvedDriver !== 'clickhouse' || /MergeTree$/i.test(tableProperties?.engine ?? '');
+    const mutationAvailable = Boolean(mutationDialect && clickhouseMutationAllowed);
+    const tableIsEditable = mutationAvailable && identityColumns.length > 0;
     const rows = useMemo(
         () =>
             baseRows.map(row => {
-                const rowIdentity = getRowKey(row.rowData, primaryKeyColumns);
+                const rowIdentity = getRowKey(row.rowData, identityColumns);
                 return rowIdentity
                     ? {
                           ...row,
@@ -526,7 +533,7 @@ function DataPreviewInner({
                       }
                     : row;
             }),
-        [baseRows, editSession, primaryKeyColumns],
+        [baseRows, editSession, identityColumns],
     );
     const currentViewIdentity = useMemo(
         () => JSON.stringify({ pageIndex, pageSize, search: query, filters: activeFilters, sort: sortState }),
@@ -535,12 +542,12 @@ function DataPreviewInner({
     const activeInspectorRowIndex = useMemo(() => {
         if (!activeInspectorRow) return null;
         if (activeInspectorRow.rowKey) {
-            const nextIndex = baseRows.findIndex(row => getRowKey(row.rowData, primaryKeyColumns)?.rowKey === activeInspectorRow.rowKey);
+            const nextIndex = baseRows.findIndex(row => getRowKey(row.rowData, identityColumns)?.rowKey === activeInspectorRow.rowKey);
             return nextIndex >= 0 ? nextIndex : null;
         }
         if (activeInspectorRow.viewIdentity !== currentViewIdentity) return null;
         return baseRows[activeInspectorRow.rowIndex] ? activeInspectorRow.rowIndex : null;
-    }, [activeInspectorRow, baseRows, currentViewIdentity, primaryKeyColumns]);
+    }, [activeInspectorRow, baseRows, currentViewIdentity, identityColumns]);
     const resolvedInspectorPayload = useMemo<VTableInspectorPayload>(() => {
         if (inspectorMode !== 'row' || activeInspectorRowIndex == null) return inspectorPayload;
         const rowData = rows[activeInspectorRowIndex]?.rowData;
@@ -549,14 +556,14 @@ function DataPreviewInner({
     const editCounts = useMemo(() => getPendingEditCounts(editSession), [editSession]);
     const pendingUpdates = useMemo(() => pendingRowsToUpdates(editSession), [editSession]);
     const updateBatch = useMemo<TableUpdateBatch | null>(() => {
-        if (!databaseName || !tableName || !primaryKeyColumns.length || !pendingUpdates.length) return null;
+        if (!databaseName || !tableName || !identityColumns.length || !pendingUpdates.length) return null;
         return {
             database: databaseName,
             table: tableName,
-            primaryKeyColumns,
+            identityColumns,
             rows: pendingUpdates,
         };
-    }, [databaseName, pendingUpdates, primaryKeyColumns, tableName]);
+    }, [databaseName, identityColumns, pendingUpdates, tableName]);
     const updateSqlPreview = useMemo(() => {
         if (!mutationDialect || !updateBatch) return '';
         try {
@@ -686,7 +693,7 @@ function DataPreviewInner({
         ({ rowIndex, column, originalValue, nextValue }: { rowIndex: number; column: string; originalValue: unknown; nextValue: unknown }) => {
             const row = baseRows[rowIndex]?.rowData;
             if (!row) return;
-            const identity = getRowKey(row, primaryKeyColumns);
+            const identity = getRowKey(row, identityColumns);
             const original = toTableMutationValue(originalValue);
             const next = toTableMutationValue(nextValue);
             if (!identity || original === undefined || next === undefined) return;
@@ -701,15 +708,15 @@ function DataPreviewInner({
                 }),
             );
         },
-        [baseRows, currentView, primaryKeyColumns, updateEditSession],
+        [baseRows, currentView, identityColumns, updateEditSession],
     );
 
     const getRowIdentityAt = useCallback(
         (rowIndex: number) => {
             const row = baseRows[rowIndex]?.rowData;
-            return row ? getRowKey(row, primaryKeyColumns) : null;
+            return row ? getRowKey(row, identityColumns) : null;
         },
-        [baseRows, primaryKeyColumns],
+        [baseRows, identityColumns],
     );
 
     const handleRevertCellAt = useCallback(
@@ -724,25 +731,27 @@ function DataPreviewInner({
         (rowIndex: number, column: string) => {
             const identity = getRowIdentityAt(rowIndex);
             const metadata = columnsByName.get(column);
-            const isComplex = /(json|array|struct|map|blob|binary|bytea|geometry|geography|interval)/i.test(metadata?.type ?? '');
-            const isPrimaryKey = primaryKeyColumns.includes(column);
-            const readOnlyReason = isPrimaryKey
-                ? t('Editor.PrimaryKeyReadOnly')
+            const isComplex = !isEditableTableMutationColumnType(metadata?.type);
+            const isIdentity = identityColumns.includes(column);
+            const readOnlyReason = isIdentity
+                ? t('Editor.IdentityColumnReadOnly')
                 : isComplex
                   ? t('Editor.ComplexTypeReadOnly')
-                  : !mutationDialect
-                    ? t('Editor.UnsupportedDriver')
-                    : primaryKeyColumns.length === 0
-                      ? t('Editor.NoPrimaryKey')
+                  : !mutationAvailable
+                    ? resolvedDriver === 'clickhouse' && !clickhouseMutationAllowed
+                        ? t('Editor.UnsupportedClickHouseEngine')
+                        : t('Editor.UnsupportedDriver')
+                    : identityColumns.length === 0
+                      ? t('Editor.NoIdentity')
                       : undefined;
             return {
-                editable: tableIsEditable && !isPrimaryKey && !isComplex,
+                editable: tableIsEditable && !isIdentity && !isComplex,
                 changed: Boolean(identity && editSession.rows[identity.rowKey]?.changes[column]),
                 nullable: metadata?.nullable,
                 readOnlyReason,
             };
         },
-        [columnsByName, editSession.rows, getRowIdentityAt, mutationDialect, primaryKeyColumns, t, tableIsEditable],
+        [clickhouseMutationAllowed, columnsByName, editSession.rows, getRowIdentityAt, identityColumns, mutationAvailable, resolvedDriver, t, tableIsEditable],
     );
 
     const isRowChanged = useCallback(
@@ -773,11 +782,11 @@ function DataPreviewInner({
             if (!row) return;
             setActiveInspectorRow({
                 rowIndex,
-                rowKey: getRowKey(row, primaryKeyColumns)?.rowKey ?? null,
+                rowKey: getRowKey(row, identityColumns)?.rowKey ?? null,
                 viewIdentity: currentViewIdentity,
             });
         },
-        [baseRows, currentViewIdentity, primaryKeyColumns],
+        [baseRows, currentViewIdentity, identityColumns],
     );
 
     useEffect(() => {
@@ -810,7 +819,7 @@ function DataPreviewInner({
             JSON.stringify(activeFilters) === JSON.stringify(pendingJump.view.filters) &&
             JSON.stringify(sortState) === JSON.stringify(pendingJump.view.sort);
         if (!isTargetView) return;
-        const rowIndex = baseRows.findIndex(row => getRowKey(row.rowData, primaryKeyColumns)?.rowKey === pendingJump.rowKey);
+        const rowIndex = baseRows.findIndex(row => getRowKey(row.rowData, identityColumns)?.rowKey === pendingJump.rowKey);
         if (rowIndex < 0) {
             toast.warning(t('Editor.JumpTargetChanged'));
         } else {
@@ -821,7 +830,7 @@ function DataPreviewInner({
             });
         }
         setPendingJump(null);
-    }, [activeFilters, baseRows, pageIndex, pageSize, pendingJump, previewQuery.isFetching, primaryKeyColumns, query, sortState, t]);
+    }, [activeFilters, baseRows, identityColumns, pageIndex, pageSize, pendingJump, previewQuery.isFetching, query, sortState, t]);
 
     const commitMutation = useMutation({
         mutationFn: async () => {
@@ -832,6 +841,7 @@ function DataPreviewInner({
                 connectionId,
                 database: databaseName,
                 table: tableName,
+                identityColumns,
                 rows: updateBatch.rows,
             });
         },
@@ -846,10 +856,36 @@ function DataPreviewInner({
             await previewQuery.refetch();
             toast.success(t('Editor.CommitSuccess', { rows: result.updatedRows, fields: result.updatedCells }));
         },
-        onError: error => {
+        onError: async error => {
+            const details = (error as { details?: Record<string, unknown> }).details;
+            if (details?.code === 'TABLE_MUTATION_PARTIAL_COMMIT' && Array.isArray(details.committedRowIndexes)) {
+                updateEditSession(session => removeCommittedTableEdits(session, details.committedRowIndexes as number[]));
+                setCommitDialogOpen(false);
+                await queryClient.invalidateQueries({ queryKey: ['table-preview'] });
+                await previewQuery.refetch();
+                toast.warning(t('Editor.PartialCommitWarning'));
+                return;
+            }
             toast.error(error instanceof Error ? error.message : t('Editor.CommitFailed'));
         },
     });
+
+    const applyIdentitySelection = useCallback(
+        (nextIdentity: string[]) => {
+            setIdentitySelections(current => ({ ...current, [sessionKey]: nextIdentity }));
+            setIdentityPopoverOpen(false);
+        },
+        [sessionKey, setIdentitySelections],
+    );
+
+    const handleApplyIdentity = useCallback(() => {
+        if (!identityDraft.length) return;
+        if (editCounts.cellCount > 0 && JSON.stringify(identityDraft) !== JSON.stringify(identityColumns)) {
+            setPendingIdentitySelection(identityDraft);
+            return;
+        }
+        applyIdentitySelection(identityDraft);
+    }, [applyIdentitySelection, editCounts.cellCount, identityColumns, identityDraft]);
 
     const rowsSummaryValue = previewData?.totalRows ?? metadataTotalRowEstimate;
     const rowsSummaryTotal = previewData?.unfilteredTotalRows ?? metadataTotalRowEstimate ?? rowsSummaryValue;
@@ -875,12 +911,66 @@ function DataPreviewInner({
                         })}
                     </div>
                 ) : null}
+                {mutationAvailable && selectableIdentityColumns.length > 0 ? (
+                    <Popover
+                        open={identityPopoverOpen}
+                        onOpenChange={open => {
+                            setIdentityPopoverOpen(open);
+                            if (open) setIdentityDraft(identityColumns);
+                        }}
+                    >
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-7 max-w-64 gap-1.5 px-2 text-xs">
+                                <KeyRound className="size-3.5 shrink-0" />
+                                <span className="truncate">
+                                    {identityColumns.length > 0 ? t('Editor.IdentitySummary', { columns: identityColumns.join(', ') }) : t('Editor.SelectIdentity')}
+                                </span>
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-80 space-y-3">
+                            <div>
+                                <div className="text-sm font-medium">{t('Editor.SelectIdentity')}</div>
+                                <p className="mt-1 text-xs text-muted-foreground">{t('Editor.IdentityDescription')}</p>
+                            </div>
+                            <div className="max-h-56 space-y-1 overflow-auto">
+                                {selectableIdentityColumns.map(column => {
+                                    const mandatory = primaryKeyColumns.includes(column.name);
+                                    const checked = identityDraft.includes(column.name);
+                                    return (
+                                        <label key={column.name} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60">
+                                            <Checkbox
+                                                checked={checked}
+                                                disabled={mandatory}
+                                                onCheckedChange={nextChecked => {
+                                                    setIdentityDraft(current => (nextChecked ? [...current, column.name] : current.filter(name => name !== column.name)));
+                                                }}
+                                            />
+                                            <span className="min-w-0 flex-1 truncate font-mono text-xs">{column.name}</span>
+                                            {mandatory ? <span className="text-[11px] text-muted-foreground">{t('Editor.PrimaryKey')}</span> : null}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                            <div className="flex justify-end">
+                                <Button size="sm" disabled={!identityDraft.length} onClick={handleApplyIdentity}>
+                                    {t('Editor.ApplyIdentity')}
+                                </Button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                ) : null}
                 {columns.length > 0 && !tableIsEditable ? (
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <span className="shrink-0 cursor-help text-xs text-muted-foreground">{t('Editor.ReadOnly')}</span>
                         </TooltipTrigger>
-                        <TooltipContent>{mutationDialect ? t('Editor.NoPrimaryKey') : t('Editor.UnsupportedDriver')}</TooltipContent>
+                        <TooltipContent>
+                            {resolvedDriver === 'clickhouse' && !clickhouseMutationAllowed
+                                ? t('Editor.UnsupportedClickHouseEngine')
+                                : mutationDialect
+                                  ? t('Editor.NoIdentity')
+                                  : t('Editor.UnsupportedDriver')}
+                        </TooltipContent>
                     </Tooltip>
                 ) : null}
             </div>
@@ -981,6 +1071,7 @@ function DataPreviewInner({
                 onClearAll={() => updateEditSession(clearTableEdits)}
                 onCommitAll={() => setCommitDialogOpen(true)}
                 isCommitting={commitMutation.isPending}
+                atomicity={mutationProfile?.atomicity ?? 'atomic'}
             />
             <InspectorPanel
                 open={inspectorOpen}
@@ -1021,35 +1112,69 @@ function DataPreviewInner({
     );
     const pagination = paginationPortalContainer === undefined ? paginationBar : paginationPortalContainer ? createPortal(paginationBar, paginationPortalContainer) : null;
     const commitDialog = (
-        <AlertDialog open={commitDialogOpen} onOpenChange={setCommitDialogOpen}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>{t('Editor.ConfirmCommitTitle')}</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        {t('Editor.ConfirmCommitDescription', {
-                            fields: editCounts.cellCount,
-                            updates: editCounts.rowCount,
-                            rows: editCounts.rowCount,
-                        })}
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <div data-testid="commit-sql-preview" className="max-h-72 overflow-auto">
-                    <SmartCodeBlock value={updateSqlPreview || ' '} type="sql" maxHeightClassName="max-h-64" />
-                </div>
-                <AlertDialogFooter>
-                    <AlertDialogCancel disabled={commitMutation.isPending}>{t('Editor.Cancel')}</AlertDialogCancel>
-                    <AlertDialogAction
-                        disabled={commitMutation.isPending || !updateBatch}
-                        onClick={event => {
-                            event.preventDefault();
-                            commitMutation.mutate();
-                        }}
-                    >
-                        {commitMutation.isPending ? t('Editor.Committing') : t('Editor.CommitNow')}
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+        <>
+            <AlertDialog open={commitDialogOpen} onOpenChange={setCommitDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('Editor.ConfirmCommitTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {mutationProfile?.atomicity === 'best-effort'
+                                ? t('Editor.ConfirmBestEffortDescription', {
+                                      fields: editCounts.cellCount,
+                                      rows: editCounts.rowCount,
+                                  })
+                                : t('Editor.ConfirmCommitDescription', {
+                                      fields: editCounts.cellCount,
+                                      updates: editCounts.rowCount,
+                                      rows: editCounts.rowCount,
+                                  })}
+                        </AlertDialogDescription>
+                        {mutationProfile?.atomicity === 'best-effort' ? (
+                            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                                {t('Editor.BestEffortWarning')}
+                            </div>
+                        ) : null}
+                    </AlertDialogHeader>
+                    <div data-testid="commit-sql-preview" className="max-h-72 overflow-auto">
+                        <SmartCodeBlock value={updateSqlPreview || ' '} type="sql" maxHeightClassName="max-h-64" />
+                    </div>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={commitMutation.isPending}>{t('Editor.Cancel')}</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={commitMutation.isPending || !updateBatch}
+                            onClick={event => {
+                                event.preventDefault();
+                                commitMutation.mutate();
+                            }}
+                        >
+                            {commitMutation.isPending ? t('Editor.Committing') : t('Editor.CommitNow')}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            <AlertDialog open={pendingIdentitySelection !== null} onOpenChange={open => !open && setPendingIdentitySelection(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('Editor.ChangeIdentityTitle')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('Editor.ChangeIdentityDescription')}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>{t('Editor.Cancel')}</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                const nextIdentity = pendingIdentitySelection;
+                                if (!nextIdentity) return;
+                                updateEditSession(clearTableEdits);
+                                applyIdentitySelection(nextIdentity);
+                                setPendingIdentitySelection(null);
+                            }}
+                        >
+                            {t('Editor.DiscardAndChangeIdentity')}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 
     if (!connectionId || !databaseName || !tableName) {

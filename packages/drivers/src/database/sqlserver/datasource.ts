@@ -1,7 +1,8 @@
-import type { ConnectionPool, Request } from 'mssql';
+import sql, { type ConnectionPool, type Request } from 'mssql';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { bindTableMutationParams, buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { createSqlServerMetadataCapability, type SqlServerMetadataAPI } from './capabilities/metadata';
 import { createSqlServerTableInfoCapability } from './capabilities/table-info';
 import { SqlServerDialect } from './dialect';
@@ -18,6 +19,11 @@ export class SqlServerDatasource extends BaseConnection {
         super(config);
         this.capabilities.metadata = createSqlServerMetadataCapability(this);
         this.capabilities.tableInfo = createSqlServerTableInfoCapability(this);
+        this.capabilities.tableMutations = {
+            dialect: 'sqlserver',
+            atomicity: 'atomic',
+            commitUpdates: input => this.commitUpdates(input),
+        };
     }
 
     protected async _init(): Promise<void> {
@@ -119,6 +125,19 @@ export class SqlServerDatasource extends BaseConnection {
         await executeSqlServerCommand(pool, sql, params, context);
     }
 
+    private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        this.assertReady();
+        const statements = buildTableUpdateStatements('sqlserver', input);
+        const pool = await this.resolvePool(input.database);
+        const transaction = new sql.Transaction(pool);
+        await executeSqlServerUpdateTransaction(statements, transaction, () => new sql.Request(transaction));
+        return {
+            updatedRows: statements.length,
+            updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+            atomicity: 'atomic',
+        };
+    }
+
     async cancelQuery(queryId: string): Promise<void> {
         this.assertReady();
         this.runningQueries.get(queryId)?.cancel();
@@ -126,5 +145,33 @@ export class SqlServerDatasource extends BaseConnection {
 
     get metadata(): SqlServerMetadataAPI {
         return this.capabilities.metadata as SqlServerMetadataAPI;
+    }
+}
+
+type SqlServerUpdateStatement = ReturnType<typeof buildTableUpdateStatements>[number];
+
+export async function executeSqlServerUpdateTransaction(
+    statements: SqlServerUpdateStatement[],
+    transaction: { begin: () => Promise<unknown>; commit: () => Promise<unknown>; rollback: () => Promise<unknown> },
+    createRequest: () => { input: (name: string, value: unknown) => unknown; query: (sql: string) => Promise<{ rowsAffected?: number[] }> },
+) {
+    await transaction.begin();
+    try {
+        for (const statement of statements) {
+            const request = createRequest();
+            const params = bindTableMutationParams('sqlserver', statement.params) as Record<string, unknown>;
+            for (const [name, value] of Object.entries(params)) {
+                request.input(name, value);
+            }
+            const result = await request.query(statement.sql);
+            const affectedRows = result.rowsAffected?.reduce((total, count) => total + count, 0) ?? 0;
+            if (affectedRows !== 1) {
+                throw new TableMutationConflictError(undefined, statement.rowIndex);
+            }
+        }
+        await transaction.commit();
+    } catch (error) {
+        await transaction.rollback().catch(() => undefined);
+        throw error;
     }
 }

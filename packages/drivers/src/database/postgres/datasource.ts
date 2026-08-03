@@ -22,6 +22,7 @@ export class PostgresDatasource extends BaseConnection {
         this.capabilities.tableInfo = createPostgresTableInfoCapability(this);
         this.capabilities.tableMutations = {
             dialect: 'postgres',
+            atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
     }
@@ -180,6 +181,7 @@ export class PostgresDatasource extends BaseConnection {
             return {
                 updatedRows: statements.length,
                 updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+                atomicity: 'atomic',
             };
         } catch (error) {
             await client.query('ROLLBACK').catch(() => undefined);

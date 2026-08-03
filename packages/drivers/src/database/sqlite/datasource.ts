@@ -18,6 +18,7 @@ export class SqliteDatasource extends BaseConnection {
         this.capabilities.tableInfo = createSqliteTableInfoCapability(this);
         this.capabilities.tableMutations = {
             dialect: 'sqlite',
+            atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
     }
@@ -106,6 +107,7 @@ export class SqliteDatasource extends BaseConnection {
         return {
             updatedRows: statements.length,
             updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+            atomicity: 'atomic',
         };
     }
 

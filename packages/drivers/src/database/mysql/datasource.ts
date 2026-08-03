@@ -22,6 +22,7 @@ export class MySqlDatasource extends BaseConnection {
         this.capabilities.tableInfo = createMysqlTableInfoCapability(this);
         this.capabilities.tableMutations = {
             dialect: 'mysql',
+            atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
     }
@@ -185,6 +186,7 @@ export class MySqlDatasource extends BaseConnection {
             return {
                 updatedRows: statements.length,
                 updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+                atomicity: 'atomic',
             };
         } catch (error) {
             await connection.rollback().catch(() => undefined);

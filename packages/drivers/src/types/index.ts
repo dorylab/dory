@@ -99,7 +99,9 @@ export type TableColumnInfo = {
     comment?: string | null;
 };
 
-export type TableMutationDialect = 'postgres' | 'mysql' | 'sqlite' | 'duckdb';
+export type TableMutationDialect = 'postgres' | 'mysql' | 'sqlite' | 'duckdb' | 'oracle' | 'snowflake' | 'sqlserver' | 'clickhouse';
+
+export type TableMutationAtomicity = 'atomic' | 'best-effort';
 
 export type TableMutationValue = string | number | boolean | null;
 
@@ -117,17 +119,19 @@ export type TableUpdateRow = {
 export type TableUpdateBatch = {
     database: string;
     table: string;
-    primaryKeyColumns: string[];
+    identityColumns: string[];
     rows: TableUpdateRow[];
 };
 
 export type TableUpdateResult = {
     updatedRows: number;
     updatedCells: number;
+    atomicity: TableMutationAtomicity;
 };
 
 export type TableMutationAPI = {
     dialect: TableMutationDialect;
+    atomicity: TableMutationAtomicity;
     commitUpdates: (input: TableUpdateBatch) => Promise<TableUpdateResult>;
 };
 

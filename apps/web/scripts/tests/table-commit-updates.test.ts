@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 
 import { ActionError } from '@dory/actions';
-import { TableMutationConflictError } from '@dory/drivers/table-mutations';
+import { TableMutationConflictError, TableMutationPartialCommitError } from '@dory/drivers/table-mutations';
 import type { TableUpdateBatch } from '@dory/drivers/types';
 
 const require = createRequire(import.meta.url);
@@ -39,7 +39,8 @@ function createInstance(
     overrides: {
         columns?: typeof columns;
         supported?: boolean;
-        commit?: (batch: TableUpdateBatch) => Promise<{ updatedRows: number; updatedCells: number }>;
+        identityCount?: number;
+        commit?: (batch: TableUpdateBatch) => Promise<{ updatedRows: number; updatedCells: number; atomicity: 'atomic' }>;
     } = {},
 ) {
     const batches: TableUpdateBatch[] = [];
@@ -47,7 +48,7 @@ function createInstance(
         overrides.commit ??
         (async (batch: TableUpdateBatch) => {
             batches.push(batch);
-            return { updatedRows: batch.rows.length, updatedCells: batch.rows.reduce((total, row) => total + row.changes.length, 0) };
+            return { updatedRows: batch.rows.length, updatedCells: batch.rows.reduce((total, row) => total + row.changes.length, 0), atomicity: 'atomic' };
         });
 
     return {
@@ -59,10 +60,12 @@ function createInstance(
                         ? undefined
                         : {
                               dialect: 'sqlite' as const,
+                              atomicity: 'atomic' as const,
                               commitUpdates: commit,
                           },
             },
             describeTable: async () => overrides.columns ?? columns,
+            queryWithContext: async () => ({ rows: [{ identityCount: overrides.identityCount ?? 1 }] }),
             commitTableUpdates: commit,
         },
     };
@@ -99,18 +102,28 @@ test('table.commitUpdates rebuilds a validated composite-key batch', async () =>
     const { instance, batches } = createInstance();
     const result = await validateAndCommitTableUpdates(instance, input);
 
-    assert.deepEqual(result, { updatedRows: 1, updatedCells: 1 });
+    assert.deepEqual(result, { updatedRows: 1, updatedCells: 1, atomicity: 'atomic' });
     assert.deepEqual(batches, [
         {
             database: 'app',
             table: 'users',
-            primaryKeyColumns: ['tenant_id', 'id'],
+            identityColumns: ['tenant_id', 'id'],
             rows: input.rows,
         },
     ]);
 });
 
-test('table.commitUpdates rejects unsupported, keyless, malformed, and primary-key mutations', async () => {
+test('table.commitUpdates supports a selected identity for keyless tables', async () => {
+    const keylessColumns = columns.map(column => ({ ...column, isPrimaryKey: false }));
+    const { instance, batches } = createInstance({ columns: keylessColumns });
+    await validateAndCommitTableUpdates(instance, {
+        ...input,
+        identityColumns: ['tenant_id', 'id'],
+    });
+    assert.deepEqual(batches[0]?.identityColumns, ['tenant_id', 'id']);
+});
+
+test('table.commitUpdates rejects unsupported, missing identity, malformed, and identity-column mutations', async () => {
     await expectActionError(() => validateAndCommitTableUpdates(createInstance({ supported: false }).instance, input), {
         code: 'ACTION_EXECUTION_FAILED',
         status: 400,
@@ -128,7 +141,7 @@ test('table.commitUpdates rejects unsupported, keyless, malformed, and primary-k
         {
             code: 'ACTION_INPUT_INVALID',
             status: 400,
-            detailCode: 'TABLE_MUTATION_PRIMARY_KEY_REQUIRED',
+            detailCode: 'TABLE_MUTATION_IDENTITY_REQUIRED',
         },
     );
 
@@ -141,7 +154,7 @@ test('table.commitUpdates rejects unsupported, keyless, malformed, and primary-k
         {
             code: 'ACTION_INPUT_INVALID',
             status: 400,
-            message: /complete primary key/,
+            message: /complete row identity/,
         },
     );
 
@@ -159,7 +172,7 @@ test('table.commitUpdates rejects unsupported, keyless, malformed, and primary-k
         {
             code: 'ACTION_INPUT_INVALID',
             status: 400,
-            message: /Primary key column "id" is read-only/,
+            message: /Row identity column "id" is read-only/,
         },
     );
 
@@ -198,6 +211,32 @@ test('table.commitUpdates maps optimistic concurrency conflicts without losing r
             assert.deepEqual(error.details, {
                 code: 'TABLE_MUTATION_CONFLICT',
                 rowIndex: 3,
+            });
+            return true;
+        },
+    );
+});
+
+test('table.commitUpdates maps non-unique identities and partial ClickHouse commits', async () => {
+    await expectActionError(() => validateAndCommitTableUpdates(createInstance({ identityCount: 2 }).instance, input), {
+        code: 'ACTION_EXECUTION_FAILED',
+        status: 409,
+        detailCode: 'TABLE_MUTATION_IDENTITY_NOT_UNIQUE',
+    });
+
+    const { instance } = createInstance({
+        commit: async () => {
+            throw new TableMutationPartialCommitError([0], [1]);
+        },
+    });
+    await assert.rejects(
+        () => validateAndCommitTableUpdates(instance, input),
+        error => {
+            assert.ok(error instanceof ActionError);
+            assert.deepEqual(error.details, {
+                code: 'TABLE_MUTATION_PARTIAL_COMMIT',
+                committedRowIndexes: [0],
+                pendingRowIndexes: [1],
             });
             return true;
         },

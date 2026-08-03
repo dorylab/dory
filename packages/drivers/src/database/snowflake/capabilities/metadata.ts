@@ -35,6 +35,7 @@ type ColumnRow = {
     defaultExpression?: string | null;
     nullable?: string | null;
     comment?: string | null;
+    primaryKey?: boolean | number | string | null;
 };
 
 type SchemaGraphColumnRow = {
@@ -64,6 +65,12 @@ function toNumberOrNull(value: unknown): number | null {
     if (value === null || value === undefined) return null;
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toBoolean(value: unknown): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    return typeof value === 'string' && ['true', 't', 'yes', 'y', '1'].includes(value.toLowerCase());
 }
 
 function toIsoString(value: unknown): string | null {
@@ -191,20 +198,34 @@ async function getTableColumns(datasource: SnowflakeDatasource, database: string
     const parsed = parseSnowflakeTableReference(table);
     const schema = parsed.schema ?? (datasource.config.options?.schema as string | undefined) ?? 'PUBLIC';
     const targetDatabase = parsed.database ?? database;
-    const informationSchema = `${quoteSnowflakeIdentifier(targetDatabase)}.INFORMATION_SCHEMA.COLUMNS`;
+    const informationSchema = `${quoteSnowflakeIdentifier(targetDatabase)}.INFORMATION_SCHEMA`;
     const result = await datasource.queryWithContext<ColumnRow>(
         `
             SELECT
-                COLUMN_NAME AS "columnName",
-                DATA_TYPE AS "columnType",
-                COLUMN_DEFAULT AS "defaultExpression",
-                IS_NULLABLE AS "nullable",
-                COMMENT AS "comment"
-            FROM ${informationSchema}
-            WHERE TABLE_CATALOG = ?
-              AND TABLE_SCHEMA = ?
-              AND TABLE_NAME = ?
-            ORDER BY ORDINAL_POSITION
+                cols.COLUMN_NAME AS "columnName",
+                cols.DATA_TYPE AS "columnType",
+                cols.COLUMN_DEFAULT AS "defaultExpression",
+                cols.IS_NULLABLE AS "nullable",
+                cols.COMMENT AS "comment",
+                IFF(pk.COLUMN_NAME IS NULL, FALSE, TRUE) AS "primaryKey"
+            FROM ${informationSchema}.COLUMNS cols
+            LEFT JOIN (
+                SELECT kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME
+                FROM ${informationSchema}.TABLE_CONSTRAINTS tc
+                JOIN ${informationSchema}.KEY_COLUMN_USAGE kcu
+                  ON kcu.CONSTRAINT_CATALOG = tc.CONSTRAINT_CATALOG
+                 AND kcu.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+                 AND kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+                WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+            ) pk
+              ON pk.TABLE_CATALOG = cols.TABLE_CATALOG
+             AND pk.TABLE_SCHEMA = cols.TABLE_SCHEMA
+             AND pk.TABLE_NAME = cols.TABLE_NAME
+             AND pk.COLUMN_NAME = cols.COLUMN_NAME
+            WHERE cols.TABLE_CATALOG = ?
+              AND cols.TABLE_SCHEMA = ?
+              AND cols.TABLE_NAME = ?
+            ORDER BY cols.ORDINAL_POSITION
         `,
         {
             database: targetDatabase,
@@ -217,7 +238,7 @@ async function getTableColumns(datasource: SnowflakeDatasource, database: string
         columnType: row.columnType ?? null,
         defaultExpression: row.defaultExpression ?? null,
         defaultKind: row.defaultExpression ? 'expression' : null,
-        isPrimaryKey: false,
+        isPrimaryKey: toBoolean(row.primaryKey),
         comment: row.comment ?? null,
     }));
 }

@@ -9,6 +9,7 @@ import {
     overlayPendingRow,
     pendingRowsToUpdates,
     redoTableEdit,
+    removeCommittedTableEdits,
     revertTableCellEdit,
     revertTableRowEdit,
     undoTableEdit,
@@ -138,5 +139,24 @@ const isolatedSessions = {
 };
 assert.equal(getPendingEditCounts(isolatedSessions['tab-a:data-preview']).cellCount, 2);
 assert.equal(getPendingEditCounts(isolatedSessions['tab-b:data-preview']).cellCount, 0);
+
+const secondIdentity = getRowKey({ tenant_id: 'acme', id: 43 }, ['tenant_id', 'id']);
+assert.ok(secondIdentity);
+let partialSession = applyTableCellEdit(twoChanges, {
+    ...secondIdentity,
+    column: 'name',
+    originalValue: 'Bob',
+    nextValue: 'Bobby',
+    sourceRowIndex: 4,
+    sourceView,
+});
+partialSession = removeCommittedTableEdits(partialSession, [0]);
+assert.deepEqual(pendingRowsToUpdates(partialSession), [
+    {
+        key: secondIdentity.key,
+        changes: [{ column: 'name', originalValue: 'Bob', nextValue: 'Bobby' }],
+    },
+]);
+assert.equal(partialSession.past.length, 0);
 
 console.log('table editor store tests passed');

@@ -21,6 +21,7 @@ export class DuckDbDatasource extends BaseConnection {
         this.capabilities.tableInfo = createDuckDbTableInfoCapability(this);
         this.capabilities.tableMutations = {
             dialect: 'duckdb',
+            atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
     }
@@ -79,6 +80,7 @@ export class DuckDbDatasource extends BaseConnection {
             return {
                 updatedRows: statements.length,
                 updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+                atomicity: 'atomic',
             };
         } catch (error) {
             await connection.run('ROLLBACK').catch(() => undefined);

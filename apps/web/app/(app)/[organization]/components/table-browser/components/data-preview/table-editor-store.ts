@@ -32,8 +32,10 @@ export type TableEditSession = {
 };
 
 export type TableEditSessions = Record<string, TableEditSession>;
+export type TableIdentitySelections = Record<string, string[]>;
 
 export const tableEditSessionsAtom = atom<TableEditSessions>({});
+export const tableIdentitySelectionsAtom = atom<TableIdentitySelections>({});
 
 const HISTORY_LIMIT = 100;
 
@@ -131,6 +133,17 @@ export function clearTableEdits(session: TableEditSession): TableEditSession {
     return commitRows(session, {});
 }
 
+export function removeCommittedTableEdits(session: TableEditSession, committedRowIndexes: number[]): TableEditSession {
+    const rowKeys = Object.keys(session.rows);
+    const keysToRemove = new Set(committedRowIndexes.map(index => rowKeys[index]).filter((key): key is string => Boolean(key)));
+    if (!keysToRemove.size) return session;
+    return {
+        rows: Object.fromEntries(Object.entries(session.rows).filter(([rowKey]) => !keysToRemove.has(rowKey))),
+        past: [],
+        future: [],
+    };
+}
+
 export function undoTableEdit(session: TableEditSession): TableEditSession {
     const previous = session.past.at(-1);
     if (!previous) return session;
@@ -172,20 +185,20 @@ export function getPendingEditCounts(session: TableEditSession) {
 
 export function getRowKey(
     row: Record<string, unknown>,
-    primaryKeyColumns: string[],
+    identityColumns: string[],
 ): {
     rowKey: string;
     key: Record<string, TableMutationValue>;
 } | null {
     const key: Record<string, TableMutationValue> = {};
-    for (const column of primaryKeyColumns) {
+    for (const column of identityColumns) {
         const value = toTableMutationValue(row[column]);
         if (value === undefined) return null;
         key[column] = value;
     }
     return {
         key,
-        rowKey: JSON.stringify(primaryKeyColumns.map(column => [column, key[column]])),
+        rowKey: JSON.stringify(identityColumns.map(column => [column, key[column]])),
     };
 }
 

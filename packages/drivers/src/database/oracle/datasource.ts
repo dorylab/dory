@@ -1,7 +1,8 @@
-import type { Pool } from 'oracledb';
+import type { BindParameters, Pool } from 'oracledb';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { bindTableMutationParams, buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { createOracleMetadataCapability, type OracleMetadataAPI } from './capabilities/metadata';
 import { createOracleTableInfoCapability } from './capabilities/table-info';
 import { OracleDialect } from './dialect';
@@ -17,6 +18,11 @@ export class OracleDatasource extends BaseConnection {
         super(config);
         this.capabilities.metadata = createOracleMetadataCapability(this);
         this.capabilities.tableInfo = createOracleTableInfoCapability(this);
+        this.capabilities.tableMutations = {
+            dialect: 'oracle',
+            atomicity: 'atomic',
+            commitUpdates: input => this.commitUpdates(input),
+        };
     }
 
     protected async _init(): Promise<void> {
@@ -92,6 +98,34 @@ export class OracleDatasource extends BaseConnection {
         const targetService = context?.database ?? resolveOracleServiceName(this.config);
         const pool = await this.resolvePool(targetService);
         await executeOracleCommand(pool, sql, params, context);
+    }
+
+    private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        this.assertReady();
+        const statements = buildTableUpdateStatements('oracle', input);
+        const pool = await this.resolvePool(input.database);
+        const connection = await pool.getConnection();
+
+        try {
+            for (const statement of statements) {
+                const bindParams = bindTableMutationParams('oracle', statement.params) as BindParameters;
+                const result = await connection.execute(statement.sql, bindParams, { autoCommit: false });
+                if (result.rowsAffected !== 1) {
+                    throw new TableMutationConflictError(undefined, statement.rowIndex);
+                }
+            }
+            await connection.commit();
+            return {
+                updatedRows: statements.length,
+                updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+                atomicity: 'atomic',
+            };
+        } catch (error) {
+            await connection.rollback().catch(() => undefined);
+            throw error;
+        } finally {
+            await connection.close();
+        }
     }
 
     get metadata(): OracleMetadataAPI {
