@@ -251,7 +251,7 @@ export function TableOverview({ databaseName, tableName }: TableOverviewProps) {
 
     return (
         <ScrollArea className="h-full pr-3">
-            <div className="space-y-5 pb-6">
+            <div className="space-y-5 pt-4 pb-6">
                 <OverviewHeader
                     loading={aiLoading}
                     blocked={aiBlocked}

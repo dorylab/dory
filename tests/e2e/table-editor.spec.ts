@@ -268,7 +268,6 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await page.evaluate(() => document.documentElement.classList.add('dark'));
     const inspectorSurfaceColors = await page.evaluate(() => {
         const appSidebar = Array.from(document.querySelectorAll<HTMLElement>('[data-sidebar="sidebar"]')).find(element => element.getClientRects().length > 0) ?? null;
-        const tableSidebarGutter = document.querySelector<HTMLElement>('[data-testid="sql-console-sidebar-gutter"]');
         const tableSidebar = document.querySelector<HTMLElement>('[data-testid="sql-console-sidebar-surface"]');
         const tableSurface = document.querySelector<HTMLElement>('[data-testid="vtable-surface"]');
         const inspector = document.querySelector<HTMLElement>('[data-testid="cell-inspector-panel"]');
@@ -286,18 +285,18 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
 
         return {
             appSidebar: appSidebar ? getComputedStyle(appSidebar).backgroundColor : null,
-            tableSidebarGutter: tableSidebarGutter ? getComputedStyle(tableSidebarGutter).backgroundColor : null,
-            tableSidebarGutterWidth: tableSidebarGutter ? getComputedStyle(tableSidebarGutter).paddingLeft : null,
             tableSidebar: tableSidebar ? getComputedStyle(tableSidebar).backgroundColor : null,
+            tableSidebarBorderWidth: tableSidebar ? getComputedStyle(tableSidebar).borderLeftWidth : null,
+            tableSidebarBorderStyle: tableSidebar ? getComputedStyle(tableSidebar).borderLeftStyle : null,
             table: tableSurface ? getComputedStyle(tableSurface).backgroundColor : null,
             inspector: inspector ? getComputedStyle(inspector).backgroundColor : null,
             inspectorAlpha: backgroundAlpha(inspector),
         };
     });
     expect(inspectorSurfaceColors.appSidebar).not.toBeNull();
-    expect(inspectorSurfaceColors.tableSidebarGutter).not.toBe(inspectorSurfaceColors.appSidebar);
-    expect(inspectorSurfaceColors.tableSidebarGutterWidth).toBe('6px');
     expect(inspectorSurfaceColors.tableSidebar).toBe(inspectorSurfaceColors.appSidebar);
+    expect(inspectorSurfaceColors.tableSidebarBorderWidth).toBe('1px');
+    expect(inspectorSurfaceColors.tableSidebarBorderStyle).toBe('solid');
     expect(inspectorSurfaceColors.table).toBe(inspectorSurfaceColors.appSidebar);
     expect(inspectorSurfaceColors.inspector).toBe(inspectorSurfaceColors.appSidebar);
     expect(inspectorSurfaceColors.inspectorAlpha).toBe(1);

@@ -387,33 +387,34 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                     maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
                     className="min-w-0 overflow-hidden"
                 >
-                    <div className="h-full w-full bg-muted/40 pl-1.5" data-testid="sql-console-sidebar-gutter">
-                        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card" data-testid="sql-console-sidebar-surface">
-                            <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
-                                <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
-                                    <TabsTrigger value="tables" className="min-w-0 flex-1">
-                                        {t('Sidebar.Tables')}
-                                    </TabsTrigger>
-                                    <TabsTrigger value="saved" className="min-w-0 flex-1">
-                                        {t('Sidebar.Queries')}
-                                    </TabsTrigger>
-                                </TabsList>
-                                {/* <Separator /> */}
-                                <TabsContent value="tables" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
-                                    <SQLConsoleSidebar
-                                        onOpenTableTab={handleOpenTableTab}
-                                        onOpenQueryConsole={handleOpenQueryConsole}
-                                        onQueryTable={handleQueryTable}
-                                        onRenameTable={handleRenameTable}
-                                        selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
-                                        selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
-                                    />
-                                </TabsContent>
-                                <TabsContent value="saved" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
-                                    <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />
-                                </TabsContent>
-                            </Tabs>
-                        </div>
+                    <div
+                        className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card"
+                        data-testid="sql-console-sidebar-surface"
+                    >
+                        <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
+                            <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
+                                <TabsTrigger value="tables" className="min-w-0 flex-1">
+                                    {t('Sidebar.Tables')}
+                                </TabsTrigger>
+                                <TabsTrigger value="saved" className="min-w-0 flex-1">
+                                    {t('Sidebar.Queries')}
+                                </TabsTrigger>
+                            </TabsList>
+                            {/* <Separator /> */}
+                            <TabsContent value="tables" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
+                                <SQLConsoleSidebar
+                                    onOpenTableTab={handleOpenTableTab}
+                                    onOpenQueryConsole={handleOpenQueryConsole}
+                                    onQueryTable={handleQueryTable}
+                                    onRenameTable={handleRenameTable}
+                                    selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
+                                    selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
+                                />
+                            </TabsContent>
+                            <TabsContent value="saved" className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden">
+                                <SavedQueriesSidebar onSelect={handleSavedQuerySelect} />
+                            </TabsContent>
+                        </Tabs>
                     </div>
                 </Panel>
 
@@ -494,7 +495,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
             <SqlConsoleOverlayHost topOffset={isLoading || tabs.length === 0 ? 0 : tabHeaderHeight} />
 
             <div className="absolute right-0 bottom-0 z-20 flex" style={{ top: isLoading || tabs.length === 0 ? 0 : `${tabHeaderHeight}px` }}>
-                <div className="flex h-full w-10 flex-col items-center gap-2 border-l bg-background/95 py-3 shadow-xl backdrop-blur">
+                <div className="flex h-full w-10 flex-col items-center gap-2 border-l border-border/70 bg-card py-3" data-testid="sql-console-action-rail">
                     {activeTab?.tabType === 'sql' && (
                         <Button
                             size="icon"

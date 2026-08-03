@@ -70,7 +70,7 @@ export function DriverTableBrowser({
 
     if (!isPostgresFamilyConnectionType(driver)) {
         return (
-            <div className="flex h-full flex-col px-6" data-testid="table-browser-layout">
+            <div className="flex h-full flex-col px-3" data-testid="table-browser-layout">
                 <TableViewTabs
                     activeTab={activeTab}
                     connectionId={connectionId}
@@ -87,7 +87,7 @@ export function DriverTableBrowser({
     }
 
     return (
-        <div className="flex h-full flex-col px-6" data-testid="table-browser-layout">
+        <div className="flex h-full flex-col px-3" data-testid="table-browser-layout">
             <Tabs value={currentTab} onValueChange={handleTabChange} className="flex h-full flex-col gap-0" key={resetKey}>
                 <div className="flex-1 min-h-0">
                     <TabsContent value="overview" className="h-full mt-0">
