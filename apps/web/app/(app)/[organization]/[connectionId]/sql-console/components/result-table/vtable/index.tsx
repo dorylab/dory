@@ -1501,7 +1501,7 @@ export default function VTable({
                     boxShadow: cellStateShadow,
                 }}
                 className={cn(
-                    'px-2 text-sm border-b border-r bg-card cursor-pointer outline-none select-none',
+                    'relative px-2 text-sm border-b border-r bg-card cursor-pointer outline-none select-none',
                     'min-w-0 overflow-hidden',
                     isRowSelected && PRIMARY_SELECTION_SUBTLE_CLASS,
                     isCellSelected && PRIMARY_SELECTION_CLASS,
@@ -1540,7 +1540,7 @@ export default function VTable({
                         <select
                             autoFocus
                             value={editingCell.draft}
-                            className="h-full w-full min-w-0 border-0 bg-transparent px-0 text-sm outline-none"
+                            className="absolute inset-0 h-full w-full min-w-0 box-border border-0 bg-transparent px-2 text-sm outline-none"
                             onMouseDown={event => event.stopPropagation()}
                             onChange={event => setEditingCell(current => (current ? { ...current, draft: event.target.value, error: null } : current))}
                             onBlur={() => {
@@ -1591,7 +1591,7 @@ export default function VTable({
                             aria-invalid={Boolean(editingCell.error)}
                             title={editingCell.error ?? undefined}
                             className={cn(
-                                'h-full w-full min-w-0 border-0 bg-transparent px-0 text-sm outline-none',
+                                'absolute inset-0 h-full w-full min-w-0 box-border border-0 bg-transparent px-2 text-sm outline-none',
                                 (cellEditState.kind === 'number' || cellEditState.kind === 'precise-number') && 'font-mono tabular-nums',
                                 editingCell.error && 'text-destructive',
                             )}
@@ -1921,10 +1921,7 @@ export default function VTable({
                         <ContextMenuItem
                             inset
                             onSelect={() => {
-                                const fc = focusedCell ?? (selectedCells.size > 0 ? parseCK([...selectedCells][0]) : null);
-                                const row = fc?.row ?? [...selectedRowIds][0] ?? null;
-                                const col = fc?.col ?? columns[0] ?? null;
-                                if (row != null && col != null) openCellInspector(row, col);
+                                openCellInspector(sel.cell.row, sel.cell.col);
                             }}
                         >
                             {editable ? t('VTable.Context.OpenCellInspector') : t('VTable.Context.ViewCell')}
@@ -1932,8 +1929,7 @@ export default function VTable({
                         <ContextMenuItem
                             inset
                             onSelect={() => {
-                                const rowIndex = [...selectedRowIds][0] ?? (focusedCell ? focusedCell.row : null);
-                                if (rowIndex != null) openRowInspector(rowIndex);
+                                openRowInspector(sel.cell.row);
                             }}
                         >
                             {t('VTable.Context.ViewRowDetails')}
@@ -1977,26 +1973,14 @@ export default function VTable({
                     </>
                 )}
                 {sel.mode === 'singleRow' && (
-                    <ContextMenuItem
-                        inset
-                        onSelect={() => {
-                            const rowIndex = [...selectedRowIds][0] ?? (focusedCell ? focusedCell.row : null);
-                            if (rowIndex != null) openRowInspector(rowIndex);
-                        }}
-                    >
+                    <ContextMenuItem inset onSelect={() => openRowInspector(sel.row)}>
                         {t('VTable.Context.ViewRowDetails')}
                     </ContextMenuItem>
                 )}
                 {sel.mode === 'rowOnly' && (
                     <>
                         <ContextMenuSeparator />
-                        <ContextMenuItem
-                            inset
-                            onSelect={() => {
-                                const rowIndex = [...selectedRowIds][0] ?? (focusedCell ? focusedCell.row : null);
-                                if (rowIndex != null) openRowInspector(rowIndex);
-                            }}
-                        >
+                        <ContextMenuItem inset onSelect={() => openRowInspector(sel.row)}>
                             {t('VTable.Context.ViewRowDetails')}
                         </ContextMenuItem>
                     </>
