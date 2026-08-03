@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, MoreHorizontal } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
+
+import { cn } from '@dory/web-utils';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Input } from '@/registry/new-york-v4/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500, 1000];
@@ -16,6 +16,7 @@ type DataPreviewPaginationBarProps = {
     currentPageRowCount: number;
     rowsLabel?: string | null;
     loading: boolean;
+    variant?: 'footer' | 'inline';
     onPageChange: (pageIndex: number) => void;
     onPageSizeChange: (pageSize: number) => void;
 };
@@ -49,6 +50,7 @@ export function DataPreviewPaginationBar({
     currentPageRowCount,
     rowsLabel: rowsLabelProp,
     loading,
+    variant = 'footer',
     onPageChange,
     onPageSizeChange,
 }: DataPreviewPaginationBarProps) {
@@ -59,15 +61,10 @@ export function DataPreviewPaginationBar({
     const pageItems = totalPages != null ? getPaginationItems(currentPageIndex, totalPages) : [];
     const hasPrevious = currentPageIndex > 0;
     const hasNext = totalPages != null ? currentPageIndex + 1 < totalPages : currentPageRowCount >= pageSize;
-    const [pageInput, setPageInput] = useState(() => String(currentPageIndex + 1));
 
     const pageLabel = t('Pagination.PageUnknown', { current: currentPageIndex + 1 });
 
     const rowsLabel = rowsLabelProp ?? (currentPageRowCount > 0 && totalRowEstimate == null ? t('Pagination.ShowingCount', { count: currentPageRowCount.toLocaleString() }) : null);
-
-    useEffect(() => {
-        setPageInput(String(currentPageIndex + 1));
-    }, [currentPageIndex]);
 
     const goToPage = (target: number) => {
         if (totalPages == null) {
@@ -78,31 +75,16 @@ export function DataPreviewPaginationBar({
         onPageChange(Math.max(0, Math.min(target, totalPages - 1)));
     };
 
-    const commitPageInput = () => {
-        if (totalPages == null) return;
-
-        const trimmed = pageInput.trim();
-        const parsed = trimmed ? Number(trimmed) : 1;
-
-        if (!Number.isFinite(parsed)) {
-            setPageInput(String(currentPageIndex + 1));
-            return;
-        }
-
-        const nextPage = Math.max(1, Math.min(Math.trunc(parsed), totalPages));
-        setPageInput(String(nextPage));
-        goToPage(nextPage - 1);
-    };
-
     return (
-        <div className="flex-none flex flex-wrap items-center justify-between gap-2 border-t bg-card px-3 py-1.5 text-xs text-muted-foreground">
-            <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div
+            data-testid="data-preview-pagination"
+            className={cn(
+                'flex flex-nowrap items-center justify-between gap-2 text-xs text-muted-foreground',
+                variant === 'footer' ? 'flex-none overflow-x-auto border-t bg-card px-3 py-1.5' : 'min-w-max flex-1',
+            )}
+        >
+            <div className="flex shrink-0 flex-nowrap items-center gap-3">
                 <div className="flex shrink-0 flex-nowrap items-center gap-1">
-                    {totalPages != null && (
-                        <Button variant="ghost" size="icon-xs" disabled={!hasPrevious || loading} onClick={() => goToPage(0)} aria-label={t('Pagination.First')}>
-                            <ChevronsLeft />
-                        </Button>
-                    )}
                     <Button variant="ghost" size="icon-xs" disabled={!hasPrevious || loading} onClick={() => goToPage(currentPageIndex - 1)} aria-label={t('Pagination.Previous')}>
                         <ChevronLeft />
                     </Button>
@@ -135,37 +117,7 @@ export function DataPreviewPaginationBar({
                     <Button variant="ghost" size="icon-xs" disabled={!hasNext || loading} onClick={() => goToPage(currentPageIndex + 1)} aria-label={t('Pagination.Next')}>
                         <ChevronRight />
                     </Button>
-                    {totalPages != null && (
-                        <Button variant="ghost" size="icon-xs" disabled={!hasNext || loading} onClick={() => goToPage(totalPages - 1)} aria-label={t('Pagination.Last')}>
-                            <ChevronsRight />
-                        </Button>
-                    )}
                 </div>
-
-                {totalPages != null && (
-                    <div className="flex shrink-0 items-center gap-1.5">
-                        <span className="whitespace-nowrap">{t('Pagination.GoTo')}</span>
-                        <Input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={totalPages}
-                            step={1}
-                            value={pageInput}
-                            disabled={loading}
-                            aria-label={t('Pagination.GoToPage', { page: currentPageIndex + 1 })}
-                            onChange={event => setPageInput(event.target.value)}
-                            onBlur={commitPageInput}
-                            onKeyDown={event => {
-                                if (event.key === 'Enter') {
-                                    event.preventDefault();
-                                    commitPageInput();
-                                }
-                            }}
-                            className="h-6 min-h-6 w-16 px-2 text-center text-xs tabular-nums"
-                        />
-                    </div>
-                )}
 
                 <div className="flex shrink-0 items-center gap-1.5">
                     <span className="whitespace-nowrap">{t('Pagination.RowsPerPage')}</span>
@@ -185,8 +137,8 @@ export function DataPreviewPaginationBar({
             </div>
 
             {rowsLabel && (
-                <div className="flex min-w-0 items-center gap-2 tabular-nums">
-                    <span className="truncate">{rowsLabel}</span>
+                <div className="flex shrink-0 items-center gap-2 tabular-nums">
+                    <span>{rowsLabel}</span>
                 </div>
             )}
         </div>

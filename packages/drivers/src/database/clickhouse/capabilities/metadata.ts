@@ -121,7 +121,7 @@ async function getTableColumns(datasource: ClickhouseDatasource, database: strin
             type AS columnType,
             default_kind AS defaultKind,
             default_expression AS defaultExpression,
-            is_in_primary_key AS isPrimaryKey,
+            is_in_sorting_key AS isPrimaryKey,
             comment
         FROM system.columns
         WHERE database = {db:String}

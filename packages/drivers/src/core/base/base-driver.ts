@@ -26,6 +26,8 @@ import type {
     TableColumnInfo,
     TableMeta,
     TablePreviewOptions,
+    TableUpdateBatch,
+    TableUpdateResult,
 } from '../../types';
 import type { DriverQueryParams } from './params/types';
 import { SshTunnel, createSshTunnel, type SshOptions } from '../ssh/ssh-tunnel';
@@ -192,6 +194,14 @@ export abstract class BaseDriver {
             throw new UnsupportedDriverCapabilityError('previewTable', this.config.type);
         }
         return preview(database, table, options);
+    }
+
+    async commitTableUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        const mutations = this.capabilities.tableMutations;
+        if (!mutations) {
+            throw new UnsupportedDriverCapabilityError('commitTableUpdates', this.config.type);
+        }
+        return mutations.commitUpdates(input);
     }
 
     async renameTable(database: string, table: string, nextName: string): Promise<void> {

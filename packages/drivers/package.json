@@ -13,6 +13,7 @@
         "./database": "./src/database/index.ts",
         "./database/register": "./src/database/register.ts",
         "./database/clickhouse/privileges": "./src/database/clickhouse/capabilities/privileges.ts",
+        "./table-mutations": "./src/table-mutations.ts",
         "./config": "./src/config/index.ts"
     },
     "scripts": {

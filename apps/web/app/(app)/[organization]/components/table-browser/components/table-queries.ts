@@ -26,24 +26,27 @@ export const tableQueryKeys = {
     aiStatsInsights: (connectionId?: string, databaseName?: string, tableName?: string) => ['table-stats-insights', connectionId, databaseName, tableName] as const,
 };
 
-type RawTableColumn = Partial<
-    TableColumn & {
-        name: string;
-        type: string;
-        isNullable: boolean;
-        nullable: boolean;
-        defaultValue: string | null;
-        default: string | null;
-        comment: string | null;
-    }
->;
+type RawTableColumn = Partial<TableColumn> & {
+    name?: string;
+    type?: string;
+    defaultValue?: string | null;
+    default?: string | null;
+};
+
+function toOptionalBoolean(value: unknown) {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') return ['true', 'yes', '1'].includes(value.toLowerCase());
+    return undefined;
+}
 
 function normalizeColumns(raw: RawTableColumn[]): ColumnInfo[] {
     const normalized = (raw ?? []).map(col => ({
         name: col.columnName ?? col.name ?? '',
         type: col.columnType ?? col.type ?? '',
-        nullable: col.isNullable ?? col.nullable ?? true,
-        defaultValue: col.defaultValue ?? col.default ?? null,
+        nullable: toOptionalBoolean(col.isNullable ?? col.nullable) ?? true,
+        isPrimaryKey: toOptionalBoolean(col.isPrimaryKey) ?? false,
+        defaultValue: col.defaultValue ?? col.default ?? col.defaultExpression ?? null,
         comment: col.comment ?? null,
     }));
     return normalized.filter(col => col.name);

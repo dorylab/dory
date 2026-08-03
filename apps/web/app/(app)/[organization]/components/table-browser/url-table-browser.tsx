@@ -5,6 +5,7 @@ import type { ExplorerDriver } from '@/lib/explorer/types';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { useTranslations } from 'next-intl';
 import { DriverTableBrowser } from './driver-table-browser';
+import { usePendingTableChangesBeforeUnload } from './components/data-preview/use-pending-table-changes-before-unload';
 import type { TableSubTab } from './types';
 
 type UrlTableBrowserProps = {
@@ -19,6 +20,7 @@ type UrlTableBrowserProps = {
 export default function UrlTableBrowser({ catalog, driver, connectionId, databaseName, tableName, initialTab = 'data' }: UrlTableBrowserProps) {
     const [currentTab, setCurrentTab] = useState<TableSubTab>(initialTab);
     const t = useTranslations('TableBrowser');
+    usePendingTableChangesBeforeUnload();
 
     useEffect(() => {
         setCurrentTab(initialTab);

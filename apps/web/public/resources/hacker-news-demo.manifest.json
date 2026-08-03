@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "source": "Dory play/default.hackernews_top + default.hackernews_history",
+  "capturedAt": "2026-07-21 17:00:00",
+  "rangeStart": "2026-06-21 17:00:00",
+  "rangeEnd": "2026-07-21 17:00:00",
+  "snapshotCount": 720,
+  "rankingRowCount": 360000,
+  "uniqueItemCount": 7664,
+  "matchedRankingRows": 359966,
+  "matchRate": 0.9999055555555556,
+  "tables": [
+    "hacker_news.top_rankings",
+    "hacker_news.items",
+    "hacker_news.top"
+  ]
+}

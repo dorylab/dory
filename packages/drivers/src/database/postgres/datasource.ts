@@ -1,8 +1,9 @@
 import type { Pool } from 'pg';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { isTlsNegotiationError, isTlsPreferMode, withTlsDisabledOptions } from '@dory/drivers/core/tls';
+import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { createPostgresMetadataCapability, type PostgresMetadataAPI } from './capabilities/metadata';
 import { createPostgresTableInfoCapability } from './capabilities/table-info';
 import { PostgresDialect } from './dialect';
@@ -19,6 +20,11 @@ export class PostgresDatasource extends BaseConnection {
         super(config);
         this.capabilities.metadata = createPostgresMetadataCapability(this);
         this.capabilities.tableInfo = createPostgresTableInfoCapability(this);
+        this.capabilities.tableMutations = {
+            dialect: 'postgres',
+            atomicity: 'atomic',
+            commitUpdates: input => this.commitUpdates(input),
+        };
     }
 
     protected async _init(): Promise<void> {
@@ -155,6 +161,34 @@ export class PostgresDatasource extends BaseConnection {
         const targetDatabase = context?.database ?? this.config.database;
         const pool = this.resolvePool(targetDatabase);
         await executePostgresCommand(pool, this.config, sql, params, context);
+    }
+
+    private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        this.assertReady();
+        const statements = buildTableUpdateStatements('postgres', input);
+        const pool = this.resolvePool(input.database);
+        const client = await pool.connect();
+
+        try {
+            await client.query('BEGIN');
+            for (const statement of statements) {
+                const result = await client.query(statement.sql, statement.params);
+                if (result.rowCount !== 1) {
+                    throw new TableMutationConflictError(undefined, statement.rowIndex);
+                }
+            }
+            await client.query('COMMIT');
+            return {
+                updatedRows: statements.length,
+                updatedCells: statements.reduce((total, statement) => total + statement.changedColumns.length, 0),
+                atomicity: 'atomic',
+            };
+        } catch (error) {
+            await client.query('ROLLBACK').catch(() => undefined);
+            throw error;
+        } finally {
+            client.release();
+        }
     }
 
     async cancelQuery(queryId: string): Promise<void> {

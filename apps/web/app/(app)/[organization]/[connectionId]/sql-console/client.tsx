@@ -387,7 +387,10 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                     maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
                     className="min-w-0 overflow-hidden"
                 >
-                    <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-background">
+                    <div
+                        className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card"
+                        data-testid="sql-console-sidebar-surface"
+                    >
                         <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
                             <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
                                 <TabsTrigger value="tables" className="min-w-0 flex-1">
@@ -492,7 +495,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
             <SqlConsoleOverlayHost topOffset={isLoading || tabs.length === 0 ? 0 : tabHeaderHeight} />
 
             <div className="absolute right-0 bottom-0 z-20 flex" style={{ top: isLoading || tabs.length === 0 ? 0 : `${tabHeaderHeight}px` }}>
-                <div className="flex h-full w-10 flex-col items-center gap-2 border-l bg-background/95 py-3 shadow-xl backdrop-blur">
+                <div className="flex h-full w-10 flex-col items-center gap-2 border-l border-border/70 bg-card py-3" data-testid="sql-console-action-rail">
                     {activeTab?.tabType === 'sql' && (
                         <Button
                             size="icon"

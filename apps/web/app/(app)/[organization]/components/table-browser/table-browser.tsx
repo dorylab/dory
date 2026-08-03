@@ -59,6 +59,7 @@ export default function TableBrowser({ activeTab, updateTab }: TableBrowserProps
             connectionId={activeTab.connectionId}
             databaseName={activeTab.databaseName}
             tableName={activeTab.tableName}
+            inspectorPortalMode="viewport"
             activeSubTab={currentTab}
             onSubTabChange={handleTabChange}
         />

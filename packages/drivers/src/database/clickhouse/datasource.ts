@@ -1,7 +1,8 @@
 import type { ClickHouseClient } from '@clickhouse/client';
 import { BaseConnection, asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableMutationValue, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
+import { TableMutationConflictError, TableMutationIdentityNotUniqueError, TableMutationPartialCommitError } from '@dory/drivers/table-mutations';
 import { ClickhouseDialect } from './dialect';
 import {
     cancelClickhouseQuery,
@@ -28,6 +29,11 @@ export class ClickhouseDatasource extends BaseConnection {
         this.capabilities.queryInsights = createClickhouseQueryInsightsCapability(this);
         this.capabilities.tableInfo = createClickhouseTableInfoCapability(this);
         this.capabilities.privileges = createClickhousePrivilegesCapability(this);
+        this.capabilities.tableMutations = {
+            dialect: 'clickhouse',
+            atomicity: 'best-effort',
+            commitUpdates: input => this.commitUpdates(input),
+        };
     }
 
     protected async _init(): Promise<void> {
@@ -123,7 +129,108 @@ export class ClickhouseDatasource extends BaseConnection {
         await cancelClickhouseQuery(this.client!, queryId);
     }
 
+    private async commitUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {
+        this.assertReady();
+        const engineResult = await this.queryWithContext<{ engine?: string }>('SELECT engine FROM system.tables WHERE database = {db:String} AND name = {table:String} LIMIT 1', {
+            database: input.database,
+            params: { db: input.database, table: input.table.split('.').at(-1) ?? input.table },
+        });
+        if (!/MergeTree$/i.test(engineResult.rows[0]?.engine ?? '')) {
+            throw new Error('This ClickHouse table engine does not support UPDATE mutations.');
+        }
+        const update = buildClickhouseUpdate(input);
+        const preflight = await Promise.all(
+            update.rows.map(async row => {
+                const result = await this.queryWithContext<{ identityCount?: number | string; matchCount?: number | string }>(
+                    `SELECT count() AS identityCount, countIf(${row.fullCondition}) AS matchCount FROM ${update.tableSql} WHERE ${row.identityCondition}`,
+                    { database: input.database },
+                );
+                const values = result.rows[0];
+                return {
+                    identityCount: Number(values?.identityCount ?? 0),
+                    matchCount: Number(values?.matchCount ?? 0),
+                };
+            }),
+        );
+        const nonUniqueIndex = preflight.findIndex(row => row.identityCount !== 1);
+        if (nonUniqueIndex >= 0) {
+            throw new TableMutationIdentityNotUniqueError(undefined, nonUniqueIndex);
+        }
+        const conflictIndex = preflight.findIndex(row => row.matchCount !== 1);
+        if (conflictIndex >= 0) {
+            throw new TableMutationConflictError(undefined, conflictIndex);
+        }
+
+        await this.command(update.sql);
+
+        const verification = await Promise.all(
+            update.rows.map(async row => {
+                const result = await this.queryWithContext<{ appliedCount?: number | string }>(
+                    `SELECT countIf(${row.finalCondition}) AS appliedCount FROM ${update.tableSql} WHERE ${row.identityCondition}`,
+                    { database: input.database },
+                );
+                return Number(result.rows[0]?.appliedCount ?? 0) === 1;
+            }),
+        );
+        const committedRowIndexes = verification.flatMap((verified, index) => (verified ? [index] : []));
+        const pendingRowIndexes = verification.flatMap((verified, index) => (verified ? [] : [index]));
+        if (pendingRowIndexes.length > 0) {
+            if (committedRowIndexes.length === 0) {
+                throw new TableMutationConflictError(undefined, pendingRowIndexes[0]);
+            }
+            throw new TableMutationPartialCommitError(committedRowIndexes, pendingRowIndexes);
+        }
+
+        return {
+            updatedRows: input.rows.length,
+            updatedCells: input.rows.reduce((total, row) => total + row.changes.length, 0),
+            atomicity: 'best-effort',
+        };
+    }
+
     get metadata(): ClickhouseMetadataAPI {
         return this.capabilities.metadata as ClickhouseMetadataAPI;
     }
+}
+
+function quoteIdentifier(identifier: string) {
+    return `\`${identifier.replaceAll('`', '``')}\``;
+}
+
+function formatLiteral(value: TableMutationValue): string {
+    if (value === null) return 'NULL';
+    if (typeof value === 'number') return String(value);
+    if (typeof value === 'boolean') return value ? 'true' : 'false';
+    return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+function equals(column: string, value: TableMutationValue) {
+    return value === null ? `isNull(${quoteIdentifier(column)})` : `${quoteIdentifier(column)} = ${formatLiteral(value)}`;
+}
+
+function buildClickhouseUpdate(input: TableUpdateBatch) {
+    const tableSql = `${quoteIdentifier(input.database)}.${quoteIdentifier(input.table.split('.').at(-1) ?? input.table)}`;
+    const rows = input.rows.map(row => {
+        const identityCondition = input.identityColumns.map(column => equals(column, row.key[column]!)).join(' AND ');
+        const originalCondition = row.changes.map(change => equals(change.column, change.originalValue)).join(' AND ');
+        const finalCondition = [identityCondition, ...row.changes.map(change => equals(change.column, change.nextValue))].join(' AND ');
+        return {
+            identityCondition,
+            fullCondition: [identityCondition, originalCondition].filter(Boolean).join(' AND '),
+            finalCondition,
+        };
+    });
+    const changedColumns = Array.from(new Set(input.rows.flatMap(row => row.changes.map(change => change.column))));
+    const assignments = changedColumns.map(column => {
+        const cases = input.rows.flatMap((row, rowIndex) => {
+            const change = row.changes.find(item => item.column === column);
+            return change ? [rows[rowIndex]!.fullCondition, formatLiteral(change.nextValue)] : [];
+        });
+        return `${quoteIdentifier(column)} = multiIf(${[...cases, quoteIdentifier(column)].join(', ')})`;
+    });
+    return {
+        tableSql,
+        rows,
+        sql: `ALTER TABLE ${tableSql}\nUPDATE ${assignments.join(',\n    ')}\nWHERE ${rows.map(row => `(${row.fullCondition})`).join(' OR ')}\nSETTINGS mutations_sync = 1`,
+    };
 }

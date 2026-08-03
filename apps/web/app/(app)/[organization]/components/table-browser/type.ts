@@ -3,6 +3,7 @@ export type ColumnInfo = {
     type: string;
     defaultValue?: string | null;
     nullable?: boolean;
+    isPrimaryKey?: boolean;
     comment?: string | null;
     semanticTags?: string[];
     semanticSummary?: string | null;

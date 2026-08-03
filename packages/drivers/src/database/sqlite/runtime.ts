@@ -227,6 +227,7 @@ export function getSqliteTableColumns(db: SqliteDatabase, database: string, tabl
             columnType: row.type,
             defaultExpression: row.dflt_value,
             isPrimaryKey: row.pk > 0,
+            nullable: row.pk > 0 ? false : row.notnull === 0,
         }));
 }
 

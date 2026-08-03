@@ -12,7 +12,12 @@ export type VTableInspectorPayload =
 
 export interface VTableProps {
     results: { rowData: Record<string, unknown> }[];
-    columnMetas: Array<{ name?: unknown; type?: unknown }>;
+    columnMetas: Array<{
+        name?: unknown;
+        type?: unknown;
+        nullable?: unknown;
+        isPrimaryKey?: unknown;
+    }>;
     remoteSource?: VTableRemoteSource | null;
     rowHeight?: number;
     maxHeight?: number;
@@ -37,6 +42,31 @@ export interface VTableProps {
     isActive?: boolean;
     onSortChange?: (sort: { column: string; direction: 'asc' | 'desc' } | null) => void;
     onSelectedRowIndexesChange?: (rowIndexes: number[]) => void;
+    editable?: boolean;
+    getCellEditState?: (
+        rowIndex: number,
+        column: string,
+    ) => {
+        editable: boolean;
+        changed?: boolean;
+        nullable?: boolean;
+        readOnlyReason?: string;
+    };
+    isRowChanged?: (rowIndex: number) => boolean;
+    onCellChange?: (input: { rowIndex: number; column: string; originalValue: unknown; nextValue: unknown }) => void;
+    onRevertCell?: (rowIndex: number, column: string) => void;
+    onUndo?: () => void;
+    onRedo?: () => void;
+    onCommitAll?: () => void;
+    onSelectionChange?: (selection: { cellCount: number; rowCount: number }) => void;
+    focusRequest?: {
+        rowIndex: number;
+        column: string;
+        requestId: number;
+    } | null;
+    autoOpenRowInspector?: boolean;
+    activeRowIndex?: number | null;
+    onActiveRowChange?: (rowIndex: number) => void;
 }
 
 export interface VTableRemoteSource {

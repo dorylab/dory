@@ -35,10 +35,13 @@ export async function executeActionClientEnvelope<TOutput = unknown>(
         signal: options.signal,
     });
 
-    const payload = (await response.json().catch(() => null)) as ({ ok?: boolean; message?: string; code?: string } & Partial<ActionExecutionEnvelope<TOutput>>) | null;
+    const payload = (await response.json().catch(() => null)) as
+        | ({ ok?: boolean; message?: string; code?: string; details?: unknown } & Partial<ActionExecutionEnvelope<TOutput>>)
+        | null;
     if (!response.ok || !payload?.ok) {
         throw Object.assign(new Error(payload?.message ?? `Action failed: ${actionId}`), {
             code: payload?.code,
+            details: payload?.details,
             status: response.status,
         });
     }
