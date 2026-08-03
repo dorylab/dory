@@ -4,6 +4,8 @@ import { expectAppHealthy, test } from './fixtures';
 import { createWorkbenchConnection, mockWorkbenchApis, openMockConnectionConsole } from './helpers/workbench';
 
 test('edits SQLite table rows through the pending changes workflow', async ({ page, appErrors }) => {
+    test.setTimeout(120_000);
+
     const connection = createWorkbenchConnection({
         id: 'sqlite-editor',
         name: 'SQLite Editor',
@@ -13,8 +15,8 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     connection.connection.database = 'demo';
 
     const rows = [
-        { id: 1, name: 'one', note: 'first' },
-        { id: 2, name: 'two', note: 'second' },
+        { id: 1, name: 'one', note: 'first', count: 10, active: true, created_at: '2026-08-01', payload: { source: 'seed' } },
+        { id: 2, name: 'two', note: 'second', count: 20, active: false, created_at: '2026-08-02', payload: { source: 'seed' } },
     ];
     let rejectCommit = false;
 
@@ -94,6 +96,10 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
                     { columnName: 'id', columnType: 'INTEGER', nullable: false, isPrimaryKey: hasPrimaryKey },
                     { columnName: 'name', columnType: 'TEXT', nullable: false, isPrimaryKey: false },
                     { columnName: 'note', columnType: 'TEXT', nullable: true, isPrimaryKey: false },
+                    { columnName: 'count', columnType: 'INTEGER', nullable: false, isPrimaryKey: false },
+                    { columnName: 'active', columnType: 'BOOLEAN', nullable: false, isPrimaryKey: false },
+                    { columnName: 'created_at', columnType: 'DATE', nullable: false, isPrimaryKey: false },
+                    { columnName: 'payload', columnType: 'JSON', nullable: true, isPrimaryKey: false },
                 ],
             });
             return;
@@ -120,6 +126,10 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
                             { name: 'id', type: 'INTEGER' },
                             { name: 'name', type: 'TEXT' },
                             { name: 'note', type: 'TEXT' },
+                            { name: 'count', type: 'INTEGER' },
+                            { name: 'active', type: 'BOOLEAN' },
+                            { name: 'created_at', type: 'DATE' },
+                            { name: 'payload', type: 'JSON' },
                         ],
                         totalRows: 1000,
                         unfilteredTotalRows: 1000,
@@ -228,11 +238,28 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect.poll(() => new URL(page.url()).searchParams.get('previewPageSize')).toBe('50');
     await expect(nameCell).toContainText('one');
 
-    await nameCell.dblclick();
-    const editor = nameCell.locator('input');
-    await expect(editor).toBeVisible();
-    await editor.fill('updated');
-    await editor.press('Enter');
+    await nameCell.click();
+    const inspectorPanel = page.getByTestId('cell-inspector-panel');
+    await expect(inspectorPanel).toBeVisible();
+    await expect(inspectorPanel.getByText('Row details', { exact: true })).toBeVisible();
+    await expect(inspectorPanel.getByTestId('row-editor-field')).toHaveCount(7);
+    await expect(inspectorPanel.getByLabel('Primary key')).toBeVisible();
+    await expect(inspectorPanel.getByLabel('id', { exact: true })).toBeDisabled();
+    await expect(nameCell).toHaveAttribute('data-active-row', 'true');
+
+    const fieldSearch = inspectorPanel.getByPlaceholder('Filter fields...');
+    await fieldSearch.fill('boolean');
+    await expect(inspectorPanel.getByTestId('row-editor-field')).toHaveCount(1);
+    await expect(inspectorPanel.locator('[data-testid="row-editor-field"][data-column="active"]')).toBeVisible();
+    await fieldSearch.clear();
+    await inspectorPanel.getByRole('button', { name: 'View JSON' }).click();
+    await expect(inspectorPanel.getByRole('button', { name: 'Copy JSON' })).toBeVisible();
+    await expect(inspectorPanel.getByRole('textbox')).toHaveCount(0);
+    await inspectorPanel.getByRole('button', { name: 'View table' }).click();
+
+    const rowNameInput = inspectorPanel.getByLabel('name', { exact: true });
+    await rowNameInput.fill('updated');
+    await rowNameInput.press('Enter');
     await expect(nameCell).toContainText('updated');
     await expect(nameCell).toHaveAttribute('data-changed', 'true');
     await expect(nameCell).toHaveClass(/text-orange-700/);
@@ -240,6 +267,41 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     const changesButton = page.getByRole('button', { name: 'Changes (1)' });
     await expect(changesButton).toHaveClass(/border-orange-500/);
     await expect(changesButton.getByTestId('pending-changes-indicator')).toHaveClass(/bg-orange-500/);
+
+    const secondRowNameCell = page.locator('[data-cell="1@@name"]');
+    await secondRowNameCell.click();
+    await expect(inspectorPanel.getByLabel('name', { exact: true })).toHaveValue('two');
+    await expect(secondRowNameCell).toHaveAttribute('data-active-row', 'true');
+    await nameCell.click();
+    await expect(inspectorPanel.getByLabel('name', { exact: true })).toHaveValue('updated');
+
+    const countField = inspectorPanel.locator('[data-testid="row-editor-field"][data-column="count"]');
+    await countField.getByLabel('count').fill('11');
+    await countField.getByLabel('count').press('Enter');
+    await expect(page.locator('[data-cell="0@@count"]')).toContainText('11');
+    await expect(page.getByRole('button', { name: 'Changes (2)' })).toBeVisible();
+    await countField.getByRole('button', { name: 'Revert count' }).click();
+    await expect(page.locator('[data-cell="0@@count"]')).toContainText('10');
+
+    const activeField = inspectorPanel.locator('[data-testid="row-editor-field"][data-column="active"]');
+    await activeField.getByLabel('active').selectOption('false');
+    await activeField.getByLabel('active').blur();
+    await expect(page.locator('[data-cell="0@@active"]')).toContainText('false');
+    await activeField.getByRole('button', { name: 'Revert active' }).click();
+
+    const dateField = inspectorPanel.locator('[data-testid="row-editor-field"][data-column="created_at"]');
+    await dateField.getByLabel('created_at').fill('2026-08-03');
+    await dateField.getByLabel('created_at').press('Enter');
+    await expect(page.locator('[data-cell="0@@created_at"]')).toContainText('2026-08-03');
+    await dateField.getByRole('button', { name: 'Revert created_at' }).click();
+
+    const noteField = inspectorPanel.locator('[data-testid="row-editor-field"][data-column="note"]');
+    await noteField.getByRole('button', { name: 'Set NULL' }).click();
+    await expect(page.locator('[data-cell="0@@note"]')).toContainText('NULL');
+    await noteField.getByRole('button', { name: 'Revert note' }).click();
+    await expect(page.locator('[data-cell="0@@note"]')).toContainText('first');
+    await expect(inspectorPanel.locator('[data-testid="row-editor-field"][data-column="payload"] pre')).toContainText('"source": "seed"');
+    await expect(page.getByRole('button', { name: 'Changes (1)' })).toBeVisible();
 
     const undoShortcut = process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z';
     const redoShortcut = process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z';
@@ -256,7 +318,6 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     const noteCell = page.locator('[data-cell="0@@note"]');
     await noteCell.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Open Cell Inspector' }).click();
-    const inspectorPanel = page.getByTestId('cell-inspector-panel');
     await expect(inspectorPanel).toBeVisible();
     await expect(inspectorPanel.getByText('Cell inspector', { exact: true })).toBeVisible();
     await expect(inspectorPanel.getByText(/Row 1 · note/)).toBeVisible();
@@ -306,6 +367,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await nameCell.click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'View row details' }).click();
     await expect(inspectorPanel.getByText('Row details', { exact: true })).toBeVisible();
+    await expect(inspectorPanel.getByTestId('inspector-review-changes')).toHaveAccessibleName('Review changes (1)');
     await inspectorPanel.getByRole('button', { name: 'View JSON' }).click();
     await expect(inspectorPanel.getByRole('button', { name: 'Copy JSON' })).toBeVisible();
     await inspectorPanel.getByRole('button', { name: 'Close' }).click();
@@ -314,7 +376,9 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await page.getByRole('menuitem', { name: 'Set to NULL' }).click();
     await expect(noteCell).toContainText('NULL');
     await expect(noteCell).toHaveAttribute('data-changed', 'true');
-    await page.getByRole('button', { name: 'Changes (2)' }).click();
+    await nameCell.click();
+    await expect(inspectorPanel).toBeVisible();
+    await inspectorPanel.getByRole('button', { name: 'Review changes (2)' }).click();
     const editorPanel = page.getByTestId('table-editor-panel');
     await expect(editorPanel).toBeVisible();
     await expect(editorPanel.getByText(/Pending Changes/)).toBeVisible();
@@ -434,7 +498,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(page.getByTestId('pending-row-indicator')).toHaveCount(0);
     await expect(nameCell).not.toHaveAttribute('data-changed', 'true');
     await expect(noteCell).not.toHaveAttribute('data-changed', 'true');
-    expect(rows[0]).toEqual({ id: 1, name: 'updated', note: null });
+    expect(rows[0]).toEqual({ id: 1, name: 'updated', note: null, count: 10, active: true, created_at: '2026-08-01', payload: { source: 'seed' } });
 
     rejectCommit = true;
     await page.getByRole('button', { name: 'Close editor panel' }).click();
@@ -462,6 +526,10 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await page.getByRole('button', { name: /Insert select for read_only/i }).click();
     await expect(page.getByText('Read-only', { exact: true })).toBeVisible();
     const readOnlyCell = page.locator('[data-cell="0@@name"]');
+    await readOnlyCell.click();
+    await expect(inspectorPanel).toBeVisible();
+    await expect(inspectorPanel.getByLabel('name', { exact: true })).toBeDisabled();
+    await expect(inspectorPanel.getByText('This table has no primary key, so editing is disabled.')).toBeVisible();
     await readOnlyCell.dblclick();
     await expect(readOnlyCell.locator('input')).toHaveCount(0);
     await expectAppHealthy(appErrors);

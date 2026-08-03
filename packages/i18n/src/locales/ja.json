@@ -498,6 +498,7 @@
             "Undo": "編集を元に戻す",
             "Redo": "編集をやり直す",
             "Changes": "変更（{count}）",
+            "ReviewChanges": "変更を確認（{count}）",
             "JumpTargetChanged": "元のビューに行が見つかりません。保留中の変更は保持されています。",
             "NothingToCommit": "コミットする保留中の変更はありません。",
             "CommitSuccess": "{rows} 行の {fields} フィールドをコミットしました。",
@@ -2151,7 +2152,13 @@
                 "RowOnly": "行 {row}",
                 "ViewJson": "JSON を表示",
                 "ViewTable": "テーブルを表示",
-                "FilterPlaceholder": "フィールドを絞り込み..."
+                "FilterPlaceholder": "フィールドを絞り込み...",
+                "PrimaryKey": "主キー",
+                "RevertField": "{field} を元に戻す",
+                "UnknownType": "不明",
+                "BooleanTrue": "True",
+                "BooleanFalse": "False",
+                "SetNull": "NULL に設定"
             }
         },
         "Debug": {

@@ -502,6 +502,7 @@
             "Undo": "撤销编辑",
             "Redo": "重做编辑",
             "Changes": "更改（{count}）",
+            "ReviewChanges": "查看更改（{count}）",
             "JumpTargetChanged": "原视图中已找不到该行。待提交更改已保留。",
             "NothingToCommit": "没有可提交的更改。",
             "CommitSuccess": "已提交 {rows} 行中的 {fields} 个字段。",
@@ -2156,7 +2157,13 @@
                 "RowOnly": "第 {row} 行",
                 "ViewJson": "查看 JSON",
                 "ViewTable": "查看表格",
-                "FilterPlaceholder": "筛选字段..."
+                "FilterPlaceholder": "筛选字段...",
+                "PrimaryKey": "主键",
+                "RevertField": "还原 {field}",
+                "UnknownType": "未知类型",
+                "BooleanTrue": "是",
+                "BooleanFalse": "否",
+                "SetNull": "设为 NULL"
             }
         },
         "Debug": {

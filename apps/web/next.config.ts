@@ -40,6 +40,7 @@ type NextWebpackOptionsShape = {
 };
 
 const nextConfig = {
+    distDir: process.env.DORY_NEXT_DIST_DIR?.trim() || '.next',
     output: 'standalone',
     typescript: {
         tsconfigPath: isProductionBuild ? 'tsconfig.build.json' : 'tsconfig.json',

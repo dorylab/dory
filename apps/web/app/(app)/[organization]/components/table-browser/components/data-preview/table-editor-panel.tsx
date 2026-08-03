@@ -138,12 +138,22 @@ export function TableEditorPanel({
                                             <span className="shrink-0 font-mono font-medium text-foreground">{change.column}</span>
                                         </div>
                                         <div className="flex shrink-0 items-center">
-                                            <Button variant="ghost" size="icon-sm" aria-label={t('JumpToCell')} onClick={() => onJumpToCell(row, change.column)}>
-                                                <CornerDownLeft className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button variant="ghost" size="icon-sm" aria-label={t('RevertCell')} onClick={() => onRevertCell(row.rowKey, change.column)}>
-                                                <RotateCcw className="h-3.5 w-3.5" />
-                                            </Button>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" size="icon-sm" aria-label={t('JumpToCell')} onClick={() => onJumpToCell(row, change.column)}>
+                                                        <CornerDownLeft className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="top">{t('JumpToCell')}</TooltipContent>
+                                            </Tooltip>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Button variant="ghost" size="icon-sm" aria-label={t('RevertCell')} onClick={() => onRevertCell(row.rowKey, change.column)}>
+                                                        <RotateCcw className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TooltipTrigger>
+                                                <TooltipContent side="top">{t('RevertCell')}</TooltipContent>
+                                            </Tooltip>
                                         </div>
                                     </div>
                                     <div className="mt-3 space-y-1 font-mono text-xs">

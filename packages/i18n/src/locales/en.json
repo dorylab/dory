@@ -498,6 +498,7 @@
             "Undo": "Undo edit",
             "Redo": "Redo edit",
             "Changes": "Changes ({count})",
+            "ReviewChanges": "Review changes ({count})",
             "JumpTargetChanged": "The row is no longer in its original view. Your pending change was kept.",
             "NothingToCommit": "There are no pending changes to commit.",
             "CommitSuccess": "Committed {fields} fields across {rows} rows.",
@@ -2152,7 +2153,13 @@
                 "RowOnly": "Row {row}",
                 "ViewJson": "View JSON",
                 "ViewTable": "View table",
-                "FilterPlaceholder": "Filter fields..."
+                "FilterPlaceholder": "Filter fields...",
+                "PrimaryKey": "Primary key",
+                "RevertField": "Revert {field}",
+                "UnknownType": "unknown",
+                "BooleanTrue": "True",
+                "BooleanFalse": "False",
+                "SetNull": "Set NULL"
             }
         },
         "Debug": {

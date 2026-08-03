@@ -498,6 +498,7 @@
             "Undo": "Deshacer edición",
             "Redo": "Rehacer edición",
             "Changes": "Cambios ({count})",
+            "ReviewChanges": "Revisar cambios ({count})",
             "JumpTargetChanged": "La fila ya no está en la vista original. El cambio pendiente se conservó.",
             "NothingToCommit": "No hay cambios pendientes para confirmar.",
             "CommitSuccess": "Se confirmaron {fields} campos en {rows} filas.",
@@ -2151,7 +2152,13 @@
                 "RowOnly": "Fila {row}",
                 "ViewJson": "Ver JSON",
                 "ViewTable": "Ver tabla",
-                "FilterPlaceholder": "Filtrar campos..."
+                "FilterPlaceholder": "Filtrar campos...",
+                "PrimaryKey": "Clave primaria",
+                "RevertField": "Revertir {field}",
+                "UnknownType": "desconocido",
+                "BooleanTrue": "Verdadero",
+                "BooleanFalse": "Falso",
+                "SetNull": "Establecer NULL"
             }
         },
         "Debug": {

@@ -371,6 +371,7 @@ function DataPreviewInner({
     const [inspectorOpen, setInspectorOpen] = useState(false);
     const [inspectorMode, setInspectorMode] = useState<'cell' | 'row' | null>(null);
     const [inspectorPayload, setInspectorPayload] = useState<VTableInspectorPayload>(null);
+    const [activeInspectorRow, setActiveInspectorRow] = useState<{ rowIndex: number; rowKey: string | null; viewIdentity: string } | null>(null);
     const [rowViewMode, setRowViewMode] = useState<'table' | 'json'>('table');
     const [inspectorWidth, setInspectorWidth] = useState(360);
     const [panelPortalContainer, setPanelPortalContainer] = useState<HTMLElement | null>(null);
@@ -527,6 +528,24 @@ function DataPreviewInner({
             }),
         [baseRows, editSession, primaryKeyColumns],
     );
+    const currentViewIdentity = useMemo(
+        () => JSON.stringify({ pageIndex, pageSize, search: query, filters: activeFilters, sort: sortState }),
+        [activeFilters, pageIndex, pageSize, query, sortState],
+    );
+    const activeInspectorRowIndex = useMemo(() => {
+        if (!activeInspectorRow) return null;
+        if (activeInspectorRow.rowKey) {
+            const nextIndex = baseRows.findIndex(row => getRowKey(row.rowData, primaryKeyColumns)?.rowKey === activeInspectorRow.rowKey);
+            return nextIndex >= 0 ? nextIndex : null;
+        }
+        if (activeInspectorRow.viewIdentity !== currentViewIdentity) return null;
+        return baseRows[activeInspectorRow.rowIndex] ? activeInspectorRow.rowIndex : null;
+    }, [activeInspectorRow, baseRows, currentViewIdentity, primaryKeyColumns]);
+    const resolvedInspectorPayload = useMemo<VTableInspectorPayload>(() => {
+        if (inspectorMode !== 'row' || activeInspectorRowIndex == null) return inspectorPayload;
+        const rowData = rows[activeInspectorRowIndex]?.rowData;
+        return rowData ? { row: activeInspectorRowIndex, rowData } : null;
+    }, [activeInspectorRowIndex, inspectorMode, inspectorPayload, rows]);
     const editCounts = useMemo(() => getPendingEditCounts(editSession), [editSession]);
     const pendingUpdates = useMemo(() => pendingRowsToUpdates(editSession), [editSession]);
     const updateBatch = useMemo<TableUpdateBatch | null>(() => {
@@ -736,8 +755,36 @@ function DataPreviewInner({
 
     const handleInspectorOpen = useCallback((open: boolean) => {
         setInspectorOpen(open);
-        if (open) setEditorPanelOpen(false);
+        if (open) {
+            setEditorPanelOpen(false);
+        } else {
+            setActiveInspectorRow(null);
+        }
     }, []);
+
+    const handleShowPendingChanges = useCallback(() => {
+        handleInspectorOpen(false);
+        setEditorPanelOpen(true);
+    }, [handleInspectorOpen]);
+
+    const handleActiveRowChange = useCallback(
+        (rowIndex: number) => {
+            const row = baseRows[rowIndex]?.rowData;
+            if (!row) return;
+            setActiveInspectorRow({
+                rowIndex,
+                rowKey: getRowKey(row, primaryKeyColumns)?.rowKey ?? null,
+                viewIdentity: currentViewIdentity,
+            });
+        },
+        [baseRows, currentViewIdentity, primaryKeyColumns],
+    );
+
+    useEffect(() => {
+        if (!activeInspectorRow || activeInspectorRowIndex != null || previewQuery.isFetching) return;
+        setActiveInspectorRow(null);
+        setInspectorOpen(false);
+    }, [activeInspectorRow, activeInspectorRowIndex, previewQuery.isFetching]);
 
     const handleJumpToCell = useCallback(
         (row: PendingRowChange, column: string) => {
@@ -839,18 +886,38 @@ function DataPreviewInner({
             </div>
             <div className="flex min-w-0 items-center gap-2">
                 <div className="flex items-center">
-                    <Button variant="ghost" size="icon-sm" aria-label={t('Editor.Undo')} disabled={editSession.past.length === 0} onClick={() => updateEditSession(undoTableEdit)}>
-                        <Undo2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={t('Editor.Redo')}
-                        disabled={editSession.future.length === 0}
-                        onClick={() => updateEditSession(redoTableEdit)}
-                    >
-                        <Redo2 className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={t('Editor.Undo')}
+                                    disabled={editSession.past.length === 0}
+                                    onClick={() => updateEditSession(undoTableEdit)}
+                                >
+                                    <Undo2 className="h-4 w-4" />
+                                </Button>
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">{t('Editor.Undo')}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className="inline-flex">
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    aria-label={t('Editor.Redo')}
+                                    disabled={editSession.future.length === 0}
+                                    onClick={() => updateEditSession(redoTableEdit)}
+                                >
+                                    <Redo2 className="h-4 w-4" />
+                                </Button>
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">{t('Editor.Redo')}</TooltipContent>
+                    </Tooltip>
                 </div>
                 <Button variant="ghost" size="sm" className="gap-2" onClick={handleRefresh} disabled={refreshing}>
                     <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
@@ -884,10 +951,7 @@ function DataPreviewInner({
                             ? 'border-orange-500/40 text-orange-700 hover:border-orange-500/60 hover:text-orange-800 dark:text-orange-300 dark:hover:text-orange-200'
                             : ''
                     }`}
-                    onClick={() => {
-                        setInspectorOpen(false);
-                        setEditorPanelOpen(true);
-                    }}
+                    onClick={handleShowPendingChanges}
                 >
                     <PanelRightOpen className="h-4 w-4" />
                     {t('Editor.Changes', { count: editCounts.cellCount })}
@@ -920,15 +984,21 @@ function DataPreviewInner({
             />
             <InspectorPanel
                 open={inspectorOpen}
-                setOpen={setInspectorOpen}
+                setOpen={handleInspectorOpen}
                 mode={inspectorMode}
-                payload={inspectorPayload}
+                payload={resolvedInspectorPayload}
                 portalContainer={panelPortalContainer}
                 position={inspectorPortalMode === 'viewport' ? 'fixed' : 'absolute'}
                 rowViewMode={rowViewMode}
                 setRowViewMode={setRowViewMode}
                 inspectorWidth={inspectorWidth}
                 setInspectorWidth={setInspectorWidth}
+                columnMetas={columns}
+                getCellEditState={getCellEditState}
+                onCellChange={handleCellChange}
+                onRevertCell={handleRevertCellAt}
+                pendingChangesCount={editCounts.cellCount}
+                onShowPendingChanges={handleShowPendingChanges}
             />
         </>
     ) : null;
@@ -1068,7 +1138,10 @@ function DataPreviewInner({
                     initialSort={sortState}
                     onSortChange={handleSortChange}
                     setInspectorOpen={handleInspectorOpen}
-                    setInspectorMode={setInspectorMode}
+                    setInspectorMode={mode => {
+                        setInspectorMode(mode);
+                        if (mode !== 'row') setActiveInspectorRow(null);
+                    }}
                     setInspectorPayload={setInspectorPayload}
                     editable={tableIsEditable}
                     getCellEditState={getCellEditState}
@@ -1082,6 +1155,9 @@ function DataPreviewInner({
                     }}
                     onSelectionChange={setSelectionSummary}
                     focusRequest={focusRequest}
+                    autoOpenRowInspector
+                    activeRowIndex={activeInspectorRowIndex}
+                    onActiveRowChange={handleActiveRowChange}
                 />
             </div>
 
