@@ -65,7 +65,7 @@ function createInstance(
                           },
             },
             describeTable: async () => overrides.columns ?? columns,
-            queryWithContext: async () => ({ rows: [{ identityCount: overrides.identityCount ?? 1 }] }),
+            queryWithContext: async <Row = Record<string, unknown>>() => ({ rows: [{ identityCount: overrides.identityCount ?? 1 } as Row] }),
             commitTableUpdates: commit,
         },
     };

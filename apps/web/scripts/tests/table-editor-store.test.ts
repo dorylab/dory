@@ -14,7 +14,7 @@ import {
     revertTableRowEdit,
     undoTableEdit,
     type TableEditViewSnapshot,
-} from '../../app/(app)/[organization]/components/table-browser/components/data-preview/table-editor-store.ts';
+} from '../../app/(app)/[organization]/components/table-browser/components/data-preview/table-editor-store';
 
 const sourceView: TableEditViewSnapshot = {
     pageIndex: 2,

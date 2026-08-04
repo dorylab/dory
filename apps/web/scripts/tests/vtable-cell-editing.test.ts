@@ -6,7 +6,7 @@ import {
     parseEditDraft,
     toDateEditDraft,
     toEditDraft,
-} from '../../app/(app)/[organization]/[connectionId]/sql-console/components/result-table/vtable/cell-editing.ts';
+} from '../../app/(app)/[organization]/[connectionId]/sql-console/components/result-table/vtable/cell-editing';
 
 const messages = {
     chooseBoolean: 'choose boolean',
