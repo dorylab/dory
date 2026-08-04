@@ -64,7 +64,6 @@ export interface VTableProps {
         column: string;
         requestId: number;
     } | null;
-    autoOpenRowInspector?: boolean;
     activeRowIndex?: number | null;
     onActiveRowChange?: (rowIndex: number) => void;
 }
