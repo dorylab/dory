@@ -170,7 +170,6 @@ export default function VTable({
     onCommitAll,
     onSelectionChange,
     focusRequest,
-    autoOpenRowInspector = false,
     activeRowIndex = null,
     onActiveRowChange,
 }: VTableProps) {
@@ -706,6 +705,13 @@ export default function VTable({
         error: string | null;
     } | null>(null);
     const editingCancelledRef = useRef(false);
+    const focusCellEditorAtEnd = useCallback((editor: HTMLInputElement | null) => {
+        if (!editor || editor.type !== 'text') return;
+
+        editor.focus({ preventScroll: true });
+        const caretPosition = editor.value.length;
+        editor.setSelectionRange(caretPosition, caretPosition);
+    }, []);
     const hasAnySelection = selectedCells.size > 0 || selectedRowIds.size > 0;
 
     const selectedRowIdsRef = useRef(selectedRowIds);
@@ -715,7 +721,6 @@ export default function VTable({
     const selectionAnchorRef = useRef<number | null>(null);
     const cellAnchorRef = useRef<{ row: number; col: string } | null>(null);
     const draggingRef = useRef(false);
-    const dragMovedRef = useRef(false);
     const lastMouseDownWasOnCell = useRef(false);
 
     const gridContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1149,7 +1154,6 @@ export default function VTable({
     }, []);
     const beginDragRect = (row: number, col: string) => {
         draggingRef.current = true;
-        dragMovedRef.current = false;
         document.body.style.userSelect = 'none';
         cellAnchorRef.current = { row, col };
         setCellAnchor(cellAnchorRef.current);
@@ -1158,7 +1162,6 @@ export default function VTable({
     const updateRectSelection = (row: number, col: string) => {
         const a = cellAnchorRef.current;
         if (!a) return;
-        if (a.row !== row || a.col !== col) dragMovedRef.current = true;
         const rect = collectRectCells(a, { row, col });
         setSelectedCells(prev => {
             const next = new Set(prev);
@@ -1298,10 +1301,9 @@ export default function VTable({
     const contextCell = focusedCell ?? (selectedCells.size > 0 ? parseCK([...selectedCells][0]) : null);
     const contextCellState = contextCell ? getEffectiveCellState(contextCell.row, contextCell.col) : null;
     const showInspectActions = sel.mode === 'singleCell' || sel.mode === 'singleRow' || sel.mode === 'rowOnly';
-    const canEditContextCell = Boolean(editable && contextCellState?.editable && contextCell);
     const canSetContextCellToNull = Boolean(editable && contextCellState?.nullable && contextCellState.editable && contextCell);
     const canRevertContextCell = Boolean(editable && contextCellState?.changed && contextCell);
-    const showEditActions = canEditContextCell || canSetContextCellToNull || canRevertContextCell;
+    const showEditActions = canSetContextCellToNull || canRevertContextCell;
     const showFilterAction = !operationsDisabled && showInspectActions;
     const openCellInspector = (row: number, col: string) => {
         const v = getDisplayRow(row)?.rowData?.[col];
@@ -1388,7 +1390,6 @@ export default function VTable({
                     data-row-index={r}
                     onClick={e => {
                         onRowIndexClick(e, r);
-                        if (autoOpenRowInspector && !e.shiftKey) openRowInspector(r);
                     }}
                     onKeyDown={onRowIndexKeyDown}
                     onContextMenu={e => {
@@ -1482,9 +1483,6 @@ export default function VTable({
                 )}
                 onMouseDown={e => onCellMouseDown(e, r, colKeyName)}
                 onMouseEnter={e => onCellMouseEnter(e, r, colKeyName)}
-                onClick={e => {
-                    if (autoOpenRowInspector && !e.shiftKey && !dragMovedRef.current) openRowInspector(r);
-                }}
                 onDoubleClick={e => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1550,6 +1548,7 @@ export default function VTable({
                         </select>
                     ) : (
                         <input
+                            ref={focusCellEditorAtEnd}
                             autoFocus
                             value={editingCell.draft}
                             type={
@@ -1906,7 +1905,7 @@ export default function VTable({
                                 openRowInspector(sel.mode === 'singleCell' ? sel.cell.row : sel.row);
                             }}
                         >
-                            {t('VTable.Context.ViewRowDetails')}
+                            {editable ? t('VTable.Context.EditRow') : t('VTable.Context.ViewRowDetails')}
                         </ContextMenuItem>
                     </ContextMenuGroup>
                 ) : null}
@@ -1915,15 +1914,6 @@ export default function VTable({
                     <>
                         <ContextMenuSeparator />
                         <ContextMenuGroup>
-                            {canEditContextCell ? (
-                                <ContextMenuItem
-                                    onSelect={() => {
-                                        beginCellEdit(sel.cell.row, sel.cell.col);
-                                    }}
-                                >
-                                    {t('VTable.Context.EditCell')}
-                                </ContextMenuItem>
-                            ) : null}
                             {canSetContextCellToNull ? (
                                 <ContextMenuItem
                                     onSelect={() => {

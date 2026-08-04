@@ -1280,7 +1280,6 @@ function DataPreviewInner({
                     }}
                     onSelectionChange={setSelectionSummary}
                     focusRequest={focusRequest}
-                    autoOpenRowInspector
                     activeRowIndex={activeInspectorRowIndex}
                     onActiveRowChange={handleActiveRowChange}
                 />

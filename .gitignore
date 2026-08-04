@@ -18,6 +18,7 @@ apps/electron/node_modules/.bin/**
 # next.js
 /.next/
 /apps/web/.next/
+/apps/web/.next-*/
 /out/
 /apps/web/dist-scripts/
 /apps/electron/dist-electron/

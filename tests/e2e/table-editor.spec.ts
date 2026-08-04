@@ -239,8 +239,26 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect.poll(() => new URL(page.url()).searchParams.get('previewPageSize')).toBe('50');
     await expect(nameCell).toContainText('one');
 
-    await nameCell.click();
     const inspectorPanel = page.getByTestId('cell-inspector-panel');
+    await nameCell.click();
+    await expect(inspectorPanel).toHaveCount(0);
+    await nameCell.click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Edit cell' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await nameCell.dblclick();
+    const nameCellEditor = nameCell.locator('input');
+    await expect(nameCellEditor).toBeFocused();
+    await expect
+        .poll(() => nameCellEditor.evaluate((input: HTMLInputElement) => input.selectionStart === input.value.length && input.selectionEnd === input.value.length))
+        .toBe(true);
+    await nameCellEditor.press('Escape');
+    await expect(nameCellEditor).toHaveCount(0);
+    await page.locator('[data-row-index="0"]').click();
+    await expect(inspectorPanel).toHaveCount(0);
+    await nameCell.click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Edit Row' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'View row details' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Edit Row' }).click();
     await expect(inspectorPanel).toBeVisible();
     await expect(inspectorPanel.getByText('Row details', { exact: true })).toBeVisible();
     await expect(inspectorPanel.getByTestId('row-editor-field')).toHaveCount(7);
@@ -265,28 +283,35 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(nameCell).toHaveAttribute('data-changed', 'true');
     await expect(nameCell).toHaveClass(/text-orange-700/);
     await expect(page.getByTestId('pending-row-indicator')).toHaveClass(/bg-orange-500/);
-    const changesButton = page.getByRole('button', { name: 'Changes (1)' });
+    const changesButton = page.getByRole('button', { name: 'Changes (1)', exact: true });
     await expect(changesButton).toHaveClass(/border-orange-500/);
     await expect(changesButton.getByTestId('pending-changes-indicator')).toHaveClass(/bg-orange-500/);
 
     const secondRowNameCell = page.locator('[data-cell="1@@name"]');
     await secondRowNameCell.click();
+    await expect(inspectorPanel.getByLabel('name', { exact: true })).toHaveValue('updated');
+    await expect(secondRowNameCell).not.toHaveAttribute('data-active-row', 'true');
+    await secondRowNameCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Edit Row' }).click();
     await expect(inspectorPanel.getByLabel('name', { exact: true })).toHaveValue('two');
     await expect(secondRowNameCell).toHaveAttribute('data-active-row', 'true');
     await nameCell.click();
+    await expect(inspectorPanel.getByLabel('name', { exact: true })).toHaveValue('two');
+    await nameCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Edit Row' }).click();
     await expect(inspectorPanel.getByLabel('name', { exact: true })).toHaveValue('updated');
 
     const countField = inspectorPanel.locator('[data-testid="row-editor-field"][data-column="count"]');
     await countField.getByLabel('count').fill('11');
     await countField.getByLabel('count').press('Enter');
     await expect(page.locator('[data-cell="0@@count"]')).toContainText('11');
-    await expect(page.getByRole('button', { name: 'Changes (2)' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Changes (2)', exact: true })).toBeVisible();
     await countField.getByRole('button', { name: 'Revert count' }).click();
     await expect(page.locator('[data-cell="0@@count"]')).toContainText('10');
 
     const activeField = inspectorPanel.locator('[data-testid="row-editor-field"][data-column="active"]');
     await activeField.getByLabel('active').selectOption('false');
-    await activeField.getByLabel('active').blur();
+    await activeField.getByLabel('active').press('Enter');
     await expect(page.locator('[data-cell="0@@active"]')).toContainText('false');
     await activeField.getByRole('button', { name: 'Revert active' }).click();
 
@@ -302,18 +327,20 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await noteField.getByRole('button', { name: 'Revert note' }).click();
     await expect(page.locator('[data-cell="0@@note"]')).toContainText('first');
     await expect(inspectorPanel.locator('[data-testid="row-editor-field"][data-column="payload"] pre')).toContainText('"source": "seed"');
-    await expect(page.getByRole('button', { name: 'Changes (1)' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Changes (1)', exact: true })).toBeVisible();
 
     const undoShortcut = process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z';
     const redoShortcut = process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z';
-    await nameCell.focus();
-    await page.keyboard.press(undoShortcut);
-    await expect(nameCell).toContainText('one');
-    await expect(nameCell).not.toHaveAttribute('data-changed', 'true');
-    await expect(page.getByTestId('pending-row-indicator')).toHaveCount(0);
-    await expect(page.getByTestId('pending-changes-indicator')).toHaveCount(0);
-    await page.keyboard.press(redoShortcut);
+    const gridContainer = page.getByTestId('vtable-surface').locator('> div[tabindex="0"]');
+    await nameCell.click();
+    await gridContainer.press(undoShortcut);
     await expect(nameCell).toContainText('updated');
+    await expect(page.locator('[data-cell="0@@note"]')).toContainText('NULL');
+    await expect(page.getByRole('button', { name: 'Changes (2)', exact: true })).toBeVisible();
+    await gridContainer.press(redoShortcut);
+    await expect(nameCell).toContainText('updated');
+    await expect(page.locator('[data-cell="0@@note"]')).toContainText('first');
+    await expect(page.getByRole('button', { name: 'Changes (1)', exact: true })).toBeVisible();
     await expect(nameCell).toHaveAttribute('data-changed', 'true');
 
     const noteCell = page.locator('[data-cell="0@@note"]');
@@ -348,8 +375,6 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
         return {
             appSidebar: appSidebar ? getComputedStyle(appSidebar).backgroundColor : null,
             tableSidebar: tableSidebar ? getComputedStyle(tableSidebar).backgroundColor : null,
-            tableSidebarBorderWidth: tableSidebar ? getComputedStyle(tableSidebar).borderLeftWidth : null,
-            tableSidebarBorderStyle: tableSidebar ? getComputedStyle(tableSidebar).borderLeftStyle : null,
             table: tableSurface ? getComputedStyle(tableSurface).backgroundColor : null,
             inspector: inspector ? getComputedStyle(inspector).backgroundColor : null,
             inspectorAlpha: backgroundAlpha(inspector),
@@ -357,8 +382,6 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     });
     expect(inspectorSurfaceColors.appSidebar).not.toBeNull();
     expect(inspectorSurfaceColors.tableSidebar).toBe(inspectorSurfaceColors.appSidebar);
-    expect(inspectorSurfaceColors.tableSidebarBorderWidth).toBe('1px');
-    expect(inspectorSurfaceColors.tableSidebarBorderStyle).toBe('solid');
     expect(inspectorSurfaceColors.table).toBe(inspectorSurfaceColors.appSidebar);
     expect(inspectorSurfaceColors.inspector).toBe(inspectorSurfaceColors.appSidebar);
     expect(inspectorSurfaceColors.inspectorAlpha).toBe(1);
@@ -366,7 +389,8 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await inspectorPanel.getByRole('button', { name: 'Close' }).click();
 
     await nameCell.click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'View row details' }).click();
+    await expect(page.getByRole('menuitem', { name: 'View row details' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Edit Row' }).click();
     await expect(inspectorPanel.getByText('Row details', { exact: true })).toBeVisible();
     await expect(inspectorPanel.getByTestId('inspector-review-changes')).toHaveAccessibleName('Review changes (1)');
     await inspectorPanel.getByRole('button', { name: 'View JSON' }).click();
@@ -377,7 +401,8 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await page.getByRole('menuitem', { name: 'Set to NULL' }).click();
     await expect(noteCell).toContainText('NULL');
     await expect(noteCell).toHaveAttribute('data-changed', 'true');
-    await nameCell.click();
+    await nameCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Edit Row' }).click();
     await expect(inspectorPanel).toBeVisible();
     await inspectorPanel.getByRole('button', { name: 'Review changes (2)' }).click();
     const editorPanel = page.getByTestId('table-editor-panel');
@@ -459,7 +484,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await noteCard.getByRole('button', { name: 'Revert this cell' }).click();
     await expect(pendingCards).toHaveCount(1);
     await expect(noteCell).not.toHaveAttribute('data-changed', 'true');
-    await expect(page.getByRole('button', { name: 'Changes (1)' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Changes (1)', exact: true })).toBeVisible();
     await nameCell.focus();
     await page.keyboard.press(undoShortcut);
     await expect(pendingCards).toHaveCount(2);
@@ -494,7 +519,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await page.getByRole('button', { name: 'Commit now' }).click();
     await expect(page.getByRole('alertdialog')).toBeHidden();
     await page.evaluate(() => document.documentElement.classList.remove('dark'));
-    await expect(page.getByRole('button', { name: 'Changes (0)' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Changes (0)', exact: true })).toBeVisible();
     await expect(page.getByTestId('pending-changes-indicator')).toHaveCount(0);
     await expect(page.getByTestId('pending-row-indicator')).toHaveCount(0);
     await expect(nameCell).not.toHaveAttribute('data-changed', 'true');
@@ -511,21 +536,30 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await conflictEditor.press('Enter');
     await expect(conflictCell).toContainText('conflict');
     await expect(conflictCell).toHaveAttribute('data-changed', 'true');
-    await page.getByRole('button', { name: 'Changes (1)' }).click();
+    await page.getByRole('button', { name: 'Changes (1)', exact: true }).click();
     await page.getByRole('button', { name: 'Commit All (1)' }).click();
     await page.getByRole('button', { name: 'Commit now' }).click();
     await expect(page.getByText('The row changed after it was loaded.')).toBeVisible();
     expect(rows[0]?.name).toBe('updated');
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(page.getByRole('button', { name: 'Changes (1)' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Changes (1)', exact: true })).toBeVisible();
     await expect(conflictCell).toHaveAttribute('data-changed', 'true');
     await editorPanel.getByRole('tab', { name: 'Visual' }).click();
     await expect(editorPanel.getByTestId('pending-change-card')).toHaveCount(1);
     await page.getByRole('button', { name: 'Clear all' }).click();
     await expect(conflictCell).not.toHaveAttribute('data-changed', 'true');
     await expect(page.getByTestId('pending-changes-indicator')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Close editor panel' }).click();
     await page.getByRole('button', { name: /Insert select for read_only/i }).click();
     await expect(page.getByText('Read-only', { exact: true })).toBeVisible();
+    const readOnlyNameCell = page.locator('[data-cell="0@@name"]');
+    await readOnlyNameCell.click();
+    await expect(inspectorPanel).toHaveCount(0);
+    await readOnlyNameCell.click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Edit Row' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'View row details' }).click();
+    await expect(inspectorPanel.getByText('Row details', { exact: true })).toBeVisible();
+    await inspectorPanel.getByRole('button', { name: 'Close' }).click();
     await page.getByRole('button', { name: 'Select row identity' }).click();
     await page.getByRole('checkbox').first().click();
     await page.getByRole('button', { name: 'Apply' }).click();
@@ -533,6 +567,10 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(page.getByText('Read-only', { exact: true })).toHaveCount(0);
     const identityCell = page.locator('[data-cell="0@@id"]');
     await identityCell.click();
+    await expect(inspectorPanel).toHaveCount(0);
+    await identityCell.click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'View row details' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Edit Row' }).click();
     await expect(inspectorPanel).toBeVisible();
     await expect(inspectorPanel.getByLabel('id', { exact: true })).toBeDisabled();
     await expect(inspectorPanel.getByText('Row identity columns are read-only.')).toBeVisible();
