@@ -3468,7 +3468,7 @@
             "Dismiss": "关闭"
         },
         "Step": "第 {number} 步",
-        "Steps": { "Select": "选择文件", "Preview": "预览", "Target": "目标", "Mapping": "映射", "Options": "选项", "Execute": "执行" },
+        "Steps": { "Select": "选择文件", "Preview": "预览", "Target": "目标", "Mapping": "映射", "Clean": "清洗数据", "Options": "选项", "Execute": "执行" },
         "Common": { "Next": "继续", "Back": "返回" },
         "Select": {
             "Title": "选择 CSV",
@@ -3500,6 +3500,15 @@
         },
         "Delimiters": { "Comma": "逗号", "Tab": "Tab", "Semicolon": "分号", "Pipe": "竖线" },
         "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Quality": {
+            "IssueCount": "{count} 个问题",
+            "Completeness": "完整度 {rate}%",
+            "DistinctSample": "样本中 {count} 个不同值",
+            "EmptyRate": "{rate}% 为空字符串",
+            "ApplyFix": "应用修复",
+            "FixAdded": "已添加清洗步骤",
+            "Issues": { "all_missing": "整列缺失", "empty_string": "空字符串", "surrounding_whitespace": "首尾空格", "leading_zero": "前导零", "mixed_type": "混合类型" }
+        },
         "Target": {
             "Title": "选择目标",
             "Description": "创建新表，或将源数据映射到现有表。",
@@ -3532,6 +3541,28 @@
             "Type": "目标类型",
             "Ignore": "忽略"
         },
+        "Clean": {
+            "Title": "清洗数据",
+            "Description": "在最终类型转换前按顺序执行可重复的清洗操作。预览使用前 100 个源数据行。",
+            "Column": "列",
+            "SourceIssues": "源数据有 {count} 个问题",
+            "NoOperations": "此列尚未添加清洗操作。",
+            "Find": "查找文本",
+            "Replacement": "替换为",
+            "Preview": "前后对比",
+            "SampleOnly": "仅为样本预览；执行时会进行全量严格校验。",
+            "Dropped": "移除 {count} 行",
+            "PreviewFailed": "无法生成预览",
+            "InvalidType": "{column} 不是有效的 {type}",
+            "RequiredNull": "{column} 不允许为 NULL",
+            "Row": "源行号",
+            "Before": "处理前",
+            "After": "处理后",
+            "Result": "结果",
+            "kept": "保留",
+            "dropped": "移除",
+            "Operations": { "trim": "去除首尾空格", "lowercase": "转为小写", "replace": "替换", "emptyToNull": "空字符串转 NULL", "dropInvalid": "移除无效行" }
+        },
         "Options": {
             "Title": "设置写入选项",
             "Description": "导入严格且原子。任何转换或数据库错误都会回滚整个任务。",
@@ -3553,6 +3584,7 @@
             "Processed": "已写入行数",
             "Pending": "待提交",
             "Inserted": "已插入",
+            "Filtered": "已过滤",
             "Total": "源数据行数",
             "PendingCommit": "数据已写入事务，但仍在等待提交。",
             "Cancel": "取消导入",

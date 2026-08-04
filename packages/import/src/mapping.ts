@@ -1,6 +1,6 @@
-import type { DatasetProfileV1, ImportColumnMappingV1, TargetSchema } from './types';
+import type { DatasetProfileV2, ImportColumnMappingV1, TargetSchema } from './types';
 
-export function createDefaultMappings(profile: DatasetProfileV1, target?: TargetSchema): ImportColumnMappingV1[] {
+export function createDefaultMappings(profile: DatasetProfileV2, target?: TargetSchema): ImportColumnMappingV1[] {
     const exact = new Map(target?.columns.map(column => [column.name, column]) ?? []);
     const insensitive = new Map<string, Array<NonNullable<typeof target>['columns'][number]>>();
     for (const column of target?.columns ?? []) {

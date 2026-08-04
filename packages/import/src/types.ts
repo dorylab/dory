@@ -1,8 +1,9 @@
 import type { Dataset } from '@dory/dataset';
 
 export const IMPORT_PLAN_VERSION = 'dory.import-plan.v1' as const;
-export const DATASET_PROFILE_VERSION = 'dory.dataset-profile.v1' as const;
+export const DATASET_PROFILE_VERSION = 'dory.dataset-profile.v2' as const;
 export const TRANSFORM_VERSION = 'dory.transform.v1' as const;
+export const TRANSFORM_PREVIEW_VERSION = 'dory.transform-preview.v1' as const;
 export const IMPORT_MANIFEST_VERSION = 'dory.import-manifest.v1' as const;
 export const SOURCE_ROW_NUMBER_COLUMN = '__dory_source_row_number';
 
@@ -26,19 +27,72 @@ export type CsvDetectionResult = {
     supportedEncodings: CsvEncoding[];
 };
 
-export type DatasetProfileColumnV1 = {
+export type DatasetProfileTypeCandidateV2 = {
+    type: Exclude<ImportColumnType, 'string'>;
+    validCount: number;
+    invalidCount: number;
+    validRate: number;
+};
+
+export type DatasetProfileTopValueV2 = {
+    value: string;
+    count: number;
+    rate: number;
+};
+
+export type DatasetQualityIssueCodeV2 = 'all_missing' | 'empty_string' | 'surrounding_whitespace' | 'leading_zero' | 'mixed_type';
+
+export type DatasetQualityIssueV2 = {
+    code: DatasetQualityIssueCodeV2;
+    severity: 'info' | 'warning';
+    affectedCount: number;
+    affectedRate: number;
+    examples: Array<{ sourceRow: number; value: string }>;
+    suggestedOperation?: Extract<TransformOperationV1, { kind: 'trim' | 'emptyToNull' }>;
+};
+
+export type DatasetProfileColumnV2 = {
     name: string;
     detectedType: ImportColumnType;
     nullCount: number;
     nullRate: number;
+    nonNullCount: number;
+    emptyCount: number;
+    emptyRate: number;
+    whitespaceCount: number;
+    whitespaceRate: number;
+    leadingZeroCount: number;
+    minLength: number | null;
+    maxLength: number | null;
+    averageLength: number | null;
+    min: string | number | null;
+    max: string | number | null;
+    mean: number | null;
+    candidates: DatasetProfileTypeCandidateV2[];
     sampleValues: string[];
+    sample: {
+        basis: 'sample';
+        rows: number;
+        distinctCount: number;
+        distinctRate: number;
+        topValues: DatasetProfileTopValueV2[];
+        quantiles: { p25: number; p50: number; p75: number } | null;
+    };
+    issues: DatasetQualityIssueV2[];
 };
 
-export type DatasetProfileV1 = {
+export type DatasetProfileV2 = {
     version: typeof DATASET_PROFILE_VERSION;
     rows: number;
-    columns: DatasetProfileColumnV1[];
+    sampleRows: number;
+    columns: DatasetProfileColumnV2[];
     preview: Array<Record<string, unknown>>;
+    quality: {
+        totalIssues: number;
+        warningCount: number;
+        infoCount: number;
+        columnsWithIssues: number;
+    };
 };
 
 export type ImportTarget = {
@@ -56,9 +110,19 @@ export type ImportColumnMappingV1 = {
     order: number;
 };
 
+export type TransformOperationV1 =
+    | { kind: 'trim'; column: string }
+    | { kind: 'lowercase'; column: string }
+    | { kind: 'replace'; column: string; find: string; replacement: string }
+    | { kind: 'emptyToNull'; column: string }
+    | { kind: 'dropInvalid'; column: string; targetType: Exclude<ImportColumnType, 'string'>; dropNulls: boolean }
+    | { kind: 'rename'; source: string; target: string }
+    | { kind: 'cast'; column: string; targetType: ImportColumnType }
+    | { kind: 'ignore'; column: string };
+
 export type TransformPlanV1 = {
     version: typeof TRANSFORM_VERSION;
-    operations: Array<{ kind: 'rename'; source: string; target: string } | { kind: 'cast'; column: string; targetType: ImportColumnType } | { kind: 'ignore'; column: string }>;
+    operations: TransformOperationV1[];
 };
 
 export type ImportPlanV1 = {
@@ -114,7 +178,31 @@ export class CommitUnknownError extends Error {
 
 export type CsvAnalysisResult = {
     dataset: Dataset;
-    profile: DatasetProfileV1;
+    profile: DatasetProfileV2;
     parsing: CsvParsingOptions;
     sourceArrowPath: string;
+};
+
+export type TransformPreviewRowV1 = {
+    sourceRow: number;
+    before: Record<string, string | null>;
+    after: Record<string, string | null>;
+    outcome: 'kept' | 'dropped';
+    errors: Array<{ column: string; code: 'invalid_type' | 'required_null'; targetType: ImportColumnType }>;
+};
+
+export type TransformPreviewV1 = {
+    version: typeof TRANSFORM_PREVIEW_VERSION;
+    transformHash: string;
+    inputRows: number;
+    keptRows: number;
+    droppedRows: number;
+    rows: TransformPreviewRowV1[];
+};
+
+export type PrepareImportDatasetResult = {
+    dataset: Dataset;
+    inputRows: number;
+    outputRows: number;
+    filteredRows: number;
 };

@@ -57,6 +57,29 @@ test('SQLite writer keeps CSV null distinct from a quoted empty string', async t
     ]);
 });
 
+test('SQLite writer receives the filtered and cleaned prepared dataset', async t => {
+    const fixture = await fixtureDataset(t, 'id,email\n1," A@EXAMPLE.COM "\nbad,"B@EXAMPLE.COM"\n', plan => ({
+        ...plan,
+        columns: plan.columns.map(column => (column.source === 'id' ? { ...column, targetType: 'int64' as const } : column)),
+        transform: {
+            version: 'dory.transform.v1',
+            operations: [
+                { kind: 'trim', column: 'email' },
+                { kind: 'lowercase', column: 'email' },
+                { kind: 'dropInvalid', column: 'id', targetType: 'int64', dropNulls: false },
+            ],
+        },
+    }));
+    const databasePath = path.join(fixture.dir, 'cleaned.sqlite');
+    new Database(databasePath).close();
+    const writer = new SqliteImportWriter(() => new Database(databasePath));
+    const result = await writer.write({ dataset: fixture.dataset, plan: fixture.plan, batchSize: 1000, signal: new AbortController().signal, onProgress: () => undefined });
+    assert.equal(result.insertedRows, 1);
+    const database = new Database(databasePath);
+    t.after(() => database.close());
+    assert.deepEqual(database.prepare('SELECT * FROM customers').all(), [{ id: 1, email: 'a@example.com' }]);
+});
+
 test('SQLite cancellation before commit leaves the target unchanged', async t => {
     const fixture = await fixtureDataset(t, 'id,name\n1,new\n');
     const databasePath = path.join(fixture.dir, 'cancel.sqlite');
@@ -99,7 +122,7 @@ test('SQLite cancellation at the persisted commit boundary rolls back', async t 
     assert.deepEqual(database.prepare('SELECT * FROM customers').all(), [{ id: 99, name: 'original' }]);
 });
 
-async function fixtureDataset(t: TestContext, csv: string) {
+async function fixtureDataset(t: TestContext, csv: string, configurePlan?: (plan: ImportPlanV1) => ImportPlanV1) {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-sqlite-import-'));
     t.after(() => rm(dir, { recursive: true, force: true }));
     const sourcePath = path.join(dir, 'source.csv');
@@ -111,7 +134,7 @@ async function fixtureDataset(t: TestContext, csv: string) {
         outputArrowPath: path.join(dir, 'source.arrow'),
         parsing: { delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
     });
-    const plan: ImportPlanV1 = {
+    const basePlan: ImportPlanV1 = {
         version: 'dory.import-plan.v1',
         parsing: analysis.parsing,
         target: { mode: 'create', database: 'main', table: 'customers' },
@@ -121,11 +144,12 @@ async function fixtureDataset(t: TestContext, csv: string) {
         transform: { version: 'dory.transform.v1', operations: [] },
         sourceSchemaHash: datasetSchemaHash(analysis.dataset),
     };
-    const dataset = await prepareImportDataset({
+    const plan = configurePlan?.(basePlan) ?? basePlan;
+    const prepared = await prepareImportDataset({
         sourceArrowPath: analysis.sourceArrowPath,
         outputArrowPath: path.join(dir, 'prepared.arrow'),
         sourceDataset: analysis.dataset,
         plan,
     });
-    return { dir, dataset, plan };
+    return { dir, dataset: prepared.dataset, plan };
 }

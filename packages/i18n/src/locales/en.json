@@ -3464,7 +3464,7 @@
             "Dismiss": "Close"
         },
         "Step": "Step {number}",
-        "Steps": { "Select": "Select file", "Preview": "Preview", "Target": "Target", "Mapping": "Mapping", "Options": "Options", "Execute": "Execute" },
+        "Steps": { "Select": "Select file", "Preview": "Preview", "Target": "Target", "Mapping": "Mapping", "Clean": "Clean data", "Options": "Options", "Execute": "Execute" },
         "Common": { "Next": "Continue", "Back": "Back" },
         "Select": {
             "Title": "Choose a CSV",
@@ -3496,6 +3496,15 @@
         },
         "Delimiters": { "Comma": "Comma", "Tab": "Tab", "Semicolon": "Semicolon", "Pipe": "Pipe" },
         "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Quality": {
+            "IssueCount": "{count} issues",
+            "Completeness": "{rate}% complete",
+            "DistinctSample": "{count} distinct in sample",
+            "EmptyRate": "{rate}% empty",
+            "ApplyFix": "Apply fix",
+            "FixAdded": "Cleaning step added",
+            "Issues": { "all_missing": "All values missing", "empty_string": "Empty strings", "surrounding_whitespace": "Extra whitespace", "leading_zero": "Leading zeros", "mixed_type": "Mixed types" }
+        },
         "Target": {
             "Title": "Choose the target",
             "Description": "Create a new table or map the source into an existing table.",
@@ -3528,6 +3537,28 @@
             "Type": "Target type",
             "Ignore": "Ignore"
         },
+        "Clean": {
+            "Title": "Clean the data",
+            "Description": "Apply ordered, repeatable operations before the final type conversion. The preview uses the first 100 source rows.",
+            "Column": "Column",
+            "SourceIssues": "{count} source issues",
+            "NoOperations": "No cleaning operations for this column.",
+            "Find": "Text to find",
+            "Replacement": "Replacement",
+            "Preview": "Before and after",
+            "SampleOnly": "Sample preview; full validation runs during execution.",
+            "Dropped": "{count} dropped",
+            "PreviewFailed": "Preview unavailable",
+            "InvalidType": "{column} is not valid {type}",
+            "RequiredNull": "{column} is required",
+            "Row": "Source row",
+            "Before": "Before",
+            "After": "After",
+            "Result": "Result",
+            "kept": "Kept",
+            "dropped": "Dropped",
+            "Operations": { "trim": "Trim", "lowercase": "Lowercase", "replace": "Replace", "emptyToNull": "Empty to NULL", "dropInvalid": "Remove invalid rows" }
+        },
         "Options": {
             "Title": "Set write options",
             "Description": "Imports are strict and atomic. A conversion or database error rolls back the complete operation.",
@@ -3549,6 +3580,7 @@
             "Processed": "Rows written",
             "Pending": "Pending commit",
             "Inserted": "Inserted",
+            "Filtered": "Filtered out",
             "Total": "Source rows",
             "PendingCommit": "Rows are written inside the transaction and are still pending commit.",
             "Cancel": "Cancel import",

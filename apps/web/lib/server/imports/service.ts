@@ -20,13 +20,15 @@ import {
     detectCsv,
     hashImportPlan,
     parseImportPlan,
+    parseDatasetProfile,
     parseImportTarget,
     prepareImportDataset,
+    previewImportTransform,
     transcodeCsvToUtf8,
     validateTargetCoverage,
     type CsvEncoding,
     type CsvParsingOptions,
-    type DatasetProfileV1,
+    type DatasetProfileV2,
     type ImportPlanV1,
     type ImportRunStatus,
     type WriteResult,
@@ -134,6 +136,7 @@ export async function uploadImportSource(db: DBService, input: { organizationId:
         plan: null,
         progress: null,
         processedRows: 0,
+        filteredRows: 0,
         pendingRows: 0,
         insertedRows: 0,
         batchCount: 0,
@@ -177,6 +180,7 @@ export async function analyzeImportSource(db: DBService, input: { organizationId
         plan: null,
         progress: null,
         processedRows: 0,
+        filteredRows: 0,
         pendingRows: 0,
         insertedRows: 0,
         batchCount: 0,
@@ -251,7 +255,9 @@ export async function saveImportPlan(db: DBService, connection: BaseConnection, 
     if (!sameParsingOptions(plan.parsing, run.parsingOptions)) {
         throw new ImportServiceError('The CSV parsing settings changed. Analyze the source again before saving the mapping.', 409, 'IMPORT_PARSING_CHANGED');
     }
-    const sourceColumns = new Set((run.profile as DatasetProfileV1 | null)?.columns.map(column => column.name) ?? []);
+    const profile = importRunProfile(run);
+    if (!profile) throw new ImportServiceError('This import uses an obsolete profile. Analyze the source again.', 409, 'IMPORT_PROFILE_VERSION');
+    const sourceColumns = new Set(profile.columns.map(column => column.name));
     const unknownSources = plan.columns.filter(column => !sourceColumns.has(column.source)).map(column => column.source);
     if (unknownSources.length) {
         throw new ImportServiceError(`Source columns are not present in the analyzed dataset: ${unknownSources.join(', ')}`, 422, 'IMPORT_SOURCE_COLUMNS', {
@@ -286,11 +292,30 @@ export async function saveImportPlan(db: DBService, connection: BaseConnection, 
     return { run: updated, target, createSql: plan.target.mode === 'create' ? await writer.previewCreateTable(plan) : null };
 }
 
+export async function previewImportRunTransform(db: DBService, input: { organizationId: string; runId: string; plan: unknown }) {
+    const run = await getImportRun(db, input.organizationId, input.runId);
+    if (run.status !== 'ready' || !run.sourceArrowPath) throw new ImportServiceError('Analyze the source before previewing transforms', 409, 'IMPORT_RUN_STATE');
+    if (!importRunProfile(run)) throw new ImportServiceError('This import uses an obsolete profile. Analyze the source again.', 409, 'IMPORT_PROFILE_VERSION');
+    const plan = parseImportPlan(input.plan);
+    const schemaHash = importRunSchemaHash(run);
+    if (!schemaHash || plan.sourceSchemaHash !== schemaHash) {
+        throw new ImportServiceError('The analyzed source schema changed. Review the mapping again.', 409, 'IMPORT_SCHEMA_CHANGED');
+    }
+    const workDir = await ensureWorkDir(`${input.runId}-preview`);
+    try {
+        const sourceArrowLocal = await materializeForRead(run.sourceArrowPath, path.join(workDir, 'source.arrow'));
+        return await previewImportTransform({ sourceArrowPath: sourceArrowLocal, plan });
+    } finally {
+        await removeWorkDir(workDir);
+    }
+}
+
 export async function queueImportRun(db: DBService, connection: BaseConnection, organizationId: string, runId: string) {
     const run = await getImportRun(db, organizationId, runId);
     if (['queued', 'running', 'completed'].includes(run.status)) return run;
     if (run.status === 'commit_unknown') throw new ImportServiceError('This import may already be committed and cannot be retried automatically', 409, 'IMPORT_COMMIT_UNKNOWN');
     if (run.status !== 'ready' || !run.plan || !run.sourceArrowPath) throw new ImportServiceError('Complete analysis and mapping before execution', 409, 'IMPORT_RUN_NOT_READY');
+    if (!importRunProfile(run)) throw new ImportServiceError('This import uses an obsolete profile. Analyze the source again.', 409, 'IMPORT_PROFILE_VERSION');
     if (connection.config.id !== run.connectionId) throw new ImportServiceError('The selected connection does not match this import run', 409, 'IMPORT_CONNECTION_MISMATCH');
     connection.getDataWriter();
     const schemaHash = importRunSchemaHash(run);
@@ -299,6 +324,7 @@ export async function queueImportRun(db: DBService, connection: BaseConnection, 
         phase: 'queued',
         cancelRequested: false,
         processedRows: 0,
+        filteredRows: 0,
         pendingRows: 0,
         insertedRows: 0,
         batchCount: 0,
@@ -416,9 +442,12 @@ class ImportRunner {
         let heartbeat: NodeJS.Timeout | null = null;
         let workDir: string | null = null;
         let committedResult: WriteResult | null = null;
+        let preparedFilteredRows = 0;
         try {
             let run = await getImportRun(this.db, organizationId, runId);
             if (!run.connectionId || !run.plan || !run.sourceArrowPath) throw new Error('Import run is missing its connection, plan, or source dataset');
+            const profile = importRunProfile(run);
+            if (!profile) throw new Error('The import profile version is obsolete; analyze the source again');
             const plan = parseImportPlan(run.plan);
             const pool = await getOrCreateConnectionPool(organizationId, run.connectionId);
             if (!pool) throw new Error('Import connection is unavailable');
@@ -437,7 +466,7 @@ class ImportRunner {
             const sourceArrowLocal = await materializeForRead(run.sourceArrowPath, path.join(workDir, 'source.arrow'));
             const sourceDataset = await ArrowIpcFileDataset.open({
                 filePath: sourceArrowLocal,
-                rowCount: (run.profile as DatasetProfileV1 | null)?.rows,
+                rowCount: profile.rows,
                 metadata: { source: run.sourceName ?? 'source.csv', sourceHash: run.sourceHash ?? undefined, artifactPath: run.sourceArrowPath },
             });
             if (datasetSchemaHash(sourceDataset) !== plan.sourceSchemaHash) {
@@ -449,13 +478,32 @@ class ImportRunner {
             await this.db.importRuns.update(organizationId, runId, { phase: 'preparing', heartbeatAt: new Date() });
             await this.db.importRuns.appendEvent(organizationId, runId, 'prepare.started', {});
             const prepared = await prepareImportDataset({ sourceArrowPath: sourceArrowLocal, outputArrowPath: preparedLocal, sourceDataset, plan, signal: controller.signal });
+            preparedFilteredRows = prepared.filteredRows;
             await persistGeneratedFile(paths.preparedArrow, preparedLocal, 'application/vnd.apache.arrow.file');
-            run = await this.db.importRuns.update(organizationId, runId, { preparedArrowPath: paths.preparedArrow, phase: 'writing', heartbeatAt: new Date() });
-            await this.db.importRuns.appendEvent(organizationId, runId, 'prepare.completed', { rows: prepared.rowCount });
+            run = await this.db.importRuns.update(organizationId, runId, {
+                preparedArrowPath: paths.preparedArrow,
+                phase: 'writing',
+                filteredRows: prepared.filteredRows,
+                heartbeatAt: new Date(),
+                progress: {
+                    phase: 'writing',
+                    sourceRows: prepared.inputRows,
+                    preparedRows: prepared.outputRows,
+                    filteredRows: prepared.filteredRows,
+                    rowsWritten: 0,
+                    batches: 0,
+                    pendingCommit: true,
+                },
+            });
+            await this.db.importRuns.appendEvent(organizationId, runId, 'prepare.completed', {
+                sourceRows: prepared.inputRows,
+                preparedRows: prepared.outputRows,
+                filteredRows: prepared.filteredRows,
+            });
 
             let lastProgressAt = 0;
             committedResult = await writer.write({
-                dataset: prepared,
+                dataset: prepared.dataset,
                 plan,
                 batchSize: plan.batchSize,
                 signal: controller.signal,
@@ -465,7 +513,12 @@ class ImportRunner {
                         lastProgressAt = now;
                         await this.db.importRuns.update(organizationId, runId, {
                             phase: progress.phase,
-                            progress,
+                            progress: {
+                                ...progress,
+                                sourceRows: prepared.inputRows,
+                                preparedRows: prepared.outputRows,
+                                filteredRows: prepared.filteredRows,
+                            },
                             processedRows: progress.rowsWritten,
                             pendingRows: progress.pendingCommit ? progress.rowsWritten : 0,
                             batchCount: progress.batches,
@@ -474,12 +527,12 @@ class ImportRunner {
                     }
                 },
             });
-            await completeImportRun(this.db, organizationId, runId, committedResult);
+            await completeImportRun(this.db, organizationId, runId, committedResult, preparedFilteredRows);
         } catch (error) {
             let failure = error;
             if (committedResult) {
                 try {
-                    await completeImportRun(this.db, organizationId, runId, committedResult);
+                    await completeImportRun(this.db, organizationId, runId, committedResult, preparedFilteredRows);
                     return;
                 } catch (completionError) {
                     failure = new CommitUnknownError(
@@ -535,23 +588,40 @@ function importRunSchemaHash(run: Run): string | null {
     return typeof value === 'string' ? value : null;
 }
 
+function importRunProfile(run: Run): DatasetProfileV2 | null {
+    try {
+        return parseDatasetProfile(run.profile);
+    } catch {
+        return null;
+    }
+}
+
 function sameParsingOptions(plan: CsvParsingOptions, stored: unknown) {
     if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return false;
     const value = stored as Record<string, unknown>;
     return value.delimiter === plan.delimiter && value.hasHeader === plan.hasHeader && value.encoding === plan.encoding && value.quoteChar === plan.quoteChar;
 }
 
-async function completeImportRun(db: DBService, organizationId: string, runId: string, result: WriteResult) {
+async function completeImportRun(db: DBService, organizationId: string, runId: string, result: WriteResult, filteredRows: number) {
     const completed = await db.importRuns.update(organizationId, runId, {
         status: 'completed',
         phase: 'completed',
         processedRows: result.insertedRows,
+        filteredRows,
         pendingRows: 0,
         insertedRows: result.insertedRows,
         batchCount: result.batches,
         heartbeatAt: new Date(),
         completedAt: new Date(),
-        progress: { phase: 'completed', rowsWritten: result.insertedRows, batches: result.batches, pendingCommit: false },
+        progress: {
+            phase: 'completed',
+            sourceRows: result.insertedRows + filteredRows,
+            preparedRows: result.insertedRows,
+            rowsWritten: result.insertedRows,
+            filteredRows,
+            batches: result.batches,
+            pendingCommit: false,
+        },
     });
     await db.importRuns.appendEvent(organizationId, runId, 'run.completed', result).catch(() => undefined);
     await writeManifest(db, completed).catch(() => undefined);
@@ -581,7 +651,13 @@ async function writeManifest(db: DBService, run: Run) {
         },
         target: plan?.target ?? null,
         status: run.status,
-        counts: { processed: run.processedRows, inserted: run.insertedRows, batches: run.batchCount },
+        counts: {
+            source: importRunProfile(run)?.rows ?? null,
+            filtered: run.filteredRows,
+            processed: run.processedRows,
+            inserted: run.insertedRows,
+            batches: run.batchCount,
+        },
         createdAt: run.createdAt,
         updatedAt: run.updatedAt,
         completedAt: run.completedAt,

@@ -8,7 +8,7 @@ import test from 'node:test';
 
 import iconv from 'iconv-lite';
 
-import { analyzeCsv, datasetSchemaHash, detectCsv, ImportCastError, prepareImportDataset, transcodeCsvToUtf8, type ImportPlanV1 } from '../../src';
+import { analyzeCsv, datasetSchemaHash, detectCsv, ImportCastError, prepareImportDataset, previewImportTransform, transcodeCsvToUtf8, type ImportPlanV1 } from '../../src';
 
 test('CSV analysis is lossless, repeatable, and conservative', async t => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-import-csv-'));
@@ -61,10 +61,11 @@ test('CSV analysis is lossless, repeatable, and conservative', async t => {
         plan,
     });
     assert.equal(
-        prepared.schema.fields.some(field => field.name === '__dory_source_row_number'),
+        prepared.dataset.schema.fields.some(field => field.name === '__dory_source_row_number'),
         false,
     );
-    assert.equal(prepared.rowCount, 2);
+    assert.equal(prepared.dataset.rowCount, 2);
+    assert.equal(prepared.filteredRows, 0);
 
     const invalidPlan: ImportPlanV1 = {
         ...plan,
@@ -123,9 +124,9 @@ test('Datetime columns are prepared without losing their millisecond values', as
         sourceDataset: analysis.dataset,
         plan: buildPlan(analysis, path.basename(source)),
     });
-    assert.equal(prepared.schema.fields.find(field => field.name === 'pickup_datetime')?.type.toString(), 'Timestamp<MICROSECOND>');
+    assert.equal(prepared.dataset.schema.fields.find(field => field.name === 'pickup_datetime')?.type.toString(), 'Timestamp<MILLISECOND>');
 
-    const reader = await prepared.openBatches();
+    const reader = await prepared.dataset.openBatches();
     for await (const batch of reader) {
         assert.equal(batch.getChild('pickup_datetime')?.get(0), Date.parse('2026-01-02T03:04:05Z'));
         break;
@@ -153,6 +154,7 @@ test('100k rows remain streaming and are exposed in bounded batches', async t =>
         parsing: detection.options,
     });
     assert.equal(analysis.profile.rows, 100_000);
+    assert.ok(analysis.profile.sampleRows <= 100_000);
     assert.equal(analysis.profile.columns.find(column => column.name === 'code')?.detectedType, 'string');
 
     let rows = 0;
@@ -165,6 +167,92 @@ test('100k rows remain streaming and are exposed in bounded batches', async t =>
     }
     assert.equal(rows, 100_000);
     assert.equal(batches, 100);
+});
+
+test('Profile v2 reports quality issues and transforms clean or filter rows', async t => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-import-transform-'));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const source = path.join(dir, 'quality.csv');
+    const rows = ['name,age,email,nickname,blank,score'];
+    for (let row = 1; row <= 10; row += 1) {
+        rows.push(`" ${row === 1 ? 'Alice' : `User ${row}`} ",${row === 10 ? 'oops' : row}," ${row === 1 ? 'ÜSER' : `USER${row}`}@EXAMPLE.COM ","","   ",${row}`);
+    }
+    await writeFile(source, `${rows.join('\n')}\n`);
+    const analysis = await analyzeCsv({
+        sourcePath: source,
+        sourceName: 'quality.csv',
+        sourceHash: 'd'.repeat(64),
+        outputArrowPath: path.join(dir, 'source.arrow'),
+        parsing: { delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
+    });
+    assert.equal(analysis.profile.version, 'dory.dataset-profile.v2');
+    assert.equal(analysis.profile.columns.find(column => column.name === 'name')?.whitespaceCount, 10);
+    assert.ok(analysis.profile.columns.find(column => column.name === 'name')?.issues.some(issue => issue.code === 'surrounding_whitespace'));
+    assert.ok(analysis.profile.columns.find(column => column.name === 'age')?.issues.some(issue => issue.code === 'mixed_type'));
+    const nickname = analysis.profile.columns.find(column => column.name === 'nickname');
+    assert.ok(nickname?.issues.some(issue => issue.code === 'all_missing'));
+    assert.deepEqual(nickname?.sample.topValues[0], { value: '', count: 10, rate: 1 });
+    const score = analysis.profile.columns.find(column => column.name === 'score');
+    assert.equal(score?.sample.distinctCount, 10);
+    assert.ok(score?.sample.quantiles && score.sample.quantiles.p50 >= 5 && score.sample.quantiles.p50 <= 6);
+
+    const plan = buildPlan(analysis, 'quality');
+    plan.columns = plan.columns.map(column => (column.source === 'age' ? { ...column, targetType: 'int64' as const } : column));
+    plan.transform.operations = [
+        { kind: 'trim', column: 'name' },
+        { kind: 'replace', column: 'name', find: 'Alice', replacement: 'Alicia' },
+        { kind: 'trim', column: 'email' },
+        { kind: 'lowercase', column: 'email' },
+        { kind: 'replace', column: 'email', find: '.', replacement: '-' },
+        { kind: 'emptyToNull', column: 'nickname' },
+        { kind: 'trim', column: 'blank' },
+        { kind: 'emptyToNull', column: 'blank' },
+        { kind: 'dropInvalid', column: 'age', targetType: 'int64', dropNulls: false },
+    ];
+
+    const preview = await previewImportTransform({ sourceArrowPath: analysis.sourceArrowPath, plan });
+    assert.equal(preview.inputRows, 10);
+    assert.equal(preview.droppedRows, 1);
+    assert.equal(preview.rows[0]?.after.name, 'Alicia');
+    assert.equal(preview.rows[0]?.after.email, 'üser@example-com');
+    assert.equal(preview.rows[0]?.after.nickname, null);
+    assert.equal(preview.rows[0]?.after.blank, null);
+
+    const prepared = await prepareImportDataset({
+        sourceArrowPath: analysis.sourceArrowPath,
+        outputArrowPath: path.join(dir, 'prepared.arrow'),
+        sourceDataset: analysis.dataset,
+        plan,
+    });
+    assert.equal(prepared.inputRows, 10);
+    assert.equal(prepared.outputRows, 9);
+    assert.equal(prepared.filteredRows, 1);
+    const reader = await prepared.dataset.openBatches();
+    for await (const batch of reader) {
+        assert.equal(batch.getChild('name')?.get(0), 'Alicia');
+        assert.equal(batch.getChild('email')?.get(0), 'üser@example-com');
+        assert.equal(batch.getChild('nickname')?.get(0), null);
+        assert.equal(batch.getChild('blank')?.get(0), null);
+        break;
+    }
+});
+
+test('Profile v2 preserves exact Int64 range values outside Number safe integers', async t => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-import-int64-'));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const source = path.join(dir, 'int64.csv');
+    await writeFile(source, 'value\n-9223372036854775808\n9223372036854775807\n');
+    const analysis = await analyzeCsv({
+        sourcePath: source,
+        sourceName: 'int64.csv',
+        sourceHash: 'e'.repeat(64),
+        outputArrowPath: path.join(dir, 'source.arrow'),
+        parsing: { delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
+    });
+    const value = analysis.profile.columns[0];
+    assert.equal(value?.detectedType, 'int64');
+    assert.equal(value?.min, '-9223372036854775808');
+    assert.equal(value?.max, '9223372036854775807');
 });
 
 function buildPlan(analysis: Awaited<ReturnType<typeof analyzeCsv>>, sourceName: string): ImportPlanV1 {

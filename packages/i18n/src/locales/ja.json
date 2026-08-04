@@ -3462,7 +3462,7 @@
             "Dismiss": "閉じる"
         },
         "Step": "ステップ {number}",
-        "Steps": { "Select": "ファイル選択", "Preview": "プレビュー", "Target": "ターゲット", "Mapping": "マッピング", "Options": "オプション", "Execute": "実行" },
+        "Steps": { "Select": "ファイル選択", "Preview": "プレビュー", "Target": "ターゲット", "Mapping": "マッピング", "Clean": "データ整形", "Options": "オプション", "Execute": "実行" },
         "Common": { "Next": "続行", "Back": "戻る" },
         "Select": {
             "Title": "CSV を選択",
@@ -3494,6 +3494,15 @@
         },
         "Delimiters": { "Comma": "カンマ", "Tab": "タブ", "Semicolon": "セミコロン", "Pipe": "パイプ" },
         "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Quality": {
+            "IssueCount": "問題 {count} 件",
+            "Completeness": "完全性 {rate}%",
+            "DistinctSample": "サンプル内の異なる値 {count} 件",
+            "EmptyRate": "空文字 {rate}%",
+            "ApplyFix": "修正を適用",
+            "FixAdded": "整形ステップを追加しました",
+            "Issues": { "all_missing": "全値が欠損", "empty_string": "空文字", "surrounding_whitespace": "前後の空白", "leading_zero": "先頭ゼロ", "mixed_type": "型の混在" }
+        },
         "Target": {
             "Title": "ターゲットを選択",
             "Description": "新しいテーブルを作成するか、既存テーブルへマッピングします。",
@@ -3526,6 +3535,28 @@
             "Type": "ターゲット型",
             "Ignore": "無視"
         },
+        "Clean": {
+            "Title": "データを整形",
+            "Description": "最終的な型変換の前に、順序付きの再現可能な処理を適用します。先頭 100 行をプレビューします。",
+            "Column": "列",
+            "SourceIssues": "ソースの問題 {count} 件",
+            "NoOperations": "この列には整形処理がありません。",
+            "Find": "検索する文字列",
+            "Replacement": "置換後",
+            "Preview": "変換前後",
+            "SampleOnly": "サンプル表示です。全件検証は実行時に行われます。",
+            "Dropped": "除外 {count} 行",
+            "PreviewFailed": "プレビューできません",
+            "InvalidType": "{column} は有効な {type} ではありません",
+            "RequiredNull": "{column} は必須です",
+            "Row": "ソース行",
+            "Before": "変換前",
+            "After": "変換後",
+            "Result": "結果",
+            "kept": "保持",
+            "dropped": "除外",
+            "Operations": { "trim": "前後の空白を削除", "lowercase": "小文字化", "replace": "置換", "emptyToNull": "空文字を NULL", "dropInvalid": "無効な行を除外" }
+        },
         "Options": {
             "Title": "書き込み設定",
             "Description": "インポートは厳密かつアトミックです。エラー時は処理全体をロールバックします。",
@@ -3547,6 +3578,7 @@
             "Processed": "書き込み済み",
             "Pending": "コミット待ち",
             "Inserted": "挿入済み",
+            "Filtered": "除外済み",
             "Total": "ソース行",
             "PendingCommit": "行はトランザクション内に書き込まれ、コミット待ちです。",
             "Cancel": "インポートをキャンセル",

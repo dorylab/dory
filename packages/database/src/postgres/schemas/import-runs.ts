@@ -26,6 +26,7 @@ export const importRuns = pgTable(
         plan: jsonb('plan'),
         progress: jsonb('progress'),
         processedRows: bigint('processed_rows', { mode: 'number' }).notNull().default(0),
+        filteredRows: bigint('filtered_rows', { mode: 'number' }).notNull().default(0),
         pendingRows: bigint('pending_rows', { mode: 'number' }).notNull().default(0),
         insertedRows: bigint('inserted_rows', { mode: 'number' }).notNull().default(0),
         batchCount: integer('batch_count').notNull().default(0),

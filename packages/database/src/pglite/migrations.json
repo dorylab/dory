@@ -413,5 +413,13 @@
     "bps": true,
     "folderMillis": 1785851842755,
     "hash": "503c7ae7d8e6a99f048fe7fe8b43fa117e955e4c17241dec93738753bf6268a3"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"import_runs\" ADD COLUMN \"filtered_rows\" bigint DEFAULT 0 NOT NULL;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1785866199860,
+    "hash": "709098ea650a01536f64f2e768383706f48a1bd15c88fce5fca64fdd5abf1916"
   }
 ]

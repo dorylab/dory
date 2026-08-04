@@ -3,7 +3,24 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDownToLine, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Circle, Loader2, RefreshCw, Table2, Upload, XCircle } from 'lucide-react';
+import {
+    ArrowDownToLine,
+    ArrowLeft,
+    ArrowRight,
+    Check,
+    CheckCircle2,
+    ChevronDown,
+    ChevronUp,
+    Circle,
+    Loader2,
+    Plus,
+    RefreshCw,
+    Sparkles,
+    Table2,
+    Trash2,
+    Upload,
+    XCircle,
+} from 'lucide-react';
 import { useQueryStates } from 'nuqs';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -26,11 +43,43 @@ import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 
 type ImportColumnType = 'string' | 'boolean' | 'int64' | 'float64' | 'date' | 'datetime';
+type CleaningOperation =
+    | { kind: 'trim'; column: string }
+    | { kind: 'lowercase'; column: string }
+    | { kind: 'replace'; column: string; find: string; replacement: string }
+    | { kind: 'emptyToNull'; column: string }
+    | { kind: 'dropInvalid'; column: string; targetType: Exclude<ImportColumnType, 'string'>; dropNulls: boolean };
+type TransformOperation =
+    | CleaningOperation
+    | { kind: 'rename'; source: string; target: string }
+    | { kind: 'cast'; column: string; targetType: ImportColumnType }
+    | { kind: 'ignore'; column: string };
 export type ImportRunStatus = 'draft' | 'uploading' | 'analyzing' | 'ready' | 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'commit_unknown';
 type Profile = {
+    version: 'dory.dataset-profile.v2';
     rows: number;
-    columns: Array<{ name: string; detectedType: ImportColumnType; nullCount: number; nullRate: number; sampleValues: string[] }>;
+    sampleRows: number;
+    columns: Array<{
+        name: string;
+        detectedType: ImportColumnType;
+        nullCount: number;
+        nullRate: number;
+        emptyCount: number;
+        emptyRate: number;
+        whitespaceCount: number;
+        whitespaceRate: number;
+        sampleValues: string[];
+        sample: { basis: 'sample'; rows: number; distinctCount: number; distinctRate: number; topValues: Array<{ value: string; count: number; rate: number }> };
+        issues: Array<{
+            code: 'all_missing' | 'empty_string' | 'surrounding_whitespace' | 'leading_zero' | 'mixed_type';
+            severity: 'info' | 'warning';
+            affectedCount: number;
+            affectedRate: number;
+            suggestedOperation?: Extract<CleaningOperation, { kind: 'trim' | 'emptyToNull' }>;
+        }>;
+    }>;
     preview: Array<Record<string, unknown>>;
+    quality: { totalIssues: number; warningCount: number; infoCount: number; columnsWithIssues: number };
 };
 type Mapping = { source: string; target: string; targetType: ImportColumnType; ignored: boolean; order: number };
 type Parsing = { delimiter: ',' | '\t' | ';' | '|'; hasHeader: boolean; encoding: string; quoteChar: string };
@@ -46,6 +95,7 @@ type ImportRun = {
     plan: ImportPlan | null;
     progress: Record<string, unknown> | null;
     processedRows: number;
+    filteredRows: number;
     pendingRows: number;
     insertedRows: number;
     batchCount: number;
@@ -67,12 +117,25 @@ type ImportPlan = {
     columns: Mapping[];
     mode: 'append' | 'replace';
     batchSize: number;
-    transform: { version: 'dory.transform.v1'; operations: Array<Record<string, unknown>> };
+    transform: { version: 'dory.transform.v1'; operations: TransformOperation[] };
     sourceSchemaHash: string;
+};
+type TransformPreview = {
+    version: 'dory.transform-preview.v1';
+    inputRows: number;
+    keptRows: number;
+    droppedRows: number;
+    rows: Array<{
+        sourceRow: number;
+        before: Record<string, string | null>;
+        after: Record<string, string | null>;
+        outcome: 'kept' | 'dropped';
+        errors: Array<{ column: string; code: 'invalid_type' | 'required_null'; targetType: ImportColumnType }>;
+    }>;
 };
 type WizardTranslator = ReturnType<typeof useTranslations>;
 type StepNavigation = { onBack: () => void; onContinue: () => void };
-type WizardStepId = 'select' | 'preview' | 'target' | 'mapping' | 'options' | 'execute';
+type WizardStepId = 'select' | 'preview' | 'target' | 'mapping' | 'clean' | 'options' | 'execute';
 
 export type ImportWizardFixedTarget = {
     database: string;
@@ -96,8 +159,8 @@ const WIZARD_TABLE_VIEWPORT_CLASS = 'h-[clamp(320px,48vh,480px)] overflow-hidden
 const WIZARD_FILL_TABLE_VIEWPORT_CLASS = 'min-h-0 flex-1 overflow-hidden [&_[data-slot=table-container]]:h-full [&_[data-slot=table-container]]:overflow-auto';
 const WIZARD_TABLE_HEADER_CLASS = 'sticky top-0 z-10 bg-background [&_tr]:bg-background';
 
-const PAGE_STEPS: WizardStepId[] = ['select', 'preview', 'target', 'mapping', 'options', 'execute'];
-const TABLE_MODAL_STEPS: WizardStepId[] = ['select', 'preview', 'mapping', 'options', 'execute'];
+const PAGE_STEPS: WizardStepId[] = ['select', 'preview', 'target', 'mapping', 'clean', 'options', 'execute'];
+const TABLE_MODAL_STEPS: WizardStepId[] = ['select', 'preview', 'mapping', 'clean', 'options', 'execute'];
 
 export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, onRunIdChange, onFinish }: ImportWizardProps) {
     const t = useTranslations('ImportWizard');
@@ -124,6 +187,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     });
     const [targetSchema, setTargetSchema] = useState<TargetSchema | null>(null);
     const [mappings, setMappings] = useState<Mapping[]>([]);
+    const [cleaningOperations, setCleaningOperations] = useState<CleaningOperation[]>([]);
     const [writeMode, setWriteMode] = useState<'append' | 'replace'>('append');
     const [batchSize, setBatchSize] = useState(1000);
     const [replaceConfirmed, setReplaceConfirmed] = useState(false);
@@ -159,12 +223,14 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         if (run.plan) {
             setTarget(isTableModal && fixedTarget ? { mode: 'existing', ...fixedTarget } : run.plan.target);
             setMappings(run.plan.columns);
+            setCleaningOperations(run.plan.transform.operations.filter(isCleaningOperation));
             setWriteMode(run.plan.mode);
             setBatchSize(run.plan.batchSize);
         } else if (run.profile) {
             setMappings(defaultMappings(run.profile, null));
         }
-        if (ACTIVE_IMPORT_RUN_STATUSES.includes(run.status) || TERMINAL_IMPORT_RUN_STATUSES.includes(run.status) || run.plan) setStep('execute');
+        if (ACTIVE_IMPORT_RUN_STATUSES.includes(run.status) || TERMINAL_IMPORT_RUN_STATUSES.includes(run.status)) setStep('execute');
+        else if (run.plan) setStep('options');
         else if (run.profile) setStep('preview');
         else if (run.phase === 'encoding_required') setStep('preview');
         else setStep('select');
@@ -213,6 +279,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
             setParsing(analyzed.parsingOptions);
             setMappings(analyzed.profile ? defaultMappings(analyzed.profile, null) : []);
+            setCleaningOperations([]);
             setStep('preview');
             if (isTableModal) onRunIdChange?.(analyzed.id);
             else router.replace(importRunPath(organization, connectionId, analyzed.id));
@@ -228,6 +295,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
             setParsing(analyzed.parsingOptions);
             setMappings(defaultMappings(analyzed.profile!, null));
+            setCleaningOperations([]);
             toast.success(t('Preview.Reanalyzed'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.AnalysisFailed')),
@@ -250,6 +318,34 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             setStep('mapping');
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.TargetFailed')),
+    });
+
+    const transformDraftKey = JSON.stringify({ mappings, cleaningOperations, target, writeMode, batchSize });
+    const transformPreviewQuery = useQuery({
+        queryKey: ['import-transform-preview', run?.id, transformDraftKey],
+        queryFn: ({ signal }) =>
+            api<TransformPreview>(`/api/import-runs/${run!.id}/transform-preview`, {
+                method: 'POST',
+                signal,
+                body: JSON.stringify({ plan: buildPlan() }),
+            }),
+        enabled: step === 'clean' && Boolean(run && parsing) && cleaningOperationsValid(cleaningOperations),
+        staleTime: Infinity,
+        retry: false,
+    });
+
+    const saveCleanMutation = useMutation({
+        mutationFn: () =>
+            api<{ run: ImportRun; target: TargetSchema; createSql: string | null }>(`/api/import-runs/${run!.id}`, {
+                method: 'PATCH',
+                headers: connectionHeaders(connectionId),
+                body: JSON.stringify({ plan: buildPlan() }),
+            }),
+        onSuccess: result => {
+            queryClient.setQueryData(['import-run', result.run.id], result.run);
+            setStep('options');
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveFailed')),
     });
 
     const savePlanMutation = useMutation({
@@ -303,19 +399,25 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         preview: t('Steps.Preview'),
         target: t('Steps.Target'),
         mapping: t('Steps.Mapping'),
+        clean: t('Steps.Clean'),
         options: t('Steps.Options'),
         execute: t('Steps.Execute'),
     };
     const profile = run?.profile;
     const writtenRows = getWrittenRows(run);
-    const totalRows = profile?.rows ?? writtenRows;
+    const preparedRows = run?.progress?.preparedRows;
+    const totalRows = typeof preparedRows === 'number' ? preparedRows : (profile?.rows ?? writtenRows);
     const progressPercent = totalRows > 0 ? Math.min(100, (writtenRows / totalRows) * 100) : 0;
 
     function buildPlan(): ImportPlan {
         if (!run || !parsing) throw new Error(t('Errors.PlanIncomplete'));
         const sourceSchemaHash = String(run.progress?.schemaHash ?? '');
         if (!/^[a-f0-9]{64}$/.test(sourceSchemaHash)) throw new Error(t('Errors.PlanIncomplete'));
-        const operations: Array<Record<string, unknown>> = [];
+        const operations: TransformOperation[] = cleaningOperations.map(operation => {
+            if (operation.kind !== 'dropInvalid') return operation;
+            const mapping = mappings.find(column => column.source === operation.column);
+            return mapping && mapping.targetType !== 'string' ? { ...operation, targetType: mapping.targetType } : operation;
+        });
         for (const mapping of mappings) {
             if (mapping.ignored) operations.push({ kind: 'ignore', column: mapping.source });
             else {
@@ -333,6 +435,11 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             transform: { version: 'dory.transform.v1', operations },
             sourceSchemaHash,
         };
+    }
+
+    function applySuggestedOperation(operation: Extract<CleaningOperation, { kind: 'trim' | 'emptyToNull' }>) {
+        setCleaningOperations(current => (current.some(item => item.kind === operation.kind && item.column === operation.column) ? current : [...current, operation]));
+        toast.success(t('Quality.FixAdded'));
     }
 
     return (
@@ -415,6 +522,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 t={t}
                                 stepNumber={getStepNumber('preview')}
                                 profile={profile}
+                                onApplyFix={applySuggestedOperation}
                                 parsing={parsing}
                                 onParsing={setParsing}
                                 reanalyzing={analyzeMutation.isPending}
@@ -458,7 +566,24 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 targetMode={target.mode}
                                 targetSchema={targetSchema}
                                 onBack={() => setStep(isTableModal ? 'preview' : 'target')}
-                                onContinue={() => setStep('options')}
+                                onContinue={() => setStep('clean')}
+                            />
+                        ) : null}
+                        {step === 'clean' && profile ? (
+                            <CleanDataStep
+                                t={t}
+                                stepNumber={getStepNumber('clean')}
+                                profile={profile}
+                                mappings={mappings}
+                                targetSchema={targetSchema}
+                                operations={cleaningOperations}
+                                onOperations={setCleaningOperations}
+                                preview={transformPreviewQuery.data}
+                                previewPending={transformPreviewQuery.isFetching}
+                                previewError={transformPreviewQuery.error instanceof Error ? transformPreviewQuery.error.message : null}
+                                pending={saveCleanMutation.isPending}
+                                onBack={() => setStep('mapping')}
+                                onContinue={() => saveCleanMutation.mutate()}
                             />
                         ) : null}
                         {step === 'options' ? (
@@ -476,7 +601,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 replaceConfirmed={replaceConfirmed}
                                 onReplaceConfirmed={setReplaceConfirmed}
                                 pending={savePlanMutation.isPending}
-                                onBack={() => setStep('mapping')}
+                                onBack={() => setStep('clean')}
                                 onContinue={() => savePlanMutation.mutate()}
                             />
                         ) : null}
@@ -661,6 +786,7 @@ function PreviewStep({
     t,
     stepNumber,
     profile,
+    onApplyFix,
     parsing,
     onParsing,
     reanalyzing,
@@ -672,6 +798,7 @@ function PreviewStep({
     t: WizardTranslator;
     stepNumber: number;
     profile: Profile;
+    onApplyFix: (operation: Extract<CleaningOperation, { kind: 'trim' | 'emptyToNull' }>) => void;
     parsing: Parsing;
     onParsing: (parsing: Parsing) => void;
     reanalyzing: boolean;
@@ -718,7 +845,12 @@ function PreviewStep({
                 </div>
                 <div className="grid h-[clamp(480px,65vh,640px)] grid-rows-[minmax(0,1fr)_auto] gap-6 xl:h-auto xl:min-h-0">
                     <section className="flex min-h-0 flex-col">
-                        <h3 className="text-sm font-medium">{t('Preview.Schema')}</h3>
+                        <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-medium">{t('Preview.Schema')}</h3>
+                            <Badge variant={profile.quality.warningCount > 0 ? 'destructive' : 'secondary'}>
+                                {t('Quality.IssueCount', { count: profile.quality.totalIssues })}
+                            </Badge>
+                        </div>
                         <div className="mt-3 min-h-0 flex-1 divide-y overflow-y-auto border-y">
                             {profile.columns.map(column => (
                                 <div key={column.name} className="py-3">
@@ -726,7 +858,28 @@ function PreviewStep({
                                         <span className="truncate text-sm">{column.name}</span>
                                         <Badge variant="outline">{t(`Types.${column.detectedType}`)}</Badge>
                                     </div>
-                                    <p className="mt-1 text-xs text-muted-foreground">{t('Preview.NullRate', { rate: (column.nullRate * 100).toFixed(1) })}</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        {t('Quality.Completeness', { rate: ((1 - column.nullRate) * 100).toFixed(1) })} ·{' '}
+                                        {t('Preview.NullRate', { rate: (column.nullRate * 100).toFixed(1) })} ·{' '}
+                                        {t('Quality.EmptyRate', { rate: (column.emptyRate * 100).toFixed(1) })} ·{' '}
+                                        {t('Quality.DistinctSample', { count: column.sample.distinctCount })}
+                                    </p>
+                                    {column.issues.length ? (
+                                        <div className="mt-2 space-y-1.5">
+                                            {column.issues.map(issue => (
+                                                <div key={issue.code} className="flex items-center gap-2 text-xs">
+                                                    <Badge variant={issue.severity === 'warning' ? 'destructive' : 'secondary'}>{t(`Quality.Issues.${issue.code}`)}</Badge>
+                                                    <span className="text-muted-foreground">{formatNumber(issue.affectedCount)}</span>
+                                                    {issue.suggestedOperation ? (
+                                                        <Button size="xs" variant="ghost" className="ml-auto" onClick={() => onApplyFix(issue.suggestedOperation!)}>
+                                                            <Sparkles />
+                                                            {t('Quality.ApplyFix')}
+                                                        </Button>
+                                                    ) : null}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : null}
                                 </div>
                             ))}
                         </div>
@@ -1176,6 +1329,219 @@ function MappingStep({
     );
 }
 
+function CleanDataStep({
+    t,
+    stepNumber,
+    profile,
+    mappings,
+    targetSchema,
+    operations,
+    onOperations,
+    preview,
+    previewPending,
+    previewError,
+    pending,
+    onBack,
+    onContinue,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    profile: Profile;
+    mappings: Mapping[];
+    targetSchema: TargetSchema | null;
+    operations: CleaningOperation[];
+    onOperations: (operations: CleaningOperation[]) => void;
+    preview?: TransformPreview;
+    previewPending: boolean;
+    previewError: string | null;
+    pending: boolean;
+} & StepNavigation) {
+    const activeMappings = mappings.filter(mapping => !mapping.ignored).sort((left, right) => left.order - right.order);
+    const [selectedSource, setSelectedSource] = useState(activeMappings[0]?.source ?? '');
+    const selected = activeMappings.find(mapping => mapping.source === selectedSource) ?? activeMappings[0];
+    const selectedOperations = operations.map((operation, index) => ({ operation, index })).filter(item => item.operation.column === selected?.source);
+    const targetColumn = targetSchema?.columns.find(column => column.name === selected?.target);
+    const previewRows = preview?.rows ?? [];
+
+    const addSingleton = (operation: CleaningOperation) => {
+        if (operations.some(item => item.kind === operation.kind && item.column === operation.column)) return;
+        onOperations([...operations, operation]);
+    };
+    const update = (index: number, operation: CleaningOperation) => onOperations(operations.map((item, itemIndex) => (itemIndex === index ? operation : item)));
+    const remove = (index: number) => onOperations(operations.filter((_, itemIndex) => itemIndex !== index));
+    const move = (index: number, direction: -1 | 1) => {
+        const next = [...operations];
+        const columnIndexes = next.map((operation, itemIndex) => ({ operation, itemIndex })).filter(item => item.operation.column === selected?.source);
+        const position = columnIndexes.findIndex(item => item.itemIndex === index);
+        const destination = columnIndexes[position + direction]?.itemIndex;
+        if (destination === undefined) return;
+        [next[index], next[destination]] = [next[destination], next[index]];
+        onOperations(next);
+    };
+
+    return (
+        <div className="flex min-h-full flex-col xl:h-full xl:min-h-0">
+            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Clean.Title')} description={t('Clean.Description')} />
+            <div className="grid gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[360px_minmax(0,1fr)]">
+                <section className="flex min-h-0 flex-col border">
+                    <div className="border-b p-4">
+                        <Label>{t('Clean.Column')}</Label>
+                        <Select value={selected?.source} onValueChange={setSelectedSource}>
+                            <SelectTrigger className="mt-2 w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {activeMappings.map(mapping => (
+                                    <SelectItem key={mapping.source} value={mapping.source}>
+                                        {mapping.source} → {mapping.target}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {selected ? (
+                            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                                <Badge variant="outline">{t(`Types.${selected.targetType}`)}</Badge>
+                                <span>{t('Clean.SourceIssues', { count: profile.columns.find(column => column.name === selected.source)?.issues.length ?? 0 })}</span>
+                            </div>
+                        ) : null}
+                    </div>
+                    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+                        {selectedOperations.map(({ operation, index }, position) => (
+                            <div key={`${operation.kind}-${index}`} className="space-y-3 border p-3">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="secondary">{t(`Clean.Operations.${operation.kind}`)}</Badge>
+                                    <div className="ml-auto flex">
+                                        <Button size="icon-xs" variant="ghost" disabled={position === 0 || operation.kind === 'dropInvalid'} onClick={() => move(index, -1)}>
+                                            <ChevronUp />
+                                        </Button>
+                                        <Button
+                                            size="icon-xs"
+                                            variant="ghost"
+                                            disabled={position === selectedOperations.length - 1 || selectedOperations[position + 1]?.operation.kind === 'dropInvalid'}
+                                            onClick={() => move(index, 1)}
+                                        >
+                                            <ChevronDown />
+                                        </Button>
+                                        <Button size="icon-xs" variant="ghost" onClick={() => remove(index)}>
+                                            <Trash2 />
+                                        </Button>
+                                    </div>
+                                </div>
+                                {operation.kind === 'replace' ? (
+                                    <div className="grid gap-2">
+                                        <Input value={operation.find} placeholder={t('Clean.Find')} onChange={event => update(index, { ...operation, find: event.target.value })} />
+                                        <Input
+                                            value={operation.replacement}
+                                            placeholder={t('Clean.Replacement')}
+                                            onChange={event => update(index, { ...operation, replacement: event.target.value })}
+                                        />
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+                        {selectedOperations.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">{t('Clean.NoOperations')}</p> : null}
+                    </div>
+                    {selected ? (
+                        <div className="flex flex-wrap gap-2 border-t p-4">
+                            <Button size="sm" variant="outline" onClick={() => addSingleton({ kind: 'trim', column: selected.source })}>
+                                <Plus /> {t('Clean.Operations.trim')}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => addSingleton({ kind: 'lowercase', column: selected.source })}>
+                                <Plus /> {t('Clean.Operations.lowercase')}
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onOperations([...operations, { kind: 'replace', column: selected.source, find: '', replacement: '' }])}
+                            >
+                                <Plus /> {t('Clean.Operations.replace')}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => addSingleton({ kind: 'emptyToNull', column: selected.source })}>
+                                <Plus /> {t('Clean.Operations.emptyToNull')}
+                            </Button>
+                            {selected.targetType !== 'string' ? (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                        addSingleton({
+                                            kind: 'dropInvalid',
+                                            column: selected.source,
+                                            targetType: selected.targetType as Exclude<ImportColumnType, 'string'>,
+                                            dropNulls: targetColumn ? !targetColumn.nullable : false,
+                                        })
+                                    }
+                                >
+                                    <Plus /> {t('Clean.Operations.dropInvalid')}
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </section>
+                <section className="flex min-h-0 flex-col border">
+                    <div className="flex items-center justify-between border-b px-4 py-3">
+                        <div>
+                            <p className="text-sm font-medium">{t('Clean.Preview')}</p>
+                            <p className="text-xs text-muted-foreground">{t('Clean.SampleOnly')}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            {previewPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                            <Badge variant={preview?.droppedRows ? 'destructive' : 'secondary'}>{t('Clean.Dropped', { count: preview?.droppedRows ?? 0 })}</Badge>
+                        </div>
+                    </div>
+                    {previewError ? (
+                        <Alert variant="destructive" className="m-4">
+                            <XCircle />
+                            <AlertTitle>{t('Clean.PreviewFailed')}</AlertTitle>
+                            <AlertDescription>{previewError}</AlertDescription>
+                        </Alert>
+                    ) : null}
+                    <div className={WIZARD_FILL_TABLE_VIEWPORT_CLASS}>
+                        <Table>
+                            <TableHeader className={WIZARD_TABLE_HEADER_CLASS}>
+                                <TableRow>
+                                    <TableHead>{t('Clean.Row')}</TableHead>
+                                    <TableHead>{t('Clean.Before')}</TableHead>
+                                    <TableHead>{t('Clean.After')}</TableHead>
+                                    <TableHead>{t('Clean.Result')}</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {previewRows.map(row => (
+                                    <TableRow key={row.sourceRow} className={row.outcome === 'dropped' ? 'bg-destructive/5' : undefined}>
+                                        <TableCell className="font-mono text-xs">{row.sourceRow}</TableCell>
+                                        <TableCell className="max-w-64 truncate font-mono text-xs">{selected ? (row.before[selected.source] ?? 'NULL') : '—'}</TableCell>
+                                        <TableCell className="max-w-64 truncate font-mono text-xs">{selected ? (row.after[selected.target] ?? 'NULL') : '—'}</TableCell>
+                                        <TableCell>
+                                            <Badge variant={row.outcome === 'dropped' ? 'destructive' : 'outline'}>{t(`Clean.${row.outcome}`)}</Badge>
+                                            {row.errors.length ? (
+                                                <p
+                                                    className="mt-1 max-w-48 truncate text-xs text-destructive"
+                                                    title={row.errors.map(error => transformErrorLabel(t, error)).join('; ')}
+                                                >
+                                                    {row.errors.map(error => transformErrorLabel(t, error)).join('; ')}
+                                                </p>
+                                            ) : null}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </section>
+            </div>
+            <StepActions
+                back={onBack}
+                backLabel={t('Common.Back')}
+                next={onContinue}
+                nextLabel={t('Common.Next')}
+                disabled={!cleaningOperationsValid(operations)}
+                pending={pending}
+            />
+        </div>
+    );
+}
+
 function OptionsStep({
     t,
     stepNumber,
@@ -1310,12 +1676,13 @@ function ExecuteStep({
                 </div>
                 <div className="space-y-5 p-5">
                     <Progress value={completed ? 100 : progressPercent} />
-                    <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="grid gap-4 sm:grid-cols-4">
                         <Metric label={t('Execute.Processed')} value={formatNumber(writtenRows)} />
                         <Metric
                             label={run.pendingRows > 0 ? t('Execute.Pending') : t('Execute.Inserted')}
                             value={formatNumber(run.pendingRows > 0 ? run.pendingRows : run.insertedRows)}
                         />
+                        <Metric label={t('Execute.Filtered')} value={formatNumber(run.filteredRows)} />
                         <Metric label={t('Execute.Total')} value={formatNumber(totalRows)} />
                     </div>
                     {run.pendingRows > 0 ? <p className="text-xs text-amber-700 dark:text-amber-400">{t('Execute.PendingCommit')}</p> : null}
@@ -1505,4 +1872,16 @@ function getWrittenRows(run?: ImportRun) {
     const rowsWritten = run?.progress?.rowsWritten;
     if (typeof rowsWritten === 'number' && Number.isFinite(rowsWritten)) return Math.max(0, rowsWritten);
     return run?.status === 'completed' ? Math.max(0, run.insertedRows) : 0;
+}
+
+function isCleaningOperation(operation: TransformOperation): operation is CleaningOperation {
+    return operation.kind === 'trim' || operation.kind === 'lowercase' || operation.kind === 'replace' || operation.kind === 'emptyToNull' || operation.kind === 'dropInvalid';
+}
+
+function cleaningOperationsValid(operations: CleaningOperation[]) {
+    return operations.every(operation => operation.kind !== 'replace' || operation.find.length > 0);
+}
+
+function transformErrorLabel(t: WizardTranslator, error: TransformPreview['rows'][number]['errors'][number]) {
+    return error.code === 'required_null' ? t('Clean.RequiredNull', { column: error.column }) : t('Clean.InvalidType', { column: error.column, type: error.targetType });
 }

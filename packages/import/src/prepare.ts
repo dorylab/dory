@@ -1,10 +1,20 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
-import { ArrowIpcFileDataset, type Dataset } from '@dory/dataset';
-import pl, { type DataType } from 'nodejs-polars';
 
-import { parseImportPlan } from './plan';
-import { SOURCE_ROW_NUMBER_COLUMN, type ImportColumnMappingV1, type ImportColumnType, type ImportPlanV1 } from './types';
+import { ArrowIpcFileDataset, fingerprint, type Dataset } from '@dory/dataset';
+import pl, { type DataType, type LazyDataFrame } from 'nodejs-polars';
+
+import { cleaningTransformOperations, parseImportPlan } from './plan';
+import {
+    SOURCE_ROW_NUMBER_COLUMN,
+    TRANSFORM_PREVIEW_VERSION,
+    type ImportColumnMappingV1,
+    type ImportColumnType,
+    type ImportPlanV1,
+    type PrepareImportDatasetResult,
+    type TransformOperationV1,
+    type TransformPreviewV1,
+} from './types';
 
 const MIN_INT64 = BigInt('-9223372036854775808');
 const MAX_INT64 = BigInt('9223372036854775807');
@@ -29,23 +39,20 @@ export class ImportCastError extends Error {
     }
 }
 
-export async function prepareImportDataset(input: PrepareImportDatasetInput): Promise<Dataset> {
+export async function prepareImportDataset(input: PrepareImportDatasetInput): Promise<PrepareImportDatasetResult> {
     const plan = parseImportPlan(input.plan);
-    await validateCasts(input.sourceDataset, plan.columns, input.signal);
+    const inputRows = input.sourceDataset.rowCount ?? (await countRows(pl.scanIPC(input.sourceArrowPath)));
+    let transformed = applyCleaningOperations(pl.scanIPC(input.sourceArrowPath), plan.transform.operations, true);
+    await validateCasts(transformed, plan.columns, input.signal);
+    if (input.signal?.aborted) throw abortError();
+
+    const countFrame = await transformed.select(pl.len().alias('rows')).collect({ streaming: true });
+    const outputRows = Number(countFrame.toRecords()[0]?.rows ?? 0);
     if (input.signal?.aborted) throw abortError();
     await mkdir(path.dirname(input.outputArrowPath), { recursive: true });
 
-    const expressions = plan.columns
-        .filter(column => !column.ignored)
-        .sort((left, right) => left.order - right.order)
-        .map(column => {
-            const expression = pl.col(column.source);
-            return castExpression(expression, column.targetType).alias(column.target);
-        });
-
-    await pl
-        .scanIPC(input.sourceArrowPath)
-        .select(expressions)
+    transformed = transformed.select(finalExpressions(plan.columns, false));
+    await transformed
         .sinkIpc(input.outputArrowPath, {
             compression: 'uncompressed',
             maintainOrder: true,
@@ -53,41 +60,141 @@ export async function prepareImportDataset(input: PrepareImportDatasetInput): Pr
         })
         .collect({ streaming: true });
 
-    return ArrowIpcFileDataset.open({
+    const dataset = await ArrowIpcFileDataset.open({
         filePath: input.outputArrowPath,
-        rowCount: input.sourceDataset.rowCount,
+        rowCount: outputRows,
         metadata: {
             ...input.sourceDataset.metadata,
             artifactPath: input.outputArrowPath,
             prepared: true,
         },
     });
+    return { dataset, inputRows, outputRows, filteredRows: Math.max(0, inputRows - outputRows) };
 }
 
-async function validateCasts(dataset: Dataset, columns: ImportColumnMappingV1[], signal?: AbortSignal) {
-    const active = columns.filter(column => !column.ignored && column.targetType !== 'string');
-    if (active.length === 0) return;
-    const sourceNames = new Set(dataset.schema.fields.map(field => field.name));
-    for (const column of columns) {
-        if (!sourceNames.has(column.source)) throw new Error(`Source column does not exist: ${column.source}`);
-    }
+async function countRows(lazy: LazyDataFrame) {
+    const frame = await lazy.select(pl.len().alias('rows')).collect({ streaming: true });
+    return Number(frame.toRecords()[0]?.rows ?? 0);
+}
 
-    const reader = await dataset.openBatches({ signal });
-    for await (const batch of reader) {
-        const rowNumbers = batch.getChild(SOURCE_ROW_NUMBER_COLUMN);
-        for (let rowIndex = 0; rowIndex < batch.numRows; rowIndex += 1) {
-            if (signal?.aborted) throw abortError();
-            const sourceRow = Number(rowNumbers?.get(rowIndex) ?? rowIndex + 1);
-            for (const column of active) {
-                const value = batch.getChild(column.source)?.get(rowIndex);
-                if (value === null || value === undefined) continue;
-                const text = String(value);
-                if (!canCast(text, column.targetType)) {
-                    throw new ImportCastError(sourceRow, column.source, column.targetType, text);
+export async function previewImportTransform(input: { sourceArrowPath: string; plan: ImportPlanV1 }): Promise<TransformPreviewV1> {
+    const plan = parseImportPlan(input.plan);
+    const source = pl.scanIPC(input.sourceArrowPath).head(100);
+    const beforeFrame = await source.clone().collect({ streaming: true });
+    const cleaned = applyCleaningOperations(source, plan.transform.operations, false);
+    const cleanedFrame = await cleaned.clone().collect({ streaming: true });
+    const projectedFrame = await cleaned.select(finalExpressions(plan.columns, false)).collect({ streaming: true });
+    const before = beforeFrame.toRecords() as Array<Record<string, unknown>>;
+    const cleanedRows = cleanedFrame.toRecords() as Array<Record<string, unknown>>;
+    const projected = projectedFrame.toRecords() as Array<Record<string, unknown>>;
+    const sourceColumns = plan.columns.map(column => column.source);
+    const activeColumns = plan.columns.filter(column => !column.ignored).sort((left, right) => left.order - right.order);
+    const dropOperations = cleaningTransformOperations(plan.transform.operations).filter(
+        (operation): operation is Extract<TransformOperationV1, { kind: 'dropInvalid' }> => operation.kind === 'dropInvalid',
+    );
+    let droppedRows = 0;
+
+    const rows = before.map((row, index) => {
+        const cleanedRow = cleanedRows[index] ?? {};
+        const errors: TransformPreviewV1['rows'][number]['errors'] = [];
+        const droppedColumns = new Set<string>();
+        for (const operation of dropOperations) {
+            const value = cleanedRow[operation.column];
+            if (value === null || value === undefined) {
+                if (operation.dropNulls) {
+                    errors.push({ column: operation.column, code: 'required_null', targetType: operation.targetType });
+                    droppedColumns.add(operation.column);
                 }
+            } else if (!canCast(String(value), operation.targetType)) {
+                errors.push({ column: operation.column, code: 'invalid_type', targetType: operation.targetType });
+                droppedColumns.add(operation.column);
             }
         }
+        for (const column of activeColumns) {
+            const value = cleanedRow[column.source];
+            if (column.targetType === 'string' || value === null || value === undefined || canCast(String(value), column.targetType)) continue;
+            if (!errors.some(error => error.column === column.source && error.code === 'invalid_type')) {
+                errors.push({ column: column.source, code: 'invalid_type', targetType: column.targetType });
+            }
+        }
+        const outcome = droppedColumns.size > 0 ? 'dropped' : 'kept';
+        if (outcome === 'dropped') droppedRows += 1;
+        return {
+            sourceRow: Number(row[SOURCE_ROW_NUMBER_COLUMN] ?? index + 1),
+            before: Object.fromEntries(sourceColumns.map(column => [column, previewValue(row[column], 'string')])),
+            after: Object.fromEntries(activeColumns.map(column => [column.target, previewValue(projected[index]?.[column.target], column.targetType)])),
+            outcome,
+            errors,
+        } as const;
+    });
+
+    return {
+        version: TRANSFORM_PREVIEW_VERSION,
+        transformHash: fingerprint(plan.transform),
+        inputRows: rows.length,
+        keptRows: rows.length - droppedRows,
+        droppedRows,
+        rows,
+    };
+}
+
+function applyCleaningOperations(lazy: LazyDataFrame, operations: TransformOperationV1[], applyDrops: boolean) {
+    let current = lazy;
+    for (const operation of cleaningTransformOperations(operations)) {
+        const column = pl.col(operation.column);
+        if (operation.kind === 'trim') {
+            current = current.withColumn(column.str.strip().alias(operation.column));
+        } else if (operation.kind === 'lowercase') {
+            current = current.withColumn(column.str.toLowerCase().alias(operation.column));
+        } else if (operation.kind === 'replace') {
+            current = current.withColumn(column.str.replaceAll(operation.find, operation.replacement, true).alias(operation.column));
+        } else if (operation.kind === 'emptyToNull') {
+            current = current.withColumn(
+                pl
+                    .when(column.eq(pl.lit('')))
+                    .then(pl.lit(null))
+                    .otherwise(column)
+                    .alias(operation.column),
+            );
+        } else if (operation.kind === 'dropInvalid' && applyDrops) {
+            const validValue = castExpression(column, operation.targetType, false).isNotNull();
+            const valid = operation.dropNulls ? validValue : column.isNull().or(validValue);
+            current = current.filter(valid);
+        }
     }
+    return current;
+}
+
+async function validateCasts(lazy: LazyDataFrame, columns: ImportColumnMappingV1[], signal?: AbortSignal) {
+    const active = columns.filter(column => !column.ignored && column.targetType !== 'string');
+    if (active.length === 0) return;
+    if (signal?.aborted) throw abortError();
+    const invalidMasks = active.map(column => {
+        const value = pl.col(column.source);
+        return value.isNotNull().and(castExpression(value, column.targetType, false).isNull());
+    });
+    let invalid = invalidMasks[0];
+    for (const mask of invalidMasks.slice(1)) invalid = invalid.or(mask);
+    const invalidFrame = await lazy
+        .filter(invalid)
+        .select([pl.col(SOURCE_ROW_NUMBER_COLUMN), ...active.map(column => pl.col(column.source))])
+        .head(1)
+        .collect({ streaming: true });
+    const row = invalidFrame.toRecords()[0] as Record<string, unknown> | undefined;
+    if (!row) return;
+    for (const column of active) {
+        const value = row[column.source];
+        if (value !== null && value !== undefined && !canCast(String(value), column.targetType)) {
+            throw new ImportCastError(Number(row[SOURCE_ROW_NUMBER_COLUMN] ?? 1), column.source, column.targetType, String(value));
+        }
+    }
+}
+
+function finalExpressions(columns: ImportColumnMappingV1[], strict: boolean) {
+    return columns
+        .filter(column => !column.ignored)
+        .sort((left, right) => left.order - right.order)
+        .map(column => castExpression(pl.col(column.source), column.targetType, strict).alias(column.target));
 }
 
 function canCast(value: string, type: ImportColumnType): boolean {
@@ -102,7 +209,7 @@ function canCast(value: string, type: ImportColumnType): boolean {
             return false;
         }
     }
-    if (type === 'float64') return value.trim() !== '' && Number.isFinite(Number(value));
+    if (type === 'float64') return value !== '' && Number.isFinite(Number(value));
     if (type === 'date') return isDate(value);
     return !Number.isNaN(Date.parse(value));
 }
@@ -123,12 +230,26 @@ function polarsType(type: ImportColumnType): DataType {
     return pl.String;
 }
 
-function castExpression(expression: ReturnType<typeof pl.col>, type: ImportColumnType) {
+function castExpression(expression: ReturnType<typeof pl.col>, type: ImportColumnType, strict: boolean) {
     if (type === 'string') return expression;
     if (type === 'boolean') return expression.str.toLowerCase().eq(pl.lit('true'));
-    if (type === 'date') return expression.str.strptime(pl.Date, '%Y-%m-%d');
-    if (type === 'datetime') return expression.str.strptime(pl.Datetime('ms'));
-    return expression.cast(polarsType(type), true);
+    if (type === 'datetime') {
+        const spaced = pl
+            .when(expression.str.contains(/\.\d+$/))
+            .then(expression.str.strptime(pl.Datetime('ms'), '%Y-%m-%d %H:%M:%S%.f'))
+            .otherwise(expression.str.strptime(pl.Datetime('ms'), '%Y-%m-%d %H:%M:%S'));
+        return pl
+            .when(expression.str.contains(/^\d{4}-\d{2}-\d{2} /))
+            .then(spaced)
+            .otherwise(expression.cast(pl.Datetime('ms'), strict));
+    }
+    return expression.cast(polarsType(type), strict);
+}
+
+function previewValue(value: unknown, type: ImportColumnType): string | null {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return type === 'date' ? value.toISOString().slice(0, 10) : value.toISOString();
+    return String(value);
 }
 
 function abortError() {

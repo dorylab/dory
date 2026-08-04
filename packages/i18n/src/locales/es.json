@@ -3462,7 +3462,7 @@
             "Dismiss": "Cerrar"
         },
         "Step": "Paso {number}",
-        "Steps": { "Select": "Archivo", "Preview": "Vista previa", "Target": "Destino", "Mapping": "Asignación", "Options": "Opciones", "Execute": "Ejecutar" },
+        "Steps": { "Select": "Archivo", "Preview": "Vista previa", "Target": "Destino", "Mapping": "Asignación", "Clean": "Limpiar", "Options": "Opciones", "Execute": "Ejecutar" },
         "Common": { "Next": "Continuar", "Back": "Atrás" },
         "Select": {
             "Title": "Elige un CSV",
@@ -3494,6 +3494,15 @@
         },
         "Delimiters": { "Comma": "Coma", "Tab": "Tabulador", "Semicolon": "Punto y coma", "Pipe": "Barra vertical" },
         "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
+        "Quality": {
+            "IssueCount": "{count} problemas",
+            "Completeness": "{rate}% completo",
+            "DistinctSample": "{count} distintos en la muestra",
+            "EmptyRate": "{rate}% vacío",
+            "ApplyFix": "Aplicar corrección",
+            "FixAdded": "Paso de limpieza añadido",
+            "Issues": { "all_missing": "Todos los valores ausentes", "empty_string": "Cadenas vacías", "surrounding_whitespace": "Espacios adicionales", "leading_zero": "Ceros iniciales", "mixed_type": "Tipos mezclados" }
+        },
         "Target": {
             "Title": "Elige el destino",
             "Description": "Crea una tabla o asigna los datos a una tabla existente.",
@@ -3526,6 +3535,28 @@
             "Type": "Tipo de destino",
             "Ignore": "Omitir"
         },
+        "Clean": {
+            "Title": "Limpia los datos",
+            "Description": "Aplica operaciones ordenadas antes de la conversión final. La vista previa usa las primeras 100 filas.",
+            "Column": "Columna",
+            "SourceIssues": "{count} problemas de origen",
+            "NoOperations": "No hay operaciones de limpieza para esta columna.",
+            "Find": "Texto a buscar",
+            "Replacement": "Reemplazo",
+            "Preview": "Antes y después",
+            "SampleOnly": "Vista de muestra; la validación completa se ejecuta al importar.",
+            "Dropped": "{count} eliminadas",
+            "PreviewFailed": "Vista previa no disponible",
+            "InvalidType": "{column} no es un {type} válido",
+            "RequiredNull": "{column} es obligatorio",
+            "Row": "Fila de origen",
+            "Before": "Antes",
+            "After": "Después",
+            "Result": "Resultado",
+            "kept": "Conservada",
+            "dropped": "Eliminada",
+            "Operations": { "trim": "Recortar", "lowercase": "Minúsculas", "replace": "Reemplazar", "emptyToNull": "Vacío a NULL", "dropInvalid": "Eliminar filas no válidas" }
+        },
         "Options": {
             "Title": "Configura la escritura",
             "Description": "La importación es estricta y atómica. Cualquier error revierte toda la operación.",
@@ -3547,6 +3578,7 @@
             "Processed": "Filas escritas",
             "Pending": "Pendientes",
             "Inserted": "Insertadas",
+            "Filtered": "Filtradas",
             "Total": "Filas de origen",
             "PendingCommit": "Las filas están escritas pero aún esperan confirmación.",
             "Cancel": "Cancelar",
