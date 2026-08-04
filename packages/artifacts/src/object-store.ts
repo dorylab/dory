@@ -26,6 +26,7 @@ export type ObjectStore = {
     list(prefix: string): AsyncIterable<ObjectInfo>;
     deletePrefix(prefix: string): Promise<void>;
     stat(path: string): Promise<ObjectStat | null>;
+    localPath?(path: string): string | null;
 };
 
 export async function objectBodyToBuffer(body: ObjectStoreBody): Promise<Buffer> {

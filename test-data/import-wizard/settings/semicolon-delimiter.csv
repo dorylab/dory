@@ -1,0 +1,4 @@
+order_id;customer;amount;ordered_at
+1001;Alice;12.50;2026-08-01
+1002;"Bob; Incorporated";99.00;2026-08-02
+1003;张三;18.75;2026-08-03

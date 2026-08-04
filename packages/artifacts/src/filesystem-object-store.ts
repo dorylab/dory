@@ -63,6 +63,10 @@ export class FilesystemObjectStore implements ObjectStore {
         }
     }
 
+    localPath(objectPath: string): string {
+        return this.resolvePath(objectPath);
+    }
+
     private resolvePath(objectPath: string) {
         const resolved = path.resolve(this.rootDir, objectPath);
         const root = path.resolve(this.rootDir);

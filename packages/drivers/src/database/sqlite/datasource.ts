@@ -3,6 +3,7 @@ import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryRes
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { SqliteDialect } from './dialect';
+import { SqliteImportWriter } from './import-writer';
 import { createSqliteMetadataCapability, type SqliteMetadataAPI } from './capabilities/metadata';
 import { createSqliteTableInfoCapability } from './capabilities/table-info';
 import { executeSqliteQuery, executeSqliteQueryRowStream, openSqliteDatabase, pingSqlite } from './runtime';
@@ -21,6 +22,7 @@ export class SqliteDatasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new SqliteImportWriter(() => openSqliteDatabase(this.config));
     }
 
     protected async _init(): Promise<void> {

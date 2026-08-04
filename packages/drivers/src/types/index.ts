@@ -1,4 +1,5 @@
 import type { SchemaSnapshot, SchemaSnapshotInput } from '@dory/schema-compare';
+import type { DataWriter } from '@dory/import';
 
 import type { QueryInsightsFilters, QueryInsightsRow, QueryInsightsSummary, QueryTimelinePoint } from './monitoring';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from './table-info';
@@ -466,6 +467,7 @@ export type ConnectionCapabilities = {
     queryInsights?: QueryInsightsAPI;
     tableInfo?: GetTableInfoAPI;
     tableMutations?: TableMutationAPI;
+    dataWriter?: DataWriter;
     privileges?: Record<string, unknown>;
 };
 export type DriverCapabilities = ConnectionCapabilities;

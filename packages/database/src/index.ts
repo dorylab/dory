@@ -17,6 +17,7 @@ import { PostgresActionAuditRepository } from './postgres/impl/action-audit';
 import { PostgresWorksRepository } from './postgres/impl/works';
 import { PostgresResultSetsRepository } from './postgres/impl/result-sets';
 import { PostgresComparisonsRepository } from './postgres/impl/comparisons';
+import { PostgresImportRunsRepository } from './postgres/impl/import-runs';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -43,6 +44,7 @@ export type PostgresDBService = {
     works: PostgresWorksRepository;
     resultSets: PostgresResultSetsRepository;
     comparisons: PostgresComparisonsRepository;
+    importRuns: PostgresImportRunsRepository;
 };
 
 /**
@@ -115,6 +117,9 @@ export async function getDBService(): Promise<DBService> {
             const comparisonsRepo = new PostgresComparisonsRepository(resultSetsRepo);
             await comparisonsRepo.init();
 
+            const importRunsRepo = new PostgresImportRunsRepository();
+            await importRunsRepo.init();
+
             instance = {
                 tabState: tabStateRepo,
                 chat: chatRepo,
@@ -134,6 +139,7 @@ export async function getDBService(): Promise<DBService> {
                 works: worksRepo,
                 resultSets: resultSetsRepo,
                 comparisons: comparisonsRepo,
+                importRuns: importRunsRepo,
             };
             break;
         }

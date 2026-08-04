@@ -7,6 +7,7 @@ import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/dr
 import { createPostgresMetadataCapability, type PostgresMetadataAPI } from './capabilities/metadata';
 import { createPostgresTableInfoCapability } from './capabilities/table-info';
 import { PostgresDialect } from './dialect';
+import { PostgresImportWriter } from './import-writer';
 import { createPostgresPool, executePostgresCommand, executePostgresQuery, executePostgresQueryRowStream, pingPostgres, resolvePostgresPort } from './runtime';
 
 export class PostgresDatasource extends BaseConnection {
@@ -25,6 +26,7 @@ export class PostgresDatasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new PostgresImportWriter(database => this.resolvePool(database));
     }
 
     protected async _init(): Promise<void> {

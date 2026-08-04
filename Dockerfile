@@ -22,10 +22,12 @@ COPY packages/artifacts/package.json ./packages/artifacts/
 COPY packages/auth-core/package.json ./packages/auth-core/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/database/package.json ./packages/database/
+COPY packages/dataset/package.json ./packages/dataset/
 COPY packages/drivers/package.json ./packages/drivers/
 COPY packages/ee/package.json ./packages/ee/
 COPY packages/files/package.json ./packages/files/
 COPY packages/i18n/package.json ./packages/i18n/
+COPY packages/import/package.json ./packages/import/
 COPY packages/mcp/package.json ./packages/mcp/
 COPY packages/resultset/package.json ./packages/resultset/
 COPY packages/server-core/package.json ./packages/server-core/

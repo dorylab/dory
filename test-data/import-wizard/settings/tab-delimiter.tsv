@@ -1,0 +1,4 @@
+product_id	product_name	price	in_stock
+P-001	Keyboard	89.90	true
+P-002	Monitor stand	49.50	false
+P-003	USB-C hub	39.00	true

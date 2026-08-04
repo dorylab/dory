@@ -1,0 +1,1508 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowDownToLine, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronUp, Circle, Loader2, RefreshCw, Table2, Upload, XCircle } from 'lucide-react';
+import { useQueryStates } from 'nuqs';
+import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
+
+import { cn } from '@dory/web-utils';
+import { useConnections } from '@/app/(app)/[organization]/connections/hooks/use-connections';
+import { tableQueryKeys } from '@/app/(app)/[organization]/components/table-browser/components/table-queries';
+import { X_CONNECTION_ID_KEY } from '@/app/config/app';
+import { executeActionClient } from '@/lib/actions/client';
+import { importEntryParsers, serializeImportEntry } from '@/lib/client/import-entry-query';
+import { Alert, AlertDescription, AlertTitle } from '@/registry/new-york-v4/ui/alert';
+import { Badge } from '@/registry/new-york-v4/ui/badge';
+import { Button } from '@/registry/new-york-v4/ui/button';
+import { Checkbox } from '@/registry/new-york-v4/ui/checkbox';
+import { Input } from '@/registry/new-york-v4/ui/input';
+import { Label } from '@/registry/new-york-v4/ui/label';
+import { Progress } from '@/registry/new-york-v4/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
+import { Switch } from '@/registry/new-york-v4/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
+
+type ImportColumnType = 'string' | 'boolean' | 'int64' | 'float64' | 'date' | 'datetime';
+export type ImportRunStatus = 'draft' | 'uploading' | 'analyzing' | 'ready' | 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'commit_unknown';
+type Profile = {
+    rows: number;
+    columns: Array<{ name: string; detectedType: ImportColumnType; nullCount: number; nullRate: number; sampleValues: string[] }>;
+    preview: Array<Record<string, unknown>>;
+};
+type Mapping = { source: string; target: string; targetType: ImportColumnType; ignored: boolean; order: number };
+type Parsing = { delimiter: ',' | '\t' | ';' | '|'; hasHeader: boolean; encoding: string; quoteChar: string };
+type ImportRun = {
+    id: string;
+    connectionId: string | null;
+    status: ImportRunStatus;
+    phase: string;
+    sourceName: string | null;
+    sourceBytes: number | null;
+    parsingOptions: Parsing | null;
+    profile: Profile | null;
+    plan: ImportPlan | null;
+    progress: Record<string, unknown> | null;
+    processedRows: number;
+    pendingRows: number;
+    insertedRows: number;
+    batchCount: number;
+    errorCode: string | null;
+    errorMessage: string | null;
+};
+type Target = { mode: 'create' | 'existing'; database?: string; schema?: string; table: string };
+type MetadataOption = { label?: string; value?: string; name?: string; schema?: string };
+type SelectOption = { label: string; value: string };
+type TableSelectOption = SelectOption & { table: string; schema?: string };
+type TargetSchema = {
+    exists: boolean;
+    columns: Array<{ name: string; databaseType: string; importType: ImportColumnType; nullable: boolean; hasDefault: boolean }>;
+};
+type ImportPlan = {
+    version: 'dory.import-plan.v1';
+    parsing: Parsing;
+    target: Target;
+    columns: Mapping[];
+    mode: 'append' | 'replace';
+    batchSize: number;
+    transform: { version: 'dory.transform.v1'; operations: Array<Record<string, unknown>> };
+    sourceSchemaHash: string;
+};
+type WizardTranslator = ReturnType<typeof useTranslations>;
+type StepNavigation = { onBack: () => void; onContinue: () => void };
+type WizardStepId = 'select' | 'preview' | 'target' | 'mapping' | 'options' | 'execute';
+
+export type ImportWizardFixedTarget = {
+    database: string;
+    schema?: string;
+    table: string;
+};
+
+type ImportWizardProps = {
+    runId?: string;
+    maxFileBytes: number;
+    mode?: 'page' | 'table-modal';
+    fixedTarget?: ImportWizardFixedTarget;
+    onRunIdChange?: (runId: string) => void;
+    onFinish?: () => void;
+};
+
+const COLUMN_TYPES: ImportColumnType[] = ['string', 'boolean', 'int64', 'float64', 'date', 'datetime'];
+export const ACTIVE_IMPORT_RUN_STATUSES: ImportRunStatus[] = ['queued', 'running'];
+export const TERMINAL_IMPORT_RUN_STATUSES: ImportRunStatus[] = ['completed', 'failed', 'canceled', 'commit_unknown'];
+const WIZARD_TABLE_VIEWPORT_CLASS = 'h-[clamp(320px,48vh,480px)] overflow-hidden [&_[data-slot=table-container]]:h-full [&_[data-slot=table-container]]:overflow-auto';
+const WIZARD_FILL_TABLE_VIEWPORT_CLASS = 'min-h-0 flex-1 overflow-hidden [&_[data-slot=table-container]]:h-full [&_[data-slot=table-container]]:overflow-auto';
+const WIZARD_TABLE_HEADER_CLASS = 'sticky top-0 z-10 bg-background [&_tr]:bg-background';
+
+const PAGE_STEPS: WizardStepId[] = ['select', 'preview', 'target', 'mapping', 'options', 'execute'];
+const TABLE_MODAL_STEPS: WizardStepId[] = ['select', 'preview', 'mapping', 'options', 'execute'];
+
+export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, onRunIdChange, onFinish }: ImportWizardProps) {
+    const t = useTranslations('ImportWizard');
+    const router = useRouter();
+    const queryClient = useQueryClient();
+    const params = useParams<{ organization: string; connectionId?: string }>();
+    const organization = params.organization;
+    const routeConnectionId = params.connectionId;
+    const [entry] = useQueryStates(importEntryParsers);
+    const connections = useConnections();
+    const isTableModal = mode === 'table-modal';
+    const stepIds = isTableModal ? TABLE_MODAL_STEPS : PAGE_STEPS;
+    const [step, setStep] = useState<WizardStepId>('select');
+    const [furthestStepIndex, setFurthestStepIndex] = useState(0);
+    const [file, setFile] = useState<File | null>(null);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [preparationStage, setPreparationStage] = useState<'idle' | 'uploading' | 'analyzing'>('idle');
+    const [parsing, setParsing] = useState<Parsing | null>(null);
+    const [target, setTarget] = useState<Target>({
+        mode: fixedTarget || entry.table ? 'existing' : 'create',
+        database: fixedTarget?.database ?? entry.database ?? undefined,
+        schema: fixedTarget?.schema ?? entry.schema ?? undefined,
+        table: fixedTarget?.table ?? entry.table ?? '',
+    });
+    const [targetSchema, setTargetSchema] = useState<TargetSchema | null>(null);
+    const [mappings, setMappings] = useState<Mapping[]>([]);
+    const [writeMode, setWriteMode] = useState<'append' | 'replace'>('append');
+    const [batchSize, setBatchSize] = useState(1000);
+    const [replaceConfirmed, setReplaceConfirmed] = useState(false);
+    const hydratedRunRef = useRef<string | null>(null);
+
+    const runQuery = useQuery({
+        queryKey: ['import-run', runId],
+        queryFn: () => api<ImportRun>(`/api/import-runs/${encodeURIComponent(runId!)}`),
+        enabled: Boolean(runId),
+        refetchInterval: query => {
+            const status = query.state.data?.status;
+            return status && (ACTIVE_IMPORT_RUN_STATUSES.includes(status) || status === 'analyzing' || status === 'uploading') ? 1000 : false;
+        },
+    });
+    const run = runQuery.data;
+    const connectionId = routeConnectionId ?? run?.connectionId ?? entry.connection ?? '';
+    const selectedConnection = (connections.data ?? []).find(item => item.connection.id === connectionId)?.connection;
+    const currentStepIndex = stepIds.indexOf(step);
+    const targetLabel = [target.database, target.schema, target.table].filter(Boolean).join('.');
+    const canResumeSource = Boolean(run && parsing && (run.profile || run.phase === 'encoding_required'));
+
+    const getStepNumber = (stepId: WizardStepId) => stepIds.indexOf(stepId) + 1;
+
+    useEffect(() => {
+        if (currentStepIndex < 0) return;
+        setFurthestStepIndex(current => Math.max(current, currentStepIndex));
+    }, [currentStepIndex]);
+
+    useEffect(() => {
+        if (!run || hydratedRunRef.current === run.id) return;
+        hydratedRunRef.current = run.id;
+        if (run.parsingOptions && 'delimiter' in run.parsingOptions) setParsing(run.parsingOptions);
+        if (run.plan) {
+            setTarget(isTableModal && fixedTarget ? { mode: 'existing', ...fixedTarget } : run.plan.target);
+            setMappings(run.plan.columns);
+            setWriteMode(run.plan.mode);
+            setBatchSize(run.plan.batchSize);
+        } else if (run.profile) {
+            setMappings(defaultMappings(run.profile, null));
+        }
+        if (ACTIVE_IMPORT_RUN_STATUSES.includes(run.status) || TERMINAL_IMPORT_RUN_STATUSES.includes(run.status) || run.plan) setStep('execute');
+        else if (run.profile) setStep('preview');
+        else if (run.phase === 'encoding_required') setStep('preview');
+        else setStep('select');
+    }, [fixedTarget, isTableModal, run]);
+
+    useEffect(() => {
+        if (!isTableModal || !fixedTarget || run?.plan) return;
+        setTarget({ mode: 'existing', ...fixedTarget });
+    }, [fixedTarget, isTableModal, run?.plan]);
+
+    useEffect(() => {
+        const scopedConnectionId = run?.connectionId ?? routeConnectionId ?? entry.connection;
+        if (isTableModal || !scopedConnectionId || routeConnectionId === scopedConnectionId) return;
+        const destination = run
+            ? importRunPath(organization, scopedConnectionId, run.id)
+            : serializeImportEntry(importPath(organization, scopedConnectionId), {
+                  database: entry.database,
+                  schema: entry.schema,
+                  table: entry.table,
+              });
+        router.replace(destination);
+    }, [entry.connection, entry.database, entry.schema, entry.table, isTableModal, organization, routeConnectionId, router, run]);
+
+    const startMutation = useMutation({
+        mutationFn: async () => {
+            if (!file) throw new Error(t('Errors.FileRequired'));
+            if (!connectionId) throw new Error(t('Errors.ConnectionMissing'));
+            if (file.size > maxFileBytes) throw new Error(t('Errors.FileTooLarge', { limit: formatBytes(maxFileBytes) }));
+            setPreparationStage('uploading');
+            setUploadProgress(0);
+            const created = await api<ImportRun>('/api/import-runs', { method: 'POST', headers: connectionHeaders(connectionId) });
+            if (isTableModal) onRunIdChange?.(created.id);
+            await uploadFile(created.id, file, setUploadProgress);
+            setPreparationStage('analyzing');
+            try {
+                const analyzed = await api<ImportRun>(`/api/import-runs/${created.id}/analyze`, { method: 'POST', body: JSON.stringify({}) });
+                return { run: analyzed, encodingRequired: false };
+            } catch (error) {
+                if (!(error instanceof ImportApiError) || error.importCode !== 'IMPORT_ENCODING_REQUIRED') throw error;
+                const blocked = await api<ImportRun>(`/api/import-runs/${created.id}`);
+                return { run: blocked, encodingRequired: true };
+            }
+        },
+        onSuccess: result => {
+            const analyzed = result.run;
+            queryClient.setQueryData(['import-run', analyzed.id], analyzed);
+            setParsing(analyzed.parsingOptions);
+            setMappings(analyzed.profile ? defaultMappings(analyzed.profile, null) : []);
+            setStep('preview');
+            if (isTableModal) onRunIdChange?.(analyzed.id);
+            else router.replace(importRunPath(organization, connectionId, analyzed.id));
+            if (result.encodingRequired) toast.info(t('Preview.EncodingRequired'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.StartFailed')),
+        onSettled: () => setPreparationStage('idle'),
+    });
+
+    const analyzeMutation = useMutation({
+        mutationFn: () => api<ImportRun>(`/api/import-runs/${run!.id}/analyze`, { method: 'POST', body: JSON.stringify({ parsing }) }),
+        onSuccess: analyzed => {
+            queryClient.setQueryData(['import-run', analyzed.id], analyzed);
+            setParsing(analyzed.parsingOptions);
+            setMappings(defaultMappings(analyzed.profile!, null));
+            toast.success(t('Preview.Reanalyzed'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.AnalysisFailed')),
+    });
+
+    const inspectMutation = useMutation({
+        mutationFn: async () => {
+            const schema = await api<TargetSchema>(`/api/import-runs/${run!.id}`, {
+                method: 'PATCH',
+                headers: connectionHeaders(connectionId),
+                body: JSON.stringify({ action: 'inspect', target: normalizedTarget(target) }),
+            });
+            if (target.mode === 'existing' && !schema.exists) throw new Error(t('Errors.TargetMissing'));
+            if (target.mode === 'create' && schema.exists) throw new Error(t('Errors.TargetExists'));
+            return schema;
+        },
+        onSuccess: schema => {
+            setTargetSchema(schema);
+            setMappings(defaultMappings(run!.profile!, target.mode === 'existing' ? schema : null));
+            setStep('mapping');
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.TargetFailed')),
+    });
+
+    const savePlanMutation = useMutation({
+        mutationFn: () =>
+            api<{ run: ImportRun; target: TargetSchema; createSql: string | null }>(`/api/import-runs/${run!.id}`, {
+                method: 'PATCH',
+                headers: connectionHeaders(connectionId),
+                body: JSON.stringify({ plan: buildPlan() }),
+            }),
+        onSuccess: result => {
+            queryClient.setQueryData(['import-run', result.run.id], result.run);
+            setStep('execute');
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveFailed')),
+    });
+
+    const executeMutation = useMutation({
+        mutationFn: () => api<ImportRun>(`/api/import-runs/${run!.id}/execute`, { method: 'POST', headers: connectionHeaders(connectionId) }),
+        onSuccess: queued => {
+            queryClient.setQueryData(['import-run', queued.id], queued);
+            void queryClient.invalidateQueries({ queryKey: ['import-run', queued.id] });
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.ExecuteFailed')),
+    });
+
+    const cancelMutation = useMutation({
+        mutationFn: () => api<ImportRun>(`/api/import-runs/${run!.id}/cancel`, { method: 'POST' }),
+        onSuccess: canceled => queryClient.setQueryData(['import-run', canceled.id], canceled),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.CancelFailed')),
+    });
+
+    useEffect(() => {
+        if (run?.status !== 'completed') return;
+        const completedTarget = run.plan?.target ?? target;
+        const completedTableName = [completedTarget.schema, completedTarget.table].filter(Boolean).join('.');
+
+        void queryClient.invalidateQueries({ queryKey: ['explorer'] });
+        void queryClient.invalidateQueries({ queryKey: ['table-preview'] });
+        void queryClient.invalidateQueries({ queryKey: ['schema'] });
+        void queryClient.invalidateQueries({ queryKey: ['catalog-db-group'] });
+        void queryClient.invalidateQueries({ queryKey: ['schema-graph'] });
+        void queryClient.invalidateQueries({ queryKey: ['schema-graph-schemas'] });
+        if (connectionId && completedTarget.database && completedTableName) {
+            void queryClient.invalidateQueries({ queryKey: tableQueryKeys.properties(connectionId, completedTarget.database, completedTableName) });
+            void queryClient.invalidateQueries({ queryKey: tableQueryKeys.stats(connectionId, completedTarget.database, completedTableName) });
+        }
+    }, [connectionId, queryClient, run?.plan, run?.status, target]);
+
+    const stepLabels: Record<WizardStepId, string> = {
+        select: t('Steps.Select'),
+        preview: t('Steps.Preview'),
+        target: t('Steps.Target'),
+        mapping: t('Steps.Mapping'),
+        options: t('Steps.Options'),
+        execute: t('Steps.Execute'),
+    };
+    const profile = run?.profile;
+    const writtenRows = getWrittenRows(run);
+    const totalRows = profile?.rows ?? writtenRows;
+    const progressPercent = totalRows > 0 ? Math.min(100, (writtenRows / totalRows) * 100) : 0;
+
+    function buildPlan(): ImportPlan {
+        if (!run || !parsing) throw new Error(t('Errors.PlanIncomplete'));
+        const sourceSchemaHash = String(run.progress?.schemaHash ?? '');
+        if (!/^[a-f0-9]{64}$/.test(sourceSchemaHash)) throw new Error(t('Errors.PlanIncomplete'));
+        const operations: Array<Record<string, unknown>> = [];
+        for (const mapping of mappings) {
+            if (mapping.ignored) operations.push({ kind: 'ignore', column: mapping.source });
+            else {
+                if (mapping.source !== mapping.target) operations.push({ kind: 'rename', source: mapping.source, target: mapping.target });
+                operations.push({ kind: 'cast', column: mapping.target, targetType: mapping.targetType });
+            }
+        }
+        return {
+            version: 'dory.import-plan.v1',
+            parsing,
+            target: normalizedTarget(target),
+            columns: mappings,
+            mode: target.mode === 'create' ? 'append' : writeMode,
+            batchSize,
+            transform: { version: 'dory.transform.v1', operations },
+            sourceSchemaHash,
+        };
+    }
+
+    return (
+        <div className={cn('h-full min-h-0 overflow-auto lg:overflow-hidden', !isTableModal && 'bg-n8')}>
+            <main className={cn('grid min-h-full grid-cols-1 lg:h-full lg:min-h-0', isTableModal ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]')}>
+                <aside
+                    className={cn(
+                        'border-b border-border/70 px-5 py-7 lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-b-0',
+                        isTableModal ? 'lg:px-5 lg:py-6' : 'lg:px-6 lg:py-9',
+                    )}
+                >
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                        <ArrowDownToLine className="size-4 text-primary" />
+                        {t('Eyebrow')}
+                    </div>
+                    <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t('Title')}</h1>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('Description')}</p>
+                    {isTableModal ? (
+                        <div className="mt-5 border-y border-border/70 py-4">
+                            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t('Modal.Target')}</p>
+                            <p className="mt-1 break-all text-sm font-medium">{targetLabel}</p>
+                        </div>
+                    ) : null}
+                    <ol className="mt-7 grid grid-cols-3 gap-2 lg:grid-cols-1 lg:gap-1">
+                        {stepIds.map((stepId, index) => {
+                            const label = stepLabels[stepId];
+                            const number = index + 1;
+                            const active = step === stepId;
+                            const complete = furthestStepIndex > index || (stepId === 'execute' && run?.status === 'completed');
+                            return (
+                                <li key={stepId}>
+                                    <button
+                                        type="button"
+                                        disabled={index > furthestStepIndex || (index > 0 && !run)}
+                                        onClick={() => setStep(stepId)}
+                                        className={cn(
+                                            'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors lg:text-sm',
+                                            active ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                                            'disabled:pointer-events-none disabled:opacity-40',
+                                        )}
+                                    >
+                                        <span
+                                            className={cn(
+                                                'flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px]',
+                                                complete && 'border-primary bg-primary text-primary-foreground',
+                                                active && !complete && 'border-foreground',
+                                            )}
+                                        >
+                                            {complete ? <Check className="size-3" /> : number}
+                                        </span>
+                                        <span className="truncate">{label}</span>
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </aside>
+
+                <section className={cn('min-h-0 min-w-0 overflow-y-auto px-4 py-7 sm:px-5', isTableModal ? 'lg:px-6 lg:py-7' : 'lg:px-7 lg:py-10')}>
+                    <div className="min-h-full w-full lg:h-full lg:min-h-0">
+                        {step === 'select' && (!runId || run || startMutation.isPending) ? (
+                            <SelectFileStep
+                                t={t}
+                                stepNumber={getStepNumber('select')}
+                                file={file}
+                                run={run}
+                                stage={preparationStage !== 'idle' ? preparationStage : run?.status === 'uploading' || run?.status === 'analyzing' ? run.status : 'idle'}
+                                sourceLocked={Boolean(run?.sourceName)}
+                                onFile={setFile}
+                                uploadProgress={uploadProgress}
+                                maxFileBytes={maxFileBytes}
+                                pending={startMutation.isPending || run?.status === 'uploading' || run?.status === 'analyzing'}
+                                canContinue={canResumeSource || Boolean(file && connectionId && file.size <= maxFileBytes)}
+                                continueLabel={canResumeSource ? t('Common.Next') : t('Select.Analyze')}
+                                onContinue={() => (canResumeSource ? setStep('preview') : startMutation.mutate())}
+                            />
+                        ) : null}
+                        {step === 'preview' && profile && parsing ? (
+                            <PreviewStep
+                                t={t}
+                                stepNumber={getStepNumber('preview')}
+                                profile={profile}
+                                parsing={parsing}
+                                onParsing={setParsing}
+                                reanalyzing={analyzeMutation.isPending}
+                                onReanalyze={() => analyzeMutation.mutate()}
+                                continuePending={inspectMutation.isPending}
+                                onBack={() => setStep('select')}
+                                onContinue={() => (isTableModal ? inspectMutation.mutate() : setStep('target'))}
+                            />
+                        ) : null}
+                        {step === 'preview' && !profile && parsing ? (
+                            <EncodingSelectionStep
+                                t={t}
+                                stepNumber={getStepNumber('preview')}
+                                parsing={parsing}
+                                onParsing={setParsing}
+                                reanalyzing={analyzeMutation.isPending}
+                                onReanalyze={() => analyzeMutation.mutate()}
+                                onBack={() => setStep('select')}
+                            />
+                        ) : null}
+                        {step === 'target' && run && !isTableModal ? (
+                            <TargetStep
+                                t={t}
+                                stepNumber={getStepNumber('target')}
+                                target={target}
+                                onTarget={setTarget}
+                                connectionId={connectionId}
+                                connectionType={selectedConnection?.type ?? ''}
+                                connectionDatabase={selectedConnection?.database ?? undefined}
+                                pending={inspectMutation.isPending}
+                                onBack={() => setStep('preview')}
+                                onContinue={() => inspectMutation.mutate()}
+                            />
+                        ) : null}
+                        {step === 'mapping' && profile ? (
+                            <MappingStep
+                                t={t}
+                                stepNumber={getStepNumber('mapping')}
+                                mappings={mappings}
+                                onMappings={setMappings}
+                                targetMode={target.mode}
+                                targetSchema={targetSchema}
+                                onBack={() => setStep(isTableModal ? 'preview' : 'target')}
+                                onContinue={() => setStep('options')}
+                            />
+                        ) : null}
+                        {step === 'options' ? (
+                            <OptionsStep
+                                t={t}
+                                stepNumber={getStepNumber('options')}
+                                target={target}
+                                writeMode={writeMode}
+                                onWriteMode={(value: 'append' | 'replace') => {
+                                    setWriteMode(value);
+                                    setReplaceConfirmed(false);
+                                }}
+                                batchSize={batchSize}
+                                onBatchSize={setBatchSize}
+                                replaceConfirmed={replaceConfirmed}
+                                onReplaceConfirmed={setReplaceConfirmed}
+                                pending={savePlanMutation.isPending}
+                                onBack={() => setStep('mapping')}
+                                onContinue={() => savePlanMutation.mutate()}
+                            />
+                        ) : null}
+                        {step === 'execute' && run ? (
+                            <ExecuteStep
+                                t={t}
+                                stepNumber={getStepNumber('execute')}
+                                run={run}
+                                totalRows={totalRows}
+                                writtenRows={writtenRows}
+                                progressPercent={progressPercent}
+                                executePending={executeMutation.isPending}
+                                cancelPending={cancelMutation.isPending}
+                                onExecute={() => executeMutation.mutate()}
+                                onCancel={() => cancelMutation.mutate()}
+                                onBack={() => setStep('options')}
+                                allowTerminalDismiss={isTableModal}
+                                onFinish={onFinish ?? (() => router.replace(`/${encodeURIComponent(organization)}/connections`))}
+                            />
+                        ) : null}
+                        {runQuery.isLoading && !startMutation.isPending ? (
+                            <div className="flex min-h-80 items-center justify-center text-muted-foreground">
+                                <Loader2 className="mr-2 size-4 animate-spin" />
+                                {t('Loading')}
+                            </div>
+                        ) : null}
+                    </div>
+                </section>
+            </main>
+        </div>
+    );
+}
+
+function StepHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+    return (
+        <header className="mb-8 shrink-0">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{eyebrow}</p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
+        </header>
+    );
+}
+
+function StepActions({
+    back,
+    backLabel,
+    next,
+    nextLabel,
+    disabled,
+    pending,
+    secondary,
+}: {
+    back?: () => void;
+    backLabel?: string;
+    next: () => void;
+    nextLabel: string;
+    disabled?: boolean;
+    pending?: boolean;
+    secondary?: {
+        label: string;
+        onClick: () => void;
+        disabled?: boolean;
+        pending?: boolean;
+        icon?: ReactNode;
+    };
+}) {
+    return (
+        <div className="mt-8 flex shrink-0 items-center justify-between border-t pt-5">
+            {back ? (
+                <Button variant="ghost" onClick={back}>
+                    <ArrowLeft />
+                    {backLabel}
+                </Button>
+            ) : (
+                <span />
+            )}
+            <div className="flex items-center gap-2">
+                {secondary ? (
+                    <Button variant="outline" onClick={secondary.onClick} disabled={secondary.disabled || secondary.pending}>
+                        {secondary.pending ? <Loader2 className="animate-spin" /> : secondary.icon}
+                        {secondary.label}
+                    </Button>
+                ) : null}
+                <Button onClick={next} disabled={disabled || pending}>
+                    {pending ? <Loader2 className="animate-spin" /> : null}
+                    {nextLabel}
+                    <ArrowRight />
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+function SelectFileStep({
+    t,
+    stepNumber,
+    file,
+    run,
+    stage,
+    sourceLocked,
+    onFile,
+    uploadProgress,
+    maxFileBytes,
+    pending,
+    canContinue,
+    continueLabel,
+    onContinue,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    file: File | null;
+    run?: ImportRun;
+    stage: 'idle' | 'uploading' | 'analyzing';
+    sourceLocked: boolean;
+    onFile: (file: File | null) => void;
+    uploadProgress: number;
+    maxFileBytes: number;
+    pending: boolean;
+    canContinue: boolean;
+    continueLabel: string;
+    onContinue: () => void;
+}) {
+    const inputRef = useRef<HTMLInputElement | null>(null);
+    const displayName = file?.name ?? run?.sourceName;
+    const displaySize = file?.size ?? run?.sourceBytes;
+    const analyzing = stage === 'analyzing';
+
+    return (
+        <>
+            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Select.Title')} description={t('Select.Description')} />
+            <div className="grid gap-6">
+                <button
+                    type="button"
+                    disabled={pending || sourceLocked}
+                    onClick={() => inputRef.current?.click()}
+                    onDragOver={event => event.preventDefault()}
+                    onDrop={event => {
+                        event.preventDefault();
+                        if (pending || sourceLocked) return;
+                        onFile(event.dataTransfer.files[0] ?? null);
+                    }}
+                    className={cn(
+                        'group flex min-h-72 w-full flex-col items-center justify-center border border-dashed border-border bg-muted/20 px-8 text-center transition-colors hover:border-foreground/40 hover:bg-muted/35 disabled:hover:border-border disabled:hover:bg-muted/20',
+                        pending ? 'disabled:cursor-wait' : 'disabled:cursor-default',
+                    )}
+                >
+                    <span className="flex size-12 items-center justify-center rounded-full border bg-background">
+                        <Upload className="size-5" />
+                    </span>
+                    <span className="mt-4 text-base font-medium">{displayName ?? t('Select.Drop')}</span>
+                    <span className="mt-1 text-sm text-muted-foreground">
+                        {displaySize != null ? formatBytes(displaySize) : t('Select.Limit', { limit: formatBytes(maxFileBytes) })}
+                    </span>
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        disabled={pending || sourceLocked}
+                        accept=".csv,.tsv,text/csv,text/tab-separated-values"
+                        className="hidden"
+                        onChange={event => onFile(event.target.files?.[0] ?? null)}
+                    />
+                </button>
+                {pending ? (
+                    <div className="space-y-2">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                            <span className="flex items-center gap-2">
+                                {analyzing ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                                {analyzing ? t('Select.UploadCompleteAnalyzing') : t('Select.Uploading')}
+                            </span>
+                            <span>{analyzing ? 100 : uploadProgress}%</span>
+                        </div>
+                        <Progress value={analyzing ? 100 : uploadProgress} />
+                    </div>
+                ) : null}
+            </div>
+            <StepActions next={onContinue} nextLabel={continueLabel} disabled={!canContinue} pending={pending} />
+        </>
+    );
+}
+
+function PreviewStep({
+    t,
+    stepNumber,
+    profile,
+    parsing,
+    onParsing,
+    reanalyzing,
+    continuePending,
+    onReanalyze,
+    onBack,
+    onContinue,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    profile: Profile;
+    parsing: Parsing;
+    onParsing: (parsing: Parsing) => void;
+    reanalyzing: boolean;
+    continuePending: boolean;
+    onReanalyze: () => void;
+} & StepNavigation) {
+    return (
+        <div className="flex min-h-full flex-col xl:h-full xl:min-h-0">
+            <StepHeader
+                eyebrow={t('Step', { number: stepNumber })}
+                title={t('Preview.Title')}
+                description={t('Preview.Description', { rows: profile.rows, columns: profile.columns.length })}
+            />
+            <div className="grid gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="flex h-[clamp(320px,48vh,480px)] min-w-0 flex-col border xl:h-auto xl:min-h-0">
+                    <div className="flex items-center justify-between border-b px-4 py-3">
+                        <span className="text-sm font-medium">{t('Preview.Rows')}</span>
+                        <Badge variant="secondary">100</Badge>
+                    </div>
+                    <div className={WIZARD_FILL_TABLE_VIEWPORT_CLASS}>
+                        <Table>
+                            <TableHeader className={WIZARD_TABLE_HEADER_CLASS}>
+                                <TableRow>
+                                    {profile.columns.map(column => (
+                                        <TableHead key={column.name} className="whitespace-nowrap">
+                                            {column.name}
+                                        </TableHead>
+                                    ))}
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {profile.preview.map((row, index) => (
+                                    <TableRow key={index}>
+                                        {profile.columns.map(column => (
+                                            <TableCell key={column.name} className="max-w-64 truncate whitespace-nowrap font-mono text-xs">
+                                                {row[column.name] === null ? <span className="text-muted-foreground">NULL</span> : String(row[column.name] ?? '')}
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </div>
+                <div className="grid h-[clamp(480px,65vh,640px)] grid-rows-[minmax(0,1fr)_auto] gap-6 xl:h-auto xl:min-h-0">
+                    <section className="flex min-h-0 flex-col">
+                        <h3 className="text-sm font-medium">{t('Preview.Schema')}</h3>
+                        <div className="mt-3 min-h-0 flex-1 divide-y overflow-y-auto border-y">
+                            {profile.columns.map(column => (
+                                <div key={column.name} className="py-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="truncate text-sm">{column.name}</span>
+                                        <Badge variant="outline">{t(`Types.${column.detectedType}`)}</Badge>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">{t('Preview.NullRate', { rate: (column.nullRate * 100).toFixed(1) })}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                    <section className="shrink-0 space-y-3">
+                        <h3 className="text-sm font-medium">{t('Preview.Parsing')}</h3>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="min-w-0 space-y-2">
+                                <Label>{t('Preview.Delimiter')}</Label>
+                                <Select value={parsing.delimiter} onValueChange={(value: Parsing['delimiter']) => onParsing({ ...parsing, delimiter: value })}>
+                                    <SelectTrigger className="w-full min-w-0">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value=",">{t('Delimiters.Comma')}</SelectItem>
+                                        <SelectItem value="\t">{t('Delimiters.Tab')}</SelectItem>
+                                        <SelectItem value=";">{t('Delimiters.Semicolon')}</SelectItem>
+                                        <SelectItem value="|">{t('Delimiters.Pipe')}</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="min-w-0 space-y-2">
+                                <Label>{t('Preview.Encoding')}</Label>
+                                <Select value={parsing.encoding} onValueChange={(value: string) => onParsing({ ...parsing, encoding: value })}>
+                                    <SelectTrigger className="w-full min-w-0">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {['utf8', 'utf16le', 'utf16be', 'gb18030', 'big5', 'shift_jis', 'windows1252'].map(value => (
+                                            <SelectItem key={value} value={value}>
+                                                {value}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <Label>{t('Preview.Header')}</Label>
+                            <Switch checked={parsing.hasHeader} onCheckedChange={(value: boolean) => onParsing({ ...parsing, hasHeader: value })} />
+                        </div>
+                    </section>
+                </div>
+            </div>
+            <StepActions
+                back={onBack}
+                backLabel={t('Common.Back')}
+                next={onContinue}
+                nextLabel={t('Common.Next')}
+                disabled={reanalyzing}
+                pending={continuePending}
+                secondary={{
+                    label: t('Preview.Reanalyze'),
+                    onClick: onReanalyze,
+                    disabled: continuePending,
+                    pending: reanalyzing,
+                    icon: <RefreshCw />,
+                }}
+            />
+        </div>
+    );
+}
+
+function EncodingSelectionStep({
+    t,
+    stepNumber,
+    parsing,
+    onParsing,
+    reanalyzing,
+    onReanalyze,
+    onBack,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    parsing: Parsing;
+    onParsing: (parsing: Parsing) => void;
+    reanalyzing: boolean;
+    onReanalyze: () => void;
+    onBack: () => void;
+}) {
+    return (
+        <>
+            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Preview.EncodingTitle')} description={t('Preview.EncodingDescription')} />
+            <div className="max-w-md space-y-5">
+                <div className="space-y-2">
+                    <Label>{t('Preview.Encoding')}</Label>
+                    <Select value={parsing.encoding} onValueChange={(value: string) => onParsing({ ...parsing, encoding: value })}>
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {['utf8', 'utf16le', 'utf16be', 'gb18030', 'big5', 'shift_jis', 'windows1252'].map(value => (
+                                <SelectItem key={value} value={value}>
+                                    {value}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Alert>
+                    <RefreshCw />
+                    <AlertTitle>{t('Preview.EncodingRequired')}</AlertTitle>
+                    <AlertDescription>{t('Preview.EncodingHelp')}</AlertDescription>
+                </Alert>
+            </div>
+            <StepActions back={onBack} backLabel={t('Common.Back')} next={onReanalyze} nextLabel={t('Preview.Reanalyze')} pending={reanalyzing} />
+        </>
+    );
+}
+
+function TargetStep({
+    t,
+    stepNumber,
+    target,
+    onTarget,
+    connectionId,
+    connectionType,
+    connectionDatabase,
+    pending,
+    onBack,
+    onContinue,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    target: Target;
+    onTarget: (target: Target) => void;
+    connectionId: string;
+    connectionType: string;
+    connectionDatabase?: string;
+    pending: boolean;
+} & StepNavigation) {
+    const databasesQuery = useQuery({
+        queryKey: ['import-target-metadata', 'databases', connectionId],
+        queryFn: ({ signal }) => executeActionClient<{ databases: MetadataOption[] }>('schema.listDatabases', { connectionId }, { currentConnectionId: connectionId, signal }),
+        enabled: Boolean(connectionId),
+        staleTime: 5 * 60_000,
+    });
+    const databaseOptions = useMemo(() => normalizeSelectOptions(databasesQuery.data?.databases), [databasesQuery.data?.databases]);
+    const selectedDatabase = target.database?.trim() ?? '';
+    const supportsSchemas = connectionType !== 'sqlite';
+
+    const schemasQuery = useQuery({
+        queryKey: ['import-target-metadata', 'schemas', connectionId, selectedDatabase],
+        queryFn: ({ signal }) =>
+            executeActionClient<MetadataOption[]>('schema.listSchemas', { connectionId, database: selectedDatabase }, { currentConnectionId: connectionId, signal }),
+        enabled: Boolean(connectionId && selectedDatabase && supportsSchemas),
+        staleTime: 5 * 60_000,
+    });
+    const schemaOptions = useMemo(() => normalizeSelectOptions(schemasQuery.data), [schemasQuery.data]);
+
+    const tablesQuery = useQuery({
+        queryKey: ['import-target-metadata', 'tables', connectionId, selectedDatabase],
+        queryFn: ({ signal }) =>
+            executeActionClient<{ tables: MetadataOption[] }>('schema.listTables', { connectionId, database: selectedDatabase }, { currentConnectionId: connectionId, signal }),
+        enabled: Boolean(connectionId && selectedDatabase && target.mode === 'existing'),
+        staleTime: 60_000,
+    });
+    const allTableOptions = useMemo(() => normalizeTableOptions(tablesQuery.data?.tables, supportsSchemas), [supportsSchemas, tablesQuery.data?.tables]);
+    const tableOptions = useMemo(
+        () => (supportsSchemas && target.schema ? allTableOptions.filter(option => option.schema === target.schema) : allTableOptions),
+        [allTableOptions, supportsSchemas, target.schema],
+    );
+    const selectedTableValue = tableOptions.find(option => option.table === target.table && (!supportsSchemas || option.schema === target.schema))?.value ?? '';
+
+    useEffect(() => {
+        if (!databaseOptions.length) return;
+        if (selectedDatabase && databaseOptions.some(option => option.value === selectedDatabase)) return;
+
+        const preferred = databaseOptions.find(option => option.value === connectionDatabase) ?? databaseOptions[0];
+        if (!preferred) return;
+        onTarget({
+            ...target,
+            database: preferred.value,
+            schema: supportsSchemas ? target.schema : undefined,
+            table: target.mode === 'existing' ? '' : target.table,
+        });
+    }, [connectionDatabase, databaseOptions, onTarget, selectedDatabase, supportsSchemas, target]);
+
+    useEffect(() => {
+        if (!supportsSchemas || !selectedDatabase || !schemaOptions.length) return;
+        if (target.schema && schemaOptions.some(option => option.value === target.schema)) return;
+
+        const preferred = schemaOptions.find(option => option.value === 'public') ?? schemaOptions[0];
+        if (!preferred) return;
+        onTarget({ ...target, schema: preferred.value, table: target.mode === 'existing' ? '' : target.table });
+    }, [onTarget, schemaOptions, selectedDatabase, supportsSchemas, target]);
+
+    const metadataError = databasesQuery.error ?? (supportsSchemas ? schemasQuery.error : null) ?? (target.mode === 'existing' ? tablesQuery.error : null);
+    const targetReady = Boolean(
+        selectedDatabase &&
+        (!supportsSchemas || target.schema) &&
+        target.table.trim() &&
+        !databasesQuery.isPending &&
+        (!supportsSchemas || !schemasQuery.isPending) &&
+        (target.mode !== 'existing' || !tablesQuery.isPending),
+    );
+
+    return (
+        <>
+            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Target.Title')} description={t('Target.Description')} />
+            <div className="grid gap-4 sm:grid-cols-2">
+                {(['create', 'existing'] as const).map(mode => (
+                    <button
+                        key={mode}
+                        type="button"
+                        onClick={() => {
+                            if (mode !== target.mode) onTarget({ ...target, mode, table: '' });
+                        }}
+                        className={cn(
+                            'flex min-h-28 items-start gap-3 border p-4 text-left transition-colors',
+                            target.mode === mode ? 'border-primary bg-primary/5' : 'hover:bg-muted/30',
+                        )}
+                    >
+                        <span
+                            className={cn(
+                                'mt-0.5 flex size-5 items-center justify-center rounded-full border',
+                                target.mode === mode && 'border-primary bg-primary text-primary-foreground',
+                            )}
+                        >
+                            {target.mode === mode ? <Check className="size-3" /> : null}
+                        </span>
+                        <span>
+                            <span className="block font-medium">{t(`Target.${mode}.Title`)}</span>
+                            <span className="mt-1 block text-sm leading-5 text-muted-foreground">{t(`Target.${mode}.Description`)}</span>
+                        </span>
+                    </button>
+                ))}
+            </div>
+            <div className="mt-7 grid gap-5 sm:grid-cols-2">
+                <div className="space-y-2">
+                    <Label htmlFor="import-target-database">{t('Target.Database')}</Label>
+                    <Select
+                        value={selectedDatabase}
+                        onValueChange={database =>
+                            onTarget({
+                                ...target,
+                                database,
+                                schema: supportsSchemas ? undefined : target.schema,
+                                table: target.mode === 'existing' ? '' : target.table,
+                            })
+                        }
+                        disabled={pending || databasesQuery.isPending || !databaseOptions.length}
+                    >
+                        <SelectTrigger id="import-target-database" className="w-full">
+                            <SelectValue placeholder={databasesQuery.isPending ? t('Target.DatabaseLoading') : t('Target.DatabaseSelect')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {databaseOptions.length ? (
+                                databaseOptions.map(option => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </SelectItem>
+                                ))
+                            ) : (
+                                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                    {databasesQuery.isPending ? t('Target.DatabaseLoading') : t('Target.DatabaseEmpty')}
+                                </div>
+                            )}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {supportsSchemas ? (
+                    <div className="space-y-2">
+                        <Label htmlFor="import-target-schema">{t('Target.Schema')}</Label>
+                        <Select
+                            value={target.schema ?? ''}
+                            onValueChange={schema => onTarget({ ...target, schema, table: target.mode === 'existing' ? '' : target.table })}
+                            disabled={pending || !selectedDatabase || schemasQuery.isPending || !schemaOptions.length}
+                        >
+                            <SelectTrigger id="import-target-schema" className="w-full">
+                                <SelectValue placeholder={schemasQuery.isPending ? t('Target.SchemaLoading') : t('Target.SchemaSelect')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {schemaOptions.length ? (
+                                    schemaOptions.map(option => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))
+                                ) : (
+                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">{schemasQuery.isPending ? t('Target.SchemaLoading') : t('Target.SchemaEmpty')}</div>
+                                )}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                ) : null}
+                <div className="space-y-2 sm:col-span-2">
+                    {target.mode === 'existing' ? (
+                        <>
+                            <Label htmlFor="import-target-table">{t('Target.Table')}</Label>
+                            <Select
+                                value={selectedTableValue}
+                                onValueChange={value => {
+                                    const option = tableOptions.find(candidate => candidate.value === value);
+                                    if (option) onTarget({ ...target, table: option.table, schema: option.schema ?? target.schema });
+                                }}
+                                disabled={pending || !selectedDatabase || (supportsSchemas && !target.schema) || tablesQuery.isPending || !tableOptions.length}
+                            >
+                                <SelectTrigger id="import-target-table" className="w-full">
+                                    <SelectValue placeholder={tablesQuery.isPending ? t('Target.TableLoading') : t('Target.TableSelect')} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {tableOptions.length ? (
+                                        tableOptions.map(option => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <div className="px-2 py-1.5 text-sm text-muted-foreground">{tablesQuery.isPending ? t('Target.TableLoading') : t('Target.TableEmpty')}</div>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </>
+                    ) : (
+                        <>
+                            <Label htmlFor="import-target-new-table">{t('Target.NewTableName')}</Label>
+                            <Input
+                                id="import-target-new-table"
+                                value={target.table}
+                                onChange={event => onTarget({ ...target, table: event.target.value })}
+                                placeholder={t('Target.TablePlaceholder')}
+                            />
+                        </>
+                    )}
+                </div>
+                {metadataError ? <p className="text-sm text-destructive sm:col-span-2">{t('Target.MetadataError')}</p> : null}
+            </div>
+            <StepActions back={onBack} backLabel={t('Common.Back')} next={onContinue} nextLabel={t('Target.Inspect')} disabled={!targetReady} pending={pending} />
+        </>
+    );
+}
+
+function MappingStep({
+    t,
+    stepNumber,
+    mappings,
+    onMappings,
+    targetMode,
+    targetSchema,
+    onBack,
+    onContinue,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    mappings: Mapping[];
+    onMappings: (mappings: Mapping[]) => void;
+    targetMode: Target['mode'];
+    targetSchema: TargetSchema | null;
+} & StepNavigation) {
+    const update = (index: number, patch: Partial<Mapping>) => onMappings(mappings.map((mapping: Mapping, item: number) => (item === index ? { ...mapping, ...patch } : mapping)));
+    const move = (index: number, direction: -1 | 1) => {
+        const next = [...mappings];
+        const destination = index + direction;
+        if (destination < 0 || destination >= next.length) return;
+        [next[index], next[destination]] = [next[destination], next[index]];
+        onMappings(next.map((mapping, order) => ({ ...mapping, order })));
+    };
+    return (
+        <>
+            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Mapping.Title')} description={t('Mapping.Description')} />
+            <div className={cn('border', WIZARD_TABLE_VIEWPORT_CLASS)}>
+                <Table>
+                    <TableHeader className={WIZARD_TABLE_HEADER_CLASS}>
+                        <TableRow>
+                            <TableHead className="w-20">{t('Mapping.Order')}</TableHead>
+                            <TableHead>{t('Mapping.Source')}</TableHead>
+                            <TableHead>{t('Mapping.Target')}</TableHead>
+                            <TableHead>{t('Mapping.Type')}</TableHead>
+                            <TableHead className="w-24">{t('Mapping.Ignore')}</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {mappings.map((mapping: Mapping, index: number) => (
+                            <TableRow key={mapping.source} className={mapping.ignored ? 'opacity-50' : undefined}>
+                                <TableCell>
+                                    <div className="flex">
+                                        <Button size="icon-xs" variant="ghost" onClick={() => move(index, -1)} disabled={index === 0}>
+                                            <ChevronUp />
+                                        </Button>
+                                        <Button size="icon-xs" variant="ghost" onClick={() => move(index, 1)} disabled={index === mappings.length - 1}>
+                                            <ChevronDown />
+                                        </Button>
+                                    </div>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">{mapping.source}</TableCell>
+                                <TableCell>
+                                    {targetMode === 'existing' ? (
+                                        <Select
+                                            value={mapping.target}
+                                            onValueChange={value => {
+                                                const column = targetSchema?.columns.find(item => item.name === value);
+                                                update(index, { target: value, targetType: column?.importType ?? mapping.targetType, ignored: false });
+                                            }}
+                                        >
+                                            <SelectTrigger className="min-w-44">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {targetSchema?.columns.map(column => (
+                                                    <SelectItem key={column.name} value={column.name}>
+                                                        {column.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Input value={mapping.target} onChange={event => update(index, { target: event.target.value })} />
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    {targetMode === 'existing' ? (
+                                        <span className="text-sm text-muted-foreground">
+                                            {targetSchema?.columns.find(column => column.name === mapping.target)?.databaseType ?? '—'}
+                                        </span>
+                                    ) : (
+                                        <Select value={mapping.targetType} onValueChange={(value: ImportColumnType) => update(index, { targetType: value })}>
+                                            <SelectTrigger className="min-w-36">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {COLUMN_TYPES.map(type => (
+                                                    <SelectItem key={type} value={type}>
+                                                        {t(`Types.${type}`)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </TableCell>
+                                <TableCell>
+                                    <Checkbox checked={mapping.ignored} onCheckedChange={value => update(index, { ignored: Boolean(value) })} aria-label={t('Mapping.Ignore')} />
+                                </TableCell>
+                            </TableRow>
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+            <StepActions
+                back={onBack}
+                backLabel={t('Common.Back')}
+                next={onContinue}
+                nextLabel={t('Common.Next')}
+                disabled={mappings.every((mapping: Mapping) => mapping.ignored) || mappings.some((mapping: Mapping) => !mapping.ignored && !mapping.target.trim())}
+            />
+        </>
+    );
+}
+
+function OptionsStep({
+    t,
+    stepNumber,
+    target,
+    writeMode,
+    onWriteMode,
+    batchSize,
+    onBatchSize,
+    replaceConfirmed,
+    onReplaceConfirmed,
+    pending,
+    onBack,
+    onContinue,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    target: Target;
+    writeMode: 'append' | 'replace';
+    onWriteMode: (mode: 'append' | 'replace') => void;
+    batchSize: number;
+    onBatchSize: (size: number) => void;
+    replaceConfirmed: boolean;
+    onReplaceConfirmed: (confirmed: boolean) => void;
+    pending: boolean;
+} & StepNavigation) {
+    return (
+        <>
+            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Options.Title')} description={t('Options.Description')} />
+            {target.mode === 'existing' ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                    {(['append', 'replace'] as const).map(mode => (
+                        <button
+                            key={mode}
+                            type="button"
+                            onClick={() => onWriteMode(mode)}
+                            className={cn('border p-4 text-left', writeMode === mode ? 'border-primary bg-primary/5' : 'hover:bg-muted/30')}
+                        >
+                            <span className="font-medium">{t(`Options.${mode}.Title`)}</span>
+                            <span className="mt-1 block text-sm text-muted-foreground">{t(`Options.${mode}.Description`)}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : (
+                <Alert>
+                    <Table2 />
+                    <AlertTitle>{t('Options.CreateMode')}</AlertTitle>
+                    <AlertDescription>{t('Options.CreateModeDescription')}</AlertDescription>
+                </Alert>
+            )}
+            <div className="mt-7 max-w-sm space-y-2">
+                <Label>{t('Options.Batch')}</Label>
+                <Input type="number" min={1} max={100000} value={batchSize} onChange={event => onBatchSize(Math.max(1, Math.min(100000, Number(event.target.value) || 1)))} />
+                <p className="text-xs text-muted-foreground">{t('Options.BatchDescription')}</p>
+            </div>
+            {target.mode === 'existing' && writeMode === 'replace' ? (
+                <Alert variant="destructive" className="mt-7">
+                    <XCircle />
+                    <AlertTitle>{t('Options.ReplaceWarning', { table: target.table })}</AlertTitle>
+                    <AlertDescription>
+                        <label className="mt-3 flex items-center gap-2 text-foreground">
+                            <Checkbox checked={replaceConfirmed} onCheckedChange={value => onReplaceConfirmed(Boolean(value))} />
+                            {t('Options.ReplaceConfirm', { table: target.table })}
+                        </label>
+                    </AlertDescription>
+                </Alert>
+            ) : null}
+            <StepActions
+                back={onBack}
+                backLabel={t('Common.Back')}
+                next={onContinue}
+                nextLabel={t('Options.Review')}
+                disabled={target.mode === 'existing' && writeMode === 'replace' && !replaceConfirmed}
+                pending={pending}
+            />
+        </>
+    );
+}
+
+function ExecuteStep({
+    t,
+    stepNumber,
+    run,
+    totalRows,
+    writtenRows,
+    progressPercent,
+    executePending,
+    cancelPending,
+    onExecute,
+    onCancel,
+    onBack,
+    onFinish,
+    allowTerminalDismiss,
+}: {
+    t: WizardTranslator;
+    stepNumber: number;
+    run: ImportRun;
+    totalRows: number;
+    writtenRows: number;
+    progressPercent: number;
+    executePending: boolean;
+    cancelPending: boolean;
+    onExecute: () => void;
+    onCancel: () => void;
+    onBack: () => void;
+    onFinish: () => void;
+    allowTerminalDismiss: boolean;
+}) {
+    const active = ACTIVE_IMPORT_RUN_STATUSES.includes(run.status);
+    const terminal = TERMINAL_IMPORT_RUN_STATUSES.includes(run.status);
+    const completed = run.status === 'completed';
+    return (
+        <>
+            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Execute.Title')} description={t('Execute.Description')} />
+            <div className="border">
+                <div className="flex items-center gap-3 border-b px-5 py-4">
+                    {completed ? (
+                        <CheckCircle2 className="size-5 text-emerald-600" />
+                    ) : active ? (
+                        <Loader2 className="size-5 animate-spin text-primary" />
+                    ) : run.status === 'failed' || run.status === 'commit_unknown' ? (
+                        <XCircle className="size-5 text-destructive" />
+                    ) : (
+                        <Circle className="size-5 text-muted-foreground" />
+                    )}
+                    <div>
+                        <p className="font-medium">{t(`Status.${run.status}`)}</p>
+                        <p className="text-xs text-muted-foreground">{t('Execute.Phase', { phase: run.phase })}</p>
+                    </div>
+                    <Badge className="ml-auto" variant={completed ? 'default' : 'secondary'}>
+                        {run.batchCount} {t('Execute.Batches')}
+                    </Badge>
+                </div>
+                <div className="space-y-5 p-5">
+                    <Progress value={completed ? 100 : progressPercent} />
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <Metric label={t('Execute.Processed')} value={formatNumber(writtenRows)} />
+                        <Metric
+                            label={run.pendingRows > 0 ? t('Execute.Pending') : t('Execute.Inserted')}
+                            value={formatNumber(run.pendingRows > 0 ? run.pendingRows : run.insertedRows)}
+                        />
+                        <Metric label={t('Execute.Total')} value={formatNumber(totalRows)} />
+                    </div>
+                    {run.pendingRows > 0 ? <p className="text-xs text-amber-700 dark:text-amber-400">{t('Execute.PendingCommit')}</p> : null}
+                    {run.errorMessage ? (
+                        <Alert variant="destructive">
+                            <XCircle />
+                            <AlertTitle>{run.errorCode ?? t('Errors.Unknown')}</AlertTitle>
+                            <AlertDescription>{run.errorMessage}</AlertDescription>
+                        </Alert>
+                    ) : null}
+                </div>
+            </div>
+            <div className="mt-8 flex items-center justify-between border-t pt-5">
+                {!completed ? (
+                    <Button variant="ghost" onClick={onBack} disabled={active}>
+                        <ArrowLeft />
+                        {t('Common.Back')}
+                    </Button>
+                ) : null}
+                <div className="ml-auto flex gap-2">
+                    {completed ? (
+                        <Button onClick={onFinish}>
+                            {t('Execute.Finish')}
+                            <ArrowRight />
+                        </Button>
+                    ) : null}
+                    {!completed && terminal && allowTerminalDismiss ? (
+                        <Button variant="outline" onClick={onFinish}>
+                            {t('Modal.Dismiss')}
+                        </Button>
+                    ) : null}
+                    {active ? (
+                        <Button variant="outline" onClick={onCancel} disabled={cancelPending}>
+                            {cancelPending ? <Loader2 className="animate-spin" /> : null}
+                            {t('Execute.Cancel')}
+                        </Button>
+                    ) : null}
+                    {!active && !terminal ? (
+                        <Button onClick={onExecute} disabled={executePending}>
+                            {executePending ? <Loader2 className="animate-spin" /> : <ArrowDownToLine />}
+                            {t('Execute.Start')}
+                        </Button>
+                    ) : null}
+                </div>
+            </div>
+        </>
+    );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
+        </div>
+    );
+}
+
+function normalizeSelectOptions(options?: MetadataOption[]): SelectOption[] {
+    const normalized = new Map<string, SelectOption>();
+    for (const option of options ?? []) {
+        const value = String(option.value ?? option.name ?? option.label ?? '').trim();
+        if (!value || normalized.has(value)) continue;
+        normalized.set(value, { value, label: String(option.label ?? option.name ?? option.value ?? value) });
+    }
+    return [...normalized.values()];
+}
+
+function normalizeTableOptions(options: MetadataOption[] | undefined, supportsSchemas: boolean): TableSelectOption[] {
+    const normalized = new Map<string, TableSelectOption>();
+    for (const option of options ?? []) {
+        const rawValue = String(option.value ?? option.name ?? option.label ?? '').trim();
+        if (!rawValue) continue;
+
+        let schema = option.schema?.trim() || undefined;
+        let table = rawValue;
+        if (supportsSchemas) {
+            const separator = rawValue.lastIndexOf('.');
+            if (separator > 0) {
+                schema ??= rawValue.slice(0, separator);
+                table = rawValue.slice(separator + 1);
+            } else {
+                schema ??= 'public';
+            }
+        }
+
+        const value = supportsSchemas ? `${schema}.${table}` : table;
+        if (!table || normalized.has(value)) continue;
+        normalized.set(value, { value, table, schema, label: String(option.label ?? table) });
+    }
+    return [...normalized.values()];
+}
+
+function normalizedTarget(target: Target): Target {
+    return {
+        mode: target.mode,
+        table: target.table.trim(),
+        ...(target.database?.trim() ? { database: target.database.trim() } : {}),
+        ...(target.schema?.trim() ? { schema: target.schema.trim() } : {}),
+    };
+}
+
+function defaultMappings(profile: Profile, target: TargetSchema | null): Mapping[] {
+    const exact = new Map(target?.columns.map(column => [column.name, column]) ?? []);
+    const insensitive = new Map<string, TargetSchema['columns']>();
+    for (const column of target?.columns ?? []) {
+        const key = column.name.toLocaleLowerCase();
+        insensitive.set(key, [...(insensitive.get(key) ?? []), column]);
+    }
+    return profile.columns.map((column, order) => {
+        const exactMatch = exact.get(column.name);
+        const candidates = insensitive.get(column.name.toLocaleLowerCase()) ?? [];
+        const match = exactMatch ?? (candidates.length === 1 ? candidates[0] : undefined);
+        return { source: column.name, target: match?.name ?? column.name, targetType: match?.importType ?? column.detectedType, ignored: Boolean(target && !match), order };
+    });
+}
+
+function connectionHeaders(connectionId: string) {
+    return { 'Content-Type': 'application/json', [X_CONNECTION_ID_KEY]: connectionId };
+}
+
+function importPath(organization: string, connectionId: string) {
+    return `/${encodeURIComponent(organization)}/${encodeURIComponent(connectionId)}/import`;
+}
+
+function importRunPath(organization: string, connectionId: string, runId: string) {
+    return `${importPath(organization, connectionId)}/${encodeURIComponent(runId)}`;
+}
+
+async function api<T>(url: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(url, { ...init, headers: { ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers } });
+    const payload = (await response.json().catch(() => null)) as { data?: T; message?: string; importCode?: string; details?: unknown } | null;
+    if (!response.ok || !payload?.data) {
+        throw new ImportApiError(payload?.message ?? `Request failed (${response.status})`, response.status, payload?.importCode, payload?.details);
+    }
+    return payload.data;
+}
+
+class ImportApiError extends Error {
+    constructor(
+        message: string,
+        readonly status: number,
+        readonly importCode?: string,
+        readonly details?: unknown,
+    ) {
+        super(message);
+        this.name = 'ImportApiError';
+    }
+}
+
+function uploadFile(runId: string, file: File, onProgress: (percent: number) => void) {
+    return new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', `/api/import-runs/${encodeURIComponent(runId)}/source`);
+        xhr.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+        xhr.upload.onprogress = event => {
+            if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+        };
+        xhr.onerror = () => reject(new Error('Upload failed'));
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                onProgress(100);
+                resolve();
+                return;
+            }
+            try {
+                reject(new Error((JSON.parse(xhr.responseText) as { message?: string }).message ?? 'Upload failed'));
+            } catch {
+                reject(new Error('Upload failed'));
+            }
+        };
+        xhr.send(file);
+    });
+}
+
+function formatBytes(bytes: number) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+function formatNumber(value: number) {
+    return new Intl.NumberFormat().format(value);
+}
+
+function getWrittenRows(run?: ImportRun) {
+    const rowsWritten = run?.progress?.rowsWritten;
+    if (typeof rowsWritten === 'number' && Number.isFinite(rowsWritten)) return Math.max(0, rowsWritten);
+    return run?.status === 'completed' ? Math.max(0, run.insertedRows) : 0;
+}

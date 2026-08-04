@@ -1,0 +1,5 @@
+id,name,note,nullable,empty_string,spaces,literal_null
+1,"Doe, Jane","Line 1
+Line 2",,"","   ",\N
+2,"O""Connor","contains ""quotes"" and a comma, too",value,"",normal,NULL
+3,张三,Emoji 😀 and 中文,,""," ",""

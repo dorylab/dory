@@ -401,9 +401,11 @@ function DataPreviewInner({
         setPanelPortalContainer(document.body);
     }, [inspectorPortalMode]);
 
-    const { data: tableProperties } = useTablePropertiesQuery({ connectionId, databaseName, tableName });
-    const { data: tableStats } = useTableStatsQuery({ connectionId, databaseName, tableName });
+    const tablePropertiesQuery = useTablePropertiesQuery({ connectionId, databaseName, tableName });
+    const tableStatsQuery = useTableStatsQuery({ connectionId, databaseName, tableName });
     const { data: tableColumns } = useTableStructureColumnsQuery({ connectionId, databaseName, tableName });
+    const tableProperties = tablePropertiesQuery.data;
+    const tableStats = tableStatsQuery.data;
     const metadataTotalRowEstimate = tableProperties?.totalRows ?? tableStats?.rowCount ?? null;
     const searchColumns = useMemo(() => tableColumns?.columns.map(column => column.name) ?? EMPTY_SEARCH_COLUMNS, [tableColumns?.columns]);
     const effectiveSearchColumns = query.trim() ? searchColumns : EMPTY_SEARCH_COLUMNS;
@@ -574,8 +576,17 @@ function DataPreviewInner({
     }, [mutationDialect, updateBatch]);
     const totalRowEstimate = previewData?.totalRows ?? metadataTotalRowEstimate;
     const loading = previewQuery.isLoading;
-    const refreshing = previewQuery.isFetching;
+    const refreshing = previewQuery.isFetching || tablePropertiesQuery.isFetching || tableStatsQuery.isFetching;
     const error = previewData ? null : previewQuery.error ? getErrorMessage(previewQuery.error, t('Failed to load data preview')) : null;
+
+    useEffect(() => {
+        if (totalRowEstimate == null) return;
+
+        const lastPageIndex = Math.max(0, Math.ceil(totalRowEstimate / pageSize) - 1);
+        if (pageIndex <= lastPageIndex) return;
+
+        void setPagination({ pageIndex: lastPageIndex });
+    }, [pageIndex, pageSize, setPagination, totalRowEstimate]);
 
     useEffect(() => {
         if (!previewData) {
@@ -665,8 +676,8 @@ function DataPreviewInner({
     const handleRefresh = useCallback(() => {
         if (refreshing) return;
         setHasUserRequestedPreviewUpdate(true);
-        void previewQuery.refetch();
-    }, [previewQuery, refreshing]);
+        void Promise.all([previewQuery.refetch(), tablePropertiesQuery.refetch(), tableStatsQuery.refetch()]);
+    }, [previewQuery, refreshing, tablePropertiesQuery, tableStatsQuery]);
 
     const updateEditSession = useCallback(
         (updater: (session: ReturnType<typeof createEmptyTableEditSession>) => ReturnType<typeof createEmptyTableEditSession>) => {

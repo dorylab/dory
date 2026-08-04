@@ -1,0 +1,5 @@
+id,maybe_integer,maybe_float,maybe_boolean,maybe_date
+1,10,1.5,true,2026-08-01
+2,20,2.0,false,2026-08-02
+3,N/A,unknown,yes,not-a-date
+4,30x,"4,5",0,2026/08/04
