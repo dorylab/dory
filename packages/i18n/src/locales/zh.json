@@ -3460,7 +3460,6 @@
         "ImportData": "导入数据",
         "Loading": "正在加载导入任务…",
         "List": {
-            "Eyebrow": "数据导入",
             "Title": "数据导入",
             "Description": "查看并继续当前数据源的导入任务。",
             "NewImport": "新建导入",

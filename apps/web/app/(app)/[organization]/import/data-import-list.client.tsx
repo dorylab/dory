@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowDownToLine, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { parseAsInteger, useQueryStates } from 'nuqs';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -57,11 +57,7 @@ export function DataImportList({ organization, connectionId }: { organization: s
             <main className="container mx-auto flex flex-col gap-6 px-6 py-8 lg:px-8 xl:px-12">
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <ArrowDownToLine className="size-4" />
-                            {t('List.Eyebrow')}
-                        </div>
-                        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t('List.Title')}</h1>
+                        <h1 className="text-2xl font-semibold tracking-tight">{t('List.Title')}</h1>
                         <p className="mt-1 text-sm text-muted-foreground">{t('List.Description')}</p>
                     </div>
                     <Button asChild>
@@ -162,6 +158,7 @@ export function DataImportList({ organization, connectionId }: { organization: s
 }
 
 function ImportStatusBadge({ item, label }: { item: ImportRunListItem; label: string }) {
+    const completed = item.status === 'completed';
     const variant =
         item.status === 'failed' || item.status === 'commit_unknown'
             ? 'destructive'
@@ -170,7 +167,11 @@ function ImportStatusBadge({ item, label }: { item: ImportRunListItem; label: st
               : item.status === 'canceled'
                 ? 'outline'
                 : 'secondary';
-    return <Badge variant={variant}>{label}</Badge>;
+    return (
+        <Badge variant={variant} className={completed ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : undefined}>
+            {label}
+        </Badge>
+    );
 }
 
 async function fetchImportRuns(connectionId: string, limit: number, offset: number): Promise<ImportRunListPage> {

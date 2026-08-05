@@ -3456,7 +3456,6 @@
         "ImportData": "Import Data",
         "Loading": "Loading import...",
         "List": {
-            "Eyebrow": "Data import",
             "Title": "Data import",
             "Description": "View and resume imports for this data source.",
             "NewImport": "New import",

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -509,10 +510,20 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                         isTableModal ? 'lg:px-5 lg:py-6' : 'lg:px-6 lg:py-9',
                     )}
                 >
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                        <ArrowDownToLine className="size-4 text-primary" />
-                        {t('Eyebrow')}
-                    </div>
+                    {isTableModal ? (
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                            <ArrowDownToLine className="size-4 text-primary" />
+                            {t('Eyebrow')}
+                        </div>
+                    ) : (
+                        <Link
+                            href={importPath(organization, connectionId)}
+                            className="inline-flex items-center gap-2 text-sm font-medium text-foreground transition-colors hover:text-primary"
+                        >
+                            <ArrowLeft className="size-4" />
+                            {t('Eyebrow')}
+                        </Link>
+                    )}
                     <h1 className="mt-2 text-2xl font-semibold tracking-tight">{t('Title')}</h1>
                     <p className="mt-2 text-sm leading-6 text-muted-foreground">{t('Description')}</p>
                     {isTableModal ? (

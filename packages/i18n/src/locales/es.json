@@ -3454,7 +3454,6 @@
         "ImportData": "Importar datos",
         "Loading": "Cargando importación...",
         "List": {
-            "Eyebrow": "Importación de datos",
             "Title": "Importación de datos",
             "Description": "Consulta y reanuda las importaciones de esta fuente de datos.",
             "NewImport": "Nueva importación",
