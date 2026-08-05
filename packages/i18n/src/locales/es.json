@@ -3448,11 +3448,25 @@
         "Unknown": "Error desconocido"
     },
     "ImportWizard": {
-        "Eyebrow": "Importar",
+        "Eyebrow": "Importación de datos",
         "Title": "Importar datos",
         "Description": "Analiza, asigna y escribe un archivo de datos en la base de datos como una operación recuperable.",
         "ImportData": "Importar datos",
         "Loading": "Cargando importación...",
+        "List": {
+            "Eyebrow": "Importación de datos",
+            "Title": "Importación de datos",
+            "Description": "Consulta y reanuda las importaciones de esta fuente de datos.",
+            "NewImport": "Nueva importación",
+            "Columns": { "Source": "Archivo de origen", "Target": "Destino", "Status": "Estado", "Progress": "Progreso", "Created": "Creada", "Updated": "Actualizada" },
+            "SourcePending": "Origen no cargado",
+            "TargetPending": "Sin seleccionar",
+            "InsertedRows": "{rows} insertadas",
+            "ProcessedRows": "{processed} / {total}",
+            "Empty": "Todavía no hay importaciones. Crea una nueva para comenzar.",
+            "LoadFailed": "No se pudo cargar el historial de importaciones.",
+            "OpenRun": "Abrir la importación de {source}"
+        },
         "Modal": {
             "Title": "Importar datos en {table}",
             "Description": "Analiza un archivo de datos y asigna los datos a la tabla seleccionada.",
@@ -3640,6 +3654,7 @@
             "SaveFailed": "No se pudo guardar el plan.",
             "ExecuteFailed": "No se pudo iniciar la ejecución.",
             "CancelFailed": "No se pudo cancelar.",
+            "SourceOptionsInvalid": "El formato de origen guardado no es válido. Analiza el archivo de nuevo o crea una nueva importación.",
             "PlanIncomplete": "El plan está incompleto.",
             "Unknown": "Error de importación"
         }
@@ -3654,7 +3669,7 @@
         "SchemaCompare": "Comparaciones",
         "SQLConsole": "Consola SQL",
         "Explorer": "Explorador",
-        "Import": "Importar",
+        "Import": "Importación de datos",
         "Schema": "Esquema",
         "Chatbot": "Asistente",
         "Monitoring": "Monitoreo",

@@ -3450,11 +3450,25 @@
         "Unknown": "Unknown error"
     },
     "ImportWizard": {
-        "Eyebrow": "Import",
+        "Eyebrow": "Data import",
         "Title": "Import data",
         "Description": "Inspect, map, and write a data file into a database as one recoverable operation.",
         "ImportData": "Import Data",
         "Loading": "Loading import...",
+        "List": {
+            "Eyebrow": "Data import",
+            "Title": "Data import",
+            "Description": "View and resume imports for this data source.",
+            "NewImport": "New import",
+            "Columns": { "Source": "Source file", "Target": "Target", "Status": "Status", "Progress": "Progress", "Created": "Created", "Updated": "Updated" },
+            "SourcePending": "Source not uploaded",
+            "TargetPending": "Not selected",
+            "InsertedRows": "{rows} inserted",
+            "ProcessedRows": "{processed} / {total}",
+            "Empty": "No imports yet. Create a new import to get started.",
+            "LoadFailed": "Could not load import history.",
+            "OpenRun": "Open import for {source}"
+        },
         "Modal": {
             "Title": "Import data into {table}",
             "Description": "Analyze and map a data file into the selected table.",
@@ -3642,6 +3656,7 @@
             "SaveFailed": "Could not save the import plan.",
             "ExecuteFailed": "Could not start execution.",
             "CancelFailed": "Could not cancel the import.",
+            "SourceOptionsInvalid": "The saved source format is invalid. Analyze the file again or create a new import.",
             "PlanIncomplete": "The import plan is incomplete.",
             "Unknown": "Import error"
         }
@@ -3656,7 +3671,7 @@
         "SchemaCompare": "Comparisons",
         "SQLConsole": "SQL Console",
         "Explorer": "Explorer",
-        "Import": "Import",
+        "Import": "Data import",
         "Schema": "Schema",
         "Chatbot": "Chatbot",
         "Monitoring": "Monitoring",

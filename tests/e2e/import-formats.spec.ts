@@ -12,7 +12,11 @@ test('import wizard accepts typed source formats and identifies Parquet before u
     const connectionId = await connectionCard.getAttribute('data-connection-id');
     if (!connectionId) throw new Error('The demo workspace does not contain an importable connection');
 
-    await page.goto(`/${encodeURIComponent(organization)}/${encodeURIComponent(connectionId)}/import`, { waitUntil: 'domcontentloaded' });
+    const importListPath = `/${encodeURIComponent(organization)}/${encodeURIComponent(connectionId)}/import`;
+    await page.goto(importListPath, { waitUntil: 'domcontentloaded' });
+    await page.getByRole('heading', { name: 'Data import' }).waitFor({ state: 'visible' });
+    await page.getByRole('link', { name: 'New import' }).click();
+    await page.waitForURL(url => url.pathname === `${importListPath}/new`);
     await page.waitForLoadState('networkidle');
     await page.getByRole('heading', { name: 'Choose a data file' }).waitFor({ state: 'visible' });
 

@@ -12,6 +12,7 @@ import {
     ChevronDown,
     ChevronUp,
     Circle,
+    Info,
     Loader2,
     Plus,
     RefreshCw,
@@ -31,6 +32,7 @@ import { tableQueryKeys } from '@/app/(app)/[organization]/components/table-brow
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { executeActionClient } from '@/lib/actions/client';
 import { importEntryParsers, serializeImportEntry } from '@/lib/client/import-entry-query';
+import { importSourceFormatForFileName, readStoredImportSourceOptions, recoverStoredImportSourceOptions } from '@/lib/client/import-source-options';
 import { driverSupportsSchema } from '@/lib/explorer/capabilities';
 import { Alert, AlertDescription, AlertTitle } from '@/registry/new-york-v4/ui/alert';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -89,7 +91,6 @@ type Profile = {
 };
 type Mapping = { source: string; target: string; targetType: ImportColumnType; ignored: boolean; order: number };
 type Parsing = { delimiter: ',' | '\t' | ';' | '|'; hasHeader: boolean; encoding: string; quoteChar: string };
-type SourceFormat = 'csv' | 'parquet' | 'ndjson' | 'arrow';
 type SourceOptions = ({ format: 'csv' } & Parsing) | { format: 'parquet' } | { format: 'ndjson' } | { format: 'arrow' };
 type ImportRun = {
     id: string;
@@ -99,7 +100,7 @@ type ImportRun = {
     sourceName: string | null;
     sourceExtension: string | null;
     sourceBytes: number | null;
-    parsingOptions: SourceOptions | null;
+    parsingOptions: unknown;
     profile: Profile | null;
     plan: ImportPlan | null;
     progress: Record<string, unknown> | null;
@@ -218,7 +219,8 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     const previewStepIndex = stepIds.indexOf('preview');
     const targetLabel = [target.database, target.schema, target.table].filter(Boolean).join('.');
     const canResumeSource = Boolean(run && sourceOptions && (run.profile || run.phase === 'encoding_required'));
-    const sourceOptionsNeedAnalysis = Boolean(run && sourceOptions && !sourceOptionsEqual(sourceOptions, run.parsingOptions));
+    const persistedSourceOptions = readStoredImportSourceOptions(run?.parsingOptions);
+    const sourceOptionsNeedAnalysis = Boolean(run && sourceOptions && (!persistedSourceOptions || !sourceOptionsEqual(sourceOptions, persistedSourceOptions)));
 
     const getStepNumber = (stepId: WizardStepId) => stepIds.indexOf(stepId) + 1;
 
@@ -230,7 +232,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     useEffect(() => {
         if (!run || hydratedRunRef.current === run.id) return;
         hydratedRunRef.current = run.id;
-        const storedSourceOptions = run.parsingOptions;
+        const storedSourceOptions = readStoredImportSourceOptions(run.parsingOptions) ?? recoverStoredImportSourceOptions(run.parsingOptions, run.sourceName, run.sourceExtension);
         if (storedSourceOptions) setSourceOptions(storedSourceOptions);
         if (run.plan) {
             setTarget(isTableModal && fixedTarget ? { mode: 'existing', ...fixedTarget } : run.plan.target);
@@ -258,7 +260,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         if (isTableModal || !scopedConnectionId || routeConnectionId === scopedConnectionId) return;
         const destination = run
             ? importRunPath(organization, scopedConnectionId, run.id)
-            : serializeImportEntry(importPath(organization, scopedConnectionId), {
+            : serializeImportEntry(importNewPath(organization, scopedConnectionId), {
                   database: entry.database,
                   schema: entry.schema,
                   table: entry.table,
@@ -279,17 +281,21 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             setPreparationStage('analyzing');
             try {
                 const analyzed = await api<ImportRun>(`/api/import-runs/${created.id}/analyze`, { method: 'POST', body: JSON.stringify({}) });
-                return { run: analyzed, encodingRequired: false };
+                const analyzedSourceOptions = readStoredImportSourceOptions(analyzed.parsingOptions);
+                if (!analyzedSourceOptions) throw new Error(t('Errors.SourceOptionsInvalid'));
+                return { run: analyzed, sourceOptions: analyzedSourceOptions, encodingRequired: false };
             } catch (error) {
                 if (!(error instanceof ImportApiError) || error.importCode !== 'IMPORT_ENCODING_REQUIRED') throw error;
                 const blocked = await api<ImportRun>(`/api/import-runs/${created.id}`);
-                return { run: blocked, encodingRequired: true };
+                const blockedSourceOptions = readStoredImportSourceOptions(blocked.parsingOptions);
+                if (!blockedSourceOptions) throw new Error(t('Errors.SourceOptionsInvalid'));
+                return { run: blocked, sourceOptions: blockedSourceOptions, encodingRequired: true };
             }
         },
         onSuccess: result => {
             const analyzed = result.run;
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
-            setSourceOptions(analyzed.parsingOptions);
+            setSourceOptions(result.sourceOptions);
             setMappings(analyzed.profile ? defaultMappings(analyzed.profile, null) : []);
             setCleaningOperations([]);
             setStep('preview');
@@ -302,10 +308,15 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     });
 
     const analyzeMutation = useMutation({
-        mutationFn: () => api<ImportRun>(`/api/import-runs/${run!.id}/analyze`, { method: 'POST', body: JSON.stringify({ sourceOptions }) }),
-        onSuccess: analyzed => {
+        mutationFn: async () => {
+            const analyzed = await api<ImportRun>(`/api/import-runs/${run!.id}/analyze`, { method: 'POST', body: JSON.stringify({ sourceOptions }) });
+            const analyzedSourceOptions = readStoredImportSourceOptions(analyzed.parsingOptions);
+            if (!analyzedSourceOptions) throw new Error(t('Errors.SourceOptionsInvalid'));
+            return { analyzed, sourceOptions: analyzedSourceOptions };
+        },
+        onSuccess: ({ analyzed, sourceOptions: analyzedSourceOptions }) => {
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
-            setSourceOptions(analyzed.parsingOptions);
+            setSourceOptions(analyzedSourceOptions);
             setMappings(defaultMappings(analyzed.profile!, null));
             setCleaningOperations([]);
             setTargetSchema(null);
@@ -673,7 +684,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 onCancel={() => cancelMutation.mutate()}
                                 onBack={() => setStep('options')}
                                 allowTerminalDismiss={isTableModal}
-                                onFinish={onFinish ?? (() => router.replace(`/${encodeURIComponent(organization)}/connections`))}
+                                onFinish={onFinish ?? (() => router.replace(importPath(organization, connectionId)))}
                             />
                         ) : null}
                         {runQuery.isLoading && !startMutation.isPending ? (
@@ -781,7 +792,7 @@ function SelectFileStep({
     const inputRef = useRef<HTMLInputElement | null>(null);
     const displayName = file?.name ?? run?.sourceName;
     const displaySize = file?.size ?? run?.sourceBytes;
-    const displayFormat = sourceFormatForFileName(displayName ?? '', run?.sourceExtension);
+    const displayFormat = importSourceFormatForFileName(displayName ?? '', run?.sourceExtension);
     const analyzing = stage === 'analyzing';
 
     return (
@@ -1263,7 +1274,7 @@ function TargetStep({
                         </Select>
                     </div>
                 ) : null}
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2 sm:col-start-1">
                     {target.mode === 'existing' ? (
                         <>
                             <Label htmlFor="import-target-table">{t('Target.Table')}</Label>
@@ -1807,8 +1818,8 @@ function ExecuteStep({
                 </div>
                 <div className="space-y-5 p-5">
                     {writeCapability?.supported ? (
-                        <Alert>
-                            <Circle />
+                        <Alert role="note" className="rounded-md border-0 bg-muted/60 shadow-none">
+                            <Info className="text-muted-foreground" />
                             <AlertTitle>{writeCapability.atomicity === 'atomic' ? t('Options.AtomicTitle') : t('Options.BestEffortTitle')}</AlertTitle>
                             <AlertDescription>
                                 {writeCapability.atomicity === 'atomic'
@@ -1967,15 +1978,6 @@ function sourceOptionsEqual(left: SourceOptions | null | undefined, right: Sourc
     return left.delimiter === right.delimiter && left.hasHeader === right.hasHeader && left.encoding === right.encoding && left.quoteChar === right.quoteChar;
 }
 
-function sourceFormatForFileName(fileName: string, extension?: string | null): SourceFormat | null {
-    const normalized = (extension || fileName.split('.').pop() || '').toLowerCase();
-    if (normalized === 'csv' || normalized === 'tsv') return 'csv';
-    if (normalized === 'parquet') return 'parquet';
-    if (normalized === 'ndjson' || normalized === 'jsonl') return 'ndjson';
-    if (normalized === 'arrow' || normalized === 'ipc' || normalized === 'feather') return 'arrow';
-    return null;
-}
-
 function readSourceWarnings(value: unknown): Array<{ code: 'DECIMAL_STRINGIFIED'; column: string; sourceType: string }> {
     if (!Array.isArray(value)) return [];
     return value.filter((warning): warning is { code: 'DECIMAL_STRINGIFIED'; column: string; sourceType: string } =>
@@ -2004,6 +2006,10 @@ function readSourceSchema(value: unknown): Array<{ name: string; sourceType: str
 
 function importPath(organization: string, connectionId: string) {
     return `/${encodeURIComponent(organization)}/${encodeURIComponent(connectionId)}/import`;
+}
+
+function importNewPath(organization: string, connectionId: string) {
+    return `${importPath(organization, connectionId)}/new`;
 }
 
 function importRunPath(organization: string, connectionId: string, runId: string) {

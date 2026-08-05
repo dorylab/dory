@@ -3448,11 +3448,25 @@
         "Unknown": "不明なエラー"
     },
     "ImportWizard": {
-        "Eyebrow": "インポート",
+        "Eyebrow": "データインポート",
         "Title": "データをインポート",
         "Description": "データファイルの分析、マッピング、データベースへの書き込みを復元可能な一つの処理として実行します。",
         "ImportData": "データをインポート",
         "Loading": "インポートを読み込み中...",
+        "List": {
+            "Eyebrow": "データインポート",
+            "Title": "データインポート",
+            "Description": "このデータソースのインポートを表示し、再開できます。",
+            "NewImport": "新規インポート",
+            "Columns": { "Source": "ソースファイル", "Target": "ターゲット", "Status": "ステータス", "Progress": "進捗", "Created": "作成日時", "Updated": "更新日時" },
+            "SourcePending": "ソース未アップロード",
+            "TargetPending": "未選択",
+            "InsertedRows": "{rows} 行を挿入",
+            "ProcessedRows": "{processed} / {total}",
+            "Empty": "インポートはまだありません。新しいインポートを作成してください。",
+            "LoadFailed": "インポート履歴を読み込めませんでした。",
+            "OpenRun": "{source} のインポートを開く"
+        },
         "Modal": {
             "Title": "{table} にデータをインポート",
             "Description": "データファイルを分析し、選択したテーブルにデータをマッピングします。",
@@ -3642,6 +3656,7 @@
             "SaveFailed": "インポート計画を保存できませんでした。",
             "ExecuteFailed": "実行を開始できませんでした。",
             "CancelFailed": "キャンセルできませんでした。",
+            "SourceOptionsInvalid": "保存されたソース形式が無効です。ファイルを再分析するか、新しいインポートを作成してください。",
             "PlanIncomplete": "インポート計画が未完成です。",
             "Unknown": "インポートエラー"
         }
@@ -3656,7 +3671,7 @@
         "SchemaCompare": "Comparisons",
         "SQLConsole": "SQL コンソール",
         "Explorer": "エクスプローラー",
-        "Import": "インポート",
+        "Import": "データインポート",
         "Schema": "スキーマ",
         "Chatbot": "チャットボット",
         "Monitoring": "モニタリング",

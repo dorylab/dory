@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, lt, max } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, lt, max } from 'drizzle-orm';
 
 import { importRunEvents, importRuns } from '@dory/database/postgres/schemas/import-runs';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
@@ -45,6 +45,15 @@ export class PostgresImportRunsRepository {
             .where(and(eq(importRuns.organizationId, organizationId), eq(importRuns.id, runId)))
             .limit(1);
         return run ?? null;
+    }
+
+    async listPage(input: { organizationId: string; connectionId: string; limit: number; offset: number }) {
+        const scope = and(eq(importRuns.organizationId, input.organizationId), eq(importRuns.connectionId, input.connectionId));
+        const [rows, totals] = await Promise.all([
+            this.db.select().from(importRuns).where(scope).orderBy(desc(importRuns.createdAt), desc(importRuns.id)).limit(input.limit).offset(input.offset),
+            this.db.select({ total: count() }).from(importRuns).where(scope),
+        ]);
+        return { rows, total: totals[0]?.total ?? 0 };
     }
 
     async update(organizationId: string, runId: string, input: ImportRunUpdateInput) {

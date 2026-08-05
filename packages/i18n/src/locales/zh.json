@@ -3454,11 +3454,25 @@
         "Unknown": "未知错误"
     },
     "ImportWizard": {
-        "Eyebrow": "导入",
+        "Eyebrow": "数据导入",
         "Title": "导入数据",
         "Description": "在一个可恢复的任务中分析、映射并将数据文件写入数据库。",
         "ImportData": "导入数据",
         "Loading": "正在加载导入任务…",
+        "List": {
+            "Eyebrow": "数据导入",
+            "Title": "数据导入",
+            "Description": "查看并继续当前数据源的导入任务。",
+            "NewImport": "新建导入",
+            "Columns": { "Source": "源文件", "Target": "目标", "Status": "状态", "Progress": "进度", "Created": "创建时间", "Updated": "更新时间" },
+            "SourcePending": "尚未上传源文件",
+            "TargetPending": "尚未选择",
+            "InsertedRows": "已插入 {rows} 行",
+            "ProcessedRows": "{processed} / {total}",
+            "Empty": "暂无导入任务。新建一个导入任务即可开始。",
+            "LoadFailed": "无法加载导入历史。",
+            "OpenRun": "打开 {source} 的导入任务"
+        },
         "Modal": {
             "Title": "导入数据到 {table}",
             "Description": "分析数据文件并将数据映射到当前表。",
@@ -3640,6 +3654,7 @@
             "SaveFailed": "无法保存导入计划。",
             "ExecuteFailed": "无法开始执行。",
             "CancelFailed": "无法取消导入。",
+            "SourceOptionsInvalid": "保存的源格式无效。请重新分析文件或新建导入任务。",
             "PlanIncomplete": "导入计划不完整。",
             "Unknown": "导入错误"
         }
@@ -3654,7 +3669,7 @@
         "SchemaCompare": "Comparisons",
         "SQLConsole": "SQL 控制台",
         "Explorer": "资源浏览",
-        "Import": "导入",
+        "Import": "数据导入",
         "Schema": "模式",
         "Chatbot": "聊天助手",
         "Monitoring": "监控",

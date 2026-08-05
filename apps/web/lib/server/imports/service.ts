@@ -34,8 +34,11 @@ import {
     type CsvParsingOptions,
     type DatasetProfileV2,
     type ImportExecutionPlan,
+    type ImportRunListPage,
     type ImportSourceOptions,
+    type ImportSourceFormat,
     type ImportRunStatus,
+    type ImportTarget,
     type WriteResult,
 } from '@dory/import';
 
@@ -78,6 +81,50 @@ export async function getImportRun(db: DBService, organizationId: string, runId:
     const run = await db.importRuns.get(organizationId, runId);
     if (!run) throw new ImportServiceError('Import run not found', 404, 'IMPORT_RUN_NOT_FOUND');
     return run;
+}
+
+export async function listImportRuns(db: DBService, input: { organizationId: string; connectionId: string; limit: number; offset: number }): Promise<ImportRunListPage> {
+    getImportRunner(db).wake();
+    const page = await db.importRuns.listPage(input);
+    return {
+        items: page.rows.map(run => ({
+            id: run.id,
+            connectionId: input.connectionId,
+            status: run.status as ImportRunStatus,
+            phase: run.phase,
+            sourceName: run.sourceName,
+            sourceFormat: readImportSourceFormat(run.parsingOptions, run.sourceExtension),
+            sourceBytes: run.sourceBytes,
+            target: readImportRunTarget(run.plan),
+            sourceRows: readImportSourceRows(run.profile),
+            processedRows: run.processedRows,
+            insertedRows: run.insertedRows,
+            createdAt: run.createdAt.toISOString(),
+            updatedAt: run.updatedAt.toISOString(),
+        })),
+        total: page.total,
+        limit: input.limit,
+        offset: input.offset,
+    };
+}
+
+function readImportSourceFormat(options: unknown, extension: string | null): ImportSourceFormat | null {
+    return parseImportSourceOptions(options)?.format ?? importSourceFormatForExtension(extension ?? '');
+}
+
+function readImportRunTarget(plan: unknown): ImportTarget | null {
+    if (!plan || typeof plan !== 'object' || Array.isArray(plan) || !('target' in plan)) return null;
+    try {
+        return parseImportTarget(plan.target);
+    } catch {
+        return null;
+    }
+}
+
+function readImportSourceRows(profile: unknown): number | null {
+    if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return null;
+    const rows = 'rows' in profile ? profile.rows : null;
+    return typeof rows === 'number' && Number.isSafeInteger(rows) && rows >= 0 ? rows : null;
 }
 
 export async function uploadImportSource(db: DBService, input: { organizationId: string; runId: string; fileName: string; contentLength?: number | null; body: Readable }) {

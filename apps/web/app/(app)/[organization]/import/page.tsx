@@ -9,7 +9,7 @@ export default async function ImportPage({ params, searchParams }: { params: Pro
         const value = singleValue(entry[key]);
         if (value) query.set(key, value);
     }
-    const destination = `/${encodeURIComponent(organization)}/${encodeURIComponent(connectionId)}/import`;
+    const destination = `/${encodeURIComponent(organization)}/${encodeURIComponent(connectionId)}/import/new`;
     redirect(query.size ? `${destination}?${query.toString()}` : destination);
 }
 

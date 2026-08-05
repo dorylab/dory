@@ -125,6 +125,29 @@ export type ImportTarget = {
     table: string;
 };
 
+export type ImportRunListItem = {
+    id: string;
+    connectionId: string;
+    status: ImportRunStatus;
+    phase: string;
+    sourceName: string | null;
+    sourceFormat: ImportSourceFormat | null;
+    sourceBytes: number | null;
+    target: ImportTarget | null;
+    sourceRows: number | null;
+    processedRows: number;
+    insertedRows: number;
+    createdAt: string;
+    updatedAt: string;
+};
+
+export type ImportRunListPage = {
+    items: ImportRunListItem[];
+    total: number;
+    limit: number;
+    offset: number;
+};
+
 export type ImportColumnMappingV1 = {
     source: string;
     target: string;

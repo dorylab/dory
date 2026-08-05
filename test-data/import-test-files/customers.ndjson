@@ -1,0 +1,5 @@
+{"id":1,"code":"00123","name":"张三","active":true,"score":98.5,"event_date":"2026-01-02","created_at":"2026-01-02T03:04:05.678Z","note":"Hello, 世界","amount":"12.3400"}
+{"id":2,"code":"00007","name":"Bob\nJones","active":false,"score":0,"event_date":"2026-02-03","created_at":"2026-02-03T14:15:16.789Z","note":"","amount":"0.0000"}
+{"id":3,"code":"94107","name":"María","active":true,"score":-12.75,"event_date":"2026-03-04","created_at":"2026-03-04T23:59:59.001Z","amount":"-99.5000"}
+{"id":4,"code":"01001","name":"山田太郎","active":false,"score":3.14159,"event_date":"2026-04-05","created_at":"2026-04-05T00:00:00.000Z","note":"line 1\nline 2","amount":"123456.7890"}
+{"id":9223372036854775807,"code":"99999","name":"Max Int64","active":true,"score":42.25,"event_date":"2026-05-06","created_at":"2026-05-06T08:30:00.250Z","note":"boundary","amount":"9999999999999999.9900"}
