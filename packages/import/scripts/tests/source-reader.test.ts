@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import pl from 'nodejs-polars';
 
-import { analyzeImportSourceFile, ImportSourceError, prepareImportDataset, type ImportPlanV2 } from '../../src';
+import { analyzeImportSourceFile, ImportSourceError, prepareImportDataset, type ImportPlan } from '../../src';
 
 test('Parquet preserves canonical scalar types and stringifies decimals exactly', async t => {
     const dir = await temporaryDirectory(t, 'parquet');
@@ -157,7 +157,7 @@ test('Source readers reject the reserved internal row-number column', async t =>
     );
 });
 
-function planFor(analysis: Awaited<ReturnType<typeof analyzeImportSourceFile>>, source: ImportPlanV2['source']): ImportPlanV2 {
+function planFor(analysis: Awaited<ReturnType<typeof analyzeImportSourceFile>>, source: ImportPlan['source']): ImportPlan {
     return {
         version: 'dory.import-plan.v2',
         source,

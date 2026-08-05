@@ -4,15 +4,13 @@ import test from 'node:test';
 import {
     createDefaultMappings,
     hashImportPlan,
-    importPlanV1Schema,
-    importPlanV2Schema,
+    importPlanSchema,
     parseDatasetProfile,
     parseImportPlan,
     validateTargetCoverage,
     type DatasetProfileColumnV2,
     type DatasetProfileV2,
-    type ImportPlanV1,
-    type ImportPlanV2,
+    type ImportPlan,
     type TargetSchema,
 } from '../../src';
 
@@ -61,10 +59,10 @@ test('required target coverage allows nullable and defaulted columns only', () =
 
 test('plan validation rejects replace-on-create and duplicate target names', () => {
     const plan = buildPlan();
-    assert.equal(importPlanV1Schema.safeParse(plan).success, true);
-    assert.equal(importPlanV1Schema.safeParse({ ...plan, mode: 'replace' }).success, false);
+    assert.equal(importPlanSchema.safeParse(plan).success, true);
+    assert.equal(importPlanSchema.safeParse({ ...plan, mode: 'replace' }).success, false);
     assert.equal(
-        importPlanV1Schema.safeParse({
+        importPlanSchema.safeParse({
             ...plan,
             columns: [...plan.columns, { ...plan.columns[0], source: 'Email', target: 'id', order: 1 }],
         }).success,
@@ -78,15 +76,18 @@ test('plan hash is stable for equivalent objects and changes with mapping order'
     assert.notEqual(hashImportPlan(plan), hashImportPlan({ ...plan, columns: plan.columns.map(column => ({ ...column, order: column.order + 1 })) }));
 });
 
-test('plan v2 validates discriminated source options without changing v1 compatibility', () => {
-    const v1 = buildPlan();
-    const v2: ImportPlanV2 = { ...v1, version: 'dory.import-plan.v2', source: { format: 'parquet' } };
-    delete (v2 as Partial<ImportPlanV1>).parsing;
-    assert.equal(importPlanV1Schema.safeParse(v1).success, true);
-    assert.equal(importPlanV2Schema.safeParse(v2).success, true);
-    assert.equal(parseImportPlan(v1).version, 'dory.import-plan.v1');
-    assert.equal(parseImportPlan(v2).version, 'dory.import-plan.v2');
-    assert.notEqual(hashImportPlan(v1), hashImportPlan(v2));
+test('plan validates discriminated source options and rejects the removed v1 shape', () => {
+    const plan = buildPlan();
+    assert.equal(importPlanSchema.safeParse(plan).success, true);
+    assert.equal(importPlanSchema.safeParse({ ...plan, source: { format: 'parquet' } }).success, true);
+    assert.throws(() =>
+        parseImportPlan({
+            ...plan,
+            version: 'dory.import-plan.v1',
+            source: undefined,
+            parsing: { delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
+        }),
+    );
 });
 
 test('plan normalization keeps value operations ordered before drop and mapping operations', () => {
@@ -107,10 +108,10 @@ test('Profile v1 is rejected instead of being adapted', () => {
     assert.equal(parseDatasetProfile(profile).version, 'dory.dataset-profile.v2');
 });
 
-function buildPlan(): ImportPlanV1 {
+function buildPlan(): ImportPlan {
     return {
-        version: 'dory.import-plan.v1',
-        parsing: { delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
+        version: 'dory.import-plan.v2',
+        source: { format: 'csv', delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
         target: { mode: 'create', schema: 'public', table: 'customers' },
         columns: [{ source: 'id', target: 'id', targetType: 'int64', ignored: false, order: 0 }],
         mode: 'append',

@@ -99,7 +99,7 @@ type ImportRun = {
     sourceName: string | null;
     sourceExtension: string | null;
     sourceBytes: number | null;
-    parsingOptions: SourceOptions | Parsing | null;
+    parsingOptions: SourceOptions | null;
     profile: Profile | null;
     plan: ImportPlan | null;
     progress: Record<string, unknown> | null;
@@ -128,7 +128,7 @@ type ImportPlanCommon = {
     transform: { version: 'dory.transform.v1'; operations: TransformOperation[] };
     sourceSchemaHash: string;
 };
-type ImportPlan = ImportPlanCommon & ({ version: 'dory.import-plan.v1'; parsing: Parsing } | { version: 'dory.import-plan.v2'; source: SourceOptions });
+type ImportPlan = ImportPlanCommon & { version: 'dory.import-plan.v2'; source: SourceOptions };
 type TransformPreview = {
     version: 'dory.transform-preview.v1';
     inputRows: number;
@@ -218,7 +218,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     const previewStepIndex = stepIds.indexOf('preview');
     const targetLabel = [target.database, target.schema, target.table].filter(Boolean).join('.');
     const canResumeSource = Boolean(run && sourceOptions && (run.profile || run.phase === 'encoding_required'));
-    const sourceOptionsNeedAnalysis = Boolean(run && sourceOptions && !sourceOptionsEqual(sourceOptions, normalizeSourceOptions(run.parsingOptions)));
+    const sourceOptionsNeedAnalysis = Boolean(run && sourceOptions && !sourceOptionsEqual(sourceOptions, run.parsingOptions));
 
     const getStepNumber = (stepId: WizardStepId) => stepIds.indexOf(stepId) + 1;
 
@@ -230,7 +230,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     useEffect(() => {
         if (!run || hydratedRunRef.current === run.id) return;
         hydratedRunRef.current = run.id;
-        const storedSourceOptions = normalizeSourceOptions(run.parsingOptions);
+        const storedSourceOptions = run.parsingOptions;
         if (storedSourceOptions) setSourceOptions(storedSourceOptions);
         if (run.plan) {
             setTarget(isTableModal && fixedTarget ? { mode: 'existing', ...fixedTarget } : run.plan.target);
@@ -289,7 +289,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         onSuccess: result => {
             const analyzed = result.run;
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
-            setSourceOptions(normalizeSourceOptions(analyzed.parsingOptions));
+            setSourceOptions(analyzed.parsingOptions);
             setMappings(analyzed.profile ? defaultMappings(analyzed.profile, null) : []);
             setCleaningOperations([]);
             setStep('preview');
@@ -305,7 +305,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         mutationFn: () => api<ImportRun>(`/api/import-runs/${run!.id}/analyze`, { method: 'POST', body: JSON.stringify({ sourceOptions }) }),
         onSuccess: analyzed => {
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
-            setSourceOptions(normalizeSourceOptions(analyzed.parsingOptions));
+            setSourceOptions(analyzed.parsingOptions);
             setMappings(defaultMappings(analyzed.profile!, null));
             setCleaningOperations([]);
             setTargetSchema(null);
@@ -1959,11 +1959,6 @@ function readWriteCapability(value: unknown): ImportWriteCapability | null {
 
 function connectionHeaders(connectionId: string) {
     return { 'Content-Type': 'application/json', [X_CONNECTION_ID_KEY]: connectionId };
-}
-
-function normalizeSourceOptions(value: SourceOptions | Parsing | null | undefined): SourceOptions | null {
-    if (!value) return null;
-    return 'format' in value ? value : { format: 'csv', ...value };
 }
 
 function sourceOptionsEqual(left: SourceOptions | null | undefined, right: SourceOptions | null | undefined) {

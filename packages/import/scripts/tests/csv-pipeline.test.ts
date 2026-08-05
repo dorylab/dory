@@ -8,7 +8,7 @@ import test from 'node:test';
 
 import iconv from 'iconv-lite';
 
-import { analyzeCsv, datasetSchemaHash, detectCsv, ImportCastError, prepareImportDataset, previewImportTransform, transcodeCsvToUtf8, type ImportPlanV1 } from '../../src';
+import { analyzeCsv, datasetSchemaHash, detectCsv, ImportCastError, prepareImportDataset, previewImportTransform, transcodeCsvToUtf8, type ImportPlan } from '../../src';
 
 test('CSV analysis is lossless, repeatable, and conservative', async t => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-import-csv-'));
@@ -67,7 +67,7 @@ test('CSV analysis is lossless, repeatable, and conservative', async t => {
     assert.equal(prepared.dataset.rowCount, 2);
     assert.equal(prepared.filteredRows, 0);
 
-    const invalidPlan: ImportPlanV1 = {
+    const invalidPlan: ImportPlan = {
         ...plan,
         columns: plan.columns.map(column => (column.source === 'name' ? { ...column, targetType: 'int64' } : column)),
     };
@@ -255,10 +255,10 @@ test('Profile v2 preserves exact Int64 range values outside Number safe integers
     assert.equal(value?.max, '9223372036854775807');
 });
 
-function buildPlan(analysis: Awaited<ReturnType<typeof analyzeCsv>>, sourceName: string): ImportPlanV1 {
+function buildPlan(analysis: Awaited<ReturnType<typeof analyzeCsv>>, sourceName: string): ImportPlan {
     return {
-        version: 'dory.import-plan.v1',
-        parsing: analysis.parsing,
+        version: 'dory.import-plan.v2',
+        source: { format: 'csv', ...analysis.parsing },
         target: { mode: 'create', database: 'main', table: sourceName.replace(/\W/g, '_') },
         columns: analysis.profile.columns.map((column, order) => ({
             source: column.name,

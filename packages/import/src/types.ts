@@ -1,7 +1,6 @@
 import type { Dataset } from '@dory/dataset';
 
-export const IMPORT_PLAN_VERSION = 'dory.import-plan.v1' as const;
-export const IMPORT_PLAN_V2_VERSION = 'dory.import-plan.v2' as const;
+export const IMPORT_PLAN_VERSION = 'dory.import-plan.v2' as const;
 export const DATASET_PROFILE_VERSION = 'dory.dataset-profile.v2' as const;
 export const TRANSFORM_VERSION = 'dory.transform.v1' as const;
 export const TRANSFORM_PREVIEW_VERSION = 'dory.transform-preview.v1' as const;
@@ -158,17 +157,10 @@ export type ImportExecutionPlan = {
     sourceSchemaHash: string;
 };
 
-export type ImportPlanV1 = ImportExecutionPlan & {
+export type ImportPlan = ImportExecutionPlan & {
     version: typeof IMPORT_PLAN_VERSION;
-    parsing: CsvParsingOptions;
-};
-
-export type ImportPlanV2 = ImportExecutionPlan & {
-    version: typeof IMPORT_PLAN_V2_VERSION;
     source: ImportSourceOptions;
 };
-
-export type ImportPlan = ImportPlanV1 | ImportPlanV2;
 
 export type TargetColumn = {
     name: string;

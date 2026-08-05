@@ -5,14 +5,12 @@ export {
     canonicalTransformPlan,
     cleaningTransformOperations,
     hashImportPlan,
-    importPlanV2Schema,
+    importPlanSchema,
     importSourceOptionsSchema,
-    importPlanV1Schema,
     importTargetSchema,
     parseImportPlan,
+    parseImportSourceOptions,
     parseImportTarget,
-    normalizeStoredSourceOptions,
-    sourceOptionsForPlan,
     transformPlanV1Schema,
 } from './plan';
 export { datasetProfileV2Schema, parseDatasetProfile } from './profile';

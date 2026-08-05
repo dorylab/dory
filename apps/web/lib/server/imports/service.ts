@@ -21,13 +21,12 @@ import {
     hashImportPlan,
     importSourceFormatForExtension,
     ImportSourceError,
-    normalizeStoredSourceOptions,
     parseImportPlan,
+    parseImportSourceOptions,
     parseDatasetProfile,
     parseImportTarget,
     prepareImportDataset,
     previewImportTransform,
-    sourceOptionsForPlan,
     supportedImportSourceExtensions,
     validateTargetCoverage,
     PartialWriteError,
@@ -151,13 +150,14 @@ export async function uploadImportSource(db: DBService, input: { organizationId:
     return updated;
 }
 
-export async function analyzeImportSource(
-    db: DBService,
-    input: { organizationId: string; runId: string; sourceOptions?: Partial<ImportSourceOptions>; parsing?: Partial<CsvParsingOptions> },
-) {
+export async function analyzeImportSource(db: DBService, input: { organizationId: string; runId: string; sourceOptions?: unknown }) {
     let run = await getImportRun(db, input.organizationId, input.runId);
     if (!run.sourceObjectPath || !run.sourceName || !run.sourceHash) throw new ImportServiceError('Upload a data file before analysis', 409, 'IMPORT_SOURCE_REQUIRED');
     if (run.status === 'running' || run.status === 'queued') throw new ImportServiceError('The import is already executing', 409, 'IMPORT_RUN_STATE');
+    const requestedSourceOptions = input.sourceOptions === undefined ? undefined : parseImportSourceOptions(input.sourceOptions);
+    if (input.sourceOptions !== undefined && !requestedSourceOptions) {
+        throw new ImportServiceError('Source options are invalid', 400, 'IMPORT_SOURCE_OPTIONS');
+    }
 
     const artifacts = getDoryArtifactStore().importRuns;
     const paths = artifacts.paths(input.organizationId, input.runId, run.sourceExtension ?? 'csv');
@@ -168,12 +168,12 @@ export async function analyzeImportSource(
         sourcePath = await materializeForRead(run.sourceObjectPath, path.join(workDir, `source.${run.sourceExtension ?? 'csv'}`));
         const format = importSourceFormatForExtension(run.sourceExtension ?? 'csv');
         if (!format) throw new ImportServiceError('The uploaded file format is not supported', 415, 'IMPORT_FILE_TYPE');
-        if (input.sourceOptions?.format && input.sourceOptions.format !== format) {
+        if (requestedSourceOptions?.format && requestedSourceOptions.format !== format) {
             throw new ImportServiceError('The selected source format does not match the uploaded file', 422, 'IMPORT_SOURCE_FORMAT_MISMATCH');
         }
         if (format === 'csv') {
             const detection = await detectCsv(sourcePath);
-            const override = input.sourceOptions?.format === 'csv' ? input.sourceOptions : input.parsing;
+            const override = requestedSourceOptions?.format === 'csv' ? requestedSourceOptions : undefined;
             const parsing = mergeParsing(detection.options, override);
             source = { format: 'csv', ...parsing };
             if (detection.requiresEncodingSelection && !override?.encoding) {
@@ -302,7 +302,7 @@ export async function saveImportPlan(db: DBService, connection: BaseConnection, 
     if (!schemaHash || plan.sourceSchemaHash !== schemaHash) {
         throw new ImportServiceError('The analyzed source schema changed. Review the mapping and save it again.', 409, 'IMPORT_SCHEMA_CHANGED');
     }
-    if (!sameSourceOptions(sourceOptionsForPlan(plan), run.parsingOptions)) {
+    if (!sameSourceOptions(plan.source, run.parsingOptions)) {
         throw new ImportServiceError('The source settings changed. Analyze the source again before saving the mapping.', 409, 'IMPORT_SOURCE_OPTIONS_CHANGED');
     }
     const profile = importRunProfile(run);
@@ -707,7 +707,7 @@ function importRunProfile(run: Run): DatasetProfileV2 | null {
 }
 
 function sameSourceOptions(plan: ImportSourceOptions, stored: unknown) {
-    const normalized = normalizeStoredSourceOptions(stored);
+    const normalized = parseImportSourceOptions(stored);
     if (!normalized || normalized.format !== plan.format) return false;
     if (plan.format !== 'csv' || normalized.format !== 'csv') return true;
     return normalized.delimiter === plan.delimiter && normalized.hasHeader === plan.hasHeader && normalized.encoding === plan.encoding && normalized.quoteChar === plan.quoteChar;
@@ -759,7 +759,7 @@ async function writeManifest(db: DBService, run: Run) {
     const artifacts = getDoryArtifactStore().importRuns;
     const paths = artifacts.paths(run.organizationId, run.id, run.sourceExtension ?? 'csv');
     const plan = run.plan ? parseImportPlan(run.plan) : null;
-    const sourceOptions = normalizeStoredSourceOptions(run.parsingOptions);
+    const sourceOptions = parseImportSourceOptions(run.parsingOptions);
     await artifacts.putJson(paths.manifest, {
         version: IMPORT_MANIFEST_VERSION,
         runId: run.id,

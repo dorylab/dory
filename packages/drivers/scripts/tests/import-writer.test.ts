@@ -7,7 +7,7 @@ import test, { type TestContext } from 'node:test';
 import Database from 'better-sqlite3';
 import { DuckDBInstance } from '@duckdb/node-api';
 
-import { analyzeCsv, datasetSchemaHash, prepareImportDataset, type ImportPlanV1, type ImportPlanV2 } from '@dory/import';
+import { analyzeCsv, datasetSchemaHash, prepareImportDataset, type ImportPlan } from '@dory/import';
 
 import { SqliteImportWriter } from '../../src/database/sqlite/import-writer';
 import { buildD1InsertQueries, CloudflareD1ImportWriter, d1ImportValue } from '../../src/database/cloudflare-d1/import-writer';
@@ -27,8 +27,7 @@ test('SQLite writer creates a table and preserves strings, booleans, dates, date
     const databasePath = path.join(fixture.dir, 'target.sqlite');
     new Database(databasePath).close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
-    const { parsing: _legacyParsing, version: _legacyVersion, ...executionPlan } = fixture.plan;
-    const plan: ImportPlanV2 = { ...executionPlan, version: 'dory.import-plan.v2', source: { format: 'parquet' } };
+    const plan: ImportPlan = { ...fixture.plan, source: { format: 'parquet' } };
     const result = await writer.write({ dataset: fixture.dataset, plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
     assert.deepEqual(result, { insertedRows: 2, batches: 2, atomicity: 'atomic' });
     const database = new Database(databasePath);
@@ -113,7 +112,7 @@ test('DuckDB writer creates and atomically imports a local table', async t => {
     const databaseReader = await connection.runAndReadAll('SELECT current_database() AS name');
     const database = String(databaseReader.getRowObjectsJson()[0]?.name);
     const writer = new DuckDbImportWriter(() => connection);
-    const plan: ImportPlanV1 = { ...fixture.plan, target: { mode: 'create', database, schema: 'main', table: 'customers' } };
+    const plan: ImportPlan = { ...fixture.plan, target: { mode: 'create', database, schema: 'main', table: 'customers' } };
     const result = await writer.write({ dataset: fixture.dataset, plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
     assert.deepEqual(result, { insertedRows: 2, batches: 2, atomicity: 'atomic' });
     const reader = await connection.runAndReadAll('SELECT id, name, active FROM customers ORDER BY id');
@@ -130,7 +129,7 @@ test('SQLite replace rolls back the delete when an insert violates a constraint'
     seed.exec("CREATE TABLE customers (id INTEGER UNIQUE NOT NULL, name TEXT NOT NULL); INSERT INTO customers VALUES (99, 'original')");
     seed.close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
-    const plan: ImportPlanV1 = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
+    const plan: ImportPlan = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
     await assert.rejects(writer.write({ dataset: fixture.dataset, plan, batchSize: 1000, signal: new AbortController().signal, onProgress: () => undefined }), /UNIQUE/);
     const database = new Database(databasePath);
     t.after(() => database.close());
@@ -182,7 +181,7 @@ test('SQLite cancellation before commit leaves the target unchanged', async t =>
     seed.exec("CREATE TABLE customers (id INTEGER NOT NULL, name TEXT NOT NULL); INSERT INTO customers VALUES (99, 'original')");
     seed.close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
-    const plan: ImportPlanV1 = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
+    const plan: ImportPlan = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
     const controller = new AbortController();
     controller.abort();
     await assert.rejects(writer.write({ dataset: fixture.dataset, plan, batchSize: 1000, signal: controller.signal, onProgress: () => undefined }), /canceled/);
@@ -198,7 +197,7 @@ test('SQLite cancellation at the persisted commit boundary rolls back', async t 
     seed.exec("CREATE TABLE customers (id INTEGER NOT NULL, name TEXT NOT NULL); INSERT INTO customers VALUES (99, 'original')");
     seed.close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
-    const plan: ImportPlanV1 = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
+    const plan: ImportPlan = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
     const controller = new AbortController();
     await assert.rejects(
         writer.write({
@@ -217,7 +216,7 @@ test('SQLite cancellation at the persisted commit boundary rolls back', async t 
     assert.deepEqual(database.prepare('SELECT * FROM customers').all(), [{ id: 99, name: 'original' }]);
 });
 
-async function fixtureDataset(t: TestContext, csv: string, configurePlan?: (plan: ImportPlanV1) => ImportPlanV1) {
+async function fixtureDataset(t: TestContext, csv: string, configurePlan?: (plan: ImportPlan) => ImportPlan) {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-sqlite-import-'));
     t.after(() => rm(dir, { recursive: true, force: true }));
     const sourcePath = path.join(dir, 'source.csv');
@@ -229,9 +228,9 @@ async function fixtureDataset(t: TestContext, csv: string, configurePlan?: (plan
         outputArrowPath: path.join(dir, 'source.arrow'),
         parsing: { delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
     });
-    const basePlan: ImportPlanV1 = {
-        version: 'dory.import-plan.v1',
-        parsing: analysis.parsing,
+    const basePlan: ImportPlan = {
+        version: 'dory.import-plan.v2',
+        source: { format: 'csv', ...analysis.parsing },
         target: { mode: 'create', database: 'main', table: 'customers' },
         columns: analysis.profile.columns.map((column, order) => ({ source: column.name, target: column.name, targetType: column.detectedType, ignored: false, order })),
         mode: 'append',
@@ -249,11 +248,11 @@ async function fixtureDataset(t: TestContext, csv: string, configurePlan?: (plan
     return { dir, dataset: prepared.dataset, plan };
 }
 
-function previewPlan(target: ImportPlanV1['target']): ImportPlanV1 {
+function previewPlan(target: ImportPlan['target']): ImportPlan {
     const types = ['string', 'boolean', 'int64', 'float64', 'date', 'datetime'] as const;
     return {
-        version: 'dory.import-plan.v1',
-        parsing: { delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
+        version: 'dory.import-plan.v2',
+        source: { format: 'csv', delimiter: ',', hasHeader: true, encoding: 'utf8', quoteChar: '"' },
         target,
         columns: types.map((targetType, order) => ({ source: `source_${order}`, target: order === 0 ? 'select value' : `column_${order}`, targetType, ignored: false, order })),
         mode: 'append',

@@ -2,14 +2,11 @@ import { fingerprint } from '@dory/dataset';
 import { z } from 'zod';
 
 import {
-    IMPORT_PLAN_V2_VERSION,
     IMPORT_PLAN_VERSION,
     TRANSFORM_VERSION,
     type ImportColumnMappingV1,
     type ImportExecutionPlan,
     type ImportPlan,
-    type ImportPlanV1,
-    type ImportPlanV2,
     type ImportSourceOptions,
     type TransformOperationV1,
     type TransformPlanV1,
@@ -70,15 +67,12 @@ const importExecutionShape = {
     sourceSchemaHash: z.string().regex(/^[a-f0-9]{64}$/),
 };
 
-export const importPlanV1Schema = z.object({ version: z.literal(IMPORT_PLAN_VERSION), parsing: csvParsingSchema, ...importExecutionShape }).superRefine(refineImportExecutionPlan);
-
-export const importPlanV2Schema = z
-    .object({ version: z.literal(IMPORT_PLAN_V2_VERSION), source: importSourceOptionsSchema, ...importExecutionShape })
+export const importPlanSchema = z
+    .object({ version: z.literal(IMPORT_PLAN_VERSION), source: importSourceOptionsSchema, ...importExecutionShape })
     .superRefine(refineImportExecutionPlan);
 
 export function parseImportPlan(value: unknown): ImportPlan {
-    const version = value && typeof value === 'object' && 'version' in value ? (value as { version?: unknown }).version : undefined;
-    const parsed = (version === IMPORT_PLAN_V2_VERSION ? importPlanV2Schema.parse(value) : importPlanV1Schema.parse(value)) as ImportPlan;
+    const parsed = importPlanSchema.parse(value) as ImportPlan;
     return { ...parsed, transform: canonicalTransformPlan(parsed.columns, parsed.transform.operations) };
 }
 
@@ -90,15 +84,9 @@ export function hashImportPlan(plan: ImportPlan): string {
     return fingerprint(parseImportPlan(plan));
 }
 
-export function sourceOptionsForPlan(plan: ImportPlan): ImportSourceOptions {
-    return plan.version === IMPORT_PLAN_VERSION ? { format: 'csv', ...plan.parsing } : plan.source;
-}
-
-export function normalizeStoredSourceOptions(value: unknown): ImportSourceOptions | null {
-    const direct = importSourceOptionsSchema.safeParse(value);
-    if (direct.success) return direct.data as ImportSourceOptions;
-    const legacy = csvParsingSchema.safeParse(value);
-    return legacy.success ? ({ format: 'csv', ...legacy.data } as ImportSourceOptions) : null;
+export function parseImportSourceOptions(value: unknown): ImportSourceOptions | null {
+    const parsed = importSourceOptionsSchema.safeParse(value);
+    return parsed.success ? (parsed.data as ImportSourceOptions) : null;
 }
 
 function refineImportExecutionPlan(plan: ImportExecutionPlan, context: z.RefinementCtx) {
