@@ -22,6 +22,7 @@ import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { cn } from '@dory/web-utils';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
+import { driverSupportsDataImport } from '@/lib/client/import-capabilities';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     initialUser?: User | null;
@@ -74,7 +75,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const defaultDatabase = currentRouteConnection ? getExplorerDefaultDatabase(currentRouteConnection) : null;
     const currentConnectionType = currentRouteConnection?.type ?? null;
     const supportsOperationalPages = currentConnectionType === 'clickhouse';
-    const supportsImport = currentConnectionType === 'postgres' || currentConnectionType === 'sqlite';
+    const supportsImport = driverSupportsDataImport(currentConnectionType);
     const explorerUrl =
         connectionId && defaultDatabase
             ? buildExplorerDatabasePath({ organization, connectionId }, defaultDatabase)

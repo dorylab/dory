@@ -17,7 +17,7 @@ import type { ClickhouseDatasource } from '../../src/database/clickhouse/datasou
 import { MySqlImportWriter } from '../../src/database/mysql/import-writer';
 import { OracleImportWriter } from '../../src/database/oracle/import-writer';
 import { SnowflakeImportWriter } from '../../src/database/snowflake/import-writer';
-import { SqlServerImportWriter } from '../../src/database/sqlserver/import-writer';
+import { createSqlServerBulkTable, SqlServerImportWriter } from '../../src/database/sqlserver/import-writer';
 
 test('SQLite writer creates a table and preserves strings, booleans, dates, datetimes, and newlines', async t => {
     const fixture = await fixtureDataset(
@@ -95,6 +95,14 @@ test('new import dialects generate qualified, escaped create SQL with safe fixed
         clickhouse,
         /`analytics`\.`order items`.*Nullable\(String\).*Nullable\(Bool\).*Nullable\(Int64\).*Nullable\(Float64\).*Nullable\(Date\).*Nullable\(DateTime64.*MergeTree ORDER BY tuple\(\)/,
     );
+});
+
+test('SQL Server bulk table keeps the schema-qualified escaped path', () => {
+    const table = createSqlServerBulkTable({ mode: 'create', schema: 'sales ops', table: 'order] items' });
+
+    assert.equal(table.name, 'order] items');
+    assert.equal(table.schema, 'sales ops');
+    assert.equal(table.path, '[sales ops].[order]] items]');
 });
 
 test('DuckDB writer creates and atomically imports a local table', async t => {

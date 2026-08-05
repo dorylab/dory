@@ -28,7 +28,9 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { cn } from '@dory/web-utils';
+import type { ConnectionType } from '@dory/shared/types/connections';
 import { useConnections } from '@/app/(app)/[organization]/connections/hooks/use-connections';
+import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { tableQueryKeys } from '@/app/(app)/[organization]/components/table-browser/components/table-queries';
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { executeActionClient } from '@/lib/actions/client';
@@ -623,7 +625,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 target={target}
                                 onTarget={setTarget}
                                 connectionId={connectionId}
-                                connectionType={selectedConnection?.type ?? ''}
+                                connectionType={selectedConnection?.type ?? null}
                                 connectionDatabase={selectedConnection?.database ?? undefined}
                                 pending={inspectMutation.isPending}
                                 onBack={() => setStep('preview')}
@@ -1126,7 +1128,7 @@ function TargetStep({
     target: Target;
     onTarget: (target: Target) => void;
     connectionId: string;
-    connectionType: string;
+    connectionType: ConnectionType | null;
     connectionDatabase?: string;
     pending: boolean;
 } & StepNavigation) {
@@ -1139,6 +1141,7 @@ function TargetStep({
     const databaseOptions = useMemo(() => normalizeSelectOptions(databasesQuery.data?.databases), [databasesQuery.data?.databases]);
     const selectedDatabase = target.database?.trim() ?? '';
     const supportsSchemas = driverSupportsSchema(connectionType);
+    const defaultSchemaName = getSidebarConfig(connectionType).defaultSchemaName;
 
     const schemasQuery = useQuery({
         queryKey: ['import-target-metadata', 'schemas', connectionId, selectedDatabase],
@@ -1181,10 +1184,10 @@ function TargetStep({
         if (!supportsSchemas || !selectedDatabase || !schemaOptions.length) return;
         if (target.schema && schemaOptions.some(option => option.value === target.schema)) return;
 
-        const preferred = schemaOptions.find(option => option.value === 'public') ?? schemaOptions[0];
+        const preferred = schemaOptions.find(option => option.value === defaultSchemaName) ?? schemaOptions[0];
         if (!preferred) return;
         onTarget({ ...target, schema: preferred.value, table: target.mode === 'existing' ? '' : target.table });
-    }, [onTarget, schemaOptions, selectedDatabase, supportsSchemas, target]);
+    }, [defaultSchemaName, onTarget, schemaOptions, selectedDatabase, supportsSchemas, target]);
 
     const metadataError = databasesQuery.error ?? (supportsSchemas ? schemasQuery.error : null) ?? (target.mode === 'existing' ? tablesQuery.error : null);
     const targetReady = Boolean(

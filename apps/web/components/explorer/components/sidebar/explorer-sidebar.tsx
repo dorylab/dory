@@ -14,6 +14,7 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useDatabases } from '@/hooks/use-databases';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { executeActionClient } from '@/lib/actions/client';
+import { driverSupportsDataImport } from '@/lib/client/import-capabilities';
 import { getDriverCapabilities } from '@/lib/explorer/capabilities';
 import { isLocalFilesDataset } from '@/lib/explorer/local-files';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
@@ -639,7 +640,7 @@ export function ExplorerSidebar({
                                 setActiveDatabase(target.database);
                                 onOpenObject?.(target);
                             }}
-                            onImportTable={connectionType === 'postgres' || connectionType === 'sqlite' ? onImportTable : undefined}
+                            onImportTable={driverSupportsDataImport(connectionType) ? onImportTable : undefined}
                             filterEntries={filterEntries}
                             getSchemaObjects={getSchemaObjects}
                         />

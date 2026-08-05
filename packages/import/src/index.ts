@@ -1,5 +1,6 @@
 export { analyzeCsv, datasetSchemaHash, profileDataset, type AnalyzeCsvInput } from './csv-analyzer';
 export { detectCsv, transcodeCsvToUtf8 } from './csv-detection';
+export { getImportErrorMessage } from './error-message';
 export { createDefaultMappings, validateTargetCoverage } from './mapping';
 export {
     canonicalTransformPlan,

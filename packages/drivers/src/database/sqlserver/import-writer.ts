@@ -77,9 +77,7 @@ export class SqlServerImportWriter implements DataWriter {
                 if (input.signal.aborted) throw abortError();
                 const rows = batchRows(batch, columns).map(row => row.map((value, index) => sqlServerValue(value, columns[index]!.targetType)));
                 if (!rows.length) continue;
-                const table = new sql.Table(input.plan.target.table);
-                table.schema = input.plan.target.schema?.trim() || 'dbo';
-                table.create = false;
+                const table = createSqlServerBulkTable(input.plan.target);
                 for (const column of columns) table.columns.add(column.target, sqlServerBindType(column.targetType), { nullable: true });
                 for (const row of rows) table.rows.add(...(row as Array<string | number | boolean | Date | Buffer | null | undefined>));
                 const result = await new sql.Request(transaction).bulk(table);
@@ -100,6 +98,16 @@ export class SqlServerImportWriter implements DataWriter {
             throw error;
         }
     }
+}
+
+export function createSqlServerBulkTable(target: ImportTarget) {
+    const schema = target.schema?.trim() || 'dbo';
+    const table = new sql.Table();
+    table.name = target.table;
+    table.schema = schema;
+    table.path = `${quoteBracket(schema)}.${quoteBracket(target.table)}`;
+    table.create = false;
+    return table;
 }
 
 function createTableSql(plan: ImportExecutionPlan) {

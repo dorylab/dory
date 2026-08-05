@@ -19,6 +19,7 @@ import {
     datasetSchemaHash,
     detectCsv,
     hashImportPlan,
+    getImportErrorMessage,
     importSourceFormatForExtension,
     ImportSourceError,
     parseImportPlan,
@@ -166,7 +167,7 @@ export async function uploadImportSource(db: DBService, input: { organizationId:
             sourceBytes: null,
             sourceObjectPath: null,
             errorCode: tooLarge ? 'IMPORT_FILE_TOO_LARGE' : 'IMPORT_UPLOAD_FAILED',
-            errorMessage: error instanceof Error ? error.message : String(error),
+            errorMessage: getImportErrorMessage(error, 'The source file upload failed'),
         });
         await db.importRuns.appendEvent(input.organizationId, input.runId, 'upload.failed', { message: failed.errorMessage });
         await writeManifest(db, failed).catch(() => undefined);
@@ -670,9 +671,7 @@ class ImportRunner {
                     await completeImportRun(this.db, organizationId, runId, committedResult, preparedFilteredRows);
                     return;
                 } catch (completionError) {
-                    failure = new CommitUnknownError(
-                        completionError instanceof Error ? `The target committed, but the import run could not record completion: ${completionError.message}` : undefined,
-                    );
+                    failure = new CommitUnknownError(`The target committed, but the import run could not record completion: ${getImportErrorMessage(completionError)}`);
                 }
             }
             const canceled = controller.signal.aborted || (failure instanceof DOMException && failure.name === 'AbortError');
@@ -680,6 +679,7 @@ class ImportRunner {
             const persisted = await this.db.importRuns.get(organizationId, runId);
             const committedRows = Math.max(persisted?.insertedRows ?? 0, failure instanceof PartialWriteError ? failure.committedRows : 0);
             const partial = committedRows > 0 || failure instanceof PartialWriteError;
+            const failureMessage = getImportErrorMessage(failure);
             const current = await this.db.importRuns.update(organizationId, runId, {
                 status,
                 phase: status,
@@ -697,17 +697,11 @@ class ImportRunner {
                         : failure instanceof ImportServiceError
                           ? failure.code
                           : 'IMPORT_EXECUTION_FAILED',
-                errorMessage: canceled
-                    ? partial
-                        ? 'The import was canceled after some rows had already committed. Review the target table.'
-                        : null
-                    : failure instanceof Error
-                      ? failure.message
-                      : String(failure),
+                errorMessage: canceled ? (partial ? 'The import was canceled after some rows had already committed. Review the target table.' : null) : failureMessage,
                 heartbeatAt: new Date(),
                 completedAt: new Date(),
             });
-            await this.db.importRuns.appendEvent(organizationId, runId, `run.${status}`, canceled ? {} : { message: failure instanceof Error ? failure.message : String(failure) });
+            await this.db.importRuns.appendEvent(organizationId, runId, `run.${status}`, canceled ? {} : { message: failureMessage });
             await writeManifest(this.db, current).catch(() => undefined);
             await writeEventsArtifact(this.db, current).catch(() => undefined);
         } finally {
@@ -862,7 +856,7 @@ async function removeWorkDir(workDir: string) {
 }
 
 async function markAnalysisFailed(db: DBService, organizationId: string, runId: string, error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = getImportErrorMessage(error, 'The source file analysis failed');
     const errorCode = error instanceof ImportServiceError ? error.code : 'IMPORT_ANALYSIS_FAILED';
     const failed = await db.importRuns.update(organizationId, runId, {
         status: 'failed',
@@ -910,7 +904,7 @@ function importSourceServiceError(error: unknown) {
     if (error instanceof ImportSourceError) {
         return new ImportServiceError(error.message, error.code === 'IMPORT_MATERIALIZED_FILE_TOO_LARGE' ? 413 : 422, error.code, error.details);
     }
-    return new ImportServiceError(error instanceof Error ? error.message : String(error), 422, 'IMPORT_ANALYSIS_FAILED');
+    return new ImportServiceError(getImportErrorMessage(error, 'The source file analysis failed'), 422, 'IMPORT_ANALYSIS_FAILED');
 }
 
 function isAbortError(error: unknown) {
