@@ -89,14 +89,17 @@ type Profile = {
 };
 type Mapping = { source: string; target: string; targetType: ImportColumnType; ignored: boolean; order: number };
 type Parsing = { delimiter: ',' | '\t' | ';' | '|'; hasHeader: boolean; encoding: string; quoteChar: string };
+type SourceFormat = 'csv' | 'parquet' | 'ndjson' | 'arrow';
+type SourceOptions = ({ format: 'csv' } & Parsing) | { format: 'parquet' } | { format: 'ndjson' } | { format: 'arrow' };
 type ImportRun = {
     id: string;
     connectionId: string | null;
     status: ImportRunStatus;
     phase: string;
     sourceName: string | null;
+    sourceExtension: string | null;
     sourceBytes: number | null;
-    parsingOptions: Parsing | null;
+    parsingOptions: SourceOptions | Parsing | null;
     profile: Profile | null;
     plan: ImportPlan | null;
     progress: Record<string, unknown> | null;
@@ -117,9 +120,7 @@ type TargetSchema = {
     columns: Array<{ name: string; databaseType: string; importType: ImportColumnType; nullable: boolean; hasDefault: boolean }>;
     writeCapabilities: ImportWriteCapabilities;
 };
-type ImportPlan = {
-    version: 'dory.import-plan.v1';
-    parsing: Parsing;
+type ImportPlanCommon = {
     target: Target;
     columns: Mapping[];
     mode: 'append' | 'replace';
@@ -127,6 +128,7 @@ type ImportPlan = {
     transform: { version: 'dory.transform.v1'; operations: TransformOperation[] };
     sourceSchemaHash: string;
 };
+type ImportPlan = ImportPlanCommon & ({ version: 'dory.import-plan.v1'; parsing: Parsing } | { version: 'dory.import-plan.v2'; source: SourceOptions });
 type TransformPreview = {
     version: 'dory.transform-preview.v1';
     inputRows: number;
@@ -185,7 +187,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     const [file, setFile] = useState<File | null>(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [preparationStage, setPreparationStage] = useState<'idle' | 'uploading' | 'analyzing'>('idle');
-    const [parsing, setParsing] = useState<Parsing | null>(null);
+    const [sourceOptions, setSourceOptions] = useState<SourceOptions | null>(null);
     const [target, setTarget] = useState<Target>({
         mode: fixedTarget || entry.table ? 'existing' : 'create',
         database: fixedTarget?.database ?? entry.database ?? undefined,
@@ -215,8 +217,8 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     const currentStepIndex = stepIds.indexOf(step);
     const previewStepIndex = stepIds.indexOf('preview');
     const targetLabel = [target.database, target.schema, target.table].filter(Boolean).join('.');
-    const canResumeSource = Boolean(run && parsing && (run.profile || run.phase === 'encoding_required'));
-    const parsingNeedsAnalysis = Boolean(run && parsing && !parsingOptionsEqual(parsing, run.parsingOptions));
+    const canResumeSource = Boolean(run && sourceOptions && (run.profile || run.phase === 'encoding_required'));
+    const sourceOptionsNeedAnalysis = Boolean(run && sourceOptions && !sourceOptionsEqual(sourceOptions, normalizeSourceOptions(run.parsingOptions)));
 
     const getStepNumber = (stepId: WizardStepId) => stepIds.indexOf(stepId) + 1;
 
@@ -228,7 +230,8 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     useEffect(() => {
         if (!run || hydratedRunRef.current === run.id) return;
         hydratedRunRef.current = run.id;
-        if (run.parsingOptions && 'delimiter' in run.parsingOptions) setParsing(run.parsingOptions);
+        const storedSourceOptions = normalizeSourceOptions(run.parsingOptions);
+        if (storedSourceOptions) setSourceOptions(storedSourceOptions);
         if (run.plan) {
             setTarget(isTableModal && fixedTarget ? { mode: 'existing', ...fixedTarget } : run.plan.target);
             setMappings(run.plan.columns);
@@ -286,7 +289,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         onSuccess: result => {
             const analyzed = result.run;
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
-            setParsing(analyzed.parsingOptions);
+            setSourceOptions(normalizeSourceOptions(analyzed.parsingOptions));
             setMappings(analyzed.profile ? defaultMappings(analyzed.profile, null) : []);
             setCleaningOperations([]);
             setStep('preview');
@@ -299,10 +302,10 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     });
 
     const analyzeMutation = useMutation({
-        mutationFn: () => api<ImportRun>(`/api/import-runs/${run!.id}/analyze`, { method: 'POST', body: JSON.stringify({ parsing }) }),
+        mutationFn: () => api<ImportRun>(`/api/import-runs/${run!.id}/analyze`, { method: 'POST', body: JSON.stringify({ sourceOptions }) }),
         onSuccess: analyzed => {
             queryClient.setQueryData(['import-run', analyzed.id], analyzed);
-            setParsing(analyzed.parsingOptions);
+            setSourceOptions(normalizeSourceOptions(analyzed.parsingOptions));
             setMappings(defaultMappings(analyzed.profile!, null));
             setCleaningOperations([]);
             setTargetSchema(null);
@@ -350,7 +353,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         retry: false,
     });
 
-    const transformDraftKey = JSON.stringify({ parsing, mappings, cleaningOperations, target, writeMode, batchSize });
+    const transformDraftKey = JSON.stringify({ sourceOptions, mappings, cleaningOperations, target, writeMode, batchSize });
     const transformPreviewQuery = useQuery({
         queryKey: ['import-transform-preview', run?.id, transformDraftKey],
         queryFn: ({ signal }) =>
@@ -359,7 +362,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                 signal,
                 body: JSON.stringify({ plan: buildPlan() }),
             }),
-        enabled: step === 'clean' && Boolean(run && parsing) && !parsingNeedsAnalysis && cleaningOperationsValid(cleaningOperations),
+        enabled: step === 'clean' && Boolean(run && sourceOptions) && !sourceOptionsNeedAnalysis && cleaningOperationsValid(cleaningOperations),
         staleTime: Infinity,
         retry: false,
     });
@@ -442,7 +445,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     const writeCapability = resolvedTargetSchema?.writeCapabilities[target.mode === 'create' ? 'create' : writeMode] ?? readWriteCapability(run?.progress?.writeCapability) ?? null;
 
     function buildPlan(): ImportPlan {
-        if (!run || !parsing) throw new Error(t('Errors.PlanIncomplete'));
+        if (!run || !sourceOptions) throw new Error(t('Errors.PlanIncomplete'));
         const sourceSchemaHash = String(run.progress?.schemaHash ?? '');
         if (!/^[a-f0-9]{64}$/.test(sourceSchemaHash)) throw new Error(t('Errors.PlanIncomplete'));
         const operations: TransformOperation[] = cleaningOperations.map(operation => {
@@ -458,8 +461,8 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             }
         }
         return {
-            version: 'dory.import-plan.v1',
-            parsing,
+            version: 'dory.import-plan.v2',
+            source: sourceOptions,
             target: normalizedTarget(target),
             columns: mappings,
             mode: target.mode === 'create' ? 'append' : writeMode,
@@ -475,7 +478,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     }
 
     async function continueFromPreview() {
-        if (parsingNeedsAnalysis) {
+        if (sourceOptionsNeedAnalysis) {
             try {
                 await analyzeMutation.mutateAsync();
             } catch {
@@ -512,7 +515,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                             const label = stepLabels[stepId];
                             const number = index + 1;
                             const active = step === stepId;
-                            const blockedByParsingChange = parsingNeedsAnalysis && index > previewStepIndex;
+                            const blockedByParsingChange = sourceOptionsNeedAnalysis && index > previewStepIndex;
                             const complete = !blockedByParsingChange && (furthestStepIndex > index || (stepId === 'execute' && run?.status === 'completed'));
                             return (
                                 <li key={stepId}>
@@ -562,15 +565,17 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 onContinue={() => (canResumeSource ? setStep('preview') : startMutation.mutate())}
                             />
                         ) : null}
-                        {step === 'preview' && profile && parsing ? (
+                        {step === 'preview' && profile && sourceOptions ? (
                             <PreviewStep
                                 t={t}
                                 stepNumber={getStepNumber('preview')}
                                 profile={profile}
                                 onApplyFix={applySuggestedOperation}
-                                parsing={parsing}
-                                onParsing={setParsing}
-                                parsingNeedsAnalysis={parsingNeedsAnalysis}
+                                sourceOptions={sourceOptions}
+                                onSourceOptions={setSourceOptions}
+                                sourceOptionsNeedAnalysis={sourceOptionsNeedAnalysis}
+                                sourceWarnings={readSourceWarnings(run?.progress?.sourceWarnings)}
+                                sourceSchema={readSourceSchema(run?.progress?.sourceSchema)}
                                 reanalyzing={analyzeMutation.isPending}
                                 onReanalyze={() => analyzeMutation.mutate()}
                                 continuePending={analyzeMutation.isPending || inspectMutation.isPending}
@@ -578,12 +583,12 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 onContinue={() => void continueFromPreview()}
                             />
                         ) : null}
-                        {step === 'preview' && !profile && parsing ? (
+                        {step === 'preview' && !profile && sourceOptions?.format === 'csv' ? (
                             <EncodingSelectionStep
                                 t={t}
                                 stepNumber={getStepNumber('preview')}
-                                parsing={parsing}
-                                onParsing={setParsing}
+                                parsing={sourceOptions}
+                                onParsing={value => setSourceOptions({ format: 'csv', ...value })}
                                 reanalyzing={analyzeMutation.isPending}
                                 onReanalyze={() => analyzeMutation.mutate()}
                                 onBack={() => setStep('select')}
@@ -776,6 +781,7 @@ function SelectFileStep({
     const inputRef = useRef<HTMLInputElement | null>(null);
     const displayName = file?.name ?? run?.sourceName;
     const displaySize = file?.size ?? run?.sourceBytes;
+    const displayFormat = sourceFormatForFileName(displayName ?? '', run?.sourceExtension);
     const analyzing = stage === 'analyzing';
 
     return (
@@ -801,6 +807,11 @@ function SelectFileStep({
                         <Upload className="size-5" />
                     </span>
                     <span className="mt-4 text-base font-medium">{displayName ?? t('Select.Drop')}</span>
+                    {displayFormat ? (
+                        <Badge variant="outline" className="mt-2">
+                            {t(`Formats.${displayFormat}`)}
+                        </Badge>
+                    ) : null}
                     <span className="mt-1 text-sm text-muted-foreground">
                         {displaySize != null ? formatBytes(displaySize) : t('Select.Limit', { limit: formatBytes(maxFileBytes) })}
                     </span>
@@ -808,7 +819,7 @@ function SelectFileStep({
                         ref={inputRef}
                         type="file"
                         disabled={pending || sourceLocked}
-                        accept=".csv,.tsv,text/csv,text/tab-separated-values"
+                        accept=".csv,.tsv,.parquet,.ndjson,.jsonl,.arrow,.ipc,.feather,text/csv,text/tab-separated-values,application/x-ndjson,application/vnd.apache.parquet,application/vnd.apache.arrow.file"
                         className="hidden"
                         onChange={event => onFile(event.target.files?.[0] ?? null)}
                     />
@@ -836,9 +847,11 @@ function PreviewStep({
     stepNumber,
     profile,
     onApplyFix,
-    parsing,
-    onParsing,
-    parsingNeedsAnalysis,
+    sourceOptions,
+    onSourceOptions,
+    sourceOptionsNeedAnalysis,
+    sourceWarnings,
+    sourceSchema,
     reanalyzing,
     continuePending,
     onReanalyze,
@@ -849,13 +862,16 @@ function PreviewStep({
     stepNumber: number;
     profile: Profile;
     onApplyFix: (operation: Extract<CleaningOperation, { kind: 'trim' | 'emptyToNull' }>) => void;
-    parsing: Parsing;
-    onParsing: (parsing: Parsing) => void;
-    parsingNeedsAnalysis: boolean;
+    sourceOptions: SourceOptions;
+    onSourceOptions: (sourceOptions: SourceOptions) => void;
+    sourceOptionsNeedAnalysis: boolean;
+    sourceWarnings: Array<{ code: 'DECIMAL_STRINGIFIED'; column: string; sourceType: string }>;
+    sourceSchema: Array<{ name: string; sourceType: string; importType: ImportColumnType }>;
     reanalyzing: boolean;
     continuePending: boolean;
     onReanalyze: () => void;
 } & StepNavigation) {
+    const sourceTypeByColumn = useMemo(() => new Map(sourceSchema.map(column => [column.name, column.sourceType])), [sourceSchema]);
     return (
         <div className="flex min-h-full flex-col xl:h-full xl:min-h-0">
             <StepHeader
@@ -910,6 +926,7 @@ function PreviewStep({
                                         <Badge variant="outline">{t(`Types.${column.detectedType}`)}</Badge>
                                     </div>
                                     <p className="mt-1 text-xs text-muted-foreground">
+                                        {sourceTypeByColumn.has(column.name) ? `${t('Preview.NativeType', { type: sourceTypeByColumn.get(column.name) ?? '' })} · ` : null}
                                         {t('Quality.Completeness', { rate: ((1 - column.nullRate) * 100).toFixed(1) })} ·{' '}
                                         {t('Preview.NullRate', { rate: (column.nullRate * 100).toFixed(1) })} ·{' '}
                                         {t('Quality.EmptyRate', { rate: (column.emptyRate * 100).toFixed(1) })} ·{' '}
@@ -936,49 +953,67 @@ function PreviewStep({
                         </div>
                     </section>
                     <section className="shrink-0 space-y-3">
-                        <h3 className="text-sm font-medium">{t('Preview.Parsing')}</h3>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="min-w-0 space-y-2">
-                                <Label>{t('Preview.Delimiter')}</Label>
-                                <Select value={parsing.delimiter} onValueChange={(value: Parsing['delimiter']) => onParsing({ ...parsing, delimiter: value })}>
-                                    <SelectTrigger className="w-full min-w-0">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value=",">{t('Delimiters.Comma')}</SelectItem>
-                                        <SelectItem value="\t">{t('Delimiters.Tab')}</SelectItem>
-                                        <SelectItem value=";">{t('Delimiters.Semicolon')}</SelectItem>
-                                        <SelectItem value="|">{t('Delimiters.Pipe')}</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="min-w-0 space-y-2">
-                                <Label>{t('Preview.Encoding')}</Label>
-                                <Select value={parsing.encoding} onValueChange={(value: string) => onParsing({ ...parsing, encoding: value })}>
-                                    <SelectTrigger className="w-full min-w-0">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {['utf8', 'utf16le', 'utf16be', 'gb18030', 'big5', 'shift_jis', 'windows1252'].map(value => (
-                                            <SelectItem key={value} value={value}>
-                                                {value}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-medium">{sourceOptions.format === 'csv' ? t('Preview.Parsing') : t('Preview.SourceFormat')}</h3>
+                            <Badge variant="outline">{t(`Formats.${sourceOptions.format}`)}</Badge>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <Label>{t('Preview.Header')}</Label>
-                            <Switch checked={parsing.hasHeader} onCheckedChange={(value: boolean) => onParsing({ ...parsing, hasHeader: value })} />
-                        </div>
-                        {parsingNeedsAnalysis ? (
-                            <Alert>
-                                <RefreshCw />
-                                <AlertTitle>{t('Preview.ParsingChangedTitle')}</AlertTitle>
-                                <AlertDescription>{t('Preview.ParsingChangedDescription')}</AlertDescription>
+                        {sourceWarnings.map(warning => (
+                            <Alert key={`${warning.code}:${warning.column}`}>
+                                <AlertTitle>{t(`SourceWarnings.${warning.code}.Title`, { column: warning.column })}</AlertTitle>
+                                <AlertDescription>{t(`SourceWarnings.${warning.code}.Description`, { column: warning.column, sourceType: warning.sourceType })}</AlertDescription>
                             </Alert>
-                        ) : null}
+                        ))}
+                        {sourceOptions.format === 'csv' ? (
+                            <>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="min-w-0 space-y-2">
+                                        <Label>{t('Preview.Delimiter')}</Label>
+                                        <Select
+                                            value={sourceOptions.delimiter}
+                                            onValueChange={(value: Parsing['delimiter']) => onSourceOptions({ ...sourceOptions, delimiter: value })}
+                                        >
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value=",">{t('Delimiters.Comma')}</SelectItem>
+                                                <SelectItem value="\t">{t('Delimiters.Tab')}</SelectItem>
+                                                <SelectItem value=";">{t('Delimiters.Semicolon')}</SelectItem>
+                                                <SelectItem value="|">{t('Delimiters.Pipe')}</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="min-w-0 space-y-2">
+                                        <Label>{t('Preview.Encoding')}</Label>
+                                        <Select value={sourceOptions.encoding} onValueChange={(value: string) => onSourceOptions({ ...sourceOptions, encoding: value })}>
+                                            <SelectTrigger className="w-full min-w-0">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {['utf8', 'utf16le', 'utf16be', 'gb18030', 'big5', 'shift_jis', 'windows1252'].map(value => (
+                                                    <SelectItem key={value} value={value}>
+                                                        {value}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <Label>{t('Preview.Header')}</Label>
+                                    <Switch checked={sourceOptions.hasHeader} onCheckedChange={(value: boolean) => onSourceOptions({ ...sourceOptions, hasHeader: value })} />
+                                </div>
+                                {sourceOptionsNeedAnalysis ? (
+                                    <Alert>
+                                        <RefreshCw />
+                                        <AlertTitle>{t('Preview.ParsingChangedTitle')}</AlertTitle>
+                                        <AlertDescription>{t('Preview.ParsingChangedDescription')}</AlertDescription>
+                                    </Alert>
+                                ) : null}
+                            </>
+                        ) : (
+                            <p className="text-xs leading-5 text-muted-foreground">{t('Preview.TypedSourceDescription')}</p>
+                        )}
                     </section>
                 </div>
             </div>
@@ -989,13 +1024,17 @@ function PreviewStep({
                 nextLabel={t('Common.Next')}
                 disabled={reanalyzing}
                 pending={continuePending}
-                secondary={{
-                    label: t('Preview.Reanalyze'),
-                    onClick: onReanalyze,
-                    disabled: continuePending,
-                    pending: reanalyzing,
-                    icon: <RefreshCw />,
-                }}
+                secondary={
+                    sourceOptions.format === 'csv'
+                        ? {
+                              label: t('Preview.Reanalyze'),
+                              onClick: onReanalyze,
+                              disabled: continuePending,
+                              pending: reanalyzing,
+                              icon: <RefreshCw />,
+                          }
+                        : undefined
+                }
             />
         </div>
     );
@@ -1922,9 +1961,49 @@ function connectionHeaders(connectionId: string) {
     return { 'Content-Type': 'application/json', [X_CONNECTION_ID_KEY]: connectionId };
 }
 
-function parsingOptionsEqual(left: Parsing | null | undefined, right: Parsing | null | undefined) {
-    return Boolean(
-        left && right && left.delimiter === right.delimiter && left.hasHeader === right.hasHeader && left.encoding === right.encoding && left.quoteChar === right.quoteChar,
+function normalizeSourceOptions(value: SourceOptions | Parsing | null | undefined): SourceOptions | null {
+    if (!value) return null;
+    return 'format' in value ? value : { format: 'csv', ...value };
+}
+
+function sourceOptionsEqual(left: SourceOptions | null | undefined, right: SourceOptions | null | undefined) {
+    if (!left || !right || left.format !== right.format) return false;
+    if (left.format !== 'csv' || right.format !== 'csv') return true;
+    return left.delimiter === right.delimiter && left.hasHeader === right.hasHeader && left.encoding === right.encoding && left.quoteChar === right.quoteChar;
+}
+
+function sourceFormatForFileName(fileName: string, extension?: string | null): SourceFormat | null {
+    const normalized = (extension || fileName.split('.').pop() || '').toLowerCase();
+    if (normalized === 'csv' || normalized === 'tsv') return 'csv';
+    if (normalized === 'parquet') return 'parquet';
+    if (normalized === 'ndjson' || normalized === 'jsonl') return 'ndjson';
+    if (normalized === 'arrow' || normalized === 'ipc' || normalized === 'feather') return 'arrow';
+    return null;
+}
+
+function readSourceWarnings(value: unknown): Array<{ code: 'DECIMAL_STRINGIFIED'; column: string; sourceType: string }> {
+    if (!Array.isArray(value)) return [];
+    return value.filter((warning): warning is { code: 'DECIMAL_STRINGIFIED'; column: string; sourceType: string } =>
+        Boolean(
+            warning &&
+            typeof warning === 'object' &&
+            (warning as { code?: unknown }).code === 'DECIMAL_STRINGIFIED' &&
+            typeof (warning as { column?: unknown }).column === 'string' &&
+            typeof (warning as { sourceType?: unknown }).sourceType === 'string',
+        ),
+    );
+}
+
+function readSourceSchema(value: unknown): Array<{ name: string; sourceType: string; importType: ImportColumnType }> {
+    if (!Array.isArray(value)) return [];
+    return value.filter((column): column is { name: string; sourceType: string; importType: ImportColumnType } =>
+        Boolean(
+            column &&
+            typeof column === 'object' &&
+            typeof (column as { name?: unknown }).name === 'string' &&
+            typeof (column as { sourceType?: unknown }).sourceType === 'string' &&
+            COLUMN_TYPES.includes((column as { importType?: ImportColumnType }).importType as ImportColumnType),
+        ),
     );
 }
 

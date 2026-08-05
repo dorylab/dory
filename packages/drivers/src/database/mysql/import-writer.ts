@@ -1,6 +1,6 @@
 import type { Pool, ResultSetHeader, RowDataPacket } from 'mysql2/promise';
 
-import { CommitUnknownError, PartialWriteError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn } from '@dory/import';
+import { CommitUnknownError, PartialWriteError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn } from '@dory/import';
 import {
     IMPORT_COLUMN_TYPES,
     abortError,
@@ -61,7 +61,7 @@ export class MySqlImportWriter implements DataWriter {
         );
     }
 
-    async previewCreateTable(plan: ImportPlanV1) {
+    async previewCreateTable(plan: ImportExecutionPlan) {
         return createTableSql(plan);
     }
 
@@ -140,7 +140,7 @@ export class MySqlImportWriter implements DataWriter {
     }
 }
 
-function createTableSql(plan: ImportPlanV1) {
+function createTableSql(plan: ImportExecutionPlan) {
     const columns = activeImportColumns(plan)
         .map(column => `${quoteBacktick(column.target)} ${mysqlType(column.targetType)}`)
         .join(', ');

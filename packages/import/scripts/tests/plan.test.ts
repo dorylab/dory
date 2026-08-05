@@ -5,12 +5,14 @@ import {
     createDefaultMappings,
     hashImportPlan,
     importPlanV1Schema,
+    importPlanV2Schema,
     parseDatasetProfile,
     parseImportPlan,
     validateTargetCoverage,
     type DatasetProfileColumnV2,
     type DatasetProfileV2,
     type ImportPlanV1,
+    type ImportPlanV2,
     type TargetSchema,
 } from '../../src';
 
@@ -74,6 +76,17 @@ test('plan hash is stable for equivalent objects and changes with mapping order'
     const plan = buildPlan();
     assert.equal(hashImportPlan(plan), hashImportPlan(structuredClone(plan)));
     assert.notEqual(hashImportPlan(plan), hashImportPlan({ ...plan, columns: plan.columns.map(column => ({ ...column, order: column.order + 1 })) }));
+});
+
+test('plan v2 validates discriminated source options without changing v1 compatibility', () => {
+    const v1 = buildPlan();
+    const v2: ImportPlanV2 = { ...v1, version: 'dory.import-plan.v2', source: { format: 'parquet' } };
+    delete (v2 as Partial<ImportPlanV1>).parsing;
+    assert.equal(importPlanV1Schema.safeParse(v1).success, true);
+    assert.equal(importPlanV2Schema.safeParse(v2).success, true);
+    assert.equal(parseImportPlan(v1).version, 'dory.import-plan.v1');
+    assert.equal(parseImportPlan(v2).version, 'dory.import-plan.v2');
+    assert.notEqual(hashImportPlan(v1), hashImportPlan(v2));
 });
 
 test('plan normalization keeps value operations ordered before drop and mapping operations', () => {

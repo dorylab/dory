@@ -1,10 +1,11 @@
 import type { Dataset } from '@dory/dataset';
 
 export const IMPORT_PLAN_VERSION = 'dory.import-plan.v1' as const;
+export const IMPORT_PLAN_V2_VERSION = 'dory.import-plan.v2' as const;
 export const DATASET_PROFILE_VERSION = 'dory.dataset-profile.v2' as const;
 export const TRANSFORM_VERSION = 'dory.transform.v1' as const;
 export const TRANSFORM_PREVIEW_VERSION = 'dory.transform-preview.v1' as const;
-export const IMPORT_MANIFEST_VERSION = 'dory.import-manifest.v1' as const;
+export const IMPORT_MANIFEST_VERSION = 'dory.import-manifest.v2' as const;
 export const SOURCE_ROW_NUMBER_COLUMN = '__dory_source_row_number';
 
 export type ImportRunStatus = 'draft' | 'uploading' | 'analyzing' | 'ready' | 'queued' | 'running' | 'completed' | 'failed' | 'canceled' | 'commit_unknown';
@@ -26,6 +27,21 @@ export type CsvParsingOptions = {
     hasHeader: boolean;
     encoding: CsvEncoding;
     quoteChar: string;
+};
+
+export type ImportSourceFormat = 'csv' | 'parquet' | 'ndjson' | 'arrow';
+export type CsvImportSourceOptions = CsvParsingOptions & { format: 'csv' };
+export type ImportSourceOptions = CsvImportSourceOptions | { format: 'parquet' } | { format: 'ndjson' } | { format: 'arrow' };
+export type ImportSourceWarningCode = 'DECIMAL_STRINGIFIED';
+export type ImportSourceWarning = {
+    code: ImportSourceWarningCode;
+    column: string;
+    sourceType: string;
+};
+export type ImportSourceColumnSchema = {
+    name: string;
+    sourceType: string;
+    importType: ImportColumnType;
 };
 
 export type CsvDetectionResult = {
@@ -133,9 +149,7 @@ export type TransformPlanV1 = {
     operations: TransformOperationV1[];
 };
 
-export type ImportPlanV1 = {
-    version: typeof IMPORT_PLAN_VERSION;
-    parsing: CsvParsingOptions;
+export type ImportExecutionPlan = {
     target: ImportTarget;
     columns: ImportColumnMappingV1[];
     mode: ImportWriteMode;
@@ -143,6 +157,18 @@ export type ImportPlanV1 = {
     transform: TransformPlanV1;
     sourceSchemaHash: string;
 };
+
+export type ImportPlanV1 = ImportExecutionPlan & {
+    version: typeof IMPORT_PLAN_VERSION;
+    parsing: CsvParsingOptions;
+};
+
+export type ImportPlanV2 = ImportExecutionPlan & {
+    version: typeof IMPORT_PLAN_V2_VERSION;
+    source: ImportSourceOptions;
+};
+
+export type ImportPlan = ImportPlanV1 | ImportPlanV2;
 
 export type TargetColumn = {
     name: string;
@@ -176,8 +202,14 @@ export interface DataWriter {
     readonly dialect: ImportWriterDialect;
     readonly allowedTypes: ReadonlyArray<ImportColumnType>;
     inspectTarget(target: ImportTarget): Promise<TargetSchema>;
-    previewCreateTable(plan: ImportPlanV1): Promise<string>;
-    write(input: { dataset: Dataset; plan: ImportPlanV1; batchSize: number; signal: AbortSignal; onProgress(event: WriteProgress): void | Promise<void> }): Promise<WriteResult>;
+    previewCreateTable(plan: ImportExecutionPlan): Promise<string>;
+    write(input: {
+        dataset: Dataset;
+        plan: ImportExecutionPlan;
+        batchSize: number;
+        signal: AbortSignal;
+        onProgress(event: WriteProgress): void | Promise<void>;
+    }): Promise<WriteResult>;
 }
 
 export class CommitUnknownError extends Error {
@@ -203,6 +235,15 @@ export type CsvAnalysisResult = {
     dataset: Dataset;
     profile: DatasetProfileV2;
     parsing: CsvParsingOptions;
+    sourceArrowPath: string;
+};
+
+export type ImportSourceAnalysisResult = {
+    dataset: Dataset;
+    profile: DatasetProfileV2;
+    source: ImportSourceOptions;
+    sourceWarnings: ImportSourceWarning[];
+    sourceSchema: ImportSourceColumnSchema[];
     sourceArrowPath: string;
 };
 

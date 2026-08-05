@@ -3450,27 +3450,35 @@
     "ImportWizard": {
         "Eyebrow": "インポート",
         "Title": "データをインポート",
-        "Description": "CSV の分析、マッピング、データベースへの書き込みを復元可能な一つの処理として実行します。",
+        "Description": "データファイルの分析、マッピング、データベースへの書き込みを復元可能な一つの処理として実行します。",
         "ImportData": "データをインポート",
         "Loading": "インポートを読み込み中...",
         "Modal": {
             "Title": "{table} にデータをインポート",
-            "Description": "CSV を分析し、選択したテーブルにデータをマッピングします。",
+            "Description": "データファイルを分析し、選択したテーブルにデータをマッピングします。",
             "Target": "ターゲットテーブル",
             "CurrentTask": "別のテーブルインポートが開いています。現在のタスクを表示します。",
             "Reopen": "表示",
             "Dismiss": "閉じる"
         },
         "Step": "ステップ {number}",
-        "Steps": { "Select": "ファイル選択", "Preview": "プレビュー", "Target": "ターゲット", "Mapping": "マッピング", "Clean": "データ整形", "Options": "オプション", "Execute": "実行" },
+        "Steps": {
+            "Select": "ファイル選択",
+            "Preview": "プレビュー",
+            "Target": "ターゲット",
+            "Mapping": "マッピング",
+            "Clean": "データ整形",
+            "Options": "オプション",
+            "Execute": "実行"
+        },
         "Common": { "Next": "続行", "Back": "戻る" },
         "Select": {
-            "Title": "CSV を選択",
-            "Description": "CSV または TSV をアップロードし、インポート前に分析します。",
+            "Title": "データファイルを選択",
+            "Description": "CSV、TSV、Parquet、NDJSON、Arrow IPC をアップロードし、インポート前に分析します。",
             "Connection": "データソース",
             "ConnectionPlaceholder": "データソースを選択",
-            "Drop": "CSV をドロップするかファイルを選択",
-            "Limit": "CSV または TSV、最大 {limit}",
+            "Drop": "データファイルをドロップするかファイルを選択",
+            "Limit": "CSV、TSV、Parquet、NDJSON、Arrow IPC、最大 {limit}",
             "Uploading": "ファイルをアップロード中",
             "UploadCompleteAnalyzing": "アップロード完了、分析中",
             "Analyze": "アップロードして分析"
@@ -3480,8 +3488,11 @@
             "Description": "{rows} 行、{columns} 列です。最初の 100 行と検出された型を確認してください。",
             "Rows": "プレビュー行",
             "Schema": "検出されたスキーマ",
+            "NativeType": "ソース: {type}",
             "NullRate": "null {rate}%",
             "Parsing": "解析設定",
+            "SourceFormat": "ソース形式",
+            "TypedSourceDescription": "この形式には独自のスキーマがあります。プレビューとマッピングではネイティブのスカラー型を保持します。",
             "Delimiter": "区切り文字",
             "Encoding": "文字コード",
             "EncodingTitle": "ソースの文字コードを選択",
@@ -3495,6 +3506,13 @@
             "Reanalyzed": "プレビューを更新しました"
         },
         "Delimiters": { "Comma": "カンマ", "Tab": "タブ", "Semicolon": "セミコロン", "Pipe": "パイプ" },
+        "Formats": { "csv": "CSV / TSV", "parquet": "Parquet", "ndjson": "NDJSON", "arrow": "Arrow IPC / Feather" },
+        "SourceWarnings": {
+            "DECIMAL_STRINGIFIED": {
+                "Title": "Decimal をテキストとして保持: {column}",
+                "Description": "{column} は {sourceType} を使用しています。現在のインポート型に Decimal がないため、正確な値を文字列として保持します。"
+            }
+        },
         "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
         "Quality": {
             "IssueCount": "問題 {count} 件",
@@ -3613,7 +3631,7 @@
             "commit_unknown": "コミット状態不明"
         },
         "Errors": {
-            "FileRequired": "CSV または TSV ファイルを選択してください。",
+            "FileRequired": "対応しているデータファイルを選択してください。",
             "ConnectionMissing": "現在のデータソースを利用できません。",
             "FileTooLarge": "ファイルが {limit} の上限を超えています。",
             "StartFailed": "インポートを開始できませんでした。",

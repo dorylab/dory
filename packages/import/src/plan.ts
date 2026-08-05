@@ -1,15 +1,33 @@
 import { fingerprint } from '@dory/dataset';
 import { z } from 'zod';
 
-import { IMPORT_PLAN_VERSION, TRANSFORM_VERSION, type ImportColumnMappingV1, type ImportPlanV1, type TransformOperationV1, type TransformPlanV1 } from './types';
+import {
+    IMPORT_PLAN_V2_VERSION,
+    IMPORT_PLAN_VERSION,
+    TRANSFORM_VERSION,
+    type ImportColumnMappingV1,
+    type ImportExecutionPlan,
+    type ImportPlan,
+    type ImportPlanV1,
+    type ImportPlanV2,
+    type ImportSourceOptions,
+    type TransformOperationV1,
+    type TransformPlanV1,
+} from './types';
 
 const columnTypeSchema = z.enum(['string', 'boolean', 'int64', 'float64', 'date', 'datetime']);
-const parsingSchema = z.object({
+export const csvParsingSchema = z.object({
     delimiter: z.enum([',', '\t', ';', '|']),
     hasHeader: z.boolean(),
     encoding: z.enum(['utf8', 'utf16le', 'utf16be', 'gb18030', 'big5', 'shift_jis', 'windows1252']),
     quoteChar: z.string().length(1),
 });
+export const importSourceOptionsSchema = z.discriminatedUnion('format', [
+    csvParsingSchema.extend({ format: z.literal('csv') }),
+    z.object({ format: z.literal('parquet') }),
+    z.object({ format: z.literal('ndjson') }),
+    z.object({ format: z.literal('arrow') }),
+]);
 export const importTargetSchema = z.object({
     mode: z.enum(['create', 'existing']),
     database: z.string().optional(),
@@ -33,78 +51,34 @@ export const transformPlanV1Schema = z.object({
     operations: z.array(transformOperationSchema),
 });
 
-export const importPlanV1Schema = z
-    .object({
-        version: z.literal(IMPORT_PLAN_VERSION),
-        parsing: parsingSchema,
-        target: importTargetSchema,
-        columns: z
-            .array(
-                z.object({
-                    source: z.string().min(1),
-                    target: z.string().min(1).max(255),
-                    targetType: columnTypeSchema,
-                    ignored: z.boolean(),
-                    order: z.number().int().nonnegative(),
-                }),
-            )
-            .min(1),
-        mode: z.enum(['append', 'replace']),
-        batchSize: z.number().int().min(1).max(100_000),
-        transform: transformPlanV1Schema,
-        sourceSchemaHash: z.string().regex(/^[a-f0-9]{64}$/),
-    })
-    .superRefine((plan, context) => {
-        const active = plan.columns.filter(column => !column.ignored);
-        if (active.length === 0) {
-            context.addIssue({ code: 'custom', message: 'At least one column must be imported', path: ['columns'] });
-        }
-        const targets = new Set<string>();
-        const sources = new Set<string>();
-        const orders = new Set<number>();
-        for (const column of active) {
-            const key = column.target;
-            if (targets.has(key)) {
-                context.addIssue({ code: 'custom', message: `Duplicate target column: ${column.target}`, path: ['columns'] });
-            }
-            targets.add(key);
-        }
-        for (const column of plan.columns) {
-            if (sources.has(column.source)) {
-                context.addIssue({ code: 'custom', message: `Duplicate source column: ${column.source}`, path: ['columns'] });
-            }
-            if (orders.has(column.order)) {
-                context.addIssue({ code: 'custom', message: `Duplicate column order: ${column.order}`, path: ['columns'] });
-            }
-            sources.add(column.source);
-            orders.add(column.order);
-        }
-        if (plan.target.mode === 'create' && plan.mode === 'replace') {
-            context.addIssue({ code: 'custom', message: 'Replace is not available when creating a table', path: ['mode'] });
-        }
-        const sourceNames = new Set(plan.columns.map(column => column.source));
-        const singletonOperations = new Set<string>();
-        for (const operation of cleaningTransformOperations(plan.transform.operations)) {
-            if (!sourceNames.has(operation.column)) {
-                context.addIssue({ code: 'custom', message: `Transform column does not exist: ${operation.column}`, path: ['transform', 'operations'] });
-            }
-            if (operation.kind === 'replace') continue;
-            const key = `${operation.kind}:${operation.column}`;
-            if (singletonOperations.has(key)) {
-                context.addIssue({ code: 'custom', message: `Duplicate ${operation.kind} transform for column ${operation.column}`, path: ['transform', 'operations'] });
-            }
-            singletonOperations.add(key);
-            if (operation.kind === 'dropInvalid') {
-                const mapping = plan.columns.find(column => column.source === operation.column);
-                if (!mapping || mapping.ignored || mapping.targetType !== operation.targetType) {
-                    context.addIssue({ code: 'custom', message: `dropInvalid must match the active target type for ${operation.column}`, path: ['transform', 'operations'] });
-                }
-            }
-        }
-    });
+const importExecutionShape = {
+    target: importTargetSchema,
+    columns: z
+        .array(
+            z.object({
+                source: z.string().min(1),
+                target: z.string().min(1).max(255),
+                targetType: columnTypeSchema,
+                ignored: z.boolean(),
+                order: z.number().int().nonnegative(),
+            }),
+        )
+        .min(1),
+    mode: z.enum(['append', 'replace']),
+    batchSize: z.number().int().min(1).max(100_000),
+    transform: transformPlanV1Schema,
+    sourceSchemaHash: z.string().regex(/^[a-f0-9]{64}$/),
+};
 
-export function parseImportPlan(value: unknown): ImportPlanV1 {
-    const parsed = importPlanV1Schema.parse(value) as ImportPlanV1;
+export const importPlanV1Schema = z.object({ version: z.literal(IMPORT_PLAN_VERSION), parsing: csvParsingSchema, ...importExecutionShape }).superRefine(refineImportExecutionPlan);
+
+export const importPlanV2Schema = z
+    .object({ version: z.literal(IMPORT_PLAN_V2_VERSION), source: importSourceOptionsSchema, ...importExecutionShape })
+    .superRefine(refineImportExecutionPlan);
+
+export function parseImportPlan(value: unknown): ImportPlan {
+    const version = value && typeof value === 'object' && 'version' in value ? (value as { version?: unknown }).version : undefined;
+    const parsed = (version === IMPORT_PLAN_V2_VERSION ? importPlanV2Schema.parse(value) : importPlanV1Schema.parse(value)) as ImportPlan;
     return { ...parsed, transform: canonicalTransformPlan(parsed.columns, parsed.transform.operations) };
 }
 
@@ -112,8 +86,59 @@ export function parseImportTarget(value: unknown) {
     return importTargetSchema.parse(value);
 }
 
-export function hashImportPlan(plan: ImportPlanV1): string {
+export function hashImportPlan(plan: ImportPlan): string {
     return fingerprint(parseImportPlan(plan));
+}
+
+export function sourceOptionsForPlan(plan: ImportPlan): ImportSourceOptions {
+    return plan.version === IMPORT_PLAN_VERSION ? { format: 'csv', ...plan.parsing } : plan.source;
+}
+
+export function normalizeStoredSourceOptions(value: unknown): ImportSourceOptions | null {
+    const direct = importSourceOptionsSchema.safeParse(value);
+    if (direct.success) return direct.data as ImportSourceOptions;
+    const legacy = csvParsingSchema.safeParse(value);
+    return legacy.success ? ({ format: 'csv', ...legacy.data } as ImportSourceOptions) : null;
+}
+
+function refineImportExecutionPlan(plan: ImportExecutionPlan, context: z.RefinementCtx) {
+    const active = plan.columns.filter(column => !column.ignored);
+    if (active.length === 0) context.addIssue({ code: 'custom', message: 'At least one column must be imported', path: ['columns'] });
+    const targets = new Set<string>();
+    const sources = new Set<string>();
+    const orders = new Set<number>();
+    for (const column of active) {
+        if (targets.has(column.target)) context.addIssue({ code: 'custom', message: `Duplicate target column: ${column.target}`, path: ['columns'] });
+        targets.add(column.target);
+    }
+    for (const column of plan.columns) {
+        if (sources.has(column.source)) context.addIssue({ code: 'custom', message: `Duplicate source column: ${column.source}`, path: ['columns'] });
+        if (orders.has(column.order)) context.addIssue({ code: 'custom', message: `Duplicate column order: ${column.order}`, path: ['columns'] });
+        sources.add(column.source);
+        orders.add(column.order);
+    }
+    if (plan.target.mode === 'create' && plan.mode === 'replace') {
+        context.addIssue({ code: 'custom', message: 'Replace is not available when creating a table', path: ['mode'] });
+    }
+    const sourceNames = new Set(plan.columns.map(column => column.source));
+    const singletonOperations = new Set<string>();
+    for (const operation of cleaningTransformOperations(plan.transform.operations)) {
+        if (!sourceNames.has(operation.column)) {
+            context.addIssue({ code: 'custom', message: `Transform column does not exist: ${operation.column}`, path: ['transform', 'operations'] });
+        }
+        if (operation.kind === 'replace') continue;
+        const key = `${operation.kind}:${operation.column}`;
+        if (singletonOperations.has(key)) {
+            context.addIssue({ code: 'custom', message: `Duplicate ${operation.kind} transform for column ${operation.column}`, path: ['transform', 'operations'] });
+        }
+        singletonOperations.add(key);
+        if (operation.kind === 'dropInvalid') {
+            const mapping = plan.columns.find(column => column.source === operation.column);
+            if (!mapping || mapping.ignored || mapping.targetType !== operation.targetType) {
+                context.addIssue({ code: 'custom', message: `dropInvalid must match the active target type for ${operation.column}`, path: ['transform', 'operations'] });
+            }
+        }
+    }
 }
 
 export function cleaningTransformOperations(operations: TransformOperationV1[]) {

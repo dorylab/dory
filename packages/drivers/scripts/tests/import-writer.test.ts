@@ -7,7 +7,7 @@ import test, { type TestContext } from 'node:test';
 import Database from 'better-sqlite3';
 import { DuckDBInstance } from '@duckdb/node-api';
 
-import { analyzeCsv, datasetSchemaHash, prepareImportDataset, type ImportPlanV1 } from '@dory/import';
+import { analyzeCsv, datasetSchemaHash, prepareImportDataset, type ImportPlanV1, type ImportPlanV2 } from '@dory/import';
 
 import { SqliteImportWriter } from '../../src/database/sqlite/import-writer';
 import { buildD1InsertQueries, CloudflareD1ImportWriter, d1ImportValue } from '../../src/database/cloudflare-d1/import-writer';
@@ -27,7 +27,9 @@ test('SQLite writer creates a table and preserves strings, booleans, dates, date
     const databasePath = path.join(fixture.dir, 'target.sqlite');
     new Database(databasePath).close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
-    const result = await writer.write({ dataset: fixture.dataset, plan: fixture.plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
+    const { parsing: _legacyParsing, version: _legacyVersion, ...executionPlan } = fixture.plan;
+    const plan: ImportPlanV2 = { ...executionPlan, version: 'dory.import-plan.v2', source: { format: 'parquet' } };
+    const result = await writer.write({ dataset: fixture.dataset, plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
     assert.deepEqual(result, { insertedRows: 2, batches: 2, atomicity: 'atomic' });
     const database = new Database(databasePath);
     t.after(() => database.close());

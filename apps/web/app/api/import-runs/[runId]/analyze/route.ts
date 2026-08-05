@@ -11,7 +11,12 @@ export const runtime = 'nodejs';
 export const POST = withUserAndOrganizationHandler(async ({ db, organizationId, req }) => {
     try {
         const payload = await req.json().catch(() => ({}));
-        const run = await analyzeImportSource(db, { organizationId, runId: runIdFromRequest(req), parsing: payload.parsing });
+        const run = await analyzeImportSource(db, {
+            organizationId,
+            runId: runIdFromRequest(req),
+            sourceOptions: payload.sourceOptions,
+            parsing: payload.parsing,
+        });
         return NextResponse.json(ResponseUtil.success(run));
     } catch (error) {
         return importErrorResponse(error);

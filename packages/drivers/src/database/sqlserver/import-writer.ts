@@ -1,6 +1,6 @@
 import sql, { type ConnectionPool, type ISqlType } from 'mssql';
 
-import { CommitUnknownError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn } from '@dory/import';
+import { CommitUnknownError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn } from '@dory/import';
 import {
     IMPORT_COLUMN_TYPES,
     abortError,
@@ -52,7 +52,7 @@ export class SqlServerImportWriter implements DataWriter {
         );
     }
 
-    async previewCreateTable(plan: ImportPlanV1) {
+    async previewCreateTable(plan: ImportExecutionPlan) {
         return createTableSql(plan);
     }
 
@@ -102,7 +102,7 @@ export class SqlServerImportWriter implements DataWriter {
     }
 }
 
-function createTableSql(plan: ImportPlanV1) {
+function createTableSql(plan: ImportExecutionPlan) {
     return `CREATE TABLE ${qualifiedName(plan.target)} (${activeImportColumns(plan)
         .map(column => `${quoteBracket(column.target)} ${sqlServerType(column.targetType)} NULL`)
         .join(', ')})`;

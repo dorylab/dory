@@ -10,7 +10,7 @@ import {
     TRANSFORM_PREVIEW_VERSION,
     type ImportColumnMappingV1,
     type ImportColumnType,
-    type ImportPlanV1,
+    type ImportPlan,
     type PrepareImportDatasetResult,
     type TransformOperationV1,
     type TransformPreviewV1,
@@ -23,7 +23,7 @@ export type PrepareImportDatasetInput = {
     sourceArrowPath: string;
     outputArrowPath: string;
     sourceDataset: Dataset;
-    plan: ImportPlanV1;
+    plan: ImportPlan;
     signal?: AbortSignal;
 };
 
@@ -77,7 +77,7 @@ async function countRows(lazy: LazyDataFrame) {
     return Number(frame.toRecords()[0]?.rows ?? 0);
 }
 
-export async function previewImportTransform(input: { sourceArrowPath: string; plan: ImportPlanV1 }): Promise<TransformPreviewV1> {
+export async function previewImportTransform(input: { sourceArrowPath: string; plan: ImportPlan }): Promise<TransformPreviewV1> {
     const plan = parseImportPlan(input.plan);
     const source = pl.scanIPC(input.sourceArrowPath).head(100);
     const beforeFrame = await source.clone().collect({ streaming: true });
@@ -143,17 +143,18 @@ function applyCleaningOperations(lazy: LazyDataFrame, operations: TransformOpera
     for (const operation of cleaningTransformOperations(operations)) {
         const column = pl.col(operation.column);
         if (operation.kind === 'trim') {
-            current = current.withColumn(column.str.strip().alias(operation.column));
+            current = current.withColumn(column.cast(pl.String).str.strip().alias(operation.column));
         } else if (operation.kind === 'lowercase') {
-            current = current.withColumn(column.str.toLowerCase().alias(operation.column));
+            current = current.withColumn(column.cast(pl.String).str.toLowerCase().alias(operation.column));
         } else if (operation.kind === 'replace') {
-            current = current.withColumn(column.str.replaceAll(operation.find, operation.replacement, true).alias(operation.column));
+            current = current.withColumn(column.cast(pl.String).str.replaceAll(operation.find, operation.replacement, true).alias(operation.column));
         } else if (operation.kind === 'emptyToNull') {
+            const stringColumn = column.cast(pl.String);
             current = current.withColumn(
                 pl
-                    .when(column.eq(pl.lit('')))
+                    .when(stringColumn.eq(pl.lit('')))
                     .then(pl.lit(null))
-                    .otherwise(column)
+                    .otherwise(stringColumn)
                     .alias(operation.column),
             );
         } else if (operation.kind === 'dropInvalid' && applyDrops) {
@@ -231,9 +232,10 @@ function polarsType(type: ImportColumnType): DataType {
 }
 
 function castExpression(expression: ReturnType<typeof pl.col>, type: ImportColumnType, strict: boolean) {
-    if (type === 'string') return expression;
-    if (type === 'boolean') return expression.str.toLowerCase().eq(pl.lit('true'));
+    if (type === 'string') return expression.cast(pl.String, strict);
+    if (type === 'boolean') return expression.cast(pl.String, strict).str.toLowerCase().eq(pl.lit('true'));
     if (type === 'datetime') {
+        expression = expression.cast(pl.String, strict);
         const spaced = pl
             .when(expression.str.contains(/\.\d+$/))
             .then(expression.str.strptime(pl.Datetime('ms'), '%Y-%m-%d %H:%M:%S%.f'))

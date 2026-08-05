@@ -22,7 +22,8 @@ export class ImportRunArtifactStore {
 
     paths(organizationId: string, runId: string, sourceExtension = 'csv'): ImportRunArtifactPaths {
         const prefix = joinObjectPath(this.storagePrefix, safeObjectPathPart(organizationId), 'import-runs', safeObjectPathPart(runId));
-        const extension = sourceExtension.toLocaleLowerCase() === 'tsv' ? 'tsv' : 'csv';
+        const normalizedExtension = sourceExtension.toLocaleLowerCase().replace(/^\./, '');
+        const extension = /^[a-z0-9]+$/.test(normalizedExtension) ? normalizedExtension : 'csv';
         return {
             prefix,
             source: joinObjectPath(prefix, 'source', `original.${extension}`),

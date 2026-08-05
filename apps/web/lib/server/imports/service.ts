@@ -15,22 +15,27 @@ import {
     CommitUnknownError,
     IMPORT_MANIFEST_VERSION,
     TRANSFORM_VERSION,
-    analyzeCsv,
+    analyzeImportSourceFile,
     datasetSchemaHash,
     detectCsv,
     hashImportPlan,
+    importSourceFormatForExtension,
+    ImportSourceError,
+    normalizeStoredSourceOptions,
     parseImportPlan,
     parseDatasetProfile,
     parseImportTarget,
     prepareImportDataset,
     previewImportTransform,
-    transcodeCsvToUtf8,
+    sourceOptionsForPlan,
+    supportedImportSourceExtensions,
     validateTargetCoverage,
     PartialWriteError,
     type CsvEncoding,
     type CsvParsingOptions,
     type DatasetProfileV2,
-    type ImportPlanV1,
+    type ImportExecutionPlan,
+    type ImportSourceOptions,
     type ImportRunStatus,
     type WriteResult,
 } from '@dory/import';
@@ -103,7 +108,7 @@ export async function uploadImportSource(db: DBService, input: { organizationId:
     try {
         input.body.on('error', error => meter.destroy(error));
         input.body.pipe(meter);
-        await artifacts.put(paths.source, meter, extension === 'tsv' ? 'text/tab-separated-values' : 'text/csv');
+        await artifacts.put(paths.source, meter, sourceContentType(extension));
         if (meter.bytes === 0) throw new ImportServiceError('The source file is empty', 400, 'IMPORT_FILE_EMPTY');
     } catch (error) {
         await artifacts.delete(paths.source).catch(() => undefined);
@@ -146,35 +151,47 @@ export async function uploadImportSource(db: DBService, input: { organizationId:
     return updated;
 }
 
-export async function analyzeImportSource(db: DBService, input: { organizationId: string; runId: string; parsing?: Partial<CsvParsingOptions> }) {
+export async function analyzeImportSource(
+    db: DBService,
+    input: { organizationId: string; runId: string; sourceOptions?: Partial<ImportSourceOptions>; parsing?: Partial<CsvParsingOptions> },
+) {
     let run = await getImportRun(db, input.organizationId, input.runId);
-    if (!run.sourceObjectPath || !run.sourceName || !run.sourceHash) throw new ImportServiceError('Upload a CSV file before analysis', 409, 'IMPORT_SOURCE_REQUIRED');
+    if (!run.sourceObjectPath || !run.sourceName || !run.sourceHash) throw new ImportServiceError('Upload a data file before analysis', 409, 'IMPORT_SOURCE_REQUIRED');
     if (run.status === 'running' || run.status === 'queued') throw new ImportServiceError('The import is already executing', 409, 'IMPORT_RUN_STATE');
 
     const artifacts = getDoryArtifactStore().importRuns;
     const paths = artifacts.paths(input.organizationId, input.runId, run.sourceExtension ?? 'csv');
     const workDir = await ensureWorkDir(input.runId);
     let sourcePath: string;
-    let detection: Awaited<ReturnType<typeof detectCsv>>;
-    let parsing: CsvParsingOptions;
+    let source: ImportSourceOptions;
     try {
         sourcePath = await materializeForRead(run.sourceObjectPath, path.join(workDir, `source.${run.sourceExtension ?? 'csv'}`));
-        detection = await detectCsv(sourcePath);
-        parsing = mergeParsing(detection.options, input.parsing);
+        const format = importSourceFormatForExtension(run.sourceExtension ?? 'csv');
+        if (!format) throw new ImportServiceError('The uploaded file format is not supported', 415, 'IMPORT_FILE_TYPE');
+        if (input.sourceOptions?.format && input.sourceOptions.format !== format) {
+            throw new ImportServiceError('The selected source format does not match the uploaded file', 422, 'IMPORT_SOURCE_FORMAT_MISMATCH');
+        }
+        if (format === 'csv') {
+            const detection = await detectCsv(sourcePath);
+            const override = input.sourceOptions?.format === 'csv' ? input.sourceOptions : input.parsing;
+            const parsing = mergeParsing(detection.options, override);
+            source = { format: 'csv', ...parsing };
+            if (detection.requiresEncodingSelection && !override?.encoding) {
+                await db.importRuns.update(input.organizationId, input.runId, { parsingOptions: source, phase: 'encoding_required' });
+                throw new ImportServiceError('Encoding confidence is low. Select the source encoding and analyze again.', 422, 'IMPORT_ENCODING_REQUIRED', detection);
+            }
+        } else {
+            source = { format };
+        }
     } catch (error) {
         await removeWorkDir(workDir);
         throw error;
-    }
-    if (detection.requiresEncodingSelection && !input.parsing?.encoding) {
-        await db.importRuns.update(input.organizationId, input.runId, { parsingOptions: detection.options, phase: 'encoding_required' });
-        await removeWorkDir(workDir);
-        throw new ImportServiceError('Encoding confidence is low. Select the source encoding and analyze again.', 422, 'IMPORT_ENCODING_REQUIRED', detection);
     }
 
     run = await db.importRuns.update(input.organizationId, input.runId, {
         status: 'analyzing',
         phase: 'analyzing',
-        parsingOptions: parsing,
+        parsingOptions: source,
         sourceArrowPath: null,
         preparedArrowPath: null,
         profile: null,
@@ -188,56 +205,88 @@ export async function analyzeImportSource(db: DBService, input: { organizationId
         errorCode: null,
         errorMessage: null,
     });
-    await db.importRuns.appendEvent(input.organizationId, input.runId, 'analysis.started', { parsing });
+    await db.importRuns.appendEvent(input.organizationId, input.runId, 'analysis.started', { source });
 
-    let utf8Path: string;
+    const analysisController = new AbortController();
+    globalForImportAnalysis.__doryImportAnalysisControllers ??= new Map();
+    globalForImportAnalysis.__doryImportAnalysisControllers.set(input.runId, analysisController);
     let sourceArrowLocal: string;
     try {
-        utf8Path = parsing.encoding === 'utf8' ? sourcePath : await transcodeCsvToUtf8(sourcePath, path.join(workDir, 'source.utf8.csv'), parsing.encoding);
         sourceArrowLocal = await pathForWrite(paths.sourceArrow, path.join(workDir, 'source.arrow'));
     } catch (error) {
+        globalForImportAnalysis.__doryImportAnalysisControllers?.delete(input.runId);
         await markAnalysisFailed(db, input.organizationId, input.runId, error);
         await removeWorkDir(workDir);
         throw error;
     }
 
     try {
-        const result = await analyzeCsv({
-            sourcePath: utf8Path,
+        const result = await analyzeImportSourceFile({
+            sourcePath,
             sourceName: run.sourceName!,
             sourceHash: run.sourceHash!,
             outputArrowPath: sourceArrowLocal,
-            parsing,
+            source,
+            maxOutputBytes: getImportConfig().maxMaterializedBytes,
+            signal: analysisController.signal,
         });
+        if (analysisController.signal.aborted) throw new DOMException('The import analysis was canceled', 'AbortError');
         await persistGeneratedFile(paths.sourceArrow, sourceArrowLocal, 'application/vnd.apache.arrow.file');
         await artifacts.put(paths.schema, Buffer.from(schemaToIpc(result.dataset.schema)), 'application/vnd.apache.arrow.file');
         await artifacts.putJson(paths.profile, result.profile);
         await artifacts.putJson(paths.transform, { version: TRANSFORM_VERSION, operations: [] });
+        if (analysisController.signal.aborted) throw new DOMException('The import analysis was canceled', 'AbortError');
         const updated = await db.importRuns.update(input.organizationId, input.runId, {
             status: 'ready',
             phase: 'ready',
-            parsingOptions: parsing,
+            parsingOptions: source,
             profile: result.profile,
             sourceArrowPath: paths.sourceArrow,
             processedRows: 0,
-            progress: { phase: 'ready', rows: result.profile.rows, schemaHash: datasetSchemaHash(result.dataset) },
+            progress: {
+                phase: 'ready',
+                rows: result.profile.rows,
+                schemaHash: datasetSchemaHash(result.dataset),
+                sourceFormat: source.format,
+                sourceWarnings: result.sourceWarnings,
+                sourceSchema: result.sourceSchema,
+            },
         });
         await writeManifest(db, updated);
         await db.importRuns.appendEvent(input.organizationId, input.runId, 'analysis.completed', {
             rows: result.profile.rows,
             columns: result.profile.columns.length,
             schemaHash: datasetSchemaHash(result.dataset),
+            sourceFormat: source.format,
+            sourceWarnings: result.sourceWarnings,
         });
         return updated;
     } catch (error) {
-        await markAnalysisFailed(db, input.organizationId, input.runId, error);
-        throw error;
+        await Promise.all([paths.sourceArrow, paths.schema, paths.profile, paths.transform].map(objectPath => artifacts.delete(objectPath).catch(() => undefined)));
+        if (isAbortError(error)) {
+            const canceled = await db.importRuns.update(input.organizationId, input.runId, {
+                status: 'canceled',
+                phase: 'canceled',
+                cancelRequested: true,
+                sourceArrowPath: null,
+                completedAt: new Date(),
+                errorCode: null,
+                errorMessage: null,
+            });
+            await db.importRuns.appendEvent(input.organizationId, input.runId, 'analysis.canceled', {});
+            await writeManifest(db, canceled).catch(() => undefined);
+            return canceled;
+        }
+        const serviceError = importSourceServiceError(error);
+        await markAnalysisFailed(db, input.organizationId, input.runId, serviceError);
+        throw serviceError;
     } finally {
+        globalForImportAnalysis.__doryImportAnalysisControllers?.delete(input.runId);
         await removeWorkDir(workDir);
     }
 }
 
-export async function inspectImportTarget(db: DBService, connection: BaseConnection, input: { organizationId: string; runId: string; target: ImportPlanV1['target'] }) {
+export async function inspectImportTarget(db: DBService, connection: BaseConnection, input: { organizationId: string; runId: string; target: ImportExecutionPlan['target'] }) {
     const run = await getImportRun(db, input.organizationId, input.runId);
     if (run.status !== 'ready') throw new ImportServiceError('Analyze the source before selecting a target', 409, 'IMPORT_RUN_STATE');
     if (run.connectionId && connection.config.id !== run.connectionId)
@@ -253,8 +302,8 @@ export async function saveImportPlan(db: DBService, connection: BaseConnection, 
     if (!schemaHash || plan.sourceSchemaHash !== schemaHash) {
         throw new ImportServiceError('The analyzed source schema changed. Review the mapping and save it again.', 409, 'IMPORT_SCHEMA_CHANGED');
     }
-    if (!sameParsingOptions(plan.parsing, run.parsingOptions)) {
-        throw new ImportServiceError('The CSV parsing settings changed. Analyze the source again before saving the mapping.', 409, 'IMPORT_PARSING_CHANGED');
+    if (!sameSourceOptions(sourceOptionsForPlan(plan), run.parsingOptions)) {
+        throw new ImportServiceError('The source settings changed. Analyze the source again before saving the mapping.', 409, 'IMPORT_SOURCE_OPTIONS_CHANGED');
     }
     const profile = importRunProfile(run);
     if (!profile) throw new ImportServiceError('This import uses an obsolete profile. Analyze the source again.', 409, 'IMPORT_PROFILE_VERSION');
@@ -292,6 +341,7 @@ export async function saveImportPlan(db: DBService, connection: BaseConnection, 
         connectionId: connection.config.id,
         plan,
         progress: {
+            ...(run.progress && typeof run.progress === 'object' && !Array.isArray(run.progress) ? run.progress : {}),
             phase: 'ready',
             schemaHash,
             planHash: hashImportPlan(plan),
@@ -378,6 +428,7 @@ export async function cancelImportRun(db: DBService, organizationId: string, run
         await writeEventsArtifact(db, canceled).catch(() => undefined);
         return canceled;
     }
+    if (run.status === 'analyzing') globalForImportAnalysis.__doryImportAnalysisControllers?.get(runId)?.abort();
     const updated = await db.importRuns.update(organizationId, runId, { cancelRequested: true });
     getImportRunner(db).cancel(runId);
     await db.importRuns.appendEvent(organizationId, runId, 'cancel.requested', {});
@@ -634,6 +685,7 @@ class ImportRunner {
 }
 
 const globalForImportRunner = globalThis as typeof globalThis & { __doryImportRunner?: ImportRunner };
+const globalForImportAnalysis = globalThis as typeof globalThis & { __doryImportAnalysisControllers?: Map<string, AbortController> };
 
 function getImportRunner(db: DBService) {
     globalForImportRunner.__doryImportRunner ??= new ImportRunner(db);
@@ -654,10 +706,11 @@ function importRunProfile(run: Run): DatasetProfileV2 | null {
     }
 }
 
-function sameParsingOptions(plan: CsvParsingOptions, stored: unknown) {
-    if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return false;
-    const value = stored as Record<string, unknown>;
-    return value.delimiter === plan.delimiter && value.hasHeader === plan.hasHeader && value.encoding === plan.encoding && value.quoteChar === plan.quoteChar;
+function sameSourceOptions(plan: ImportSourceOptions, stored: unknown) {
+    const normalized = normalizeStoredSourceOptions(stored);
+    if (!normalized || normalized.format !== plan.format) return false;
+    if (plan.format !== 'csv' || normalized.format !== 'csv') return true;
+    return normalized.delimiter === plan.delimiter && normalized.hasHeader === plan.hasHeader && normalized.encoding === plan.encoding && normalized.quoteChar === plan.quoteChar;
 }
 
 async function completeImportRun(db: DBService, organizationId: string, runId: string, result: WriteResult, filteredRows: number) {
@@ -689,15 +742,15 @@ async function completeImportRun(db: DBService, organizationId: string, runId: s
     return completed;
 }
 
-function importOperation(plan: ImportPlanV1) {
+function importOperation(plan: ImportExecutionPlan) {
     return plan.target.mode === 'create' ? ('create' as const) : plan.mode;
 }
 
-function capabilityForPlan(target: Awaited<ReturnType<ReturnType<BaseConnection['getDataWriter']>['inspectTarget']>>, plan: ImportPlanV1) {
+function capabilityForPlan(target: Awaited<ReturnType<ReturnType<BaseConnection['getDataWriter']>['inspectTarget']>>, plan: ImportExecutionPlan) {
     return target.writeCapabilities[importOperation(plan)];
 }
 
-function assertTargetState(target: Awaited<ReturnType<ReturnType<BaseConnection['getDataWriter']>['inspectTarget']>>, plan: ImportPlanV1) {
+function assertTargetState(target: Awaited<ReturnType<ReturnType<BaseConnection['getDataWriter']>['inspectTarget']>>, plan: ImportExecutionPlan) {
     if (plan.target.mode === 'create' && target.exists) throw new ImportServiceError('The target table already exists', 409, 'IMPORT_TARGET_EXISTS');
     if (plan.target.mode === 'existing' && !target.exists) throw new ImportServiceError('The target table does not exist', 409, 'IMPORT_TARGET_NOT_FOUND');
 }
@@ -705,12 +758,19 @@ function assertTargetState(target: Awaited<ReturnType<ReturnType<BaseConnection[
 async function writeManifest(db: DBService, run: Run) {
     const artifacts = getDoryArtifactStore().importRuns;
     const paths = artifacts.paths(run.organizationId, run.id, run.sourceExtension ?? 'csv');
-    const plan = run.plan as ImportPlanV1 | null;
+    const plan = run.plan ? parseImportPlan(run.plan) : null;
+    const sourceOptions = normalizeStoredSourceOptions(run.parsingOptions);
     await artifacts.putJson(paths.manifest, {
         version: IMPORT_MANIFEST_VERSION,
         runId: run.id,
         sourceHash: run.sourceHash,
         sourceBytes: run.sourceBytes,
+        source: {
+            name: run.sourceName,
+            extension: run.sourceExtension,
+            format: sourceOptions?.format ?? importSourceFormatForExtension(run.sourceExtension ?? 'csv'),
+            options: sourceOptions,
+        },
         schemaHash: plan?.sourceSchemaHash ?? null,
         planHash: plan ? hashImportPlan(plan) : null,
         artifacts: {
@@ -756,13 +816,14 @@ async function removeWorkDir(workDir: string) {
 
 async function markAnalysisFailed(db: DBService, organizationId: string, runId: string, error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const errorCode = error instanceof ImportServiceError ? error.code : 'IMPORT_ANALYSIS_FAILED';
     const failed = await db.importRuns.update(organizationId, runId, {
         status: 'failed',
         phase: 'analyzing',
-        errorCode: 'IMPORT_ANALYSIS_FAILED',
+        errorCode,
         errorMessage: message,
     });
-    await db.importRuns.appendEvent(organizationId, runId, 'analysis.failed', { message });
+    await db.importRuns.appendEvent(organizationId, runId, 'analysis.failed', { message, errorCode });
     await writeManifest(db, failed).catch(() => undefined);
     await writeEventsArtifact(db, failed).catch(() => undefined);
 }
@@ -791,8 +852,30 @@ async function persistGeneratedFile(objectPath: string, localPath: string, conte
 
 function sourceExtension(fileName: string) {
     const extension = path.extname(fileName).toLocaleLowerCase().slice(1);
-    if (extension !== 'csv' && extension !== 'tsv') throw new ImportServiceError('Only CSV and TSV files are supported', 415, 'IMPORT_FILE_TYPE');
+    if (!importSourceFormatForExtension(extension)) {
+        throw new ImportServiceError(`Supported file extensions: ${supportedImportSourceExtensions().join(', ')}`, 415, 'IMPORT_FILE_TYPE');
+    }
     return extension;
+}
+
+function importSourceServiceError(error: unknown) {
+    if (error instanceof ImportServiceError) return error;
+    if (error instanceof ImportSourceError) {
+        return new ImportServiceError(error.message, error.code === 'IMPORT_MATERIALIZED_FILE_TOO_LARGE' ? 413 : 422, error.code, error.details);
+    }
+    return new ImportServiceError(error instanceof Error ? error.message : String(error), 422, 'IMPORT_ANALYSIS_FAILED');
+}
+
+function isAbortError(error: unknown) {
+    return error instanceof DOMException ? error.name === 'AbortError' : error instanceof Error && error.name === 'AbortError';
+}
+
+function sourceContentType(extension: string) {
+    if (extension === 'csv') return 'text/csv';
+    if (extension === 'tsv') return 'text/tab-separated-values';
+    if (extension === 'parquet') return 'application/vnd.apache.parquet';
+    if (extension === 'ndjson' || extension === 'jsonl') return 'application/x-ndjson';
+    return 'application/vnd.apache.arrow.file';
 }
 
 function mergeParsing(detected: CsvParsingOptions, override?: Partial<CsvParsingOptions>): CsvParsingOptions {

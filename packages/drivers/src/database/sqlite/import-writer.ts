@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 
-import { CommitUnknownError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn, type TargetSchema } from '@dory/import';
+import { CommitUnknownError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn, type TargetSchema } from '@dory/import';
 import { atomicCapabilities } from '../shared/import-writer';
 
 const ALLOWED_TYPES: ReadonlyArray<ImportColumnType> = ['string', 'boolean', 'int64', 'float64', 'date', 'datetime'];
@@ -43,7 +43,7 @@ export class SqliteImportWriter implements DataWriter {
         }
     }
 
-    async previewCreateTable(plan: ImportPlanV1): Promise<string> {
+    async previewCreateTable(plan: ImportExecutionPlan): Promise<string> {
         return createTableSql(plan);
     }
 
@@ -111,7 +111,7 @@ export class SqliteImportWriter implements DataWriter {
     }
 }
 
-function createTableSql(plan: ImportPlanV1) {
+function createTableSql(plan: ImportExecutionPlan) {
     const columns = plan.columns
         .filter(column => !column.ignored)
         .sort((left, right) => left.order - right.order)

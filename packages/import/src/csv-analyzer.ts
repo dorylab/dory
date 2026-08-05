@@ -82,18 +82,47 @@ export async function profileDataset(dataset: Dataset): Promise<DatasetProfileV2
     const filePath = dataset.metadata.artifactPath;
     if (typeof filePath !== 'string' || !filePath) throw new Error('Polars profiling requires a local Arrow IPC artifact path');
     const fields = dataset.schema.fields.filter(field => field.name !== SOURCE_ROW_NUMBER_COLUMN);
+    const forcedStringColumns = new Set(
+        Array.isArray(dataset.metadata.sourceWarnings)
+            ? dataset.metadata.sourceWarnings
+                  .filter(warning => warning && typeof warning === 'object' && (warning as { code?: unknown }).code === 'DECIMAL_STRINGIFIED')
+                  .map(warning => String((warning as { column?: unknown }).column ?? ''))
+            : [],
+    );
     const exactExpressions = [pl.len().alias('rows')];
 
     for (let index = 0; index < fields.length; index += 1) {
         const column = pl.col(fields[index].name);
         const prefix = metricPrefix(index);
+        const nativeType = importTypeForArrowType(fields[index].type.toString());
+        exactExpressions.push(column.nullCount().alias(`${prefix}_null`), column.count().alias(`${prefix}_non_null`));
+        if (nativeType !== 'string') {
+            exactExpressions.push(
+                pl.lit(0).alias(`${prefix}_empty`),
+                pl.lit(0).alias(`${prefix}_whitespace`),
+                pl.lit(0).alias(`${prefix}_leading_zero`),
+                pl.lit(null).alias(`${prefix}_length_min`),
+                pl.lit(null).alias(`${prefix}_length_max`),
+                pl.lit(null).alias(`${prefix}_length_mean`),
+            );
+            if (nativeType === 'int64') {
+                exactExpressions.push(
+                    column.min().cast(pl.String).alias(`${prefix}_int64_min`),
+                    column.max().cast(pl.String).alias(`${prefix}_int64_max`),
+                    column.mean().alias(`${prefix}_int64_mean`),
+                );
+            } else if (nativeType === 'float64') {
+                exactExpressions.push(column.min().alias(`${prefix}_float64_min`), column.max().alias(`${prefix}_float64_max`), column.mean().alias(`${prefix}_float64_mean`));
+            } else if (nativeType === 'date' || nativeType === 'datetime') {
+                exactExpressions.push(column.min().alias(`${prefix}_${nativeType}_min`), column.max().alias(`${prefix}_${nativeType}_max`));
+            }
+            continue;
+        }
         const intValue = column.cast(pl.Int64, false);
         const floatValue = column.cast(pl.Float64, false);
         const dateValue = column.cast(pl.Date, false);
         const datetimeValue = datetimeExpression(column, false);
         exactExpressions.push(
-            column.nullCount().alias(`${prefix}_null`),
-            column.count().alias(`${prefix}_non_null`),
             column.eq(pl.lit('')).sum().alias(`${prefix}_empty`),
             column.isNotNull().and(column.neq(column.str.strip())).sum().alias(`${prefix}_whitespace`),
             column.str
@@ -137,7 +166,17 @@ export async function profileDataset(dataset: Dataset): Promise<DatasetProfileV2
         fields.map(field => field.name),
     );
     const columns = fields.map<DatasetProfileColumnV2>((field, index) =>
-        buildColumnProfile(field.name, index, rows, sampleRows, exact, sampleFrame.getColumn(field.name), sampleRecords),
+        buildColumnProfile(
+            field.name,
+            importTypeForArrowType(field.type.toString()),
+            forcedStringColumns.has(field.name),
+            index,
+            rows,
+            sampleRows,
+            exact,
+            sampleFrame.getColumn(field.name),
+            sampleRecords,
+        ),
     );
     const issues = columns.flatMap(column => column.issues);
 
@@ -168,6 +207,8 @@ export function datasetSchemaHash(dataset: Dataset): string {
 
 function buildColumnProfile(
     name: string,
+    nativeType: ImportColumnType,
+    forceString: boolean,
     index: number,
     rows: number,
     sampleRows: number,
@@ -182,16 +223,19 @@ function buildColumnProfile(
     const whitespaceCount = metricNumber(exact[`${prefix}_whitespace`]);
     const leadingZeroCount = metricNumber(exact[`${prefix}_leading_zero`]);
     const nonEmptyCount = Math.max(0, rows - nullCount - emptyCount);
-    const candidates = CANDIDATE_TYPES.map<DatasetProfileTypeCandidateV2>(type => {
-        const validCount = Math.min(nonEmptyCount, metricNumber(exact[`${prefix}_${type}_valid`]));
-        return {
-            type,
-            validCount,
-            invalidCount: Math.max(0, nonEmptyCount - validCount),
-            validRate: nonEmptyCount === 0 ? 0 : validCount / nonEmptyCount,
-        };
-    });
-    const detectedType = detectedTypeFor(candidates, nonEmptyCount, leadingZeroCount);
+    const candidates =
+        nativeType === 'string'
+            ? CANDIDATE_TYPES.map<DatasetProfileTypeCandidateV2>(type => {
+                  const validCount = Math.min(nonEmptyCount, metricNumber(exact[`${prefix}_${type}_valid`]));
+                  return {
+                      type,
+                      validCount,
+                      invalidCount: Math.max(0, nonEmptyCount - validCount),
+                      validRate: nonEmptyCount === 0 ? 0 : validCount / nonEmptyCount,
+                  };
+              })
+            : [];
+    const detectedType = forceString ? 'string' : nativeType === 'string' ? detectedTypeFor(candidates, nonEmptyCount, leadingZeroCount) : nativeType;
     const nonNullSample = sampleSeries.dropNulls();
     const distinctCount = nonNullSample.length > 0 ? nonNullSample.nUnique() : 0;
     const topValues = nonNullSample.length
@@ -203,7 +247,18 @@ function buildColumnProfile(
         : [];
     const quantiles = numericQuantiles(sampleSeries, detectedType);
     const sampleValues = topValues.map(item => item.value).slice(0, 5);
-    const issues = qualityIssues({ name, rows, nullCount, emptyCount, whitespaceCount, leadingZeroCount, nonEmptyCount, candidates, sampleRecords });
+    const issues = qualityIssues({
+        name,
+        rows,
+        nullCount,
+        emptyCount,
+        whitespaceCount,
+        leadingZeroCount,
+        nonEmptyCount,
+        candidates,
+        sampleRecords,
+        isString: nativeType === 'string',
+    });
     const stats = exactStats(exact, prefix, detectedType);
 
     return {
@@ -245,12 +300,13 @@ function qualityIssues(input: {
     nonEmptyCount: number;
     candidates: DatasetProfileTypeCandidateV2[];
     sampleRecords: Array<Record<string, unknown>>;
+    isString: boolean;
 }): DatasetQualityIssueV2[] {
     const issues: DatasetQualityIssueV2[] = [];
     if (input.rows > 0 && input.nullCount + input.emptyCount === input.rows) {
         issues.push(issue('all_missing', 'warning', input.rows, input.rows, []));
     }
-    if (input.emptyCount > 0) {
+    if (input.isString && input.emptyCount > 0) {
         issues.push(
             issue(
                 'empty_string',
@@ -265,7 +321,7 @@ function qualityIssues(input: {
             ),
         );
     }
-    if (input.whitespaceCount > 0) {
+    if (input.isString && input.whitespaceCount > 0) {
         issues.push(
             issue(
                 'surrounding_whitespace',
@@ -280,7 +336,7 @@ function qualityIssues(input: {
             ),
         );
     }
-    if (input.leadingZeroCount > 0) {
+    if (input.isString && input.leadingZeroCount > 0) {
         issues.push(
             issue(
                 'leading_zero',
@@ -291,7 +347,9 @@ function qualityIssues(input: {
             ),
         );
     }
-    const best = [...input.candidates].sort((left, right) => right.validRate - left.validRate || CANDIDATE_TYPES.indexOf(left.type) - CANDIDATE_TYPES.indexOf(right.type))[0];
+    const best = input.isString
+        ? [...input.candidates].sort((left, right) => right.validRate - left.validRate || CANDIDATE_TYPES.indexOf(left.type) - CANDIDATE_TYPES.indexOf(right.type))[0]
+        : undefined;
     if (input.nonEmptyCount >= 10 && best && best.validRate >= 0.9 && best.validRate < 1) {
         issues.push(
             issue(
@@ -454,4 +512,13 @@ function dateStat(value: unknown, type: 'date' | 'datetime') {
 
 function rate(value: number, total: number) {
     return total === 0 ? 0 : value / total;
+}
+
+function importTypeForArrowType(type: string): ImportColumnType {
+    if (/Bool/i.test(type)) return 'boolean';
+    if (/Int64/i.test(type)) return 'int64';
+    if (/Float64/i.test(type)) return 'float64';
+    if (/^Date/i.test(type)) return 'date';
+    if (/Timestamp|DateTime/i.test(type)) return 'datetime';
+    return 'string';
 }

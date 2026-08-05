@@ -3450,12 +3450,12 @@
     "ImportWizard": {
         "Eyebrow": "Importar",
         "Title": "Importar datos",
-        "Description": "Analiza, asigna y escribe un CSV en la base de datos como una operación recuperable.",
+        "Description": "Analiza, asigna y escribe un archivo de datos en la base de datos como una operación recuperable.",
         "ImportData": "Importar datos",
         "Loading": "Cargando importación...",
         "Modal": {
             "Title": "Importar datos en {table}",
-            "Description": "Analiza un CSV y asigna los datos a la tabla seleccionada.",
+            "Description": "Analiza un archivo de datos y asigna los datos a la tabla seleccionada.",
             "Target": "Tabla de destino",
             "CurrentTask": "Ya hay una importación de tabla abierta. Se muestra la tarea actual.",
             "Reopen": "Ver",
@@ -3465,12 +3465,12 @@
         "Steps": { "Select": "Archivo", "Preview": "Vista previa", "Target": "Destino", "Mapping": "Asignación", "Clean": "Limpiar", "Options": "Opciones", "Execute": "Ejecutar" },
         "Common": { "Next": "Continuar", "Back": "Atrás" },
         "Select": {
-            "Title": "Elige un CSV",
-            "Description": "Carga un archivo CSV o TSV para analizarlo antes de importarlo.",
+            "Title": "Elige un archivo de datos",
+            "Description": "Carga CSV, TSV, Parquet, NDJSON o Arrow IPC para analizarlo antes de importarlo.",
             "Connection": "Origen de datos",
             "ConnectionPlaceholder": "Selecciona una fuente de datos",
-            "Drop": "Suelta un CSV aquí o elige un archivo",
-            "Limit": "CSV o TSV, hasta {limit}",
+            "Drop": "Suelta un archivo de datos aquí o elige un archivo",
+            "Limit": "CSV, TSV, Parquet, NDJSON o Arrow IPC, hasta {limit}",
             "Uploading": "Cargando archivo",
             "UploadCompleteAnalyzing": "Carga completada, analizando",
             "Analyze": "Cargar y analizar"
@@ -3480,8 +3480,11 @@
             "Description": "{rows} filas y {columns} columnas. Revisa las primeras 100 filas y los tipos detectados.",
             "Rows": "Filas de muestra",
             "Schema": "Esquema detectado",
+            "NativeType": "Origen: {type}",
             "NullRate": "{rate}% nulo",
             "Parsing": "Opciones de lectura",
+            "SourceFormat": "Formato de origen",
+            "TypedSourceDescription": "Este formato incluye su propio esquema. Los tipos escalares nativos se conservan durante la vista previa y la asignación.",
             "Delimiter": "Delimitador",
             "Encoding": "Codificación",
             "EncodingTitle": "Elige la codificación de origen",
@@ -3495,6 +3498,13 @@
             "Reanalyzed": "Vista previa actualizada"
         },
         "Delimiters": { "Comma": "Coma", "Tab": "Tabulador", "Semicolon": "Punto y coma", "Pipe": "Barra vertical" },
+        "Formats": { "csv": "CSV / TSV", "parquet": "Parquet", "ndjson": "NDJSON", "arrow": "Arrow IPC / Feather" },
+        "SourceWarnings": {
+            "DECIMAL_STRINGIFIED": {
+                "Title": "Decimal conservado como texto: {column}",
+                "Description": "{column} usa {sourceType}. Los valores exactos se conservan como cadenas porque el sistema de importación actual no tiene un tipo Decimal."
+            }
+        },
         "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
         "Quality": {
             "IssueCount": "{count} problemas",
@@ -3503,7 +3513,13 @@
             "EmptyRate": "{rate}% vacío",
             "ApplyFix": "Aplicar corrección",
             "FixAdded": "Paso de limpieza añadido",
-            "Issues": { "all_missing": "Todos los valores ausentes", "empty_string": "Cadenas vacías", "surrounding_whitespace": "Espacios adicionales", "leading_zero": "Ceros iniciales", "mixed_type": "Tipos mezclados" }
+            "Issues": {
+                "all_missing": "Todos los valores ausentes",
+                "empty_string": "Cadenas vacías",
+                "surrounding_whitespace": "Espacios adicionales",
+                "leading_zero": "Ceros iniciales",
+                "mixed_type": "Tipos mezclados"
+            }
         },
         "Target": {
             "Title": "Elige el destino",
@@ -3613,7 +3629,7 @@
             "commit_unknown": "Estado de confirmación desconocido"
         },
         "Errors": {
-            "FileRequired": "Elige un archivo CSV o TSV.",
+            "FileRequired": "Elige un archivo de datos compatible.",
             "ConnectionMissing": "El origen de datos actual no está disponible.",
             "FileTooLarge": "El archivo supera el límite de {limit}.",
             "StartFailed": "No se pudo iniciar la importación.",

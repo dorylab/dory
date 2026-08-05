@@ -3452,12 +3452,12 @@
     "ImportWizard": {
         "Eyebrow": "Import",
         "Title": "Import data",
-        "Description": "Inspect, map, and write a CSV into a database as one recoverable operation.",
+        "Description": "Inspect, map, and write a data file into a database as one recoverable operation.",
         "ImportData": "Import Data",
         "Loading": "Loading import...",
         "Modal": {
             "Title": "Import data into {table}",
-            "Description": "Analyze and map a CSV into the selected table.",
+            "Description": "Analyze and map a data file into the selected table.",
             "Target": "Target table",
             "CurrentTask": "Another table import is already open. Showing the current task.",
             "Reopen": "View",
@@ -3467,12 +3467,12 @@
         "Steps": { "Select": "Select file", "Preview": "Preview", "Target": "Target", "Mapping": "Mapping", "Clean": "Clean data", "Options": "Options", "Execute": "Execute" },
         "Common": { "Next": "Continue", "Back": "Back" },
         "Select": {
-            "Title": "Choose a CSV",
-            "Description": "Upload a CSV or TSV file to analyze it before importing.",
+            "Title": "Choose a data file",
+            "Description": "Upload CSV, TSV, Parquet, NDJSON, or Arrow IPC to analyze it before importing.",
             "Connection": "Data source",
             "ConnectionPlaceholder": "Select a data source",
-            "Drop": "Drop a CSV here, or choose a file",
-            "Limit": "CSV or TSV, up to {limit}",
+            "Drop": "Drop a data file here, or choose a file",
+            "Limit": "CSV, TSV, Parquet, NDJSON, or Arrow IPC, up to {limit}",
             "Uploading": "Uploading source file",
             "UploadCompleteAnalyzing": "Upload complete, analyzing",
             "Analyze": "Upload and analyze"
@@ -3482,8 +3482,11 @@
             "Description": "{rows} rows across {columns} columns. Review the first 100 rows and detected types before continuing.",
             "Rows": "Preview rows",
             "Schema": "Detected schema",
+            "NativeType": "Source: {type}",
             "NullRate": "{rate}% null",
             "Parsing": "Parsing settings",
+            "SourceFormat": "Source format",
+            "TypedSourceDescription": "This format carries its own schema. Native scalar types are preserved through preview and mapping.",
             "Delimiter": "Delimiter",
             "Encoding": "Encoding",
             "EncodingTitle": "Choose the source encoding",
@@ -3497,6 +3500,13 @@
             "Reanalyzed": "Preview updated"
         },
         "Delimiters": { "Comma": "Comma", "Tab": "Tab", "Semicolon": "Semicolon", "Pipe": "Pipe" },
+        "Formats": { "csv": "CSV / TSV", "parquet": "Parquet", "ndjson": "NDJSON", "arrow": "Arrow IPC / Feather" },
+        "SourceWarnings": {
+            "DECIMAL_STRINGIFIED": {
+                "Title": "Decimal preserved as text: {column}",
+                "Description": "{column} uses {sourceType}. Exact values are preserved as strings because the current import type system has no Decimal type."
+            }
+        },
         "Types": { "string": "String", "boolean": "Boolean", "int64": "Int64", "float64": "Float64", "date": "Date", "datetime": "Datetime" },
         "Quality": {
             "IssueCount": "{count} issues",
@@ -3505,7 +3515,13 @@
             "EmptyRate": "{rate}% empty",
             "ApplyFix": "Apply fix",
             "FixAdded": "Cleaning step added",
-            "Issues": { "all_missing": "All values missing", "empty_string": "Empty strings", "surrounding_whitespace": "Extra whitespace", "leading_zero": "Leading zeros", "mixed_type": "Mixed types" }
+            "Issues": {
+                "all_missing": "All values missing",
+                "empty_string": "Empty strings",
+                "surrounding_whitespace": "Extra whitespace",
+                "leading_zero": "Leading zeros",
+                "mixed_type": "Mixed types"
+            }
         },
         "Target": {
             "Title": "Choose the target",
@@ -3615,7 +3631,7 @@
             "commit_unknown": "Commit status unknown"
         },
         "Errors": {
-            "FileRequired": "Choose a CSV or TSV file.",
+            "FileRequired": "Choose a supported data file.",
             "ConnectionMissing": "The current data source is unavailable.",
             "FileTooLarge": "The source file exceeds the {limit} limit.",
             "StartFailed": "Could not start the import.",

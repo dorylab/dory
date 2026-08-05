@@ -1,4 +1,4 @@
-import { PartialWriteError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn } from '@dory/import';
+import { PartialWriteError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn } from '@dory/import';
 import type { BaseConfig } from '@dory/drivers/types';
 import {
     IMPORT_COLUMN_TYPES,
@@ -50,7 +50,7 @@ export class CloudflareD1ImportWriter implements DataWriter {
         );
     }
 
-    async previewCreateTable(plan: ImportPlanV1) {
+    async previewCreateTable(plan: ImportExecutionPlan) {
         return createTableSql(plan);
     }
 
@@ -129,7 +129,7 @@ export function buildD1InsertQueries(target: ImportTarget, columnNames: string[]
     return queries;
 }
 
-function createTableSql(plan: ImportPlanV1) {
+function createTableSql(plan: ImportExecutionPlan) {
     return `CREATE TABLE ${qualifiedName(plan.target)} (${activeImportColumns(plan)
         .map(column => `${quoteDouble(column.target)} ${d1Type(column.targetType)}`)
         .join(', ')})`;

@@ -1,6 +1,6 @@
 import oracledb, { type BindDefinition, type Pool } from 'oracledb';
 
-import { CommitUnknownError, PartialWriteError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn } from '@dory/import';
+import { CommitUnknownError, PartialWriteError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn } from '@dory/import';
 import {
     IMPORT_COLUMN_TYPES,
     abortError,
@@ -67,7 +67,7 @@ export class OracleImportWriter implements DataWriter {
         }
     }
 
-    async previewCreateTable(plan: ImportPlanV1) {
+    async previewCreateTable(plan: ImportExecutionPlan) {
         return createTableSql(plan, this.defaultSchema);
     }
 
@@ -134,7 +134,7 @@ export class OracleImportWriter implements DataWriter {
     }
 }
 
-function createTableSql(plan: ImportPlanV1, defaultSchema?: string | null) {
+function createTableSql(plan: ImportExecutionPlan, defaultSchema?: string | null) {
     return `CREATE TABLE ${qualifiedName(plan.target, defaultSchema)} (${activeImportColumns(plan)
         .map(column => `${quoteDouble(column.target)} ${oracleType(column.targetType)}`)
         .join(', ')})`;

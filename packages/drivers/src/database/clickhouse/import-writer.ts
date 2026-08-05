@@ -1,4 +1,4 @@
-import { PartialWriteError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn } from '@dory/import';
+import { PartialWriteError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn } from '@dory/import';
 import {
     IMPORT_COLUMN_TYPES,
     abortError,
@@ -44,7 +44,7 @@ export class ClickhouseImportWriter implements DataWriter {
         );
     }
 
-    async previewCreateTable(plan: ImportPlanV1) {
+    async previewCreateTable(plan: ImportExecutionPlan) {
         return createTableSql(plan, this.datasource.config.database);
     }
 
@@ -107,7 +107,7 @@ export class ClickhouseImportWriter implements DataWriter {
     }
 }
 
-function createTableSql(plan: ImportPlanV1, defaultDatabase?: string | null) {
+function createTableSql(plan: ImportExecutionPlan, defaultDatabase?: string | null) {
     return `CREATE TABLE ${qualifiedName(plan.target, defaultDatabase)} (${activeImportColumns(plan)
         .map(column => `${quoteBacktick(column.target)} ${clickhouseType(column.targetType)}`)
         .join(', ')}) ENGINE = MergeTree ORDER BY tuple()`;

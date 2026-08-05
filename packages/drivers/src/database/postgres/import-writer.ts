@@ -8,7 +8,7 @@ import {
     type DataWriter,
     type ImportColumnMappingV1,
     type ImportColumnType,
-    type ImportPlanV1,
+    type ImportExecutionPlan,
     type ImportTarget,
     type TargetColumn,
     type TargetSchema,
@@ -59,7 +59,7 @@ export class PostgresImportWriter implements DataWriter {
         };
     }
 
-    async previewCreateTable(plan: ImportPlanV1): Promise<string> {
+    async previewCreateTable(plan: ImportExecutionPlan): Promise<string> {
         return createTableSql(plan);
     }
 
@@ -128,11 +128,11 @@ export class PostgresImportWriter implements DataWriter {
     }
 }
 
-function activeColumns(plan: ImportPlanV1) {
+function activeColumns(plan: ImportExecutionPlan) {
     return plan.columns.filter(column => !column.ignored).sort((left, right) => left.order - right.order);
 }
 
-function createTableSql(plan: ImportPlanV1) {
+function createTableSql(plan: ImportExecutionPlan) {
     const columns = activeColumns(plan)
         .map(column => `${quoteIdentifier(column.target)} ${postgresType(column.targetType)}`)
         .join(', ');

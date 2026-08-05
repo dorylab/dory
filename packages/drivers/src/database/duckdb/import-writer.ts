@@ -1,6 +1,6 @@
 import type { DuckDBConnection, DuckDBValue } from '@duckdb/node-api';
 
-import { CommitUnknownError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn } from '@dory/import';
+import { CommitUnknownError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn } from '@dory/import';
 import {
     IMPORT_COLUMN_TYPES,
     abortError,
@@ -43,7 +43,7 @@ export class DuckDbImportWriter implements DataWriter {
         );
     }
 
-    async previewCreateTable(plan: ImportPlanV1) {
+    async previewCreateTable(plan: ImportExecutionPlan) {
         return createTableSql(plan);
     }
 
@@ -94,7 +94,7 @@ export class DuckDbImportWriter implements DataWriter {
     }
 }
 
-function createTableSql(plan: ImportPlanV1) {
+function createTableSql(plan: ImportExecutionPlan) {
     return `CREATE TABLE ${qualifiedName(plan.target)} (${activeImportColumns(plan)
         .map(column => `${quoteDouble(column.target)} ${duckDbType(column.targetType)}`)
         .join(', ')})`;

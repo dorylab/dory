@@ -1,6 +1,6 @@
 import type snowflake from 'snowflake-sdk';
 
-import { CommitUnknownError, PartialWriteError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn } from '@dory/import';
+import { CommitUnknownError, PartialWriteError, type DataWriter, type ImportColumnType, type ImportExecutionPlan, type ImportTarget, type TargetColumn } from '@dory/import';
 import {
     IMPORT_COLUMN_TYPES,
     abortError,
@@ -61,7 +61,7 @@ export class SnowflakeImportWriter implements DataWriter {
         );
     }
 
-    async previewCreateTable(plan: ImportPlanV1) {
+    async previewCreateTable(plan: ImportExecutionPlan) {
         return createTableSql(plan, this.defaultSchema);
     }
 
@@ -141,7 +141,7 @@ function executeRows<Row>(connection: snowflake.Connection, sqlText: string, bin
     });
 }
 
-function createTableSql(plan: ImportPlanV1, defaultSchema: string) {
+function createTableSql(plan: ImportExecutionPlan, defaultSchema: string) {
     return `CREATE TABLE ${qualifiedName(plan.target, defaultSchema)} (${activeImportColumns(plan)
         .map(column => `${quoteDouble(column.target)} ${snowflakeType(column.targetType)}`)
         .join(', ')})`;

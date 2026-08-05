@@ -2,7 +2,7 @@ import {
     type ImportAtomicity,
     type ImportColumnMappingV1,
     type ImportColumnType,
-    type ImportPlanV1,
+    type ImportExecutionPlan,
     type ImportWriteCapabilities,
     type ImportWriteOperation,
     type TargetSchema,
@@ -10,11 +10,11 @@ import {
 
 export const IMPORT_COLUMN_TYPES: ReadonlyArray<ImportColumnType> = ['string', 'boolean', 'int64', 'float64', 'date', 'datetime'];
 
-export function activeImportColumns(plan: ImportPlanV1) {
+export function activeImportColumns(plan: ImportExecutionPlan) {
     return plan.columns.filter(column => !column.ignored).sort((left, right) => left.order - right.order);
 }
 
-export function importOperation(plan: ImportPlanV1): ImportWriteOperation {
+export function importOperation(plan: ImportExecutionPlan): ImportWriteOperation {
     return plan.target.mode === 'create' ? 'create' : plan.mode;
 }
 
@@ -49,7 +49,7 @@ export function targetSchema(exists: boolean, columns: TargetSchema['columns'], 
     return { exists, columns, writeCapabilities };
 }
 
-export function assertImportSupported(plan: ImportPlanV1, writeCapabilities: ImportWriteCapabilities) {
+export function assertImportSupported(plan: ImportExecutionPlan, writeCapabilities: ImportWriteCapabilities) {
     const operation = importOperation(plan);
     const capability = writeCapabilities[operation];
     if (!capability.supported) {
