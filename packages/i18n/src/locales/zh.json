@@ -3495,6 +3495,8 @@
             "EncodingRequired": "需要手动选择编码",
             "EncodingHelp": "请选择源文件实际使用的编码，然后重新分析。原始文件不会被修改。",
             "Header": "第一行为表头",
+            "ParsingChangedTitle": "解析设置已更改",
+            "ParsingChangedDescription": "继续时会自动重新分析文件，刷新检测到的 Schema，并重置后续的映射和清洗步骤。",
             "Reanalyze": "重新分析文件",
             "Reanalyzed": "预览已更新"
         },

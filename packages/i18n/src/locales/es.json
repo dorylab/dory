@@ -3489,6 +3489,8 @@
             "EncodingRequired": "Se requiere elegir la codificación manualmente",
             "EncodingHelp": "Elige la codificación usada por el archivo de origen y vuelve a analizarlo. El archivo original no se modifica.",
             "Header": "La primera fila es cabecera",
+            "ParsingChangedTitle": "Las opciones de lectura han cambiado",
+            "ParsingChangedDescription": "Continúa para volver a analizar el archivo automáticamente. Esto actualiza el esquema detectado y reinicia los pasos posteriores de asignación y limpieza.",
             "Reanalyze": "Volver a analizar",
             "Reanalyzed": "Vista previa actualizada"
         },

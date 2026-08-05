@@ -206,8 +206,10 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     const connectionId = routeConnectionId ?? run?.connectionId ?? entry.connection ?? '';
     const selectedConnection = (connections.data ?? []).find(item => item.connection.id === connectionId)?.connection;
     const currentStepIndex = stepIds.indexOf(step);
+    const previewStepIndex = stepIds.indexOf('preview');
     const targetLabel = [target.database, target.schema, target.table].filter(Boolean).join('.');
     const canResumeSource = Boolean(run && parsing && (run.profile || run.phase === 'encoding_required'));
+    const parsingNeedsAnalysis = Boolean(run && parsing && !parsingOptionsEqual(parsing, run.parsingOptions));
 
     const getStepNumber = (stepId: WizardStepId) => stepIds.indexOf(stepId) + 1;
 
@@ -296,6 +298,8 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             setParsing(analyzed.parsingOptions);
             setMappings(defaultMappings(analyzed.profile!, null));
             setCleaningOperations([]);
+            setTargetSchema(null);
+            setFurthestStepIndex(previewStepIndex);
             toast.success(t('Preview.Reanalyzed'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.AnalysisFailed')),
@@ -310,17 +314,19 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
             });
             if (target.mode === 'existing' && !schema.exists) throw new Error(t('Errors.TargetMissing'));
             if (target.mode === 'create' && schema.exists) throw new Error(t('Errors.TargetExists'));
-            return schema;
+            const latestProfile = queryClient.getQueryData<ImportRun>(['import-run', run!.id])?.profile ?? run!.profile;
+            if (!latestProfile) throw new Error(t('Errors.PlanIncomplete'));
+            return { schema, profile: latestProfile };
         },
-        onSuccess: schema => {
+        onSuccess: ({ schema, profile }) => {
             setTargetSchema(schema);
-            setMappings(defaultMappings(run!.profile!, target.mode === 'existing' ? schema : null));
+            setMappings(defaultMappings(profile, target.mode === 'existing' ? schema : null));
             setStep('mapping');
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.TargetFailed')),
     });
 
-    const transformDraftKey = JSON.stringify({ mappings, cleaningOperations, target, writeMode, batchSize });
+    const transformDraftKey = JSON.stringify({ parsing, mappings, cleaningOperations, target, writeMode, batchSize });
     const transformPreviewQuery = useQuery({
         queryKey: ['import-transform-preview', run?.id, transformDraftKey],
         queryFn: ({ signal }) =>
@@ -329,7 +335,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                 signal,
                 body: JSON.stringify({ plan: buildPlan() }),
             }),
-        enabled: step === 'clean' && Boolean(run && parsing) && cleaningOperationsValid(cleaningOperations),
+        enabled: step === 'clean' && Boolean(run && parsing) && !parsingNeedsAnalysis && cleaningOperationsValid(cleaningOperations),
         staleTime: Infinity,
         retry: false,
     });
@@ -442,6 +448,18 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         toast.success(t('Quality.FixAdded'));
     }
 
+    async function continueFromPreview() {
+        if (parsingNeedsAnalysis) {
+            try {
+                await analyzeMutation.mutateAsync();
+            } catch {
+                return;
+            }
+        }
+        if (isTableModal) inspectMutation.mutate();
+        else setStep('target');
+    }
+
     return (
         <div className={cn('h-full min-h-0 overflow-auto lg:overflow-hidden', !isTableModal && 'bg-n8')}>
             <main className={cn('grid min-h-full grid-cols-1 lg:h-full lg:min-h-0', isTableModal ? 'lg:grid-cols-[220px_minmax(0,1fr)]' : 'lg:grid-cols-[250px_minmax(0,1fr)]')}>
@@ -468,12 +486,13 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                             const label = stepLabels[stepId];
                             const number = index + 1;
                             const active = step === stepId;
-                            const complete = furthestStepIndex > index || (stepId === 'execute' && run?.status === 'completed');
+                            const blockedByParsingChange = parsingNeedsAnalysis && index > previewStepIndex;
+                            const complete = !blockedByParsingChange && (furthestStepIndex > index || (stepId === 'execute' && run?.status === 'completed'));
                             return (
                                 <li key={stepId}>
                                     <button
                                         type="button"
-                                        disabled={index > furthestStepIndex || (index > 0 && !run)}
+                                        disabled={index > furthestStepIndex || (index > 0 && !run) || blockedByParsingChange}
                                         onClick={() => setStep(stepId)}
                                         className={cn(
                                             'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors lg:text-sm',
@@ -525,11 +544,12 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 onApplyFix={applySuggestedOperation}
                                 parsing={parsing}
                                 onParsing={setParsing}
+                                parsingNeedsAnalysis={parsingNeedsAnalysis}
                                 reanalyzing={analyzeMutation.isPending}
                                 onReanalyze={() => analyzeMutation.mutate()}
-                                continuePending={inspectMutation.isPending}
+                                continuePending={analyzeMutation.isPending || inspectMutation.isPending}
                                 onBack={() => setStep('select')}
-                                onContinue={() => (isTableModal ? inspectMutation.mutate() : setStep('target'))}
+                                onContinue={() => void continueFromPreview()}
                             />
                         ) : null}
                         {step === 'preview' && !profile && parsing ? (
@@ -789,6 +809,7 @@ function PreviewStep({
     onApplyFix,
     parsing,
     onParsing,
+    parsingNeedsAnalysis,
     reanalyzing,
     continuePending,
     onReanalyze,
@@ -801,6 +822,7 @@ function PreviewStep({
     onApplyFix: (operation: Extract<CleaningOperation, { kind: 'trim' | 'emptyToNull' }>) => void;
     parsing: Parsing;
     onParsing: (parsing: Parsing) => void;
+    parsingNeedsAnalysis: boolean;
     reanalyzing: boolean;
     continuePending: boolean;
     onReanalyze: () => void;
@@ -921,6 +943,13 @@ function PreviewStep({
                             <Label>{t('Preview.Header')}</Label>
                             <Switch checked={parsing.hasHeader} onCheckedChange={(value: boolean) => onParsing({ ...parsing, hasHeader: value })} />
                         </div>
+                        {parsingNeedsAnalysis ? (
+                            <Alert>
+                                <RefreshCw />
+                                <AlertTitle>{t('Preview.ParsingChangedTitle')}</AlertTitle>
+                                <AlertDescription>{t('Preview.ParsingChangedDescription')}</AlertDescription>
+                            </Alert>
+                        ) : null}
                     </section>
                 </div>
             </div>
@@ -1802,6 +1831,12 @@ function defaultMappings(profile: Profile, target: TargetSchema | null): Mapping
 
 function connectionHeaders(connectionId: string) {
     return { 'Content-Type': 'application/json', [X_CONNECTION_ID_KEY]: connectionId };
+}
+
+function parsingOptionsEqual(left: Parsing | null | undefined, right: Parsing | null | undefined) {
+    return Boolean(
+        left && right && left.delimiter === right.delimiter && left.hasHeader === right.hasHeader && left.encoding === right.encoding && left.quoteChar === right.quoteChar,
+    );
 }
 
 function importPath(organization: string, connectionId: string) {

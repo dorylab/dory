@@ -3491,6 +3491,8 @@
             "EncodingRequired": "Manual encoding selection required",
             "EncodingHelp": "Choose the encoding used by the source file, then analyze it again. The original file remains unchanged.",
             "Header": "First row is a header",
+            "ParsingChangedTitle": "Parsing settings changed",
+            "ParsingChangedDescription": "Continue to automatically reanalyze the file. This refreshes the detected schema and resets later mapping and cleaning steps.",
             "Reanalyze": "Reanalyze file",
             "Reanalyzed": "Preview updated"
         },

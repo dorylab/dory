@@ -354,7 +354,7 @@ function DataPreviewInner({
     const [editSessions, setEditSessions] = useAtom(tableEditSessionsAtom);
     const [identitySelections, setIdentitySelections] = useAtom(tableIdentitySelectionsAtom);
     const sessionKey = storageKey ?? `preview:${connectionId ?? 'unknown'}:${databaseName ?? 'unknown'}:${tableName ?? 'unknown'}`;
-    const editSession = editSessions[sessionKey] ?? createEmptyTableEditSession();
+    const editSession = useMemo(() => editSessions[sessionKey] ?? createEmptyTableEditSession(), [editSessions, sessionKey]);
     const currentConnectionValue = currentConnection?.connection;
     const resolvedDriver = driver ?? (currentConnectionValue && currentConnectionValue.id === connectionId ? currentConnectionValue.type : undefined);
     const mutationProfile = getTableMutationProfile(resolvedDriver);
