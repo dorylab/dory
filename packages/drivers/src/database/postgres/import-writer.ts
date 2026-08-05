@@ -13,6 +13,7 @@ import {
     type TargetColumn,
     type TargetSchema,
 } from '@dory/import';
+import { atomicCapabilities } from '../shared/import-writer';
 
 const ALLOWED_TYPES: ReadonlyArray<ImportColumnType> = ['string', 'boolean', 'int64', 'float64', 'date', 'datetime'];
 
@@ -54,6 +55,7 @@ export class PostgresImportWriter implements DataWriter {
                 nullable: column.is_nullable === 'YES',
                 hasDefault: column.column_default !== null,
             })),
+            writeCapabilities: atomicCapabilities,
         };
     }
 
@@ -88,7 +90,7 @@ export class PostgresImportWriter implements DataWriter {
             const sql = `COPY ${qualifiedName(plan.target)} (${names}) FROM STDIN WITH (FORMAT csv, NULL '\\N')`;
             copyStream = client.query(copyFrom(sql));
             const completion = finished(copyStream);
-            await input.onProgress({ phase: 'writing', batches, rowsWritten, pendingCommit: true });
+            await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
             const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal });
 
             for await (const batch of reader) {
@@ -100,18 +102,18 @@ export class PostgresImportWriter implements DataWriter {
                 if (chunk && !copyStream.write(chunk)) await once(copyStream, 'drain');
                 batches += 1;
                 rowsWritten += batch.numRows;
-                await input.onProgress({ phase: 'writing', batches, rowsWritten, pendingCommit: true });
+                await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
             }
 
             copyStream.end();
             await completion;
             if (signal.aborted) throw abortError();
-            await input.onProgress({ phase: 'committing', batches, rowsWritten, pendingCommit: true });
+            await input.onProgress({ phase: 'committing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
             if (signal.aborted) throw abortError();
             commitStarted = true;
             await client.query('COMMIT');
             committed = true;
-            return { insertedRows: rowsWritten, batches };
+            return { insertedRows: rowsWritten, batches, atomicity: 'atomic' as const };
         } catch (error) {
             copyStream?.destroy();
             if (!committed) await client.query('ROLLBACK').catch(() => undefined);

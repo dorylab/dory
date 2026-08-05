@@ -31,6 +31,7 @@ import { tableQueryKeys } from '@/app/(app)/[organization]/components/table-brow
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
 import { executeActionClient } from '@/lib/actions/client';
 import { importEntryParsers, serializeImportEntry } from '@/lib/client/import-entry-query';
+import { driverSupportsSchema } from '@/lib/explorer/capabilities';
 import { Alert, AlertDescription, AlertTitle } from '@/registry/new-york-v4/ui/alert';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
@@ -43,6 +44,11 @@ import { Switch } from '@/registry/new-york-v4/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
 
 type ImportColumnType = 'string' | 'boolean' | 'int64' | 'float64' | 'date' | 'datetime';
+type ImportAtomicity = 'atomic' | 'best-effort';
+type ImportWriteCapability =
+    | { supported: true; atomicity: ImportAtomicity; reason?: 'batch_commits' | 'ddl_not_transactional' | 'target_non_transactional' }
+    | { supported: false; reason: 'replace_not_atomic' | 'target_non_transactional' };
+type ImportWriteCapabilities = Record<'create' | 'append' | 'replace', ImportWriteCapability>;
 type CleaningOperation =
     | { kind: 'trim'; column: string }
     | { kind: 'lowercase'; column: string }
@@ -109,6 +115,7 @@ type TableSelectOption = SelectOption & { table: string; schema?: string };
 type TargetSchema = {
     exists: boolean;
     columns: Array<{ name: string; databaseType: string; importType: ImportColumnType; nullable: boolean; hasDefault: boolean }>;
+    writeCapabilities: ImportWriteCapabilities;
 };
 type ImportPlan = {
     version: 'dory.import-plan.v1';
@@ -321,9 +328,26 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
         onSuccess: ({ schema, profile }) => {
             setTargetSchema(schema);
             setMappings(defaultMappings(profile, target.mode === 'existing' ? schema : null));
+            if (!schema.writeCapabilities.replace.supported) {
+                setWriteMode('append');
+                setReplaceConfirmed(false);
+            }
             setStep('mapping');
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.TargetFailed')),
+    });
+
+    const resumedTargetQuery = useQuery({
+        queryKey: ['import-target-capabilities', run?.id, connectionId, run?.plan?.target],
+        queryFn: () =>
+            api<TargetSchema>(`/api/import-runs/${run!.id}`, {
+                method: 'PATCH',
+                headers: connectionHeaders(connectionId),
+                body: JSON.stringify({ action: 'inspect', target: run!.plan!.target }),
+            }),
+        enabled: Boolean(run?.plan && step === 'options' && !targetSchema && connectionId),
+        staleTime: 0,
+        retry: false,
     });
 
     const transformDraftKey = JSON.stringify({ parsing, mappings, cleaningOperations, target, writeMode, batchSize });
@@ -414,6 +438,8 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
     const preparedRows = run?.progress?.preparedRows;
     const totalRows = typeof preparedRows === 'number' ? preparedRows : (profile?.rows ?? writtenRows);
     const progressPercent = totalRows > 0 ? Math.min(100, (writtenRows / totalRows) * 100) : 0;
+    const resolvedTargetSchema = targetSchema ?? resumedTargetQuery.data ?? null;
+    const writeCapability = resolvedTargetSchema?.writeCapabilities[target.mode === 'create' ? 'create' : writeMode] ?? readWriteCapability(run?.progress?.writeCapability) ?? null;
 
     function buildPlan(): ImportPlan {
         if (!run || !parsing) throw new Error(t('Errors.PlanIncomplete'));
@@ -620,6 +646,8 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 onBatchSize={setBatchSize}
                                 replaceConfirmed={replaceConfirmed}
                                 onReplaceConfirmed={setReplaceConfirmed}
+                                writeCapability={writeCapability}
+                                replaceCapability={resolvedTargetSchema?.writeCapabilities.replace ?? null}
                                 pending={savePlanMutation.isPending}
                                 onBack={() => setStep('clean')}
                                 onContinue={() => savePlanMutation.mutate()}
@@ -630,6 +658,7 @@ export function ImportWizard({ runId, maxFileBytes, mode = 'page', fixedTarget, 
                                 t={t}
                                 stepNumber={getStepNumber('execute')}
                                 run={run}
+                                writeCapability={writeCapability}
                                 totalRows={totalRows}
                                 writtenRows={writtenRows}
                                 progressPercent={progressPercent}
@@ -1048,7 +1077,7 @@ function TargetStep({
     });
     const databaseOptions = useMemo(() => normalizeSelectOptions(databasesQuery.data?.databases), [databasesQuery.data?.databases]);
     const selectedDatabase = target.database?.trim() ?? '';
-    const supportsSchemas = connectionType !== 'sqlite';
+    const supportsSchemas = driverSupportsSchema(connectionType);
 
     const schemasQuery = useQuery({
         queryKey: ['import-target-metadata', 'schemas', connectionId, selectedDatabase],
@@ -1581,6 +1610,8 @@ function OptionsStep({
     onBatchSize,
     replaceConfirmed,
     onReplaceConfirmed,
+    writeCapability,
+    replaceCapability,
     pending,
     onBack,
     onContinue,
@@ -1594,11 +1625,23 @@ function OptionsStep({
     onBatchSize: (size: number) => void;
     replaceConfirmed: boolean;
     onReplaceConfirmed: (confirmed: boolean) => void;
+    writeCapability: ImportWriteCapability | null;
+    replaceCapability: ImportWriteCapability | null;
     pending: boolean;
 } & StepNavigation) {
     return (
         <>
-            <StepHeader eyebrow={t('Step', { number: stepNumber })} title={t('Options.Title')} description={t('Options.Description')} />
+            <StepHeader
+                eyebrow={t('Step', { number: stepNumber })}
+                title={t('Options.Title')}
+                description={
+                    !writeCapability
+                        ? t('Options.Description')
+                        : writeCapability.supported && writeCapability.atomicity === 'best-effort'
+                          ? t('Options.BestEffortDescription')
+                          : t('Options.AtomicDescription')
+                }
+            />
             {target.mode === 'existing' ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                     {(['append', 'replace'] as const).map(mode => (
@@ -1606,7 +1649,11 @@ function OptionsStep({
                             key={mode}
                             type="button"
                             onClick={() => onWriteMode(mode)}
-                            className={cn('border p-4 text-left', writeMode === mode ? 'border-primary bg-primary/5' : 'hover:bg-muted/30')}
+                            disabled={mode === 'replace' && replaceCapability?.supported === false}
+                            className={cn(
+                                'border p-4 text-left disabled:cursor-not-allowed disabled:opacity-50',
+                                writeMode === mode ? 'border-primary bg-primary/5' : 'hover:bg-muted/30',
+                            )}
                         >
                             <span className="font-medium">{t(`Options.${mode}.Title`)}</span>
                             <span className="mt-1 block text-sm text-muted-foreground">{t(`Options.${mode}.Description`)}</span>
@@ -1620,6 +1667,20 @@ function OptionsStep({
                     <AlertDescription>{t('Options.CreateModeDescription')}</AlertDescription>
                 </Alert>
             )}
+            {replaceCapability?.supported === false ? (
+                <Alert className="mt-5">
+                    <XCircle />
+                    <AlertTitle>{t('Options.ReplaceUnavailable')}</AlertTitle>
+                    <AlertDescription>{t(`Options.CapabilityReasons.${replaceCapability.reason}`)}</AlertDescription>
+                </Alert>
+            ) : null}
+            {writeCapability?.supported && writeCapability.atomicity === 'best-effort' ? (
+                <Alert className="mt-5">
+                    <Circle />
+                    <AlertTitle>{t('Options.BestEffortTitle')}</AlertTitle>
+                    <AlertDescription>{t(`Options.CapabilityReasons.${writeCapability.reason ?? 'batch_commits'}`)}</AlertDescription>
+                </Alert>
+            ) : null}
             <div className="mt-7 max-w-sm space-y-2">
                 <Label>{t('Options.Batch')}</Label>
                 <Input type="number" min={1} max={100000} value={batchSize} onChange={event => onBatchSize(Math.max(1, Math.min(100000, Number(event.target.value) || 1)))} />
@@ -1642,7 +1703,7 @@ function OptionsStep({
                 backLabel={t('Common.Back')}
                 next={onContinue}
                 nextLabel={t('Options.Review')}
-                disabled={target.mode === 'existing' && writeMode === 'replace' && !replaceConfirmed}
+                disabled={writeCapability?.supported === false || (target.mode === 'existing' && writeMode === 'replace' && !replaceConfirmed)}
                 pending={pending}
             />
         </>
@@ -1653,6 +1714,7 @@ function ExecuteStep({
     t,
     stepNumber,
     run,
+    writeCapability,
     totalRows,
     writtenRows,
     progressPercent,
@@ -1667,6 +1729,7 @@ function ExecuteStep({
     t: WizardTranslator;
     stepNumber: number;
     run: ImportRun;
+    writeCapability: ImportWriteCapability | null;
     totalRows: number;
     writtenRows: number;
     progressPercent: number;
@@ -1704,6 +1767,17 @@ function ExecuteStep({
                     </Badge>
                 </div>
                 <div className="space-y-5 p-5">
+                    {writeCapability?.supported ? (
+                        <Alert>
+                            <Circle />
+                            <AlertTitle>{writeCapability.atomicity === 'atomic' ? t('Options.AtomicTitle') : t('Options.BestEffortTitle')}</AlertTitle>
+                            <AlertDescription>
+                                {writeCapability.atomicity === 'atomic'
+                                    ? t('Options.AtomicDescription')
+                                    : t(`Options.CapabilityReasons.${writeCapability.reason ?? 'batch_commits'}`)}
+                            </AlertDescription>
+                        </Alert>
+                    ) : null}
                     <Progress value={completed ? 100 : progressPercent} />
                     <div className="grid gap-4 sm:grid-cols-4">
                         <Metric label={t('Execute.Processed')} value={formatNumber(writtenRows)} />
@@ -1720,6 +1794,13 @@ function ExecuteStep({
                             <XCircle />
                             <AlertTitle>{run.errorCode ?? t('Errors.Unknown')}</AlertTitle>
                             <AlertDescription>{run.errorMessage}</AlertDescription>
+                        </Alert>
+                    ) : null}
+                    {run.errorCode === 'IMPORT_PARTIAL_WRITE' || run.errorCode === 'IMPORT_CANCELED_PARTIAL' ? (
+                        <Alert>
+                            <Circle />
+                            <AlertTitle>{t('Execute.PartialWriteTitle')}</AlertTitle>
+                            <AlertDescription>{t('Execute.PartialWriteDescription', { rows: formatNumber(run.insertedRows) })}</AlertDescription>
                         </Alert>
                     ) : null}
                 </div>
@@ -1827,6 +1908,14 @@ function defaultMappings(profile: Profile, target: TargetSchema | null): Mapping
         const match = exactMatch ?? (candidates.length === 1 ? candidates[0] : undefined);
         return { source: column.name, target: match?.name ?? column.name, targetType: match?.importType ?? column.detectedType, ignored: Boolean(target && !match), order };
     });
+}
+
+function readWriteCapability(value: unknown): ImportWriteCapability | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const capability = value as Record<string, unknown>;
+    if (capability.supported === false && typeof capability.reason === 'string') return capability as ImportWriteCapability;
+    if (capability.supported === true && (capability.atomicity === 'atomic' || capability.atomicity === 'best-effort')) return capability as ImportWriteCapability;
+    return null;
 }
 
 function connectionHeaders(connectionId: string) {

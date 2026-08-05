@@ -1,6 +1,7 @@
 import type Database from 'better-sqlite3';
 
 import { CommitUnknownError, type DataWriter, type ImportColumnType, type ImportPlanV1, type ImportTarget, type TargetColumn, type TargetSchema } from '@dory/import';
+import { atomicCapabilities } from '../shared/import-writer';
 
 const ALLOWED_TYPES: ReadonlyArray<ImportColumnType> = ['string', 'boolean', 'int64', 'float64', 'date', 'datetime'];
 const SQLITE_SAFE_PARAMETER_LIMIT = 999;
@@ -18,7 +19,7 @@ export class SqliteImportWriter implements DataWriter {
         try {
             const schema = target.database?.trim() || 'main';
             const exists = Boolean(database.prepare(`SELECT 1 FROM ${quoteIdentifier(schema)}.sqlite_master WHERE type = 'table' AND name = ?`).get(target.table));
-            if (!exists) return { exists: false, columns: [] };
+            if (!exists) return { exists: false, columns: [], writeCapabilities: atomicCapabilities };
             const rows = database.prepare(`PRAGMA ${quoteIdentifier(schema)}.table_info(${quoteLiteral(target.table)})`).all() as Array<{
                 name: string;
                 type: string;
@@ -35,6 +36,7 @@ export class SqliteImportWriter implements DataWriter {
                     nullable: column.notnull === 0 && column.pk === 0,
                     hasDefault: column.dflt_value !== null || column.pk > 0,
                 })),
+                writeCapabilities: atomicCapabilities,
             };
         } finally {
             database.close();
@@ -62,7 +64,7 @@ export class SqliteImportWriter implements DataWriter {
             } else if (input.plan.mode === 'replace') {
                 database.exec(`DELETE FROM ${qualifiedName(input.plan.target)}`);
             }
-            await input.onProgress({ phase: 'writing', batches, rowsWritten, pendingCommit: true });
+            await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
             const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
 
             for await (const batch of reader) {
@@ -81,18 +83,18 @@ export class SqliteImportWriter implements DataWriter {
                     database.prepare(`INSERT INTO ${qualifiedName(input.plan.target)} (${names}) VALUES ${rowSql.join(', ')}`).run(...values);
                     rowsWritten += count;
                     batches += 1;
-                    await input.onProgress({ phase: 'writing', batches, rowsWritten, pendingCommit: true });
+                    await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
                     await yieldEventLoop();
                 }
             }
 
             if (input.signal.aborted) throw abortError();
-            await input.onProgress({ phase: 'committing', batches, rowsWritten, pendingCommit: true });
+            await input.onProgress({ phase: 'committing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
             if (input.signal.aborted) throw abortError();
             commitStarted = true;
             database.exec('COMMIT');
             committed = true;
-            return { insertedRows: rowsWritten, batches };
+            return { insertedRows: rowsWritten, batches, atomicity: 'atomic' as const };
         } catch (error) {
             if (!committed) {
                 try {

@@ -11,6 +11,14 @@ export type ImportRunStatus = 'draft' | 'uploading' | 'analyzing' | 'ready' | 'q
 export type ImportWriteMode = 'append' | 'replace';
 export type ImportTargetMode = 'create' | 'existing';
 export type ImportColumnType = 'string' | 'boolean' | 'int64' | 'float64' | 'date' | 'datetime';
+export type ImportWriterDialect = 'clickhouse' | 'duckdb' | 'mysql' | 'oracle' | 'postgres' | 'snowflake' | 'sqlite' | 'sqlserver';
+export type ImportAtomicity = 'atomic' | 'best-effort';
+export type ImportWriteOperation = 'create' | 'append' | 'replace';
+export type ImportCapabilityReason = 'batch_commits' | 'ddl_not_transactional' | 'replace_not_atomic' | 'target_non_transactional';
+export type ImportWriteCapability =
+    | { supported: true; atomicity: ImportAtomicity; reason?: Exclude<ImportCapabilityReason, 'replace_not_atomic'> }
+    | { supported: false; reason: ImportCapabilityReason };
+export type ImportWriteCapabilities = Record<ImportWriteOperation, ImportWriteCapability>;
 export type CsvEncoding = 'utf8' | 'utf16le' | 'utf16be' | 'gb18030' | 'big5' | 'shift_jis' | 'windows1252';
 
 export type CsvParsingOptions = {
@@ -147,22 +155,25 @@ export type TargetColumn = {
 export type TargetSchema = {
     exists: boolean;
     columns: TargetColumn[];
+    writeCapabilities: ImportWriteCapabilities;
 };
 
 export type WriteProgress = {
     phase: 'preparing' | 'writing' | 'committing';
     batches: number;
     rowsWritten: number;
+    rowsCommitted: number;
     pendingCommit: boolean;
 };
 
 export type WriteResult = {
     insertedRows: number;
     batches: number;
+    atomicity: ImportAtomicity;
 };
 
 export interface DataWriter {
-    readonly dialect: 'postgres' | 'sqlite';
+    readonly dialect: ImportWriterDialect;
     readonly allowedTypes: ReadonlyArray<ImportColumnType>;
     inspectTarget(target: ImportTarget): Promise<TargetSchema>;
     previewCreateTable(plan: ImportPlanV1): Promise<string>;
@@ -173,6 +184,18 @@ export class CommitUnknownError extends Error {
     constructor(message = 'The connection was lost while committing the import') {
         super(message);
         this.name = 'CommitUnknownError';
+    }
+}
+
+export class PartialWriteError extends Error {
+    constructor(
+        message: string,
+        readonly committedRows: number,
+        readonly batches: number,
+        readonly targetMayBeChanged = true,
+    ) {
+        super(message);
+        this.name = 'PartialWriteError';
     }
 }
 

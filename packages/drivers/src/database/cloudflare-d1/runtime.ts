@@ -41,6 +41,8 @@ type CloudflareD1Response = {
     result?: CloudflareD1Result[];
 };
 
+export type CloudflareD1BatchQuery = { sql: string; params?: unknown[] };
+
 type CountRow = {
     totalRows?: number | string | bigint | null;
 };
@@ -216,6 +218,29 @@ export async function executeCloudflareD1Query<Row = any>(config: BaseConfig, sq
             },
         },
     };
+}
+
+export async function executeCloudflareD1Batch(config: BaseConfig, queries: CloudflareD1BatchQuery[]): Promise<Array<{ changes: number }>> {
+    if (!queries.length) return [];
+    const d1 = getD1Config(config);
+    const batch = queries.map(query => {
+        const normalized = normalizeParams(query.sql, query.params);
+        return { sql: normalized.sql, ...(Array.isArray(normalized.params) && normalized.params.length ? { params: normalized.params } : {}) };
+    });
+    const response = await fetch(`${d1.apiBaseUrl}/accounts/${encodeURIComponent(d1.accountId)}/d1/database/${encodeURIComponent(d1.databaseId)}/query`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${d1.apiToken}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ batch }),
+    });
+    const payload = (await response.json().catch(() => null)) as CloudflareD1Response | null;
+    if (!response.ok || !payload?.success) throw new Error(getErrorMessage(payload ?? {}, `Cloudflare D1 batch failed with status ${response.status}`));
+    const results = payload.result ?? [];
+    const failed = results.find(result => result.success === false);
+    if (failed) throw new Error(failed.error || 'Cloudflare D1 batch failed');
+    return results.map(result => ({ changes: result.meta?.changes ?? 0 }));
 }
 
 export async function executeCloudflareD1QueryRowStream<Row = any>(config: BaseConfig, sql: string, params?: DriverQueryParams): Promise<DriverQueryRowStream<Row>> {

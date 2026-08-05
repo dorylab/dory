@@ -6,6 +6,7 @@ import { CloudflareD1Dialect } from './dialect';
 import { createCloudflareD1MetadataCapability, type CloudflareD1MetadataAPI } from './capabilities/metadata';
 import { createCloudflareD1TableInfoCapability } from './capabilities/table-info';
 import { executeCloudflareD1Query, executeCloudflareD1QueryRowStream, pingCloudflareD1 } from './runtime';
+import { CloudflareD1ImportWriter } from './import-writer';
 
 export class CloudflareD1Datasource extends BaseConnection {
     readonly dialect = CloudflareD1Dialect;
@@ -19,6 +20,7 @@ export class CloudflareD1Datasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new CloudflareD1ImportWriter(this.config);
     }
 
     protected async _init(): Promise<void> {

@@ -26,6 +26,7 @@ import {
     previewImportTransform,
     transcodeCsvToUtf8,
     validateTargetCoverage,
+    PartialWriteError,
     type CsvEncoding,
     type CsvParsingOptions,
     type DatasetProfileV2,
@@ -280,10 +281,23 @@ export async function saveImportPlan(db: DBService, connection: BaseConnection, 
     } else if (target.exists) {
         throw new ImportServiceError('The target table already exists', 409, 'IMPORT_TARGET_EXISTS');
     }
+    const writeCapability = capabilityForPlan(target, plan);
+    if (!writeCapability.supported) {
+        throw new ImportServiceError('The selected write mode is not supported for this target', 422, 'IMPORT_WRITE_MODE_UNSUPPORTED', {
+            operation: importOperation(plan),
+            reason: writeCapability.reason,
+        });
+    }
     const updated = await db.importRuns.update(input.organizationId, input.runId, {
         connectionId: connection.config.id,
         plan,
-        progress: { phase: 'ready', schemaHash, planHash: hashImportPlan(plan), createSql: plan.target.mode === 'create' ? await writer.previewCreateTable(plan) : null },
+        progress: {
+            phase: 'ready',
+            schemaHash,
+            planHash: hashImportPlan(plan),
+            createSql: plan.target.mode === 'create' ? await writer.previewCreateTable(plan) : null,
+            writeCapability,
+        },
     });
     const paths = getDoryArtifactStore().importRuns.paths(input.organizationId, input.runId, run.sourceExtension ?? 'csv');
     await getDoryArtifactStore().importRuns.putJson(paths.transform, plan.transform);
@@ -317,7 +331,16 @@ export async function queueImportRun(db: DBService, connection: BaseConnection, 
     if (run.status !== 'ready' || !run.plan || !run.sourceArrowPath) throw new ImportServiceError('Complete analysis and mapping before execution', 409, 'IMPORT_RUN_NOT_READY');
     if (!importRunProfile(run)) throw new ImportServiceError('This import uses an obsolete profile. Analyze the source again.', 409, 'IMPORT_PROFILE_VERSION');
     if (connection.config.id !== run.connectionId) throw new ImportServiceError('The selected connection does not match this import run', 409, 'IMPORT_CONNECTION_MISMATCH');
-    connection.getDataWriter();
+    const target = await connection.getDataWriter().inspectTarget(parseImportPlan(run.plan).target);
+    const plan = parseImportPlan(run.plan);
+    assertTargetState(target, plan);
+    const writeCapability = capabilityForPlan(target, plan);
+    if (!writeCapability.supported) {
+        throw new ImportServiceError('The selected write mode is no longer supported for this target', 409, 'IMPORT_WRITE_MODE_UNSUPPORTED', {
+            operation: importOperation(plan),
+            reason: writeCapability.reason,
+        });
+    }
     const schemaHash = importRunSchemaHash(run);
     const updated = await db.importRuns.update(organizationId, runId, {
         status: 'queued',
@@ -332,7 +355,9 @@ export async function queueImportRun(db: DBService, connection: BaseConnection, 
             phase: 'queued',
             rowsWritten: 0,
             batches: 0,
+            rowsCommitted: 0,
             pendingCommit: false,
+            writeCapability,
             ...(schemaHash ? { schemaHash } : {}),
         },
         errorCode: null,
@@ -452,6 +477,15 @@ class ImportRunner {
             const pool = await getOrCreateConnectionPool(organizationId, run.connectionId);
             if (!pool) throw new Error('Import connection is unavailable');
             const writer = pool.instance.getDataWriter();
+            const target = await writer.inspectTarget(plan.target);
+            assertTargetState(target, plan);
+            const writeCapability = capabilityForPlan(target, plan);
+            if (!writeCapability.supported) {
+                throw new ImportServiceError(`Import ${importOperation(plan)} is no longer supported for this target`, 409, 'IMPORT_WRITE_MODE_UNSUPPORTED', {
+                    operation: importOperation(plan),
+                    reason: writeCapability.reason,
+                });
+            }
             heartbeat = setInterval(() => {
                 void this.db.importRuns
                     .get(organizationId, runId)
@@ -491,8 +525,10 @@ class ImportRunner {
                     preparedRows: prepared.outputRows,
                     filteredRows: prepared.filteredRows,
                     rowsWritten: 0,
+                    rowsCommitted: 0,
                     batches: 0,
-                    pendingCommit: true,
+                    pendingCommit: false,
+                    writeCapability,
                 },
             });
             await this.db.importRuns.appendEvent(organizationId, runId, 'prepare.completed', {
@@ -509,7 +545,7 @@ class ImportRunner {
                 signal: controller.signal,
                 onProgress: async progress => {
                     const now = Date.now();
-                    if (progress.phase === 'committing' || now - lastProgressAt >= 250) {
+                    if (!progress.pendingCommit || progress.phase === 'committing' || now - lastProgressAt >= 250) {
                         lastProgressAt = now;
                         await this.db.importRuns.update(organizationId, runId, {
                             phase: progress.phase,
@@ -520,7 +556,8 @@ class ImportRunner {
                                 filteredRows: prepared.filteredRows,
                             },
                             processedRows: progress.rowsWritten,
-                            pendingRows: progress.pendingCommit ? progress.rowsWritten : 0,
+                            pendingRows: Math.max(0, progress.rowsWritten - progress.rowsCommitted),
+                            insertedRows: progress.rowsCommitted,
                             batchCount: progress.batches,
                             heartbeatAt: new Date(),
                         });
@@ -542,12 +579,33 @@ class ImportRunner {
             }
             const canceled = controller.signal.aborted || (failure instanceof DOMException && failure.name === 'AbortError');
             const status: ImportRunStatus = canceled ? 'canceled' : failure instanceof CommitUnknownError ? 'commit_unknown' : 'failed';
+            const persisted = await this.db.importRuns.get(organizationId, runId);
+            const committedRows = Math.max(persisted?.insertedRows ?? 0, failure instanceof PartialWriteError ? failure.committedRows : 0);
+            const partial = committedRows > 0 || failure instanceof PartialWriteError;
             const current = await this.db.importRuns.update(organizationId, runId, {
                 status,
                 phase: status,
                 pendingRows: 0,
-                errorCode: canceled ? null : status === 'commit_unknown' ? 'IMPORT_COMMIT_UNKNOWN' : 'IMPORT_EXECUTION_FAILED',
-                errorMessage: canceled ? null : failure instanceof Error ? failure.message : String(failure),
+                insertedRows: committedRows,
+                processedRows: Math.max(persisted?.processedRows ?? 0, committedRows),
+                errorCode: canceled
+                    ? partial
+                        ? 'IMPORT_CANCELED_PARTIAL'
+                        : null
+                    : status === 'commit_unknown'
+                      ? 'IMPORT_COMMIT_UNKNOWN'
+                      : partial
+                        ? 'IMPORT_PARTIAL_WRITE'
+                        : failure instanceof ImportServiceError
+                          ? failure.code
+                          : 'IMPORT_EXECUTION_FAILED',
+                errorMessage: canceled
+                    ? partial
+                        ? 'The import was canceled after some rows had already committed. Review the target table.'
+                        : null
+                    : failure instanceof Error
+                      ? failure.message
+                      : String(failure),
                 heartbeatAt: new Date(),
                 completedAt: new Date(),
             });
@@ -618,15 +676,30 @@ async function completeImportRun(db: DBService, organizationId: string, runId: s
             sourceRows: result.insertedRows + filteredRows,
             preparedRows: result.insertedRows,
             rowsWritten: result.insertedRows,
+            rowsCommitted: result.insertedRows,
             filteredRows,
             batches: result.batches,
             pendingCommit: false,
+            writeCapability: { supported: true, atomicity: result.atomicity },
         },
     });
     await db.importRuns.appendEvent(organizationId, runId, 'run.completed', result).catch(() => undefined);
     await writeManifest(db, completed).catch(() => undefined);
     await writeEventsArtifact(db, completed).catch(() => undefined);
     return completed;
+}
+
+function importOperation(plan: ImportPlanV1) {
+    return plan.target.mode === 'create' ? ('create' as const) : plan.mode;
+}
+
+function capabilityForPlan(target: Awaited<ReturnType<ReturnType<BaseConnection['getDataWriter']>['inspectTarget']>>, plan: ImportPlanV1) {
+    return target.writeCapabilities[importOperation(plan)];
+}
+
+function assertTargetState(target: Awaited<ReturnType<ReturnType<BaseConnection['getDataWriter']>['inspectTarget']>>, plan: ImportPlanV1) {
+    if (plan.target.mode === 'create' && target.exists) throw new ImportServiceError('The target table already exists', 409, 'IMPORT_TARGET_EXISTS');
+    if (plan.target.mode === 'existing' && !target.exists) throw new ImportServiceError('The target table does not exist', 409, 'IMPORT_TARGET_NOT_FOUND');
 }
 
 async function writeManifest(db: DBService, run: Run) {

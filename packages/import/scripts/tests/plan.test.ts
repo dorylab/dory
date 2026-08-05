@@ -25,6 +25,11 @@ const profile: DatasetProfileV2 = {
 
 const target: TargetSchema = {
     exists: true,
+    writeCapabilities: {
+        create: { supported: true, atomicity: 'atomic' },
+        append: { supported: true, atomicity: 'atomic' },
+        replace: { supported: true, atomicity: 'atomic' },
+    },
     columns: [
         { name: 'id', databaseType: 'bigint', importType: 'int64', nullable: false, hasDefault: false },
         { name: 'email', databaseType: 'text', importType: 'string', nullable: false, hasDefault: false },

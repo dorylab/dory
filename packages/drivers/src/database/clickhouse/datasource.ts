@@ -18,6 +18,7 @@ import { createClickhouseMetadataCapability, type ClickhouseMetadataAPI } from '
 import { createClickhouseQueryInsightsCapability } from './capabilities/insights';
 import { createClickhouseTableInfoCapability } from './capabilities/table-info';
 import { createClickhousePrivilegesCapability } from './capabilities/privileges';
+import { ClickhouseImportWriter } from './import-writer';
 
 export class ClickhouseDatasource extends BaseConnection {
     readonly dialect = ClickhouseDialect;
@@ -34,6 +35,7 @@ export class ClickhouseDatasource extends BaseConnection {
             atomicity: 'best-effort',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new ClickhouseImportWriter(this);
     }
 
     protected async _init(): Promise<void> {
@@ -84,6 +86,23 @@ export class ClickhouseDatasource extends BaseConnection {
             return await executeClickhouseQuery<Row>(tempClient, sql, context?.params, context);
         } finally {
             await tempClient.close().catch(() => undefined);
+        }
+    }
+
+    async withClient<T>(database: string | undefined, callback: (client: ClickHouseClient) => Promise<T>): Promise<T> {
+        this.assertReady();
+        const targetDb = database ?? this.config.database;
+        if (!targetDb || targetDb === this.config.database) return callback(this.client!);
+        const sshEndpoint = this.getSshEndpoint();
+        const client = createClickhouseClient(this.config, {
+            database: targetDb,
+            hostOverride: sshEndpoint?.host,
+            httpPortOverride: sshEndpoint?.port,
+        });
+        try {
+            return await callback(client);
+        } finally {
+            await client.close().catch(() => undefined);
         }
     }
 
