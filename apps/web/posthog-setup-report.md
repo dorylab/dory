@@ -28,7 +28,7 @@ The wizard has completed a deep integration of PostHog into the Studio Next.js a
 | `connection_deleted` | Database connection deleted | `app/(app)/[organization]/connections/hooks/use-connections.ts` |
 | `connection_opened` | User successfully opens/connects to a connection | `app/(app)/[organization]/connections/hooks/use-connect-connection.ts` |
 | `connection_open_failed` | User fails to open/connect to a connection | `app/(app)/[organization]/connections/hooks/use-connect-connection.ts` |
-| `chat_message_sent` | User submits a message in the AI chatbot | `app/(app)/[organization]/[connectionId]/chatbot/thread/chatbox.tsx` |
+| `chat_message_sent` | User submits a message in Data Agent | `app/(app)/[organization]/[connectionId]/chatbot/thread/chatbox.tsx` |
 | `chat_session_created` | New chat session created | `app/(app)/[organization]/[connectionId]/chatbot/core/session-controller.ts` |
 | `chat_session_deleted` | Chat session deleted | `app/(app)/[organization]/[connectionId]/chatbot/core/session-controller.ts` |
 | `saved_query_opened` | User opens a saved query in the SQL console | `app/(app)/[organization]/[connectionId]/sql-console/components/saved-queries/saved-queries-sidebar.tsx` |
