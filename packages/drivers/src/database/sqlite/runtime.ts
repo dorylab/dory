@@ -4,7 +4,7 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, SchemaGraphOptions, SchemaGraphResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverRowCursor, HealthInfo, QueryResult, SchemaGraphOptions, SchemaGraphResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
 import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
@@ -122,7 +122,7 @@ export function executeSqliteQuery<Row = any>(db: SqliteDatabase, sql: string, p
     };
 }
 
-export function executeSqliteQueryRowStream<Row = any>(db: SqliteDatabase, sql: string, params?: DriverQueryParams): DriverQueryRowStream<Row> {
+export function executeSqliteQueryRowStream<Row = any>(db: SqliteDatabase, sql: string, params?: DriverQueryParams): DriverRowCursor<Row> {
     const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
     const statement = db.prepare(compiledSql);
     const boundParams = bindStatement(statement, compiledParams);
@@ -139,7 +139,7 @@ export function executeSqliteQueryRowStream<Row = any>(db: SqliteDatabase, sql: 
         };
     }
 
-    const iterator = (statement.iterate(...boundParams) as Iterable<Row>)[Symbol.iterator]();
+    const iterator = (statement.raw(true).iterate(...boundParams) as Iterable<Row>)[Symbol.iterator]();
     let iteratorClosed = false;
     const close = () => {
         if (iteratorClosed) return;

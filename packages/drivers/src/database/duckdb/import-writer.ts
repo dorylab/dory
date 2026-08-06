@@ -66,8 +66,8 @@ export class DuckDbImportWriter implements DataWriter {
             else if (input.plan.mode === 'replace') await connection.run(`DELETE FROM ${qualifiedName(input.plan.target)}`);
             statement = await connection.prepare(`INSERT INTO ${qualifiedName(input.plan.target)} (${names}) VALUES (${columns.map(() => '?').join(', ')})`);
             await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
-            const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
-            for await (const batch of reader) {
+            const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal: input.signal });
+            for await (const batch of dataStream.batches()) {
                 if (input.signal.aborted) throw abortError();
                 for (const row of batchRows(batch, columns)) {
                     statement.bind(row as DuckDBValue[]);

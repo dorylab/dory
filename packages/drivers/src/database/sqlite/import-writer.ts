@@ -65,9 +65,9 @@ export class SqliteImportWriter implements DataWriter {
                 database.exec(`DELETE FROM ${qualifiedName(input.plan.target)}`);
             }
             await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
-            const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
+            const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal: input.signal });
 
-            for await (const batch of reader) {
+            for await (const batch of dataStream.batches()) {
                 for (let offset = 0; offset < batch.numRows; offset += maxRowsPerInsert) {
                     if (input.signal.aborted) throw abortError();
                     const count = Math.min(maxRowsPerInsert, batch.numRows - offset);

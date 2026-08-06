@@ -7,6 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import { and, asc, eq, lte, ne, notInArray, sql } from 'drizzle-orm';
 
 import { getDoryArtifactStore, joinObjectPath, safeObjectPathPart, type DoryArtifactStore } from '@dory/artifacts';
+import { collectSerializableDataPage, createDataSchema, prefetchSerializableDataStream, rowDataStream, schemaToIpc, serializableColumns, type DataStream } from '@dory/data-plane';
 import { getClient } from '@dory/database/postgres/client';
 import { agentRunResultSets, connections, organizations, queryRuns, resultSetExports, resultSets as resultSetsTable, workQueryResultSets } from '@dory/database/postgres/schemas';
 import {
@@ -25,8 +26,8 @@ import {
     type ResultSetColumn,
     type ResultSetDataAvailability,
     type ResultSetDataWriter,
+    type ResultSetDataWriterResult,
     type ResultSetManifest,
-    type ResultSetRowIterable,
 } from '@dory/resultset';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
@@ -77,9 +78,7 @@ export type PersistQueryResultSetInput = {
 export type PersistQueryErrorInput = Omit<PersistQueryResultSetInput, 'database' | 'previewRows' | 'rows' | 'sourceConnectionType' | 'sourceDatabaseName'>;
 
 export type PersistQueryResultSetStreamInput = Omit<PersistQueryResultSetInput, 'rows'> & {
-    rows: ResultSetRowIterable;
-    columns?: ResultSetColumn[];
-    rowCount?: number | null;
+    dataStream: DataStream;
     resultSetId?: string | null;
     queryRunId?: string | null;
 };
@@ -480,6 +479,12 @@ function getErrorMessage(error: unknown) {
     return String(error);
 }
 
+function isCanceledError(error: unknown) {
+    if (!error || typeof error !== 'object') return false;
+    const value = error as { name?: unknown; code?: unknown };
+    return value.name === 'AbortError' || value.code === 'ABORT_ERR';
+}
+
 function getNumber(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -678,111 +683,76 @@ function setCachedRowPage(key: string, output: ReadResultRowsOutput) {
     }
 }
 
-function isAsyncIterableRows(rows: ResultSetRowIterable): rows is AsyncIterable<unknown> {
-    return typeof (rows as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function';
+function resultSetLogicalType(value?: string): ResultSetColumn['logicalType'] {
+    if (value === 'boolean') return 'boolean';
+    if (value === 'integer' || value === 'number' || value === 'decimal') return 'number';
+    if (value === 'date') return 'date';
+    if (value === 'datetime' || value === 'time') return 'datetime';
+    if (value === 'json') return 'json';
+    if (value === 'binary') return 'binary';
+    if (value === 'string') return 'string';
+    return 'unknown';
 }
 
-function withRowCounting(
-    rows: ResultSetRowIterable,
-    handlers: {
-        onRow: (row: unknown) => void;
-        onError: (error: unknown) => void;
-    },
-): ResultSetRowIterable {
-    if (isAsyncIterableRows(rows)) {
-        return (async function* () {
-            try {
-                for await (const row of rows) {
-                    handlers.onRow(row);
-                    yield row;
+function dataStreamForResultRows(rows: unknown[], columns: ResultSetColumn[], source: string): DataStream {
+    return rowDataStream({
+        columns: dataColumnsForResultRows(rows, columns),
+        rows,
+        rowCount: rows.length,
+        metadata: { source },
+    });
+}
+
+function schemaIpcForResultColumns(columns: ResultSetColumn[], rows: unknown[] = []): Buffer {
+    return Buffer.from(schemaToIpc(createDataSchema(dataColumnsForResultRows(rows, columns))));
+}
+
+function dataColumnsForResultRows(rows: unknown[], columns: ResultSetColumn[]) {
+    return columns.map((column, index) => ({
+        name: column.name,
+        type: resultColumnDataType(
+            column,
+            rows.slice(0, 200).map(row => (Array.isArray(row) ? row[index] : row && typeof row === 'object' ? (row as Record<string, unknown>)[column.name] : undefined)),
+        ),
+        nullable: column.nullable,
+    }));
+}
+
+function resultColumnDataType(column: ResultSetColumn, values: unknown[]): string {
+    if (column.databaseType?.trim()) return column.databaseType;
+    if (column.logicalType === 'boolean') return 'BOOLEAN';
+    if (column.logicalType === 'date') return 'DATE';
+    if (column.logicalType === 'datetime') return 'TIMESTAMP';
+    if (column.logicalType === 'binary') return 'BINARY';
+    if (column.logicalType === 'json') return 'JSON';
+    const nonNull = values.filter(value => value !== null && value !== undefined);
+    if (column.logicalType === 'number' || nonNull.some(value => typeof value === 'number' || typeof value === 'bigint')) {
+        return nonNull.every(value => typeof value === 'bigint' || (typeof value === 'number' && Number.isSafeInteger(value))) ? 'BIGINT' : 'DOUBLE';
+    }
+    if (nonNull.some(value => typeof value === 'boolean')) return 'BOOLEAN';
+    if (nonNull.some(value => value instanceof Date)) return 'TIMESTAMP';
+    if (nonNull.some(value => value instanceof Uint8Array)) return 'BINARY';
+    return 'VARCHAR';
+}
+
+function observeDataStream(stream: DataStream, onBatch: (rows: number) => void): DataStream {
+    let consumed = false;
+    return {
+        schema: stream.schema,
+        metadata: stream.metadata,
+        rowCount: stream.rowCount,
+        batches: () => {
+            if (consumed) throw new Error('DATA_STREAM_ALREADY_CONSUMED');
+            consumed = true;
+            return (async function* () {
+                for await (const batch of stream.batches()) {
+                    onBatch(batch.numRows);
+                    yield batch;
                 }
-            } catch (error) {
-                handlers.onError(error);
-                throw error;
-            }
-        })();
-    }
-
-    return (function* () {
-        try {
-            for (const row of rows) {
-                handlers.onRow(row);
-                yield row;
-            }
-        } catch (error) {
-            handlers.onError(error);
-            throw error;
-        }
-    })();
-}
-
-async function consumeRows(rows: ResultSetRowIterable): Promise<void> {
-    if (isAsyncIterableRows(rows)) {
-        for await (const row of rows) {
-            void row;
-        }
-        return;
-    }
-
-    for (const row of rows) {
-        void row;
-    }
-}
-
-async function preparePreviewRows(rows: ResultSetRowIterable, maxRows: number): Promise<{ previewRows: unknown[]; remainingRows: ResultSetRowIterable }> {
-    const previewRows: unknown[] = [];
-    const limit = Math.max(0, Math.floor(maxRows));
-    if (limit <= 0) {
-        return { previewRows, remainingRows: rows };
-    }
-
-    if (isAsyncIterableRows(rows)) {
-        const iterator = rows[Symbol.asyncIterator]();
-        while (previewRows.length < limit) {
-            const next = await iterator.next();
-            if (next.done) break;
-            previewRows.push(next.value);
-        }
-        return { previewRows, remainingRows: asyncRowsFromIterator(iterator) };
-    }
-
-    const iterator = rows[Symbol.iterator]();
-    while (previewRows.length < limit) {
-        const next = iterator.next();
-        if (next.done) break;
-        previewRows.push(next.value);
-    }
-    return { previewRows, remainingRows: rowsFromIterator(iterator) };
-}
-
-function concatRows(prefixRows: unknown[], remainingRows: ResultSetRowIterable): ResultSetRowIterable {
-    if (isAsyncIterableRows(remainingRows)) {
-        return (async function* () {
-            for (const row of prefixRows) yield row;
-            for await (const row of remainingRows) yield row;
-        })();
-    }
-
-    return (function* () {
-        for (const row of prefixRows) yield row;
-        for (const row of remainingRows) yield row;
-    })();
-}
-
-function* rowsFromIterator(iterator: Iterator<unknown>) {
-    for (;;) {
-        const next = iterator.next();
-        if (next.done) return;
-        yield next.value;
-    }
-}
-
-async function* asyncRowsFromIterator(iterator: AsyncIterator<unknown>) {
-    for (;;) {
-        const next = await iterator.next();
-        if (next.done) return;
-        yield next.value;
-    }
+            })();
+        },
+        close: () => stream.close(),
+    };
 }
 
 function rowsBySchema(rows: unknown[][], columns: ResultSetColumn[]) {
@@ -794,6 +764,16 @@ function rowsBySchema(rows: unknown[][], columns: ResultSetColumn[]) {
         }
         return out;
     });
+}
+
+async function serializeResultRows(rows: unknown[][], columns: ResultSetColumn[]) {
+    const stream = rowDataStream({
+        columns: dataColumnsForResultRows(rows, columns),
+        rows,
+        rowCount: rows.length,
+        metadata: { source: 'result-set-page' },
+    });
+    return (await collectSerializableDataPage(stream, rows.length)).rows;
 }
 
 function normalizeReadValue(value: unknown, column: ResultSetColumn | undefined) {
@@ -840,6 +820,7 @@ export class PostgresResultSetsRepository {
         const now = new Date();
         const expiresAt = input.persistent ? null : addDays(now, await this.getRetentionDays(input.organizationId));
         const columns = inferResultSetColumns(rows);
+        const schemaIpc = schemaIpcForResultColumns(columns, rows);
         const preview = buildResultSetPreview({
             columns,
             rows,
@@ -847,7 +828,7 @@ export class PostgresResultSetsRepository {
             maxRows: input.previewRows ?? DEFAULT_PREVIEW_ROWS,
         });
         const manifest: ResultSetManifest = {
-            format: 'dory.resultset.v1',
+            format: 'dory.resultset.v2',
             artifactId,
             organizationId: input.organizationId,
             kind: input.kind,
@@ -877,11 +858,11 @@ export class PostgresResultSetsRepository {
         const fullData = await this.writeFullDataArtifact({
             artifactId,
             status: 'success',
-            columns,
-            rows,
+            dataStream: dataStreamForResultRows(rows, columns, 'derived-result-set'),
         });
+        manifest.batchCount = fullData?.batchCount ?? (rows.length ? 1 : 0);
         const maxStorageBytes = await this.getMaxStorageBytes(input.organizationId);
-        const previewByteSizeEstimate = Buffer.byteLength(JSON.stringify(preview), 'utf8');
+        const previewByteSizeEstimate = schemaIpc.byteLength + Buffer.byteLength(JSON.stringify(preview), 'utf8');
         const fullDataByteSize = fullData?.byteSize ?? fullData?.parts.reduce((total, part) => total + (part.byteSize ?? 0), 0) ?? 0;
         const storageLimitApplied = Boolean(fullData && fullDataByteSize + previewByteSizeEstimate > maxStorageBytes);
         const { ref, manifest: persistedManifest } = await this.artifacts.resultSets
@@ -889,6 +870,7 @@ export class PostgresResultSetsRepository {
                 organizationId: input.organizationId,
                 artifactId,
                 manifest,
+                schema: schemaIpc,
                 preview,
                 dataParts: storageLimitApplied ? null : (fullData?.parts ?? null),
             })
@@ -918,7 +900,7 @@ export class PostgresResultSetsRepository {
                 createdByActorType: input.agentRunId ? 'agent' : 'user',
                 createdByActorId: input.userId,
                 contentHash: input.contentHash ?? null,
-                byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                byteSize: persistedManifest.byteSize ?? 0,
                 storageLimitApplied,
                 expiresAt,
                 createdAt: now,
@@ -948,7 +930,7 @@ export class PostgresResultSetsRepository {
             previewRowCount: preview.previewRowCount,
             rowCount: rows.length,
             schema: columns,
-            byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+            byteSize: persistedManifest.byteSize ?? 0,
             artifactStore: ref.store,
             storageFormat: storageFormatFor(dataAvailability),
             sourceConnectionType: input.sourceConnectionType ?? null,
@@ -1003,6 +985,7 @@ export class PostgresResultSetsRepository {
         const sourceConnectionType = input.sourceConnectionType ?? null;
         const sourceDatabaseName = input.sourceDatabaseName ?? input.database ?? null;
         const columns = inferResultSetColumns(rows, resultSet.columns);
+        const schemaIpc = schemaIpcForResultColumns(columns, rows);
         const rowCount = getNumber(resultSet.rowCount) ?? rows.length;
         const now = new Date();
         const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
@@ -1014,7 +997,7 @@ export class PostgresResultSetsRepository {
         });
         const limited = getBoolean(resultSet.limited);
         const manifest: ResultSetManifest = {
-            format: 'dory.resultset.v1',
+            format: 'dory.resultset.v2',
             artifactId,
             organizationId: input.organizationId,
             kind: 'sql-result-set',
@@ -1061,11 +1044,11 @@ export class PostgresResultSetsRepository {
         const fullData = await this.writeFullDataArtifact({
             artifactId,
             status,
-            columns,
-            rows,
+            dataStream: dataStreamForResultRows(rows, columns, 'query-result-set'),
         });
+        manifest.batchCount = fullData?.batchCount ?? (rows.length ? 1 : 0);
         const maxStorageBytes = await this.getMaxStorageBytes(input.organizationId);
-        const previewByteSizeEstimate = Buffer.byteLength(JSON.stringify(preview), 'utf8');
+        const previewByteSizeEstimate = schemaIpc.byteLength + Buffer.byteLength(JSON.stringify(preview), 'utf8');
         const fullDataByteSize = fullData?.byteSize ?? fullData?.parts.reduce((total, part) => total + (part.byteSize ?? 0), 0) ?? 0;
         const storageLimitApplied = Boolean(fullData && fullDataByteSize + previewByteSizeEstimate > maxStorageBytes);
 
@@ -1074,6 +1057,7 @@ export class PostgresResultSetsRepository {
                 organizationId: input.organizationId,
                 artifactId,
                 manifest,
+                schema: schemaIpc,
                 preview: rows.length || status === 'success' ? preview : null,
                 dataParts: storageLimitApplied ? null : (fullData?.parts ?? null),
             })
@@ -1129,7 +1113,7 @@ export class PostgresResultSetsRepository {
                 dataAvailability: resultSetDataAvailability(persistedManifest),
                 createdByActorType: actorType,
                 createdByActorId: input.userId,
-                byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                byteSize: persistedManifest.byteSize ?? 0,
                 storageLimitApplied,
                 expiresAt,
                 createdAt: now,
@@ -1167,7 +1151,7 @@ export class PostgresResultSetsRepository {
             previewRowCount: preview.previewRowCount,
             rowCount,
             schema: columns,
-            byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+            byteSize: persistedManifest.byteSize ?? 0,
             artifactStore: ref.store,
             storageFormat: storageFormatFor(dataAvailability),
             sourceConnectionType,
@@ -1189,14 +1173,22 @@ export class PostgresResultSetsRepository {
         const status = getString(resultSet.status) ?? 'success';
         const sourceConnectionType = input.sourceConnectionType ?? null;
         const sourceDatabaseName = input.sourceDatabaseName ?? input.database ?? null;
-        const explicitColumns = input.columns?.length ? input.columns : inferResultSetColumns([], resultSet.columns);
+        const schemaIpc = Buffer.from(schemaToIpc(input.dataStream.schema));
+        const streamColumns = serializableColumns(input.dataStream.schema).map<ResultSetColumn>(column => ({
+            name: column.name,
+            displayName: column.displayName,
+            databaseType: column.databaseType ?? column.type,
+            logicalType: resultSetLogicalType(column.logicalType),
+            nullable: column.nullable,
+        }));
+        const explicitColumns = streamColumns.length ? streamColumns : inferResultSetColumns([], resultSet.columns);
         const now = new Date();
         const expiresAt = addDays(now, await this.getRetentionDays(input.organizationId));
         const maxPreviewRows = input.previewRows ?? DEFAULT_PREVIEW_ROWS;
-        const preparedRows = await preparePreviewRows(input.rows, maxPreviewRows);
-        const previewRows = preparedRows.previewRows;
+        const prefetched = await prefetchSerializableDataStream(input.dataStream, maxPreviewRows);
+        const previewRows = prefetched.page.rows;
         const columns = explicitColumns.length ? explicitColumns : inferResultSetColumns(previewRows);
-        const initialRowCount = getNumber(resultSet.rowCount) ?? input.rowCount ?? (previewRows.length < maxPreviewRows ? previewRows.length : null);
+        const initialRowCount = getNumber(resultSet.rowCount) ?? input.dataStream.rowCount ?? (prefetched.page.truncated ? null : previewRows.length);
         const preview = buildResultSetPreview({
             columns,
             rows: previewRows,
@@ -1207,7 +1199,7 @@ export class PostgresResultSetsRepository {
         const previewStatus = status === 'success' ? 'running' : status;
         const previewAt = new Date();
         const previewManifestInput: ResultSetManifest = {
-            format: 'dory.resultset.v1',
+            format: 'dory.resultset.v2',
             artifactId,
             organizationId: input.organizationId,
             kind: 'sql-result-set',
@@ -1240,6 +1232,7 @@ export class PostgresResultSetsRepository {
                       }
                     : undefined,
             schema: columns,
+            batchCount: prefetched.prefetchedBatchCount,
             rowCount: initialRowCount,
             previewRowCount: preview.previewRowCount,
             limited,
@@ -1255,6 +1248,7 @@ export class PostgresResultSetsRepository {
             organizationId: input.organizationId,
             artifactId,
             manifest: previewManifestInput,
+            schema: schemaIpc,
             preview: previewRows.length || previewStatus === 'running' || previewStatus === 'success' ? preview : null,
             dataParts: null,
         });
@@ -1309,7 +1303,7 @@ export class PostgresResultSetsRepository {
                 dataAvailability: resultSetDataAvailability(previewManifest),
                 createdByActorType: actorType,
                 createdByActorId: input.userId,
-                byteSize: (previewManifest.files.preview?.byteSize ?? 0) + (previewManifest.files.data?.byteSize ?? 0),
+                byteSize: previewManifest.byteSize ?? 0,
                 expiresAt,
                 createdAt: now,
                 updatedAt: previewAt,
@@ -1325,6 +1319,7 @@ export class PostgresResultSetsRepository {
                 });
             }
         } catch (error) {
+            await prefetched.stream.close().catch(() => undefined);
             await this.artifacts.resultSets.deleteResultSet(previewRef).catch(() => undefined);
             throw error;
         }
@@ -1339,7 +1334,7 @@ export class PostgresResultSetsRepository {
             previewRowCount: preview.previewRowCount,
             rowCount: initialRowCount ?? previewRows.length,
             schema: columns,
-            byteSize: (previewManifest.files.preview?.byteSize ?? 0) + (previewManifest.files.data?.byteSize ?? 0),
+            byteSize: previewManifest.byteSize ?? 0,
             artifactStore: previewRef.store,
             storageFormat: storageFormatFor(previewDataAvailability),
             sourceConnectionType,
@@ -1350,39 +1345,58 @@ export class PostgresResultSetsRepository {
         await options.onPreviewPersisted?.(previewOutput);
 
         let streamedRowCount = 0;
+        let streamedBatchCount = 0;
         let streamReadError: unknown = null;
-        const countedRows = withRowCounting(concatRows(previewRows, preparedRows.remainingRows), {
-            onRow: row => {
-                void row;
-                streamedRowCount += 1;
-            },
-            onError: error => {
-                streamReadError = error;
-            },
-        });
-
-        const fullData = await this.writeFullDataArtifact({
-            artifactId,
-            status,
-            columns,
-            rows: countedRows,
-        });
+        let fullData: ResultSetDataWriterResult | null = null;
+        try {
+            fullData = await this.writeFullDataArtifact({
+                artifactId,
+                status,
+                dataStream: observeDataStream(prefetched.stream, rows => {
+                    streamedBatchCount += 1;
+                    streamedRowCount += rows;
+                }),
+            });
+        } catch (error) {
+            streamReadError = error;
+        }
         const maxStorageBytes = await this.getMaxStorageBytes(input.organizationId);
-        const previewByteSizeEstimate = Buffer.byteLength(JSON.stringify(preview), 'utf8');
+        const previewByteSizeEstimate = schemaIpc.byteLength + Buffer.byteLength(JSON.stringify(preview), 'utf8');
         const fullDataByteSize = fullData?.byteSize ?? fullData?.parts.reduce((total, part) => total + (part.byteSize ?? 0), 0) ?? 0;
         const storageLimitApplied = Boolean(fullData && fullDataByteSize + previewByteSizeEstimate > maxStorageBytes);
         const completedAt = new Date();
         const durationMs = getDurationMs(resultSet.durationMs, resultSet.startedAt, completedAt);
-        if (!fullData && streamedRowCount === 0 && status === 'success' && !streamReadError) {
-            await consumeRows(countedRows);
-        }
         if (streamReadError) {
             const message = getErrorMessage(streamReadError);
+            const failureStatus = isCanceledError(streamReadError) ? 'canceled' : 'error';
+            let failureRef = previewRef;
+            let failureManifest = previewManifest;
+            try {
+                const persistedFailure = await this.artifacts.resultSets.putResultSet({
+                    organizationId: input.organizationId,
+                    artifactId,
+                    manifest: {
+                        ...previewManifestInput,
+                        status: failureStatus,
+                        error: { message },
+                        batchCount: streamedBatchCount,
+                        rowCount: streamedRowCount > 0 ? streamedRowCount : initialRowCount,
+                        updatedAt: completedAt.toISOString(),
+                    },
+                    schema: schemaIpc,
+                    preview: previewRows.length ? preview : null,
+                    dataParts: null,
+                });
+                failureRef = persistedFailure.ref;
+                failureManifest = persistedFailure.manifest;
+            } catch (artifactError) {
+                console.warn('[resultSets] failed to finalize failed stream artifact', { artifactId, error: getErrorMessage(artifactError) });
+            }
             await Promise.all([
                 this.db
                     .update(queryRuns)
                     .set({
-                        status: 'error',
+                        status: failureStatus,
                         durationMs,
                         errorMessage: message,
                         updatedAt: completedAt,
@@ -1391,9 +1405,12 @@ export class PostgresResultSetsRepository {
                 this.db
                     .update(resultSetsTable)
                     .set({
-                        status: 'error',
+                        status: failureStatus,
                         errorMessage: message,
-                        rowCount: streamedRowCount || initialRowCount,
+                        rowCount: streamedRowCount > 0 ? streamedRowCount : initialRowCount,
+                        artifactRefJson: failureRef,
+                        dataAvailability: resultSetDataAvailability(failureManifest),
+                        byteSize: failureManifest.byteSize ?? 0,
                         updatedAt: completedAt,
                     })
                     .where(eq(resultSetsTable.id, artifactId)),
@@ -1401,7 +1418,7 @@ export class PostgresResultSetsRepository {
             throw streamReadError;
         }
 
-        const rowCount = getNumber(resultSet.rowCount) ?? input.rowCount ?? fullData?.rowCount ?? streamedRowCount;
+        const rowCount = getNumber(resultSet.rowCount) ?? input.dataStream.rowCount ?? fullData?.rowCount ?? streamedRowCount;
         const manifest: ResultSetManifest = {
             ...previewManifestInput,
             status,
@@ -1415,6 +1432,7 @@ export class PostgresResultSetsRepository {
                       }
                     : undefined,
             rowCount,
+            batchCount: streamedBatchCount,
             updatedAt: completedAt.toISOString(),
         };
 
@@ -1425,13 +1443,14 @@ export class PostgresResultSetsRepository {
                 organizationId: input.organizationId,
                 artifactId,
                 manifest,
+                schema: schemaIpc,
                 preview: previewRows.length || status === 'success' ? preview : null,
                 dataParts: storageLimitApplied ? null : (fullData?.parts ?? null),
             });
             latestRef = ref;
             latestManifest = persistedManifest;
             const dataAvailability = resultSetDataAvailability(persistedManifest);
-            const byteSize = (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0);
+            const byteSize = persistedManifest.byteSize ?? 0;
 
             await Promise.all([
                 this.db
@@ -1524,6 +1543,7 @@ export class PostgresResultSetsRepository {
             };
         } finally {
             await fullData?.cleanup?.().catch(() => undefined);
+            await input.dataStream.close().catch(() => undefined);
         }
     }
 
@@ -1911,7 +1931,7 @@ export class PostgresResultSetsRepository {
             const filteredCount =
                 countSql != null ? Number(((await connection.runAndReadAll(countSql, query.params as any)).getRowsJson() as unknown[][])[0]?.[0] ?? 0) : unfilteredRowCount;
             const reader = await connection.runAndReadAll(`SELECT *${fromSql}${query.whereSql}${query.orderSql} LIMIT ${limit} OFFSET ${offset}`, query.params as any);
-            const rows = rowsBySchema(reader.getRowsJson() as unknown[][], columns);
+            const rows = await serializeResultRows(reader.getRowsJson() as unknown[][], columns);
             return {
                 resultSetId: params.resultSetId,
                 rows,
@@ -2235,7 +2255,7 @@ export class PostgresResultSetsRepository {
 
         return this.withDuckDbResultSetData(params.organizationId, params.resultSetId, async ({ connection, parquetPath }) => {
             const reader = await connection.runAndReadAll(`SELECT * FROM read_parquet(${quoteLiteral(parquetPath)}) LIMIT ${sampleLimit}`);
-            const sampleRows = rowsBySchema(reader.getRowsJson() as unknown[][], columns);
+            const sampleRows = await serializeResultRows(reader.getRowsJson() as unknown[][], columns);
             const rowCount = manifest.rowCount ?? record.rowCount ?? null;
             const allowlist = buildColumnAllowlist(columns);
             const columnStats = new Map<string, Record<string, unknown>>();
@@ -2594,22 +2614,17 @@ export class PostgresResultSetsRepository {
         };
     }
 
-    private async writeFullDataArtifact(input: { artifactId: string; status: string; columns: ResultSetManifest['schema']; rows: ResultSetRowIterable }) {
-        if (input.status !== 'success') return null;
-        try {
-            return await this.fullDataWriter.write({
-                artifactId: input.artifactId,
-                schema: input.columns,
-                rows: input.rows,
-                target: null,
-            });
-        } catch (error) {
-            console.warn('[resultSets] full data parquet write failed; falling back to preview-only', {
-                artifactId: input.artifactId,
-                error,
-            });
+    private async writeFullDataArtifact(input: { artifactId: string; status: string; dataStream: DataStream }) {
+        if (input.status !== 'success') {
+            for await (const batch of input.dataStream.batches()) void batch;
+            await input.dataStream.close();
             return null;
         }
+        return this.fullDataWriter.write({
+            artifactId: input.artifactId,
+            dataStream: input.dataStream,
+            target: null,
+        });
     }
 
     private assertInited() {

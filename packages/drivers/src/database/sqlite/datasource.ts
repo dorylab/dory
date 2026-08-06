@@ -1,5 +1,5 @@
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { SqliteDialect } from './dialect';
@@ -57,7 +57,7 @@ export class SqliteDatasource extends BaseConnection {
         return executeSqliteQuery<Row>(this.getDatabase(), sql, context?.params);
     }
 
-    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+    async openRowCursorWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
         this.assertReady();
         const streamDatabase = openSqliteDatabase(this.config);
 
@@ -118,7 +118,7 @@ export class SqliteDatasource extends BaseConnection {
     }
 }
 
-function rowsWithClose<Row>(rows: DriverQueryRowStream<Row>['rows'], close: () => void): DriverQueryRowStream<Row>['rows'] {
+function rowsWithClose<Row>(rows: DriverRowCursor<Row>['rows'], close: () => void): DriverRowCursor<Row>['rows'] {
     if (typeof (rows as AsyncIterable<Row>)[Symbol.asyncIterator] === 'function') {
         return (async function* () {
             try {

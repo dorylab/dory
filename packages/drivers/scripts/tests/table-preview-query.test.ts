@@ -89,9 +89,9 @@ assert.equal(noCountPreview.totalRows, null);
 assert.equal(noCountPreview.unfilteredTotalRows, null);
 assert.equal(noCountPreview.rows.length, 2);
 
-const stream = executeSqliteQueryRowStream<{ id: number }>(db, 'SELECT id FROM orders ORDER BY id');
-const streamIterator = (stream.rows as Iterable<{ id: number }>)[Symbol.iterator]();
-assert.deepEqual(streamIterator.next().value, { id: 1 });
+const stream = executeSqliteQueryRowStream<[number]>(db, 'SELECT id FROM orders ORDER BY id');
+const streamIterator = (stream.rows as Iterable<[number]>)[Symbol.iterator]();
+assert.deepEqual(streamIterator.next().value, [1]);
 stream.close?.();
 assert.doesNotThrow(() => db.pragma('schema_version'));
 
@@ -110,9 +110,9 @@ try {
     const datasource = new SqliteDatasource({ id: 'sqlite_stream_test', type: 'sqlite', path: dbPath } as any);
     await datasource.init();
     try {
-        const datasourceStream = await datasource.queryRowsStreamWithContext<{ id: number }>('SELECT id FROM stream_orders ORDER BY id');
-        const datasourceIterator = (datasourceStream.rows as Iterable<{ id: number }>)[Symbol.iterator]();
-        assert.deepEqual(datasourceIterator.next().value, { id: 1 });
+        const datasourceStream = await datasource.openRowCursorWithContext<[number]>('SELECT id FROM stream_orders ORDER BY id');
+        const datasourceIterator = (datasourceStream.rows as Iterable<[number]>)[Symbol.iterator]();
+        assert.deepEqual(datasourceIterator.next().value, [1]);
         assert.doesNotThrow(() => datasource.getDatabase().pragma('schema_version'));
         await datasourceStream.close?.();
     } finally {

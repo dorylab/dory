@@ -15,6 +15,7 @@ import {
 } from '@dory/database/postgres/schemas';
 import { translateDatabase } from '@dory/database/i18n';
 import { getDoryArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
+import { createDataSchema, rowDataStream, schemaToIpc } from '@dory/data-plane';
 import {
     buildResultSetPreview,
     createDefaultResultSetDataWriter,
@@ -608,9 +609,12 @@ export class PostgresWorksRepository {
                 rows,
                 rowCount,
             });
+            const schemaIpc = Buffer.from(
+                schemaToIpc(createDataSchema(columns.map(column => ({ name: column.name, type: column.databaseType ?? column.logicalType, nullable: column.nullable })))),
+            );
             const limited = getBoolean(resultSet.limited) || preview.truncated;
             const manifest: ResultSetManifest = {
-                format: 'dory.resultset.v1',
+                format: 'dory.resultset.v2',
                 artifactId,
                 organizationId: work.organizationId,
                 kind: 'sql-result-set',
@@ -657,12 +661,14 @@ export class PostgresWorksRepository {
                 columns,
                 rows,
             });
+            manifest.batchCount = fullData?.batchCount ?? (rows.length ? 1 : 0);
 
             const { ref, manifest: persistedManifest } = await this.artifacts.resultSets
                 .putResultSet({
                     organizationId: work.organizationId,
                     artifactId,
                     manifest,
+                    schema: schemaIpc,
                     preview: rows.length || status === 'success' ? preview : null,
                     dataParts: fullData?.parts ?? null,
                 })
@@ -712,7 +718,7 @@ export class PostgresWorksRepository {
                     dataAvailability: resultSetDataAvailability(persistedManifest),
                     createdByActorType: actorType,
                     createdByActorId: session.userId ?? work.userId ?? null,
-                    byteSize: (persistedManifest.files.preview?.byteSize ?? 0) + (persistedManifest.files.data?.byteSize ?? 0),
+                    byteSize: persistedManifest.byteSize ?? 0,
                     createdAt: now,
                     updatedAt: now,
                 });
@@ -835,8 +841,12 @@ export class PostgresWorksRepository {
         try {
             return await this.fullDataWriter.write({
                 artifactId: input.artifactId,
-                schema: input.columns,
-                rows: input.rows,
+                dataStream: rowDataStream({
+                    columns: input.columns.map(column => ({ name: column.name, type: column.databaseType ?? column.logicalType, nullable: column.nullable })),
+                    rows: input.rows,
+                    rowCount: input.rows.length,
+                    metadata: { source: 'saved-work-result-set' },
+                }),
                 target: null,
             });
         } catch (error) {

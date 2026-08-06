@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import { ArrowIpcFileDataset, fingerprint, type Dataset } from '@dory/dataset';
+import { ArrowIpcFileDataSource, fingerprint, type DataSource } from '@dory/data-plane';
 import pl from 'nodejs-polars';
 
 import {
@@ -54,7 +54,7 @@ export async function analyzeCsv(input: AnalyzeCsvInput): Promise<CsvAnalysisRes
             mkdir: true,
         })
         .collect({ streaming: true });
-    const dataset = await ArrowIpcFileDataset.open({
+    const dataSource = await ArrowIpcFileDataSource.fromFile({
         filePath: input.outputArrowPath,
         metadata: {
             source: input.sourceName,
@@ -63,28 +63,28 @@ export async function analyzeCsv(input: AnalyzeCsvInput): Promise<CsvAnalysisRes
             parsing: input.parsing,
         },
     });
-    const profile = await profileDataset(dataset);
-    const profiledDataset = await ArrowIpcFileDataset.open({
+    const profile = await profileDataset(dataSource);
+    const profiledDataSource = await ArrowIpcFileDataSource.fromFile({
         filePath: input.outputArrowPath,
         rowCount: profile.rows,
-        metadata: dataset.metadata,
+        metadata: dataSource.metadata,
     });
 
     return {
-        dataset: profiledDataset,
+        dataSource: profiledDataSource,
         profile,
         parsing: input.parsing,
         sourceArrowPath: input.outputArrowPath,
     };
 }
 
-export async function profileDataset(dataset: Dataset): Promise<DatasetProfileV2> {
-    const filePath = dataset.metadata.artifactPath;
+export async function profileDataset(dataSource: DataSource): Promise<DatasetProfileV2> {
+    const filePath = dataSource.metadata.artifactPath;
     if (typeof filePath !== 'string' || !filePath) throw new Error('Polars profiling requires a local Arrow IPC artifact path');
-    const fields = dataset.schema.fields.filter(field => field.name !== SOURCE_ROW_NUMBER_COLUMN);
+    const fields = dataSource.schema.fields.filter(field => field.name !== SOURCE_ROW_NUMBER_COLUMN);
     const forcedStringColumns = new Set(
-        Array.isArray(dataset.metadata.sourceWarnings)
-            ? dataset.metadata.sourceWarnings
+        Array.isArray(dataSource.metadata.sourceWarnings)
+            ? dataSource.metadata.sourceWarnings
                   .filter(warning => warning && typeof warning === 'object' && (warning as { code?: unknown }).code === 'DECIMAL_STRINGIFIED')
                   .map(warning => String((warning as { column?: unknown }).column ?? ''))
             : [],
@@ -162,7 +162,7 @@ export async function profileDataset(dataset: Dataset): Promise<DatasetProfileV2
     const sampleRows = sampleFrame.height;
     const sampleRecords = sampleFrame.toRecords() as Array<Record<string, unknown>>;
     const preview = await readPreview(
-        dataset,
+        dataSource,
         fields.map(field => field.name),
     );
     const columns = fields.map<DatasetProfileColumnV2>((field, index) =>
@@ -195,9 +195,9 @@ export async function profileDataset(dataset: Dataset): Promise<DatasetProfileV2
     };
 }
 
-export function datasetSchemaHash(dataset: Dataset): string {
+export function datasetSchemaHash(dataSource: DataSource): string {
     return fingerprint(
-        dataset.schema.fields.map(field => ({
+        dataSource.schema.fields.map(field => ({
             name: field.name,
             nullable: field.nullable,
             type: field.type.toString(),
@@ -438,11 +438,11 @@ function datetimeExpression(expression: ReturnType<typeof pl.col>, strict: boole
         .otherwise(expression.cast(pl.Datetime('ms'), strict));
 }
 
-async function readPreview(dataset: Dataset, columns: string[]) {
+async function readPreview(dataSource: DataSource, columns: string[]) {
     const preview: Array<Record<string, unknown>> = [];
-    const reader = await dataset.openBatches();
+    const stream = await dataSource.open();
     try {
-        for await (const batch of reader) {
+        for await (const batch of stream.batches()) {
             for (let rowIndex = 0; rowIndex < batch.numRows && preview.length < 100; rowIndex += 1) {
                 const row: Record<string, unknown> = {};
                 for (const column of columns) {
@@ -454,7 +454,7 @@ async function readPreview(dataset: Dataset, columns: string[]) {
             if (preview.length === 100) break;
         }
     } finally {
-        await reader.close();
+        await stream.close();
     }
     return preview;
 }

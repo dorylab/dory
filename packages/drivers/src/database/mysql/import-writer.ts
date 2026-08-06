@@ -92,9 +92,9 @@ export class MySqlImportWriter implements DataWriter {
             if (atomicDml) await connection.beginTransaction();
             if (operation === 'replace') await connection.query(`DELETE FROM ${qualifiedName(input.plan.target)}`);
             await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted, pendingCommit: atomicDml });
-            const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
+            const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal: input.signal });
 
-            for await (const batch of reader) {
+            for await (const batch of dataStream.batches()) {
                 if (input.signal.aborted) throw abortError();
                 const rows = batchRows(batch, columns).map(row => row.map((value, index) => mysqlValue(value, columns[index]!.targetType)));
                 if (!rows.length) continue;

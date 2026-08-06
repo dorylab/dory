@@ -4,7 +4,7 @@ import { DEFAULT_MAX_RESULT_ROWS, isPostgresFamilyConnectionType } from '@dory/d
 import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ColumnMeta, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ColumnMeta, ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { buildNodeTlsConnectionOptions, getDriverTlsOptions } from '@dory/drivers/core/tls';
 import { PostgresDialect } from './dialect';
 
@@ -301,7 +301,7 @@ export async function executePostgresQueryRowStream<Row>(
     sql: string,
     params?: DriverQueryParams,
     options?: QuerySessionOptions,
-): Promise<DriverQueryRowStream<Row>> {
+): Promise<DriverRowCursor<Row>> {
     const { sql: compiledSql, values } = normalizeParams(sql, params);
     const client = (await pool.connect()) as PgClientLike;
     const started = Date.now();
@@ -324,6 +324,7 @@ export async function executePostgresQueryRowStream<Row>(
         stream = new QueryStream(compiledSql, values, {
             batchSize: 1000,
             highWaterMark: 1000,
+            rowMode: 'array',
         });
         const readable = client.query(stream);
 
@@ -340,7 +341,9 @@ export async function executePostgresQueryRowStream<Row>(
 
         return {
             rows,
-            columns: normalizePgFields((stream as any)?._result?.fields),
+            get columns() {
+                return normalizePgFields((stream as any)?._result?.fields);
+            },
             rowCount: null,
             limited: false,
             tookMs: Date.now() - started,

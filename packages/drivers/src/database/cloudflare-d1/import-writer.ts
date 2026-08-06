@@ -70,8 +70,8 @@ export class CloudflareD1ImportWriter implements DataWriter {
                 createdTarget = true;
             }
             await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: rowsWritten, pendingCommit: false });
-            const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
-            for await (const batch of reader) {
+            const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal: input.signal });
+            for await (const batch of dataStream.batches()) {
                 if (input.signal.aborted) throw abortError();
                 const rows = batchRows(batch, columns).map(row => row.map((value, index) => d1ImportValue(value, columns[index]!.targetType)));
                 const queries = buildD1InsertQueries(

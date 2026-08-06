@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { isTlsNegotiationError, isTlsPreferMode, withTlsDisabledOptions } from '@dory/drivers/core/tls';
 import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
@@ -135,7 +135,7 @@ export class PostgresDatasource extends BaseConnection {
         });
     }
 
-    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+    async openRowCursorWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
         this.assertReady();
         const targetDatabase = context?.database ?? this.config.database;
         const pool = this.resolvePool(targetDatabase);

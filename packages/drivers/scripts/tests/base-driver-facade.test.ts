@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { collectSerializableDataPage } from '@dory/data-plane';
 import { BaseDriver, UnsupportedDriverCapabilityError } from '../../src/core';
 import type { ConnectionParameterDialect } from '../../src/core/registry/types';
 import type { DriverConfig, DriverHealthInfo, DriverQueryResult } from '../../src/types';
@@ -32,12 +33,15 @@ const config: DriverConfig = {
 };
 
 const unsupportedDriver = new TestDriver(config);
-await assert.rejects(() => unsupportedDriver.listDatabases(), (error: unknown) => {
-    assert.ok(error instanceof UnsupportedDriverCapabilityError);
-    assert.equal(error.code, 'DRIVER_CAPABILITY_UNSUPPORTED');
-    assert.equal(error.capability, 'getDatabases');
-    return true;
-});
+await assert.rejects(
+    () => unsupportedDriver.listDatabases(),
+    (error: unknown) => {
+        assert.ok(error instanceof UnsupportedDriverCapabilityError);
+        assert.equal(error.code, 'DRIVER_CAPABILITY_UNSUPPORTED');
+        assert.equal(error.capability, 'getDatabases');
+        return true;
+    },
+);
 
 const driver = new TestDriver(config);
 driver.capabilities.metadata = {
@@ -81,6 +85,8 @@ assert.equal(profile.properties?.totalRows, 12);
 assert.equal(profile.indexes[0]?.name, 'orders_pkey');
 assert.equal(profile.ddl, 'CREATE TABLE orders (id uuid primary key)');
 
-assert.deepEqual(await driver.previewTable('app', 'orders', { limit: 1 }), { rows: [{ id: '1' }], rowCount: 1 });
+const table = await driver.readTable({ database: 'app', table: 'orders', options: { limit: 1 } });
+assert.equal(table.stream.rowCount, 1);
+assert.deepEqual((await collectSerializableDataPage(table.stream, 1)).rows, [{ id: '1' }]);
 
 console.log('base-driver facade tests passed');

@@ -7,6 +7,7 @@ import test from 'node:test';
 import { eq, sql } from 'drizzle-orm';
 
 import { AgentRunArtifactStore, ComparisonArtifactStore, FilesystemObjectStore, ImportRunArtifactStore, ResultSetArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
+import { rowDataStream } from '@dory/data-plane';
 import { NoopFullDataWriter, type ResultSetDataWriter } from '@dory/resultset';
 
 const dbDir = await mkdtemp(path.join(os.tmpdir(), 'dory-result-set-retention-db-'));
@@ -545,10 +546,14 @@ test('writes expiresAt when persisting result sets and streams', async () => {
             status: 'success',
             rowCount: 1,
         },
-        rows: (async function* () {
-            yield { id: 2 };
-        })(),
-        columns: [{ name: 'id', logicalType: 'number' }],
+        dataStream: rowDataStream({
+            columns: [{ name: 'id', type: 'BIGINT' }],
+            rows: (async function* () {
+                yield { id: 2 };
+            })(),
+            rowCount: 1,
+            metadata: { source: 'retention-test' },
+        }),
     });
 
     const [streamedRow] = await db.select().from(resultSets).where(eq(resultSets.id, streamed.resultSetId)).limit(1);
@@ -591,6 +596,40 @@ test('writes expiresAt when persisting result sets and streams', async () => {
     });
     assert.equal(legacyReloaded?.sourceConnectionType, 'sqlite');
     assert.equal(legacyReloaded?.sourceDatabaseName, 'main');
+});
+
+test('stream failure publishes a v2 preview-only error manifest and removes uncommitted data', async () => {
+    const { resultSetsRepo } = await createRepositories();
+    await assert.rejects(
+        resultSetsRepo.persistQueryResultSetStream({
+            organizationId: 'org_retention',
+            userId: 'user_retention',
+            sessionId: 'session_stream_failure',
+            sessionSqlText: 'select fail',
+            resultSet: { sessionId: 'session_stream_failure', setIndex: 0, sqlText: 'select fail', status: 'success' },
+            previewRows: 1,
+            dataStream: rowDataStream({
+                columns: [{ name: 'id', type: 'BIGINT' }],
+                rows: (async function* () {
+                    yield { id: 1 };
+                    throw new Error('stream fixture failed');
+                })(),
+                metadata: { source: 'retention-test' },
+                batchRows: 1,
+            }),
+        }),
+        /stream fixture failed/,
+    );
+
+    const [record] = await db.select().from(resultSets).where(eq(resultSets.sessionId, 'session_stream_failure')).limit(1);
+    assert.equal(record?.status, 'error');
+    const ref = record?.artifactRefJson;
+    assert.ok(ref);
+    const manifest = await artifacts.resultSets.readManifest(ref!);
+    assert.equal(manifest.format, 'dory.resultset.v2');
+    assert.equal(manifest.status, 'error');
+    assert.equal(manifest.files.data, undefined);
+    assert.equal(manifest.files.schema?.path, 'schema.arrow');
 });
 
 test('cleanup deletes expired artifacts and result set rows while keeping query history', async () => {
@@ -735,10 +774,12 @@ test('stores bigint usage and removes exports before result sets when over quota
 
 test('keeps only preview when a single full result exceeds the Workspace limit', async () => {
     const oversizedWriter: ResultSetDataWriter = {
-        async write() {
+        async write(input) {
+            for await (const batch of input.dataStream.batches()) void batch;
             return {
                 format: 'parquet',
                 rowCount: 1,
+                batchCount: 1,
                 byteSize: 2 * 1024 ** 3,
                 parts: [{ path: 'data/part-00000.parquet', format: 'parquet', rowCount: 1, byteSize: 2 * 1024 ** 3, data: Buffer.from('fake') }],
             };

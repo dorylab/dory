@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
-import { AgentRunArtifactStore, FilesystemObjectStore, readableToBuffer, ResultSetArtifactStore, S3CompatibleObjectStore } from '../../src/index';
+import { AgentRunArtifactStore, FilesystemObjectStore, readableToBuffer, ResultSetArtifactStore, S3CompatibleObjectStore, type ObjectStore } from '../../src/index';
 import { buildResultSetPreview, resultSetDataAvailability, type ResultSetManifest } from '@dory/resultset';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'dory-artifacts-test-'));
@@ -37,26 +37,65 @@ try {
     };
 
     const dataPart = Buffer.from('PAR1-test');
+    const schema = Buffer.from('ARROW1-schema');
+    manifest.format = 'dory.resultset.v2';
     const { ref } = await resultSets.putResultSet({
         organizationId: 'org_test',
         artifactId: 'rs_test',
         manifest,
+        schema,
         preview,
         dataParts: [{ path: 'data/part-00000.parquet', rowCount: rows.length, data: dataPart }],
     });
     assert.equal(ref.basePath, 'artifacts/org_test/result-sets/rs_test');
     assert.equal(ref.dataPath, 'data');
+    assert.equal(ref.schemaPath, 'schema.arrow');
     assert.equal(ref.dataAvailability, 'full');
     assert.deepEqual((await resultSets.readPreview(ref))?.rows, rows);
     const savedManifest = await resultSets.readManifest(ref);
-    assert.equal(savedManifest.format, 'dory.resultset.v1');
+    assert.equal(savedManifest.format, 'dory.resultset.v2');
+    assert.equal(savedManifest.files.schema?.path, 'schema.arrow');
+    assert.equal(savedManifest.files.schema?.byteSize, schema.byteLength);
+    assert.deepEqual(await resultSets.readSchema(ref), schema);
     assert.equal(savedManifest.files.data?.path, 'data');
     assert.equal(savedManifest.files.data?.byteSize, dataPart.byteLength);
+    assert.equal(savedManifest.byteSize, schema.byteLength + (savedManifest.files.preview?.byteSize ?? 0) + dataPart.byteLength);
     assert.deepEqual(savedManifest.files.data?.parts, [{ path: 'data/part-00000.parquet', format: 'parquet', rowCount: rows.length, byteSize: dataPart.byteLength }]);
     assert.equal(resultSetDataAvailability(savedManifest), 'full');
     const parts = await resultSets.openDataParts(ref, savedManifest);
     assert.equal(parts.length, 1);
     assert.deepEqual(await readableToBuffer(parts[0]!.stream), dataPart);
+
+    const failingStore: ObjectStore = {
+        kind: objectStore.kind,
+        put: async (objectPath, body, options) => {
+            if (objectPath.endsWith('manifest.json')) throw new Error('manifest commit failed');
+            await objectStore.put(objectPath, body, options);
+        },
+        get: objectPath => objectStore.get(objectPath),
+        exists: objectPath => objectStore.exists(objectPath),
+        delete: objectPath => objectStore.delete(objectPath),
+        list: objectPath => objectStore.list(objectPath),
+        deletePrefix: objectPath => objectStore.deletePrefix(objectPath),
+        stat: objectPath => objectStore.stat(objectPath),
+        localPath: objectPath => objectStore.localPath(objectPath),
+    };
+    const failingResultSets = new ResultSetArtifactStore(failingStore, 'artifacts');
+    await assert.rejects(
+        failingResultSets.putResultSet({
+            organizationId: 'org_test',
+            artifactId: 'rs_incomplete',
+            manifest: { ...manifest, artifactId: 'rs_incomplete' },
+            schema,
+            preview,
+            dataParts: [{ path: 'data/part-00000.parquet', rowCount: rows.length, data: dataPart }],
+        }),
+        /manifest commit failed/,
+    );
+    const incompleteBasePath = failingResultSets.basePath('org_test', 'rs_incomplete');
+    const incompleteObjects: string[] = [];
+    for await (const object of objectStore.list(incompleteBasePath)) incompleteObjects.push(object.path);
+    assert.deepEqual(incompleteObjects, []);
 
     const agentRuns = new AgentRunArtifactStore(objectStore, 'artifacts');
     const runRef = agentRuns.ref('org_test', 'run_test');

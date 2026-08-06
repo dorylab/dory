@@ -1,6 +1,6 @@
 import type { ClickHouseClient } from '@clickhouse/client';
 import { BaseConnection, asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableMutationValue, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult, TableMutationValue, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { TableMutationConflictError, TableMutationIdentityNotUniqueError, TableMutationPartialCommitError } from '@dory/drivers/table-mutations';
 import { ClickhouseDialect } from './dialect';
@@ -106,7 +106,7 @@ export class ClickhouseDatasource extends BaseConnection {
         }
     }
 
-    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+    async openRowCursorWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
         this.assertReady();
         const targetDb = context?.database ?? this.config.database;
 

@@ -4,7 +4,7 @@ import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { buildMysqlTlsOptions, getDriverTlsOptions } from '@dory/drivers/core/tls';
 import { MySqlDialect } from './dialect';
 
@@ -153,8 +153,49 @@ export function buildMySqlPoolConfig(config: BaseConfig, databaseOverride?: stri
 function normalizeColumns(fields?: FieldPacket[]) {
     return (fields ?? []).map(field => ({
         name: field.name,
-        type: String(field.columnType),
+        type: mysqlColumnType(field),
     }));
+}
+
+function mysqlColumnType(field: FieldPacket) {
+    const unsigned = typeof field.flags === 'number' ? (field.flags & 32) !== 0 : field.flags.includes('UNSIGNED');
+    const integerType = unsigned ? 'BIGINT UNSIGNED' : 'BIGINT';
+    switch (field.columnType) {
+        case 0:
+        case 246: {
+            const scale = Math.max(0, Number(field.decimals ?? 0));
+            const precision = Math.max(1, Number(field.columnLength ?? 0) - (scale > 0 ? 1 : 0) - (unsigned ? 0 : 1));
+            return precision <= 38 ? `DECIMAL(${precision},${Math.min(scale, precision)})` : 'DECIMAL';
+        }
+        case 1:
+        case 2:
+        case 3:
+        case 8:
+        case 9:
+        case 13:
+            return integerType;
+        case 4:
+        case 5:
+            return 'DOUBLE';
+        case 7:
+        case 12:
+            return 'DATETIME';
+        case 10:
+            return 'DATE';
+        case 11:
+            return 'TIME';
+        case 16:
+            return 'BINARY';
+        case 245:
+            return 'JSON';
+        case 249:
+        case 250:
+        case 251:
+        case 252:
+            return field.characterSet === 63 ? 'BLOB' : 'TEXT';
+        default:
+            return 'VARCHAR';
+    }
 }
 
 function normalizeParams(sql: string, params?: DriverQueryParams) {
@@ -278,7 +319,7 @@ export async function executeMySqlQueryRowStream<Row>(
     sql: string,
     params?: DriverQueryParams,
     options?: QuerySessionOptions,
-): Promise<DriverQueryRowStream<Row>> {
+): Promise<DriverRowCursor<Row>> {
     const { sql: compiledSql, values } = normalizeParams(sql, params);
     const connection = await pool.getConnection();
     const runtime = extractRuntimeOptions(config);
@@ -300,6 +341,11 @@ export async function executeMySqlQueryRowStream<Row>(
             sql: compiledSql,
             values,
             timeout: queryTimeoutMs,
+            rowsAsArray: true,
+        });
+        let columns: ReturnType<typeof normalizeColumns> | undefined;
+        query.on?.('fields', (fields: FieldPacket[]) => {
+            columns = normalizeColumns(fields);
         });
         const queryStream = query.stream({ highWaterMark: 1000 }) as AsyncIterable<Row> & { destroy?: (error?: Error) => void };
         stream = queryStream;
@@ -307,7 +353,9 @@ export async function executeMySqlQueryRowStream<Row>(
         return {
             rows: asyncIterableWithCleanup<Row>(queryStream, cleanup),
             rowCount: null,
-            columns: undefined,
+            get columns() {
+                return columns;
+            },
             limited: false,
             tookMs: Date.now() - started,
             close: async () => {

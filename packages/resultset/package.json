@@ -12,8 +12,10 @@
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
+        "@dory/data-plane": "0.1.0",
         "@dory/shared": "0.1.0",
-        "@duckdb/node-api": "^1.5.2-r.1"
+        "@duckdb/node-api": "^1.5.2-r.1",
+        "nodejs-polars": "^0.25.2"
     },
     "devDependencies": {
         "@types/node": "^25.5.2",

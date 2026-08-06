@@ -2,10 +2,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { NextRequest } from 'next/server';
 
 import { X_CONNECTION_ID_KEY } from '@/app/config/app';
+import type { DataStream } from '@dory/data-plane';
 import { getDBService } from '@dory/database';
-import type { BaseConnection, DriverPoolEntry, DriverQueryParams } from '@dory/drivers/core';
+import type { BaseConnection, DriverPoolEntry, DriverQueryDataRequest, DriverQueryParams } from '@dory/drivers/core';
 import { pickConnectionIdentity } from '@dory/drivers/config';
-import type { DriverQueryContext, DriverQueryResult, DriverQueryRowStream } from '@dory/drivers/types';
+import type { DriverQueryContext, DriverQueryResult } from '@dory/drivers/types';
 import type { AuditPayload, QuerySource, QueryStatus } from '@dory/shared/types/audit';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 
@@ -27,7 +28,7 @@ type SqlAuditStore = SqlAuditContext & {
     inDriverCall?: boolean;
 };
 
-type SqlAuditMethod = 'query' | 'queryWithContext' | 'queryRowsStreamWithContext' | 'command';
+type SqlAuditMethod = 'query' | 'queryWithContext' | 'command';
 type AuditResultStats = {
     rows?: unknown[];
     rowCount?: number | null;
@@ -108,7 +109,7 @@ export function patchDriverInstanceForSqlAudit(instance: BaseConnection): BaseCo
 
     patchDriverMethod(instance, 'query');
     patchDriverMethod(instance, 'queryWithContext');
-    patchDriverMethod(instance, 'queryRowsStreamWithContext');
+    patchDriverReadQueryMethod(instance);
     patchDriverMethod(instance, 'command');
 
     return instance;
@@ -226,6 +227,42 @@ function patchDriverMethod(instance: BaseConnection, method: SqlAuditMethod) {
     });
 }
 
+function patchDriverReadQueryMethod(instance: BaseConnection) {
+    const original = instance.readQuery;
+    Object.defineProperty(instance, 'readQuery', {
+        configurable: true,
+        writable: true,
+        value: async function auditedReadQuery(this: BaseConnection, request: DriverQueryDataRequest, options?: Parameters<BaseConnection['readQuery']>[1]) {
+            const store = sqlAuditStore.getStore();
+            if (!store || store.inDriverCall || typeof request?.sql !== 'string') return original.call(this, request, options);
+
+            const started = performance.now();
+            const queryContext = request.context ?? {};
+            try {
+                const stream = await sqlAuditStore.run({ ...store, inDriverCall: true }, async () => original.call(this, request, options));
+                return wrapAuditedDataStream({ stream, store, instance: this, sql: request.sql, queryContext, started });
+            } catch (error) {
+                await insertSqlAudit({
+                    context: store,
+                    instance: this,
+                    sqlText: request.sql,
+                    databaseName: queryContext.database ?? store.databaseName ?? this.config.database ?? null,
+                    queryId: queryContext.queryId ?? store.queryId ?? null,
+                    status: 'error',
+                    errorMessage: error instanceof Error ? error.message : String(error ?? 'SQL execution failed'),
+                    durationMs: Math.round(performance.now() - started),
+                    extraJson: {
+                        auditMethod: 'readQuery',
+                        ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
+                        ...(store.extraJson ?? {}),
+                    },
+                });
+                throw error;
+            }
+        },
+    });
+}
+
 async function executeAuditedDriverMethod(instance: BaseConnection, original: (...callArgs: unknown[]) => Promise<unknown>, method: SqlAuditMethod, sql: string, args: unknown[]) {
     const store = sqlAuditStore.getStore();
     if (!store || store.inDriverCall || typeof sql !== 'string') {
@@ -234,38 +271,6 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
 
     const queryContext = extractQueryContext(method, args);
     const started = performance.now();
-
-    if (method === 'queryRowsStreamWithContext') {
-        try {
-            const stream = (await sqlAuditStore.run({ ...store, inDriverCall: true }, async () => original.call(instance, sql, ...args))) as DriverQueryRowStream<unknown>;
-            return wrapAuditedRowStream({
-                stream,
-                store,
-                instance,
-                sql,
-                queryContext,
-                started,
-            });
-        } catch (error) {
-            const durationMs = Math.round(performance.now() - started);
-            await insertSqlAudit({
-                context: store,
-                instance,
-                sqlText: sql,
-                databaseName: queryContext.database ?? store.databaseName ?? instance.config.database ?? null,
-                queryId: queryContext.queryId ?? store.queryId ?? null,
-                status: 'error',
-                errorMessage: error instanceof Error ? error.message : String(error ?? 'SQL execution failed'),
-                durationMs,
-                extraJson: {
-                    auditMethod: method,
-                    ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
-                    ...(store.extraJson ?? {}),
-                },
-            });
-            throw error;
-        }
-    }
 
     try {
         const result = await sqlAuditStore.run({ ...store, inDriverCall: true }, async () => original.call(instance, sql, ...args));
@@ -307,14 +312,14 @@ async function executeAuditedDriverMethod(instance: BaseConnection, original: (.
     }
 }
 
-function wrapAuditedRowStream(input: {
-    stream: DriverQueryRowStream<unknown>;
+function wrapAuditedDataStream(input: {
+    stream: DataStream;
     store: SqlAuditStore;
     instance: BaseConnection;
     sql: string;
     queryContext: DriverQueryContext;
     started: number;
-}): DriverQueryRowStream<unknown> {
+}): DataStream {
     const { stream, store, instance, sql, queryContext, started } = input;
     let observedRows = 0;
     let logged = false;
@@ -334,63 +339,46 @@ function wrapAuditedRowStream(input: {
             durationMs,
             result: {
                 rowCount: stream.rowCount ?? observedRows,
-                statistics: stream.statistics,
+                statistics: stream.metadata.statistics && typeof stream.metadata.statistics === 'object' ? (stream.metadata.statistics as Record<string, unknown>) : undefined,
             },
             extraJson: {
-                auditMethod: 'queryRowsStreamWithContext',
+                auditMethod: 'readQuery',
                 ...(typeof queryContext.statementIndex === 'number' ? { statementIndex: queryContext.statementIndex } : {}),
                 ...(store.extraJson ?? {}),
             },
         });
     };
 
-    if (typeof (stream.rows as AsyncIterable<unknown>)[Symbol.asyncIterator] !== 'function') {
-        function* rows() {
-            try {
-                for (const row of stream.rows as Iterable<unknown>) {
-                    observedRows += 1;
-                    yield row;
-                }
-                void writeAudit('success').catch(() => undefined);
-            } catch (error) {
-                void writeAudit('error', error instanceof Error ? error.message : String(error ?? 'SQL stream failed')).catch(() => undefined);
-                throw error;
-            } finally {
-                void writeAudit('canceled', 'Query stream closed before completion').catch(() => undefined);
-            }
-        }
-
-        return {
-            ...stream,
-            rows: rows(),
-            close: stream.close ? () => stream.close?.() : undefined,
-        };
-    }
-
-    async function* rows() {
-        try {
-            for await (const row of stream.rows) {
-                observedRows += 1;
-                yield row;
-            }
-            await writeAudit('success');
-        } catch (error) {
-            await writeAudit('error', error instanceof Error ? error.message : String(error ?? 'SQL stream failed'));
-            throw error;
-        } finally {
-            await writeAudit('canceled', 'Query stream closed before completion');
-        }
-    }
-
     return {
-        ...stream,
-        rows: rows(),
-        close: stream.close ? () => stream.close?.() : undefined,
+        schema: stream.schema,
+        metadata: stream.metadata,
+        rowCount: stream.rowCount,
+        batches: () => {
+            const batches = stream.batches();
+            return (async function* () {
+                try {
+                    for await (const batch of batches) {
+                        observedRows += batch.numRows;
+                        yield batch;
+                    }
+                    await writeAudit('success');
+                } catch (error) {
+                    await writeAudit('error', error instanceof Error ? error.message : String(error ?? 'SQL stream failed'));
+                    throw error;
+                } finally {
+                    await writeAudit('canceled', 'Query stream closed before completion');
+                }
+            })();
+        },
+        close: async () => {
+            await stream.close();
+            await writeAudit('canceled', 'Query stream closed before completion');
+        },
     };
 }
 
 function extractQueryContext(method: SqlAuditMethod, args: unknown[]): DriverQueryContext {
-    if (method === 'queryWithContext' || method === 'queryRowsStreamWithContext') {
+    if (method === 'queryWithContext') {
         return isQueryContext(args[0]) ? args[0] : {};
     }
     return isQueryContext(args[1]) ? args[1] : {};

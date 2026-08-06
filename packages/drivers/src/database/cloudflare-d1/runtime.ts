@@ -1,7 +1,7 @@
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams, enforceSelectLimit } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, SchemaGraphOptions, SchemaGraphResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverRowCursor, HealthInfo, QueryResult, SchemaGraphOptions, SchemaGraphResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 import { CloudflareD1Dialect } from './dialect';
@@ -153,7 +153,21 @@ function normalizeColumns(rows: Record<string, unknown>[]) {
             names.add(key);
         }
     }
-    return Array.from(names).map(name => ({ name }));
+    return Array.from(names).map(name => ({ name, type: inferD1ColumnType(rows.map(row => row[name])) }));
+}
+
+function normalizeRawColumns(names: string[], rows: unknown[][]) {
+    return names.map((name, index) => ({ name, type: inferD1ColumnType(rows.map(row => row[index])) }));
+}
+
+function inferD1ColumnType(values: unknown[]) {
+    const value = values.find(candidate => candidate !== null && candidate !== undefined);
+    if (typeof value === 'boolean') return 'BOOLEAN';
+    if (typeof value === 'bigint') return 'BIGINT';
+    if (typeof value === 'number') return Number.isInteger(value) ? 'BIGINT' : 'DOUBLE';
+    if (value instanceof Uint8Array || ArrayBuffer.isView(value)) return 'BLOB';
+    if (value && typeof value === 'object') return 'JSON';
+    return 'VARCHAR';
 }
 
 function getErrorMessage(payload: CloudflareD1Response, fallback: string) {
@@ -243,7 +257,7 @@ export async function executeCloudflareD1Batch(config: BaseConfig, queries: Clou
     return results.map(result => ({ changes: result.meta?.changes ?? 0 }));
 }
 
-export async function executeCloudflareD1QueryRowStream<Row = any>(config: BaseConfig, sql: string, params?: DriverQueryParams): Promise<DriverQueryRowStream<Row>> {
+export async function executeCloudflareD1QueryRowStream<Row = any>(config: BaseConfig, sql: string, params?: DriverQueryParams): Promise<DriverRowCursor<Row>> {
     const d1 = getD1Config(config);
     const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
     const body: Record<string, unknown> = { sql: compiledSql };
@@ -252,7 +266,7 @@ export async function executeCloudflareD1QueryRowStream<Row = any>(config: BaseC
     }
 
     const started = Date.now();
-    const response = await fetch(`${d1.apiBaseUrl}/accounts/${encodeURIComponent(d1.accountId)}/d1/database/${encodeURIComponent(d1.databaseId)}/query`, {
+    const response = await fetch(`${d1.apiBaseUrl}/accounts/${encodeURIComponent(d1.accountId)}/d1/database/${encodeURIComponent(d1.databaseId)}/raw`, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${d1.apiToken}`,
@@ -271,7 +285,12 @@ export async function executeCloudflareD1QueryRowStream<Row = any>(config: BaseC
         throw new Error(firstResult.error || 'Cloudflare D1 query failed');
     }
 
-    const rows = normalizeRows(firstResult?.results) as Row[];
+    const rawResult = firstResult?.results;
+    const rows = (!Array.isArray(rawResult) && Array.isArray(rawResult?.rows) ? rawResult.rows : normalizeRows(rawResult)) as Row[];
+    const columns =
+        !Array.isArray(rawResult) && Array.isArray(rawResult?.columns)
+            ? normalizeRawColumns(rawResult.columns, rows as unknown[][])
+            : normalizeColumns(rows as Record<string, unknown>[]);
     const meta = firstResult?.meta;
     const reader = isReaderSql(compiledSql);
 
@@ -282,7 +301,7 @@ export async function executeCloudflareD1QueryRowStream<Row = any>(config: BaseC
             }
         })(),
         rowCount: reader ? null : (meta?.changes ?? rows.length),
-        columns: normalizeColumns(rows as Record<string, unknown>[]),
+        columns,
         limited: false,
         tookMs: Date.now() - started,
         statistics: {

@@ -26,6 +26,7 @@
     },
     "dependencies": {
         "@dory/artifacts": "0.1.0",
+        "@dory/data-plane": "0.1.0",
         "@dory/resultset": "0.1.0",
         "@dory/schema-compare": "0.1.0",
         "@dory/shared": "0.1.0",

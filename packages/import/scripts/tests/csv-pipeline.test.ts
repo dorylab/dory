@@ -44,27 +44,27 @@ test('CSV analysis is lossless, repeatable, and conservative', async t => {
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
         let rows = 0;
-        const reader = await analysis.dataset.openBatches();
-        for await (const batch of reader) rows += batch.numRows;
+        const stream = await analysis.dataSource.open();
+        for await (const batch of stream.batches()) rows += batch.numRows;
         assert.equal(rows, 2);
     }
-    const oneRowReader = await analysis.dataset.openBatches({ batchSize: 1 });
+    const oneRowStream = await analysis.dataSource.open({ batchRows: 1 });
     const batchSizes: number[] = [];
-    for await (const batch of oneRowReader) batchSizes.push(batch.numRows);
+    for await (const batch of oneRowStream.batches()) batchSizes.push(batch.numRows);
     assert.deepEqual(batchSizes, [1, 1]);
 
     const plan = buildPlan(analysis, path.basename(csvPath));
     const prepared = await prepareImportDataset({
         sourceArrowPath: analysis.sourceArrowPath,
         outputArrowPath: path.join(dir, 'prepared.arrow'),
-        sourceDataset: analysis.dataset,
+        sourceDataSource: analysis.dataSource,
         plan,
     });
     assert.equal(
-        prepared.dataset.schema.fields.some(field => field.name === '__dory_source_row_number'),
+        prepared.dataSource.schema.fields.some(field => field.name === '__dory_source_row_number'),
         false,
     );
-    assert.equal(prepared.dataset.rowCount, 2);
+    assert.equal(prepared.dataSource.rowCount, 2);
     assert.equal(prepared.filteredRows, 0);
 
     const invalidPlan: ImportPlan = {
@@ -75,7 +75,7 @@ test('CSV analysis is lossless, repeatable, and conservative', async t => {
         prepareImportDataset({
             sourceArrowPath: analysis.sourceArrowPath,
             outputArrowPath: path.join(dir, 'invalid.arrow'),
-            sourceDataset: analysis.dataset,
+            sourceDataSource: analysis.dataSource,
             plan: invalidPlan,
         }),
         (error: unknown) => error instanceof ImportCastError && error.sourceRow === 1 && error.column === 'name',
@@ -121,13 +121,13 @@ test('Datetime columns are prepared without losing their millisecond values', as
     const prepared = await prepareImportDataset({
         sourceArrowPath: analysis.sourceArrowPath,
         outputArrowPath: path.join(dir, 'prepared.arrow'),
-        sourceDataset: analysis.dataset,
+        sourceDataSource: analysis.dataSource,
         plan: buildPlan(analysis, path.basename(source)),
     });
-    assert.equal(prepared.dataset.schema.fields.find(field => field.name === 'pickup_datetime')?.type.toString(), 'Timestamp<MILLISECOND>');
+    assert.equal(prepared.dataSource.schema.fields.find(field => field.name === 'pickup_datetime')?.type.toString(), 'Timestamp<MILLISECOND>');
 
-    const reader = await prepared.dataset.openBatches();
-    for await (const batch of reader) {
+    const stream = await prepared.dataSource.open();
+    for await (const batch of stream.batches()) {
         assert.equal(batch.getChild('pickup_datetime')?.get(0), Date.parse('2026-01-02T03:04:05Z'));
         break;
     }
@@ -159,8 +159,8 @@ test('100k rows remain streaming and are exposed in bounded batches', async t =>
 
     let rows = 0;
     let batches = 0;
-    const reader = await analysis.dataset.openBatches({ batchSize: 1000 });
-    for await (const batch of reader) {
+    const stream = await analysis.dataSource.open({ batchRows: 1000 });
+    for await (const batch of stream.batches()) {
         assert.ok(batch.numRows <= 1000);
         rows += batch.numRows;
         batches += 1;
@@ -221,14 +221,14 @@ test('Profile v2 reports quality issues and transforms clean or filter rows', as
     const prepared = await prepareImportDataset({
         sourceArrowPath: analysis.sourceArrowPath,
         outputArrowPath: path.join(dir, 'prepared.arrow'),
-        sourceDataset: analysis.dataset,
+        sourceDataSource: analysis.dataSource,
         plan,
     });
     assert.equal(prepared.inputRows, 10);
     assert.equal(prepared.outputRows, 9);
     assert.equal(prepared.filteredRows, 1);
-    const reader = await prepared.dataset.openBatches();
-    for await (const batch of reader) {
+    const stream = await prepared.dataSource.open();
+    for await (const batch of stream.batches()) {
         assert.equal(batch.getChild('name')?.get(0), 'Alicia');
         assert.equal(batch.getChild('email')?.get(0), 'üser@example-com');
         assert.equal(batch.getChild('nickname')?.get(0), null);
@@ -270,6 +270,6 @@ function buildPlan(analysis: Awaited<ReturnType<typeof analyzeCsv>>, sourceName:
         mode: 'append',
         batchSize: 1000,
         transform: { version: 'dory.transform.v1', operations: [] },
-        sourceSchemaHash: datasetSchemaHash(analysis.dataset),
+        sourceSchemaHash: datasetSchemaHash(analysis.dataSource),
     };
 }

@@ -5,6 +5,7 @@ export * from './base/params/compile';
 export * from './base/params/types';
 export * from './base/row-stream';
 export * from './defaults';
+export * from './data-reader';
 export * from './factory';
 export * from './pool-store';
 export * from './registry';

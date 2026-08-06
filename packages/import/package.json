@@ -13,7 +13,7 @@
         "test": "tsx --test scripts/tests/*.test.ts"
     },
     "dependencies": {
-        "@dory/dataset": "0.1.0",
+        "@dory/data-plane": "0.1.0",
         "chardet": "^2.1.1",
         "iconv-lite": "^0.7.0",
         "nodejs-polars": "^0.25.2",

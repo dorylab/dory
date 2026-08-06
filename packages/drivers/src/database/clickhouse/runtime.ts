@@ -4,7 +4,7 @@ import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import { buildClickhouseTlsOptions, getDriverTlsOptions, normalizeTlsMode } from '@dory/drivers/core/tls';
-import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { ClickhouseDialect } from './dialect';
 
@@ -219,35 +219,59 @@ export async function executeClickhouseQuery<Row>(client: ClickHouseClient, sql:
     };
 }
 
-export async function executeClickhouseQueryRowStream<Row>(client: ClickHouseClient, sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<DriverQueryRowStream<Row>> {
+export async function executeClickhouseQueryRowStream<Row>(
+    client: ClickHouseClient,
+    sql: string,
+    params?: DriverQueryParams,
+    context?: ConnectionQueryContext,
+): Promise<DriverRowCursor<Row>> {
     const started = Date.now();
     const resultSet = await client.query({
         query: sql,
-        format: 'JSONEachRow',
+        format: 'JSONCompactEachRowWithNamesAndTypes',
         query_params: normalizeParams(params),
         query_id: context?.queryId,
     });
     const cleanup = onceAsync(() => resultSet.close());
 
-    const chunks = resultSet.stream() as AsyncIterable<Array<{ json(): Row }>>;
-    const rows = (async function* () {
+    const chunks = resultSet.stream() as AsyncIterable<Array<{ json(): unknown }>>;
+    const rawRows = (async function* () {
         for await (const chunk of chunks) {
             for (const row of chunk) {
                 yield row.json();
             }
         }
     })();
+    const iterator = rawRows[Symbol.asyncIterator]();
+    let namesResult: IteratorResult<unknown>;
+    let typesResult: IteratorResult<unknown>;
+    try {
+        namesResult = await iterator.next();
+        typesResult = await iterator.next();
+    } catch (error) {
+        await cleanup();
+        throw error;
+    }
+    const names = !namesResult.done && Array.isArray(namesResult.value) ? namesResult.value.map(String) : [];
+    const types = !typesResult.done && Array.isArray(typesResult.value) ? typesResult.value.map(String) : [];
+    const rows = (async function* () {
+        for (;;) {
+            const next = await iterator.next();
+            if (next.done) return;
+            yield next.value as Row;
+        }
+    })();
 
     return {
         rows: asyncIterableWithCleanup(rows, cleanup),
         rowCount: null,
-        columns: undefined,
+        columns: names.map((name, index) => ({ name, type: types[index] })),
         limited: false,
         tookMs: Date.now() - started,
         statistics: {
             clickhouse: {
                 queryId: resultSet.query_id,
-                streamingMode: 'json-each-row',
+                streamingMode: 'json-compact-with-names-and-types',
             },
         },
         close: cleanup,

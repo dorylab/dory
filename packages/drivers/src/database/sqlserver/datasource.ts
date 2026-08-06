@@ -1,6 +1,6 @@
 import sql, { type ConnectionPool, type Request } from 'mssql';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { bindTableMutationParams, buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { createSqlServerMetadataCapability, type SqlServerMetadataAPI } from './capabilities/metadata';
@@ -106,7 +106,7 @@ export class SqlServerDatasource extends BaseConnection {
         });
     }
 
-    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+    async openRowCursorWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
         this.assertReady();
         const targetDatabase = context?.database ?? this.config.database;
         const pool = await this.resolvePool(targetDatabase);

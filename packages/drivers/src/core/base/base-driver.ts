@@ -1,6 +1,8 @@
 import type { SchemaSnapshot, SchemaSnapshotInput } from '@dory/schema-compare';
 
 import { NotInitializedError, UnsupportedDriverCapabilityError } from './errors';
+import { createDriverDataReader } from '../data-reader';
+import type { DataOpenOptions, DataStream } from '@dory/data-plane';
 import type { ConnectionParameterDialect } from '../registry/types';
 import type {
     ConnectionMetadataAPI,
@@ -17,15 +19,17 @@ import type {
     DriverHealthInfo,
     DriverMonitoringSummary,
     DriverMonitoringSummaryOptions,
-    DriverQueryRowStream,
+    DriverRowCursor,
     DriverQueryContext,
     DriverQueryResult,
+    DriverDataReader,
+    DriverQueryDataRequest,
     SchemaGraphOptions,
     SchemaGraphResult,
     DriverTableProfile,
+    DriverTableDataRequest,
     TableColumnInfo,
     TableMeta,
-    TablePreviewOptions,
     TableUpdateBatch,
     TableUpdateResult,
 } from '../../types';
@@ -37,8 +41,12 @@ export abstract class BaseDriver {
     protected _initialized = false;
     abstract readonly dialect: ConnectionParameterDialect;
     readonly capabilities: DriverCapabilities = {};
+    private readonly _dataReader: DriverDataReader;
 
-    constructor(public readonly config: DriverConfig) {}
+    constructor(public readonly config: DriverConfig) {
+        this._dataReader = createDriverDataReader(this);
+        this.capabilities.dataReader = this._dataReader;
+    }
 
     private sshTunnel: SshTunnel | null = null;
     protected sshLocalEndpoint: { host: string; port: number } | null = null;
@@ -68,8 +76,20 @@ export abstract class BaseDriver {
         return this.query<Row>(sql, context?.params, context);
     }
 
-    async queryRowsStreamWithContext<Row = any>(_sql: string, _context?: DriverQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
-        throw new UnsupportedDriverCapabilityError('queryRowsStreamWithContext', this.config.type);
+    async openRowCursorWithContext<Row = any>(_sql: string, _context?: DriverQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
+        throw new UnsupportedDriverCapabilityError('openRowCursorWithContext', this.config.type);
+    }
+
+    getDataReader(): DriverDataReader {
+        return this._dataReader;
+    }
+
+    readQuery(request: DriverQueryDataRequest, options?: DataOpenOptions): Promise<DataStream> {
+        return this.getDataReader().readQuery(request, options);
+    }
+
+    readTable(request: DriverTableDataRequest, options?: DataOpenOptions) {
+        return this.getDataReader().readTable(request, options);
     }
 
     async command(sql: string, params?: DriverQueryParams, context?: DriverQueryContext): Promise<void> {
@@ -186,14 +206,6 @@ export abstract class BaseDriver {
             indexes,
             ddl,
         };
-    }
-
-    async previewTable(database: string, table: string, options?: TablePreviewOptions): Promise<DriverQueryResult<Record<string, unknown>>> {
-        const preview = this.capabilities.tableInfo?.preview;
-        if (!preview) {
-            throw new UnsupportedDriverCapabilityError('previewTable', this.config.type);
-        }
-        return preview(database, table, options);
     }
 
     async commitTableUpdates(input: TableUpdateBatch): Promise<TableUpdateResult> {

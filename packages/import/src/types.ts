@@ -1,4 +1,4 @@
-import type { Dataset } from '@dory/dataset';
+import type { DataSource } from '@dory/data-plane';
 
 export const IMPORT_PLAN_VERSION = 'dory.import-plan.v2' as const;
 export const DATASET_PROFILE_VERSION = 'dory.dataset-profile.v2' as const;
@@ -219,7 +219,7 @@ export interface DataWriter {
     inspectTarget(target: ImportTarget): Promise<TargetSchema>;
     previewCreateTable(plan: ImportExecutionPlan): Promise<string>;
     write(input: {
-        dataset: Dataset;
+        dataSource: DataSource;
         plan: ImportExecutionPlan;
         batchSize: number;
         signal: AbortSignal;
@@ -247,14 +247,14 @@ export class PartialWriteError extends Error {
 }
 
 export type CsvAnalysisResult = {
-    dataset: Dataset;
+    dataSource: DataSource;
     profile: DatasetProfileV2;
     parsing: CsvParsingOptions;
     sourceArrowPath: string;
 };
 
 export type ImportSourceAnalysisResult = {
-    dataset: Dataset;
+    dataSource: DataSource;
     profile: DatasetProfileV2;
     source: ImportSourceOptions;
     sourceWarnings: ImportSourceWarning[];
@@ -280,7 +280,7 @@ export type TransformPreviewV1 = {
 };
 
 export type PrepareImportDatasetResult = {
-    dataset: Dataset;
+    dataSource: DataSource;
     inputRows: number;
     outputRows: number;
     filteredRows: number;

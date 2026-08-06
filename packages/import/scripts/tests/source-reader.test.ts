@@ -57,7 +57,7 @@ test('Parquet preserves canonical scalar types and stringifies decimals exactly'
     const prepared = await prepareImportDataset({
         sourceArrowPath: analysis.sourceArrowPath,
         outputArrowPath: path.join(dir, 'prepared.arrow'),
-        sourceDataset: analysis.dataset,
+        sourceDataSource: analysis.dataSource,
         plan,
     });
     assert.equal(prepared.outputRows, 2);

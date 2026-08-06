@@ -49,7 +49,7 @@ const nextConfig = {
         '@dory/actions',
         '@dory/artifacts',
         '@dory/database',
-        '@dory/dataset',
+        '@dory/data-plane',
         '@dory/i18n',
         '@dory/import',
         '@dory/resultset',

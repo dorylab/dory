@@ -1064,6 +1064,12 @@ export default function VTable({
             }
             const rowList = [...rows].sort((a, b) => a - b);
             const colList = [...colsSet].sort((a, b) => columns.indexOf(a) - columns.indexOf(b));
+            for (let index = 1; index < rowList.length; index += 1) {
+                if (rowList[index] !== rowList[index - 1] + 1) return null;
+            }
+            for (let index = 1; index < colList.length; index += 1) {
+                if (columns.indexOf(colList[index]) !== columns.indexOf(colList[index - 1]) + 1) return null;
+            }
             for (const r of rowList) for (const c of colList) if (!sel.has(ck(r, c))) return null;
             return { rows: rowList, cols: colList };
         },
@@ -1353,6 +1359,21 @@ export default function VTable({
             });
             return;
         }
+        if (e.metaKey || e.ctrlKey) {
+            const cellKey = ck(row, col);
+            const next = new Set(selectedCellsRef.current);
+            const wasSelected = next.delete(cellKey);
+            if (!wasSelected) next.add(cellKey);
+
+            setSelectedCells(next);
+            setSelectedRowIds(new Set());
+
+            const nextFocusedCell = !wasSelected ? { row, col } : next.size > 0 ? parseCK([...next][next.size - 1]) : null;
+            setFocusedCell(nextFocusedCell);
+            cellAnchorRef.current = nextFocusedCell;
+            setCellAnchor(nextFocusedCell);
+            return;
+        }
         clearAllSelections({ preserveCellAnchor: true, preserveRowAnchor: true });
         cellAnchorRef.current = { row, col };
         setCellAnchor(cellAnchorRef.current);
@@ -1625,6 +1646,7 @@ export default function VTable({
         const cellEditState = getEffectiveCellState(r, colKeyName);
         const isEditing = editingCell?.row === r && editingCell.col === colKeyName;
         const isRectSelectedCell = Boolean(selectedRectBounds && isCellSelected);
+        const isIndependentSelectedCell = isCellSelected && !selectedRectBounds;
         const rectTopRow = selectedRectBounds?.rows[0];
         const rectBottomRow = selectedRectBounds?.rows[selectedRectBounds.rows.length - 1];
         const rectLeftCol = selectedRectBounds?.cols[0];
@@ -1653,6 +1675,7 @@ export default function VTable({
                 role="button"
                 tabIndex={0}
                 data-cell={keyCell}
+                data-selected={isCellSelected ? 'true' : undefined}
                 data-active-row={activeRowIndex === r ? 'true' : undefined}
                 data-changed={cellEditState.changed ? 'true' : undefined}
                 style={{
@@ -1661,6 +1684,9 @@ export default function VTable({
                     alignItems: 'center',
                     backgroundColor: cellEditState.changed ? 'color-mix(in oklab, var(--color-orange-500) 15%, var(--card))' : undefined,
                     boxShadow: cellStateShadow,
+                    outline: isIndependentSelectedCell ? '1px solid var(--primary)' : undefined,
+                    outlineOffset: isIndependentSelectedCell ? '-1px' : undefined,
+                    zIndex: isIndependentSelectedCell ? 1 : undefined,
                 }}
                 className={cn(
                     'relative px-2 text-sm border-b border-r bg-card cursor-pointer outline-none select-none',
@@ -1949,11 +1975,21 @@ export default function VTable({
             const isRowSelected = selectedRowIds.has(row) || activeRowIndex === row;
             const isCellSelected = selectedCells.has(rawCell as CellKey);
             const isFocused = focusedCell?.row === row && focusedCell.col === col;
+            const isIndependentSelectedCell = isCellSelected && !rectBounds;
 
             element.classList.remove(...SELECTION_CLASS_NAMES);
+            if (isCellSelected) element.dataset.selected = 'true';
+            else delete element.dataset.selected;
             if (isRowSelected) element.classList.add(...PRIMARY_SELECTION_SUBTLE_CLASS.split(' '));
             if (isCellSelected) element.classList.add(...PRIMARY_SELECTION_CLASS.split(' '));
             if (isFocused && !rectBounds) element.classList.add(...PRIMARY_SELECTION_RING_CLASS.split(' '));
+
+            // A non-rectangular selection is rendered as individual cells. Give each
+            // one its own elevated outline so neighbouring virtualized cells cannot
+            // paint their grid border over part of the selection.
+            element.style.outline = isIndependentSelectedCell ? '1px solid var(--primary)' : '';
+            element.style.outlineOffset = isIndependentSelectedCell ? '-1px' : '';
+            element.style.zIndex = isIndependentSelectedCell ? '1' : '';
 
             element.style.boxShadow =
                 rectBounds && isCellSelected
@@ -1965,7 +2001,11 @@ export default function VTable({
                       ]
                           .filter(Boolean)
                           .join(', ')
-                    : '';
+                    : isFocused || isCellSelected
+                      ? 'inset 0 0 0 1px var(--primary)'
+                      : element.dataset.changed === 'true'
+                        ? 'inset 0 0 0 1px color-mix(in oklab, var(--color-orange-500) 50%, transparent)'
+                        : '';
         });
 
         container.querySelectorAll<HTMLElement>('[data-row-index]').forEach(element => {

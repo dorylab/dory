@@ -1,5 +1,7 @@
 import type { SchemaSnapshot, SchemaSnapshotInput } from '@dory/schema-compare';
+import type { DataOpenOptions, DataStream } from '@dory/data-plane';
 import type { DataWriter } from '@dory/import';
+import type { DriverQueryParams } from '../core/base/params/types';
 
 import type { QueryInsightsFilters, QueryInsightsRow, QueryInsightsSummary, QueryTimelinePoint } from './monitoring';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from './table-info';
@@ -57,7 +59,7 @@ export interface DriverQueryResult<Row = any> {
 }
 export type QueryResult<Row = any> = DriverQueryResult<Row>;
 
-export interface DriverQueryRowStream<Row = any> {
+export interface DriverRowCursor<Row = any> {
     rows: AsyncIterable<Row> | Iterable<Row>;
     rowCount?: number | null;
     limited?: boolean;
@@ -392,6 +394,34 @@ export type TablePreviewOptions = {
     searchColumns?: string[];
 };
 
+export type DriverQueryDataRequest = {
+    sql: string;
+    context?: DriverQueryContext;
+    params?: DriverQueryParams;
+};
+
+export type DriverTableDataRequest = {
+    database: string;
+    table: string;
+    options?: TablePreviewOptions;
+};
+
+export type DriverTableDataStream = {
+    stream: DataStream;
+    totalRows: number | null;
+    unfilteredTotalRows: number | null;
+    limited: boolean;
+    limit?: number;
+    offset: number;
+    tookMs?: number;
+    statistics?: Record<string, unknown>;
+};
+
+export interface DriverDataReader {
+    readQuery(request: DriverQueryDataRequest, options?: DataOpenOptions): Promise<DataStream>;
+    readTable(request: DriverTableDataRequest, options?: DataOpenOptions): Promise<DriverTableDataStream>;
+}
+
 export type QueryInsightsImpl = {
     summary: (filters: QueryInsightsFilters) => Promise<QueryInsightsSummary>;
     timeline: (filters: QueryInsightsFilters) => Promise<QueryTimelinePoint[]>;
@@ -467,6 +497,7 @@ export type ConnectionCapabilities = {
     queryInsights?: QueryInsightsAPI;
     tableInfo?: GetTableInfoAPI;
     tableMutations?: TableMutationAPI;
+    dataReader?: DriverDataReader;
     dataWriter?: DataWriter;
     privileges?: Record<string, unknown>;
 };

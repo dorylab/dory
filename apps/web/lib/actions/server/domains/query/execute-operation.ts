@@ -4,8 +4,9 @@ import { ensureConnectionPoolForUser } from '@/lib/connection/utils';
 import { splitSqlStatements } from '@/lib/server/sql-splitter';
 import { runWithSqlAudit } from '@/lib/server/sql-audit';
 import type { ActionContext } from '@dory/actions';
+import { serializableColumns, type DataStream } from '@dory/data-plane';
 import type { BaseConnection } from '@dory/drivers/core';
-import type { ColumnMeta, DriverQueryRowStream, DriverType } from '@dory/drivers/types';
+import type { DriverType } from '@dory/drivers/types';
 import { newEntityId } from '@dory/shared/id';
 import type { QuerySource } from '@dory/shared/types/audit';
 import { enforceSelectLimit, type SelectLimitDialect } from '@dory/shared/utils/enforce-select-limit';
@@ -59,8 +60,6 @@ export type QueryExecutionStreamEvent =
     | { type: 'session-finished'; payload: QueryExecutePayload };
 
 type QueryExecutionEventSink = (event: QueryExecutionStreamEvent) => Promise<void> | void;
-type QueryRows = Iterable<unknown> | AsyncIterable<unknown>;
-
 function preciseDateNow(): Date {
     return new Date(performance.timeOrigin + performance.now());
 }
@@ -120,36 +119,21 @@ function applyLimitToStatement(statement: string, limit: number | null | undefin
 }
 
 function supportsStreamingResultSets(connection: BaseConnection) {
-    return (
-        connection.config.type === 'clickhouse' ||
-        connection.config.type === 'cloudflare-d1' ||
-        connection.config.type === 'duckdb' ||
-        connection.config.type === 'mariadb' ||
-        connection.config.type === 'mysql' ||
-        connection.config.type === 'neon' ||
-        connection.config.type === 'oracle' ||
-        connection.config.type === 'postgres' ||
-        connection.config.type === 'sqlite' ||
-        connection.config.type === 'snowflake' ||
-        connection.config.type === 'supabase' ||
-        connection.config.type === 'sqlserver'
-    );
+    return Boolean(connection.capabilities.dataReader);
 }
 
-function toResultSetColumns(columns: ColumnMeta[] | undefined | null) {
-    return (columns ?? []).map(column => ({
+function toResultSetColumns(stream: DataStream) {
+    return serializableColumns(stream.schema).map(column => ({
         name: column.name,
-        databaseType: column.type,
-        logicalType: 'unknown' as const,
+        displayName: column.displayName,
+        databaseType: column.databaseType ?? column.type,
+        logicalType: column.logicalType ?? ('unknown' as const),
+        nullable: column.nullable,
     }));
 }
 
-function isAsyncRows(rows: QueryRows): rows is AsyncIterable<unknown> {
-    return typeof (rows as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function';
-}
-
-function instrumentRows(
-    rows: QueryRows,
+function instrumentDataStream(
+    stream: DataStream,
     options: {
         signal?: AbortSignal;
         onEvent?: QueryExecutionEventSink;
@@ -157,62 +141,41 @@ function instrumentRows(
         setIndex: number;
         startedAt: number;
     },
-): QueryRows {
-    if (isAsyncRows(rows)) {
-        return (async function* () {
-            let observedRows = 0;
-            let lastProgressAt = 0;
-            for await (const row of rows) {
-                if (options.signal?.aborted) {
-                    throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
+): DataStream {
+    return {
+        schema: stream.schema,
+        metadata: stream.metadata,
+        rowCount: stream.rowCount,
+        batches: () => {
+            const batches = stream.batches();
+            return (async function* () {
+                let observedRows = 0;
+                let lastProgressAt = 0;
+                for await (const batch of batches) {
+                    if (options.signal?.aborted) {
+                        throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
+                    }
+                    observedRows += batch.numRows;
+                    const now = performance.now();
+                    if (observedRows > 0 && now - lastProgressAt > 500) {
+                        lastProgressAt = now;
+                        await options.onEvent?.({
+                            type: 'result-progress',
+                            payload: {
+                                sessionId: options.sessionId,
+                                setIndex: options.setIndex,
+                                rowsWritten: observedRows,
+                                previewRowCount: Math.min(observedRows, DEFAULT_RESULT_PREVIEW_ROWS),
+                                elapsedMs: Math.max(0, Math.round(now - options.startedAt)),
+                            },
+                        });
+                    }
+                    yield batch;
                 }
-                observedRows += 1;
-                const now = performance.now();
-                if (observedRows > 0 && now - lastProgressAt > 500) {
-                    lastProgressAt = now;
-                    await options.onEvent?.({
-                        type: 'result-progress',
-                        payload: {
-                            sessionId: options.sessionId,
-                            setIndex: options.setIndex,
-                            rowsWritten: observedRows,
-                            previewRowCount: 0,
-                            elapsedMs: Math.max(0, Math.round(now - options.startedAt)),
-                        },
-                    });
-                }
-                yield row;
-            }
-        })();
-    }
-
-    return (function* () {
-        let observedRows = 0;
-        let lastProgressAt = 0;
-        for (const row of rows) {
-            if (options.signal?.aborted) {
-                throw Object.assign(new Error('Query canceled'), { name: 'AbortError', code: 'ABORT_ERR' });
-            }
-            observedRows += 1;
-            const now = performance.now();
-            if (observedRows > 0 && now - lastProgressAt > 500) {
-                lastProgressAt = now;
-                void Promise.resolve(
-                    options.onEvent?.({
-                        type: 'result-progress',
-                        payload: {
-                            sessionId: options.sessionId,
-                            setIndex: options.setIndex,
-                            rowsWritten: observedRows,
-                            previewRowCount: 0,
-                            elapsedMs: Math.max(0, Math.round(now - options.startedAt)),
-                        },
-                    }),
-                ).catch(() => undefined);
-            }
-            yield row;
-        }
-    })();
+            })();
+        },
+        close: () => stream.close(),
+    };
 }
 
 function buildPayload(input: {
@@ -372,16 +335,27 @@ async function executeOne(connection: BaseConnection, statement: string, context
     }
 }
 
-async function executeOneStream(connection: BaseConnection, statement: string, context: { database?: string | null }, options?: { queryId?: string; statementIndex?: number }) {
+async function executeOneStream(
+    connection: BaseConnection,
+    statement: string,
+    context: { database?: string | null },
+    options?: { queryId?: string; statementIndex?: number; signal?: AbortSignal },
+) {
     const startedAt = preciseDateNow();
     const perfStart = performance.now();
 
     try {
-        const result = await connection.queryRowsStreamWithContext(statement, {
-            database: context.database ?? undefined,
-            queryId: options?.queryId,
-            statementIndex: options?.statementIndex,
-        });
+        const result = await connection.readQuery(
+            {
+                sql: statement,
+                context: {
+                    database: context.database ?? undefined,
+                    queryId: options?.queryId,
+                    statementIndex: options?.statementIndex,
+                },
+            },
+            { signal: options?.signal },
+        );
         const finishedAt = preciseDateNow();
         const durationMs = performance.now() - perfStart;
 
@@ -392,10 +366,10 @@ async function executeOneStream(connection: BaseConnection, statement: string, c
                 sqlText: statement,
                 sqlOp: parseSqlOp(statement),
                 title: makeTitle(statement),
-                columns: result.columns ?? null,
+                columns: toResultSetColumns(result),
                 rowCount: result.rowCount ?? null,
-                limited: false,
-                limit: result.limit ?? null,
+                limited: Boolean(result.metadata.limited),
+                limit: typeof result.metadata.limit === 'number' ? result.metadata.limit : null,
                 affectedRows: null,
                 status: 'success' as const,
                 errorMessage: null,
@@ -588,7 +562,7 @@ async function runSqlExecution(
                 });
 
                 const execOne = useStreaming
-                    ? await executeOneStream(entry.instance, statement, { database: input.database }, { queryId: sessionId, statementIndex: i })
+                    ? await executeOneStream(entry.instance, statement, { database: input.database }, { queryId: sessionId, statementIndex: i, signal: options?.signal })
                     : await executeOne(entry.instance, statement, { database: input.database }, { queryId: sessionId, statementIndex: i });
                 let qrs: Record<string, unknown> = {
                     sessionId,
@@ -655,7 +629,7 @@ async function runSqlExecution(
                             ...qrs,
                             finishedAt,
                             durationMs: startedAt ? Math.max(0, Math.round(finishedAt.getTime() - startedAt.getTime())) : qrs.durationMs,
-                            limited: typeof stream.limit === 'number' ? persistedResult.rowCount >= stream.limit : qrs.limited,
+                            limited: typeof stream.metadata.limit === 'number' ? persistedResult.rowCount >= stream.metadata.limit : qrs.limited,
                         };
                     }
 
@@ -681,12 +655,12 @@ async function runSqlExecution(
                     continue;
                 }
 
-                const stream = (execOne as { resultStream?: DriverQueryRowStream }).resultStream;
-                let rowsForPersist = stream?.rows;
+                const stream = (execOne as { resultStream?: DataStream }).resultStream;
+                let dataStreamForPersist = stream;
                 const streamResultSetId = stream ? `rs_${newEntityId()}` : null;
                 const streamQueryRunId = stream ? `qr_${newEntityId()}` : null;
                 if (stream && options?.onEvent) {
-                    rowsForPersist = instrumentRows(stream.rows, {
+                    dataStreamForPersist = instrumentDataStream(stream, {
                         signal: options.signal,
                         onEvent: options.onEvent,
                         sessionId,
@@ -710,9 +684,7 @@ async function runSqlExecution(
                                 sessionSqlText: input.sql,
                                 source: input.source ?? null,
                                 resultSet: qrs as PersistableResultSet,
-                                rows: rowsForPersist ?? stream.rows,
-                                columns: toResultSetColumns(stream.columns),
-                                rowCount: stream.rowCount ?? null,
+                                dataStream: dataStreamForPersist ?? stream,
                                 resultSetId: streamResultSetId,
                                 queryRunId: streamQueryRunId,
                                 previewRows: DEFAULT_RESULT_PREVIEW_ROWS,
