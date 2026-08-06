@@ -38,13 +38,16 @@ interface ShowDialogOptions {
 
 export function showDialog(window: BrowserWindow, options: ShowDialogOptions = {}) {
     const { focus = false } = options;
+    if (!focus) {
+        if (!window.isVisible()) {
+            window.showInactive();
+        }
+        return;
+    }
     if (window.isMinimized()) {
         window.restore();
     }
     window.show();
-    if (!focus) {
-        return;
-    }
     if (process.platform === 'darwin') {
         app.focus({ steal: true });
     }
