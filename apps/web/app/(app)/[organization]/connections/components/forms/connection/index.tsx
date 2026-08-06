@@ -11,6 +11,7 @@ import { DatabaseTypeIcon } from '../../database-type-icon';
 import { createTlsDefaultsForConnectionType } from '../tls/utils';
 import { CONNECTION_ENVIRONMENT_OPTIONS, CONNECTION_TAG_COLOR_OPTIONS, normalizeConnectionEnvironmentValue, normalizeConnectionTagColorValue } from '../../../constants';
 import type { ConnectionEnvironmentValue } from '../../../constants';
+import { ConnectionUrlField, supportsConnectionUrl } from './connection-url-field';
 
 const EMPTY_ENVIRONMENT_SELECT_VALUE = '__none__';
 const ENVIRONMENT_OPTION_ICONS = {
@@ -22,28 +23,19 @@ const ENVIRONMENT_OPTION_ICONS = {
     shared: Users,
 } satisfies Record<ConnectionEnvironmentValue, typeof CircleOff>;
 
-const BETA_CONNECTION_TYPES = new Set(['snowflake', 'supabase']);
-
 function ConnectionTypeOptionLabel({ value, label }: { value: string; label: string }) {
-    const isBeta = BETA_CONNECTION_TYPES.has(value);
-
     return (
         <span className="flex min-w-0 items-center gap-2">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center">
                 <DatabaseTypeIcon type={value} className="max-h-4 max-w-4" fallbackClassName="text-[10px]" />
             </span>
             <span className="truncate">{label}</span>
-            {isBeta ? (
-                <span aria-label={`${label} beta`} className="rounded-full bg-primary/10 px-1.5 text-[9px] leading-4 font-semibold tracking-[0.02em] text-primary">
-                    BETA
-                </span>
-            ) : null}
         </span>
     );
 }
 
-export default function ConnectionForm(props: { form: UseFormReturn<FieldValues> }) {
-    const { form } = props;
+export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>; isEditMode?: boolean }) {
+    const { form, isEditMode } = props;
     const { control } = form;
     const t = useTranslations('Connections.ConnectionContent');
     const connectionType = useWatch({
@@ -65,6 +57,9 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
         form.setValue('connection.httpPort', nextDefaults.httpPort, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.database', nextDefaults.database, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.path', currentConnection.path ?? nextDefaults.path ?? null, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.localDatabaseSource', nextDefaults.localDatabaseSource, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.localDatabaseFileName', nextDefaults.localDatabaseFileName, { shouldDirty: true, shouldValidate: false });
+        form.setValue('connection.localDatabaseDirectory', nextDefaults.localDatabaseDirectory, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.accountId', nextDefaults.accountId, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.duckdbMode', nextDefaults.duckdbMode, { shouldDirty: true, shouldValidate: false });
         form.setValue('connection.warehouse', nextDefaults.warehouse, { shouldDirty: true, shouldValidate: false });
@@ -97,6 +92,9 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
             'connection.httpPort',
             'connection.database',
             'connection.path',
+            'connection.localDatabaseSource',
+            'connection.localDatabaseFileName',
+            'connection.localDatabaseDirectory',
             'connection.accountId',
             'connection.duckdbMode',
             'connection.warehouse',
@@ -154,7 +152,8 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
                     )}
                 />
             </div>
-            <DriverFields key={connectionType} form={form} />
+            {!isEditMode && supportsConnectionUrl(connectionType) ? <ConnectionUrlField key={connectionType} form={form} type={connectionType} /> : null}
+            <DriverFields key={connectionType} form={form} isEditMode={isEditMode} />
         </div>
     );
 }

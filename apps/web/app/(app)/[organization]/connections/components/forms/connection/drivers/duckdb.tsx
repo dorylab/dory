@@ -3,10 +3,9 @@ import { UseFormReturn, useWatch } from 'react-hook-form';
 import { InputPassword } from '@/components/originui/input-password';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
-import { Button } from '@/registry/new-york-v4/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
-import { applySelectedLocalDatabasePath, FieldHelp } from './shared';
-import { isDesktopRuntime } from '@dory/shared/runtime';
+import { FieldHelp, LocalDatabaseFileFields } from './shared';
+import { buildLocalDatabasePath, DEFAULT_LOCAL_DATABASE_DIRECTORY, getDefaultLocalDatabaseFileName } from './local-database';
 
 type DuckDbMode = 'local' | 'motherduck';
 
@@ -43,6 +42,9 @@ export function createDuckDbConnectionDefaults() {
         database: '',
         path: '',
         duckdbMode: 'local',
+        localDatabaseSource: 'existing',
+        localDatabaseFileName: getDefaultLocalDatabaseFileName('duckdb'),
+        localDatabaseDirectory: DEFAULT_LOCAL_DATABASE_DIRECTORY,
         environment: '',
         tags: '',
     };
@@ -60,6 +62,7 @@ export function normalizeDuckDbConnectionForForm(connection: any) {
         database: mode === 'motherduck' ? (connection?.database ?? '') : '',
         path: mode === 'motherduck' ? '' : (connection?.path ?? ''),
         duckdbMode: mode,
+        localDatabaseSource: 'existing',
     };
 }
 
@@ -69,7 +72,7 @@ export function normalizeDuckDbConnectionForSubmit(connection: any) {
     options.mode = mode;
     delete options.ssh;
 
-    const { duckdbMode: _duckdbMode, ...restConnection } = connection ?? {};
+    const { duckdbMode: _duckdbMode, localDatabaseSource, localDatabaseFileName, localDatabaseDirectory, ...restConnection } = connection ?? {};
 
     return {
         ...restConnection,
@@ -78,7 +81,12 @@ export function normalizeDuckDbConnectionForSubmit(connection: any) {
         httpPort: null,
         ssl: false,
         database: mode === 'motherduck' ? connection?.database?.trim?.() || null : null,
-        path: mode === 'motherduck' ? null : connection?.path?.trim?.() || '',
+        path:
+            mode === 'motherduck'
+                ? null
+                : localDatabaseSource === 'new'
+                  ? buildLocalDatabasePath('duckdb', localDatabaseDirectory ?? '', localDatabaseFileName ?? '')
+                  : connection?.path?.trim?.() || '',
         options: JSON.stringify(options),
     };
 }
@@ -88,10 +96,9 @@ export function validateDuckDbConnection(value: any, ctx: RefinementCtx) {
     void ctx;
 }
 
-export function DuckDbConnectionFields({ form }: { form: UseFormReturn<any> }) {
+export function DuckDbConnectionFields({ form, isEditMode }: { form: UseFormReturn<any>; isEditMode?: boolean }) {
     const mode = useWatch({ control: form.control, name: 'connection.duckdbMode' }) as DuckDbMode | undefined;
     const resolvedMode = mode === 'motherduck' ? 'motherduck' : 'local';
-    const canPickFile = isDesktopRuntime() && typeof window !== 'undefined' && typeof window.electron?.selectSqliteFile === 'function';
 
     return (
         <div className="space-y-4">
@@ -132,41 +139,7 @@ export function DuckDbConnectionFields({ form }: { form: UseFormReturn<any> }) {
             />
 
             {resolvedMode === 'local' ? (
-                <FormField
-                    control={form.control}
-                    name="connection.path"
-                    render={({ field }) => (
-                        <FormItem className="space-y-2">
-                            <FormLabel className="flex items-center gap-1.5">
-                                <span>
-                                    Database File<span className="text-destructive"> *</span>
-                                </span>
-                                <FieldHelp text="Use an absolute path to an existing .duckdb or .db file that the server process can access." />
-                            </FormLabel>
-                            <FormControl>
-                                <div className="flex gap-2">
-                                    <Input placeholder="/path/to/database.duckdb" {...field} value={field.value ?? ''} />
-                                    {canPickFile ? (
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            onClick={async () => {
-                                                const selectedPath = await window.electron?.selectSqliteFile?.();
-                                                if (!selectedPath) {
-                                                    return;
-                                                }
-                                                applySelectedLocalDatabasePath(form, selectedPath);
-                                            }}
-                                        >
-                                            Choose
-                                        </Button>
-                                    ) : null}
-                                </div>
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )}
-                />
+                <LocalDatabaseFileFields form={form} type="duckdb" isEditMode={isEditMode} />
             ) : (
                 <>
                     <FormField

@@ -433,6 +433,19 @@ ipcMain.handle('filesystem:select-sqlite-file', async () => {
   return result.filePaths[0] ?? null;
 });
 
+ipcMain.handle('filesystem:select-database-directory', async () => {
+  const result = await dialog.showOpenDialog({
+    defaultPath: path.join(app.getPath('home'), 'Dory', 'databases'),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+
+  if (result.canceled) {
+    return null;
+  }
+
+  return result.filePaths[0] ?? null;
+});
+
 ipcMain.handle('filesystem:select-local-file', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openFile'],

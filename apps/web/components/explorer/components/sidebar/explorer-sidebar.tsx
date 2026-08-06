@@ -11,6 +11,8 @@ import { cn } from '@dory/web-utils';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
+import { TableContextMenu } from '@/components/table-context-menu/table-context-menu';
+import type { RenameTableTarget, TableContextTarget } from '@/components/table-context-menu/types';
 import { useDatabases } from '@/hooks/use-databases';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { executeActionClient } from '@/lib/actions/client';
@@ -21,17 +23,7 @@ import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.s
 import { ExplorerSidebarTree } from './explorer-sidebar-tree';
 import { buildLocalFilesSidebarModel } from './local-files-sidebar';
 import { DEFAULT_GROUP_STATE, EMPTY_DATABASE_OBJECTS } from './types';
-import type {
-    DatabaseObjects,
-    GroupState,
-    SchemaNode,
-    SidebarImportTarget,
-    SidebarListKind,
-    SidebarListTarget,
-    SidebarObjectTarget,
-    SidebarSelection,
-    TargetOption,
-} from './types';
+import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';
 
 type ExplorerSidebarProps = {
     catalogName?: string;
@@ -40,7 +32,10 @@ type ExplorerSidebarProps = {
     onSelectList?: (target: SidebarListTarget) => void;
     onSelectObject?: (target: SidebarObjectTarget) => void;
     onOpenObject?: (target: SidebarObjectTarget) => void;
-    onImportTable?: (target: SidebarImportTarget) => void;
+    onNewQuery?: () => void | Promise<void>;
+    onQuickQuery?: (target: TableContextTarget) => void | Promise<void>;
+    onRenameTable?: (target: RenameTableTarget) => void | Promise<void>;
+    onImportTable?: (target: TableContextTarget) => void | Promise<void>;
     selectedDatabase?: string;
     selectedSchema?: string;
     selectedList?: SidebarListKind;
@@ -111,6 +106,9 @@ export function ExplorerSidebar({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onNewQuery,
+    onQuickQuery,
+    onRenameTable,
     onImportTable,
     selectedDatabase,
     selectedSchema,
@@ -271,7 +269,7 @@ export function ExplorerSidebar({
         });
 
         return next;
-    }, [databaseEntries, expandedSchemas, groupQueries, isLocalFilesExplorer, supportedGroupKeys]);
+    }, [databaseEntries, expandedSchemas, groupQueries, supportedGroupKeys]);
 
     const databaseSchemas = useMemo(() => {
         const next: Record<string, SchemaNode[]> = {};
@@ -555,16 +553,14 @@ export function ExplorerSidebar({
                                 {!localFilesModel.loading && localFilesModel.items.length
                                     ? localFilesModel.items.map(item => {
                                           const Icon = item.objectKind === 'table' ? Table : Eye;
-
-                                          return (
+                                          const itemButton = (
                                               <button
-                                                  key={item.key}
                                                   type="button"
                                                   className={cn(
                                                       'flex w-full cursor-pointer items-center gap-2 truncate rounded px-2 py-1 text-left text-sm',
                                                       item.selected
                                                           ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                                                          : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                                          : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground',
                                                   )}
                                                   onClick={() => {
                                                       setActiveDatabase(item.target.database);
@@ -579,6 +575,29 @@ export function ExplorerSidebar({
                                                   <Icon className="h-3.5 w-3.5 shrink-0" />
                                                   <span className="truncate">{item.label}</span>
                                               </button>
+                                          );
+
+                                          if (item.objectKind !== 'table') return <div key={item.key}>{itemButton}</div>;
+
+                                          const target: TableContextTarget = {
+                                              database: item.target.database,
+                                              schema: item.target.schema,
+                                              tableName: item.target.name,
+                                              tableLabel: item.label,
+                                              unqualifiedTableName: item.target.name.split('.').filter(Boolean).pop() ?? item.target.name,
+                                          };
+
+                                          return (
+                                              <TableContextMenu
+                                                  key={item.key}
+                                                  target={target}
+                                                  onNewQuery={onNewQuery}
+                                                  onQuickQuery={onQuickQuery}
+                                                  onRename={onRenameTable}
+                                                  onImport={driverSupportsDataImport(connectionType) ? onImportTable : undefined}
+                                              >
+                                                  {itemButton}
+                                              </TableContextMenu>
                                           );
                                       })
                                     : null}
@@ -640,6 +659,9 @@ export function ExplorerSidebar({
                                 setActiveDatabase(target.database);
                                 onOpenObject?.(target);
                             }}
+                            onNewQuery={onNewQuery}
+                            onQuickQuery={onQuickQuery}
+                            onRenameTable={onRenameTable}
                             onImportTable={driverSupportsDataImport(connectionType) ? onImportTable : undefined}
                             filterEntries={filterEntries}
                             getSchemaObjects={getSchemaObjects}

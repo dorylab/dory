@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import { getImportConfig } from '@/lib/server/imports/config';
 import SQLConsoleClient from './client';
 
 export default async function Page() {
@@ -9,5 +10,5 @@ export default async function Page() {
         defaultLayout = JSON.parse(layout.value);
     }
 
-    return <SQLConsoleClient defaultLayout={defaultLayout} />;
+    return <SQLConsoleClient defaultLayout={defaultLayout} maxFileBytes={getImportConfig().maxFileBytes} />;
 }

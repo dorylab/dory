@@ -16,6 +16,7 @@ function sanitizeIdentity(identity: unknown) {
 export function sanitizeConnectionSyncPayload(payload: Record<string, unknown>) {
     const tls = payload.tls;
     const sanitizedPayload = { ...payload };
+    delete sanitizedPayload.createLocalDatabase;
 
     if (Array.isArray(sanitizedPayload.identities)) {
         sanitizedPayload.identities = sanitizedPayload.identities.map(sanitizeIdentity);

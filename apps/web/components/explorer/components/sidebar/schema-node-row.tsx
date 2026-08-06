@@ -4,19 +4,10 @@ import { ChevronDown, ChevronRight, Layers, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@dory/web-utils';
+import type { RenameTableTarget, TableContextTarget } from '@/components/table-context-menu/types';
 import { ObjectGroup } from './object-group';
 import { DEFAULT_GROUP_STATE } from './types';
-import type {
-    DatabaseObjects,
-    GroupState,
-    SchemaNode,
-    SidebarImportTarget,
-    SidebarListKind,
-    SidebarListTarget,
-    SidebarObjectTarget,
-    SidebarSelection,
-    TargetOption,
-} from './types';
+import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';
 import type { GroupConfig } from './object-group';
 
 type SchemaNodeRowProps = {
@@ -39,7 +30,10 @@ type SchemaNodeRowProps = {
     onSelectList: (target: SidebarListTarget) => void;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
-    onImportTable?: (target: SidebarImportTarget) => void;
+    onNewQuery?: () => void | Promise<void>;
+    onQuickQuery?: (target: TableContextTarget) => void | Promise<void>;
+    onRenameTable?: (target: RenameTableTarget) => void | Promise<void>;
+    onImportTable?: (target: TableContextTarget) => void | Promise<void>;
     filterEntries: (entries: TargetOption[]) => TargetOption[];
 };
 
@@ -63,6 +57,9 @@ export function SchemaNodeRow({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onNewQuery,
+    onQuickQuery,
+    onRenameTable,
     onImportTable,
     filterEntries,
 }: SchemaNodeRowProps) {
@@ -131,6 +128,9 @@ export function SchemaNodeRow({
                                   onSelectList={onSelectList}
                                   onSelectObject={onSelectObject}
                                   onOpenObject={onOpenObject}
+                                  onNewQuery={onNewQuery}
+                                  onQuickQuery={onQuickQuery}
+                                  onRenameTable={onRenameTable}
                                   onImportTable={onImportTable}
                               />
                           ))

@@ -13,14 +13,14 @@ const defaultSize = {
 
 export const panelSizeAtom = atomWithStorage('panelSize', defaultSize);
 
-const booleanStorage = createJSONStorage<boolean>(() => localStorage);
-const numberStorage = createJSONStorage<number>(() => localStorage);
+const booleanStorage = createJSONStorage<boolean>();
+const numberStorage = createJSONStorage<number>();
 export const copilotPanelOpenAtom = atomWithStorage<boolean>('sqlConsole.copilotPanelOpen', true, booleanStorage);
 export const copilotPanelWidthAtom = atomWithStorage<number>('sqlConsole.copilotPanelWidth', 30, numberStorage);
 export const copilotPanelTabAtom = atomWithStorage<'ask' | 'action' | 'context'>(
     'sqlConsole.copilotPanelTab',
     'ask',
-    createJSONStorage(() => localStorage),
+    createJSONStorage(),
 );
 
 export type SqlEditorResultLayout = [number, number];
@@ -28,7 +28,7 @@ export type SqlEditorResultLayout = [number, number];
 export const sqlEditorResultLayoutByScopeAtom = atomWithStorage<Record<string, SqlEditorResultLayout>>(
     'sqlConsole.editorResultLayoutByScope',
     {},
-    createJSONStorage(() => localStorage),
+    createJSONStorage(),
     { getOnInit: true },
 );
 
@@ -38,7 +38,7 @@ export const QUERY_HISTORY_UPDATED_EVENT = 'query-history-updated';
 export const savedQueriesViewByConnectionAtom = atomWithStorage<Record<string, SavedQueriesView>>(
     'sqlConsole.savedQueriesViewByConnection',
     {},
-    createJSONStorage(() => localStorage),
+    createJSONStorage(),
 );
 
 export const sessionIdByTabAtom = atom<Record<string, string>>({});
@@ -97,7 +97,7 @@ export const copilotAnalysisRequestAtom = atom<CopilotAnalysisRequest | null>(nu
 export const analysisWorkspaceStateAtom = atomWithStorage<Record<string, AnalysisWorkspaceState>>(
     'sqlConsole.analysisWorkspaceState',
     {},
-    createJSONStorage(() => localStorage),
+    createJSONStorage(),
 );
 
 function makeAnalysisWorkspaceKey(tabId?: string | null, sessionId?: string | null, setIndex?: number | null) {

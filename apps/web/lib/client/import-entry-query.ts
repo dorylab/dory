@@ -9,7 +9,7 @@ export const importEntryParsers = {
 
 export const serializeImportEntry = createSerializer(importEntryParsers);
 
-export const explorerImportParsers = {
+export const tableImportParsers = {
     importOpen: parseAsBoolean.withDefault(false),
     importDatabase: parseAsString,
     importSchema: parseAsString,

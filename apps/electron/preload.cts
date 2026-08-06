@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electron', {
     platform: process.platform,
     isPackaged: process.env.NODE_ENV === 'production' || process.env.ELECTRON_IS_PACKAGED === 'true',
     selectSqliteFile: () => ipcRenderer.invoke('filesystem:select-sqlite-file') as Promise<string | null>,
+    selectDatabaseDirectory: () => ipcRenderer.invoke('filesystem:select-database-directory') as Promise<string | null>,
     selectLocalFile: () => ipcRenderer.invoke('filesystem:select-local-file') as Promise<string | null>,
 });
 

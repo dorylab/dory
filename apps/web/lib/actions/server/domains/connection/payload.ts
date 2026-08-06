@@ -101,6 +101,7 @@ export function normalizeConnectionCreatePayload(value: unknown) {
         identities: normalizeCreateIdentities(payload, rawConnection),
         ssh: payload.ssh ?? null,
         tls: payload.tls ?? null,
+        createLocalDatabase: payload.createLocalDatabase === true ? (true as const) : undefined,
     };
 }
 
@@ -128,6 +129,7 @@ export function normalizeConnectionUpdatePatch(value: unknown) {
 
     if ('ssh' in patch) normalized.ssh = patch.ssh ?? null;
     if ('tls' in patch) normalized.tls = patch.tls ?? null;
+    delete normalized.createLocalDatabase;
 
     return normalized;
 }
@@ -182,6 +184,7 @@ export const connectionCreatePayloadSchema = z
         identity: connectionIdentitySchema.optional().describe('Convenience single identity; Dory converts it to identities[0].'),
         ssh: connectionSshSchema,
         tls: connectionTlsSchema,
+        createLocalDatabase: z.literal(true).optional().describe('One-time UI request to create a new SQLite or local DuckDB file before saving the connection.'),
     })
     .passthrough()
     .describe(

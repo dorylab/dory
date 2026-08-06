@@ -72,7 +72,7 @@ export type SupportedConnectionDriver =
 
 type DriverDefinition = {
     label: string;
-    FormComponent: ComponentType<{ form: UseFormReturn<FieldValues> }>;
+    FormComponent: ComponentType<{ form: UseFormReturn<FieldValues>; isEditMode?: boolean }>;
     createDefaults(): FieldValues;
     normalizeForForm(connection: FieldValues | null | undefined): FieldValues;
     normalizeForSubmit(connection: FieldValues | null | undefined): FieldValues;

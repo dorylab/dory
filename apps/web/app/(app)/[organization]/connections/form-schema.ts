@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getConnectionDriver } from './components/forms/connection/drivers';
+import { isAbsoluteOrHomePath, validateLocalDatabaseFileName, type LocalDatabaseType } from './components/forms/connection/drivers/local-database';
 
 const requiredPort = z.preprocess(
     value => {
@@ -23,6 +24,40 @@ function hasTrimmedString(value: unknown) {
     return typeof value === 'string' && value.trim() !== '';
 }
 
+function validateNewLocalDatabase(value: Record<string, any>, type: LocalDatabaseType, ctx: z.RefinementCtx) {
+    const fileName = value.localDatabaseFileName?.trim?.() ?? '';
+    const fileNameError = validateLocalDatabaseFileName(type, fileName);
+    if (fileNameError) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['connection', 'localDatabaseFileName'],
+            message:
+                fileNameError === 'missing'
+                    ? 'Please provide a database file name'
+                    : fileNameError === 'invalid'
+                      ? 'File name must not contain path separators'
+                      : type === 'duckdb'
+                        ? 'DuckDB file name must use .duckdb or .db'
+                        : 'SQLite file name must use .sqlite, .sqlite3, or .db',
+        });
+    }
+
+    const directory = value.localDatabaseDirectory?.trim?.() ?? '';
+    if (!directory) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['connection', 'localDatabaseDirectory'],
+            message: 'Please provide a database location',
+        });
+    } else if (!isAbsoluteOrHomePath(directory)) {
+        ctx.addIssue({
+            code: 'custom',
+            path: ['connection', 'localDatabaseDirectory'],
+            message: 'Database location must be absolute or start with ~/',
+        });
+    }
+}
+
 function hasCertificateValue(tls: Record<string, unknown> | null | undefined, sourceName: string, pathName: string, contentName: string, hasContentName: string) {
     if (!tls) return false;
     if (tls[sourceName] === 'content') {
@@ -44,6 +79,9 @@ export const ConnectionDialogFormSchema = z
             database: z.string().optional().nullable(),
             connectString: z.string().optional().nullable(),
             path: z.string().optional().nullable(),
+            localDatabaseSource: z.enum(['existing', 'new']).optional(),
+            localDatabaseFileName: z.string().optional(),
+            localDatabaseDirectory: z.string().optional(),
             accountId: z.string().optional().nullable(),
             duckdbMode: z.enum(['local', 'motherduck']).optional(),
             warehouse: z.string().optional().nullable(),
@@ -102,6 +140,10 @@ export const ConnectionDialogFormSchema = z
         driver.validate(value.connection, ctx);
 
         if (value.connection.type === 'sqlite') {
+            if (value.connection.localDatabaseSource === 'new') {
+                validateNewLocalDatabase(value.connection, 'sqlite', ctx);
+                return;
+            }
             const normalizedPath = value.connection.path?.trim() ?? '';
             const extension = getLowerPathExtension(normalizedPath);
             if (!normalizedPath) {
@@ -129,6 +171,10 @@ export const ConnectionDialogFormSchema = z
         if (value.connection.type === 'duckdb') {
             const mode = value.connection.duckdbMode === 'motherduck' ? 'motherduck' : 'local';
             if (mode === 'local') {
+                if (value.connection.localDatabaseSource === 'new') {
+                    validateNewLocalDatabase(value.connection, 'duckdb', ctx);
+                    return;
+                }
                 const normalizedPath = value.connection.path?.trim() ?? '';
                 const extension = getLowerPathExtension(normalizedPath);
                 if (!normalizedPath) {
