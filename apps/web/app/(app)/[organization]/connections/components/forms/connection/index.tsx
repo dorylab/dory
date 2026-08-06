@@ -152,8 +152,8 @@ export default function ConnectionForm(props: { form: UseFormReturn<FieldValues>
                     )}
                 />
             </div>
-            {!isEditMode && supportsConnectionUrl(connectionType) ? <ConnectionUrlField key={connectionType} form={form} type={connectionType} /> : null}
-            <DriverFields key={connectionType} form={form} isEditMode={isEditMode} />
+            {!isEditMode && supportsConnectionUrl(connectionType) ? <ConnectionUrlField key={`connection-url-${connectionType}`} form={form} type={connectionType} /> : null}
+            <DriverFields form={form} isEditMode={isEditMode} />
         </div>
     );
 }
