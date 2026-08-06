@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -22,6 +22,7 @@ import { buildExplorerBasePath, buildExplorerDatabasePath } from '@/lib/explorer
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { cn } from '@dory/web-utils';
 import type { ConnectionListItem } from '@dory/shared/types/connections';
+import { driverSupportsDataImport } from '@/lib/client/import-capabilities';
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     initialUser?: User | null;
@@ -74,6 +75,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const defaultDatabase = currentRouteConnection ? getExplorerDefaultDatabase(currentRouteConnection) : null;
     const currentConnectionType = currentRouteConnection?.type ?? null;
     const supportsOperationalPages = currentConnectionType === 'clickhouse';
+    const supportsImport = driverSupportsDataImport(currentConnectionType);
     const explorerUrl =
         connectionId && defaultDatabase
             ? buildExplorerDatabasePath({ organization, connectionId }, defaultDatabase)
@@ -113,6 +115,17 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   icon: IconFileAi,
                   requiresConnection: true,
               },
+              ...(supportsImport
+                  ? [
+                        {
+                            title: t('Import'),
+                            url: `/${organization}/${connectionId}/import`,
+                            matchPrefix: `/${organization}/${connectionId}/import`,
+                            icon: ArrowDownToLine,
+                            requiresConnection: true,
+                        },
+                    ]
+                  : []),
               ...(supportsOperationalPages
                   ? [
                         {

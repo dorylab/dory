@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
 import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 
 import { objectBodyToBuffer, type ObjectInfo, type ObjectStat, type ObjectStore, type ObjectStoreBody, type ObjectStorePutOptions } from './object-store';
 
@@ -16,7 +17,10 @@ export class S3CompatibleObjectStore implements ObjectStore {
     readonly kind = 's3' as const;
     private readonly client: S3Client;
 
-    constructor(private readonly config: S3CompatibleObjectStoreConfig, client?: S3Client) {
+    constructor(
+        private readonly config: S3CompatibleObjectStoreConfig,
+        client?: S3Client,
+    ) {
         this.client =
             client ??
             new S3Client({
@@ -34,11 +38,25 @@ export class S3CompatibleObjectStore implements ObjectStore {
     }
 
     async put(path: string, body: ObjectStoreBody, options?: ObjectStorePutOptions): Promise<void> {
+        if (body instanceof Readable) {
+            const upload = new Upload({
+                client: this.client,
+                params: {
+                    Bucket: this.config.bucket,
+                    Key: path,
+                    Body: body,
+                    ContentType: options?.contentType,
+                },
+                leavePartsOnError: false,
+            });
+            await upload.done();
+            return;
+        }
         await this.client.send(
             new PutObjectCommand({
                 Bucket: this.config.bucket,
                 Key: path,
-                Body: body instanceof Readable ? body : await objectBodyToBuffer(body),
+                Body: await objectBodyToBuffer(body),
                 ContentType: options?.contentType,
             }),
         );
@@ -102,6 +120,7 @@ export class S3CompatibleObjectStore implements ObjectStore {
 function isNotFound(error: unknown) {
     if (!error || typeof error !== 'object') return false;
     const name = 'name' in error ? error.name : undefined;
-    const statusCode = '$metadata' in error && error.$metadata && typeof error.$metadata === 'object' && 'httpStatusCode' in error.$metadata ? error.$metadata.httpStatusCode : undefined;
+    const statusCode =
+        '$metadata' in error && error.$metadata && typeof error.$metadata === 'object' && 'httpStatusCode' in error.$metadata ? error.$metadata.httpStatusCode : undefined;
     return name === 'NotFound' || statusCode === 404;
 }

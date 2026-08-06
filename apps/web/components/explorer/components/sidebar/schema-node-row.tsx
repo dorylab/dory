@@ -6,7 +6,17 @@ import { useTranslations } from 'next-intl';
 import { cn } from '@dory/web-utils';
 import { ObjectGroup } from './object-group';
 import { DEFAULT_GROUP_STATE } from './types';
-import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';
+import type {
+    DatabaseObjects,
+    GroupState,
+    SchemaNode,
+    SidebarImportTarget,
+    SidebarListKind,
+    SidebarListTarget,
+    SidebarObjectTarget,
+    SidebarSelection,
+    TargetOption,
+} from './types';
 import type { GroupConfig } from './object-group';
 
 type SchemaNodeRowProps = {
@@ -29,6 +39,7 @@ type SchemaNodeRowProps = {
     onSelectList: (target: SidebarListTarget) => void;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
+    onImportTable?: (target: SidebarImportTarget) => void;
     filterEntries: (entries: TargetOption[]) => TargetOption[];
 };
 
@@ -52,6 +63,7 @@ export function SchemaNodeRow({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onImportTable,
     filterEntries,
 }: SchemaNodeRowProps) {
     const t = useTranslations('CatalogSchemaSidebar');
@@ -81,9 +93,7 @@ export function SchemaNodeRow({
                     onClick={() => onSelectSchema({ database: dbName, schema: schema.name })}
                     className={cn(
                         'flex flex-1 cursor-pointer items-center gap-1.5 truncate rounded px-2 py-1 text-left text-sm',
-                        isSelected
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                            : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                        isSelected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                     )}
                 >
                     <Layers className="h-3.5 w-3.5 shrink-0" />
@@ -121,6 +131,7 @@ export function SchemaNodeRow({
                                   onSelectList={onSelectList}
                                   onSelectObject={onSelectObject}
                                   onOpenObject={onOpenObject}
+                                  onImportTable={onImportTable}
                               />
                           ))
                         : null}

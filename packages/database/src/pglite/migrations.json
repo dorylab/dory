@@ -399,5 +399,27 @@
     "bps": true,
     "folderMillis": 1784796637312,
     "hash": "0b6d09a9b642b45b27135e0c353b59b466a447346ec2b56cd1d398ad8e5c240c"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"import_run_events\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"run_id\" text NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"sequence\" integer NOT NULL,\n\t\"type\" text NOT NULL,\n\t\"payload\" jsonb DEFAULT '{}'::jsonb NOT NULL,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE TABLE \"import_runs\" (\n\t\"id\" text PRIMARY KEY NOT NULL,\n\t\"organization_id\" text NOT NULL,\n\t\"created_by_user_id\" text NOT NULL,\n\t\"connection_id\" text,\n\t\"status\" text DEFAULT 'draft' NOT NULL,\n\t\"phase\" text DEFAULT 'draft' NOT NULL,\n\t\"source_name\" text,\n\t\"source_extension\" text,\n\t\"source_hash\" text,\n\t\"source_bytes\" bigint,\n\t\"source_object_path\" text,\n\t\"artifact_prefix\" text,\n\t\"source_arrow_path\" text,\n\t\"prepared_arrow_path\" text,\n\t\"parsing_options\" jsonb,\n\t\"profile\" jsonb,\n\t\"plan\" jsonb,\n\t\"progress\" jsonb,\n\t\"processed_rows\" bigint DEFAULT 0 NOT NULL,\n\t\"pending_rows\" bigint DEFAULT 0 NOT NULL,\n\t\"inserted_rows\" bigint DEFAULT 0 NOT NULL,\n\t\"batch_count\" integer DEFAULT 0 NOT NULL,\n\t\"error_code\" text,\n\t\"error_message\" text,\n\t\"heartbeat_at\" timestamp with time zone,\n\t\"cancel_requested\" boolean DEFAULT false NOT NULL,\n\t\"artifacts_expire_at\" timestamp with time zone,\n\t\"started_at\" timestamp with time zone,\n\t\"completed_at\" timestamp with time zone,\n\t\"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n\t\"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_import_run_events_sequence\" ON \"import_run_events\" USING btree (\"run_id\",\"sequence\");",
+      "\nCREATE INDEX \"idx_import_run_events_org_run\" ON \"import_run_events\" USING btree (\"organization_id\",\"run_id\",\"sequence\");",
+      "\nCREATE INDEX \"idx_import_runs_org_created\" ON \"import_runs\" USING btree (\"organization_id\",\"created_at\");",
+      "\nCREATE INDEX \"idx_import_runs_status_heartbeat\" ON \"import_runs\" USING btree (\"status\",\"heartbeat_at\");",
+      "\nCREATE INDEX \"idx_import_runs_artifacts_expire\" ON \"import_runs\" USING btree (\"artifacts_expire_at\");"
+    ],
+    "bps": true,
+    "folderMillis": 1785851842755,
+    "hash": "503c7ae7d8e6a99f048fe7fe8b43fa117e955e4c17241dec93738753bf6268a3"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"import_runs\" ADD COLUMN \"filtered_rows\" bigint DEFAULT 0 NOT NULL;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1785866199860,
+    "hash": "709098ea650a01536f64f2e768383706f48a1bd15c88fce5fca64fdd5abf1916"
   }
 ]

@@ -36,6 +36,12 @@ export type SidebarObjectTarget = {
     label?: string;
 };
 
+export type SidebarImportTarget = {
+    database: string;
+    schema?: string;
+    table: string;
+};
+
 export type GroupState = {
     tables: boolean;
     materializedViews: boolean;

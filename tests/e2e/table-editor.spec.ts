@@ -17,6 +17,18 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     const rows = [
         { id: 1, name: 'one', note: 'first', count: 10, active: true, created_at: '2026-08-01', payload: { source: 'seed' } },
         { id: 2, name: 'two', note: 'second', count: 20, active: false, created_at: '2026-08-02', payload: { source: 'seed' } },
+        ...Array.from({ length: 58 }, (_, index) => {
+            const id = index + 3;
+            return {
+                id,
+                name: id === 50 ? 'Falkland Islands (Malvinas)' : `name-${id}`,
+                note: `note-${id}`,
+                count: id * 10,
+                active: id % 2 === 0,
+                created_at: '2026-08-03',
+                payload: { source: 'seed' },
+            };
+        }),
     ];
     let rejectCommit = false;
 
@@ -201,6 +213,22 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     expect(Math.abs(paginationBox!.y + paginationBox!.height / 2 - (subTabsFooterBox!.y + subTabsFooterBox!.height / 2))).toBeLessThanOrEqual(1);
     expect(dataTabBox!.x + dataTabBox!.width).toBeLessThan(paginationBox!.x);
     expect(subTabsFooterBox!.y).toBeGreaterThan(nameCellBox!.y + nameCellBox!.height);
+
+    const gridScroller = page.locator('.BottomRightGrid_ScrollWrapper').filter({ visible: true });
+    await gridScroller.evaluate(element => {
+        element.scrollTop = 49 * 32;
+        element.dispatchEvent(new Event('scroll'));
+    });
+    const distantNameCell = page.locator('[data-cell="49@@name"]');
+    await expect(distantNameCell).toBeVisible();
+    const widthBeforeSelection = await distantNameCell.evaluate(element => element.getBoundingClientRect().width);
+    await distantNameCell.click();
+    await expect.poll(() => distantNameCell.evaluate(element => element.getBoundingClientRect().width)).toBeCloseTo(widthBeforeSelection, 5);
+    await gridScroller.evaluate(element => {
+        element.scrollTop = 0;
+        element.dispatchEvent(new Event('scroll'));
+    });
+    await expect(nameCell).toBeVisible();
 
     const originalViewport = page.viewportSize();
     await page.setViewportSize({ width: 720, height: 720 });

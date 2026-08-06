@@ -292,6 +292,12 @@ fi
 
 copy_node_package_to_standalone "libpg-query"
 copy_node_package_to_standalone "@pgsql/types"
+copy_node_package_to_standalone "nodejs-polars"
+if compgen -G "${ROOT_DIR}/node_modules/nodejs-polars-*" >/dev/null; then
+  while IFS= read -r -d '' polars_binary_dir; do
+    copy_node_package_to_standalone "$(basename "${polars_binary_dir}")"
+  done < <(find "${ROOT_DIR}/node_modules" -mindepth 1 -maxdepth 1 -type d -name 'nodejs-polars-*' -print0)
+fi
 
 BETTER_SQLITE3_DIR="${OUT_DIR}/node_modules/better-sqlite3"
 if [[ -d "${BETTER_SQLITE3_DIR}" ]]; then

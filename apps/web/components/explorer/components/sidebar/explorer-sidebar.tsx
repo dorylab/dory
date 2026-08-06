@@ -14,13 +14,24 @@ import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
 import { useDatabases } from '@/hooks/use-databases';
 import { getSidebarConfig } from '@/app/(app)/[organization]/components/sql-console-sidebar/sidebar-config';
 import { executeActionClient } from '@/lib/actions/client';
+import { driverSupportsDataImport } from '@/lib/client/import-capabilities';
 import { getDriverCapabilities } from '@/lib/explorer/capabilities';
 import { isLocalFilesDataset } from '@/lib/explorer/local-files';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import { ExplorerSidebarTree } from './explorer-sidebar-tree';
 import { buildLocalFilesSidebarModel } from './local-files-sidebar';
 import { DEFAULT_GROUP_STATE, EMPTY_DATABASE_OBJECTS } from './types';
-import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';
+import type {
+    DatabaseObjects,
+    GroupState,
+    SchemaNode,
+    SidebarImportTarget,
+    SidebarListKind,
+    SidebarListTarget,
+    SidebarObjectTarget,
+    SidebarSelection,
+    TargetOption,
+} from './types';
 
 type ExplorerSidebarProps = {
     catalogName?: string;
@@ -29,6 +40,7 @@ type ExplorerSidebarProps = {
     onSelectList?: (target: SidebarListTarget) => void;
     onSelectObject?: (target: SidebarObjectTarget) => void;
     onOpenObject?: (target: SidebarObjectTarget) => void;
+    onImportTable?: (target: SidebarImportTarget) => void;
     selectedDatabase?: string;
     selectedSchema?: string;
     selectedList?: SidebarListKind;
@@ -99,6 +111,7 @@ export function ExplorerSidebar({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onImportTable,
     selectedDatabase,
     selectedSchema,
     selectedList,
@@ -162,7 +175,11 @@ export function ExplorerSidebar({
                 if (!connectionId || !supportsSchemas) return [];
 
                 try {
-                    const payload = await executeActionClient<TargetOption[]>('schema.listSchemas', { connectionId, database: entry.value }, { currentConnectionId: connectionId, signal });
+                    const payload = await executeActionClient<TargetOption[]>(
+                        'schema.listSchemas',
+                        { connectionId, database: entry.value },
+                        { currentConnectionId: connectionId, signal },
+                    );
                     return normalizeEntries(payload ?? []);
                 } catch (error) {
                     console.error('Failed to load schemas:', error);
@@ -623,6 +640,7 @@ export function ExplorerSidebar({
                                 setActiveDatabase(target.database);
                                 onOpenObject?.(target);
                             }}
+                            onImportTable={driverSupportsDataImport(connectionType) ? onImportTable : undefined}
                             filterEntries={filterEntries}
                             getSchemaObjects={getSchemaObjects}
                         />

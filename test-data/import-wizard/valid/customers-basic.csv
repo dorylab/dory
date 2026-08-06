@@ -1,0 +1,7 @@
+customer_id,name,email,active,balance,created_at
+1,Alice Chen,alice@example.test,true,120.50,2026-08-01T09:30:00Z
+2,Bob Jones,,false,0,2026-08-02T10:15:00Z
+3,张三,zhangsan@example.test,true,-25.75,2026-08-03T08:00:00Z
+4,佐藤 花子,hanako@example.test,true,9999.99,2026-08-04T12:45:00Z
+5,María García,maria@example.test,false,18.20,2026-08-05T14:20:00Z
+6,Renée O’Connor,renee@example.test,true,42,2026-08-06T16:00:00Z

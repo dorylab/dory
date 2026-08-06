@@ -1,0 +1,4 @@
+event_id|event_type|payload|created_at
+evt_001|created|"{""source"":""api""}"|2026-08-01T01:02:03Z
+evt_002|updated|"contains | pipe"|2026-08-01T02:03:04Z
+evt_003|deleted||2026-08-01T03:04:05Z

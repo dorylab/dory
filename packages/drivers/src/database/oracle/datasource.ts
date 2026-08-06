@@ -6,6 +6,7 @@ import { bindTableMutationParams, buildTableUpdateStatements, TableMutationConfl
 import { createOracleMetadataCapability, type OracleMetadataAPI } from './capabilities/metadata';
 import { createOracleTableInfoCapability } from './capabilities/table-info';
 import { OracleDialect } from './dialect';
+import { OracleImportWriter } from './import-writer';
 import { createOraclePool, executeOracleCommand, executeOracleQuery, executeOracleQueryRowStream, pingOracle, resolveOraclePort, resolveOracleServiceName } from './runtime';
 
 export class OracleDatasource extends BaseConnection {
@@ -23,6 +24,7 @@ export class OracleDatasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new OracleImportWriter(database => this.resolvePool(database), this.config.username);
     }
 
     protected async _init(): Promise<void> {

@@ -6,6 +6,7 @@ import { bindTableMutationParams, buildTableUpdateStatements, TableMutationConfl
 import { createSqlServerMetadataCapability, type SqlServerMetadataAPI } from './capabilities/metadata';
 import { createSqlServerTableInfoCapability } from './capabilities/table-info';
 import { SqlServerDialect } from './dialect';
+import { SqlServerImportWriter } from './import-writer';
 import { createSqlServerPool, executeSqlServerCommand, executeSqlServerQuery, executeSqlServerQueryRowStream, pingSqlServer, resolveSqlServerPort } from './runtime';
 
 export class SqlServerDatasource extends BaseConnection {
@@ -24,6 +25,7 @@ export class SqlServerDatasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new SqlServerImportWriter(database => this.resolvePool(database));
     }
 
     protected async _init(): Promise<void> {

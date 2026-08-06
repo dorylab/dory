@@ -7,6 +7,7 @@ import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/dr
 import { createMysqlMetadataCapability, type MysqlMetadataAPI } from './capabilities/metadata';
 import { createMysqlTableInfoCapability } from './capabilities/table-info';
 import { MySqlDialect } from './dialect';
+import { MySqlImportWriter } from './import-writer';
 import { cancelMySqlQuery, createMySqlPool, executeMySqlCommand, executeMySqlQuery, executeMySqlQueryRowStream, pingMySql, resolveMysqlPort } from './runtime';
 
 export class MySqlDatasource extends BaseConnection {
@@ -25,6 +26,7 @@ export class MySqlDatasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new MySqlImportWriter(database => this.resolvePool(database));
     }
 
     protected async _init(): Promise<void> {

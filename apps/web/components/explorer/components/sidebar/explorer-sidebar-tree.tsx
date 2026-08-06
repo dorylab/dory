@@ -9,7 +9,17 @@ import { ObjectGroup } from './object-group';
 import type { GroupConfig } from './object-group';
 import { SchemaNodeRow } from './schema-node-row';
 import { DEFAULT_GROUP_STATE, EMPTY_DATABASE_OBJECTS } from './types';
-import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';
+import type {
+    DatabaseObjects,
+    GroupState,
+    SchemaNode,
+    SidebarImportTarget,
+    SidebarListKind,
+    SidebarListTarget,
+    SidebarObjectTarget,
+    SidebarSelection,
+    TargetOption,
+} from './types';
 
 type ExplorerSidebarTreeProps = {
     catalogName: string;
@@ -40,6 +50,7 @@ type ExplorerSidebarTreeProps = {
     onSelectList: (target: SidebarListTarget) => void;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
+    onImportTable?: (target: SidebarImportTarget) => void;
     filterEntries: (entries: TargetOption[]) => TargetOption[];
     getSchemaObjects: (database: string, schema: string) => DatabaseObjects;
 };
@@ -82,6 +93,7 @@ export function ExplorerSidebarTree({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onImportTable,
     filterEntries,
     getSchemaObjects,
 }: ExplorerSidebarTreeProps) {
@@ -147,6 +159,7 @@ export function ExplorerSidebarTree({
                                     onSelectList={onSelectList}
                                     onSelectObject={onSelectObject}
                                     onOpenObject={onOpenObject}
+                                    onImportTable={onImportTable}
                                     filterEntries={filterEntries}
                                     getSchemaObjects={getSchemaObjects}
                                 />
@@ -204,6 +217,7 @@ type DatabaseNodeProps = {
     onSelectList: (target: SidebarListTarget) => void;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
+    onImportTable?: (target: SidebarImportTarget) => void;
     filterEntries: (entries: TargetOption[]) => TargetOption[];
     getSchemaObjects: (database: string, schema: string) => DatabaseObjects;
 };
@@ -234,6 +248,7 @@ function DatabaseNode({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onImportTable,
     filterEntries,
     getSchemaObjects,
 }: DatabaseNodeProps) {
@@ -272,9 +287,7 @@ function DatabaseNode({
                     onClick={() => onSelectDatabase(dbName)}
                     className={cn(
                         'flex flex-1 cursor-pointer items-center gap-1.5 truncate rounded px-2 py-1 text-left text-sm',
-                        isDbOnlySelected
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                            : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                        isDbOnlySelected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                     )}
                     title={dbName}
                 >
@@ -313,6 +326,7 @@ function DatabaseNode({
                                               onSelectList={onSelectList}
                                               onSelectObject={onSelectObject}
                                               onOpenObject={onOpenObject}
+                                              onImportTable={onImportTable}
                                               filterEntries={filterEntries}
                                           />
                                       );
@@ -355,6 +369,7 @@ function DatabaseNode({
                                           onSelectList={onSelectList}
                                           onSelectObject={onSelectObject}
                                           onOpenObject={onOpenObject}
+                                          onImportTable={onImportTable}
                                       />
                                   ))
                                 : null}

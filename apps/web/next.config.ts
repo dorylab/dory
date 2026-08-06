@@ -45,8 +45,19 @@ const nextConfig = {
     typescript: {
         tsconfigPath: isProductionBuild ? 'tsconfig.build.json' : 'tsconfig.json',
     },
-    transpilePackages: ['@dory/actions', '@dory/artifacts', '@dory/database', '@dory/i18n', '@dory/resultset', '@dory/shared', '@dory/ui', '@dory/web-utils'],
-    serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'pino', 'better-sqlite3', 'electron', 'libpg-query', 'snowflake-sdk'],
+    transpilePackages: [
+        '@dory/actions',
+        '@dory/artifacts',
+        '@dory/database',
+        '@dory/dataset',
+        '@dory/i18n',
+        '@dory/import',
+        '@dory/resultset',
+        '@dory/shared',
+        '@dory/ui',
+        '@dory/web-utils',
+    ],
+    serverExternalPackages: ['@duckdb/node-api', '@electric-sql/pglite', 'nodejs-polars', 'pino', 'better-sqlite3', 'electron', 'libpg-query', 'snowflake-sdk'],
     outputFileTracingRoot: path.join(__dirname, '../../'),
     outputFileTracingIncludes: {
         '/*': [
@@ -61,6 +72,8 @@ const nextConfig = {
             '../../node_modules/async-generator-function/**/*',
             '../../node_modules/generator-function/**/*',
             '../../node_modules/libpg-query/wasm/**/*',
+            '../../node_modules/nodejs-polars/**/*',
+            '../../node_modules/nodejs-polars-*/**/*',
         ],
     },
     logging: {

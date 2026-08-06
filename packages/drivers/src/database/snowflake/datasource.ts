@@ -6,6 +6,7 @@ import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/dr
 import { createSnowflakeMetadataCapability, type SnowflakeMetadataAPI } from './capabilities/metadata';
 import { createSnowflakeTableInfoCapability } from './capabilities/table-info';
 import { SnowflakeDialect } from './dialect';
+import { SnowflakeImportWriter } from './import-writer';
 import {
     closeSnowflake,
     connectSnowflake,
@@ -30,11 +31,19 @@ export class SnowflakeDatasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        const schema = typeof this.config.options?.schema === 'string' && this.config.options.schema.trim() ? this.config.options.schema.trim() : 'PUBLIC';
+        this.capabilities.dataWriter = new SnowflakeImportWriter(() => this.getConnection(), schema);
     }
 
     protected async _init(): Promise<void> {
         this.connection = createSnowflakeConnection(this.config);
         await connectSnowflake(this.connection);
+    }
+
+    getConnection() {
+        this.assertReady();
+        if (!this.connection) throw new Error('Snowflake connection is not initialized');
+        return this.connection;
     }
 
     async close(): Promise<void> {

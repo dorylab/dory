@@ -50,4 +50,12 @@
 - [x] Verify dark, light, and narrow viewport behavior.
 - [x] Preserve editor and Inspector sizing and interaction behavior.
 
+## Data import return navigation
+
+- Reference: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-9d1d2a93-66ba-4d23-9577-e2a39005c47c.png`.
+- Verified the page-based import wizard renders “Data import” as a left-arrow return link in the original header position.
+- Verified the link returns to the current connection's `/import` history list.
+- Verified the table-level import modal retains its non-navigation import label.
+- No P0, P1, P2, or P3 differences remain in the scoped component.
+
 final result: passed

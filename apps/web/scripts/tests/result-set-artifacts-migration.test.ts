@@ -40,7 +40,7 @@ async function tableExists(client: PGlite, tableName: string) {
 }
 
 test('keeps the PostgreSQL and PGlite ResultSet migrations in sync', async () => {
-    for (const name of ['0019_resultset_artifacts.sql', '0020_resultset_schema_updates.sql']) {
+    for (const name of ['0019_resultset_artifacts.sql', '0020_resultset_schema_updates.sql', '0023_import_runs.sql', '0024_import_transform_stats.sql']) {
         const postgres = await readMigration(migrationRoots.PostgreSQL, name);
         const pglite = await readMigration(migrationRoots.PGlite, name);
         assert.equal(postgres, pglite, `${name} differs between PostgreSQL and PGlite`);
@@ -55,22 +55,27 @@ test('keeps the PostgreSQL and PGlite ResultSet migrations in sync', async () =>
     assert.equal(firstClassComparisons, pgliteFirstClassComparisons, '0022_first_class_comparisons.sql differs between PostgreSQL and PGlite');
 });
 
-test('keeps the compiled PGlite bundle on the released 0019 through first-class Comparisons', async () => {
+test('keeps the compiled PGlite bundle on the released 0019 through import transform stats', async () => {
     const bundleUrl = new URL('../../../../packages/database/src/pglite/migrations.json', import.meta.url);
     const bundle = JSON.parse(await readFile(bundleUrl, 'utf8')) as Array<{
         folderMillis: number;
         hash: string;
         sql: string[];
     }>;
-    const releasedMigration = bundle.at(-4);
-    const schemaUpdateMigration = bundle.at(-3);
-    const comparisonMigration = bundle.at(-2);
-    const firstClassComparisonMigration = bundle.at(-1);
+    const byCreatedAt = new Map(bundle.map(migration => [migration.folderMillis, migration]));
+    const releasedMigration = byCreatedAt.get(1783075200000);
+    const schemaUpdateMigration = byCreatedAt.get(1784296092000);
+    const comparisonMigration = byCreatedAt.get(1784780119152);
+    const firstClassComparisonMigration = byCreatedAt.get(1784796637312);
+    const importRunsMigration = byCreatedAt.get(1785851842755);
+    const transformStatsMigration = byCreatedAt.get(1785866199860);
 
     assert.ok(releasedMigration);
     assert.ok(schemaUpdateMigration);
     assert.ok(comparisonMigration);
     assert.ok(firstClassComparisonMigration);
+    assert.ok(importRunsMigration);
+    assert.ok(transformStatsMigration);
     assert.equal(releasedMigration.folderMillis, 1783075200000);
     assert.equal(releasedMigration.hash, releasedMigrationHash);
     assert.equal(schemaUpdateMigration.folderMillis, 1784296092000);
@@ -83,7 +88,28 @@ test('keeps the compiled PGlite bundle on the released 0019 through first-class 
     assert.equal(comparisonMigration.hash, createHash('sha256').update(comparisonSql).digest('hex'));
     const firstClassComparisonSql = await readMigration(migrationRoots.PGlite, '0022_first_class_comparisons.sql');
     assert.equal(firstClassComparisonMigration.hash, createHash('sha256').update(firstClassComparisonSql).digest('hex'));
+    const importRunsSql = await readMigration(migrationRoots.PGlite, '0023_import_runs.sql');
+    assert.equal(importRunsMigration.hash, createHash('sha256').update(importRunsSql).digest('hex'));
+    const transformStatsSql = await readMigration(migrationRoots.PGlite, '0024_import_transform_stats.sql');
+    assert.equal(transformStatsMigration.hash, createHash('sha256').update(transformStatsSql).digest('hex'));
 });
+
+for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
+    test(`adds import filtered row counts with the ${dialect} migration`, async () => {
+        const client = new PGlite();
+        try {
+            await client.exec('CREATE TABLE "import_runs" ("id" text PRIMARY KEY NOT NULL);');
+            await executeMigration(client, await readMigration(migrationRoot, '0024_import_transform_stats.sql'));
+            const columns = await getColumnTypes(client, 'import_runs');
+            assert.equal(columns.get('filtered_rows'), 'bigint');
+            await client.exec(`INSERT INTO "import_runs" ("id") VALUES ('run_default');`);
+            const result = await client.query<{ filtered_rows: bigint }>(`SELECT "filtered_rows" FROM "import_runs" WHERE "id" = 'run_default'`);
+            assert.equal(Number(result.rows[0]?.filtered_rows), 0);
+        } finally {
+            await client.close();
+        }
+    });
+}
 
 for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
     test(`upgrades the v0.30.0 ResultSet schema with the ${dialect} migrations`, async () => {

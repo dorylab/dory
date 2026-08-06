@@ -204,6 +204,14 @@ export abstract class BaseDriver {
         return mutations.commitUpdates(input);
     }
 
+    getDataWriter() {
+        const writer = this.capabilities.dataWriter;
+        if (!writer) {
+            throw new UnsupportedDriverCapabilityError('dataWriter', this.config.type);
+        }
+        return writer;
+    }
+
     async renameTable(database: string, table: string, nextName: string): Promise<void> {
         const rename = this.capabilities.tableInfo?.rename;
         if (!rename) {

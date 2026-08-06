@@ -17,10 +17,13 @@
         "./config": "./src/config/index.ts"
     },
     "scripts": {
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "test:import": "tsx --test scripts/tests/import-writer.test.ts"
     },
     "dependencies": {
         "@clickhouse/client": "^1.18.2",
+        "@dory/dataset": "0.1.0",
+        "@dory/import": "0.1.0",
         "@dory/schema-compare": "0.1.0",
         "@duckdb/node-api": "^1.5.2-r.1",
         "better-sqlite3": "^12.8.0",
@@ -28,6 +31,7 @@
         "mysql2": "^3.20.0",
         "oracledb": "^6.10.0",
         "pg": "^8.20.0",
+        "pg-copy-streams": "^7.0.0",
         "pg-query-stream": "^4.16.0",
         "snowflake-sdk": "^3.0.0",
         "ssh2": "^1.17.0",
@@ -39,7 +43,9 @@
         "@types/node": "^25.5.2",
         "@types/oracledb": "^6",
         "@types/pg": "^8.20.0",
+        "@types/pg-copy-streams": "^1.2.5",
         "@types/pg-query-stream": "^3.4.0",
+        "tsx": "^4.23.1",
         "typescript": "^6.0.2"
     }
 }

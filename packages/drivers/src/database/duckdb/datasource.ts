@@ -6,6 +6,7 @@ import { buildTableUpdateStatements, TableMutationConflictError } from '@dory/dr
 import { createDuckDbMetadataCapability, type DuckDbMetadataAPI } from './capabilities/metadata';
 import { createDuckDbTableInfoCapability } from './capabilities/table-info';
 import { DuckDbDialect } from './dialect';
+import { DuckDbImportWriter } from './import-writer';
 import { closeDuckDbConnection, executeDuckDbQuery, executeDuckDbQueryRowStream, openDuckDbConnection, pingDuckDb } from './runtime';
 
 type DuckDbHandle = Awaited<ReturnType<typeof openDuckDbConnection>>;
@@ -24,6 +25,7 @@ export class DuckDbDatasource extends BaseConnection {
             atomicity: 'atomic',
             commitUpdates: input => this.commitUpdates(input),
         };
+        this.capabilities.dataWriter = new DuckDbImportWriter(() => this.getHandle().connection);
     }
 
     protected async _init(): Promise<void> {
