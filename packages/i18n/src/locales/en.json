@@ -506,6 +506,14 @@
             "CommitAll": "Commit All ({count})",
             "Committing": "Committing…",
             "SelectionSummary": "{cells} cells · {rows} rows",
+            "SelectionEditHint": "Type to set all · Cmd/Ctrl+V to paste",
+            "BatchRowUnavailable": "A selected row is no longer available on this page.",
+            "BatchReadOnly": "The selection contains a read-only cell.",
+            "BatchIdentityUnavailable": "A selected row cannot be uniquely identified.",
+            "BatchUnsupportedValue": "The selection contains a value that cannot be edited.",
+            "BatchRejected": "No changes were applied. {reason} ({count} affected)",
+            "BatchRowLimit": "A commit can contain at most {count} changed rows.",
+            "BatchFieldLimit": "A row can contain at most {count} changed fields.",
             "ReadOnly": "Read-only",
             "NoPrimaryKey": "This table has no primary key, so editing is disabled.",
             "NoIdentity": "Select one or more scalar columns as the row identity to enable editing.",
@@ -2116,6 +2124,23 @@
                 "ChooseBoolean": "Choose true or false.",
                 "InvalidNumber": "Enter a valid number."
             },
+            "Bulk": {
+                "Unavailable": "Bulk editing is not available for this table.",
+                "Applied": "Updated {cells} cells across {rows} rows.",
+                "Reverted": "Reverted {cells} cells across {rows} rows.",
+                "UseSetSelected": "Use “Set selected cells” for boolean and date values.",
+                "InvalidClipboard": "The clipboard data could not be parsed.",
+                "OutOfBounds": "The pasted data extends beyond the current page.",
+                "ReadOnly": "The target cell is read-only.",
+                "Rejected": "Paste not applied: {reason} ({count} invalid targets).",
+                "ClipboardPermission": "Clipboard access was blocked. Use Cmd/Ctrl+V to paste.",
+                "MappingError": {
+                    "empty": "The clipboard is empty.",
+                    "no-target": "Select a target cell before pasting.",
+                    "non-rectangular": "Matrix paste requires a rectangular selection.",
+                    "out-of-bounds": "The pasted data extends beyond the current page."
+                }
+            },
             "Filter": {
                 "EditHint": "Click to edit filter",
                 "CaseSensitiveSuffix": " (Aa)",
@@ -2155,8 +2180,13 @@
                 "Copy": "Copy",
                 "CopyValue": "Copy value",
                 "CopyRowAsJson": "Copy row as JSON",
+                "SetSelectedCells": "Set selected cells ({count})",
+                "Paste": "Paste",
+                "FillDown": "Fill down",
                 "SetToNull": "Set to NULL",
+                "SetSelectionToNull": "Set selection to NULL",
                 "RevertCell": "Revert this cell",
+                "RevertSelection": "Revert selected changes",
                 "CopyWithHeaders": "Copy with headers",
                 "FilterByValue": "Filter by this value",
                 "DownloadCsv": "Download CSV"

@@ -34,6 +34,21 @@ export type TableEditSession = {
 export type TableEditSessions = Record<string, TableEditSession>;
 export type TableIdentitySelections = Record<string, string[]>;
 
+export type TableCellEditInput = {
+    rowKey: string;
+    key: Record<string, TableMutationValue>;
+    column: string;
+    originalValue: TableMutationValue;
+    nextValue: TableMutationValue;
+    sourceRowIndex: number;
+    sourceView: TableEditViewSnapshot;
+};
+
+export type TableCellEditTarget = {
+    rowKey: string;
+    column: string;
+};
+
 export const tableEditSessionsAtom = atom<TableEditSessions>({});
 export const tableIdentitySelectionsAtom = atom<TableIdentitySelections>({});
 
@@ -56,69 +71,80 @@ function commitRows(session: TableEditSession, rows: PendingRows): TableEditSess
     };
 }
 
-function withoutEmptyRow(rows: PendingRows, rowKey: string, row: PendingRowChange) {
-    if (Object.keys(row.changes).length > 0) {
-        return { ...rows, [rowKey]: row };
-    }
-    const next = { ...rows };
-    delete next[rowKey];
-    return next;
+export function applyTableCellEdit(session: TableEditSession, input: TableCellEditInput): TableEditSession {
+    return applyTableCellEdits(session, [input]);
 }
 
-export function applyTableCellEdit(
-    session: TableEditSession,
-    input: {
-        rowKey: string;
-        key: Record<string, TableMutationValue>;
-        column: string;
-        originalValue: TableMutationValue;
-        nextValue: TableMutationValue;
-        sourceRowIndex: number;
-        sourceView: TableEditViewSnapshot;
-    },
-): TableEditSession {
-    const currentRow = session.rows[input.rowKey];
-    const currentCell = currentRow?.changes[input.column];
-    const originalValue = currentCell ? currentCell.originalValue : input.originalValue;
-    const currentValue = currentCell ? currentCell.nextValue : input.originalValue;
-
-    if (Object.is(currentValue, input.nextValue)) {
-        return session;
+export function applyTableCellEdits(session: TableEditSession, inputs: TableCellEditInput[]): TableEditSession {
+    const normalizedInputs = new Map<string, TableCellEditInput>();
+    for (const input of inputs) {
+        normalizedInputs.set(`${input.rowKey}\u0000${input.column}`, input);
     }
 
-    const row: PendingRowChange = currentRow ?? {
-        rowKey: input.rowKey,
-        key: input.key,
-        changes: {},
-    };
-    const nextChanges = { ...row.changes };
-    if (Object.is(originalValue, input.nextValue)) {
-        delete nextChanges[input.column];
-    } else {
-        nextChanges[input.column] = {
-            column: input.column,
-            originalValue,
-            nextValue: input.nextValue,
-            sourceRowIndex: input.sourceRowIndex,
-            sourceView: input.sourceView,
+    let rows = session.rows;
+    for (const input of normalizedInputs.values()) {
+        const currentRow = rows[input.rowKey];
+        const currentCell = currentRow?.changes[input.column];
+        const originalValue = currentCell ? currentCell.originalValue : input.originalValue;
+        const currentValue = currentCell ? currentCell.nextValue : input.originalValue;
+        if (Object.is(currentValue, input.nextValue)) continue;
+
+        const row: PendingRowChange = currentRow ?? {
+            rowKey: input.rowKey,
+            key: input.key,
+            changes: {},
         };
+        const nextChanges = { ...row.changes };
+        if (Object.is(originalValue, input.nextValue)) {
+            delete nextChanges[input.column];
+        } else {
+            nextChanges[input.column] = {
+                column: input.column,
+                originalValue,
+                nextValue: input.nextValue,
+                sourceRowIndex: input.sourceRowIndex,
+                sourceView: input.sourceView,
+            };
+        }
+
+        if (rows === session.rows) rows = { ...session.rows };
+        if (Object.keys(nextChanges).length > 0) {
+            rows[input.rowKey] = { ...row, changes: nextChanges };
+        } else {
+            delete rows[input.rowKey];
+        }
     }
 
-    return commitRows(
-        session,
-        withoutEmptyRow(session.rows, input.rowKey, {
-            ...row,
-            changes: nextChanges,
-        }),
-    );
+    return commitRows(session, rows);
 }
 
 export function revertTableCellEdit(session: TableEditSession, rowKey: string, column: string): TableEditSession {
-    const row = session.rows[rowKey];
-    if (!row?.changes[column]) return session;
-    const changes = { ...row.changes };
-    delete changes[column];
-    return commitRows(session, withoutEmptyRow(session.rows, rowKey, { ...row, changes }));
+    return revertTableCells(session, [{ rowKey, column }]);
+}
+
+export function revertTableCells(session: TableEditSession, targets: TableCellEditTarget[]): TableEditSession {
+    const columnsByRow = new Map<string, Set<string>>();
+    for (const target of targets) {
+        const columns = columnsByRow.get(target.rowKey) ?? new Set<string>();
+        columns.add(target.column);
+        columnsByRow.set(target.rowKey, columns);
+    }
+
+    let rows = session.rows;
+    for (const [rowKey, columns] of columnsByRow) {
+        const row = session.rows[rowKey];
+        if (!row || ![...columns].some(column => row.changes[column])) continue;
+        const changes = { ...row.changes };
+        for (const column of columns) delete changes[column];
+        if (rows === session.rows) rows = { ...session.rows };
+        if (Object.keys(changes).length > 0) {
+            rows[rowKey] = { ...row, changes };
+        } else {
+            delete rows[rowKey];
+        }
+    }
+
+    return commitRows(session, rows);
 }
 
 export function revertTableRowEdit(session: TableEditSession, rowKey: string): TableEditSession {
@@ -181,6 +207,13 @@ export function getPendingEditCounts(session: TableEditSession) {
         rowCount: rows.length,
         cellCount: rows.reduce((total, row) => total + Object.keys(row.changes).length, 0),
     };
+}
+
+export function getTableEditLimitViolation(session: TableEditSession, limits: { maxRows: number; maxChangesPerRow: number }): 'rows' | 'fields' | null {
+    const rows = Object.values(session.rows);
+    if (rows.length > limits.maxRows) return 'rows';
+    if (rows.some(row => Object.keys(row.changes).length > limits.maxChangesPerRow)) return 'fields';
+    return null;
 }
 
 export function getRowKey(

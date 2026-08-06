@@ -506,6 +506,14 @@
             "CommitAll": "Confirmar todo ({count})",
             "Committing": "Confirmando…",
             "SelectionSummary": "{cells} celdas · {rows} filas",
+            "SelectionEditHint": "Escribe para asignar · Cmd/Ctrl+V para pegar",
+            "BatchRowUnavailable": "Una fila seleccionada ya no está disponible en esta página.",
+            "BatchReadOnly": "La selección contiene una celda de solo lectura.",
+            "BatchIdentityUnavailable": "No se puede identificar de forma única una fila seleccionada.",
+            "BatchUnsupportedValue": "La selección contiene un valor que no se puede editar.",
+            "BatchRejected": "No se aplicaron cambios. {reason} ({count} afectados)",
+            "BatchRowLimit": "Una confirmación puede contener como máximo {count} filas modificadas.",
+            "BatchFieldLimit": "Una fila puede contener como máximo {count} campos modificados.",
             "ReadOnly": "Solo lectura",
             "NoPrimaryKey": "Esta tabla no tiene clave primaria, por lo que no se puede editar.",
             "NoIdentity": "Selecciona una o más columnas escalares como identidad de fila para habilitar la edición.",
@@ -2115,6 +2123,23 @@
                 "ChooseBoolean": "Elige true o false.",
                 "InvalidNumber": "Introduce un número válido."
             },
+            "Bulk": {
+                "Unavailable": "La edición masiva no está disponible para esta tabla.",
+                "Applied": "Se actualizaron {cells} celdas en {rows} filas.",
+                "Reverted": "Se revirtieron {cells} celdas en {rows} filas.",
+                "UseSetSelected": "Usa “Establecer celdas seleccionadas” para booleanos y fechas.",
+                "InvalidClipboard": "No se pudieron analizar los datos del portapapeles.",
+                "OutOfBounds": "Los datos pegados exceden la página actual.",
+                "ReadOnly": "La celda de destino es de solo lectura.",
+                "Rejected": "No se pegó: {reason} ({count} destinos no válidos).",
+                "ClipboardPermission": "Se bloqueó el acceso al portapapeles. Usa Cmd/Ctrl+V.",
+                "MappingError": {
+                    "empty": "El portapapeles está vacío.",
+                    "no-target": "Selecciona una celda de destino antes de pegar.",
+                    "non-rectangular": "El pegado de matrices requiere una selección rectangular.",
+                    "out-of-bounds": "Los datos pegados exceden la página actual."
+                }
+            },
             "Filter": {
                 "EditHint": "Haz clic para editar el filtro",
                 "CaseSensitiveSuffix": " (Aa)",
@@ -2154,8 +2179,13 @@
                 "Copy": "Copiar",
                 "CopyValue": "Copiar valor",
                 "CopyRowAsJson": "Copiar fila como JSON",
+                "SetSelectedCells": "Establecer celdas seleccionadas ({count})",
+                "Paste": "Pegar",
+                "FillDown": "Rellenar hacia abajo",
                 "SetToNull": "Establecer como NULL",
+                "SetSelectionToNull": "Establecer selección como NULL",
                 "RevertCell": "Revertir esta celda",
+                "RevertSelection": "Revertir cambios seleccionados",
                 "CopyWithHeaders": "Copiar con encabezados",
                 "FilterByValue": "Filtrar por este valor",
                 "DownloadCsv": "Descargar CSV"

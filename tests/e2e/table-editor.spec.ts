@@ -1,10 +1,20 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 
 import { expectAppHealthy, test } from './fixtures';
 import { createWorkbenchConnection, mockWorkbenchApis, openMockConnectionConsole } from './helpers/workbench';
 
+async function pasteIntoGrid(page: Page, text: string) {
+    const grid = page.getByTestId('vtable-surface').locator('> div[tabindex="0"]');
+    await grid.focus();
+    await grid.evaluate((element: HTMLElement, clipboardText: string) => {
+        const clipboardData = new DataTransfer();
+        clipboardData.setData('text/plain', clipboardText);
+        element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+    }, text);
+}
+
 test('edits SQLite table rows through the pending changes workflow', async ({ page, appErrors }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
 
     const connection = createWorkbenchConnection({
         id: 'sqlite-editor',
@@ -251,6 +261,95 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
         await page.setViewportSize(originalViewport);
     }
 
+    const firstNameCell = page.locator('[data-cell="0@@name"]');
+    const secondNameCell = page.locator('[data-cell="1@@name"]');
+    const thirdNameCell = page.locator('[data-cell="2@@name"]');
+    const gridContainer = page.getByTestId('vtable-surface').locator('> div[tabindex="0"]');
+    const undoShortcut = process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z';
+    const redoShortcut = process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z';
+
+    await firstNameCell.click();
+    await thirdNameCell.click({ modifiers: ['Shift'] });
+    await expect(page.getByText('Type to set all · Cmd/Ctrl+V to paste')).toBeVisible();
+    await gridContainer.focus();
+    await page.keyboard.press('b');
+    const bulkNameEditor = thirdNameCell.locator('input');
+    await expect(bulkNameEditor).toBeFocused();
+    await bulkNameEditor.fill('bulk-name');
+    await bulkNameEditor.press('Enter');
+    await expect(firstNameCell).toContainText('bulk-name');
+    await expect(secondNameCell).toContainText('bulk-name');
+    await expect(thirdNameCell).toContainText('bulk-name');
+    await expect(page.getByRole('button', { name: 'Changes (3)', exact: true })).toBeVisible();
+    await gridContainer.press(undoShortcut);
+    await expect(firstNameCell).toContainText('one');
+    await expect(secondNameCell).toContainText('two');
+    await expect(page.getByRole('button', { name: 'Changes (0)', exact: true })).toBeVisible();
+    await gridContainer.press(redoShortcut);
+    await expect(firstNameCell).toContainText('bulk-name');
+    await gridContainer.press(undoShortcut);
+
+    await pasteIntoGrid(page, 'pasted-name');
+    await expect(firstNameCell).toContainText('pasted-name');
+    await expect(secondNameCell).toContainText('pasted-name');
+    await expect(thirdNameCell).toContainText('pasted-name');
+    await gridContainer.press(undoShortcut);
+
+    await firstNameCell.click();
+    await pasteIntoGrid(page, 'alpha\talpha-note\nbeta\tbeta-note');
+    await expect(firstNameCell).toContainText('alpha');
+    await expect(page.locator('[data-cell="0@@note"]')).toContainText('alpha-note');
+    await expect(secondNameCell).toContainText('beta');
+    await expect(page.locator('[data-cell="1@@note"]')).toContainText('beta-note');
+    await expect(page.getByRole('button', { name: 'Changes (4)', exact: true })).toBeVisible();
+    await gridContainer.press(undoShortcut);
+
+    const firstCountCell = page.locator('[data-cell="0@@count"]');
+    const secondCountCell = page.locator('[data-cell="1@@count"]');
+    await firstCountCell.click();
+    await secondCountCell.click({ modifiers: ['Shift'] });
+    await pasteIntoGrid(page, 'not-a-number');
+    await expect(page.getByText(/Paste not applied:/)).toBeVisible();
+    await expect(firstCountCell).toContainText('10');
+    await expect(secondCountCell).toContainText('20');
+    await expect(page.getByRole('button', { name: 'Changes (0)', exact: true })).toBeVisible();
+
+    await firstNameCell.click();
+    await thirdNameCell.click({ modifiers: ['Shift'] });
+    await thirdNameCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Fill down' }).click();
+    await expect(secondNameCell).toContainText('one');
+    await expect(thirdNameCell).toContainText('one');
+    await expect(page.getByRole('button', { name: 'Changes (2)', exact: true })).toBeVisible();
+    await thirdNameCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Revert selected changes' }).click();
+    await expect(secondNameCell).toContainText('two');
+    await expect(thirdNameCell).toContainText('name-3');
+    await expect(page.getByRole('button', { name: 'Changes (0)', exact: true })).toBeVisible();
+
+    const firstNoteCell = page.locator('[data-cell="0@@note"]');
+    const secondNoteCell = page.locator('[data-cell="1@@note"]');
+    await firstNoteCell.click();
+    await secondNoteCell.click({ modifiers: ['Shift'] });
+    await secondNoteCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Set selection to NULL' }).click();
+    await expect(firstNoteCell).toContainText('NULL');
+    await expect(secondNoteCell).toContainText('NULL');
+    await gridContainer.press(undoShortcut);
+
+    const firstActiveCell = page.locator('[data-cell="0@@active"]');
+    const secondActiveCell = page.locator('[data-cell="1@@active"]');
+    await firstActiveCell.click();
+    await secondActiveCell.click({ modifiers: ['Shift'] });
+    await secondActiveCell.click({ button: 'right' });
+    await page.getByRole('menuitem', { name: 'Set selected cells (2)' }).click();
+    const bulkBooleanEditor = secondActiveCell.locator('select');
+    await bulkBooleanEditor.selectOption('false');
+    await bulkBooleanEditor.press('Enter');
+    await expect(firstActiveCell).toContainText('false');
+    await expect(secondActiveCell).toContainText('false');
+    await gridContainer.press(undoShortcut);
+
     await subTabsFooter.getByRole('tab', { name: 'Overview' }).click();
     await expect(page.getByTestId('data-preview-pagination')).toHaveCount(0);
     await subTabsFooter.getByRole('tab', { name: 'Data' }).click();
@@ -357,9 +456,6 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(inspectorPanel.locator('[data-testid="row-editor-field"][data-column="payload"] pre')).toContainText('"source": "seed"');
     await expect(page.getByRole('button', { name: 'Changes (1)', exact: true })).toBeVisible();
 
-    const undoShortcut = process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z';
-    const redoShortcut = process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z';
-    const gridContainer = page.getByTestId('vtable-surface').locator('> div[tabindex="0"]');
     await nameCell.click();
     await gridContainer.press(undoShortcut);
     await expect(nameCell).toContainText('updated');
@@ -585,6 +681,15 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(inspectorPanel).toHaveCount(0);
     await readOnlyNameCell.click({ button: 'right' });
     await expect(page.getByRole('menuitem', { name: 'Edit Row' })).toHaveCount(0);
+    const disabledPasteItem = page.getByRole('menuitem', { name: 'Paste' });
+    await expect(page.getByRole('menuitem', { name: 'Set selected cells (1)' })).toBeDisabled();
+    await expect(disabledPasteItem).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: 'Fill down' })).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: 'Set to NULL' })).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: 'Revert cell change' })).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: 'Copy row as JSON' })).toBeVisible();
+    await disabledPasteItem.hover();
+    await expect(page.getByText('Select one or more scalar columns as the row identity to enable editing.')).toBeVisible();
     await page.getByRole('menuitem', { name: 'View row details' }).click();
     await expect(inspectorPanel.getByText('Row details', { exact: true })).toBeVisible();
     await inspectorPanel.getByRole('button', { name: 'Close' }).click();

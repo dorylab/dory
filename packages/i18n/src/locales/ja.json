@@ -506,6 +506,14 @@
             "CommitAll": "すべてコミット（{count}）",
             "Committing": "コミット中…",
             "SelectionSummary": "{cells} セル · {rows} 行",
+            "SelectionEditHint": "入力して一括設定 · Cmd/Ctrl+V で貼り付け",
+            "BatchRowUnavailable": "選択した行の一部が現在のページにありません。",
+            "BatchReadOnly": "選択範囲に読み取り専用セルが含まれています。",
+            "BatchIdentityUnavailable": "選択した行を一意に識別できません。",
+            "BatchUnsupportedValue": "選択範囲に編集できない値が含まれています。",
+            "BatchRejected": "変更は適用されませんでした。{reason}（{count} 件）",
+            "BatchRowLimit": "1 回のコミットで変更できるのは最大 {count} 行です。",
+            "BatchFieldLimit": "1 行で変更できるのは最大 {count} フィールドです。",
             "ReadOnly": "読み取り専用",
             "NoPrimaryKey": "主キーがないため、このテーブルは編集できません。",
             "NoIdentity": "編集を有効にするには、1 つ以上のスカラー列を行識別子として選択してください。",
@@ -2115,6 +2123,23 @@
                 "ChooseBoolean": "true または false を選択してください。",
                 "InvalidNumber": "有効な数値を入力してください。"
             },
+            "Bulk": {
+                "Unavailable": "このテーブルでは一括編集を利用できません。",
+                "Applied": "{rows} 行の {cells} セルを更新しました。",
+                "Reverted": "{rows} 行の {cells} セルを元に戻しました。",
+                "UseSetSelected": "真偽値と日付には「選択セルを設定」を使用してください。",
+                "InvalidClipboard": "クリップボードのデータを解析できませんでした。",
+                "OutOfBounds": "貼り付けデータが現在のページ範囲を超えています。",
+                "ReadOnly": "対象セルは読み取り専用です。",
+                "Rejected": "貼り付けませんでした: {reason}（無効な対象 {count} 件）",
+                "ClipboardPermission": "クリップボードを読み取れません。Cmd/Ctrl+V を使用してください。",
+                "MappingError": {
+                    "empty": "クリップボードは空です。",
+                    "no-target": "貼り付け先のセルを選択してください。",
+                    "non-rectangular": "行列の貼り付けには矩形の選択範囲が必要です。",
+                    "out-of-bounds": "貼り付けデータが現在のページ範囲を超えています。"
+                }
+            },
             "Filter": {
                 "EditHint": "クリックしてフィルターを編集",
                 "CaseSensitiveSuffix": "（Aa）",
@@ -2154,8 +2179,13 @@
                 "Copy": "コピー",
                 "CopyValue": "値をコピー",
                 "CopyRowAsJson": "行を JSON としてコピー",
+                "SetSelectedCells": "選択セルを設定（{count}）",
+                "Paste": "貼り付け",
+                "FillDown": "下方向に入力",
                 "SetToNull": "NULL に設定",
+                "SetSelectionToNull": "選択範囲を NULL に設定",
                 "RevertCell": "このセルを元に戻す",
+                "RevertSelection": "選択した変更を元に戻す",
                 "CopyWithHeaders": "ヘッダー付きでコピー",
                 "FilterByValue": "この値でフィルター",
                 "DownloadCsv": "CSV をダウンロード"

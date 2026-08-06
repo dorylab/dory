@@ -510,6 +510,14 @@
             "CommitAll": "全部提交（{count}）",
             "Committing": "正在提交…",
             "SelectionSummary": "{cells} 个单元格 · {rows} 行",
+            "SelectionEditHint": "输入以统一赋值 · Cmd/Ctrl+V 粘贴",
+            "BatchRowUnavailable": "选中的某一行已不在当前页面中。",
+            "BatchReadOnly": "选区中包含只读单元格。",
+            "BatchIdentityUnavailable": "选中的某一行无法被唯一定位。",
+            "BatchUnsupportedValue": "选区中包含当前无法编辑的值。",
+            "BatchRejected": "未应用任何更改。{reason}（共 {count} 个问题）",
+            "BatchRowLimit": "每次提交最多包含 {count} 行更改。",
+            "BatchFieldLimit": "每行最多包含 {count} 个字段更改。",
             "ReadOnly": "只读",
             "NoPrimaryKey": "此表没有主键，无法编辑。",
             "NoIdentity": "请选择一个或多个标量列作为行唯一键以启用编辑。",
@@ -2120,6 +2128,23 @@
                 "ChooseBoolean": "请选择 true 或 false。",
                 "InvalidNumber": "请输入有效数字。"
             },
+            "Bulk": {
+                "Unavailable": "此表当前无法使用批量编辑。",
+                "Applied": "已修改 {rows} 行中的 {cells} 个单元格。",
+                "Reverted": "已撤销 {rows} 行中的 {cells} 个单元格。",
+                "UseSetSelected": "布尔值和日期请使用“设置选中单元格”。",
+                "InvalidClipboard": "无法解析剪贴板数据。",
+                "OutOfBounds": "粘贴数据超出了当前页面范围。",
+                "ReadOnly": "目标单元格为只读。",
+                "Rejected": "未执行粘贴：{reason}（{count} 个无效目标）",
+                "ClipboardPermission": "无法读取剪贴板，请使用 Cmd/Ctrl+V 粘贴。",
+                "MappingError": {
+                    "empty": "剪贴板为空。",
+                    "no-target": "请先选择要粘贴的目标单元格。",
+                    "non-rectangular": "矩阵粘贴需要矩形选区。",
+                    "out-of-bounds": "粘贴数据超出了当前页面范围。"
+                }
+            },
             "Filter": {
                 "EditHint": "点击编辑筛选",
                 "CaseSensitiveSuffix": "（区分大小写）",
@@ -2159,8 +2184,13 @@
                 "Copy": "复制",
                 "CopyValue": "复制值",
                 "CopyRowAsJson": "将行复制为 JSON",
+                "SetSelectedCells": "设置选中单元格（{count}）",
+                "Paste": "粘贴",
+                "FillDown": "向下填充",
                 "SetToNull": "设为 NULL",
+                "SetSelectionToNull": "将选区设为 NULL",
                 "RevertCell": "撤销此单元格",
+                "RevertSelection": "撤销所选更改",
                 "CopyWithHeaders": "复制（含表头）",
                 "FilterByValue": "按此值筛选",
                 "DownloadCsv": "下载 CSV"

@@ -6,6 +6,8 @@ import {
     bindTableMutationParams,
     buildTableIdentityCountStatements,
     isEditableTableMutationColumnType,
+    MAX_TABLE_UPDATE_CHANGES_PER_ROW,
+    MAX_TABLE_UPDATE_ROWS,
     TABLE_MUTATION_CONFLICT_CODE,
     TABLE_MUTATION_IDENTITY_NOT_UNIQUE_CODE,
     TABLE_MUTATION_PARTIAL_COMMIT_CODE,
@@ -26,7 +28,7 @@ const changeSchema = z.object({
 });
 const rowSchema = z.object({
     key: z.record(z.string().min(1), mutationValueSchema),
-    changes: z.array(changeSchema).min(1).max(200),
+    changes: z.array(changeSchema).min(1).max(MAX_TABLE_UPDATE_CHANGES_PER_ROW),
 });
 const inputSchema = z.object({
     connectionId: z.string().min(1).optional(),
@@ -34,7 +36,7 @@ const inputSchema = z.object({
     database: z.string().min(1),
     table: z.string().min(1),
     identityColumns: z.array(z.string().min(1)).min(1).max(50).optional(),
-    rows: z.array(rowSchema).min(1).max(100),
+    rows: z.array(rowSchema).min(1).max(MAX_TABLE_UPDATE_ROWS),
 });
 const outputSchema = z.object({
     updatedRows: z.number().int().nonnegative(),

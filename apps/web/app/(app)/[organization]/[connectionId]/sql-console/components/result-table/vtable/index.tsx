@@ -2,14 +2,17 @@
 import { cn } from '@dory/web-utils';
 import { useMemo, useState, useEffect, useCallback, useLayoutEffect, useRef } from 'react';
 import { GridCellProps, AutoSizer, MultiGrid, MultiGridProps } from 'react-virtualized';
+import { toast } from 'sonner';
 import { ColumnFilterPopover } from './ColumnFIlter';
-import { VTableProps, ColWidths, CellKey, ck, parseCK } from './type';
+import { VTableProps, ColWidths, CellKey, VTableCellChange, VTableCellTarget, ck, parseCK } from './type';
 import { formatTooltip, formatValue } from './utils';
 import { ContextMenu, ContextMenuContent, ContextMenuGroup, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/registry/new-york-v4/ui/context-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { buildEqualsFilterFromCell, mapDbTypeToTwoKinds } from './filter';
 import { useTranslations } from 'next-intl';
 import { useVTableFilterUi, useVTableFilters, VTableFilters } from './VTableFilters';
 import { getCellEditorKind, parseEditDraft, toDateEditDraft, toEditDraft } from './cell-editing';
+import { mapClipboardMatrix, parseClipboardMatrix } from './clipboard-editing';
 
 const HEADER_PAD = 24;
 const VISIBLE_AUTO_FIT_SAMPLE_LIMIT = 48;
@@ -36,6 +39,29 @@ const BOTTOM_LEFT_GRID_STYLE = { overflowY: 'hidden', overflowX: 'hidden' } as c
 const TOP_LEFT_GRID_STYLE = { overflow: 'hidden' } as const;
 const BOTTOM_RIGHT_GRID_STYLE = { overflowY: 'auto', overflowX: 'auto' } as const;
 const GRID_STYLE = { outline: 'none' } as const;
+
+type ContextMenuItemWithReasonProps = React.ComponentProps<typeof ContextMenuItem> & {
+    disabledReason?: string;
+};
+
+function ContextMenuItemWithReason({ disabledReason, disabled, className, children, ...props }: ContextMenuItemWithReasonProps) {
+    const item = (
+        <ContextMenuItem {...props} disabled={disabled} className={cn(className, disabled && disabledReason ? 'data-disabled:pointer-events-auto' : undefined)}>
+            {children}
+        </ContextMenuItem>
+    );
+
+    if (!disabled || !disabledReason) return item;
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>{item}</TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8}>
+                {disabledReason}
+            </TooltipContent>
+        </Tooltip>
+    );
+}
 
 type ColumnMeta = {
     name: string;
@@ -161,10 +187,13 @@ export default function VTable({
     onSortChange,
     onSelectedRowIndexesChange,
     editable = false,
+    editDisabledReason,
     getCellEditState,
     isRowChanged,
     onCellChange,
+    onCellsChange,
     onRevertCell,
+    onCellsRevert,
     onUndo,
     onRedo,
     onCommitAll,
@@ -703,6 +732,7 @@ export default function VTable({
         col: string;
         draft: string;
         error: string | null;
+        targets: VTableCellTarget[];
     } | null>(null);
     const editingCancelledRef = useRef(false);
     const focusCellEditorAtEnd = useCallback((editor: HTMLInputElement | null) => {
@@ -785,7 +815,7 @@ export default function VTable({
     );
 
     const beginCellEdit = useCallback(
-        (row: number, column: string, initialDraft?: string) => {
+        (row: number, column: string, initialDraft?: string, targets: VTableCellTarget[] = [{ rowIndex: row, column }]) => {
             const state = getEffectiveCellState(row, column);
             if (!state.editable) return;
             const value = getDisplayRow(row)?.rowData?.[column];
@@ -795,8 +825,14 @@ export default function VTable({
                 col: column,
                 draft: initialDraft ?? (state.kind === 'date' ? toDateEditDraft(value, state.meta?.type) : toEditDraft(value)),
                 error: null,
+                targets,
             });
-            focusGridCell(row, column);
+            if (targets.length === 1) {
+                focusGridCell(row, column);
+            } else {
+                setFocusedCell({ row, col: column });
+                requestAnimationFrame(() => gridContainerRef.current?.focus({ preventScroll: true }));
+            }
         },
         [focusGridCell, getDisplayRow, getEffectiveCellState],
     );
@@ -810,17 +846,32 @@ export default function VTable({
                     chooseBoolean: t('VTable.Edit.ChooseBoolean'),
                     invalidNumber: t('VTable.Edit.InvalidNumber'),
                 });
-                const originalValue = getDisplayRow(editingCell.row)?.rowData?.[editingCell.col];
-                onCellChange?.({
-                    rowIndex: editingCell.row,
-                    column: editingCell.col,
-                    originalValue,
+                const changes = editingCell.targets.map(target => ({
+                    ...target,
+                    originalValue: getDisplayRow(target.rowIndex)?.rowData?.[target.column],
                     nextValue,
-                });
+                }));
+                if (changes.length > 1) {
+                    const result = onCellsChange?.(changes);
+                    if (!result?.ok) {
+                        const message = result?.error ?? t('VTable.Bulk.Unavailable');
+                        setEditingCell(current => (current ? { ...current, error: message } : current));
+                        toast.error(message);
+                        return false;
+                    }
+                    if (result.changedCellCount > 0) {
+                        toast.success(t('VTable.Bulk.Applied', { cells: result.changedCellCount, rows: result.affectedRowCount }));
+                    }
+                } else {
+                    const [change] = changes;
+                    if (change) onCellChange?.(change);
+                }
                 const committedCell = { row: editingCell.row, col: editingCell.col };
                 setEditingCell(null);
-                if (move) {
+                if (move && changes.length === 1) {
                     requestAnimationFrame(() => moveFocusedCell(0, move === 'next' ? 1 : -1, committedCell));
+                } else {
+                    requestAnimationFrame(() => gridContainerRef.current?.focus({ preventScroll: true }));
                 }
                 return true;
             } catch (error) {
@@ -828,7 +879,7 @@ export default function VTable({
                 return false;
             }
         },
-        [editingCell, getDisplayRow, getEffectiveCellState, moveFocusedCell, onCellChange, t],
+        [editingCell, getDisplayRow, getEffectiveCellState, moveFocusedCell, onCellChange, onCellsChange, t],
     );
 
     useEffect(() => {
@@ -1108,6 +1159,116 @@ export default function VTable({
         for (let r = r1; r <= r2; r++) for (let ci = c1; ci <= c2; ci++) out.push(ck(r, columns[ci]));
         return out;
     };
+    const getSelectedCellTargets = useCallback((): VTableCellTarget[] => {
+        return [...selectedCellsRef.current]
+            .map(parseCK)
+            .map(cell => ({ rowIndex: cell.row, column: cell.col }))
+            .sort((left, right) => left.rowIndex - right.rowIndex || columns.indexOf(left.column) - columns.indexOf(right.column));
+    }, [columns]);
+    const getSameColumnTargets = useCallback(() => {
+        const targets = getSelectedCellTargets();
+        if (targets.length < 2) return null;
+        const column = targets[0]?.column;
+        return column && targets.every(target => target.column === column) ? targets : null;
+    }, [getSelectedCellTargets]);
+    const applyBatchChanges = useCallback(
+        (changes: VTableCellChange[]) => {
+            if (!onCellsChange) {
+                const error = t('VTable.Bulk.Unavailable');
+                toast.error(error);
+                return false;
+            }
+            const result = onCellsChange(changes);
+            if (!result.ok) {
+                toast.error(result.error);
+                return false;
+            }
+            if (result.changedCellCount > 0) {
+                toast.success(t('VTable.Bulk.Applied', { cells: result.changedCellCount, rows: result.affectedRowCount }));
+            }
+            return true;
+        },
+        [onCellsChange, t],
+    );
+    const applyClipboardText = useCallback(
+        (text: string) => {
+            let matrix: string[][];
+            try {
+                matrix = parseClipboardMatrix(text);
+            } catch {
+                toast.error(t('VTable.Bulk.InvalidClipboard'));
+                return false;
+            }
+
+            const selectedCellsForPaste = getSelectedCellTargets().map(target => ({
+                rowIndex: target.rowIndex,
+                columnIndex: columns.indexOf(target.column),
+            }));
+            const focusedCellForPaste = focusedCell
+                ? {
+                      rowIndex: focusedCell.row,
+                      columnIndex: columns.indexOf(focusedCell.col),
+                  }
+                : null;
+            const mapping = mapClipboardMatrix({
+                matrix,
+                selectedCells: selectedCellsForPaste,
+                focusedCell: focusedCellForPaste,
+                rowCount: tableRowCount,
+                columnCount: columns.length,
+            });
+            if (!mapping.ok) {
+                toast.error(t(`VTable.Bulk.MappingError.${mapping.reason}`));
+                return false;
+            }
+
+            const changes: VTableCellChange[] = [];
+            const errors: string[] = [];
+            for (const assignment of mapping.assignments) {
+                const column = columns[assignment.columnIndex];
+                if (!column) {
+                    errors.push(t('VTable.Bulk.OutOfBounds'));
+                    continue;
+                }
+                const state = getEffectiveCellState(assignment.rowIndex, column);
+                if (!state.editable) {
+                    errors.push(state.readOnlyReason ?? t('VTable.Bulk.ReadOnly'));
+                    continue;
+                }
+                try {
+                    const nextValue = parseEditDraft(state.kind, assignment.value, {
+                        chooseBoolean: t('VTable.Edit.ChooseBoolean'),
+                        invalidNumber: t('VTable.Edit.InvalidNumber'),
+                    });
+                    changes.push({
+                        rowIndex: assignment.rowIndex,
+                        column,
+                        originalValue: getDisplayRow(assignment.rowIndex)?.rowData?.[column],
+                        nextValue,
+                    });
+                } catch (error) {
+                    errors.push(error instanceof Error ? error.message : String(error));
+                }
+            }
+
+            if (errors.length > 0) {
+                toast.error(t('VTable.Bulk.Rejected', { reason: errors[0], count: errors.length }));
+                return false;
+            }
+            return applyBatchChanges(changes);
+        },
+        [applyBatchChanges, columns, focusedCell, getDisplayRow, getEffectiveCellState, getSelectedCellTargets, t, tableRowCount],
+    );
+    const handleGridPaste = useCallback(
+        (event: React.ClipboardEvent<HTMLDivElement>) => {
+            const target = event.target;
+            if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
+            if (!editable) return;
+            event.preventDefault();
+            applyClipboardText(event.clipboardData.getData('text/plain'));
+        },
+        [applyClipboardText, editable],
+    );
     const onRowIndexClick = (e: React.MouseEvent, rowIndex: number) => {
         if (e.button !== 0) return;
         if (lastMouseDownWasOnCell.current) return;
@@ -1245,6 +1406,15 @@ export default function VTable({
             if (editable && e.key.length === 1) {
                 e.preventDefault();
                 const state = getEffectiveCellState(focusedCell.row, focusedCell.col);
+                const bulkTargets = getSameColumnTargets();
+                if (bulkTargets && onCellsChange) {
+                    if (state.kind === 'boolean' || state.kind === 'date') {
+                        toast.info(t('VTable.Bulk.UseSetSelected'));
+                        return;
+                    }
+                    beginCellEdit(focusedCell.row, focusedCell.col, e.key, bulkTargets);
+                    return;
+                }
                 beginCellEdit(focusedCell.row, focusedCell.col, state.kind === 'boolean' || state.kind === 'date' ? undefined : e.key);
                 return;
             }
@@ -1299,11 +1469,31 @@ export default function VTable({
     }
     const sel = getSelectionInfo();
     const contextCell = focusedCell ?? (selectedCells.size > 0 ? parseCK([...selectedCells][0]) : null);
-    const contextCellState = contextCell ? getEffectiveCellState(contextCell.row, contextCell.col) : null;
     const showInspectActions = sel.mode === 'singleCell' || sel.mode === 'singleRow' || sel.mode === 'rowOnly';
-    const canSetContextCellToNull = Boolean(editable && contextCellState?.nullable && contextCellState.editable && contextCell);
-    const canRevertContextCell = Boolean(editable && contextCellState?.changed && contextCell);
-    const showEditActions = canSetContextCellToNull || canRevertContextCell;
+    const selectedCellTargets = getSelectedCellTargets();
+    const actionTargets: VTableCellTarget[] = selectedCellTargets.length > 0 ? selectedCellTargets : contextCell ? [{ rowIndex: contextCell.row, column: contextCell.col }] : [];
+    const actionColumn = actionTargets[0]?.column;
+    const sameColumnActionTargets = actionColumn && actionTargets.every(target => target.column === actionColumn) ? actionTargets : null;
+    const actionTargetStates = actionTargets.map(target => getEffectiveCellState(target.rowIndex, target.column));
+    const allActionTargetsEditable = actionTargets.length > 0 && actionTargetStates.every(state => state.editable);
+    const canSetSelectedCells = Boolean(editable && onCellsChange && sameColumnActionTargets && sameColumnActionTargets.length > 1 && allActionTargetsEditable);
+    const canPasteSelection = Boolean(editable && onCellsChange && actionTargets.length > 0);
+    const canSetSelectionToNull = Boolean(editable && allActionTargetsEditable && actionTargetStates.every(state => state.nullable));
+    const fillSource = sameColumnActionTargets?.[0];
+    const fillSourceValue = fillSource ? getDisplayRow(fillSource.rowIndex)?.rowData?.[fillSource.column] : undefined;
+    const canFillDown = Boolean(
+        editable &&
+        onCellsChange &&
+        sameColumnActionTargets &&
+        sameColumnActionTargets.length > 1 &&
+        allActionTargetsEditable &&
+        (fillSourceValue !== null || actionTargetStates.every(state => state.nullable)),
+    );
+    const changedActionTargets = actionTargets.filter(target => getEffectiveCellState(target.rowIndex, target.column).changed);
+    const canRevertSelection = Boolean(changedActionTargets.length > 0 && (changedActionTargets.length === 1 ? onRevertCell : onCellsRevert));
+    const showEditActions = Boolean(
+        actionTargets.length > 0 && (editDisabledReason || canSetSelectedCells || canPasteSelection || canSetSelectionToNull || canFillDown || canRevertSelection),
+    );
     const showFilterAction = !operationsDisabled && showInspectActions;
     const openCellInspector = (row: number, col: string) => {
         const v = getDisplayRow(row)?.rowData?.[col];
@@ -1882,7 +2072,7 @@ export default function VTable({
                     )}
 
                     {/* Grid */}
-                    <div ref={gridContainerRef} className="flex-1 min-h-0 outline-none" tabIndex={0} onKeyDown={onGridKeyDown}>
+                    <div ref={gridContainerRef} className="flex-1 min-h-0 outline-none" tabIndex={0} onKeyDown={onGridKeyDown} onPaste={handleGridPaste}>
                         {gridElement}
                     </div>
                 </div>
@@ -1910,39 +2100,100 @@ export default function VTable({
                     </ContextMenuGroup>
                 ) : null}
 
-                {showEditActions && sel.mode === 'singleCell' ? (
+                {showEditActions ? (
                     <>
-                        <ContextMenuSeparator />
+                        {showInspectActions ? <ContextMenuSeparator /> : null}
                         <ContextMenuGroup>
-                            {canSetContextCellToNull ? (
-                                <ContextMenuItem
+                            {actionTargets.length > 1 || editDisabledReason ? (
+                                <ContextMenuItemWithReason
+                                    disabled={!canSetSelectedCells}
+                                    disabledReason={!canSetSelectedCells ? editDisabledReason : undefined}
                                     onSelect={() => {
-                                        const originalValue = getDisplayRow(sel.cell.row)?.rowData?.[sel.cell.col];
-                                        onCellChange?.({
-                                            rowIndex: sel.cell.row,
-                                            column: sel.cell.col,
-                                            originalValue,
+                                        const anchor =
+                                            sameColumnActionTargets?.find(target => target.rowIndex === contextCell?.row && target.column === contextCell.col) ??
+                                            sameColumnActionTargets?.[0];
+                                        if (!anchor || !sameColumnActionTargets) return;
+                                        beginCellEdit(anchor.rowIndex, anchor.column, '', sameColumnActionTargets);
+                                    }}
+                                >
+                                    {t('VTable.Context.SetSelectedCells', { count: actionTargets.length })}
+                                </ContextMenuItemWithReason>
+                            ) : null}
+                            <ContextMenuItemWithReason
+                                disabled={!canPasteSelection}
+                                disabledReason={!canPasteSelection ? editDisabledReason : undefined}
+                                onSelect={async event => {
+                                    event.stopPropagation();
+                                    try {
+                                        if (!navigator.clipboard?.readText) throw new Error('clipboard unavailable');
+                                        applyClipboardText(await navigator.clipboard.readText());
+                                    } catch {
+                                        toast.error(t('VTable.Bulk.ClipboardPermission'));
+                                    }
+                                }}
+                            >
+                                {t('VTable.Context.Paste')}
+                            </ContextMenuItemWithReason>
+                            {actionTargets.length > 1 || editDisabledReason ? (
+                                <ContextMenuItemWithReason
+                                    disabled={!canFillDown}
+                                    disabledReason={!canFillDown ? editDisabledReason : undefined}
+                                    onSelect={() => {
+                                        if (!sameColumnActionTargets || !fillSource) return;
+                                        applyBatchChanges(
+                                            sameColumnActionTargets.map(target => ({
+                                                ...target,
+                                                originalValue: getDisplayRow(target.rowIndex)?.rowData?.[target.column],
+                                                nextValue: fillSourceValue,
+                                            })),
+                                        );
+                                    }}
+                                >
+                                    {t('VTable.Context.FillDown')}
+                                </ContextMenuItemWithReason>
+                            ) : null}
+                            <ContextMenuItemWithReason
+                                disabled={!canSetSelectionToNull}
+                                disabledReason={!canSetSelectionToNull ? editDisabledReason : undefined}
+                                onSelect={() => {
+                                    applyBatchChanges(
+                                        actionTargets.map(target => ({
+                                            ...target,
+                                            originalValue: getDisplayRow(target.rowIndex)?.rowData?.[target.column],
                                             nextValue: null,
-                                        });
-                                    }}
-                                >
-                                    {t('VTable.Context.SetToNull')}
-                                </ContextMenuItem>
-                            ) : null}
-                            {canRevertContextCell ? (
-                                <ContextMenuItem
-                                    onSelect={() => {
-                                        onRevertCell?.(sel.cell.row, sel.cell.col);
-                                    }}
-                                >
-                                    {t('VTable.Context.RevertCell')}
-                                </ContextMenuItem>
-                            ) : null}
+                                        })),
+                                    );
+                                }}
+                            >
+                                {actionTargets.length > 1 ? t('VTable.Context.SetSelectionToNull') : t('VTable.Context.SetToNull')}
+                            </ContextMenuItemWithReason>
+                            <ContextMenuItemWithReason
+                                disabled={!canRevertSelection}
+                                disabledReason={!canRevertSelection ? editDisabledReason : undefined}
+                                onSelect={() => {
+                                    if (changedActionTargets.length === 1) {
+                                        const [target] = changedActionTargets;
+                                        if (target) onRevertCell?.(target.rowIndex, target.column);
+                                        return;
+                                    }
+                                    const result = onCellsRevert?.(changedActionTargets);
+                                    if (!result) return;
+                                    if (!result.ok) {
+                                        toast.error(result.error);
+                                    } else {
+                                        if (result.changedCellCount > 0) {
+                                            toast.success(t('VTable.Bulk.Reverted', { cells: result.changedCellCount, rows: result.affectedRowCount }));
+                                        }
+                                    }
+                                }}
+                            >
+                                {actionTargets.length > 1 ? t('VTable.Context.RevertSelection') : t('VTable.Context.RevertCell')}
+                            </ContextMenuItemWithReason>
                         </ContextMenuGroup>
                     </>
                 ) : null}
 
-                {showInspectActions ? <ContextMenuSeparator /> : null}
+                {showInspectActions || showEditActions ? <ContextMenuSeparator /> : null}
                 <ContextMenuGroup>
                     <ContextMenuItem
                         disabled={!hasAnySelection}
@@ -1951,9 +2202,9 @@ export default function VTable({
                             await copySelectedCellsTSV();
                         }}
                     >
-                        {editable && sel.mode === 'singleCell' ? t('VTable.Context.CopyValue') : t('VTable.Context.Copy')}
+                        {sel.mode === 'singleCell' ? t('VTable.Context.CopyValue') : t('VTable.Context.Copy')}
                     </ContextMenuItem>
-                    {editable && contextCell ? (
+                    {contextCell ? (
                         <ContextMenuItem
                             onSelect={async e => {
                                 e.stopPropagation();
