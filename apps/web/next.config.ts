@@ -50,6 +50,8 @@ const nextConfig = {
         '@dory/artifacts',
         '@dory/database',
         '@dory/data-plane',
+        '@dory/drivers',
+        '@dory/export',
         '@dory/i18n',
         '@dory/import',
         '@dory/resultset',

@@ -25,14 +25,24 @@ export async function writeDataStreamToArrowIpcFile(stream: DataStream, filePath
         }
     })();
 
+    const writer = new RecordBatchFileWriter({ autoDestroy: true });
+    const output = createWriteStream(filePath);
+    const pipePromise = pipeline(Readable.from(writer as AsyncIterable<Uint8Array>, { objectMode: false }), output);
+
     try {
-        await pipeline(Readable.from(batches, { objectMode: true }), RecordBatchFileWriter.throughNode({ autoDestroy: true }), createWriteStream(filePath));
+        const writePromise = writer.writeAll(batches);
+        await Promise.all([writePromise, pipePromise]);
         if (batchCount === 0) await writeFile(filePath, schemaToIpc(stream.schema));
         return {
             rowCount,
             batchCount,
             byteSize: (await stat(filePath)).size,
         };
+    } catch (error) {
+        writer.abort(error);
+        output.destroy(error instanceof Error ? error : new Error(String(error)));
+        await pipePromise.catch(() => undefined);
+        throw error;
     } finally {
         await stream.close();
     }

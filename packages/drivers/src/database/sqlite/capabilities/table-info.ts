@@ -1,5 +1,5 @@
 import type { GetTableInfoAPI } from '@dory/drivers/types';
-import { getSqliteTableDdl, getSqliteTableIndexes, getSqliteTableProperties, previewSqliteTable, renameSqliteTable } from '../runtime';
+import { buildSqliteTableReadQuery, getSqliteTableDdl, getSqliteTableIndexes, getSqliteTableProperties, previewSqliteTable, renameSqliteTable } from '../runtime';
 import type { SqliteDatasource } from '../datasource';
 
 export function createSqliteTableInfoCapability(datasource: SqliteDatasource): GetTableInfoAPI {
@@ -15,6 +15,10 @@ export function createSqliteTableInfoCapability(datasource: SqliteDatasource): G
         },
         async preview(database, table, options) {
             return previewSqliteTable(datasource.getDatabase(), database, table, options?.limit, options?.offset, options);
+        },
+        async openRows(database, table, options) {
+            const query = buildSqliteTableReadQuery(database, table, options);
+            return datasource.openRowCursorWithContext(query.sql, { database, params: query.params });
         },
         async indexes(database, table) {
             return getSqliteTableIndexes(datasource.getDatabase(), database, table);

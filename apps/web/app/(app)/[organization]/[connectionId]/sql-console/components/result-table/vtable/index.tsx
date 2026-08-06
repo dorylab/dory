@@ -1178,7 +1178,7 @@ export default function VTable({
         return column && targets.every(target => target.column === column) ? targets : null;
     }, [getSelectedCellTargets]);
     const applyBatchChanges = useCallback(
-        (changes: VTableCellChange[]) => {
+        (changes: VTableCellChange[], options?: { announceSuccess?: boolean }) => {
             if (!onCellsChange) {
                 const error = t('VTable.Bulk.Unavailable');
                 toast.error(error);
@@ -1189,7 +1189,7 @@ export default function VTable({
                 toast.error(result.error);
                 return false;
             }
-            if (result.changedCellCount > 0) {
+            if (result.changedCellCount > 0 && options?.announceSuccess !== false) {
                 toast.success(t('VTable.Bulk.Applied', { cells: result.changedCellCount, rows: result.affectedRowCount }));
             }
             return true;
@@ -1261,7 +1261,7 @@ export default function VTable({
                 toast.error(t('VTable.Bulk.Rejected', { reason: errors[0], count: errors.length }));
                 return false;
             }
-            return applyBatchChanges(changes);
+            return applyBatchChanges(changes, { announceSuccess: false });
         },
         [applyBatchChanges, columns, focusedCell, getDisplayRow, getEffectiveCellState, getSelectedCellTargets, t, tableRowCount],
     );
@@ -1661,13 +1661,14 @@ export default function VTable({
                   .filter(Boolean)
                   .join(', ')
             : undefined;
-        const cellStateShadow =
-            selectionEdgeShadow ??
-            (isFocused || isCellSelected
-                ? 'inset 0 0 0 1px var(--primary)'
-                : cellEditState.changed
-                  ? 'inset 0 0 0 1px color-mix(in oklab, var(--color-orange-500) 50%, transparent)'
-                  : undefined);
+        const cellStateShadow = isIndependentSelectedCell
+            ? undefined
+            : (selectionEdgeShadow ??
+              (isFocused || isCellSelected
+                  ? 'inset 0 0 0 1px var(--primary)'
+                  : cellEditState.changed
+                    ? 'inset 0 0 0 1px color-mix(in oklab, var(--color-orange-500) 50%, transparent)'
+                    : undefined));
 
         return (
             <div
@@ -1684,8 +1685,8 @@ export default function VTable({
                     alignItems: 'center',
                     backgroundColor: cellEditState.changed ? 'color-mix(in oklab, var(--color-orange-500) 15%, var(--card))' : undefined,
                     boxShadow: cellStateShadow,
-                    outline: isIndependentSelectedCell ? '1px solid var(--primary)' : undefined,
-                    outlineOffset: isIndependentSelectedCell ? '-1px' : undefined,
+                    outline: isIndependentSelectedCell ? '2px solid var(--primary)' : undefined,
+                    outlineOffset: isIndependentSelectedCell ? '-2px' : undefined,
                     zIndex: isIndependentSelectedCell ? 1 : undefined,
                 }}
                 className={cn(
@@ -1694,7 +1695,7 @@ export default function VTable({
                     (isRowSelected || activeRowIndex === r) && PRIMARY_SELECTION_SUBTLE_CLASS,
                     isCellSelected && PRIMARY_SELECTION_CLASS,
                     cellEditState.changed && '!text-orange-700 dark:!text-orange-300',
-                    isFocused && !isRectSelectedCell && PRIMARY_SELECTION_RING_CLASS,
+                    isFocused && !isRectSelectedCell && !isIndependentSelectedCell && PRIMARY_SELECTION_RING_CLASS,
                     !isCellSelected && 'focus:ring-1 focus:ring-inset focus:ring-primary/40',
                 )}
                 onMouseDown={e => onCellMouseDown(e, r, colKeyName)}
@@ -1982,13 +1983,13 @@ export default function VTable({
             else delete element.dataset.selected;
             if (isRowSelected) element.classList.add(...PRIMARY_SELECTION_SUBTLE_CLASS.split(' '));
             if (isCellSelected) element.classList.add(...PRIMARY_SELECTION_CLASS.split(' '));
-            if (isFocused && !rectBounds) element.classList.add(...PRIMARY_SELECTION_RING_CLASS.split(' '));
+            if (isFocused && !rectBounds && !isIndependentSelectedCell) element.classList.add(...PRIMARY_SELECTION_RING_CLASS.split(' '));
 
             // A non-rectangular selection is rendered as individual cells. Give each
             // one its own elevated outline so neighbouring virtualized cells cannot
             // paint their grid border over part of the selection.
-            element.style.outline = isIndependentSelectedCell ? '1px solid var(--primary)' : '';
-            element.style.outlineOffset = isIndependentSelectedCell ? '-1px' : '';
+            element.style.outline = isIndependentSelectedCell ? '2px solid var(--primary)' : '';
+            element.style.outlineOffset = isIndependentSelectedCell ? '-2px' : '';
             element.style.zIndex = isIndependentSelectedCell ? '1' : '';
 
             element.style.boxShadow =
@@ -2001,11 +2002,13 @@ export default function VTable({
                       ]
                           .filter(Boolean)
                           .join(', ')
-                    : isFocused || isCellSelected
-                      ? 'inset 0 0 0 1px var(--primary)'
-                      : element.dataset.changed === 'true'
-                        ? 'inset 0 0 0 1px color-mix(in oklab, var(--color-orange-500) 50%, transparent)'
-                        : '';
+                    : isIndependentSelectedCell
+                      ? ''
+                      : isFocused || isCellSelected
+                        ? 'inset 0 0 0 1px var(--primary)'
+                        : element.dataset.changed === 'true'
+                          ? 'inset 0 0 0 1px color-mix(in oklab, var(--color-orange-500) 50%, transparent)'
+                          : '';
         });
 
         container.querySelectorAll<HTMLElement>('[data-row-index]').forEach(element => {

@@ -40,7 +40,7 @@ async function tableExists(client: PGlite, tableName: string) {
 }
 
 test('keeps the PostgreSQL and PGlite ResultSet migrations in sync', async () => {
-    for (const name of ['0019_resultset_artifacts.sql', '0020_resultset_schema_updates.sql', '0023_import_runs.sql', '0024_import_transform_stats.sql']) {
+    for (const name of ['0019_resultset_artifacts.sql', '0020_resultset_schema_updates.sql', '0023_import_runs.sql', '0024_import_transform_stats.sql', '0025_export_runs.sql']) {
         const postgres = await readMigration(migrationRoots.PostgreSQL, name);
         const pglite = await readMigration(migrationRoots.PGlite, name);
         assert.equal(postgres, pglite, `${name} differs between PostgreSQL and PGlite`);
@@ -55,7 +55,7 @@ test('keeps the PostgreSQL and PGlite ResultSet migrations in sync', async () =>
     assert.equal(firstClassComparisons, pgliteFirstClassComparisons, '0022_first_class_comparisons.sql differs between PostgreSQL and PGlite');
 });
 
-test('keeps the compiled PGlite bundle on the released 0019 through import transform stats', async () => {
+test('keeps the compiled PGlite bundle on the released 0019 through export runs', async () => {
     const bundleUrl = new URL('../../../../packages/database/src/pglite/migrations.json', import.meta.url);
     const bundle = JSON.parse(await readFile(bundleUrl, 'utf8')) as Array<{
         folderMillis: number;
@@ -69,6 +69,7 @@ test('keeps the compiled PGlite bundle on the released 0019 through import trans
     const firstClassComparisonMigration = byCreatedAt.get(1784796637312);
     const importRunsMigration = byCreatedAt.get(1785851842755);
     const transformStatsMigration = byCreatedAt.get(1785866199860);
+    const exportRunsMigration = byCreatedAt.get(1786028223308);
 
     assert.ok(releasedMigration);
     assert.ok(schemaUpdateMigration);
@@ -76,6 +77,7 @@ test('keeps the compiled PGlite bundle on the released 0019 through import trans
     assert.ok(firstClassComparisonMigration);
     assert.ok(importRunsMigration);
     assert.ok(transformStatsMigration);
+    assert.ok(exportRunsMigration);
     assert.equal(releasedMigration.folderMillis, 1783075200000);
     assert.equal(releasedMigration.hash, releasedMigrationHash);
     assert.equal(schemaUpdateMigration.folderMillis, 1784296092000);
@@ -92,7 +94,26 @@ test('keeps the compiled PGlite bundle on the released 0019 through import trans
     assert.equal(importRunsMigration.hash, createHash('sha256').update(importRunsSql).digest('hex'));
     const transformStatsSql = await readMigration(migrationRoots.PGlite, '0024_import_transform_stats.sql');
     assert.equal(transformStatsMigration.hash, createHash('sha256').update(transformStatsSql).digest('hex'));
+    const exportRunsSql = await readMigration(migrationRoots.PGlite, '0025_export_runs.sql');
+    assert.equal(exportRunsMigration.hash, createHash('sha256').update(exportRunsSql).digest('hex'));
 });
+
+for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
+    test(`creates export run storage with the ${dialect} migration`, async () => {
+        const client = new PGlite();
+        try {
+            await executeMigration(client, await readMigration(migrationRoot, '0025_export_runs.sql'));
+            assert.equal(await tableExists(client, 'export_runs'), true);
+            assert.equal(await tableExists(client, 'export_run_events'), true);
+            const columns = await getColumnTypes(client, 'export_runs');
+            assert.equal(columns.get('plan'), 'jsonb');
+            assert.equal(columns.get('processed_rows'), 'bigint');
+            assert.equal(columns.get('artifact_expires_at'), 'timestamp with time zone');
+        } finally {
+            await client.close();
+        }
+    });
+}
 
 for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
     test(`adds import filtered row counts with the ${dialect} migration`, async () => {

@@ -1,5 +1,5 @@
 import type { GetTableInfoAPI, TablePreviewOptions, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { SnowflakeDatasource } from '../datasource';
 import { parseSnowflakeTableReference, quoteSnowflakeIdentifier, quoteSnowflakeQualifiedTable } from '../runtime';
 
@@ -110,10 +110,13 @@ async function preview(datasource: SnowflakeDatasource, database: string, table:
               })
             : countResult;
     const params = [...previewParams, limit, offset];
-    const result = await datasource.queryWithContext<Record<string, unknown>>(`SELECT * FROM ${qualifiedName}${previewClauses.whereSql}${previewClauses.orderBySql} LIMIT ? OFFSET ?`, {
-        database: target.database,
-        params,
-    });
+    const result = await datasource.queryWithContext<Record<string, unknown>>(
+        `SELECT * FROM ${qualifiedName}${previewClauses.whereSql}${previewClauses.orderBySql} LIMIT ? OFFSET ?`,
+        {
+            database: target.database,
+            params,
+        },
+    );
 
     return {
         ...result,
@@ -124,11 +127,22 @@ async function preview(datasource: SnowflakeDatasource, database: string, table:
     };
 }
 
+async function openRows(datasource: SnowflakeDatasource, database: string, table: string, options: Parameters<NonNullable<GetTableInfoAPI['openRows']>>[2]) {
+    const target = resolveTableInput(datasource, database, table);
+    const clauses = buildTablePreviewClauses({ ...options, dialect: 'snowflake', quoteIdentifier: quoteSnowflakeIdentifier });
+    const projection = buildTableProjection(options.columns, quoteSnowflakeIdentifier);
+    return datasource.openRowCursorWithContext<Record<string, unknown>>(
+        `SELECT ${projection} FROM ${quoteSnowflakeQualifiedTable(target.database, target.schema, target.table)}${clauses.whereSql}${clauses.orderBySql}`,
+        { database: target.database, params: clauses.params },
+    );
+}
+
 export function createSnowflakeTableInfoCapability(datasource: SnowflakeDatasource): GetTableInfoAPI {
     return {
         properties: (database, table) => properties(datasource, database, table),
         ddl: (database, table) => ddl(datasource, database, table),
         stats: (database, table) => stats(datasource, database, table),
         preview: (database, table, options) => preview(datasource, database, table, options),
+        openRows: (database, table, options) => openRows(datasource, database, table, options),
     };
 }

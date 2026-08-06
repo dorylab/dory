@@ -421,5 +421,19 @@
     "bps": true,
     "folderMillis": 1785866199860,
     "hash": "709098ea650a01536f64f2e768383706f48a1bd15c88fce5fca64fdd5abf1916"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"export_runs\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"created_by_user_id\" text NOT NULL,\n    \"connection_id\" text NOT NULL,\n    \"database_name\" text NOT NULL,\n    \"table_name\" text NOT NULL,\n    \"status\" text DEFAULT 'queued' NOT NULL,\n    \"phase\" text DEFAULT 'queued' NOT NULL,\n    \"plan\" jsonb NOT NULL,\n    \"plan_hash\" text NOT NULL,\n    \"progress\" jsonb,\n    \"processed_rows\" bigint DEFAULT 0 NOT NULL,\n    \"batch_count\" integer DEFAULT 0 NOT NULL,\n    \"byte_size\" bigint,\n    \"object_path\" text,\n    \"manifest_path\" text,\n    \"file_name\" text,\n    \"content_type\" text,\n    \"consistency\" text,\n    \"error_code\" text,\n    \"error_message\" text,\n    \"heartbeat_at\" timestamp with time zone,\n    \"cancel_requested\" boolean DEFAULT false NOT NULL,\n    \"artifact_expires_at\" timestamp with time zone,\n    \"started_at\" timestamp with time zone,\n    \"completed_at\" timestamp with time zone,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_export_runs_table_created\" ON \"export_runs\" USING btree (\"organization_id\", \"connection_id\", \"database_name\", \"table_name\", \"created_at\");\n",
+      "\nCREATE INDEX \"idx_export_runs_status_heartbeat\" ON \"export_runs\" USING btree (\"status\", \"heartbeat_at\");\n",
+      "\nCREATE INDEX \"idx_export_runs_artifact_expires\" ON \"export_runs\" USING btree (\"artifact_expires_at\");\n",
+      "\nCREATE TABLE \"export_run_events\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"run_id\" text NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"sequence\" integer NOT NULL,\n    \"type\" text NOT NULL,\n    \"payload\" jsonb DEFAULT '{}'::jsonb NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_export_run_events_sequence\" ON \"export_run_events\" USING btree (\"run_id\", \"sequence\");\n",
+      "\nCREATE INDEX \"idx_export_run_events_org_run\" ON \"export_run_events\" USING btree (\"organization_id\", \"run_id\", \"sequence\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1786028223308,
+    "hash": "75b9503a8a9b061964fd64a9a0bc16c17e17d863a5400904eccc32d0b178aa6d"
   }
 ]

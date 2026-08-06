@@ -8,7 +8,7 @@ import type { DriverQueryParams } from '@dory/drivers/core';
 import { enforceSelectLimit } from '@dory/drivers/core';
 import type { BaseConfig, DriverRowCursor, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
-import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
+import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 
 import { DuckDbDialect } from './dialect';
 
@@ -349,6 +349,16 @@ export async function previewDuckDbTable(
         unfilteredTotalRows: unfilteredCountResult ? Number(unfilteredCountResult.rows[0]?.totalRows ?? 0) : null,
         limited: true,
         limit: normalizedLimit,
+    };
+}
+
+export function buildDuckDbTableReadQuery(database: string, table: string, options: Parameters<NonNullable<import('@dory/drivers/types').GetTableInfoAPI['openRows']>>[2]) {
+    const { schema, tableName } = parseDuckDbTableReference(table);
+    const clauses = buildTablePreviewClauses({ ...options, dialect: 'duckdb', quoteIdentifier });
+    const projection = buildTableProjection(options.columns, quoteIdentifier);
+    return {
+        sql: `SELECT ${projection} FROM ${buildQualifiedTable(database, tableName, schema)}${clauses.whereSql}${clauses.orderBySql}`,
+        params: clauses.params,
     };
 }
 

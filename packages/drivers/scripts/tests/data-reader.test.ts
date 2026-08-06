@@ -67,6 +67,26 @@ test('SQLite readTable preserves database-side filter, sort, paging, and counts'
     assert.equal(result.limited, true);
 });
 
+test('SQLite readTable all mode streams every matching row with projection and no preview limit', async t => {
+    const fixture = await sqliteFixture(t);
+    const result = await fixture.datasource.readTable({
+        database: 'main',
+        table: 'orders',
+        columns: ['id', 'amount'],
+        window: { kind: 'all' },
+        options: {
+            filters: [{ col: 'status', kind: 'string', op: 'equals', value: 'paid' }],
+            sort: { column: 'amount', direction: 'desc' },
+        },
+    });
+    const page = await collectSerializableDataPage(result.stream, 10);
+    assert.equal(result.limited, false);
+    assert.deepEqual(page.rows, [
+        { id: '2', amount: '20' },
+        { id: '1', amount: '10' },
+    ]);
+});
+
 test('reader resolves cursor metadata after an empty result without first-row inference', async () => {
     let columns: Array<{ name: string; type?: string }> | undefined;
     const stream = await dataStreamFromDriverRows(

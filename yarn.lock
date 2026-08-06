@@ -3181,6 +3181,21 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/export@npm:0.1.0, @dory/export@workspace:packages/export":
+  version: 0.0.0-use.local
+  resolution: "@dory/export@workspace:packages/export"
+  dependencies:
+    "@dory/data-plane": "npm:0.1.0"
+    "@dory/drivers": "npm:0.1.0"
+    "@types/node": "npm:^25.5.2"
+    apache-arrow: "npm:^21.2.0"
+    nodejs-polars: "npm:^0.25.2"
+    tsx: "npm:^4.23.1"
+    typescript: "npm:^6.0.2"
+    zod: "npm:^4.3.6"
+  languageName: unknown
+  linkType: soft
+
 "@dory/files@npm:0.1.0, @dory/files@workspace:packages/files":
   version: 0.0.0-use.local
   resolution: "@dory/files@workspace:packages/files"
@@ -23548,6 +23563,7 @@ __metadata:
     "@dory/database": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"
     "@dory/ee": "npm:0.1.0"
+    "@dory/export": "npm:0.1.0"
     "@dory/files": "npm:0.1.0"
     "@dory/i18n": "npm:0.1.0"
     "@dory/import": "npm:0.1.0"

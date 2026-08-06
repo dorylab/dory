@@ -18,6 +18,7 @@ import * as worksSchema from './works';
 import * as resultSetsSchema from './result-sets';
 import * as comparisonsSchema from './comparisons';
 import * as importRunsSchema from './import-runs';
+import * as exportRunsSchema from './export-runs';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -39,6 +40,7 @@ export * from './works';
 export * from './result-sets';
 export * from './comparisons';
 export * from './import-runs';
+export * from './export-runs';
 
 export const schema = {
     ...tabsSchema,
@@ -61,6 +63,7 @@ export const schema = {
     ...resultSetsSchema,
     ...comparisonsSchema,
     ...importRunsSchema,
+    ...exportRunsSchema,
 };
 
 export type DBSchema = typeof schema;

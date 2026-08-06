@@ -1,6 +1,6 @@
 import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { OracleDatasource } from '../datasource';
 import { parseOracleTableReference, quoteOracleIdentifier, quoteOracleQualifiedName } from '../runtime';
 
@@ -218,6 +218,16 @@ async function getTablePreview(datasource: OracleDatasource, database: string, t
     };
 }
 
+async function openTableRows(datasource: OracleDatasource, database: string, table: string, options: Parameters<NonNullable<GetTableInfoAPI['openRows']>>[2]) {
+    const { target } = await getTableIdentity(datasource, database, table);
+    const clauses = buildTablePreviewClauses({ ...options, dialect: 'oracle', quoteIdentifier: quoteOracleIdentifier });
+    const projection = buildTableProjection(options.columns, quoteOracleIdentifier);
+    return datasource.openRowCursorWithContext<Record<string, unknown>>(
+        `SELECT ${projection} FROM ${quoteOracleQualifiedName(target.schema, target.table)}${clauses.whereSql}${clauses.orderBySql}`,
+        { database, params: clauses.params },
+    );
+}
+
 async function getTableIndexes(datasource: OracleDatasource, database: string, table: string): Promise<TableIndexInfo[]> {
     const currentSchema = await getCurrentSchema(datasource, database);
     const target = parseOracleTableReference(table, currentSchema);
@@ -286,6 +296,9 @@ export function createOracleTableInfoCapability(datasource: OracleDatasource): G
         },
         async preview(database, table, options) {
             return getTablePreview(datasource, database, table, options);
+        },
+        async openRows(database, table, options) {
+            return openTableRows(datasource, database, table, options);
         },
         async indexes(database, table) {
             return getTableIndexes(datasource, database, table);

@@ -62,6 +62,7 @@
         "@dory/database": "0.1.0",
         "@dory/drivers": "0.1.0",
         "@dory/ee": "0.1.0",
+        "@dory/export": "0.1.0",
         "@dory/files": "0.1.0",
         "@dory/i18n": "0.1.0",
         "@dory/import": "0.1.0",

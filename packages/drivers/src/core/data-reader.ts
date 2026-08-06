@@ -25,9 +25,48 @@ export function createDriverDataReader(driver: BaseDriver): DriverDataReader {
             });
         },
         async readTable(request, options = {}) {
+            if (request.window?.kind === 'all') {
+                const openRows = driver.capabilities.tableInfo?.openRows;
+                if (!openRows) throw new UnsupportedDriverCapabilityError('dataReader.readTable.all', driver.config.type);
+                const rowStream = await openRows(request.database, request.table, {
+                    columns: request.columns ?? [],
+                    sort: request.options?.sort,
+                    filters: request.options?.filters,
+                    search: request.options?.search,
+                    searchColumns: request.options?.searchColumns,
+                });
+                const stream = await dataStreamFromDriverRows(rowStream, {
+                    ...options,
+                    source: 'driver-table-export',
+                    metadata: {
+                        driverType: driver.config.type,
+                        database: request.database,
+                        table: request.table,
+                        columns: request.columns ?? [],
+                        statistics: rowStream.statistics,
+                        limited: false,
+                    },
+                });
+                return {
+                    stream,
+                    totalRows: rowStream.rowCount ?? null,
+                    unfilteredTotalRows: null,
+                    limited: false,
+                    offset: 0,
+                    tookMs: rowStream.tookMs,
+                    statistics: rowStream.statistics,
+                };
+            }
             const preview = driver.capabilities.tableInfo?.preview;
             if (!preview) throw new UnsupportedDriverCapabilityError('dataReader.readTable', driver.config.type);
-            const result = await preview(request.database, request.table, request.options);
+            const pageWindow = request.window?.kind === 'page' ? request.window : null;
+            const previewOptions = {
+                ...request.options,
+                limit: pageWindow?.limit ?? request.options?.limit,
+                offset: pageWindow?.offset ?? request.options?.offset,
+                countMode: pageWindow?.countMode ?? request.options?.countMode,
+            };
+            const result = await preview(request.database, request.table, previewOptions);
             const rows = Array.isArray(result.rows) ? result.rows : [];
             const stream = rowDataStream({
                 ...options,
@@ -50,7 +89,7 @@ export function createDriverDataReader(driver: BaseDriver): DriverDataReader {
                 unfilteredTotalRows: result.unfilteredTotalRows ?? result.totalRows ?? null,
                 limited: result.limited ?? true,
                 limit: result.limit ?? request.options?.limit,
-                offset: request.options?.offset ?? 0,
+                offset: previewOptions.offset ?? 0,
                 tookMs: result.tookMs,
                 statistics: result.statistics,
             };

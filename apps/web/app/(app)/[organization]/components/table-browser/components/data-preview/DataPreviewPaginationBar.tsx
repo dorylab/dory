@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 
@@ -19,6 +20,7 @@ type DataPreviewPaginationBarProps = {
     variant?: 'footer' | 'inline';
     onPageChange: (pageIndex: number) => void;
     onPageSizeChange: (pageSize: number) => void;
+    actions?: ReactNode;
 };
 
 type PaginationItem = number | 'start-ellipsis' | 'end-ellipsis';
@@ -53,6 +55,7 @@ export function DataPreviewPaginationBar({
     variant = 'footer',
     onPageChange,
     onPageSizeChange,
+    actions,
 }: DataPreviewPaginationBarProps) {
     const t = useTranslations('TableBrowser');
 
@@ -136,11 +139,10 @@ export function DataPreviewPaginationBar({
                 </div>
             </div>
 
-            {rowsLabel && (
-                <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                    <span>{rowsLabel}</span>
-                </div>
-            )}
+            <div className="flex shrink-0 items-center gap-2 tabular-nums">
+                {rowsLabel ? <span>{rowsLabel}</span> : null}
+                {actions}
+            </div>
         </div>
     );
 }

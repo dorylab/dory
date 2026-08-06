@@ -3,7 +3,7 @@ import { compileParams, enforceSelectLimit } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import type { BaseConfig, DriverRowCursor, HealthInfo, QueryResult, SchemaGraphOptions, SchemaGraphResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import { buildSchemaGraphResult, type SchemaGraphRelationshipInput, type SchemaGraphTableInput } from '@dory/drivers/core';
-import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
+import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 import { CloudflareD1Dialect } from './dialect';
 
 type CloudflareD1Meta = {
@@ -515,6 +515,15 @@ export async function previewCloudflareD1Table(
         unfilteredTotalRows: unfilteredCountResult ? Number(unfilteredCountResult.rows[0]?.totalRows ?? 0) : null,
         limited: true,
         limit: normalizedLimit,
+    };
+}
+
+export function buildCloudflareD1TableReadQuery(database: string, table: string, options: Parameters<NonNullable<import('@dory/drivers/types').GetTableInfoAPI['openRows']>>[2]) {
+    const clauses = buildTablePreviewClauses({ ...options, dialect: 'sqlite', quoteIdentifier });
+    const projection = buildTableProjection(options.columns, quoteIdentifier);
+    return {
+        sql: `SELECT ${projection} FROM ${buildQualifiedName(database, table)}${clauses.whereSql}${clauses.orderBySql}`,
+        params: clauses.params,
     };
 }
 
