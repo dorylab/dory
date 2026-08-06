@@ -1,11 +1,7 @@
 import { type RefinementCtx } from 'zod';
 import { UseFormReturn } from 'react-hook-form';
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/registry/new-york-v4/ui/form';
-import { Input } from '@/registry/new-york-v4/ui/input';
-import { Button } from '@/registry/new-york-v4/ui/button';
-import { applySelectedLocalDatabasePath, FieldHelp } from './shared';
-import { useTranslations } from 'next-intl';
-import { isDesktopRuntime } from '@dory/shared/runtime';
+import { LocalDatabaseFileFields } from './shared';
+import { buildLocalDatabasePath, DEFAULT_LOCAL_DATABASE_DIRECTORY, getDefaultLocalDatabaseFileName } from './local-database';
 
 function isAbsolutePath(value: string) {
     return /^(\/|[a-zA-Z]:[\\/])/.test(value);
@@ -38,6 +34,9 @@ export function createSqliteConnectionDefaults() {
         ssl: false,
         database: 'main',
         path: '',
+        localDatabaseSource: 'existing',
+        localDatabaseFileName: getDefaultLocalDatabaseFileName('sqlite'),
+        localDatabaseDirectory: DEFAULT_LOCAL_DATABASE_DIRECTORY,
         environment: '',
         tags: '',
     };
@@ -53,6 +52,7 @@ export function normalizeSqliteConnectionForForm(connection: any) {
         ssl: false,
         database: connection?.database ?? 'main',
         path: connection?.path ?? '',
+        localDatabaseSource: 'existing',
     };
 }
 
@@ -60,14 +60,16 @@ export function normalizeSqliteConnectionForSubmit(connection: any) {
     const options = parseConnectionOptions(connection?.options);
     delete options.ssh;
 
+    const { localDatabaseSource, localDatabaseFileName, localDatabaseDirectory, ...restConnection } = connection ?? {};
+
     return {
-        ...connection,
+        ...restConnection,
         host: null,
         port: null,
         httpPort: null,
         ssl: false,
         database: connection?.database?.trim?.() || 'main',
-        path: connection?.path?.trim?.() || '',
+        path: localDatabaseSource === 'new' ? buildLocalDatabasePath('sqlite', localDatabaseDirectory ?? '', localDatabaseFileName ?? '') : connection?.path?.trim?.() || '',
         options: JSON.stringify(options),
     };
 }
@@ -79,48 +81,6 @@ export function validateSqliteConnection(value: any, ctx: RefinementCtx) {
     void isAbsolutePath;
 }
 
-export function SqliteConnectionFields({ form }: { form: UseFormReturn<any> }) {
-    const t = useTranslations('Connections.ConnectionContent');
-    const canPickFile = isDesktopRuntime() && typeof window !== 'undefined' && typeof window.electron?.selectSqliteFile === 'function';
-
-    return (
-        <div className="space-y-4">
-            <FormField
-                control={form.control}
-                name="connection.path"
-                render={({ field }) => (
-                    <FormItem className="space-y-2">
-                        <FormLabel className="flex items-center gap-1.5">
-                            <span>
-                                {t('Database File')}
-                                <span className="text-destructive"> *</span>
-                            </span>
-                            <FieldHelp text="Use an absolute path to an existing .sqlite or .db file that the server process can access." />
-                        </FormLabel>
-                        <FormControl>
-                            <div className="flex gap-2">
-                                <Input placeholder={t('Select File Placeholder')} {...field} value={field.value ?? ''} />
-                                {canPickFile ? (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={async () => {
-                                            const selectedPath = await window.electron?.selectSqliteFile?.();
-                                            if (!selectedPath) {
-                                                return;
-                                            }
-                                            applySelectedLocalDatabasePath(form, selectedPath);
-                                        }}
-                                    >
-                                        {t('Choose')}
-                                    </Button>
-                                ) : null}
-                            </div>
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-        </div>
-    );
+export function SqliteConnectionFields({ form, isEditMode }: { form: UseFormReturn<any>; isEditMode?: boolean }) {
+    return <LocalDatabaseFileFields form={form} type="sqlite" isEditMode={isEditMode} />;
 }

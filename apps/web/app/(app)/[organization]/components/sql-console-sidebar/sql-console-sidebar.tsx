@@ -10,6 +10,7 @@ import { useDatabases } from '@/hooks/use-databases';
 import { useTables } from '@/hooks/use-tables';
 import { useColumns } from '@/hooks/use-columns';
 import { useSchemas } from '@/hooks/use-schemas';
+import { driverSupportsDataImport } from '@/lib/client/import-capabilities';
 import { activeDatabaseAtom, currentConnectionAtom } from '@/shared/stores/app.store';
 import { DatabaseSelect } from './database-select';
 import { getSidebarConfig } from './sidebar-config';
@@ -44,6 +45,7 @@ export function SQLConsoleSidebar({
     onOpenQueryConsole,
     onQueryTable,
     onRenameTable,
+    onImportTable,
     onSelectTable,
     selectedTable,
     selectedDatabase,
@@ -279,6 +281,7 @@ export function SQLConsoleSidebar({
                 onOpenQueryConsole={onOpenQueryConsole}
                 onQueryTable={onQueryTable}
                 onRenameTable={handleRenameTable}
+                onImportTable={driverSupportsDataImport(currentConnection?.connection?.type) ? onImportTable : undefined}
                 getTableActionPayload={toTableActionPayload}
                 t={t}
             />

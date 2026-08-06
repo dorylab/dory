@@ -137,7 +137,9 @@
     ".next-e2e/types/**/*.ts",
     ".next-e2e/dev/types/**/*.ts",
     ".next-e2e-final/types/**/*.ts",
-    ".next-e2e-final/dev/types/**/*.ts"
+    ".next-e2e-final/dev/types/**/*.ts",
+    ".next-url-switch-test/types/**/*.ts",
+    ".next-url-switch-test/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

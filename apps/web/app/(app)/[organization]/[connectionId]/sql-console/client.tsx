@@ -7,7 +7,10 @@ import { Sparkles } from 'lucide-react';
 
 import { cn } from '@dory/web-utils';
 import type { SQLTab } from '@dory/shared/types/tabs';
+import { TableImportDialogHost, useTableImportDialog } from '@/components/table-context-menu/table-import-dialog-host';
+import type { TableContextTarget } from '@/components/table-context-menu/types';
 import { executeActionClient } from '@/lib/actions/client';
+import { consumeSqlConsoleTableHandoff } from '@/lib/client/sql-console-handoff';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { useTranslations } from 'next-intl';
 import {
@@ -23,7 +26,7 @@ import {
 import { copilotPanelOpenAtom, copilotPanelWidthAtom, editorSelectionByTabAtom, inlineSqlAskByTabAtom, sessionIdByTabAtom } from './sql-console.store';
 
 import { SQLConsoleSidebar } from '../../components/sql-console-sidebar/sql-console-sidebar';
-import type { RenameTablePayload, TableActionPayload } from '../../components/sql-console-sidebar/types';
+import type { RenameTablePayload } from '../../components/sql-console-sidebar/types';
 import { SavedQueriesSidebar, type SavedQueryItem } from './components/saved-queries/saved-queries-sidebar';
 import SQLTabEmpty from './components/tabs/tab-empty';
 import { SQLTabs } from './components/tabs';
@@ -77,7 +80,7 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
-export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizontal.default }: { defaultLayout: number[] | undefined }) {
+export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizontal.default, maxFileBytes }: { defaultLayout: number[] | undefined; maxFileBytes: number }) {
     const {
         normalizedLayout,
         onLayout: onLayoutFromHook,
@@ -110,6 +113,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     const selectionByTab = useAtomValue(editorSelectionByTabAtom);
     const setInlineAskByTab = useSetAtom(inlineSqlAskByTabAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
+    const openTableImport = useTableImportDialog();
     const shouldShowChatbot = activeTab?.tabType === 'sql' ? showChatbot : false;
     const normalizedChatWidth = useMemo(
         () => clamp(chatWidth ?? INITIAL_LAYOUT.copilot.defaultWidth, INITIAL_LAYOUT.copilot.minWidth, INITIAL_LAYOUT.copilot.maxWidth),
@@ -154,14 +158,14 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     }, [addTab]);
 
     const handleQueryTable = useCallback(
-        async (payload: TableActionPayload) => {
+        async (payload: TableContextTarget) => {
             const sqlText = buildQueryTableSql({
                 connectionType: currentConnection?.connection?.type,
                 database: payload.database,
                 schema: payload.schema,
                 tableName: payload.tableName,
             });
-            const tabName = t('Tabs.QueryTableTabName', { table: payload.tabLabel ?? payload.tableName });
+            const tabName = t('Tabs.QueryTableTabName', { table: payload.tableLabel ?? payload.tableName });
             const tabId = await addTab({ tabName, content: sqlText, activate: true });
             const tab: SQLTab = {
                 tabId,
@@ -220,6 +224,19 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         },
         [currentConnection?.connection?.id, t, tabs, updateTab],
     );
+
+    useEffect(() => {
+        const connectionId = currentConnection?.connection?.id;
+        if (!connectionId || isLoading || !areTabsHydrated) return;
+
+        const handoff = consumeSqlConsoleTableHandoff(connectionId);
+        if (!handoff) return;
+        if (handoff.kind === 'new-query') {
+            void handleOpenQueryConsole();
+            return;
+        }
+        void handleQueryTable(handoff.target);
+    }, [areTabsHydrated, currentConnection?.connection?.id, handleOpenQueryConsole, handleQueryTable, isLoading]);
 
     useEffect(() => {
         if (chatWidth !== normalizedChatWidth) {
@@ -387,10 +404,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                     maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
                     className="min-w-0 overflow-hidden"
                 >
-                    <div
-                        className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card"
-                        data-testid="sql-console-sidebar-surface"
-                    >
+                    <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card" data-testid="sql-console-sidebar-surface">
                         <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
                             <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
                                 <TabsTrigger value="tables" className="min-w-0 flex-1">
@@ -407,6 +421,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                                     onOpenQueryConsole={handleOpenQueryConsole}
                                     onQueryTable={handleQueryTable}
                                     onRenameTable={handleRenameTable}
+                                    onImportTable={openTableImport}
                                     selectedTable={activeTab?.tabType === 'table' ? activeTab.tableName : undefined}
                                     selectedDatabase={activeTab?.tabType === 'table' ? activeTab.databaseName : undefined}
                                 />
@@ -543,6 +558,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            <TableImportDialogHost maxFileBytes={maxFileBytes} />
         </main>
     );
 }

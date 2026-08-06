@@ -10,6 +10,20 @@ export type VTableInspectorPayload =
       }
     | null;
 
+export type VTableCellChange = {
+    rowIndex: number;
+    column: string;
+    originalValue: unknown;
+    nextValue: unknown;
+};
+
+export type VTableCellTarget = {
+    rowIndex: number;
+    column: string;
+};
+
+export type VTableBatchEditResult = { ok: true; changedCellCount: number; affectedRowCount: number } | { ok: false; error: string };
+
 export interface VTableProps {
     results: { rowData: Record<string, unknown> }[];
     columnMetas: Array<{
@@ -43,6 +57,7 @@ export interface VTableProps {
     onSortChange?: (sort: { column: string; direction: 'asc' | 'desc' } | null) => void;
     onSelectedRowIndexesChange?: (rowIndexes: number[]) => void;
     editable?: boolean;
+    editDisabledReason?: string;
     getCellEditState?: (
         rowIndex: number,
         column: string,
@@ -53,8 +68,10 @@ export interface VTableProps {
         readOnlyReason?: string;
     };
     isRowChanged?: (rowIndex: number) => boolean;
-    onCellChange?: (input: { rowIndex: number; column: string; originalValue: unknown; nextValue: unknown }) => void;
+    onCellChange?: (input: VTableCellChange) => void;
+    onCellsChange?: (inputs: VTableCellChange[]) => VTableBatchEditResult;
     onRevertCell?: (rowIndex: number, column: string) => void;
+    onCellsRevert?: (targets: VTableCellTarget[]) => VTableBatchEditResult;
     onUndo?: () => void;
     onRedo?: () => void;
     onCommitAll?: () => void;

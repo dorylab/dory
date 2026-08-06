@@ -1,6 +1,8 @@
 import type { DriverType, TableMutationAtomicity, TableMutationDialect, TableMutationValue, TableUpdateBatch, TableUpdateCell, TableUpdateRow } from './types';
 
 export const TABLE_MUTATION_CONFLICT_CODE = 'TABLE_MUTATION_CONFLICT';
+export const MAX_TABLE_UPDATE_ROWS = 100;
+export const MAX_TABLE_UPDATE_CHANGES_PER_ROW = 200;
 
 export class TableMutationConflictError extends Error {
     readonly code = TABLE_MUTATION_CONFLICT_CODE;

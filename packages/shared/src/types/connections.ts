@@ -290,6 +290,7 @@ export interface CreateConnectionPayload {
     identities: ConnectionListIdentity[];
     ssh: ConnectionSsh | null;
     tls?: ConnectionTlsUpsertInput | null;
+    createLocalDatabase?: true;
 }
 
 export interface UpdateConnectionPayload {

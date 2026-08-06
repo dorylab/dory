@@ -4,22 +4,13 @@ import { Boxes, ChevronDown, ChevronRight, Database, Eye, FolderTree, Loader2, S
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@dory/web-utils';
+import type { RenameTableTarget, TableContextTarget } from '@/components/table-context-menu/types';
 
 import { ObjectGroup } from './object-group';
 import type { GroupConfig } from './object-group';
 import { SchemaNodeRow } from './schema-node-row';
 import { DEFAULT_GROUP_STATE, EMPTY_DATABASE_OBJECTS } from './types';
-import type {
-    DatabaseObjects,
-    GroupState,
-    SchemaNode,
-    SidebarImportTarget,
-    SidebarListKind,
-    SidebarListTarget,
-    SidebarObjectTarget,
-    SidebarSelection,
-    TargetOption,
-} from './types';
+import type { DatabaseObjects, GroupState, SchemaNode, SidebarListKind, SidebarListTarget, SidebarObjectTarget, SidebarSelection, TargetOption } from './types';
 
 type ExplorerSidebarTreeProps = {
     catalogName: string;
@@ -50,7 +41,10 @@ type ExplorerSidebarTreeProps = {
     onSelectList: (target: SidebarListTarget) => void;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
-    onImportTable?: (target: SidebarImportTarget) => void;
+    onNewQuery?: () => void | Promise<void>;
+    onQuickQuery?: (target: TableContextTarget) => void | Promise<void>;
+    onRenameTable?: (target: RenameTableTarget) => void | Promise<void>;
+    onImportTable?: (target: TableContextTarget) => void | Promise<void>;
     filterEntries: (entries: TargetOption[]) => TargetOption[];
     getSchemaObjects: (database: string, schema: string) => DatabaseObjects;
 };
@@ -93,6 +87,9 @@ export function ExplorerSidebarTree({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onNewQuery,
+    onQuickQuery,
+    onRenameTable,
     onImportTable,
     filterEntries,
     getSchemaObjects,
@@ -159,6 +156,9 @@ export function ExplorerSidebarTree({
                                     onSelectList={onSelectList}
                                     onSelectObject={onSelectObject}
                                     onOpenObject={onOpenObject}
+                                    onNewQuery={onNewQuery}
+                                    onQuickQuery={onQuickQuery}
+                                    onRenameTable={onRenameTable}
                                     onImportTable={onImportTable}
                                     filterEntries={filterEntries}
                                     getSchemaObjects={getSchemaObjects}
@@ -217,7 +217,10 @@ type DatabaseNodeProps = {
     onSelectList: (target: SidebarListTarget) => void;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
-    onImportTable?: (target: SidebarImportTarget) => void;
+    onNewQuery?: () => void | Promise<void>;
+    onQuickQuery?: (target: TableContextTarget) => void | Promise<void>;
+    onRenameTable?: (target: RenameTableTarget) => void | Promise<void>;
+    onImportTable?: (target: TableContextTarget) => void | Promise<void>;
     filterEntries: (entries: TargetOption[]) => TargetOption[];
     getSchemaObjects: (database: string, schema: string) => DatabaseObjects;
 };
@@ -248,6 +251,9 @@ function DatabaseNode({
     onSelectList,
     onSelectObject,
     onOpenObject,
+    onNewQuery,
+    onQuickQuery,
+    onRenameTable,
     onImportTable,
     filterEntries,
     getSchemaObjects,
@@ -326,6 +332,9 @@ function DatabaseNode({
                                               onSelectList={onSelectList}
                                               onSelectObject={onSelectObject}
                                               onOpenObject={onOpenObject}
+                                              onNewQuery={onNewQuery}
+                                              onQuickQuery={onQuickQuery}
+                                              onRenameTable={onRenameTable}
                                               onImportTable={onImportTable}
                                               filterEntries={filterEntries}
                                           />
@@ -369,6 +378,9 @@ function DatabaseNode({
                                           onSelectList={onSelectList}
                                           onSelectObject={onSelectObject}
                                           onOpenObject={onOpenObject}
+                                          onNewQuery={onNewQuery}
+                                          onQuickQuery={onQuickQuery}
+                                          onRenameTable={onRenameTable}
                                           onImportTable={onImportTable}
                                       />
                                   ))

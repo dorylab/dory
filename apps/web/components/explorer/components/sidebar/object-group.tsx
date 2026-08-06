@@ -1,12 +1,13 @@
 'use client';
 
-import { ArrowDownToLine, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@dory/web-utils';
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/registry/new-york-v4/ui/context-menu';
-import type { GroupState, SidebarImportTarget, SidebarListTarget, SidebarObjectKind, SidebarObjectTarget, SidebarSelection, SidebarListKind, TargetOption } from './types';
+import { TableContextMenu } from '@/components/table-context-menu/table-context-menu';
+import type { RenameTableTarget, TableContextTarget } from '@/components/table-context-menu/types';
+import type { GroupState, SidebarListTarget, SidebarObjectKind, SidebarObjectTarget, SidebarSelection, SidebarListKind, TargetOption } from './types';
 
 export type GroupConfig = {
     key: keyof GroupState;
@@ -34,7 +35,10 @@ type ObjectGroupProps = {
     onSelectList: (target: SidebarListTarget) => void;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
-    onImportTable?: (target: SidebarImportTarget) => void;
+    onNewQuery?: () => void | Promise<void>;
+    onQuickQuery?: (target: TableContextTarget) => void | Promise<void>;
+    onRenameTable?: (target: RenameTableTarget) => void | Promise<void>;
+    onImportTable?: (target: TableContextTarget) => void | Promise<void>;
 };
 
 const resolveEntryValue = (entry: TargetOption) => (entry.value ?? entry.label ?? entry.name ?? '').toString();
@@ -45,20 +49,19 @@ export function ObjectGroup({
     dbName,
     group,
     objectKind,
-    listTarget,
     fallbackSchema,
     isExpanded,
     isLoading,
     entries,
     normalized,
     selectedDatabase,
-    selectedSchema,
-    selectedList,
     selectedObject,
     onToggle,
-    onSelectList,
     onSelectObject,
     onOpenObject,
+    onNewQuery,
+    onQuickQuery,
+    onRenameTable,
     onImportTable,
 }: ObjectGroupProps) {
     const t = useTranslations('CatalogSchemaSidebar');
@@ -95,6 +98,9 @@ export function ObjectGroup({
                                     selectedObject={selectedObject}
                                     onSelectObject={onSelectObject}
                                     onOpenObject={onOpenObject}
+                                    onNewQuery={onNewQuery}
+                                    onQuickQuery={onQuickQuery}
+                                    onRenameTable={onRenameTable}
                                     onImportTable={onImportTable}
                                 />
                             ))
@@ -117,6 +123,9 @@ function ObjectItem({
     selectedObject,
     onSelectObject,
     onOpenObject,
+    onNewQuery,
+    onQuickQuery,
+    onRenameTable,
     onImportTable,
 }: {
     dbName: string;
@@ -128,9 +137,11 @@ function ObjectItem({
     selectedObject?: SidebarSelection;
     onSelectObject: (target: SidebarObjectTarget) => void;
     onOpenObject: (target: SidebarObjectTarget) => void;
-    onImportTable?: (target: SidebarImportTarget) => void;
+    onNewQuery?: () => void | Promise<void>;
+    onQuickQuery?: (target: TableContextTarget) => void | Promise<void>;
+    onRenameTable?: (target: RenameTableTarget) => void | Promise<void>;
+    onImportTable?: (target: TableContextTarget) => void | Promise<void>;
 }) {
-    const importT = useTranslations('ImportWizard');
     const entryValue = resolveEntryValue(entry);
     const entryLabel = resolveEntryLabel(entry);
     const entrySchema = typeof entry.schema === 'string' && entry.schema.trim() ? entry.schema.trim() : fallbackSchema;
@@ -147,7 +158,9 @@ function ObjectItem({
             type="button"
             className={cn(
                 'flex w-full items-center gap-2 truncate rounded px-2 py-1 text-left text-sm',
-                isSelected ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                isSelected
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                    : 'text-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground',
                 'cursor-pointer',
             )}
             onClick={() =>
@@ -175,17 +188,19 @@ function ObjectItem({
         </button>
     );
 
-    if (objectKind !== 'table' || !onImportTable) return itemButton;
+    if (objectKind !== 'table') return itemButton;
+
+    const target: TableContextTarget = {
+        database: dbName,
+        schema: entrySchema,
+        tableName: entryValue,
+        tableLabel: entryLabel,
+        unqualifiedTableName: entryName,
+    };
 
     return (
-        <ContextMenu>
-            <ContextMenuTrigger asChild>{itemButton}</ContextMenuTrigger>
-            <ContextMenuContent>
-                <ContextMenuItem onSelect={() => onImportTable({ database: dbName, schema: entrySchema, table: entryName })}>
-                    <ArrowDownToLine />
-                    {importT('ImportData')}
-                </ContextMenuItem>
-            </ContextMenuContent>
-        </ContextMenu>
+        <TableContextMenu target={target} onNewQuery={onNewQuery} onQuickQuery={onQuickQuery} onRename={onRenameTable} onImport={onImportTable}>
+            {itemButton}
+        </TableContextMenu>
     );
 }

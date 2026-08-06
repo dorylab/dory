@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { FileText, KeyRound, PanelRightOpen, Redo2, RotateCw, Undo2 } from 'lucide-react';
@@ -24,7 +24,13 @@ import { currentSessionMetaAtom } from '../../../../[connectionId]/sql-console/c
 import VTable from '../../../../[connectionId]/sql-console/components/result-table/vtable';
 import { InspectorPanel } from '../../../../[connectionId]/sql-console/components/result-table/vtable/InspectorPanel';
 import { VTableFilters } from '../../../../[connectionId]/sql-console/components/result-table/vtable/VTableFilters';
-import type { ColumnFilter, VTableInspectorPayload } from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
+import type {
+    ColumnFilter,
+    VTableBatchEditResult,
+    VTableCellChange,
+    VTableCellTarget,
+    VTableInspectorPayload,
+} from '../../../../[connectionId]/sql-console/components/result-table/vtable/type';
 import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { useTablePropertiesQuery, useTableStatsQuery, useTableStructureColumnsQuery } from '../table-queries';
@@ -39,25 +45,34 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/registry/new-york-v4/ui/alert-dialog';
-import { buildTableUpdatePreview, getTableMutationProfile, isEditableTableMutationColumnType } from '@dory/drivers/table-mutations';
+import {
+    buildTableUpdatePreview,
+    getTableMutationProfile,
+    isEditableTableMutationColumnType,
+    MAX_TABLE_UPDATE_CHANGES_PER_ROW,
+    MAX_TABLE_UPDATE_ROWS,
+} from '@dory/drivers/table-mutations';
 import type { TablePreviewFilter, TablePreviewSort, TableUpdateBatch } from '@dory/drivers/types';
 import { commitTableUpdates } from '../../lib/commit-table-updates';
 import {
-    applyTableCellEdit,
+    applyTableCellEdits,
     clearTableEdits,
     createEmptyTableEditSession,
     getPendingEditCounts,
     getRowKey,
+    getTableEditLimitViolation,
     overlayPendingRow,
     pendingRowsToUpdates,
     redoTableEdit,
     removeCommittedTableEdits,
     revertTableCellEdit,
+    revertTableCells,
     tableEditSessionsAtom,
     tableIdentitySelectionsAtom,
     toTableMutationValue,
     undoTableEdit,
     type PendingRowChange,
+    type TableCellEditInput,
     type TableEditViewSnapshot,
 } from './table-editor-store';
 import { TableEditorPanel } from './table-editor-panel';
@@ -355,6 +370,8 @@ function DataPreviewInner({
     const [identitySelections, setIdentitySelections] = useAtom(tableIdentitySelectionsAtom);
     const sessionKey = storageKey ?? `preview:${connectionId ?? 'unknown'}:${databaseName ?? 'unknown'}:${tableName ?? 'unknown'}`;
     const editSession = useMemo(() => editSessions[sessionKey] ?? createEmptyTableEditSession(), [editSessions, sessionKey]);
+    const editSessionRef = useRef(editSession);
+    editSessionRef.current = editSession;
     const currentConnectionValue = currentConnection?.connection;
     const resolvedDriver = driver ?? (currentConnectionValue && currentConnectionValue.id === connectionId ? currentConnectionValue.type : undefined);
     const mutationProfile = getTableMutationProfile(resolvedDriver);
@@ -681,10 +698,9 @@ function DataPreviewInner({
 
     const updateEditSession = useCallback(
         (updater: (session: ReturnType<typeof createEmptyTableEditSession>) => ReturnType<typeof createEmptyTableEditSession>) => {
-            setEditSessions(current => ({
-                ...current,
-                [sessionKey]: updater(current[sessionKey] ?? createEmptyTableEditSession()),
-            }));
+            const nextSession = updater(editSessionRef.current);
+            editSessionRef.current = nextSession;
+            setEditSessions(current => ({ ...current, [sessionKey]: nextSession }));
         },
         [sessionKey, setEditSessions],
     );
@@ -700,26 +716,81 @@ function DataPreviewInner({
         [activeFilters, pageIndex, pageSize, query, sortState],
     );
 
-    const handleCellChange = useCallback(
-        ({ rowIndex, column, originalValue, nextValue }: { rowIndex: number; column: string; originalValue: unknown; nextValue: unknown }) => {
-            const row = baseRows[rowIndex]?.rowData;
-            if (!row) return;
-            const identity = getRowKey(row, identityColumns);
-            const original = toTableMutationValue(originalValue);
-            const next = toTableMutationValue(nextValue);
-            if (!identity || original === undefined || next === undefined) return;
-            updateEditSession(session =>
-                applyTableCellEdit(session, {
+    const handleCellsChange = useCallback(
+        (inputs: VTableCellChange[]): VTableBatchEditResult => {
+            const edits: TableCellEditInput[] = [];
+            const affectedRows = new Set<string>();
+            const errors: string[] = [];
+
+            for (const input of inputs) {
+                const baseRow = baseRows[input.rowIndex]?.rowData;
+                const displayedRow = rows[input.rowIndex]?.rowData;
+                if (!baseRow || !displayedRow) {
+                    errors.push(t('Editor.BatchRowUnavailable'));
+                    continue;
+                }
+                const metadata = columnsByName.get(input.column);
+                if (!metadata || identityColumns.includes(input.column) || !isEditableTableMutationColumnType(metadata.type)) {
+                    errors.push(t('Editor.BatchReadOnly'));
+                    continue;
+                }
+                const identity = getRowKey(baseRow, identityColumns);
+                if (!identity) {
+                    errors.push(t('Editor.BatchIdentityUnavailable'));
+                    continue;
+                }
+                const original = toTableMutationValue(baseRow[input.column]);
+                const current = toTableMutationValue(displayedRow[input.column]);
+                const next = toTableMutationValue(input.nextValue);
+                if (original === undefined || current === undefined || next === undefined) {
+                    errors.push(t('Editor.BatchUnsupportedValue'));
+                    continue;
+                }
+                if (Object.is(current, next)) continue;
+                edits.push({
                     ...identity,
-                    column,
+                    column: input.column,
                     originalValue: original,
                     nextValue: next,
-                    sourceRowIndex: rowIndex,
+                    sourceRowIndex: input.rowIndex,
                     sourceView: currentView,
-                }),
-            );
+                });
+                affectedRows.add(identity.rowKey);
+            }
+
+            if (errors.length > 0) {
+                return { ok: false, error: t('Editor.BatchRejected', { reason: errors[0], count: errors.length }) };
+            }
+            if (!edits.length) return { ok: true, changedCellCount: 0, affectedRowCount: 0 };
+            const candidate = applyTableCellEdits(editSessionRef.current, edits);
+            const limitViolation = getTableEditLimitViolation(candidate, {
+                maxRows: MAX_TABLE_UPDATE_ROWS,
+                maxChangesPerRow: MAX_TABLE_UPDATE_CHANGES_PER_ROW,
+            });
+            if (limitViolation === 'rows') {
+                return { ok: false, error: t('Editor.BatchRowLimit', { count: MAX_TABLE_UPDATE_ROWS }) };
+            }
+            if (limitViolation === 'fields') {
+                return { ok: false, error: t('Editor.BatchFieldLimit', { count: MAX_TABLE_UPDATE_CHANGES_PER_ROW }) };
+            }
+
+            editSessionRef.current = candidate;
+            setEditSessions(current => ({ ...current, [sessionKey]: candidate }));
+            return {
+                ok: true,
+                changedCellCount: edits.length,
+                affectedRowCount: affectedRows.size,
+            };
         },
-        [baseRows, currentView, identityColumns, updateEditSession],
+        [baseRows, columnsByName, currentView, identityColumns, rows, sessionKey, setEditSessions, t],
+    );
+
+    const handleCellChange = useCallback(
+        (input: VTableCellChange) => {
+            const result = handleCellsChange([input]);
+            if (!result.ok) toast.error(result.error);
+        },
+        [handleCellsChange],
     );
 
     const getRowIdentityAt = useCallback(
@@ -730,12 +801,33 @@ function DataPreviewInner({
         [baseRows, identityColumns],
     );
 
+    const handleCellsRevert = useCallback(
+        (targets: VTableCellTarget[]): VTableBatchEditResult => {
+            const storeTargets: Array<{ rowKey: string; column: string }> = [];
+            const affectedRows = new Set<string>();
+            const currentSession = editSessionRef.current;
+            for (const target of targets) {
+                const identity = getRowIdentityAt(target.rowIndex);
+                if (!identity) return { ok: false, error: t('Editor.BatchIdentityUnavailable') };
+                if (!currentSession.rows[identity.rowKey]?.changes[target.column]) continue;
+                storeTargets.push({ rowKey: identity.rowKey, column: target.column });
+                affectedRows.add(identity.rowKey);
+            }
+            if (!storeTargets.length) return { ok: true, changedCellCount: 0, affectedRowCount: 0 };
+            const candidate = revertTableCells(currentSession, storeTargets);
+            editSessionRef.current = candidate;
+            setEditSessions(current => ({ ...current, [sessionKey]: candidate }));
+            return { ok: true, changedCellCount: storeTargets.length, affectedRowCount: affectedRows.size };
+        },
+        [getRowIdentityAt, sessionKey, setEditSessions, t],
+    );
+
     const handleRevertCellAt = useCallback(
         (rowIndex: number, column: string) => {
-            const identity = getRowIdentityAt(rowIndex);
-            if (identity) updateEditSession(session => revertTableCellEdit(session, identity.rowKey, column));
+            const result = handleCellsRevert([{ rowIndex, column }]);
+            if (!result.ok) toast.error(result.error);
         },
-        [getRowIdentityAt, updateEditSession],
+        [handleCellsRevert],
     );
 
     const getCellEditState = useCallback(
@@ -744,19 +836,21 @@ function DataPreviewInner({
             const metadata = columnsByName.get(column);
             const isComplex = !isEditableTableMutationColumnType(metadata?.type);
             const isIdentity = identityColumns.includes(column);
-            const readOnlyReason = isIdentity
-                ? t('Editor.IdentityColumnReadOnly')
-                : isComplex
-                  ? t('Editor.ComplexTypeReadOnly')
-                  : !mutationAvailable
-                    ? resolvedDriver === 'clickhouse' && !clickhouseMutationAllowed
-                        ? t('Editor.UnsupportedClickHouseEngine')
-                        : t('Editor.UnsupportedDriver')
-                    : identityColumns.length === 0
-                      ? t('Editor.NoIdentity')
-                      : undefined;
+            const readOnlyReason = !identity
+                ? t('Editor.BatchIdentityUnavailable')
+                : isIdentity
+                  ? t('Editor.IdentityColumnReadOnly')
+                  : isComplex
+                    ? t('Editor.ComplexTypeReadOnly')
+                    : !mutationAvailable
+                      ? resolvedDriver === 'clickhouse' && !clickhouseMutationAllowed
+                          ? t('Editor.UnsupportedClickHouseEngine')
+                          : t('Editor.UnsupportedDriver')
+                      : identityColumns.length === 0
+                        ? t('Editor.NoIdentity')
+                        : undefined;
             return {
-                editable: tableIsEditable && !isIdentity && !isComplex,
+                editable: Boolean(identity) && tableIsEditable && !isIdentity && !isComplex,
                 changed: Boolean(identity && editSession.rows[identity.rowKey]?.changes[column]),
                 nullable: metadata?.nullable,
                 readOnlyReason,
@@ -915,11 +1009,16 @@ function DataPreviewInner({
                 />
                 {totalRowsLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{totalRowsLabel}</div>}
                 {selectionSummary.cellCount > 0 || selectionSummary.rowCount > 0 ? (
-                    <div className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {t('Editor.SelectionSummary', {
-                            cells: selectionSummary.cellCount,
-                            rows: selectionSummary.rowCount,
-                        })}
+                    <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
+                        <span>
+                            {t('Editor.SelectionSummary', {
+                                cells: selectionSummary.cellCount,
+                                rows: selectionSummary.rowCount,
+                            })}
+                        </span>
+                        {tableIsEditable && selectionSummary.cellCount > 1 ? (
+                            <span className="hidden text-muted-foreground/80 xl:inline">{t('Editor.SelectionEditHint')}</span>
+                        ) : null}
                     </div>
                 ) : null}
                 {mutationAvailable && selectableIdentityColumns.length > 0 ? (
@@ -1280,10 +1379,13 @@ function DataPreviewInner({
                     }}
                     setInspectorPayload={setInspectorPayload}
                     editable={tableIsEditable}
+                    editDisabledReason={mutationAvailable && identityColumns.length === 0 ? t('Editor.NoIdentity') : undefined}
                     getCellEditState={getCellEditState}
                     isRowChanged={isRowChanged}
                     onCellChange={handleCellChange}
+                    onCellsChange={handleCellsChange}
                     onRevertCell={handleRevertCellAt}
+                    onCellsRevert={handleCellsRevert}
                     onUndo={() => updateEditSession(undoTableEdit)}
                     onRedo={() => updateEditSession(redoTableEdit)}
                     onCommitAll={() => {

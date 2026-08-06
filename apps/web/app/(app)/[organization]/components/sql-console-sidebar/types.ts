@@ -1,4 +1,5 @@
 import type { ConnectionType } from '@dory/shared/types/connections';
+import type { RenameTableTarget, TableContextTarget } from '@/components/table-context-menu/types';
 
 export type TableColumn = {
     columnName: string;
@@ -37,15 +38,14 @@ export type TableActionPayload = {
     tabLabel?: string;
 };
 
-export type RenameTablePayload = TableActionPayload & {
-    nextName: string;
-};
+export type RenameTablePayload = RenameTableTarget;
 
 export type SQLConsoleSidebarProps = {
     onOpenTableTab?: (payload: TableActionPayload) => void;
     onOpenQueryConsole?: () => void | Promise<void>;
-    onQueryTable?: (payload: TableActionPayload) => void | Promise<void>;
+    onQueryTable?: (payload: TableContextTarget) => void | Promise<void>;
     onRenameTable?: (payload: RenameTablePayload) => void | Promise<void>;
+    onImportTable?: (payload: TableContextTarget) => void | Promise<void>;
     onSelectTable?: (payload: TableActionPayload) => void;
     onSelectDatabase?: (database: string) => void;
     selectedTable?: string;

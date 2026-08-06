@@ -79,6 +79,9 @@ const CONNECTION_SECTION_ERROR_PATHS: Record<ConnectionDialogSection, string[]> 
         'connection.database',
         'connection.connectString',
         'connection.path',
+        'connection.localDatabaseSource',
+        'connection.localDatabaseFileName',
+        'connection.localDatabaseDirectory',
         'connection.accountId',
         'connection.duckdbMode',
         'connection.ssl',
@@ -186,6 +189,7 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
     const { control, handleSubmit, reset } = form;
     const connectionType = useWatch({ control, name: 'connection.type' });
     const duckDbMode = useWatch({ control, name: 'connection.duckdbMode' });
+    const localDatabaseSource = useWatch({ control, name: 'connection.localDatabaseSource' });
     const isSqlite = connectionType === 'sqlite';
     const isNeon = connectionType === 'neon';
     const isSupabase = connectionType === 'supabase';
@@ -198,6 +202,7 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
     const hidesTlsForm = !TLS_SUPPORTED_CONNECTION_TYPES.has(connectionType);
 
     const isEditMode = mode === 'Edit' && Boolean(connectionItem?.connection?.id);
+    const isCreatingLocalDatabase = !isEditMode && localDatabaseSource === 'new' && (isSqlite || (isDuckDb && !isMotherDuck));
 
     const resetDialogState = () => {
         setTesting(false);
@@ -420,6 +425,10 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
             const driver = getConnectionDriver(values.connection?.type);
             const normalizedConnection = driver.normalizeForSubmit(normalizeConnectionValuesForSubmit(values.connection, tlsPayload));
             const normalizedIdentity = normalizeIdentityPasswordForSubmit(normalizeIdentityValues(values.identity), 'save');
+            const shouldCreateLocalDatabase =
+                !isEditMode &&
+                values.connection?.localDatabaseSource === 'new' &&
+                (values.connection?.type === 'sqlite' || (values.connection?.type === 'duckdb' && values.connection?.duckdbMode !== 'motherduck'));
 
             const savedValues = {
                 connection: isEditMode ? { ...normalizedConnection, id: connectionId } : normalizedConnection,
@@ -433,6 +442,7 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
                           }
                         : normalizedIdentity,
                 ],
+                ...(shouldCreateLocalDatabase ? { createLocalDatabase: true } : {}),
             };
             console.log('onSaveSubmit values:', values, 'savedValues:', savedValues);
             if (isEditMode && connectionItem?.connection?.id) {
@@ -537,7 +547,7 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
                                         <section className="space-y-6">
                                             <div className="space-y-3">
                                                 <ConnectionFormGroupLabel icon={Server}>{tc('General')}</ConnectionFormGroupLabel>
-                                                <ConnectionForm form={form} />
+                                                <ConnectionForm form={form} isEditMode={isEditMode} />
                                             </div>
 
                                             {!hidesIdentityForm ? (
@@ -588,11 +598,19 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
                         </div>
 
                         <DialogFooter className="flex shrink-0 border-t bg-background px-5 py-4 lg:justify-between">
-                            <div>
-                                <Button type="button" size="sm" className="gap-1" onClick={handleTestConnection} disabled={submitting || testing} data-testid="test-connection">
+                            <div className="flex items-center gap-3">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    className="gap-1"
+                                    onClick={handleTestConnection}
+                                    disabled={submitting || testing || isCreatingLocalDatabase}
+                                    data-testid="test-connection"
+                                >
                                     {testing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <FlaskConical className="mr-1 h-3.5 w-3.5" />}
                                     {testing ? t('Testing Connection') : tc('TestConnection')}
                                 </Button>
+                                {isCreatingLocalDatabase ? <p className="max-w-64 text-xs text-muted-foreground">{tc('New Database Test Hint')}</p> : null}
                             </div>
                             <div className="flex gap-2">
                                 <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
