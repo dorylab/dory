@@ -3,7 +3,7 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
 import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { buildSecureContextOptions, getDriverTlsOptions, normalizeTlsMode } from '@dory/drivers/core/tls';
 import { SqlServerDialect } from './dialect';
 
@@ -129,7 +129,10 @@ export function buildSqlServerPoolConfig(config: BaseConfig, databaseOverride?: 
 }
 
 function normalizeColumns(result: IResult<unknown>) {
-    const columns = result.recordset?.columns ?? {};
+    return normalizeColumnMap(result.recordset?.columns ?? {});
+}
+
+function normalizeColumnMap(columns: IResult<unknown>['recordset']['columns']) {
     return Object.values(columns)
         .sort((a, b) => a.index - b.index)
         .map(column => ({
@@ -262,9 +265,10 @@ export async function executeSqlServerQueryRowStream<Row>(
         trackQuery?: (request: Request) => void;
         untrackQuery?: () => void;
     },
-): Promise<DriverQueryRowStream<Row>> {
+): Promise<DriverRowCursor<Row>> {
     const { sql: compiledSql, values } = normalizeParams(sqlText, params);
     const request = pool.request();
+    request.arrayRowMode = true;
     bindParams(request, values);
     const started = Date.now();
 
@@ -274,6 +278,10 @@ export async function executeSqlServerQueryRowStream<Row>(
 
     const readable = request.toReadableStream({ highWaterMark: 1000 }) as AsyncIterable<Row> & { destroy?: (error?: Error) => void };
     const cleanup = onceAsync(() => options?.untrackQuery?.());
+    let columns: ReturnType<typeof normalizeColumnMap> | undefined;
+    request.on('recordset', recordset => {
+        columns = normalizeColumnMap(recordset);
+    });
     void request.query<Row>(compiledSql).catch(error => {
         readable.destroy?.(error instanceof Error ? error : new Error(String(error)));
     });
@@ -281,7 +289,9 @@ export async function executeSqlServerQueryRowStream<Row>(
     return {
         rows: asyncIterableWithCleanup(readable, cleanup),
         rowCount: null,
-        columns: undefined,
+        get columns() {
+            return columns;
+        },
         limited: false,
         tookMs: Date.now() - started,
         close: async () => {

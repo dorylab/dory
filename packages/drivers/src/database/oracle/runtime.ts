@@ -3,7 +3,7 @@ import { compileParams } from '@dory/drivers/core';
 import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { OracleDialect } from './dialect';
 
 oracledb.fetchAsString = Array.from(new Set([...(oracledb.fetchAsString ?? []), oracledb.CLOB]));
@@ -266,12 +266,12 @@ export async function executeOracleQueryRowStream<Row>(
     options?: {
         context?: ConnectionQueryContext;
     },
-): Promise<DriverQueryRowStream<Row>> {
+): Promise<DriverRowCursor<Row>> {
     const { sql: compiledSql, values } = normalizeParams(sqlText, params);
     const connection = await pool.getConnection();
     const runtimeOptions = (options?.context?.statementTimeoutMs ? { callTimeout: options.context.statementTimeoutMs } : {}) as ExecuteOptions;
     const executeOptions: ExecuteOptions = {
-        outFormat: oracledb.OUT_FORMAT_OBJECT,
+        outFormat: oracledb.OUT_FORMAT_ARRAY,
         fetchArraySize: 1000,
         ...runtimeOptions,
     };
@@ -281,11 +281,17 @@ export async function executeOracleQueryRowStream<Row>(
 
     try {
         const queryStream = connection.queryStream<Row>(compiledSql, values, executeOptions) as AsyncIterable<Row> & { destroy?: (error?: Error) => void };
+        let columns: ReturnType<typeof normalizeColumns> | undefined;
+        (queryStream as typeof queryStream & { on?: (event: string, handler: (metadata: Result<any>['metaData']) => void) => void }).on?.('metadata', metadata => {
+            columns = normalizeColumns({ metaData: metadata } as Result<any>);
+        });
         stream = queryStream;
         return {
             rows: asyncIterableWithCleanup(queryStream, cleanup),
             rowCount: null,
-            columns: undefined,
+            get columns() {
+                return columns;
+            },
             limited: false,
             tookMs: Date.now() - started,
             close: async () => {

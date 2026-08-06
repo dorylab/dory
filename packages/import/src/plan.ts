@@ -1,4 +1,4 @@
-import { fingerprint } from '@dory/dataset';
+import { fingerprint } from '@dory/data-plane';
 import { z } from 'zod';
 
 import {

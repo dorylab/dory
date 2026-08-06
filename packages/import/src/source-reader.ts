@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import { mkdir, open, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
-import { ArrowIpcFileDataset } from '@dory/dataset';
+import { ArrowIpcFileDataSource } from '@dory/data-plane';
 import pl, { type DataType, type LazyDataFrame } from 'nodejs-polars';
 
 import { analyzeCsv, profileDataset } from './csv-analyzer';
@@ -74,11 +74,11 @@ const csvReader: ImportSourceReader = {
         throwIfAborted(input.signal);
         await enforceOutputLimit(input.outputArrowPath, input.maxOutputBytes);
         return {
-            dataset: result.dataset,
+            dataSource: result.dataSource,
             profile: result.profile,
             source: input.source,
             sourceWarnings: [],
-            sourceSchema: result.dataset.schema.fields
+            sourceSchema: result.dataSource.schema.fields
                 .filter(field => field.name !== SOURCE_ROW_NUMBER_COLUMN)
                 .map(field => ({
                     name: field.name,
@@ -102,8 +102,8 @@ const ndjsonReader = lazyReader('ndjson', ['ndjson', 'jsonl'], async (sourcePath
 
 const arrowReader = lazyReader('arrow', ['arrow', 'ipc', 'feather'], async sourcePath => {
     await validateMagic(sourcePath, Buffer.from('ARROW1'), Buffer.from('ARROW1'));
-    const sourceDataset = await ArrowIpcFileDataset.open({ filePath: sourcePath, metadata: { source: sourcePath } });
-    assertColumnNames(sourceDataset.schema.fields.map(field => field.name));
+    const sourceDataSource = await ArrowIpcFileDataSource.fromFile({ filePath: sourcePath, metadata: { source: sourcePath } });
+    assertColumnNames(sourceDataSource.schema.fields.map(field => field.name));
     return pl.scanIPC(sourcePath, { rechunk: false });
 });
 
@@ -158,7 +158,7 @@ function lazyReader(
                 throw normalizePolarsError(error, schemaFrame.schema);
             }
             await enforceOutputLimit(input.outputArrowPath, input.maxOutputBytes);
-            const dataset = await ArrowIpcFileDataset.open({
+            const dataSource = await ArrowIpcFileDataSource.fromFile({
                 filePath: input.outputArrowPath,
                 metadata: {
                     source: input.sourceName,
@@ -168,14 +168,14 @@ function lazyReader(
                     sourceWarnings: warnings,
                 },
             });
-            const profile = await profileDataset(dataset);
+            const profile = await profileDataset(dataSource);
             throwIfAborted(input.signal);
-            const profiledDataset = await ArrowIpcFileDataset.open({
+            const profiledDataSource = await ArrowIpcFileDataSource.fromFile({
                 filePath: input.outputArrowPath,
                 rowCount: profile.rows,
-                metadata: dataset.metadata,
+                metadata: dataSource.metadata,
             });
-            return { dataset: profiledDataset, profile, source: input.source, sourceWarnings: warnings, sourceSchema, sourceArrowPath: input.outputArrowPath };
+            return { dataSource: profiledDataSource, profile, source: input.source, sourceWarnings: warnings, sourceSchema, sourceArrowPath: input.outputArrowPath };
         },
     };
 }

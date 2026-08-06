@@ -88,8 +88,8 @@ export class SnowflakeImportWriter implements DataWriter {
             await execute(connection, 'BEGIN TRANSACTION');
             if (input.plan.target.mode === 'existing' && input.plan.mode === 'replace') await execute(connection, `DELETE FROM ${target}`);
             await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
-            const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
-            for await (const batch of reader) {
+            const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal: input.signal });
+            for await (const batch of dataStream.batches()) {
                 if (input.signal.aborted) throw abortError();
                 const rows = batchRows(batch, columns).map(row => row.map((value, index) => snowflakeValue(value, columns[index]!.targetType)));
                 if (!rows.length) continue;

@@ -4,6 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
+import pl from 'nodejs-polars';
+
+import { writeDataStreamToArrowIpcFile, type DataStream } from '@dory/data-plane';
+
 export type ResultSetLogicalType = 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'json' | 'binary' | 'unknown';
 
 export type ResultSetColumn = {
@@ -27,6 +31,7 @@ export type ResultSetArtifactRef = {
     artifactId: string;
     basePath: string;
     manifestPath: string;
+    schemaPath?: string;
     previewPath?: string;
     dataPath?: string;
     dataAvailability: ResultSetDataAvailability;
@@ -41,14 +46,14 @@ export type ResultSetFilePartManifest = {
 
 export type ResultSetFileManifest = {
     path: string;
-    format: 'json' | 'parquet' | (string & {});
+    format: 'arrow' | 'json' | 'parquet' | (string & {});
     rowCount?: number;
     byteSize?: number;
     parts?: ResultSetFilePartManifest[];
 };
 
 export type ResultSetManifest = {
-    format: 'dory.resultset.v1';
+    format: 'dory.resultset.v1' | 'dory.resultset.v2';
     artifactId: string;
     organizationId: string;
     kind: ResultSetKind;
@@ -80,11 +85,14 @@ export type ResultSetManifest = {
         meta?: unknown;
     };
     schema: ResultSetColumn[];
+    batchCount?: number | null;
     rowCount?: number | null;
+    byteSize?: number | null;
     previewRowCount: number;
     limited: boolean;
     limit?: number | null;
     files: {
+        schema?: ResultSetFileManifest;
         preview?: ResultSetFileManifest;
         data?: ResultSetFileManifest;
     };
@@ -127,19 +135,23 @@ export type ResultSetDataWriterPart = {
 export type ResultSetDataWriterResult = {
     format: 'parquet';
     rowCount: number;
+    batchCount: number;
     byteSize?: number;
     parts: ResultSetDataWriterPart[];
     cleanup?: () => Promise<void>;
 };
 
-export type ResultSetRowIterable = Iterable<unknown> | AsyncIterable<unknown>;
-
 export type ResultSetDataWriter = {
-    write(input: { artifactId: string; schema: ResultSetColumn[]; rows: ResultSetRowIterable; target: unknown }): Promise<ResultSetDataWriterResult | null>;
+    write(input: { artifactId: string; dataStream: DataStream; target: unknown }): Promise<ResultSetDataWriterResult | null>;
 };
 
 export class NoopFullDataWriter implements ResultSetDataWriter {
-    async write(): Promise<ResultSetDataWriterResult | null> {
+    async write(input: { dataStream: DataStream }): Promise<ResultSetDataWriterResult | null> {
+        try {
+            for await (const batch of input.dataStream.batches()) void batch;
+        } finally {
+            await input.dataStream.close();
+        }
         return null;
     }
 }
@@ -158,33 +170,8 @@ export function createDefaultResultSetDataWriter(env: Record<string, string | un
     return new ParquetResultSetDataWriter();
 }
 
-type DuckDbColumnType = 'BOOLEAN' | 'BIGINT' | 'DOUBLE' | 'BLOB' | 'VARCHAR';
-
-type NormalizedColumn = ResultSetColumn & {
-    parquetName: string;
-    duckDbType: DuckDbColumnType;
-};
-
-type DuckDBAppenderLike = {
-    appendNull(): void;
-    appendBoolean(value: boolean): void;
-    appendBigInt(value: bigint): void;
-    appendDouble(value: number): void;
-    appendBlob(value: Uint8Array): void;
-    appendVarchar(value: string): void;
-    endRow(): void;
-    closeSync(): void;
-};
-
 type DuckDBConnectionLike = {
     run(sql: string): Promise<unknown>;
-    createAppender(table: string): Promise<DuckDBAppenderLike>;
-    closeSync(): void;
-};
-
-type DuckDBInstanceLike = {
-    connect(): Promise<DuckDBConnectionLike>;
-    closeSync(): void;
 };
 
 export async function configureResultSetDuckDb(connection: Pick<DuckDBConnectionLike, 'run'>, tempDirectory: string, env: Record<string, string | undefined> = process.env) {
@@ -195,72 +182,47 @@ export async function configureResultSetDuckDb(connection: Pick<DuckDBConnection
 }
 
 export class ParquetResultSetDataWriter implements ResultSetDataWriter {
-    async write(input: { artifactId: string; schema: ResultSetColumn[]; rows: ResultSetRowIterable; target: unknown }): Promise<ResultSetDataWriterResult | null> {
-        const preparedRows = await prepareRowsForParquet(input.rows, input.schema);
-        const schema = input.schema.length ? input.schema : inferResultSetColumns(preparedRows.sampleRows);
-        if (!schema.length) return null;
-
-        const columns = normalizeParquetColumns(
-            schema,
-            preparedRows.sampleRows.map(row => normalizeRecord(row)),
-        );
+    async write(input: { artifactId: string; dataStream: DataStream; target: unknown }): Promise<ResultSetDataWriterResult | null> {
         const tempDir = await mkdtemp(path.join(os.tmpdir(), `dory-${safeFilePart(input.artifactId)}-`));
+        const arrowPath = path.join(/* turbopackIgnore: true */ tempDir, 'data.arrow');
         const dataDir = path.join(/* turbopackIgnore: true */ tempDir, 'data');
         const partRows = normalizeParquetPartRows(process.env.DORY_RESULTSET_PARQUET_PART_ROWS);
         const parts: ResultSetDataWriterPart[] = [];
 
         let keepTempDir = false;
         try {
-            const { DuckDBInstance } = await import('@duckdb/node-api');
-            let rowCount = 0;
+            const writeResult = await writeDataStreamToArrowIpcFile(input.dataStream, arrowPath);
+            if (!input.dataStream.schema.fields.length) return null;
+
+            await mkdir(dataDir, { recursive: true });
             let byteSize = 0;
-            let chunk: unknown[] = [];
-
-            const flushChunk = async () => {
-                const instance: DuckDBInstanceLike = await DuckDBInstance.create(':memory:');
-                const connection = await instance.connect();
-                try {
-                    await configureResultSetDuckDb(connection, path.join(tempDir, 'duckdb-tmp'));
-                    const part = await writeParquetPart({
-                        connection,
-                        columns,
-                        rows: chunk,
-                        outputDir: dataDir,
-                        partIndex: parts.length,
-                    });
-                    parts.push(part);
-                    rowCount += part.rowCount;
-                    byteSize += part.byteSize ?? 0;
-                    chunk = [];
-                } finally {
-                    connection.closeSync();
-                    instance.closeSync();
-                }
-            };
-
-            const pushRow = (row: unknown) => {
-                chunk.push(row);
-                return chunk.length >= partRows;
-            };
-
-            for (const row of preparedRows.sampleRows) {
-                if (pushRow(row)) await flushChunk();
+            const offsets = writeResult.rowCount === 0 ? [0] : Array.from({ length: Math.ceil(writeResult.rowCount / partRows) }, (_, index) => index * partRows);
+            for (const offset of offsets) {
+                const rowCount = Math.min(partRows, writeResult.rowCount - offset);
+                const partName = `part-${String(parts.length).padStart(5, '0')}.parquet`;
+                const relativePath = path.posix.join('data', partName);
+                const outputPath = path.join(dataDir, partName);
+                await pl
+                    .scanIPC(arrowPath, { rechunk: false })
+                    .slice(offset, rowCount)
+                    .sinkParquet(outputPath, { compression: 'zstd', rowGroupSize: Math.min(rowCount, 128_000), maintainOrder: true })
+                    .collect({ streaming: true });
+                const info = await stat(outputPath);
+                byteSize += info.size;
+                parts.push({
+                    path: relativePath,
+                    format: 'parquet',
+                    rowCount,
+                    byteSize: info.size,
+                    data: createLazyReadStream(outputPath),
+                    cleanup: async () => undefined,
+                });
             }
-            if (isAsyncIterable(preparedRows.remainingRows)) {
-                for await (const row of preparedRows.remainingRows) {
-                    if (pushRow(row)) await flushChunk();
-                }
-            } else {
-                for (const row of preparedRows.remainingRows) {
-                    if (pushRow(row)) await flushChunk();
-                }
-            }
-
-            if (chunk.length || parts.length === 0) await flushChunk();
             keepTempDir = true;
             return {
                 format: 'parquet',
-                rowCount,
+                rowCount: writeResult.rowCount,
+                batchCount: writeResult.batchCount,
                 byteSize,
                 parts,
                 cleanup: () => rm(tempDir, { recursive: true, force: true }).catch(() => undefined),
@@ -271,42 +233,6 @@ export class ParquetResultSetDataWriter implements ResultSetDataWriter {
             }
         }
     }
-}
-
-async function writeParquetPart(input: {
-    connection: DuckDBConnectionLike;
-    columns: NormalizedColumn[];
-    rows: unknown[];
-    outputDir: string;
-    partIndex: number;
-}): Promise<ResultSetDataWriterPart> {
-    await mkdir(input.outputDir, { recursive: true });
-    const partName = `part-${String(input.partIndex).padStart(5, '0')}.parquet`;
-    const relativePath = path.posix.join('data', partName);
-    const outputPath = path.join(input.outputDir, partName);
-    const tableName = `result_set_part_${input.partIndex}`;
-
-    await input.connection.run(`DROP TABLE IF EXISTS ${quoteIdentifier(tableName)}`);
-    await input.connection.run(
-        `CREATE TABLE ${quoteIdentifier(tableName)} (${input.columns.map(column => `${quoteIdentifier(column.parquetName)} ${column.duckDbType}`).join(', ')})`,
-    );
-    const appender = await input.connection.createAppender(tableName);
-    try {
-        for (const row of input.rows) appendRow(appender, input.columns, row);
-    } finally {
-        appender.closeSync();
-    }
-    await input.connection.run(`COPY ${quoteIdentifier(tableName)} TO ${quoteLiteral(outputPath)} (FORMAT PARQUET)`);
-    await input.connection.run(`DROP TABLE ${quoteIdentifier(tableName)}`);
-    const info = await stat(outputPath);
-    return {
-        path: relativePath,
-        format: 'parquet',
-        rowCount: input.rows.length,
-        byteSize: info.size,
-        data: createLazyReadStream(outputPath),
-        cleanup: async () => undefined,
-    };
 }
 
 function createLazyReadStream(filePath: string): Readable {
@@ -411,158 +337,6 @@ function normalizeRow(row: unknown): Record<string, unknown> {
     return Object.fromEntries(Object.entries(row as Record<string, unknown>).map(([key, value]) => [key, toJsonSafeValue(value)]));
 }
 
-function normalizeRecord(row: unknown): Record<string, unknown> {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) return { value: row };
-    return row as Record<string, unknown>;
-}
-
-async function prepareRowsForParquet(rows: ResultSetRowIterable, schema: ResultSetColumn[]) {
-    if (Array.isArray(rows)) {
-        return {
-            sampleRows: schema.length ? rows.slice(0, 200) : rows,
-            remainingRows: rowsFromArray(schema.length ? rows.slice(200) : []),
-        };
-    }
-
-    if (isAsyncIterable(rows)) {
-        const iterator = rows[Symbol.asyncIterator]();
-        const sampleRows: unknown[] = [];
-        const sampleLimit = 200;
-        while (sampleRows.length < sampleLimit) {
-            const next = await iterator.next();
-            if (next.done) break;
-            sampleRows.push(next.value);
-        }
-
-        return {
-            sampleRows,
-            remainingRows: asyncRowsFromIterator(iterator),
-        };
-    }
-
-    const iterator = rows[Symbol.iterator]();
-    const sampleRows: unknown[] = [];
-    const sampleLimit = 200;
-    while (sampleRows.length < sampleLimit) {
-        const next = iterator.next();
-        if (next.done) break;
-        sampleRows.push(next.value);
-    }
-
-    return {
-        sampleRows,
-        remainingRows: rowsFromIterator(iterator),
-    };
-}
-
-function* rowsFromArray(rows: unknown[]) {
-    for (const row of rows) yield row;
-}
-
-function* rowsFromIterator(iterator: Iterator<unknown>) {
-    for (;;) {
-        const next = iterator.next();
-        if (next.done) return;
-        yield next.value;
-    }
-}
-
-async function* asyncRowsFromIterator(iterator: AsyncIterator<unknown>) {
-    for (;;) {
-        const next = await iterator.next();
-        if (next.done) return;
-        yield next.value;
-    }
-}
-
-function isAsyncIterable(value: ResultSetRowIterable): value is AsyncIterable<unknown> {
-    return typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function';
-}
-
-function normalizeParquetColumns(schema: ResultSetColumn[], rows: Record<string, unknown>[]): NormalizedColumn[] {
-    const usedNames = new Set<string>();
-    return schema.map((column, index) => {
-        const parquetName = uniqueParquetName(column.name || `column_${index + 1}`, usedNames);
-        return {
-            ...column,
-            parquetName,
-            duckDbType: inferDuckDbType(
-                column,
-                rows.map(row => row[column.name]),
-            ),
-        };
-    });
-}
-
-function uniqueParquetName(name: string, usedNames: Set<string>) {
-    let candidate = name || 'column';
-    let suffix = 2;
-    while (usedNames.has(candidate)) {
-        candidate = `${name}_${suffix}`;
-        suffix += 1;
-    }
-    usedNames.add(candidate);
-    return candidate;
-}
-
-function inferDuckDbType(column: ResultSetColumn, values: unknown[]): DuckDbColumnType {
-    const nonNullValues = values.filter(value => value !== null && typeof value !== 'undefined');
-    if (!nonNullValues.length) {
-        if (column.logicalType === 'number') return isIntegerDatabaseType(column.databaseType) ? 'BIGINT' : 'DOUBLE';
-        if (column.logicalType === 'boolean') return 'BOOLEAN';
-        if (column.logicalType === 'binary') return 'BLOB';
-        return 'VARCHAR';
-    }
-
-    if (column.logicalType === 'boolean' && nonNullValues.every(value => typeof value === 'boolean')) return 'BOOLEAN';
-    if (column.logicalType === 'binary' && nonNullValues.every(isBinaryValue)) return 'BLOB';
-    if (column.logicalType === 'number' || nonNullValues.every(value => typeof value === 'number' || typeof value === 'bigint')) {
-        if (nonNullValues.every(isIntegerLike)) return 'BIGINT';
-        if (nonNullValues.every(value => typeof value === 'number' && Number.isFinite(value))) return 'DOUBLE';
-    }
-    if (nonNullValues.every(value => typeof value === 'boolean')) return 'BOOLEAN';
-    if (nonNullValues.every(isBinaryValue)) return 'BLOB';
-    if (nonNullValues.every(isIntegerLike)) return 'BIGINT';
-    if (nonNullValues.every(value => typeof value === 'number' && Number.isFinite(value))) return 'DOUBLE';
-    return 'VARCHAR';
-}
-
-function appendValue(appender: DuckDBAppenderLike, column: NormalizedColumn, value: unknown) {
-    if (value === null || typeof value === 'undefined') {
-        appender.appendNull();
-        return;
-    }
-
-    switch (column.duckDbType) {
-        case 'BOOLEAN':
-            if (typeof value === 'boolean') appender.appendBoolean(value);
-            else appender.appendNull();
-            return;
-        case 'BIGINT':
-            if (typeof value === 'bigint') appender.appendBigInt(clampBigInt64(value));
-            else if (typeof value === 'number' && Number.isFinite(value)) appender.appendBigInt(BigInt(Math.trunc(value)));
-            else appender.appendNull();
-            return;
-        case 'DOUBLE':
-            if (typeof value === 'number' && Number.isFinite(value)) appender.appendDouble(value);
-            else appender.appendNull();
-            return;
-        case 'BLOB':
-            if (isBinaryValue(value)) appender.appendBlob(toUint8Array(value));
-            else appender.appendNull();
-            return;
-        case 'VARCHAR':
-            appender.appendVarchar(toStableString(value));
-            return;
-    }
-}
-
-function appendRow(appender: DuckDBAppenderLike, columns: NormalizedColumn[], row: unknown) {
-    const normalizedRow = normalizeRecord(row);
-    for (const column of columns) appendValue(appender, column, normalizedRow[column.name]);
-    appender.endRow();
-}
-
 function toJsonSafeValue(value: unknown): unknown {
     if (typeof value === 'bigint') return value.toString();
     if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
@@ -575,42 +349,11 @@ function toJsonSafeValue(value: unknown): unknown {
     return value;
 }
 
-function toStableString(value: unknown) {
-    if (typeof value === 'string') return value;
-    if (typeof value === 'bigint') return value.toString();
-    if (value instanceof Date) return Number.isNaN(value.getTime()) ? '' : value.toISOString();
-    if (isBinaryValue(value)) return Buffer.from(toUint8Array(value)).toString('base64');
-    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-    try {
-        return JSON.stringify(toJsonSafeValue(value));
-    } catch {
-        return String(value);
-    }
-}
-
 function isBinaryValue(value: unknown): value is Uint8Array {
     return value instanceof Uint8Array;
 }
 
 function toUint8Array(value: Uint8Array) {
-    return value;
-}
-
-function isIntegerLike(value: unknown) {
-    if (typeof value === 'bigint') return value >= MIN_INT64 && value <= MAX_INT64;
-    return typeof value === 'number' && Number.isSafeInteger(value) && value >= Number(MIN_INT64) && value <= Number(MAX_INT64);
-}
-
-function isIntegerDatabaseType(databaseType: string | undefined) {
-    return Boolean(databaseType && /\b(bigint|int8|integer|int4|smallint|int2|tinyint|number\(38,0\))\b/i.test(databaseType));
-}
-
-const MIN_INT64 = BigInt('-9223372036854775808');
-const MAX_INT64 = BigInt('9223372036854775807');
-
-function clampBigInt64(value: bigint) {
-    if (value < MIN_INT64) return MIN_INT64;
-    if (value > MAX_INT64) return MAX_INT64;
     return value;
 }
 

@@ -9,7 +9,7 @@ import { pipeline } from 'node:stream/promises';
 
 import { getDoryArtifactStore } from '@dory/artifacts';
 import type { DBService } from '@dory/database';
-import { ArrowIpcFileDataset, schemaToIpc } from '@dory/dataset';
+import { ArrowIpcFileDataSource, schemaToIpc } from '@dory/data-plane';
 import type { BaseConnection } from '@dory/drivers/core';
 import {
     CommitUnknownError,
@@ -280,7 +280,7 @@ export async function analyzeImportSource(db: DBService, input: { organizationId
         });
         if (analysisController.signal.aborted) throw new DOMException('The import analysis was canceled', 'AbortError');
         await persistGeneratedFile(paths.sourceArrow, sourceArrowLocal, 'application/vnd.apache.arrow.file');
-        await artifacts.put(paths.schema, Buffer.from(schemaToIpc(result.dataset.schema)), 'application/vnd.apache.arrow.file');
+        await artifacts.put(paths.schema, Buffer.from(schemaToIpc(result.dataSource.schema)), 'application/vnd.apache.arrow.file');
         await artifacts.putJson(paths.profile, result.profile);
         await artifacts.putJson(paths.transform, { version: TRANSFORM_VERSION, operations: [] });
         if (analysisController.signal.aborted) throw new DOMException('The import analysis was canceled', 'AbortError');
@@ -294,7 +294,7 @@ export async function analyzeImportSource(db: DBService, input: { organizationId
             progress: {
                 phase: 'ready',
                 rows: result.profile.rows,
-                schemaHash: datasetSchemaHash(result.dataset),
+                schemaHash: datasetSchemaHash(result.dataSource),
                 sourceFormat: source.format,
                 sourceWarnings: result.sourceWarnings,
                 sourceSchema: result.sourceSchema,
@@ -304,7 +304,7 @@ export async function analyzeImportSource(db: DBService, input: { organizationId
         await db.importRuns.appendEvent(input.organizationId, input.runId, 'analysis.completed', {
             rows: result.profile.rows,
             columns: result.profile.columns.length,
-            schemaHash: datasetSchemaHash(result.dataset),
+            schemaHash: datasetSchemaHash(result.dataSource),
             sourceFormat: source.format,
             sourceWarnings: result.sourceWarnings,
         });
@@ -597,12 +597,12 @@ class ImportRunner {
             heartbeat.unref();
             workDir = await ensureWorkDir(runId);
             const sourceArrowLocal = await materializeForRead(run.sourceArrowPath, path.join(workDir, 'source.arrow'));
-            const sourceDataset = await ArrowIpcFileDataset.open({
+            const sourceDataSource = await ArrowIpcFileDataSource.fromFile({
                 filePath: sourceArrowLocal,
                 rowCount: profile.rows,
                 metadata: { source: run.sourceName ?? 'source.csv', sourceHash: run.sourceHash ?? undefined, artifactPath: run.sourceArrowPath },
             });
-            if (datasetSchemaHash(sourceDataset) !== plan.sourceSchemaHash) {
+            if (datasetSchemaHash(sourceDataSource) !== plan.sourceSchemaHash) {
                 throw new Error('The source dataset schema no longer matches the saved import plan');
             }
             const artifacts = getDoryArtifactStore().importRuns;
@@ -610,7 +610,7 @@ class ImportRunner {
             const preparedLocal = await pathForWrite(paths.preparedArrow, path.join(workDir, 'prepared.arrow'));
             await this.db.importRuns.update(organizationId, runId, { phase: 'preparing', heartbeatAt: new Date() });
             await this.db.importRuns.appendEvent(organizationId, runId, 'prepare.started', {});
-            const prepared = await prepareImportDataset({ sourceArrowPath: sourceArrowLocal, outputArrowPath: preparedLocal, sourceDataset, plan, signal: controller.signal });
+            const prepared = await prepareImportDataset({ sourceArrowPath: sourceArrowLocal, outputArrowPath: preparedLocal, sourceDataSource, plan, signal: controller.signal });
             preparedFilteredRows = prepared.filteredRows;
             await persistGeneratedFile(paths.preparedArrow, preparedLocal, 'application/vnd.apache.arrow.file');
             run = await this.db.importRuns.update(organizationId, runId, {
@@ -638,7 +638,7 @@ class ImportRunner {
 
             let lastProgressAt = 0;
             committedResult = await writer.write({
-                dataset: prepared.dataset,
+                dataSource: prepared.dataSource,
                 plan,
                 batchSize: plan.batchSize,
                 signal: controller.signal,

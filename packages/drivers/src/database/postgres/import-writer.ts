@@ -91,9 +91,9 @@ export class PostgresImportWriter implements DataWriter {
             copyStream = client.query(copyFrom(sql));
             const completion = finished(copyStream);
             await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
-            const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal });
+            const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal });
 
-            for await (const batch of reader) {
+            for await (const batch of dataStream.batches()) {
                 if (signal.aborted) throw abortError();
                 let chunk = '';
                 for (let row = 0; row < batch.numRows; row += 1) {

@@ -67,8 +67,8 @@ export class ClickhouseImportWriter implements DataWriter {
                     createdTarget = true;
                 }
                 await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: rowsWritten, pendingCommit: false });
-                const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
-                for await (const batch of reader) {
+                const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal: input.signal });
+                for await (const batch of dataStream.batches()) {
                     if (input.signal.aborted) throw abortError();
                     const rows = batchRows(batch, columns).map(row =>
                         Object.fromEntries(columns.map((column, index) => [column.target, clickhouseValue(row[index], column.targetType)])),

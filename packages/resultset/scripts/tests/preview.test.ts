@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { DuckDBInstance } from '@duckdb/node-api';
+import { rowDataStream } from '@dory/data-plane';
 
 import {
     buildResultSetPreview,
@@ -76,16 +77,20 @@ process.env.DORY_RESULTSET_PARQUET_PART_ROWS = '2';
 const writer = new ParquetResultSetDataWriter();
 const parquet = await writer.write({
     artifactId: 'rs_writer_test',
-    schema: [
-        { name: 'id', logicalType: 'number', databaseType: 'bigint' },
-        { name: 'name', logicalType: 'string' },
-        { name: 'active', logicalType: 'boolean' },
-        { name: 'amount', logicalType: 'number' },
-        { name: 'created_at', logicalType: 'datetime' },
-        { name: 'payload', logicalType: 'json' },
-        { name: 'bytes', logicalType: 'binary' },
-    ],
-    rows: complexRows,
+    dataStream: rowDataStream({
+        columns: [
+            { name: 'id', type: 'bigint' },
+            { name: 'name', type: 'varchar' },
+            { name: 'active', type: 'boolean' },
+            { name: 'amount', type: 'double' },
+            { name: 'created_at', type: 'timestamp with time zone' },
+            { name: 'payload', type: 'json' },
+            { name: 'bytes', type: 'blob' },
+        ],
+        rows: complexRows,
+        rowCount: complexRows.length,
+        metadata: { source: 'resultset-test' },
+    }),
     target: null,
 });
 assert.equal(parquet?.format, 'parquet');
@@ -112,8 +117,7 @@ assert.equal(resultSetDataAvailability(fullManifest), 'full');
 
 const emptyParquet = await writer.write({
     artifactId: 'rs_empty_test',
-    schema: [{ name: 'id', logicalType: 'number' }],
-    rows: [],
+    dataStream: rowDataStream({ columns: [{ name: 'id', type: 'bigint' }], rows: [], rowCount: 0, metadata: { source: 'resultset-test' } }),
     target: null,
 });
 assert.equal(emptyParquet?.rowCount, 0);
@@ -129,12 +133,15 @@ function* generatedRows() {
 
 const generatedParquet = await writer.write({
     artifactId: 'rs_generated_test',
-    schema: [
-        { name: 'id', logicalType: 'unknown' },
-        { name: 'name', logicalType: 'unknown' },
-        { name: 'bytes', logicalType: 'unknown' },
-    ],
-    rows: generatedRows(),
+    dataStream: rowDataStream({
+        columns: [
+            { name: 'id', type: 'bigint' },
+            { name: 'name', type: 'varchar' },
+            { name: 'bytes', type: 'blob' },
+        ],
+        rows: generatedRows(),
+        metadata: { source: 'resultset-test' },
+    }),
     target: null,
 });
 assert.equal(generatedParquet?.rowCount, 3);

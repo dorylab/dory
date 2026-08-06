@@ -28,7 +28,7 @@ test('SQLite writer creates a table and preserves strings, booleans, dates, date
     new Database(databasePath).close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
     const plan: ImportPlan = { ...fixture.plan, source: { format: 'parquet' } };
-    const result = await writer.write({ dataset: fixture.dataset, plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
+    const result = await writer.write({ dataSource: fixture.dataSource, plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
     assert.deepEqual(result, { insertedRows: 2, batches: 2, atomicity: 'atomic' });
     const database = new Database(databasePath);
     t.after(() => database.close());
@@ -121,7 +121,7 @@ test('DuckDB writer creates and atomically imports a local table', async t => {
     const database = String(databaseReader.getRowObjectsJson()[0]?.name);
     const writer = new DuckDbImportWriter(() => connection);
     const plan: ImportPlan = { ...fixture.plan, target: { mode: 'create', database, schema: 'main', table: 'customers' } };
-    const result = await writer.write({ dataset: fixture.dataset, plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
+    const result = await writer.write({ dataSource: fixture.dataSource, plan, batchSize: 1, signal: new AbortController().signal, onProgress: () => undefined });
     assert.deepEqual(result, { insertedRows: 2, batches: 2, atomicity: 'atomic' });
     const reader = await connection.runAndReadAll('SELECT id, name, active FROM customers ORDER BY id');
     assert.deepEqual(reader.getRowObjectsJson(), [
@@ -138,7 +138,7 @@ test('SQLite replace rolls back the delete when an insert violates a constraint'
     seed.close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
     const plan: ImportPlan = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
-    await assert.rejects(writer.write({ dataset: fixture.dataset, plan, batchSize: 1000, signal: new AbortController().signal, onProgress: () => undefined }), /UNIQUE/);
+    await assert.rejects(writer.write({ dataSource: fixture.dataSource, plan, batchSize: 1000, signal: new AbortController().signal, onProgress: () => undefined }), /UNIQUE/);
     const database = new Database(databasePath);
     t.after(() => database.close());
     assert.deepEqual(database.prepare('SELECT * FROM customers').all(), [{ id: 99, name: 'original' }]);
@@ -149,7 +149,7 @@ test('SQLite writer keeps CSV null distinct from a quoted empty string', async t
     const databasePath = path.join(fixture.dir, 'null-empty.sqlite');
     new Database(databasePath).close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
-    await writer.write({ dataset: fixture.dataset, plan: fixture.plan, batchSize: 2, signal: new AbortController().signal, onProgress: () => undefined });
+    await writer.write({ dataSource: fixture.dataSource, plan: fixture.plan, batchSize: 2, signal: new AbortController().signal, onProgress: () => undefined });
     const database = new Database(databasePath);
     t.after(() => database.close());
     assert.deepEqual(database.prepare('SELECT id, value FROM customers ORDER BY id').all(), [
@@ -175,7 +175,7 @@ test('SQLite writer receives the filtered and cleaned prepared dataset', async t
     const databasePath = path.join(fixture.dir, 'cleaned.sqlite');
     new Database(databasePath).close();
     const writer = new SqliteImportWriter(() => new Database(databasePath));
-    const result = await writer.write({ dataset: fixture.dataset, plan: fixture.plan, batchSize: 1000, signal: new AbortController().signal, onProgress: () => undefined });
+    const result = await writer.write({ dataSource: fixture.dataSource, plan: fixture.plan, batchSize: 1000, signal: new AbortController().signal, onProgress: () => undefined });
     assert.equal(result.insertedRows, 1);
     const database = new Database(databasePath);
     t.after(() => database.close());
@@ -192,7 +192,7 @@ test('SQLite cancellation before commit leaves the target unchanged', async t =>
     const plan: ImportPlan = { ...fixture.plan, target: { mode: 'existing', database: 'main', table: 'customers' }, mode: 'replace' };
     const controller = new AbortController();
     controller.abort();
-    await assert.rejects(writer.write({ dataset: fixture.dataset, plan, batchSize: 1000, signal: controller.signal, onProgress: () => undefined }), /canceled/);
+    await assert.rejects(writer.write({ dataSource: fixture.dataSource, plan, batchSize: 1000, signal: controller.signal, onProgress: () => undefined }), /canceled/);
     const database = new Database(databasePath);
     t.after(() => database.close());
     assert.deepEqual(database.prepare('SELECT * FROM customers').all(), [{ id: 99, name: 'original' }]);
@@ -209,7 +209,7 @@ test('SQLite cancellation at the persisted commit boundary rolls back', async t 
     const controller = new AbortController();
     await assert.rejects(
         writer.write({
-            dataset: fixture.dataset,
+            dataSource: fixture.dataSource,
             plan,
             batchSize: 1000,
             signal: controller.signal,
@@ -244,16 +244,16 @@ async function fixtureDataset(t: TestContext, csv: string, configurePlan?: (plan
         mode: 'append',
         batchSize: 1000,
         transform: { version: 'dory.transform.v1', operations: [] },
-        sourceSchemaHash: datasetSchemaHash(analysis.dataset),
+        sourceSchemaHash: datasetSchemaHash(analysis.dataSource),
     };
     const plan = configurePlan?.(basePlan) ?? basePlan;
     const prepared = await prepareImportDataset({
         sourceArrowPath: analysis.sourceArrowPath,
         outputArrowPath: path.join(dir, 'prepared.arrow'),
-        sourceDataset: analysis.dataset,
+        sourceDataSource: analysis.dataSource,
         plan,
     });
-    return { dir, dataset: prepared.dataset, plan };
+    return { dir, dataSource: prepared.dataSource, plan };
 }
 
 function previewPlan(target: ImportPlan['target']): ImportPlan {

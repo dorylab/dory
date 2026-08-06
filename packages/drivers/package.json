@@ -18,11 +18,12 @@
     },
     "scripts": {
         "typecheck": "tsc --noEmit",
+        "test:data-reader": "tsx --test scripts/tests/data-reader.test.ts",
         "test:import": "tsx --test scripts/tests/import-writer.test.ts"
     },
     "dependencies": {
         "@clickhouse/client": "^1.18.2",
-        "@dory/dataset": "0.1.0",
+        "@dory/data-plane": "0.1.0",
         "@dory/import": "0.1.0",
         "@dory/schema-compare": "0.1.0",
         "@duckdb/node-api": "^1.5.2-r.1",

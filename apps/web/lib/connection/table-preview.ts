@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { collectSerializableDataPage } from '@dory/data-plane';
 import type { BaseConnection } from '@dory/drivers/core';
 import type { TablePreviewFilter, TablePreviewSort } from '@dory/drivers/types';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
@@ -65,18 +66,23 @@ export async function buildTablePreviewPayload({
     const sqlText = buildPreviewSqlText(database, table, { sort, filters, search });
     const startedAt = new Date();
     const perfStart = performance.now();
-    const result = await connection.previewTable(database, table, {
-        limit: normalizedLimit,
-        offset: normalizedOffset,
-        countMode,
-        sort,
-        filters,
-        search,
-        searchColumns,
+    const result = await connection.readTable({
+        database,
+        table,
+        options: {
+            limit: normalizedLimit,
+            offset: normalizedOffset,
+            countMode,
+            sort,
+            filters,
+            search,
+            searchColumns,
+        },
     });
+    const page = await collectSerializableDataPage(result.stream, normalizedLimit);
     const durationMs = Math.round(performance.now() - perfStart);
     const finishedAt = new Date();
-    const rows = Array.isArray(result.rows) ? result.rows : [];
+    const rows = page.rows;
     const effectiveSessionId = sessionId?.trim() || randomUUID();
 
     return {
@@ -103,8 +109,12 @@ export async function buildTablePreviewPayload({
                 sqlText,
                 sqlOp: 'SELECT',
                 title: `Preview: ${table}`,
-                columns: result.columns ?? null,
-                rowCount: result.rowCount ?? rows.length,
+                columns: page.columns.map(column => ({
+                    name: column.name,
+                    type: column.databaseType ?? column.type,
+                    displayName: column.displayName,
+                })),
+                rowCount: page.rowCount ?? rows.length,
                 totalRows: result.totalRows ?? null,
                 unfilteredTotalRows: result.unfilteredTotalRows ?? result.totalRows ?? null,
                 limited: result.limited ?? true,

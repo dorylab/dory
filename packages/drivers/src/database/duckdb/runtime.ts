@@ -6,7 +6,7 @@ import { DEFAULT_MAX_RESULT_ROWS } from '@dory/drivers/types';
 import { compileParams } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { enforceSelectLimit } from '@dory/drivers/core';
-import type { BaseConfig, DriverQueryRowStream, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
+import type { BaseConfig, DriverRowCursor, HealthInfo, QueryResult, TableColumnInfo, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow } from '@dory/drivers/types';
 import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../shared/table-preview-query';
 
@@ -186,13 +186,13 @@ export async function executeDuckDbQuery<Row = any>(handle: DuckDbConnectionHand
     };
 }
 
-export async function executeDuckDbQueryRowStream<Row = any>(handle: DuckDbConnectionHandle, sql: string, params?: DriverQueryParams): Promise<DriverQueryRowStream<Row>> {
+export async function executeDuckDbQueryRowStream<Row = any>(handle: DuckDbConnectionHandle, sql: string, params?: DriverQueryParams): Promise<DriverRowCursor<Row>> {
     const { sql: compiledSql, params: compiledParams } = normalizeParams(sql, params);
     const started = Date.now();
     const result = await handle.connection.stream(compiledSql, compiledParams as any);
 
     const rows = (async function* () {
-        for await (const chunk of result.yieldRowObjectJson()) {
+        for await (const chunk of result.yieldRowsJson()) {
             for (const row of chunk) {
                 yield row as Row;
             }

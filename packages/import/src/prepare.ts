@@ -1,7 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-import { ArrowIpcFileDataset, fingerprint, type Dataset } from '@dory/dataset';
+import { ArrowIpcFileDataSource, fingerprint, type DataSource } from '@dory/data-plane';
 import pl, { type DataType, type LazyDataFrame } from 'nodejs-polars';
 
 import { cleaningTransformOperations, parseImportPlan } from './plan';
@@ -22,7 +22,7 @@ const MAX_INT64 = BigInt('9223372036854775807');
 export type PrepareImportDatasetInput = {
     sourceArrowPath: string;
     outputArrowPath: string;
-    sourceDataset: Dataset;
+    sourceDataSource: DataSource;
     plan: ImportPlan;
     signal?: AbortSignal;
 };
@@ -41,7 +41,7 @@ export class ImportCastError extends Error {
 
 export async function prepareImportDataset(input: PrepareImportDatasetInput): Promise<PrepareImportDatasetResult> {
     const plan = parseImportPlan(input.plan);
-    const inputRows = input.sourceDataset.rowCount ?? (await countRows(pl.scanIPC(input.sourceArrowPath)));
+    const inputRows = input.sourceDataSource.rowCount ?? (await countRows(pl.scanIPC(input.sourceArrowPath)));
     let transformed = applyCleaningOperations(pl.scanIPC(input.sourceArrowPath), plan.transform.operations, true);
     await validateCasts(transformed, plan.columns, input.signal);
     if (input.signal?.aborted) throw abortError();
@@ -60,16 +60,16 @@ export async function prepareImportDataset(input: PrepareImportDatasetInput): Pr
         })
         .collect({ streaming: true });
 
-    const dataset = await ArrowIpcFileDataset.open({
+    const dataSource = await ArrowIpcFileDataSource.fromFile({
         filePath: input.outputArrowPath,
         rowCount: outputRows,
         metadata: {
-            ...input.sourceDataset.metadata,
+            ...input.sourceDataSource.metadata,
             artifactPath: input.outputArrowPath,
             prepared: true,
         },
     });
-    return { dataset, inputRows, outputRows, filteredRows: Math.max(0, inputRows - outputRows) };
+    return { dataSource, inputRows, outputRows, filteredRows: Math.max(0, inputRows - outputRows) };
 }
 
 async function countRows(lazy: LazyDataFrame) {

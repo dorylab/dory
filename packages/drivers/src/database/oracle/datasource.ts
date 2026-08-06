@@ -1,6 +1,6 @@
 import type { BindParameters, Pool } from 'oracledb';
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { bindTableMutationParams, buildTableUpdateStatements, TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { createOracleMetadataCapability, type OracleMetadataAPI } from './capabilities/metadata';
@@ -88,7 +88,7 @@ export class OracleDatasource extends BaseConnection {
         return executeOracleQuery<Row>(pool, sql, context?.params, { context });
     }
 
-    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+    async openRowCursorWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
         this.assertReady();
         const targetService = context?.database ?? resolveOracleServiceName(this.config);
         const pool = await this.resolvePool(targetService);

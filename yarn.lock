@@ -3111,11 +3111,23 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@dory/data-plane@npm:0.1.0, @dory/data-plane@workspace:packages/data-plane":
+  version: 0.0.0-use.local
+  resolution: "@dory/data-plane@workspace:packages/data-plane"
+  dependencies:
+    "@types/node": "npm:^25.5.2"
+    apache-arrow: "npm:^21.2.0"
+    tsx: "npm:^4.23.1"
+    typescript: "npm:^6.0.2"
+  languageName: unknown
+  linkType: soft
+
 "@dory/database@npm:0.1.0, @dory/database@workspace:packages/database":
   version: 0.0.0-use.local
   resolution: "@dory/database@workspace:packages/database"
   dependencies:
     "@dory/artifacts": "npm:0.1.0"
+    "@dory/data-plane": "npm:0.1.0"
     "@dory/resultset": "npm:0.1.0"
     "@dory/schema-compare": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
@@ -3128,22 +3140,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@dory/dataset@npm:0.1.0, @dory/dataset@workspace:packages/dataset":
-  version: 0.0.0-use.local
-  resolution: "@dory/dataset@workspace:packages/dataset"
-  dependencies:
-    "@types/node": "npm:^25.5.2"
-    apache-arrow: "npm:^21.2.0"
-    typescript: "npm:^6.0.2"
-  languageName: unknown
-  linkType: soft
-
 "@dory/drivers@npm:0.1.0, @dory/drivers@workspace:packages/drivers":
   version: 0.0.0-use.local
   resolution: "@dory/drivers@workspace:packages/drivers"
   dependencies:
     "@clickhouse/client": "npm:^1.18.2"
-    "@dory/dataset": "npm:0.1.0"
+    "@dory/data-plane": "npm:0.1.0"
     "@dory/import": "npm:0.1.0"
     "@dory/schema-compare": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
@@ -3204,7 +3206,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dory/import@workspace:packages/import"
   dependencies:
-    "@dory/dataset": "npm:0.1.0"
+    "@dory/data-plane": "npm:0.1.0"
     "@types/node": "npm:^25.5.2"
     chardet: "npm:^2.1.1"
     iconv-lite: "npm:^0.7.0"
@@ -3219,9 +3221,11 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@dory/resultset@workspace:packages/resultset"
   dependencies:
+    "@dory/data-plane": "npm:0.1.0"
     "@dory/shared": "npm:0.1.0"
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@types/node": "npm:^25.5.2"
+    nodejs-polars: "npm:^0.25.2"
     typescript: "npm:^6.0.2"
   languageName: unknown
   linkType: soft
@@ -23540,8 +23544,8 @@ __metadata:
     "@dory/actions": "npm:0.1.0"
     "@dory/analysis": "npm:0.1.0"
     "@dory/artifacts": "npm:0.1.0"
+    "@dory/data-plane": "npm:0.1.0"
     "@dory/database": "npm:0.1.0"
-    "@dory/dataset": "npm:0.1.0"
     "@dory/drivers": "npm:0.1.0"
     "@dory/ee": "npm:0.1.0"
     "@dory/files": "npm:0.1.0"

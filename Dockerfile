@@ -22,7 +22,7 @@ COPY packages/artifacts/package.json ./packages/artifacts/
 COPY packages/auth-core/package.json ./packages/auth-core/
 COPY packages/cli/package.json ./packages/cli/
 COPY packages/database/package.json ./packages/database/
-COPY packages/dataset/package.json ./packages/dataset/
+COPY packages/data-plane/package.json ./packages/data-plane/
 COPY packages/drivers/package.json ./packages/drivers/
 COPY packages/ee/package.json ./packages/ee/
 COPY packages/files/package.json ./packages/files/

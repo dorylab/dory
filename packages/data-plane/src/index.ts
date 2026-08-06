@@ -1,0 +1,10 @@
+export { fingerprint, stableStringify } from './fingerprint';
+export { ArrowIpcFileDataSource, type ArrowIpcFileDataSourceOptions } from './ipc-file-data-source';
+export { writeDataStreamToArrowIpcFile, type ArrowIpcWriteResult } from './ipc-write';
+export { dataStreamAbortError, onceAsync } from './lifecycle';
+export { createDataSchema, recordBatchFromRows, rowDataStream, type RowDataStreamOptions } from './row-data-stream';
+export { schemaToIpc } from './schema-ipc';
+export { collectSerializableDataPage, prefetchSerializableDataStream, recordBatchToSerializableRows, serializableColumns, serializeArrowValue } from './serialize';
+export type { DataColumn, DataOpenOptions, DataReader, DataRows, DataSource, DataStream, DataStreamMetadata, SerializableDataColumn, SerializableDataPage } from './types';
+export { DEFAULT_DATA_STREAM_BATCH_BYTES, DEFAULT_DATA_STREAM_BATCH_ROWS } from './types';
+export type { DataType, Field, RecordBatch, Schema } from 'apache-arrow';

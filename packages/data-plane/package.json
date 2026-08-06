@@ -1,5 +1,5 @@
 {
-    "name": "@dory/dataset",
+    "name": "@dory/data-plane",
     "version": "0.1.0",
     "private": true,
     "type": "module",
@@ -9,13 +9,15 @@
         ".": "./src/index.ts"
     },
     "scripts": {
-        "typecheck": "tsc --noEmit"
+        "typecheck": "tsc --noEmit",
+        "test": "tsx --test scripts/tests/data-plane.test.ts"
     },
     "dependencies": {
         "apache-arrow": "^21.2.0"
     },
     "devDependencies": {
         "@types/node": "^25.5.2",
+        "tsx": "^4.23.1",
         "typescript": "^6.0.2"
     }
 }

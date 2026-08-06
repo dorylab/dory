@@ -72,8 +72,8 @@ export class SqlServerImportWriter implements DataWriter {
             if (input.plan.target.mode === 'create') await new sql.Request(transaction).query(createTableSql(input.plan));
             else if (input.plan.mode === 'replace') await new sql.Request(transaction).query(`DELETE FROM ${qualifiedName(input.plan.target)}`);
             await input.onProgress({ phase: 'writing', batches, rowsWritten, rowsCommitted: 0, pendingCommit: true });
-            const reader = await input.dataset.openBatches({ batchSize: input.batchSize, signal: input.signal });
-            for await (const batch of reader) {
+            const dataStream = await input.dataSource.open({ batchRows: input.batchSize, signal: input.signal });
+            for await (const batch of dataStream.batches()) {
                 if (input.signal.aborted) throw abortError();
                 const rows = batchRows(batch, columns).map(row => row.map((value, index) => sqlServerValue(value, columns[index]!.targetType)));
                 if (!rows.length) continue;

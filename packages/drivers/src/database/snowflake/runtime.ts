@@ -5,7 +5,7 @@ import { enforceSelectLimit } from '@dory/drivers/core';
 import { compileParams } from '@dory/drivers/core';
 import { asyncIterableWithCleanup, onceAsync } from '@dory/drivers/core';
 import type { DriverQueryParams } from '@dory/drivers/core';
-import type { BaseConfig, ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult } from '@dory/drivers/types';
+import type { BaseConfig, ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult } from '@dory/drivers/types';
 import { SnowflakeDialect } from './dialect';
 
 type SnowflakeConnection = snowflake.Connection;
@@ -163,7 +163,10 @@ export function parseSnowflakeTableReference(table: string): { database?: string
 }
 
 export function quoteSnowflakeQualifiedTable(database: string, schema: string | undefined, table: string): string {
-    return [database, schema, table].filter((part): part is string => Boolean(part?.trim())).map(quoteSnowflakeIdentifier).join('.');
+    return [database, schema, table]
+        .filter((part): part is string => Boolean(part?.trim()))
+        .map(quoteSnowflakeIdentifier)
+        .join('.');
 }
 
 export async function pingSnowflake(connection: SnowflakeConnection, config: BaseConfig): Promise<HealthInfo & { version?: string }> {
@@ -236,13 +239,13 @@ export async function executeSnowflakeQueryRowStream<Row>(
         trackQuery?: (statement: snowflake.RowStatement) => void;
         untrackQuery?: () => void;
     },
-): Promise<DriverQueryRowStream<Row>> {
+): Promise<DriverRowCursor<Row>> {
     const { sql: compiledSql, values } = normalizeParams(sql, params);
     const runtime = extractRuntimeOptions(config);
     const started = Date.now();
     const queryTimeoutMs = options?.context?.statementTimeoutMs ?? runtime.requestTimeoutMs;
 
-    return await new Promise<DriverQueryRowStream<Row>>((resolve, reject) => {
+    return await new Promise<DriverRowCursor<Row>>((resolve, reject) => {
         let stream: (AsyncIterable<Row> & { destroy?: (error?: Error) => void }) | null = null;
         const cleanup = onceAsync(() => options?.untrackQuery?.());
         let statementRef: snowflake.RowStatement | null = null;
@@ -251,6 +254,7 @@ export async function executeSnowflakeQueryRowStream<Row>(
             sqlText: compiledSql,
             binds: values as snowflake.Binds,
             streamResult: true,
+            rowMode: 'array',
             parameters: queryTimeoutMs ? { STATEMENT_TIMEOUT_IN_SECONDS: Math.max(1, Math.ceil(queryTimeoutMs / 1000)) } : undefined,
             complete: (err, stmt) => {
                 if (err) {
@@ -296,6 +300,12 @@ export async function executeSnowflakeQueryRowStream<Row>(
     });
 }
 
-export async function executeSnowflakeCommand(connection: SnowflakeConnection, config: BaseConfig, sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<void> {
+export async function executeSnowflakeCommand(
+    connection: SnowflakeConnection,
+    config: BaseConfig,
+    sql: string,
+    params?: DriverQueryParams,
+    context?: ConnectionQueryContext,
+): Promise<void> {
     await executeSnowflakeQuery(connection, config, sql, params, { context });
 }

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { recordBatchToSerializableRows, rowDataStream } from '@dory/data-plane';
 import type { BaseConnection, DriverPoolEntry } from '@dory/drivers/core';
-import type { DriverQueryResult, DriverQueryRowStream } from '@dory/drivers/types';
+import type { DriverQueryResult } from '@dory/drivers/types';
 import {
     createSqlAuditConnectionSnapshot,
     isSqlAuditConnectionSnapshotCurrent,
@@ -38,15 +39,15 @@ function createConnection(overrides: Partial<BaseConnection> = {}) {
         async queryWithContext(sql: string, context?: { database?: string; queryId?: string; statementIndex?: number }): Promise<DriverQueryResult<{ id: number }>> {
             return this.query(sql, undefined, context);
         },
-        async queryRowsStreamWithContext(): Promise<DriverQueryRowStream<{ id: number }>> {
-            return {
+        async readQuery() {
+            return rowDataStream({
+                columns: [{ name: 'id', type: 'integer' }],
                 rows: (async function* () {
                     yield { id: 1 };
                     yield { id: 2 };
                 })(),
-                rowCount: null,
-                columns: [{ name: 'id', type: 'integer' }],
-            };
+                metadata: { source: 'test' },
+            });
         },
         async command(sql: string): Promise<void> {
             await this.query(sql);
@@ -226,15 +227,15 @@ test('audits successful streaming SQL execution after consuming rows', async () 
             connectionId: 'conn-1',
             databaseName: 'db_from_context',
         },
-        () => connection.queryRowsStreamWithContext('select stream', { database: 'db_from_call', queryId: 'stream-query-1' }),
+        () => connection.readQuery({ sql: 'select stream', context: { database: 'db_from_call', queryId: 'stream-query-1' } }),
     );
 
     const rows = [];
-    for await (const row of stream.rows) {
-        rows.push(row);
+    for await (const batch of stream.batches()) {
+        rows.push(...recordBatchToSerializableRows(batch));
     }
 
-    assert.deepEqual(rows, [{ id: 1 }, { id: 2 }]);
+    assert.deepEqual(rows, [{ id: '1' }, { id: '2' }]);
     assert.equal(writes.length, 1);
     assert.equal(writes[0]!.status, 'success');
     assert.equal(writes[0]!.source, 'user_sql_console');
@@ -244,18 +245,18 @@ test('audits successful streaming SQL execution after consuming rows', async () 
     assert.equal(writes[0]!.rowsRead, 2);
 });
 
-test('preserves synchronous row streams while auditing', async () => {
+test('audits synchronous row sources through the Arrow DataStream boundary', async () => {
     const writes = captureAuditWrites();
     const connection = createConnection({
-        async queryRowsStreamWithContext<Row = unknown>(): Promise<DriverQueryRowStream<Row>> {
-            return {
+        async readQuery() {
+            return rowDataStream({
+                columns: [{ name: 'id', type: 'integer' }],
                 rows: (function* () {
                     yield { id: 1 };
                     yield { id: 2 };
-                })() as Iterable<Row>,
-                rowCount: null,
-                columns: [{ name: 'id', type: 'integer' }],
-            };
+                })(),
+                metadata: { source: 'test' },
+            });
         },
     });
 
@@ -266,13 +267,12 @@ test('preserves synchronous row streams while auditing', async () => {
             source: 'user_sql_console',
             connectionId: 'conn-1',
         },
-        () => connection.queryRowsStreamWithContext('select sync stream'),
+        () => connection.readQuery({ sql: 'select sync stream' }),
     );
 
-    assert.equal(typeof (stream.rows as Iterable<unknown>)[Symbol.iterator], 'function');
-    assert.equal(typeof (stream.rows as AsyncIterable<unknown>)[Symbol.asyncIterator], 'undefined');
-    assert.deepEqual([...(stream.rows as Iterable<{ id: number }>)], [{ id: 1 }, { id: 2 }]);
-    await Promise.resolve();
+    const rows = [];
+    for await (const batch of stream.batches()) rows.push(...recordBatchToSerializableRows(batch));
+    assert.deepEqual(rows, [{ id: '1' }, { id: '2' }]);
     assert.equal(writes.length, 1);
     assert.equal(writes[0]!.status, 'success');
     assert.equal(writes[0]!.rowsRead, 2);

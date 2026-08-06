@@ -1,5 +1,5 @@
 import { BaseConnection } from '@dory/drivers/core';
-import type { ConnectionQueryContext, DriverQueryRowStream, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
+import type { ConnectionQueryContext, DriverRowCursor, HealthInfo, QueryResult, TableUpdateBatch, TableUpdateResult } from '@dory/drivers/types';
 import type { DriverQueryParams } from '@dory/drivers/core';
 import { TableMutationConflictError } from '@dory/drivers/table-mutations';
 import { CloudflareD1Dialect } from './dialect';
@@ -46,7 +46,7 @@ export class CloudflareD1Datasource extends BaseConnection {
         return executeCloudflareD1Query<Row>(this.config, sql, context?.params);
     }
 
-    async queryRowsStreamWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverQueryRowStream<Row>> {
+    async openRowCursorWithContext<Row = any>(sql: string, context?: ConnectionQueryContext & { params?: DriverQueryParams }): Promise<DriverRowCursor<Row>> {
         this.assertReady();
         return executeCloudflareD1QueryRowStream<Row>(this.config, sql, context?.params);
     }
