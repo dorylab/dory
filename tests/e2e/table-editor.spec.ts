@@ -224,7 +224,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     expect(dataTabBox!.x + dataTabBox!.width).toBeLessThan(paginationBox!.x);
     expect(subTabsFooterBox!.y).toBeGreaterThan(nameCellBox!.y + nameCellBox!.height);
 
-    const gridScroller = page.locator('.BottomRightGrid_ScrollWrapper').filter({ visible: true });
+    const gridScroller = page.getByTestId('vtable-surface').locator('.ReactVirtualized__Grid.bg-card').last();
     await gridScroller.evaluate(element => {
         element.scrollTop = 49 * 32;
         element.dispatchEvent(new Event('scroll'));
@@ -267,6 +267,22 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     const gridContainer = page.getByTestId('vtable-surface').locator('> div[tabindex="0"]');
     const undoShortcut = process.platform === 'darwin' ? 'Meta+Z' : 'Control+Z';
     const redoShortcut = process.platform === 'darwin' ? 'Meta+Shift+Z' : 'Control+Shift+Z';
+    const additiveSelectionModifier = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+    await firstNameCell.click();
+    await thirdNameCell.click({ modifiers: [additiveSelectionModifier] });
+    await expect(firstNameCell).toHaveAttribute('data-selected', 'true');
+    await expect(secondNameCell).not.toHaveAttribute('data-selected', 'true');
+    await expect(thirdNameCell).toHaveAttribute('data-selected', 'true');
+    await expect.poll(() => firstNameCell.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+    await expect.poll(() => thirdNameCell.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+    await thirdNameCell.click({ button: 'right' });
+    await expect(page.getByRole('menuitem', { name: 'Set selected cells (2)' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await thirdNameCell.click({ modifiers: [additiveSelectionModifier] });
+    await expect(firstNameCell).toHaveAttribute('data-selected', 'true');
+    await expect(thirdNameCell).not.toHaveAttribute('data-selected', 'true');
 
     await firstNameCell.click();
     await thirdNameCell.click({ modifiers: ['Shift'] });
