@@ -1,6 +1,6 @@
 import { type GetTableInfoAPI, type TablePreviewOptions } from '@dory/drivers/types';
 import { TableMutationInfo, TablePartitionStat, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { ClickhouseDatasource } from '../datasource';
 
 type SizeRow = {
@@ -265,6 +265,15 @@ async function getTablePreview(datasource: ClickhouseDatasource, database: strin
     };
 }
 
+async function openTableRows(datasource: ClickhouseDatasource, database: string, table: string, options: Parameters<NonNullable<GetTableInfoAPI['openRows']>>[2]) {
+    const clauses = buildTablePreviewClauses({ ...options, dialect: 'clickhouse', quoteIdentifier: quoteClickhouseIdentifier });
+    const projection = buildTableProjection(options.columns, quoteClickhouseIdentifier);
+    return datasource.openRowCursorWithContext<Record<string, unknown>>(`SELECT ${projection} FROM {db:Identifier}.{tbl:Identifier}${clauses.whereSql}${clauses.orderBySql}`, {
+        database,
+        params: { ...(clauses.params as Record<string, unknown>), db: database, tbl: table },
+    });
+}
+
 async function renameTable(datasource: ClickhouseDatasource, database: string, table: string, nextName: string): Promise<void> {
     const normalizedNextName = nextName.trim();
     if (!normalizedNextName || normalizedNextName.includes('.')) {
@@ -284,6 +293,7 @@ export function createClickhouseTableInfoCapability(datasource: ClickhouseDataso
         ddl: (database: string, table: string) => getTableDDL(datasource, database, table),
         stats: (database: string, table: string) => getTableStats(datasource, database, table),
         preview: (database: string, table: string, options) => getTablePreview(datasource, database, table, options),
+        openRows: (database, table, options) => openTableRows(datasource, database, table, options),
         rename: (database: string, table: string, nextName: string) => renameTable(datasource, database, table, nextName),
     };
 }

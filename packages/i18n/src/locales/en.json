@@ -479,6 +479,41 @@
         "No data": "No data",
         "Refresh": "Refresh",
         "Current SQL": "Current SQL",
+        "Export": {
+            "Title": "Export",
+            "New": "New export",
+            "Recent": "Recent",
+            "Format": "Format",
+            "ScopeSummary": "All matching rows · {filters} filters · sort: {sort}",
+            "SearchSummary": "Search: {search}",
+            "NoSort": "none",
+            "PendingWarning": "Pending edits are not included. The export reads the current database snapshot.",
+            "Columns": "Columns ({selected}/{total})",
+            "ColumnsLabel": "columns",
+            "SelectAll": "Select all",
+            "Clear": "Clear",
+            "SearchColumns": "Search columns",
+            "Start": "Start export",
+            "Queued": "Export queued",
+            "Failed": "Export failed",
+            "CancelFailed": "Could not cancel export",
+            "NoRuns": "No exports for this table yet.",
+            "Rows": "rows",
+            "Progress": "{phase} · {batches} batches",
+            "Expires": "Available until {date}",
+            "Cancel": "Cancel",
+            "Download": "Download",
+            "Status": { "queued": "Queued", "running": "Running", "completed": "Completed", "failed": "Failed", "canceled": "Canceled" },
+            "Phase": {
+                "queued": "Waiting",
+                "reading": "Reading",
+                "converting": "Converting",
+                "uploading": "Uploading",
+                "completed": "Completed",
+                "failed": "Failed",
+                "canceled": "Canceled"
+            }
+        },
         "Failed to load data preview": "Failed to load data preview",
         "Editor": {
             "PendingChanges": "Pending Changes",
@@ -987,7 +1022,7 @@
             }
         },
         "AuthRequired": {
-            "Title": "Sign in to use Chatbot",
+            "Title": "Sign in to use Data Agent",
             "Description": "After sign-in, your current workspace stay with you.",
             "Hint": "After sign-in, your current workspace stay with you.",
             "WorkspaceNotice": "When you sign in, your current guest workspace will be kept with your account.",
@@ -1020,7 +1055,7 @@
             "Cancel": "Cancel",
             "ConfirmDelete": "Delete",
             "DeleteSuccess": "Session deleted",
-            "CopilotAutoCreate": "Copilot sessions are created automatically for the current tab",
+            "CopilotAutoCreate": "Data Agent sessions are created automatically for the current tab",
             "NoMatches": "No matching sessions",
             "SearchPlaceholder": "Search sessions",
             "Groups": {
@@ -1032,16 +1067,16 @@
         "Errors": {
             "FetchSessions": "Failed to fetch sessions",
             "FetchSessionDetail": "Failed to fetch session details",
-            "FetchCopilotSession": "Failed to fetch Copilot session",
+            "FetchCopilotSession": "Failed to fetch Data Agent session",
             "CreateSession": "Failed to create session",
             "RenameSession": "Failed to rename session",
             "DeleteSession": "Failed to delete session",
             "SessionNotFoundRename": "Session not found. Unable to rename.",
             "SessionNotFoundDelete": "Session not found. Unable to delete.",
             "SessionNameRequired": "Session name cannot be empty",
-            "CopilotRenameUnsupported": "Copilot sessions cannot be renamed",
-            "CopilotDeleteUnsupported": "Copilot sessions cannot be deleted (managed by the current tab)",
-            "CreateCopilotSession": "Failed to create Copilot session",
+            "CopilotRenameUnsupported": "Data Agent sessions cannot be renamed",
+            "CopilotDeleteUnsupported": "Data Agent sessions cannot be deleted (managed by the current tab)",
+            "CreateCopilotSession": "Failed to create Data Agent session",
             "SessionNotSelected": "No session selected",
             "RequestFailed": "Request failed",
             "SendFailed": "Failed to send message",
@@ -1107,14 +1142,14 @@
     },
     "Welcome": {
         "Badge": "Anonymous mode",
-        "Title": "Start with an anonymous workspace, upgrade only when you need Chatbot.",
+        "Title": "Start with an anonymous workspace, upgrade only when you need Data Agent.",
         "Description": "Explore Dory immediately without creating an account. We will create a temporary workspace for you and keep your organization data when you later sign in.",
         "CardTitle": "Enter Dory instantly",
         "CardDescription": "Create an anonymous account and a personal workspace with one click.",
         "Start": "Start with anonymous account",
         "Resume": "Continue anonymous workspace",
         "Starting": "Preparing workspace…",
-        "Hint": "You can keep browsing anonymously. When you need Chatbot, sign in and we will link this workspace to your real account.",
+        "Hint": "You can keep browsing anonymously. When you need Data Agent, sign in and we will link this workspace to your real account.",
         "HaveAccount": "Already have an account?",
         "SignIn": "Sign in",
         "Highlights": {
@@ -1267,12 +1302,12 @@
             "ActionRunSelection": "Run selection",
             "ActionSave": "Save Query",
             "ActionNewTab": "New tab",
-            "ActionToggleCopilot": "Open Copilot",
+            "ActionToggleCopilot": "Open Data Agent",
             "ActionFormat": "Format SQL",
             "ShortcutRunSelection": "Run selection: Cmd/Ctrl+Enter",
             "ShortcutSave": "Save Query: Cmd/Ctrl+S",
             "ShortcutNewTab": "New tab: Cmd/Ctrl+Option/Alt+L",
-            "ShortcutToggleCopilot": "Open Copilot: Cmd/Ctrl+I",
+            "ShortcutToggleCopilot": "Open Data Agent: Cmd/Ctrl+I",
             "ShortcutFormat": "Format SQL: Shift+Cmd/Ctrl+F",
             "NewConsole": "New console",
             "OrDivider": "or",
@@ -1333,10 +1368,10 @@
                 "NewTab": "New tab created"
             },
             "NewTabTitle": "AI Query",
-            "ToggleOpen": "Open AI panel",
-            "ToggleClose": "Close AI panel",
-            "ToggleAria": "Toggle AI panel",
-            "ToggleLabel": "AI",
+            "ToggleOpen": "Open Data Agent",
+            "ToggleClose": "Close Data Agent",
+            "ToggleAria": "Toggle Data Agent",
+            "ToggleLabel": "Data Agent",
             "Context": {
                 "SqlTitle": "SQL Context",
                 "EditorTitle": "Editor Context",
@@ -1370,7 +1405,7 @@
                 "TopShareShort": "top {value}",
                 "PrimaryKeyLabel": "Primary key",
                 "TableLabel": "Table",
-                "RawCopilot": "Raw Copilot Context",
+                "RawCopilot": "Raw Data Agent Context",
                 "RawBundle": "Raw Context Bundle",
                 "CopyJson": "Copy JSON",
                 "NotReady": "Context is not ready"
@@ -1449,15 +1484,15 @@
                     "Optimize": "Optimize",
                     "Rewrite": "Rewrite",
                     "ToAggregation": "Convert to aggregation",
-                    "Default": "Ask Copilot"
+                    "Default": "Ask Data Agent"
                 },
                 "AppliedLabel": "{action} applied",
                 "AppliedDescription": "Your SQL has been updated in the editor.",
                 "GoToActions": "Go to Actions"
             },
             "Panel": {
-                "NoSqlTab": "Select a SQL tab to use Copilot.",
-                "UnsupportedTab": "Copilot is not supported for {type} tabs.",
+                "NoSqlTab": "Select a SQL tab to use Data Agent.",
+                "UnsupportedTab": "Data Agent is not supported for {type} tabs.",
                 "TabAsk": "Ask",
                 "TabAction": "Action",
                 "TabContext": "Context"
@@ -2616,13 +2651,13 @@
                 "UpdateSessionFailed": "Failed to update session",
                 "DeleteSessionFailed": "Failed to delete session",
                 "MissingTabId": "Missing tabId",
-                "FetchCopilotSessionFailed": "Failed to fetch Copilot session",
+                "FetchCopilotSessionFailed": "Failed to fetch Data Agent session",
                 "InvalidSessionType": "Invalid session type",
                 "ConnectionIdRequired": "Data source ID is required",
                 "ListSessionsFailed": "Failed to fetch sessions",
-                "CopilotCreationNotAllowed": "Copilot sessions cannot be created via this endpoint",
+                "CopilotCreationNotAllowed": "Data Agent sessions cannot be created via this endpoint",
                 "CreateSessionFailed": "Failed to create session",
-                "FullAccountRequired": "Please sign in to use Chatbot."
+                "FullAccountRequired": "Please sign in to use Data Agent."
             },
             "Tools": {
                 "Rag": {
@@ -2674,7 +2709,7 @@
             "Prompt": {
                 "SchemaContextTitle": "[Current data context]",
                 "DatabaseContextTitle": "[Database context]",
-                "CopilotContextTitle": "[Current Copilot context]",
+                "CopilotContextTitle": "[Current Data Agent context]",
                 "ExecutionIntent": {
                     "Policy": "Current turn execution policy:\n- Classify the latest user message before deciding whether to use sqlRunner.\n- If the user explicitly asks to only generate, show, or write SQL, or asks not to execute the query, do not call sqlRunner and return SQL only unless clarification is needed.\n- If the user asks to view, list, rank, compare, aggregate, chart, or otherwise obtain actual database results, and sqlRunner is available, call sqlRunner with a read-only SQL query before the final answer.\n- Do not stop after only writing SQL for data-result requests.\n- Keep exploratory/detail result limits at 100 rows or fewer."
                 }
@@ -2691,7 +2726,7 @@
                 "SqlRequired": "SQL cannot be empty",
                 "MissingConnection": "Missing data source info; unable to execute query.",
                 "ReadOnlyOnly": "Only read-only queries are allowed (SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA). Do not include write or update statements.",
-                "SelectAllNotAllowed": "SELECT * is not allowed in chatbot-generated SQL. Select only the columns needed for the answer.",
+                "SelectAllNotAllowed": "SELECT * is not allowed in SQL generated by Data Agent. Select only the columns needed for the answer.",
                 "OrderByIndexMissing": "This query may be expensive: ORDER BY uses column(s) {columns} on table {table}, and they are not confirmed to be indexed. Narrow the selected columns or inspect indexes first.",
                 "OrderByIndexUnknown": "This query may be expensive: ORDER BY uses column(s) {columns} on table {table}, but index support could not be confirmed. Narrow the selected columns or inspect indexes first.",
                 "ExecuteFailed": "SQL execution failed"
@@ -3037,7 +3072,7 @@
         },
         "AssistantFallback": {
             "Title": "Response error",
-            "Description": "The assistant did not return usable content. Please try again later or refine your prompt.",
+            "Description": "Data Agent did not return usable content. Please try again later or refine your prompt.",
             "MissingAiEnvTitle": "Missing AI configuration",
             "MissingAiEnvDescription": "Please set DORY_AI_API_KEY and DORY_AI_URL to enable AI features."
         },
@@ -3468,7 +3503,7 @@
             "ChatSessionNotFound": "Session not found",
             "ChatSessionForbidden": "You do not have access to this session",
             "ChatSessionArchived": "Session is archived and cannot be modified",
-            "ChatCopilotSessionFailed": "Failed to get or create Copilot session",
+            "ChatCopilotSessionFailed": "Failed to get or create Data Agent session",
             "ChatGlobalSessionFailed": "Failed to create or get global session",
             "ChatUpdateSessionNotFound": "Session not found",
             "ChatInsertMessageFailed": "Failed to write message"
@@ -3716,7 +3751,7 @@
         "Explorer": "Explorer",
         "Import": "Data import",
         "Schema": "Schema",
-        "Chatbot": "Chatbot",
+        "Chatbot": "Data Agent",
         "Monitoring": "Monitoring",
         "Privileges": "Privileges",
         "GetHelp": "Get Help",
@@ -4126,8 +4161,8 @@
                 "ViewSetup": "View connection commands",
                 "UsageSetupHint": "Install the Dory Codex Agent service on this device, then refresh this panel to enable Codex Agent from the Web app.",
                 "UsageBridgeReadyHint": "The Dory Codex Agent is connected. Enable Codex Agent next, then make it the default model.",
-                "UsageEnabledHint": "Local AI is enabled. Make it the default model to run assistant requests through the agent on this device.",
-                "UsageDefaultHint": "Local AI is the default model. The Dory Codex Agent service runs assistant requests on this device.",
+                "UsageEnabledHint": "Local AI is enabled. Make it the default model to run Data Agent requests through the agent on this device.",
+                "UsageDefaultHint": "Local AI is the default model. The Dory Codex Agent service runs Data Agent requests on this device.",
                 "UsageDesktopHint": "On Desktop, Dory detects Codex or Claude Code CLI on this device. Once detected, enable it and make it the default model.",
                 "ModelServiceDescription": "Use the local OpenAI-compatible endpoint at {endpoint}."
             }

@@ -35,6 +35,7 @@ import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
 import { DEFAULT_TABLE_PREVIEW_LIMIT } from '@/shared/data/app.data';
 import { useTablePropertiesQuery, useTableStatsQuery, useTableStructureColumnsQuery } from '../table-queries';
 import { DataPreviewPaginationBar } from './DataPreviewPaginationBar';
+import { DataPreviewExportPanel } from './data-preview-export-panel';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -1218,6 +1219,21 @@ function DataPreviewInner({
             variant={paginationPortalContainer === undefined ? 'footer' : 'inline'}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
+            actions={
+                connectionId && databaseName && tableName && columns.length > 0 ? (
+                    <DataPreviewExportPanel
+                        connectionId={connectionId}
+                        database={databaseName}
+                        table={tableName}
+                        columns={columns.map(column => column.name)}
+                        filters={activeFilters as TablePreviewFilter[]}
+                        search={query}
+                        searchColumns={effectiveSearchColumns}
+                        sort={sortState}
+                        pendingChanges={editCounts.cellCount}
+                    />
+                ) : null
+            }
         />
     );
     const pagination = paginationPortalContainer === undefined ? paginationBar : paginationPortalContainer ? createPortal(paginationBar, paginationPortalContainer) : null;

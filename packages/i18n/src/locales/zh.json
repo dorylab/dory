@@ -483,6 +483,33 @@
         "No data": "没有数据",
         "Refresh": "刷新",
         "Current SQL": "当前 SQL",
+        "Export": {
+            "Title": "导出",
+            "New": "新建导出",
+            "Recent": "最近任务",
+            "Format": "格式",
+            "ScopeSummary": "全部匹配行 · {filters} 个过滤条件 · 排序：{sort}",
+            "SearchSummary": "搜索：{search}",
+            "NoSort": "无",
+            "PendingWarning": "未提交的编辑不会进入导出；导出读取当前数据库快照。",
+            "Columns": "列（{selected}/{total}）",
+            "ColumnsLabel": "列",
+            "SelectAll": "全选",
+            "Clear": "清空",
+            "SearchColumns": "搜索列",
+            "Start": "开始导出",
+            "Queued": "导出任务已排队",
+            "Failed": "导出失败",
+            "CancelFailed": "无法取消导出",
+            "NoRuns": "当前表还没有导出任务。",
+            "Rows": "行",
+            "Progress": "{phase} · {batches} 个批次",
+            "Expires": "可下载至 {date}",
+            "Cancel": "取消",
+            "Download": "下载",
+            "Status": { "queued": "排队中", "running": "导出中", "completed": "已完成", "failed": "失败", "canceled": "已取消" },
+            "Phase": { "queued": "等待中", "reading": "读取中", "converting": "转换中", "uploading": "上传中", "completed": "已完成", "failed": "失败", "canceled": "已取消" }
+        },
         "Failed to load data preview": "加载数据预览失败",
         "Editor": {
             "PendingChanges": "待提交更改",
@@ -991,8 +1018,8 @@
             }
         },
         "AuthRequired": {
-            "Title": "登录后才能使用 Chatbot",
-            "Description": "访客工作区可以继续浏览应用，但 Chatbot 需要正式账号。",
+            "Title": "登录后才能使用 Data Agent",
+            "Description": "访客工作区可以继续浏览应用，但 Data Agent 需要正式账号。",
             "Hint": "登录后会保留当前工作区，不会丢数据。",
             "WorkspaceNotice": "登录后，当前访客工作区会保留到你的账号下。",
             "SignIn": "登录",
@@ -1024,7 +1051,7 @@
             "Cancel": "取消",
             "ConfirmDelete": "删除",
             "DeleteSuccess": "删除成功",
-            "CopilotAutoCreate": "Copilot 会话随当前 Tab 自动创建",
+            "CopilotAutoCreate": "Data Agent 会话随当前 Tab 自动创建",
             "NoMatches": "没有匹配的会话",
             "SearchPlaceholder": "搜索会话",
             "Groups": {
@@ -1036,16 +1063,16 @@
         "Errors": {
             "FetchSessions": "获取会话列表失败",
             "FetchSessionDetail": "获取会话详情失败",
-            "FetchCopilotSession": "获取 Copilot 会话失败",
+            "FetchCopilotSession": "获取 Data Agent 会话失败",
             "CreateSession": "创建会话失败",
             "RenameSession": "重命名失败",
             "DeleteSession": "删除会话失败",
             "SessionNotFoundRename": "未找到会话，无法重命名",
             "SessionNotFoundDelete": "未找到会话，无法删除",
             "SessionNameRequired": "会话名称不能为空",
-            "CopilotRenameUnsupported": "Copilot 会话不支持重命名",
-            "CopilotDeleteUnsupported": "Copilot 会话不支持删除（随 Tab 自动管理）",
-            "CreateCopilotSession": "创建 Copilot 会话失败",
+            "CopilotRenameUnsupported": "Data Agent 会话不支持重命名",
+            "CopilotDeleteUnsupported": "Data Agent 会话不支持删除（随 Tab 自动管理）",
+            "CreateCopilotSession": "创建 Data Agent 会话失败",
             "SessionNotSelected": "未选择会话",
             "RequestFailed": "请求失败",
             "SendFailed": "发送失败",
@@ -1111,14 +1138,14 @@
     },
     "Welcome": {
         "Badge": "匿名模式",
-        "Title": "先用匿名工作区体验，等需要 Chatbot 时再登录。",
+        "Title": "先用匿名工作区体验，等需要 Data Agent 时再登录。",
         "Description": "无需注册即可直接进入 Dory。我们会先为你创建一个临时工作区，之后登录时保留当前组织和数据。",
         "CardTitle": "立即进入 Dory",
         "CardDescription": "点击一次即可创建匿名账号和默认工作区。",
         "Start": "匿名开始使用",
         "Resume": "继续匿名工作区",
         "Starting": "正在准备工作区…",
-        "Hint": "你可以先匿名浏览。等需要 Chatbot 时再登录，我们会把当前工作区绑定到正式账号。",
+        "Hint": "你可以先匿名浏览。等需要 Data Agent 时再登录，我们会把当前工作区绑定到正式账号。",
         "HaveAccount": "已经有账号了？",
         "SignIn": "去登录",
         "Highlights": {
@@ -1271,12 +1298,12 @@
             "ActionRunSelection": "运行选中内容",
             "ActionSave": "保存 SQL",
             "ActionNewTab": "新建标签页",
-            "ActionToggleCopilot": "切换 Copilot",
+            "ActionToggleCopilot": "打开 Data Agent",
             "ActionFormat": "格式化 SQL",
             "ShortcutRunSelection": "运行选中内容：Cmd/Ctrl+Enter",
             "ShortcutSave": "保存 SQL：Cmd/Ctrl+S",
             "ShortcutNewTab": "新建标签页：Cmd/Ctrl+Option/Alt+L",
-            "ShortcutToggleCopilot": "切换 Copilot：Cmd/Ctrl+K",
+            "ShortcutToggleCopilot": "打开 Data Agent：Cmd/Ctrl+K",
             "ShortcutFormat": "格式化 SQL：Shift+Cmd/Ctrl+F",
             "NewConsole": "新建控制台",
             "OrDivider": "或",
@@ -1337,10 +1364,10 @@
                 "NewTab": "已创建新标签页"
             },
             "NewTabTitle": "AI 查询",
-            "ToggleOpen": "打开 AI 面板",
-            "ToggleClose": "关闭 AI 面板",
-            "ToggleAria": "切换 AI 面板",
-            "ToggleLabel": "AI",
+            "ToggleOpen": "打开 Data Agent",
+            "ToggleClose": "关闭 Data Agent",
+            "ToggleAria": "切换 Data Agent",
+            "ToggleLabel": "Data Agent",
             "Context": {
                 "SqlTitle": "SQL 上下文",
                 "EditorTitle": "编辑器上下文",
@@ -1374,7 +1401,7 @@
                 "TopShareShort": "top {value}",
                 "PrimaryKeyLabel": "主键",
                 "TableLabel": "表",
-                "RawCopilot": "Copilot 原始上下文",
+                "RawCopilot": "Data Agent 原始上下文",
                 "RawBundle": "原始上下文包",
                 "CopyJson": "复制 JSON",
                 "NotReady": "上下文尚未就绪"
@@ -1453,15 +1480,15 @@
                     "Optimize": "优化",
                     "Rewrite": "重写",
                     "ToAggregation": "转换为聚合",
-                    "Default": "询问 Copilot"
+                    "Default": "询问 Data Agent"
                 },
                 "AppliedLabel": "已应用：{action}",
                 "AppliedDescription": "SQL 已更新到编辑器。",
                 "GoToActions": "前往操作"
             },
             "Panel": {
-                "NoSqlTab": "请选择 SQL 标签以使用 Copilot。",
-                "UnsupportedTab": "Copilot 不支持 {type} 标签。",
+                "NoSqlTab": "请选择 SQL 标签以使用 Data Agent。",
+                "UnsupportedTab": "Data Agent 不支持 {type} 标签。",
                 "TabAsk": "提问",
                 "TabAction": "操作",
                 "TabContext": "上下文"
@@ -2620,13 +2647,13 @@
                 "UpdateSessionFailed": "更新会话失败",
                 "DeleteSessionFailed": "删除会话失败",
                 "MissingTabId": "缺少 tabId",
-                "FetchCopilotSessionFailed": "获取 Copilot 会话失败",
+                "FetchCopilotSessionFailed": "获取 Data Agent 会话失败",
                 "InvalidSessionType": "非法的 session type",
                 "ConnectionIdRequired": "缺少数据源 ID 参数",
                 "ListSessionsFailed": "获取会话列表失败",
-                "CopilotCreationNotAllowed": "Copilot 会话不能通过该接口创建",
+                "CopilotCreationNotAllowed": "Data Agent 会话不能通过该接口创建",
                 "CreateSessionFailed": "创建会话失败",
-                "FullAccountRequired": "请先登录后再使用 Chatbot。"
+                "FullAccountRequired": "请先登录后再使用 Data Agent。"
             },
             "Tools": {
                 "Rag": {
@@ -2678,7 +2705,7 @@
             "Prompt": {
                 "SchemaContextTitle": "【当前数据上下文】",
                 "DatabaseContextTitle": "【数据库上下文】",
-                "CopilotContextTitle": "【当前 Copilot 上下文】",
+                "CopilotContextTitle": "【当前 Data Agent 上下文】",
                 "ExecutionIntent": {
                     "Policy": "当前轮执行策略：\n- 在决定是否使用 sqlRunner 之前，先判断用户最新消息的意图。\n- 如果用户明确要求只生成、只显示或只写 SQL，或明确要求不要执行查询，则本轮不要调用 sqlRunner；除非需要澄清，否则只返回 SQL。\n- 如果用户要求查看、列出、排名、对比、聚合、画图，或以其他方式获取实际数据库结果，并且 sqlRunner 可用，请先用只读 SQL 调用 sqlRunner，再给出最终回答。\n- 对于需要数据结果的请求，不要只写 SQL 就结束。\n- 探索性或明细查询的结果限制保持在 100 行以内。"
                 }
@@ -2695,7 +2722,7 @@
                 "SqlRequired": "SQL 语句不能为空",
                 "MissingConnection": "缺少数据源信息，无法执行查询。",
                 "ReadOnlyOnly": "目前仅允许执行只读查询（SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA），请勿包含写入或更新语句。",
-                "SelectAllNotAllowed": "chatbot 生成的 SQL 不允许使用 SELECT *，请只选择回答问题所需的列。",
+                "SelectAllNotAllowed": "Data Agent 生成的 SQL 不允许使用 SELECT *，请只选择回答问题所需的列。",
                 "OrderByIndexMissing": "这个查询可能较重：表 {table} 上用于 ORDER BY 的列 {columns} 未确认有索引。请先缩小查询列范围，或先检查索引。",
                 "OrderByIndexUnknown": "这个查询可能较重：表 {table} 上用于 ORDER BY 的列 {columns} 无法确认是否有索引。请先缩小查询列范围，或先检查索引。",
                 "ExecuteFailed": "执行 SQL 失败"
@@ -3041,7 +3068,7 @@
         },
         "AssistantFallback": {
             "Title": "响应异常",
-            "Description": "助手暂未返回可用内容，请稍后重试或调整提问。",
+            "Description": "Data Agent 暂未返回可用内容，请稍后重试或调整提问。",
             "MissingAiEnvTitle": "缺少 AI 配置",
             "MissingAiEnvDescription": "请设置 DORY_AI_API_KEY 和 DORY_AI_URL 以启用 AI 功能。"
         },
@@ -3472,7 +3499,7 @@
             "ChatSessionNotFound": "会话不存在",
             "ChatSessionForbidden": "无权访问该会话",
             "ChatSessionArchived": "会话已归档，无法写入",
-            "ChatCopilotSessionFailed": "获取 / 创建 Copilot 会话失败",
+            "ChatCopilotSessionFailed": "获取 / 创建 Data Agent 会话失败",
             "ChatGlobalSessionFailed": "创建 / 获取 global 会话失败",
             "ChatUpdateSessionNotFound": "会话不存在",
             "ChatInsertMessageFailed": "写入消息失败"
@@ -3714,7 +3741,7 @@
         "Explorer": "资源浏览",
         "Import": "数据导入",
         "Schema": "模式",
-        "Chatbot": "聊天助手",
+        "Chatbot": "Data Agent",
         "Monitoring": "监控",
         "Privileges": "权限",
         "StarNotificationTitle": "喜欢 Dory 吗？",
@@ -4124,8 +4151,8 @@
                 "ViewSetup": "查看连接命令",
                 "UsageSetupHint": "在这台设备上安装 Dory Codex Agent 服务，刷新此面板后即可从 Web 应用启用 Codex Agent。",
                 "UsageBridgeReadyHint": "Dory Codex Agent 已连接。下一步启用 Codex Agent，并将它设为默认模型。",
-                "UsageEnabledHint": "本机 AI 已启用。设为默认后，聊天助手会通过这台设备上的 Agent 运行。",
-                "UsageDefaultHint": "本机 AI 已是默认模型。Dory Codex Agent 服务会在这台设备上运行助手请求。",
+                "UsageEnabledHint": "本机 AI 已启用。设为默认后，Data Agent 会通过这台设备上的 Agent 运行。",
+                "UsageDefaultHint": "本机 AI 已是默认模型。Dory Codex Agent 服务会在这台设备上运行 Data Agent 请求。",
                 "UsageDesktopHint": "桌面版会检测这台设备上的 Codex 或 Claude Code CLI；检测到后即可启用并设为默认模型。",
                 "ModelServiceDescription": "使用本机 OpenAI-compatible endpoint：{endpoint}。"
             }

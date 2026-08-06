@@ -4,7 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 
-import { AgentRunArtifactStore, FilesystemObjectStore, readableToBuffer, ResultSetArtifactStore, S3CompatibleObjectStore, type ObjectStore } from '../../src/index';
+import {
+    AgentRunArtifactStore,
+    ExportRunArtifactStore,
+    FilesystemObjectStore,
+    readableToBuffer,
+    ResultSetArtifactStore,
+    S3CompatibleObjectStore,
+    type ObjectStore,
+} from '../../src/index';
 import { buildResultSetPreview, resultSetDataAvailability, type ResultSetManifest } from '@dory/resultset';
 
 const root = await mkdtemp(path.join(os.tmpdir(), 'dory-artifacts-test-'));
@@ -105,6 +113,16 @@ try {
     for await (const event of agentRuns.readEvents(runRef)) events.push(event);
     assert.deepEqual(events, [{ step: 1 }, { step: 2 }]);
 
+    const exportRuns = new ExportRunArtifactStore(objectStore, 'artifacts');
+    const exportPaths = exportRuns.paths('org_test', 'export_test', 'orders.csv');
+    await exportRuns.put(exportPaths.output, 'id,name\n1,Ada\n', 'text/csv');
+    await exportRuns.putJson(exportPaths.manifest, { version: 1, runId: 'export_test' });
+    assert.equal(exportPaths.output, 'artifacts/org_test/export-runs/export_test/output/orders.csv');
+    assert.equal(await exportRuns.exists(exportPaths.manifest), true);
+    await exportRuns.deleteRun('org_test', 'export_test');
+    assert.equal(await exportRuns.exists(exportPaths.output), false);
+    assert.equal(await exportRuns.exists(exportPaths.manifest), false);
+
     await resultSets.deleteResultSet(ref);
     assert.equal(await resultSets.exists(ref), false);
 } finally {
@@ -154,6 +172,13 @@ const s3Client = {
 };
 
 const s3Store = new S3CompatibleObjectStore({ bucket: 'test', region: 'us-east-1' }, s3Client as never);
+const s3ExportRuns = new ExportRunArtifactStore(s3Store, 'artifacts');
+const s3ExportPaths = s3ExportRuns.paths('org_test', 'export_s3', 'orders.arrow');
+await s3ExportRuns.put(s3ExportPaths.output, Buffer.from('ARROW1'), 'application/vnd.apache.arrow.file');
+await s3ExportRuns.putJson(s3ExportPaths.manifest, { version: 1, runId: 'export_s3' });
+assert.deepEqual(await readableToBuffer(await s3ExportRuns.get(s3ExportPaths.output)), Buffer.from('ARROW1'));
+await s3ExportRuns.deleteRun('org_test', 'export_s3');
+assert.equal(await s3ExportRuns.exists(s3ExportPaths.manifest), false);
 const s3ResultSets = new ResultSetArtifactStore(s3Store, 'artifacts');
 const s3Preview = buildResultSetPreview({ columns: [{ name: 'id', logicalType: 'number' }], rows: [{ id: 1 }] });
 const s3Manifest: ResultSetManifest = {

@@ -479,6 +479,41 @@
         "No data": "データがありません",
         "Refresh": "更新",
         "Current SQL": "現在の SQL",
+        "Export": {
+            "Title": "エクスポート",
+            "New": "新規エクスポート",
+            "Recent": "最近のタスク",
+            "Format": "形式",
+            "ScopeSummary": "一致する全行 · フィルター {filters} 件 · 並び順: {sort}",
+            "SearchSummary": "検索: {search}",
+            "NoSort": "なし",
+            "PendingWarning": "未確定の編集は含まれません。現在のデータベーススナップショットを読み取ります。",
+            "Columns": "列 ({selected}/{total})",
+            "ColumnsLabel": "列",
+            "SelectAll": "すべて選択",
+            "Clear": "クリア",
+            "SearchColumns": "列を検索",
+            "Start": "エクスポート開始",
+            "Queued": "エクスポートをキューに追加しました",
+            "Failed": "エクスポートに失敗しました",
+            "CancelFailed": "エクスポートをキャンセルできませんでした",
+            "NoRuns": "このテーブルのエクスポートはまだありません。",
+            "Rows": "行",
+            "Progress": "{phase} · {batches} バッチ",
+            "Expires": "{date} までダウンロード可能",
+            "Cancel": "キャンセル",
+            "Download": "ダウンロード",
+            "Status": { "queued": "待機中", "running": "実行中", "completed": "完了", "failed": "失敗", "canceled": "キャンセル済み" },
+            "Phase": {
+                "queued": "待機中",
+                "reading": "読み込み中",
+                "converting": "変換中",
+                "uploading": "アップロード中",
+                "completed": "完了",
+                "failed": "失敗",
+                "canceled": "キャンセル済み"
+            }
+        },
         "Failed to load data preview": "データプレビューの読み込みに失敗しました",
         "Editor": {
             "PendingChanges": "保留中の変更",
@@ -987,8 +1022,8 @@
             }
         },
         "AuthRequired": {
-            "Title": "Chatbot を使うにはサインインしてください",
-            "Description": "ゲストワークスペースでもアプリは閲覧できますが、Chatbot を使うには通常アカウントが必要です。",
+            "Title": "Data Agent を使うにはサインインしてください",
+            "Description": "ゲストワークスペースでもアプリは閲覧できますが、Data Agent を使うには通常アカウントが必要です。",
             "Hint": "サインイン後も、現在のワークスペースはそのまま引き継がれます。",
             "WorkspaceNotice": "サインインすると、現在のゲストワークスペースはあなたのアカウントに引き継がれます。",
             "SignIn": "サインイン",
@@ -1020,7 +1055,7 @@
             "Cancel": "キャンセル",
             "ConfirmDelete": "削除",
             "DeleteSuccess": "セッションを削除しました",
-            "CopilotAutoCreate": "Copilot セッションは現在のタブに対して自動作成されます",
+            "CopilotAutoCreate": "Data Agent セッションは現在のタブに対して自動作成されます",
             "NoMatches": "一致するセッションがありません",
             "SearchPlaceholder": "セッションを検索",
             "Groups": {
@@ -1032,16 +1067,16 @@
         "Errors": {
             "FetchSessions": "セッションの取得に失敗しました",
             "FetchSessionDetail": "セッション詳細の取得に失敗しました",
-            "FetchCopilotSession": "Copilot セッションの取得に失敗しました",
+            "FetchCopilotSession": "Data Agent セッションの取得に失敗しました",
             "CreateSession": "セッションの作成に失敗しました",
             "RenameSession": "セッション名の変更に失敗しました",
             "DeleteSession": "セッションの削除に失敗しました",
             "SessionNotFoundRename": "セッションが見つからず、名前を変更できません。",
             "SessionNotFoundDelete": "セッションが見つからず、削除できません。",
             "SessionNameRequired": "セッション名は空にできません",
-            "CopilotRenameUnsupported": "Copilot セッションは名前を変更できません",
-            "CopilotDeleteUnsupported": "Copilot セッションは削除できません（現在のタブで管理されています）",
-            "CreateCopilotSession": "Copilot セッションの作成に失敗しました",
+            "CopilotRenameUnsupported": "Data Agent セッションは名前を変更できません",
+            "CopilotDeleteUnsupported": "Data Agent セッションは削除できません（現在のタブで管理されています）",
+            "CreateCopilotSession": "Data Agent セッションの作成に失敗しました",
             "SessionNotSelected": "セッションが選択されていません",
             "RequestFailed": "リクエストに失敗しました",
             "SendFailed": "メッセージの送信に失敗しました",
@@ -1107,14 +1142,14 @@
     },
     "Welcome": {
         "Badge": "匿名モード",
-        "Title": "匿名ワークスペースですぐ始めて、Chatbot が必要になったらアップグレード。",
+        "Title": "匿名ワークスペースですぐ始めて、Data Agent が必要になったらアップグレード。",
         "Description": "アカウントを作成せずにすぐ Dory を試せます。一時的なワークスペースを作成し、後でサインインしたときにも組織データを引き継ぎます。",
         "CardTitle": "すぐに Dory を始める",
         "CardDescription": "ワンクリックで匿名アカウントと個人用ワークスペースを作成します。",
         "Start": "匿名アカウントで始める",
         "Resume": "匿名ワークスペースを続ける",
         "Starting": "ワークスペースを準備中…",
-        "Hint": "匿名のまま閲覧を続けられます。Chatbot が必要になったらサインインすれば、このワークスペースを実アカウントに紐付けます。",
+        "Hint": "匿名のまま閲覧を続けられます。Data Agent が必要になったらサインインすれば、このワークスペースを実アカウントに紐付けます。",
         "HaveAccount": "すでにアカウントをお持ちですか？",
         "SignIn": "サインイン",
         "Highlights": {
@@ -1267,12 +1302,12 @@
             "ActionRunSelection": "選択範囲を実行",
             "ActionSave": "クエリを保存",
             "ActionNewTab": "新しいタブ",
-            "ActionToggleCopilot": "Copilot を開く",
+            "ActionToggleCopilot": "Data Agent を開く",
             "ActionFormat": "SQL を整形",
             "ShortcutRunSelection": "選択範囲を実行: Cmd/Ctrl+Enter",
             "ShortcutSave": "クエリを保存: Cmd/Ctrl+S",
             "ShortcutNewTab": "新しいタブ: Cmd/Ctrl+Option/Alt+L",
-            "ShortcutToggleCopilot": "Copilot を開く: Cmd/Ctrl+I",
+            "ShortcutToggleCopilot": "Data Agent を開く: Cmd/Ctrl+I",
             "ShortcutFormat": "SQL を整形: Shift+Cmd/Ctrl+F",
             "NewConsole": "新しいコンソール",
             "OrDivider": "または",
@@ -1333,10 +1368,10 @@
                 "NewTab": "新しいタブを作成しました"
             },
             "NewTabTitle": "AI クエリ",
-            "ToggleOpen": "AI パネルを開く",
-            "ToggleClose": "AI パネルを閉じる",
-            "ToggleAria": "AI パネルを切り替え",
-            "ToggleLabel": "AI",
+            "ToggleOpen": "Data Agent を開く",
+            "ToggleClose": "Data Agent を閉じる",
+            "ToggleAria": "Data Agent を切り替え",
+            "ToggleLabel": "Data Agent",
             "Context": {
                 "SqlTitle": "SQL コンテキスト",
                 "EditorTitle": "エディターコンテキスト",
@@ -1370,7 +1405,7 @@
                 "TopShareShort": "top {value}",
                 "PrimaryKeyLabel": "主キー",
                 "TableLabel": "テーブル",
-                "RawCopilot": "生の Copilot コンテキスト",
+                "RawCopilot": "生の Data Agent コンテキスト",
                 "RawBundle": "生のコンテキストバンドル",
                 "CopyJson": "JSON をコピー",
                 "NotReady": "コンテキストはまだ準備できていません"
@@ -1449,15 +1484,15 @@
                     "Optimize": "最適化",
                     "Rewrite": "書き換え",
                     "ToAggregation": "集計に変換",
-                    "Default": "Copilot に質問"
+                    "Default": "Data Agent に質問"
                 },
                 "AppliedLabel": "{action} を適用しました",
                 "AppliedDescription": "エディター内の SQL を更新しました。",
                 "GoToActions": "アクションへ移動"
             },
             "Panel": {
-                "NoSqlTab": "Copilot を使うには SQL タブを選択してください。",
-                "UnsupportedTab": "{type} タブでは Copilot は利用できません。",
+                "NoSqlTab": "Data Agent を使うには SQL タブを選択してください。",
+                "UnsupportedTab": "{type} タブでは Data Agent は利用できません。",
                 "TabAsk": "質問",
                 "TabAction": "操作",
                 "TabContext": "コンテキスト"
@@ -2614,13 +2649,13 @@
                 "UpdateSessionFailed": "セッションの更新に失敗しました",
                 "DeleteSessionFailed": "セッションの削除に失敗しました",
                 "MissingTabId": "tabId がありません",
-                "FetchCopilotSessionFailed": "Copilot セッションの取得に失敗しました",
+                "FetchCopilotSessionFailed": "Data Agent セッションの取得に失敗しました",
                 "InvalidSessionType": "無効なセッション種別です",
                 "ConnectionIdRequired": "データソース ID が必要です",
                 "ListSessionsFailed": "セッションの取得に失敗しました",
-                "CopilotCreationNotAllowed": "このエンドポイントでは Copilot セッションを作成できません",
+                "CopilotCreationNotAllowed": "このエンドポイントでは Data Agent セッションを作成できません",
                 "CreateSessionFailed": "セッションの作成に失敗しました",
-                "FullAccountRequired": "Chatbot を使うにはサインインしてください。"
+                "FullAccountRequired": "Data Agent を使うにはサインインしてください。"
             },
             "Tools": {
                 "Rag": {
@@ -2672,7 +2707,7 @@
             "Prompt": {
                 "SchemaContextTitle": "[現在のデータコンテキスト]",
                 "DatabaseContextTitle": "[データベースコンテキスト]",
-                "CopilotContextTitle": "[現在の Copilot コンテキスト]",
+                "CopilotContextTitle": "[現在の Data Agent コンテキスト]",
                 "ExecutionIntent": {
                     "Policy": "現在のターンの実行ポリシー:\n- sqlRunner を使うかどうかを決める前に、最新のユーザーメッセージの意図を分類してください。\n- ユーザーが SQL の生成、表示、作成のみを明示している場合、またはクエリを実行しないよう求めている場合は、このターンでは sqlRunner を呼び出さず、確認が必要な場合を除いて SQL だけを返してください。\n- ユーザーが表示、一覧、ランキング、比較、集計、グラフ作成、または実際のデータベース結果の取得を求めており、sqlRunner が利用可能な場合は、最終回答の前に読み取り専用 SQL で sqlRunner を呼び出してください。\n- データ結果が必要なリクエストでは、SQL を書くだけで終了しないでください。\n- 探索的または明細の結果件数は 100 行以下にしてください。"
                 }
@@ -2689,7 +2724,7 @@
                 "SqlRequired": "SQL は空にできません",
                 "MissingConnection": "データソース情報がないため、クエリを実行できません。",
                 "ReadOnlyOnly": "読み取り専用クエリ（SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA）のみ許可されています。書き込みや更新文は含めないでください。",
-                "SelectAllNotAllowed": "chatbot が生成する SQL では SELECT * は使用できません。必要な列だけを選択してください。",
+                "SelectAllNotAllowed": "Data Agent が生成する SQL では SELECT * は使用できません。必要な列だけを選択してください。",
                 "OrderByIndexMissing": "このクエリは高コストの可能性があります: テーブル {table} の ORDER BY 列 {columns} にインデックスが確認できません。まず取得列を絞るか、インデックスを確認してください。",
                 "OrderByIndexUnknown": "このクエリは高コストの可能性があります: テーブル {table} の ORDER BY 列 {columns} のインデックス有無を確認できませんでした。まず取得列を絞るか、インデックスを確認してください。",
                 "ExecuteFailed": "SQL 実行に失敗しました"
@@ -3035,7 +3070,7 @@
         },
         "AssistantFallback": {
             "Title": "応答エラー",
-            "Description": "アシスタントが利用可能な内容を返しませんでした。後でもう一度試すか、プロンプトを調整してください。",
+            "Description": "Data Agent が利用可能な内容を返しませんでした。後でもう一度試すか、プロンプトを調整してください。",
             "MissingAiEnvTitle": "AI 設定が不足しています",
             "MissingAiEnvDescription": "AI 機能を有効にするには DORY_AI_API_KEY と DORY_AI_URL を設定してください。"
         },
@@ -3466,7 +3501,7 @@
             "ChatSessionNotFound": "セッションが見つかりません",
             "ChatSessionForbidden": "このセッションへアクセスする権限がありません",
             "ChatSessionArchived": "セッションはアーカイブ済みのため変更できません",
-            "ChatCopilotSessionFailed": "Copilot セッションの取得または作成に失敗しました",
+            "ChatCopilotSessionFailed": "Data Agent セッションの取得または作成に失敗しました",
             "ChatGlobalSessionFailed": "グローバルセッションの作成または取得に失敗しました",
             "ChatUpdateSessionNotFound": "セッションが見つかりません",
             "ChatInsertMessageFailed": "メッセージの書き込みに失敗しました"
@@ -3716,7 +3751,7 @@
         "Explorer": "エクスプローラー",
         "Import": "データインポート",
         "Schema": "スキーマ",
-        "Chatbot": "チャットボット",
+        "Chatbot": "Data Agent",
         "Monitoring": "モニタリング",
         "Privileges": "権限",
         "GetHelp": "ヘルプ",
@@ -4126,8 +4161,8 @@
                 "ViewSetup": "接続コマンドを表示",
                 "UsageSetupHint": "このデバイスに Dory Codex Agent サービスをインストールし、このパネルを更新すると Web アプリから Codex Agent を有効化できます。",
                 "UsageBridgeReadyHint": "Dory Codex Agent は接続済みです。次に Codex Agent を有効化し、デフォルトモデルに設定してください。",
-                "UsageEnabledHint": "ローカル AI は有効です。デフォルトモデルに設定すると、このデバイス上の Agent 経由でアシスタントリクエストを実行します。",
-                "UsageDefaultHint": "ローカル AI はデフォルトモデルです。Dory Codex Agent サービスがこのデバイスでアシスタントリクエストを実行します。",
+                "UsageEnabledHint": "ローカル AI は有効です。デフォルトモデルに設定すると、このデバイス上の Agent 経由で Data Agent のリクエストを実行します。",
+                "UsageDefaultHint": "ローカル AI はデフォルトモデルです。Dory Codex Agent サービスがこのデバイスで Data Agent のリクエストを実行します。",
                 "UsageDesktopHint": "Desktop では、このデバイス上の Codex または Claude Code CLI を Dory が検出します。検出後、有効化してデフォルトモデルに設定できます。",
                 "ModelServiceDescription": "ローカル OpenAI-compatible endpoint {endpoint} を使用します。"
             }

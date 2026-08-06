@@ -1,6 +1,6 @@
 import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { MySqlDatasource } from '../datasource';
 import { parseMysqlTableReference, quoteMysqlQualifiedTable } from '../runtime';
 
@@ -250,6 +250,17 @@ async function getTablePreview(datasource: MySqlDatasource, database: string, ta
     };
 }
 
+async function openTableRows(datasource: MySqlDatasource, database: string, table: string, options: Parameters<NonNullable<GetTableInfoAPI['openRows']>>[2]) {
+    const target = resolveTableInput(database, table);
+    const quoteIdentifier = (value: string) => `\`${value.replace(/`/g, '``')}\``;
+    const clauses = buildTablePreviewClauses({ ...options, dialect: 'mysql', quoteIdentifier });
+    const projection = buildTableProjection(options.columns, quoteIdentifier);
+    return datasource.openRowCursorWithContext<Record<string, unknown>>(
+        `SELECT ${projection} FROM ${quoteMysqlQualifiedTable(target.database, target.table)}${clauses.whereSql}${clauses.orderBySql}`,
+        { database: target.database, params: clauses.params },
+    );
+}
+
 async function getTableIndexes(datasource: MySqlDatasource, database: string, table: string): Promise<TableIndexInfo[]> {
     const target = resolveTableInput(database, table);
     const result = await datasource.queryWithContext<TableIndexInfo>(
@@ -296,6 +307,7 @@ export function createMysqlTableInfoCapability(datasource: MySqlDatasource): Get
         ddl: (database: string, table: string) => getTableDDL(datasource, database, table),
         stats: (database: string, table: string) => getTableStats(datasource, database, table),
         preview: (database: string, table: string, options) => getTablePreview(datasource, database, table, options),
+        openRows: (database, table, options) => openTableRows(datasource, database, table, options),
         indexes: (database: string, table: string) => getTableIndexes(datasource, database, table),
         rename: (database: string, table: string, nextName: string) => renameTable(datasource, database, table, nextName),
     };

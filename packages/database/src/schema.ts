@@ -36,5 +36,7 @@ export const resultSets = activeSchemas?.resultSets;
 export const agentRunResultSets = activeSchemas?.agentRunResultSets;
 export const importRuns = activeSchemas?.importRuns;
 export const importRunEvents = activeSchemas?.importRunEvents;
+export const exportRuns = activeSchemas?.exportRuns;
+export const exportRunEvents = activeSchemas?.exportRunEvents;
 
 export type ActiveDBSchema = typeof activeSchemas.schema;

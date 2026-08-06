@@ -31,6 +31,11 @@ export function normalizeTablePreviewOffset(offset?: number): number {
     return Math.floor(offset);
 }
 
+export function buildTableProjection(columns: string[], quoteIdentifier: (value: string) => string): string {
+    const normalized = Array.from(new Set(columns.map(normalizeIdentifier).filter((column): column is string => Boolean(column))));
+    return normalized.length > 0 ? normalized.map(quoteIdentifier).join(', ') : '*';
+}
+
 function normalizeIdentifier(value?: string | null) {
     const normalized = value?.trim();
     return normalized || null;

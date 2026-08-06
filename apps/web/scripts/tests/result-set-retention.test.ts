@@ -6,7 +6,15 @@ import test from 'node:test';
 
 import { eq, sql } from 'drizzle-orm';
 
-import { AgentRunArtifactStore, ComparisonArtifactStore, FilesystemObjectStore, ImportRunArtifactStore, ResultSetArtifactStore, type DoryArtifactStore } from '@dory/artifacts';
+import {
+    AgentRunArtifactStore,
+    ComparisonArtifactStore,
+    ExportRunArtifactStore,
+    FilesystemObjectStore,
+    ImportRunArtifactStore,
+    ResultSetArtifactStore,
+    type DoryArtifactStore,
+} from '@dory/artifacts';
 import { rowDataStream } from '@dory/data-plane';
 import { NoopFullDataWriter, type ResultSetDataWriter } from '@dory/resultset';
 
@@ -37,6 +45,7 @@ const artifacts: DoryArtifactStore = {
     agentRuns: new AgentRunArtifactStore(objectStore, ''),
     comparisons: new ComparisonArtifactStore(objectStore, ''),
     importRuns: new ImportRunArtifactStore(objectStore, ''),
+    exportRuns: new ExportRunArtifactStore(objectStore, ''),
 };
 
 async function initSchema() {

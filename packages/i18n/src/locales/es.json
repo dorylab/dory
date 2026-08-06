@@ -479,6 +479,41 @@
         "No data": "No hay datos",
         "Refresh": "Actualizar",
         "Current SQL": "SQL actual",
+        "Export": {
+            "Title": "Exportar",
+            "New": "Nueva exportación",
+            "Recent": "Recientes",
+            "Format": "Formato",
+            "ScopeSummary": "Todas las filas coincidentes · {filters} filtros · orden: {sort}",
+            "SearchSummary": "Búsqueda: {search}",
+            "NoSort": "ninguno",
+            "PendingWarning": "Las ediciones pendientes no se incluyen. La exportación lee la instantánea actual de la base de datos.",
+            "Columns": "Columnas ({selected}/{total})",
+            "ColumnsLabel": "columnas",
+            "SelectAll": "Seleccionar todo",
+            "Clear": "Limpiar",
+            "SearchColumns": "Buscar columnas",
+            "Start": "Iniciar exportación",
+            "Queued": "Exportación en cola",
+            "Failed": "La exportación falló",
+            "CancelFailed": "No se pudo cancelar la exportación",
+            "NoRuns": "Todavía no hay exportaciones para esta tabla.",
+            "Rows": "filas",
+            "Progress": "{phase} · {batches} lotes",
+            "Expires": "Disponible hasta {date}",
+            "Cancel": "Cancelar",
+            "Download": "Descargar",
+            "Status": { "queued": "En cola", "running": "En curso", "completed": "Completada", "failed": "Fallida", "canceled": "Cancelada" },
+            "Phase": {
+                "queued": "En espera",
+                "reading": "Leyendo",
+                "converting": "Convirtiendo",
+                "uploading": "Subiendo",
+                "completed": "Completada",
+                "failed": "Fallida",
+                "canceled": "Cancelada"
+            }
+        },
         "Failed to load data preview": "No se pudo cargar la vista previa de los datos",
         "Editor": {
             "PendingChanges": "Cambios pendientes",
@@ -987,8 +1022,8 @@
             }
         },
         "AuthRequired": {
-            "Title": "Inicia sesión para usar Chatbot",
-            "Description": "Los espacios de trabajo de invitado permiten explorar la app, pero Chatbot requiere una cuenta completa.",
+            "Title": "Inicia sesión para usar Data Agent",
+            "Description": "Los espacios de trabajo de invitado permiten explorar la app, pero Data Agent requiere una cuenta completa.",
             "Hint": "Después de iniciar sesión, tu espacio de trabajo actual seguirá contigo.",
             "WorkspaceNotice": "Cuando inicies sesión, tu espacio de trabajo de invitado actual se mantendrá en tu cuenta.",
             "SignIn": "Iniciar sesión",
@@ -1020,7 +1055,7 @@
             "Cancel": "Cancelar",
             "ConfirmDelete": "Eliminar",
             "DeleteSuccess": "Sesión eliminada",
-            "CopilotAutoCreate": "Las sesiones de Copilot se crean automáticamente para la pestaña actual",
+            "CopilotAutoCreate": "Las sesiones de Data Agent se crean automáticamente para la pestaña actual",
             "NoMatches": "No hay sesiones coincidentes",
             "SearchPlaceholder": "Buscar sesiones",
             "Groups": {
@@ -1032,16 +1067,16 @@
         "Errors": {
             "FetchSessions": "No se pudieron obtener las sesiones",
             "FetchSessionDetail": "No se pudieron obtener los detalles de la sesión",
-            "FetchCopilotSession": "No se pudo obtener la sesión de Copilot",
+            "FetchCopilotSession": "No se pudo obtener la sesión de Data Agent",
             "CreateSession": "No se pudo crear la sesión",
             "RenameSession": "No se pudo renombrar la sesión",
             "DeleteSession": "No se pudo eliminar la sesión",
             "SessionNotFoundRename": "No se encontró la sesión. No se puede renombrar.",
             "SessionNotFoundDelete": "No se encontró la sesión. No se puede eliminar.",
             "SessionNameRequired": "El nombre de la sesión no puede estar vacío",
-            "CopilotRenameUnsupported": "Las sesiones de Copilot no se pueden renombrar",
-            "CopilotDeleteUnsupported": "Las sesiones de Copilot no se pueden eliminar (las gestiona la pestaña actual)",
-            "CreateCopilotSession": "No se pudo crear la sesión de Copilot",
+            "CopilotRenameUnsupported": "Las sesiones de Data Agent no se pueden renombrar",
+            "CopilotDeleteUnsupported": "Las sesiones de Data Agent no se pueden eliminar (las gestiona la pestaña actual)",
+            "CreateCopilotSession": "No se pudo crear la sesión de Data Agent",
             "SessionNotSelected": "No hay una sesión seleccionada",
             "RequestFailed": "La solicitud falló",
             "SendFailed": "No se pudo enviar el mensaje",
@@ -1107,14 +1142,14 @@
     },
     "Welcome": {
         "Badge": "Modo anónimo",
-        "Title": "Empieza con un espacio de trabajo anónimo y mejora solo cuando necesites Chatbot.",
+        "Title": "Empieza con un espacio de trabajo anónimo y mejora solo cuando necesites Data Agent.",
         "Description": "Explora Dory de inmediato sin crear una cuenta. Crearemos un espacio de trabajo temporal para ti y conservaremos los datos de tu organización cuando más tarde inicies sesión.",
         "CardTitle": "Entra en Dory al instante",
         "CardDescription": "Crea una cuenta anónima y un espacio de trabajo personal con un solo clic.",
         "Start": "Empezar con una cuenta anónima",
         "Resume": "Continuar en el espacio de trabajo anónimo",
         "Starting": "Preparando espacio de trabajo…",
-        "Hint": "Puedes seguir navegando de forma anónima. Cuando necesites Chatbot, inicia sesión y vincularemos este espacio de trabajo con tu cuenta real.",
+        "Hint": "Puedes seguir navegando de forma anónima. Cuando necesites Data Agent, inicia sesión y vincularemos este espacio de trabajo con tu cuenta real.",
         "HaveAccount": "¿Ya tienes una cuenta?",
         "SignIn": "Iniciar sesión",
         "Highlights": {
@@ -1267,12 +1302,12 @@
             "ActionRunSelection": "Ejecutar selección",
             "ActionSave": "Guardar consulta",
             "ActionNewTab": "Nueva pestaña",
-            "ActionToggleCopilot": "Abrir Copilot",
+            "ActionToggleCopilot": "Abrir Data Agent",
             "ActionFormat": "Formatear SQL",
             "ShortcutRunSelection": "Ejecutar selección: Cmd/Ctrl+Enter",
             "ShortcutSave": "Guardar consulta: Cmd/Ctrl+S",
             "ShortcutNewTab": "Nueva pestaña: Cmd/Ctrl+Option/Alt+L",
-            "ShortcutToggleCopilot": "Abrir Copilot: Cmd/Ctrl+I",
+            "ShortcutToggleCopilot": "Abrir Data Agent: Cmd/Ctrl+I",
             "ShortcutFormat": "Formatear SQL: Shift+Cmd/Ctrl+F",
             "NewConsole": "Nueva consola",
             "OrDivider": "o",
@@ -1333,10 +1368,10 @@
                 "NewTab": "Nueva pestaña creada"
             },
             "NewTabTitle": "Consulta con IA",
-            "ToggleOpen": "Abrir panel de IA",
-            "ToggleClose": "Cerrar panel de IA",
-            "ToggleAria": "Alternar panel de IA",
-            "ToggleLabel": "AI",
+            "ToggleOpen": "Abrir Data Agent",
+            "ToggleClose": "Cerrar Data Agent",
+            "ToggleAria": "Alternar Data Agent",
+            "ToggleLabel": "Data Agent",
             "Context": {
                 "SqlTitle": "Contexto SQL",
                 "EditorTitle": "Contexto del editor",
@@ -1370,7 +1405,7 @@
                 "TopShareShort": "principal {value}",
                 "PrimaryKeyLabel": "Clave primaria",
                 "TableLabel": "Tabla",
-                "RawCopilot": "Contexto bruto de Copilot",
+                "RawCopilot": "Contexto bruto de Data Agent",
                 "RawBundle": "Paquete de contexto bruto",
                 "CopyJson": "Copiar JSON",
                 "NotReady": "El contexto no está listo"
@@ -1449,15 +1484,15 @@
                     "Optimize": "Optimizar",
                     "Rewrite": "Reescribir",
                     "ToAggregation": "Convertir a agregación",
-                    "Default": "Preguntar a Copilot"
+                    "Default": "Preguntar a Data Agent"
                 },
                 "AppliedLabel": "{action} aplicado",
                 "AppliedDescription": "Tu SQL se ha actualizado en el editor.",
                 "GoToActions": "Ir a Acciones"
             },
             "Panel": {
-                "NoSqlTab": "Selecciona una pestaña SQL para usar Copilot.",
-                "UnsupportedTab": "Copilot no es compatible con pestañas de tipo {type}.",
+                "NoSqlTab": "Selecciona una pestaña SQL para usar Data Agent.",
+                "UnsupportedTab": "Data Agent no es compatible con pestañas de tipo {type}.",
                 "TabAsk": "Preguntar",
                 "TabAction": "Acción",
                 "TabContext": "Contexto"
@@ -2614,13 +2649,13 @@
                 "UpdateSessionFailed": "No se pudo actualizar la sesión",
                 "DeleteSessionFailed": "No se pudo eliminar la sesión",
                 "MissingTabId": "Falta tabId",
-                "FetchCopilotSessionFailed": "No se pudo obtener la sesión de Copilot",
+                "FetchCopilotSessionFailed": "No se pudo obtener la sesión de Data Agent",
                 "InvalidSessionType": "Tipo de sesión no válido",
                 "ConnectionIdRequired": "Se requiere el ID de la fuente de datos",
                 "ListSessionsFailed": "No se pudieron obtener las sesiones",
-                "CopilotCreationNotAllowed": "Las sesiones de Copilot no se pueden crear desde este endpoint",
+                "CopilotCreationNotAllowed": "Las sesiones de Data Agent no se pueden crear desde este endpoint",
                 "CreateSessionFailed": "No se pudo crear la sesión",
-                "FullAccountRequired": "Inicia sesión para usar Chatbot."
+                "FullAccountRequired": "Inicia sesión para usar Data Agent."
             },
             "Tools": {
                 "Rag": {
@@ -2672,7 +2707,7 @@
             "Prompt": {
                 "SchemaContextTitle": "[Contexto de datos actual]",
                 "DatabaseContextTitle": "[Contexto de base de datos]",
-                "CopilotContextTitle": "[Contexto actual de Copilot]",
+                "CopilotContextTitle": "[Contexto actual de Data Agent]",
                 "ExecutionIntent": {
                     "Policy": "Política de ejecución del turno actual:\n- Clasifica el último mensaje del usuario antes de decidir si usar sqlRunner.\n- Si el usuario pide explícitamente solo generar, mostrar o escribir SQL, o pide no ejecutar la consulta, no llames a sqlRunner en este turno y devuelve solo SQL salvo que necesites una aclaración.\n- Si el usuario pide ver, listar, ordenar por ranking, comparar, agregar, crear un gráfico u obtener resultados reales de la base de datos de otra forma, y sqlRunner está disponible, llama a sqlRunner con una consulta SQL de solo lectura antes de la respuesta final.\n- Para solicitudes que requieren resultados de datos, no termines solo escribiendo SQL.\n- Mantén los límites de resultados exploratorios o de detalle en 100 filas o menos."
                 }
@@ -2689,7 +2724,7 @@
                 "SqlRequired": "El SQL no puede estar vacío",
                 "MissingConnection": "Falta información de la fuente de datos; no se puede ejecutar la consulta.",
                 "ReadOnlyOnly": "Solo se permiten consultas de solo lectura (SELECT/SHOW/DESCRIBE/DESC/EXPLAIN/WITH/PRAGMA). No incluyas sentencias de escritura o actualización.",
-                "SelectAllNotAllowed": "No se permite usar SELECT * en el SQL generado por el chatbot. Selecciona solo las columnas necesarias para responder.",
+                "SelectAllNotAllowed": "No se permite usar SELECT * en el SQL generado por Data Agent. Selecciona solo las columnas necesarias para responder.",
                 "OrderByIndexMissing": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, y no se confirmó que tengan índice. Reduce las columnas seleccionadas o revisa los índices primero.",
                 "OrderByIndexUnknown": "Esta consulta puede ser costosa: ORDER BY usa la(s) columna(s) {columns} en la tabla {table}, pero no se pudo confirmar si tienen índice. Reduce las columnas seleccionadas o revisa los índices primero.",
                 "ExecuteFailed": "La ejecución SQL falló"
@@ -3035,7 +3070,7 @@
         },
         "AssistantFallback": {
             "Title": "Error de respuesta",
-            "Description": "El asistente no devolvió contenido utilizable. Inténtalo de nuevo más tarde o ajusta tu prompt.",
+            "Description": "Data Agent no devolvió contenido utilizable. Inténtalo de nuevo más tarde o ajusta tu prompt.",
             "MissingAiEnvTitle": "Falta la configuración de IA",
             "MissingAiEnvDescription": "Define DORY_AI_API_KEY y DORY_AI_URL para habilitar las funciones de IA."
         },
@@ -3466,7 +3501,7 @@
             "ChatSessionNotFound": "Sesión no encontrada",
             "ChatSessionForbidden": "No tienes acceso a esta sesión",
             "ChatSessionArchived": "La sesión está archivada y no se puede modificar",
-            "ChatCopilotSessionFailed": "No se pudo obtener o crear la sesión de Copilot",
+            "ChatCopilotSessionFailed": "No se pudo obtener o crear la sesión de Data Agent",
             "ChatGlobalSessionFailed": "No se pudo crear u obtener la sesión global",
             "ChatUpdateSessionNotFound": "Sesión no encontrada",
             "ChatInsertMessageFailed": "No se pudo escribir el mensaje"
@@ -3714,7 +3749,7 @@
         "Explorer": "Explorador",
         "Import": "Importación de datos",
         "Schema": "Esquema",
-        "Chatbot": "Asistente",
+        "Chatbot": "Data Agent",
         "Monitoring": "Monitoreo",
         "Privileges": "Privilegios",
         "GetHelp": "Ayuda",
@@ -4124,8 +4159,8 @@
                 "ViewSetup": "Ver comandos de conexión",
                 "UsageSetupHint": "Instala el servicio Dory Codex Agent en este dispositivo y luego actualiza este panel para habilitar Codex Agent desde la app web.",
                 "UsageBridgeReadyHint": "Dory Codex Agent está conectado. Habilita Codex Agent y configúralo como modelo predeterminado.",
-                "UsageEnabledHint": "La IA local está habilitada. Configúrala como modelo predeterminado para ejecutar las solicitudes del asistente mediante el agente de este dispositivo.",
-                "UsageDefaultHint": "La IA local es el modelo predeterminado. El servicio Dory Codex Agent ejecuta las solicitudes del asistente en este dispositivo.",
+                "UsageEnabledHint": "La IA local está habilitada. Configúrala como modelo predeterminado para ejecutar las solicitudes de Data Agent mediante el agente de este dispositivo.",
+                "UsageDefaultHint": "La IA local es el modelo predeterminado. El servicio Dory Codex Agent ejecuta las solicitudes de Data Agent en este dispositivo.",
                 "UsageDesktopHint": "En Desktop, Dory detecta Codex o Claude Code CLI en este dispositivo. Cuando se detecte, habilítalo y configúralo como modelo predeterminado.",
                 "ModelServiceDescription": "Usa el endpoint local compatible con OpenAI en {endpoint}."
             }

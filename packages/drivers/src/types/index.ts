@@ -403,7 +403,24 @@ export type DriverQueryDataRequest = {
 export type DriverTableDataRequest = {
     database: string;
     table: string;
+    columns?: string[];
+    window?: TableReadWindow;
     options?: TablePreviewOptions;
+};
+
+export type TableReadWindow =
+    | {
+          kind: 'page';
+          limit: number;
+          offset: number;
+          countMode: 'none' | 'exact';
+      }
+    | {
+          kind: 'all';
+      };
+
+export type TableRowReadOptions = Pick<TablePreviewOptions, 'sort' | 'filters' | 'search' | 'searchColumns'> & {
+    columns: string[];
 };
 
 export type DriverTableDataStream = {
@@ -454,6 +471,7 @@ export type GetTableInfoAPI = {
     ddl: (database: string, table: string) => Promise<string | null>;
     stats: (database: string, table: string) => Promise<TableStats | null>;
     preview: (database: string, table: string, options?: TablePreviewOptions) => Promise<QueryResult<Record<string, unknown>>>;
+    openRows?: (database: string, table: string, options: TableRowReadOptions) => Promise<DriverRowCursor<Record<string, unknown>>>;
     indexes?: (database: string, table: string) => Promise<TableIndexInfo[]>;
     rename?: (database: string, table: string, nextName: string) => Promise<void>;
 };

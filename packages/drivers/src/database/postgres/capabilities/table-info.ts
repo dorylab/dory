@@ -1,6 +1,6 @@
 import type { GetTableInfoAPI, TablePreviewOptions } from '@dory/drivers/types';
 import type { TableIndexInfo, TablePropertiesRow, TableStats } from '@dory/drivers/types';
-import { buildTablePreviewClauses, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
+import { buildTablePreviewClauses, buildTableProjection, normalizeTablePreviewLimit, normalizeTablePreviewOffset } from '../../shared/table-preview-query';
 import type { PostgresDatasource } from '../datasource';
 
 type TableIdentityRow = {
@@ -371,6 +371,17 @@ async function getTablePreview(datasource: PostgresDatasource, database: string,
     };
 }
 
+async function openTableRows(datasource: PostgresDatasource, database: string, table: string, options: Parameters<NonNullable<GetTableInfoAPI['openRows']>>[2]) {
+    const parsed = parseTableName(table);
+    const qualifiedName = `${quoteIdentifier(parsed.schema?.trim() || 'public')}.${quoteIdentifier(parsed.name.trim())}`;
+    const clauses = buildTablePreviewClauses({ ...options, dialect: 'postgres', quoteIdentifier, parameterStart: 1 });
+    const projection = buildTableProjection(options.columns, quoteIdentifier);
+    return datasource.openRowCursorWithContext<Record<string, unknown>>(`SELECT ${projection} FROM ${qualifiedName}${clauses.whereSql}${clauses.orderBySql}`, {
+        database,
+        params: clauses.params,
+    });
+}
+
 async function getTableIndexes(datasource: PostgresDatasource, database: string, table: string): Promise<TableIndexInfo[]> {
     const identity = await getTableIdentity(datasource, database, table);
     if (!identity?.oid) {
@@ -430,6 +441,7 @@ export function createPostgresTableInfoCapability(datasource: PostgresDatasource
         ddl: (database, table) => getTableDDL(datasource, database, table),
         stats: (database, table) => getTableStats(datasource, database, table),
         preview: (database, table, options) => getTablePreview(datasource, database, table, options),
+        openRows: (database, table, options) => openTableRows(datasource, database, table, options),
         indexes: (database, table) => getTableIndexes(datasource, database, table),
         rename: (database, table, nextName) => renameTable(datasource, database, table, nextName),
     };

@@ -41,13 +41,24 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
         }),
     ];
     let rejectCommit = false;
+    let createdExportPlan: Record<string, unknown> | null = null;
+    let exportCreated = false;
 
     await mockWorkbenchApis(page, { initialConnections: [connection] });
+    await page.route('**/api/table-exports/export-e2e', route =>
+        route.fulfill({
+            status: 200,
+            contentType: 'text/csv; charset=utf-8',
+            headers: { 'content-disposition': 'attachment; filename="numbers.csv"' },
+            body: 'id,name\n1,one\n',
+        }),
+    );
     await page.route('**/api/actions/execute', async route => {
         const payload = route.request().postDataJSON() as {
             actionId?: string;
             input?: {
                 table?: string;
+                plan?: Record<string, unknown>;
                 rows?: Array<{
                     key: Record<string, unknown>;
                     changes: Array<{ column: string; originalValue: unknown; nextValue: unknown }>;
@@ -161,6 +172,49 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
             });
             return;
         }
+        if (payload.actionId === 'table.export.list') {
+            await success({
+                rows: exportCreated
+                    ? [
+                          {
+                              id: 'export-e2e',
+                              status: 'completed',
+                              phase: 'completed',
+                              plan: createdExportPlan,
+                              processedRows: 1000,
+                              batchCount: 1,
+                              byteSize: 14,
+                              fileName: 'numbers.csv',
+                              downloadUrl: '/api/table-exports/export-e2e',
+                              errorMessage: null,
+                              artifactExpiresAt: '2026-08-13T00:00:00.000Z',
+                              createdAt: '2026-08-06T00:00:00.000Z',
+                          },
+                      ]
+                    : [],
+                nextCursor: null,
+            });
+            return;
+        }
+        if (payload.actionId === 'table.export.create') {
+            createdExportPlan = payload.input?.plan ?? null;
+            exportCreated = true;
+            await success({
+                id: 'export-e2e',
+                status: 'queued',
+                phase: 'queued',
+                plan: createdExportPlan,
+                processedRows: 0,
+                batchCount: 0,
+                byteSize: null,
+                fileName: null,
+                downloadUrl: null,
+                errorMessage: null,
+                artifactExpiresAt: null,
+                createdAt: '2026-08-06T00:00:00.000Z',
+            });
+            return;
+        }
         if (payload.actionId === 'table.commitUpdates') {
             if (rejectCommit) {
                 await route.fulfill({
@@ -207,6 +261,37 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     const pagination = page.getByTestId('data-preview-pagination');
     await expect(subTabsFooter).toBeVisible();
     await expect(pagination).toBeVisible();
+    const exportTrigger = page.getByTestId('data-preview-export-trigger');
+    await expect(exportTrigger).toBeVisible();
+    const exportTriggerBox = await exportTrigger.boundingBox();
+    expect(exportTriggerBox).not.toBeNull();
+    await exportTrigger.click();
+    const exportPanel = page.getByTestId('data-preview-export-panel');
+    await expect(exportPanel).toBeVisible();
+    await expect(page.getByText('Columns (7/7)')).toBeVisible();
+    const expectedPanelHeight = Math.min(560, page.viewportSize()!.height - 32);
+    await expect.poll(async () => (await exportPanel.boundingBox())?.height).toBeCloseTo(expectedPanelHeight, 0);
+    const panelHeight = (await exportPanel.boundingBox())?.height;
+    const firstExportColumn = exportPanel.locator('[data-export-column]').first();
+    await expect(firstExportColumn).toHaveAttribute('data-export-column', 'id');
+    await firstExportColumn.getByRole('checkbox').click();
+    await expect(firstExportColumn).toHaveAttribute('data-export-column', 'id');
+    await firstExportColumn.getByRole('checkbox').click();
+    await exportPanel.getByRole('tab', { name: 'Recent' }).click();
+    await expect.poll(async () => (await exportPanel.boundingBox())?.height).toBe(panelHeight);
+    await exportPanel.getByRole('tab', { name: 'New export' }).click();
+    const automaticDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Start export' }).click();
+    expect((await automaticDownload).suggestedFilename()).toBe('numbers.csv');
+    await expect.poll(() => createdExportPlan).not.toBeNull();
+    expect(createdExportPlan).toMatchObject({
+        version: 1,
+        source: { kind: 'table', connectionId: 'sqlite-editor', database: 'demo', table: 'numbers' },
+        columns: ['id', 'name', 'note', 'count', 'active', 'created_at', 'payload'],
+        operations: { filters: [], search: null, sort: null },
+        output: { format: 'csv' },
+    });
+    await page.keyboard.press('Escape');
     await expect(pagination.getByRole('button', { name: 'First page' })).toHaveCount(0);
     await expect(pagination.getByText('Go to', { exact: true })).toHaveCount(0);
     const subTabsFooterBox = await subTabsFooter.boundingBox();
@@ -215,6 +300,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     const nameCellBox = await nameCell.boundingBox();
     expect(subTabsFooterBox).not.toBeNull();
     expect(paginationBox).not.toBeNull();
+    expect(exportTriggerBox!.x).toBeGreaterThan(paginationBox!.x + paginationBox!.width / 2);
     expect(dataTabBox).not.toBeNull();
     expect(nameCellBox).not.toBeNull();
     expect(subTabsFooterBox!.height).toBeCloseTo(28, 0);
@@ -276,6 +362,10 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(thirdNameCell).toHaveAttribute('data-selected', 'true');
     await expect.poll(() => firstNameCell.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
     await expect.poll(() => thirdNameCell.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+    await expect.poll(() => firstNameCell.evaluate(element => getComputedStyle(element).outlineWidth)).toBe('2px');
+    await expect.poll(() => thirdNameCell.evaluate(element => getComputedStyle(element).outlineWidth)).toBe('2px');
+    await expect.poll(() => firstNameCell.evaluate(element => getComputedStyle(element).boxShadow)).toBe('none');
+    await expect.poll(() => thirdNameCell.evaluate(element => getComputedStyle(element).boxShadow)).toBe('none');
     await thirdNameCell.click({ button: 'right' });
     await expect(page.getByRole('menuitem', { name: 'Set selected cells (2)' })).toBeVisible();
     await page.keyboard.press('Escape');
@@ -297,6 +387,9 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(secondNameCell).toContainText('bulk-name');
     await expect(thirdNameCell).toContainText('bulk-name');
     await expect(page.getByRole('button', { name: 'Changes (3)', exact: true })).toBeVisible();
+    const closeToastButton = page.getByRole('button', { name: 'Close toast' }).first();
+    await expect(closeToastButton).toBeVisible();
+    await closeToastButton.click();
     await gridContainer.press(undoShortcut);
     await expect(firstNameCell).toContainText('one');
     await expect(secondNameCell).toContainText('two');
@@ -309,6 +402,7 @@ test('edits SQLite table rows through the pending changes workflow', async ({ pa
     await expect(firstNameCell).toContainText('pasted-name');
     await expect(secondNameCell).toContainText('pasted-name');
     await expect(thirdNameCell).toContainText('pasted-name');
+    await expect(page.getByText('Updated 3 cells across 3 rows.')).not.toBeVisible();
     await gridContainer.press(undoShortcut);
 
     await firstNameCell.click();

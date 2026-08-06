@@ -251,7 +251,7 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
                     ) : null}
 
                     {!isLoading && !billingStatusQuery.isError && !isProPlan ? (
-                        <Alert className="mt-4 border-primary/20 bg-primary/5 py-2 text-primary">
+                        <Alert className="mt-4 items-center border-primary/20 bg-primary/5 py-2 text-primary [&>svg]:translate-y-0">
                             <Info className="size-4" />
                             <AlertDescription className="text-xs text-primary/80">{t('Hobby.LimitedTimeUnlimitedAlert')}</AlertDescription>
                         </Alert>
@@ -302,7 +302,6 @@ export default function BillingSettingsPageClient({ billingManagementAvailable, 
                     </Button>
                 ) : null}
             </div>
-
         </div>
     );
 }

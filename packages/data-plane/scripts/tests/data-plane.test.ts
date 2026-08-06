@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -102,6 +102,23 @@ test('Arrow IPC data source can be opened repeatedly with bounded batches', asyn
         for await (const batch of stream.batches()) sizes.push(batch.numRows);
         assert.deepEqual(sizes, [2, 2, 1]);
     }
+});
+
+test('Arrow IPC writer preserves schema for an empty stream', async t => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'dory-data-plane-empty-'));
+    t.after(() => rm(dir, { recursive: true, force: true }));
+    const filePath = path.join(dir, 'empty.arrow');
+    const stream = rowDataStream({
+        columns: [{ name: 'id', type: 'BIGINT', nullable: false }],
+        rows: [],
+        metadata: { source: 'empty-fixture' },
+    });
+    const written = await writeDataStreamToArrowIpcFile(stream, filePath);
+    const table = tableFromIPC(await readFile(filePath));
+    assert.equal(written.rowCount, 0);
+    assert.equal(written.batchCount, 0);
+    assert.equal(table.numRows, 0);
+    assert.equal(table.schema.fields[0]?.name, 'id');
 });
 
 test('empty schema IPC preserves typed fields and duplicate display names', () => {
