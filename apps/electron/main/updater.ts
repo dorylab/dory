@@ -15,6 +15,7 @@ import {
     createUpdateAvailableState,
 } from './updater/dialog-state.js';
 import { updaterPreferenceStore } from './updater/preferences.js';
+import { RestartInstallCoordinator } from './updater/restart-install-coordinator.js';
 import type {
     AvailableDialogState,
     ProgressDialogState,
@@ -56,7 +57,7 @@ let availableVersion: string | null = null;
 let currentLocale = 'en-US';
 let debugPreviewMode = false;
 let debugProgressTimer: NodeJS.Timeout | null = null;
-let restartInstallInFlight = false;
+const restartInstallCoordinator = new RestartInstallCoordinator();
 let showCheckingDialog = false;
 let latestDownloadProgressState: ProgressDialogState | null = null;
 let hasFocusedProgressDialogForCurrentDownload = false;
@@ -460,6 +461,12 @@ function showInstallLocationBlockedDialog(t: MainTranslator) {
 }
 
 function handleUpdateAction(log: LogFn, t: MainTranslator, action: UpdateAction) {
+    if (restartInstallCoordinator.isInFlight()) {
+        log('[updater] ignored update action while restart install is in flight:', action);
+        closeAllDialogs();
+        return;
+    }
+
     switch (action) {
         case 'dismiss': {
             stopDebugProgressTimer();
@@ -523,6 +530,11 @@ function handleUpdateAction(log: LogFn, t: MainTranslator, action: UpdateAction)
                 showInstallLocationBlockedDialog(t);
                 break;
             }
+            if (!restartInstallCoordinator.tryStart()) {
+                log('[updater] ignored duplicate restart install request');
+                closeAllDialogs();
+                break;
+            }
             log('[updater] quitAndInstall');
             log('[updater] restart install path:', getAppBundlePath());
             log('[updater] restart install current version:', app.getVersion());
@@ -532,12 +544,11 @@ function handleUpdateAction(log: LogFn, t: MainTranslator, action: UpdateAction)
             });
             closeAllDialogs();
             setMainWindowQuitting(true);
-            restartInstallInFlight = true;
             try {
                 log('[updater] invoking quitAndInstall with isSilent=false, isForceRunAfter=true');
                 autoUpdater.quitAndInstall(false, true);
             } catch (error) {
-                restartInstallInFlight = false;
+                restartInstallCoordinator.resetAfterFailure();
                 setMainWindowQuitting(false);
                 log('[updater] quitAndInstall failed:', error);
                 showUpdateError(log, t, error, true);
@@ -658,6 +669,10 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
 
     ipcMain.removeHandler('updater:restart-and-install');
     ipcMain.handle('updater:restart-and-install', async () => {
+        if (restartInstallCoordinator.isInFlight()) {
+            log('[updater] ignored duplicate renderer restart install request');
+            return false;
+        }
         if (!rendererUpdaterState.readyToInstall) return false;
         if (debugPreviewMode) {
             closeAllDialogs();
@@ -697,6 +712,10 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     applyUpdateChannel(log, getStoredOrDefaultUpdateChannel());
 
     autoUpdater.on('checking-for-update', () => {
+        if (restartInstallCoordinator.isInFlight()) {
+            log('[updater] ignored checking-for-update event while restart install is in flight');
+            return;
+        }
         debugPreviewMode = false;
         log('[updater] checking-for-update');
         checkInProgress = true;
@@ -706,6 +725,12 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     });
 
     autoUpdater.on('update-available', (info: UpdateInfo) => {
+        if (restartInstallCoordinator.isInFlight()) {
+            log('[updater] ignored update-available event while restart install is in flight:', info.version);
+            isManualCheck = false;
+            closeAllDialogs();
+            return;
+        }
         debugPreviewMode = false;
         log('[updater] update-available:', info.version);
         checkInProgress = false;
@@ -770,6 +795,10 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     });
 
     autoUpdater.on('update-not-available', (info: UpdateInfo) => {
+        if (restartInstallCoordinator.isInFlight()) {
+            log('[updater] ignored update-not-available event while restart install is in flight:', info.version);
+            return;
+        }
         debugPreviewMode = false;
         log('[updater] update-not-available:', info.version);
         checkInProgress = false;
@@ -785,6 +814,9 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     });
 
     autoUpdater.on('download-progress', (progress: ProgressInfo) => {
+        if (restartInstallCoordinator.isInFlight()) {
+            return;
+        }
         debugPreviewMode = false;
         if (downloadCanceledByUser) {
             return;
@@ -800,6 +832,10 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     });
 
     autoUpdater.on('update-downloaded', (info: UpdateInfo) => {
+        if (restartInstallCoordinator.isInFlight()) {
+            log('[updater] ignored duplicate update-downloaded event while restart install is in flight:', info.version);
+            return;
+        }
         debugPreviewMode = false;
         log('[updater] update-downloaded:', info.version);
         downloadInProgress = false;
@@ -819,6 +855,10 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     });
 
     autoUpdater.on('error', (error: Error) => {
+        if (restartInstallCoordinator.isInFlight()) {
+            logWarn('[updater] ignored updater error while restart install is in flight:', error.message);
+            return;
+        }
         debugPreviewMode = false;
         stopDebugProgressTimer();
         checkInProgress = false;
@@ -836,9 +876,8 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     });
 
     app.on('before-quit', () => {
-        if (restartInstallInFlight) {
+        if (restartInstallCoordinator.handleBeforeQuit()) {
             log('[updater] before-quit while restart install in flight');
-            restartInstallInFlight = false;
         }
     });
 
@@ -867,6 +906,11 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
     };
 
     const runCheckForUpdates = async (manual: boolean, source: 'menu' | 'startup' | 'interval' | 'focus' | 'channel-change') => {
+        if (restartInstallCoordinator.isInFlight()) {
+            logWarn('[updater] check ignored while restart install is in flight, source:', source);
+            return;
+        }
+
         if (checkInProgress || downloadInProgress) {
             if (manual) {
                 if (downloadInProgress) {
@@ -972,7 +1016,7 @@ export function setupUpdater({ log, logWarn, logError, locale, t }: SetupUpdater
                 return;
             }
 
-            if (checkInProgress || downloadInProgress || rendererUpdaterState.readyToInstall) {
+            if (restartInstallCoordinator.isInFlight() || checkInProgress || downloadInProgress || rendererUpdaterState.readyToInstall) {
                 const options: MessageBoxOptions = {
                     type: 'warning',
                     title: t('updater.title'),
