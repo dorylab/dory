@@ -400,6 +400,10 @@ if (!gotLock) {
 app.on('before-quit', () => {
   log('[electron] before-quit');
   setMainWindowQuitting(true);
+});
+
+app.on('will-quit', () => {
+  log('[electron] will-quit');
   void mcpProxyManager.stop({ persist: false });
   serverManager.stopStandaloneServer();
 });

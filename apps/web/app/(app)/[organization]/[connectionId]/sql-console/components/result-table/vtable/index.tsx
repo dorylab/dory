@@ -754,6 +754,7 @@ export default function VTable({
     const lastMouseDownWasOnCell = useRef(false);
 
     const gridContainerRef = useRef<HTMLDivElement | null>(null);
+    const gridInteractionActiveRef = useRef(false);
     const gridRef = useRef<MultiGrid | null>(null);
     const lastEmittedSelectedRowsRef = useRef<number[]>(selectedRowIndexes ?? []);
 
@@ -1259,16 +1260,28 @@ export default function VTable({
         },
         [applyBatchChanges, columns, focusedCell, getDisplayRow, getEffectiveCellState, getSelectedCellTargets, t, tableRowCount],
     );
-    const handleGridPaste = useCallback(
-        (event: React.ClipboardEvent<HTMLDivElement>) => {
+    useEffect(() => {
+        const handleDocumentPointerDown = (event: PointerEvent) => {
+            const container = gridContainerRef.current;
+            gridInteractionActiveRef.current = Boolean(container && event.target instanceof Node && container.contains(event.target));
+        };
+        document.addEventListener('pointerdown', handleDocumentPointerDown, true);
+        return () => document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
+    }, []);
+
+    useEffect(() => {
+        const handleDocumentPaste = (event: ClipboardEvent) => {
+            if (!editable || !gridInteractionActiveRef.current || event.defaultPrevented || !event.clipboardData) return;
             const target = event.target;
             if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"]')) return;
-            if (!editable) return;
+            const container = gridContainerRef.current;
+            if (!container || container.getClientRects().length === 0) return;
             event.preventDefault();
             applyClipboardText(event.clipboardData.getData('text/plain'));
-        },
-        [applyClipboardText, editable],
-    );
+        };
+        document.addEventListener('paste', handleDocumentPaste);
+        return () => document.removeEventListener('paste', handleDocumentPaste);
+    }, [applyClipboardText, editable]);
     const onRowIndexClick = (e: React.MouseEvent, rowIndex: number) => {
         if (e.button !== 0) return;
         if (lastMouseDownWasOnCell.current) return;
@@ -2072,7 +2085,20 @@ export default function VTable({
                     )}
 
                     {/* Grid */}
-                    <div ref={gridContainerRef} className="flex-1 min-h-0 outline-none" tabIndex={0} onKeyDown={onGridKeyDown} onPaste={handleGridPaste}>
+                    <div
+                        ref={gridContainerRef}
+                        className="flex-1 min-h-0 outline-none"
+                        tabIndex={0}
+                        onKeyDown={onGridKeyDown}
+                        onFocusCapture={() => {
+                            gridInteractionActiveRef.current = true;
+                        }}
+                        onBlurCapture={event => {
+                            if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+                                gridInteractionActiveRef.current = false;
+                            }
+                        }}
+                    >
                         {gridElement}
                     </div>
                 </div>

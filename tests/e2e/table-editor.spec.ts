@@ -6,10 +6,10 @@ import { createWorkbenchConnection, mockWorkbenchApis, openMockConnectionConsole
 async function pasteIntoGrid(page: Page, text: string) {
     const grid = page.getByTestId('vtable-surface').locator('> div[tabindex="0"]');
     await grid.focus();
-    await grid.evaluate((element: HTMLElement, clipboardText: string) => {
+    await grid.evaluate((_element: HTMLElement, clipboardText: string) => {
         const clipboardData = new DataTransfer();
         clipboardData.setData('text/plain', clipboardText);
-        element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+        document.body.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
     }, text);
 }
 

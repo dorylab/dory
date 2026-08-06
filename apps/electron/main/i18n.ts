@@ -9,6 +9,11 @@ type MessageKey =
     | 'menu.openUpdateDialogDebug'
     | 'menu.openLog'
     | 'error.openLogFailed'
+    | 'quit.pendingChangesTitle'
+    | 'quit.pendingChangesMessage'
+    | 'quit.pendingChangesDetail'
+    | 'quit.cancel'
+    | 'quit.discardAndQuit'
     | 'updater.title'
     | 'updater.checking'
     | 'updater.pleaseWait'
@@ -52,6 +57,11 @@ const MESSAGES: Record<MainLocale, Record<MessageKey, string>> = {
         'menu.openUpdateDialogDebug': '打开更新弹窗（调试）',
         'menu.openLog': '打开日志',
         'error.openLogFailed': '打开日志失败',
+        'quit.pendingChangesTitle': '退出 Dory？',
+        'quit.pendingChangesMessage': '还有未提交的表格修改',
+        'quit.pendingChangesDetail': '退出将丢弃所有待提交修改。你也可以取消退出，返回表格提交或撤销这些修改。',
+        'quit.cancel': '取消',
+        'quit.discardAndQuit': '丢弃并退出',
         'updater.title': '软件更新',
         'updater.checking': '正在检查更新...',
         'updater.pleaseWait': '请稍候',
@@ -94,6 +104,11 @@ const MESSAGES: Record<MainLocale, Record<MessageKey, string>> = {
         'menu.openUpdateDialogDebug': '更新ダイアログを開く（デバッグ）',
         'menu.openLog': 'ログを開く',
         'error.openLogFailed': 'ログを開けませんでした',
+        'quit.pendingChangesTitle': 'Dory を終了しますか？',
+        'quit.pendingChangesMessage': '未コミットのテーブル変更があります',
+        'quit.pendingChangesDetail': '終了すると、保留中の変更はすべて破棄されます。キャンセルしてテーブルに戻り、変更をコミットまたは元に戻すこともできます。',
+        'quit.cancel': 'キャンセル',
+        'quit.discardAndQuit': '破棄して終了',
         'updater.title': 'ソフトウェア更新',
         'updater.checking': '更新を確認しています...',
         'updater.pleaseWait': 'しばらくお待ちください',
@@ -136,6 +151,11 @@ const MESSAGES: Record<MainLocale, Record<MessageKey, string>> = {
         'menu.openUpdateDialogDebug': 'Abrir diálogo de actualización (depuración)',
         'menu.openLog': 'Abrir registro',
         'error.openLogFailed': 'No se pudo abrir el registro',
+        'quit.pendingChangesTitle': '¿Salir de Dory?',
+        'quit.pendingChangesMessage': 'Hay cambios de tabla sin confirmar',
+        'quit.pendingChangesDetail': 'Al salir se descartarán todos los cambios pendientes. Puedes cancelar, volver a la tabla y confirmar o deshacer los cambios.',
+        'quit.cancel': 'Cancelar',
+        'quit.discardAndQuit': 'Descartar y salir',
         'updater.title': 'Actualización de software',
         'updater.checking': 'Buscando actualizaciones...',
         'updater.pleaseWait': 'Espera un momento',
@@ -178,6 +198,11 @@ const MESSAGES: Record<MainLocale, Record<MessageKey, string>> = {
         'menu.openUpdateDialogDebug': 'Open Update Dialog (Debug)',
         'menu.openLog': 'Open Log',
         'error.openLogFailed': 'Open Log Failed',
+        'quit.pendingChangesTitle': 'Quit Dory?',
+        'quit.pendingChangesMessage': 'You have uncommitted table changes',
+        'quit.pendingChangesDetail': 'Quitting will discard all pending changes. You can cancel, return to the table, and commit or revert them first.',
+        'quit.cancel': 'Cancel',
+        'quit.discardAndQuit': 'Discard and Quit',
         'updater.title': 'Software Update',
         'updater.checking': 'Checking for updates...',
         'updater.pleaseWait': 'Please wait',

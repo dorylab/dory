@@ -1,6 +1,7 @@
-import { BrowserWindow, screen, shell } from 'electron';
+import { BrowserWindow, dialog, screen, shell } from 'electron';
 import fs from 'node:fs';
 import Store from 'electron-store';
+import { createMainI18n } from './i18n.js';
 import type { LogFn } from './logger.js';
 import { getThemeBackgroundColor } from './theme.js';
 
@@ -78,6 +79,31 @@ export function createMainWindow({ preloadPath, log }: CreateMainWindowOptions) 
 
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
         log('[electron] render process gone:', details.reason, details.exitCode);
+    });
+
+    mainWindow.webContents.on('will-prevent-unload', event => {
+        if (!isQuitting || !mainWindow || mainWindow.isDestroyed()) return;
+
+        const { t } = createMainI18n();
+        const response = dialog.showMessageBoxSync(mainWindow, {
+            type: 'warning',
+            title: t('quit.pendingChangesTitle'),
+            message: t('quit.pendingChangesMessage'),
+            detail: t('quit.pendingChangesDetail'),
+            buttons: [t('quit.cancel'), t('quit.discardAndQuit')],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+        });
+
+        if (response === 1) {
+            log('[electron] pending changes discarded during quit');
+            event.preventDefault();
+            return;
+        }
+
+        log('[electron] quit canceled because of pending changes');
+        isQuitting = false;
     });
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
