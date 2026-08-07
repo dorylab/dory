@@ -59,3 +59,36 @@
 - No P0, P1, P2, or P3 differences remain in the scoped component.
 
 final result: passed
+
+## Artifact Workspace isolated Drawer and exit controls
+
+- Reference: `/var/folders/8t/5d4kjsy95pdb46sy3x204z8w0000gn/T/codex-clipboard-ca2e6163-4bd6-4307-bf51-f6adde5ca17d.png`.
+- Verified the Artifact Drawer restores only the `order 1000` SQL tab and its persisted Result 1; the human SQL Console tabs and pending table edit state are absent.
+- Verified the near-full-screen Drawer has a visible border, rounded desktop inset, header title, “Back to Artifact” action, and close icon.
+- Verified both exit controls close the intercepted route and restore the Artifact Viewer URL.
+- No P0, P1, P2, or P3 differences remain in the requested isolation and exit-control scope.
+
+final result: passed
+
+## Artifact Viewer virtual result table and Workspace Drawer
+
+- Reference: `codex-clipboard-7585828a-2830-4e5a-852a-adadf56d3311.png`
+- Tested URL: `http://localhost:3000/demo-getdory-dev-s-organization-GvG2e0xI/artifacts/artifact_rs_019fda6a-1c0d-73e0-a82b-1400988d71ee`
+- Viewports: 1280×720 and 800×720
+
+## Checks
+
+- Viewer fills the viewport and the document does not scroll (`scrollHeight === clientHeight`).
+- The SQL Console VTable fills the remaining content height and owns vertical scrolling.
+- At 800 px wide, the result grid has a 572 px viewport over 820 px of content and its horizontal scroll position can be dragged independently.
+- Search, column filters, row headers, selection affordances, and SQL Console table styling are present.
+- Open navigates to the full-screen SQL Workspace Drawer and restores the Artifact SQL, result session, and selected result set without executing the query.
+- Reloading the Drawer URL reuses the session-bound recovery tab and does not create another tab.
+- Browser Back closes the Drawer and restores the Artifact Viewer.
+- The implementation follows the existing light/dark theme tokens and responsive sidebar behavior.
+
+## Notes
+
+- The development server reports pre-existing global theme hydration and injected-script diagnostics; no Artifact Viewer or Workspace restoration runtime error was observed.
+
+final result: passed

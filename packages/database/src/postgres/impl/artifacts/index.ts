@@ -33,6 +33,26 @@ export type ArtifactSummary = {
     expiresAt: Date | null;
 };
 
+export type ArtifactWorkspaceTarget =
+    | {
+          mode: 'agent';
+          workId: string;
+          connectionId: string;
+          tabId: string;
+          sessionId: string;
+          setIndex: number;
+          sql: string | null;
+      }
+    | {
+          mode: 'sql';
+          workId: null;
+          connectionId: string;
+          tabId: string;
+          sessionId: string;
+          setIndex: number;
+          sql: string | null;
+      };
+
 export type ArtifactDetail = ArtifactSummary & {
     chartState: ArtifactChartState | null;
     resultSet: {
@@ -42,8 +62,33 @@ export type ArtifactDetail = ArtifactSummary & {
         sql: string | null;
         previewRowCount: number;
     } | null;
+    workspaceTarget: ArtifactWorkspaceTarget | null;
     downloadUrl: string | null;
 };
+
+type ArtifactWorkspaceResultSet = Pick<typeof resultSets.$inferSelect, 'connectionId' | 'tabId' | 'sessionId' | 'setIndex' | 'sql' | 'workId'>;
+
+export function resolveArtifactWorkspaceTarget(input: {
+    type: ArtifactType;
+    comparisonId: string | null;
+    artifactWorkId: string | null;
+    resultSet: ArtifactWorkspaceResultSet | null;
+}): ArtifactWorkspaceTarget | null {
+    const { resultSet } = input;
+    if (input.type === 'file' || input.comparisonId || !resultSet?.connectionId || !resultSet.tabId || !resultSet.sessionId || typeof resultSet.setIndex !== 'number') {
+        return null;
+    }
+
+    const workId = input.artifactWorkId ?? resultSet.workId;
+    const common = {
+        connectionId: resultSet.connectionId,
+        tabId: resultSet.tabId,
+        sessionId: resultSet.sessionId,
+        setIndex: resultSet.setIndex,
+        sql: resultSet.sql,
+    };
+    return workId ? { ...common, mode: 'agent', workId } : { ...common, mode: 'sql', workId: null };
+}
 
 function defaultTitle(type: ArtifactType, resourceId: string) {
     const label = type === 'result_set' ? 'Result Set' : type === 'chart' ? 'Chart' : 'File';
@@ -138,6 +183,12 @@ export class PostgresArtifactsRepository {
             .limit(1);
         if (!row) throw new DatabaseError('Artifact not found', 404);
         if (row.artifact.expiresAt && row.artifact.expiresAt.getTime() <= Date.now()) throw new DatabaseError('Artifact is no longer available', 404);
+        const workspaceTarget = resolveArtifactWorkspaceTarget({
+            type: row.artifact.type,
+            comparisonId: row.artifact.comparisonId,
+            artifactWorkId: row.artifact.workId,
+            resultSet: row.resultSet,
+        });
         return {
             ...this.toSummary({ ...row, rowCount: row.resultSet?.rowCount ?? null }),
             chartState: row.artifact.chartState,
@@ -150,6 +201,7 @@ export class PostgresArtifactsRepository {
                       previewRowCount: row.resultSet.previewRowCount,
                   }
                 : null,
+            workspaceTarget,
             downloadUrl: row.artifact.type === 'file' ? `/api/result-set-exports/${encodeURIComponent(row.artifact.resourceId)}` : null,
         };
     }

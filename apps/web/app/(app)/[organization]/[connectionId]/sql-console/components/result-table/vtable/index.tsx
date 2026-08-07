@@ -563,6 +563,7 @@ export default function VTable({
                     })
                     .catch(error => {
                         if (!controller.signal.aborted) {
+                            remoteSource.onError?.(error);
                             console.warn('[VTable] remote result page load failed', {
                                 cacheKey: remoteSource.cacheKey,
                                 page,

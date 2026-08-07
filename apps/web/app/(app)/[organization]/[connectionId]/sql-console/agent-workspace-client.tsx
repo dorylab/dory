@@ -42,6 +42,7 @@ import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-resu
 import { getSessionStorageKey, sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
 import { clearQueryHistoryRestoredSession, getQueryHistoryRestorableSessionId, markQueryHistoryRestoredSession } from './query-history-result-restore';
 import { AgentRunWorkspacePanel } from './agent-run-workspace-panel';
+import type { SqlWorkspaceInitialResultTarget } from './initial-result-target';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -229,11 +230,13 @@ export default function AgentWorkspaceClient({
     organization,
     workId,
     connectionId,
+    initialResultTarget,
 }: {
     defaultLayout: number[] | undefined;
     organization: string;
     workId: string;
     connectionId: string;
+    initialResultTarget?: SqlWorkspaceInitialResultTarget | null;
 }) {
     const workspaceScope = useMemo<SqlWorkspaceScope>(
         () => ({
@@ -264,7 +267,7 @@ export default function AgentWorkspaceClient({
         handleCloseTab,
         handleCloseOthers,
         saveWorkspaceNow,
-    } = useSqlConsoleClient(defaultLayout, workspaceScope);
+    } = useSqlConsoleClient(defaultLayout, workspaceScope, initialResultTarget);
     const t = useTranslations('SqlConsole');
     const tAgentRuns = useTranslations('AgentRuns');
     const router = useRouter();
@@ -730,10 +733,7 @@ export default function AgentWorkspaceClient({
                         maxSize={`${INITIAL_LAYOUT.horizontal.leftPanel.max}%`}
                         className="min-w-0 overflow-hidden"
                     >
-                        <div
-                            className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card"
-                            data-testid="sql-console-sidebar-surface"
-                        >
+                        <div className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden bg-card" data-testid="sql-console-sidebar-surface">
                             <Tabs defaultValue="tables" className="w-full min-w-0 max-w-full flex-1 overflow-hidden">
                                 <TabsList className="w-full min-w-0 max-w-full rounded-none px-2">
                                     <TabsTrigger value="tables" className="min-w-0 flex-1">

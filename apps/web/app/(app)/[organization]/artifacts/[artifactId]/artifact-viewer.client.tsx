@@ -1,33 +1,30 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, BarChart3, Bot, Check, Database, Download, ExternalLink, FileText, Loader2, Pencil, Save, Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { parseAsInteger, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { executeActionClient } from '@/lib/actions/client';
 import { buildArtifactHandoffPrompt } from '@/lib/artifacts/handoff-prompt';
+import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
 import type { ArtifactChartState, ArtifactDetail } from '@/lib/artifacts/types';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/registry/new-york-v4/ui/table';
+import { ArtifactResultTable } from './artifact-result-table';
 
 const ArtifactCharts = dynamic(() => import('../../[connectionId]/sql-console/components/result-table/components/charts').then(module => module.Charts), {
     ssr: false,
     loading: () => <Skeleton className="h-[460px] w-full" />,
 });
-
-const PAGE_SIZE = 100;
-const DIRECTIONS = ['asc', 'desc'] as const;
 
 type RowsOutput = {
     rows: Record<string, unknown>[];
@@ -42,13 +39,6 @@ function formatBytes(value: number | null) {
     if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
     if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
     return `${(value / 1024 ** 3).toFixed(1)} GB`;
-}
-
-function columnNames(columns: unknown[], rows: Record<string, unknown>[]) {
-    const names = columns
-        .map(column => (column && typeof column === 'object' && 'name' in column && typeof column.name === 'string' ? column.name : null))
-        .filter((name): name is string => Boolean(name));
-    return names.length ? names : Object.keys(rows[0] ?? {});
 }
 
 function Metadata({ artifact }: { artifact: ArtifactDetail }) {
@@ -80,17 +70,10 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
     const router = useRouter();
     const organizationId = useOrganizationId();
     const queryClient = useQueryClient();
-    const contentRef = useRef<HTMLDivElement>(null);
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState('');
     const [showChartBuilder, setShowChartBuilder] = useState(false);
     const [chartState, setChartState] = useState<ArtifactChartState | null>(null);
-    const [tableState, setTableState] = useQueryStates({
-        page: parseAsInteger.withDefault(1),
-        q: parseAsString.withDefault(''),
-        sort: parseAsString.withDefault(''),
-        direction: parseAsStringLiteral(DIRECTIONS).withDefault('asc'),
-    });
     const artifactQuery = useQuery({
         queryKey: ['artifact', organizationId, artifactId],
         queryFn: () => executeActionClient<ArtifactDetail>('artifact.get', { artifactId }, { organizationId }),
@@ -103,27 +86,20 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
         setShowChartBuilder(artifact.type === 'chart');
     }, [artifact]);
 
-    const rowsQuery = useQuery({
-        queryKey: ['artifact-rows', organizationId, artifact?.sourceResultSetId, tableState.page, tableState.q, tableState.sort, tableState.direction],
-        enabled: Boolean(artifact?.sourceResultSetId),
+    const chartRowsQuery = useQuery({
+        queryKey: ['artifact-chart-rows', organizationId, artifact?.sourceResultSetId],
+        enabled: Boolean(artifact?.sourceResultSetId && (artifact.type === 'chart' || showChartBuilder)),
         queryFn: () =>
             executeActionClient<RowsOutput>(
                 'resultSet.rows.read',
                 {
                     resultSetId: artifact!.sourceResultSetId,
-                    offset: (tableState.page - 1) * PAGE_SIZE,
-                    limit: PAGE_SIZE,
-                    sorts: tableState.sort ? [{ column: tableState.sort, direction: tableState.direction }] : undefined,
-                    search: tableState.q ? { text: tableState.q } : undefined,
+                    offset: 0,
+                    limit: 200,
                 },
                 { organizationId },
             ),
     });
-    const columns = useMemo(
-        () => columnNames((rowsQuery.data?.columns ?? artifact?.resultSet?.columns ?? []) as unknown[], rowsQuery.data?.rows ?? []),
-        [artifact?.resultSet?.columns, rowsQuery.data],
-    );
-    const pageCount = Math.max(1, Math.ceil((rowsQuery.data?.rowCount ?? artifact?.rowCount ?? 0) / PAGE_SIZE));
 
     const renameMutation = useMutation({
         mutationFn: () => executeActionClient<{ id: string; title: string }>('artifact.rename', { artifactId, title }, { organizationId }),
@@ -180,8 +156,6 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
             toast.error(t('ActionFailed'));
         }
     };
-    const openContent = () => contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
     if (artifactQuery.isLoading) {
         return (
             <div className="h-screen bg-n8 p-8">
@@ -195,15 +169,15 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
 
     const TypeIcon = artifact.type === 'result_set' ? Database : artifact.type === 'chart' ? BarChart3 : FileText;
     return (
-        <div className="h-screen overflow-auto bg-n8">
-            <main className="container mx-auto flex flex-col gap-6 px-12 pb-12 pt-8 lg:px-12 xl:px-8 2xl:px-4">
+        <div className="h-dvh overflow-hidden bg-n8">
+            <main className="container mx-auto flex h-full min-h-0 flex-col gap-4 px-12 pb-6 pt-8 lg:px-12 xl:px-8 2xl:px-4">
                 <Button asChild variant="ghost" size="sm" className="w-fit -ml-2">
                     <Link href={`/${encodeURIComponent(organization)}/artifacts`}>
                         <ArrowLeft className="h-4 w-4" />
                         {t('Back')}
                     </Link>
                 </Button>
-                <header className="space-y-4">
+                <header className="shrink-0 space-y-4">
                     <div className="flex flex-wrap items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -237,10 +211,14 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                             )}
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button onClick={openContent}>
-                                <ExternalLink />
-                                {t('Open')}
-                            </Button>
+                            {artifact.workspaceTarget ? (
+                                <Button asChild>
+                                    <Link href={buildArtifactWorkspacePath(organization, artifact.id, artifact.workspaceTarget.connectionId)}>
+                                        <ExternalLink />
+                                        {t('Open')}
+                                    </Link>
+                                </Button>
+                            ) : null}
                             <Button variant="outline" onClick={continueWithAgent}>
                                 <Bot />
                                 {t('ContinueWithAgent')}
@@ -271,7 +249,6 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                                     variant="outline"
                                     onClick={() => {
                                         setShowChartBuilder(true);
-                                        openContent();
                                     }}
                                 >
                                     <BarChart3 />
@@ -287,9 +264,9 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                     <Metadata artifact={artifact} />
                 </header>
 
-                <div ref={contentRef} className="scroll-mt-6 space-y-4">
+                <div className="min-h-0 flex-1">
                     {artifact.type === 'file' ? (
-                        <Card>
+                        <Card className="h-full overflow-hidden">
                             <CardHeader>
                                 <CardTitle>{artifact.fileName}</CardTitle>
                             </CardHeader>
@@ -309,7 +286,7 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                     ) : null}
 
                     {(artifact.type === 'chart' || showChartBuilder) && artifact.sourceResultSetId ? (
-                        <Card>
+                        <Card className="flex h-full min-h-0 flex-col overflow-hidden">
                             <CardHeader className="flex-row items-center justify-between">
                                 <CardTitle>{t('Chart')}</CardTitle>
                                 <Button onClick={() => chartMutation.mutate()} disabled={!chartState || chartMutation.isPending}>
@@ -317,10 +294,10 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                                     {t('SaveChart')}
                                 </Button>
                             </CardHeader>
-                            <CardContent className="h-[560px]">
+                            <CardContent className="min-h-0 flex-1">
                                 <ArtifactCharts
-                                    rows={(rowsQuery.data?.rows ?? []).map(row => ({ rowData: row }))}
-                                    columnsRaw={rowsQuery.data?.columns ?? artifact.resultSet?.columns}
+                                    rows={(chartRowsQuery.data?.rows ?? []).map(row => ({ rowData: row }))}
+                                    columnsRaw={chartRowsQuery.data?.columns ?? artifact.resultSet?.columns}
                                     remoteSource={{
                                         cacheKey: `${artifact.sourceResultSetId}:artifact-chart`,
                                         readChart: state =>
@@ -344,74 +321,13 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                         </Card>
                     ) : null}
 
-                    {artifact.type === 'result_set' && !showChartBuilder ? (
-                        <Card>
-                            <CardHeader className="gap-3 md:flex-row md:items-center md:justify-between">
-                                <CardTitle>{t('Data')}</CardTitle>
-                                <Input
-                                    value={tableState.q}
-                                    onChange={event => void setTableState({ q: event.target.value, page: 1 })}
-                                    placeholder={t('SearchRows')}
-                                    className="md:max-w-xs"
-                                />
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <div className="overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                {columns.map(column => (
-                                                    <TableHead key={column}>
-                                                        <button
-                                                            type="button"
-                                                            className="whitespace-nowrap"
-                                                            onClick={() =>
-                                                                void setTableState({
-                                                                    sort: column,
-                                                                    direction: tableState.sort === column && tableState.direction === 'asc' ? 'desc' : 'asc',
-                                                                    page: 1,
-                                                                })
-                                                            }
-                                                        >
-                                                            {column}
-                                                            {tableState.sort === column ? (tableState.direction === 'asc' ? ' ↑' : ' ↓') : ''}
-                                                        </button>
-                                                    </TableHead>
-                                                ))}
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {rowsQuery.isLoading ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={Math.max(columns.length, 1)} className="h-32 text-center">
-                                                        <Loader2 className="mx-auto animate-spin" />
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                rowsQuery.data?.rows.map((row, index) => (
-                                                    <TableRow key={`${tableState.page}-${index}`}>
-                                                        {columns.map(column => (
-                                                            <TableCell key={column} className="max-w-72 truncate font-mono text-xs" title={String(row[column] ?? '')}>
-                                                                {row[column] == null ? <span className="text-muted-foreground">NULL</span> : String(row[column])}
-                                                            </TableCell>
-                                                        ))}
-                                                    </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                                <div className="flex items-center justify-end gap-2 border-t p-3">
-                                    <Button size="sm" variant="outline" disabled={tableState.page <= 1} onClick={() => void setTableState({ page: tableState.page - 1 })}>
-                                        {t('Previous')}
-                                    </Button>
-                                    <span className="text-xs text-muted-foreground">{t('Page', { page: tableState.page, pages: pageCount })}</span>
-                                    <Button size="sm" variant="outline" disabled={tableState.page >= pageCount} onClick={() => void setTableState({ page: tableState.page + 1 })}>
-                                        {t('Next')}
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
+                    {artifact.type === 'result_set' && !showChartBuilder && artifact.sourceResultSetId ? (
+                        <ArtifactResultTable
+                            artifactId={artifact.id}
+                            resultSetId={artifact.sourceResultSetId}
+                            columns={artifact.resultSet?.columns ?? []}
+                            rowCount={artifact.rowCount}
+                        />
                     ) : null}
                 </div>
             </main>

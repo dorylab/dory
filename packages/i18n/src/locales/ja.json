@@ -3841,6 +3841,8 @@
             "SaveChart": "チャートを保存",
             "Data": "データ",
             "SearchRows": "行を検索...",
+            "LoadingRows": "結果行を読み込んでいます...",
+            "NoRows": "現在の表示条件に一致する行はありません。",
             "Previous": "前へ",
             "Next": "次へ",
             "Page": "{page} / {pages} ページ",
@@ -3852,6 +3854,14 @@
             "ChartRequired": "保存前にチャートを設定してください。",
             "ActionFailed": "Artifact の操作に失敗しました。",
             "NotFound": "Artifact が存在しないか、利用できません。"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Artifact SQL Workspace",
+            "Description": "この Artifact から復元された独立 SQL ワークスペースです。",
+            "Back": "Artifact に戻る",
+            "Close": "Artifact ワークスペースを閉じる",
+            "Loading": "SQL Workspace を開いています...",
+            "Unavailable": "この Artifact は SQL Workspace で開けなくなりました。"
         }
     },
     "AgentRuns": {
@@ -3974,7 +3984,9 @@
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run ワークスペース",
-            "Description": "この Agent Run の SQL ワークスペースです。"
+            "Description": "この Agent Run の SQL ワークスペースです。",
+            "Back": "Agent Run に戻る",
+            "Close": "Agent Run ワークスペースを閉じる"
         },
         "WorkspacePanel": {
             "LoadFailed": "Agent Run の読み込みに失敗しました。",

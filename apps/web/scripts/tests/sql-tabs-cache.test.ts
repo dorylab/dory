@@ -41,6 +41,7 @@ test('keeps cached tabs isolated by connection and agent workspace', () => {
     assert.equal(getTabsStorageKey({ workspaceMode: 'human', connectionId: 'connection-1' }), 'sqlconsole:tabs:connection-1');
     assert.equal(getTabsStorageKey({ workspaceMode: 'human', connectionId: 'connection-2' }), 'sqlconsole:tabs:connection-2');
     assert.equal(getTabsStorageKey({ workspaceMode: 'agent', connectionId: 'connection-1', workId: 'work-1' }), 'sqlconsole:tabs:connection-1:work:work-1');
+    assert.equal(getTabsStorageKey({ workspaceMode: 'artifact', connectionId: 'connection-1', artifactId: 'artifact-1' }), 'sqlconsole:tabs:connection-1:artifact:artifact-1');
 });
 
 test('ignores malformed or unsupported cache payloads', () => {

@@ -38,8 +38,9 @@ import { applyRenamedTableName, buildQueryTableSql } from './table-action-sql';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { currentConnectionAtom } from '@/shared/stores/app.store';
 import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
-import { getSessionStorageKey, humanSqlWorkspaceScope, sqlWorkspaceScopeAtom } from './workspace-scope';
+import { getSessionStorageKey, humanSqlWorkspaceScope, normalizeSqlWorkspaceScope, sqlWorkspaceScopeAtom, type SqlWorkspaceScope } from './workspace-scope';
 import { clearQueryHistoryRestoredSession, getQueryHistoryRestorableSessionId, markQueryHistoryRestoredSession } from './query-history-result-restore';
+import type { SqlWorkspaceInitialResultTarget } from './initial-result-target';
 
 const INITIAL_LAYOUT = {
     horizontal: {
@@ -80,7 +81,18 @@ function normalizeHorizontalLayout(layout: readonly number[] | undefined): [numb
     return [normalizedLeft, INITIAL_LAYOUT.horizontal.total - normalizedLeft];
 }
 
-export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizontal.default, maxFileBytes }: { defaultLayout: number[] | undefined; maxFileBytes: number }) {
+export default function SQLConsoleClient({
+    defaultLayout = INITIAL_LAYOUT.horizontal.default,
+    maxFileBytes,
+    initialResultTarget,
+    workspaceScope: requestedWorkspaceScope,
+}: {
+    defaultLayout: number[] | undefined;
+    maxFileBytes: number;
+    initialResultTarget?: SqlWorkspaceInitialResultTarget | null;
+    workspaceScope?: SqlWorkspaceScope;
+}) {
+    const resolvedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(requestedWorkspaceScope ?? humanSqlWorkspaceScope), [requestedWorkspaceScope]);
     const {
         normalizedLayout,
         onLayout: onLayoutFromHook,
@@ -101,7 +113,7 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
         handleOpenTableTab,
         handleCloseTab,
         handleCloseOthers,
-    } = useSqlConsoleClient(defaultLayout, humanSqlWorkspaceScope);
+    } = useSqlConsoleClient(defaultLayout, resolvedWorkspaceScope, initialResultTarget);
     const t = useTranslations('SqlConsole');
     const setWorkspaceScope = useSetAtom(sqlWorkspaceScopeAtom);
 
@@ -124,8 +136,8 @@ export default function SQLConsoleClient({ defaultLayout = INITIAL_LAYOUT.horizo
     const [pendingSavedQuery, setPendingSavedQuery] = useState<SavedQueryItem | null>(null);
 
     useEffect(() => {
-        setWorkspaceScope(humanSqlWorkspaceScope);
-    }, [setWorkspaceScope]);
+        setWorkspaceScope(resolvedWorkspaceScope);
+    }, [resolvedWorkspaceScope, setWorkspaceScope]);
 
     const lastActiveSqlTabIdRef = useRef<string | null>(null);
     if (activeTab?.tabType === 'sql') {

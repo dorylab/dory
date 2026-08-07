@@ -3831,6 +3831,8 @@
             "SaveChart": "保存图表",
             "Data": "数据",
             "SearchRows": "搜索数据行...",
+            "LoadingRows": "正在加载结果数据...",
+            "NoRows": "当前视图没有匹配的数据行。",
             "Previous": "上一页",
             "Next": "下一页",
             "Page": "第 {page} / {pages} 页",
@@ -3842,6 +3844,14 @@
             "ChartRequired": "请先配置图表再保存。",
             "ActionFailed": "Artifact 操作失败。",
             "NotFound": "Artifact 不存在或已不可用。"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Artifact SQL Workspace",
+            "Description": "从此 Artifact 恢复的独立 SQL 工作区。",
+            "Back": "返回 Artifact",
+            "Close": "关闭 Artifact 工作区",
+            "Loading": "正在打开 SQL Workspace...",
+            "Unavailable": "此 Artifact 已无法在 SQL Workspace 中打开。"
         }
     },
     "AgentRuns": {
@@ -3964,7 +3974,9 @@
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run 工作区",
-            "Description": "这个 Agent Run 的 SQL 工作区。"
+            "Description": "这个 Agent Run 的 SQL 工作区。",
+            "Back": "返回 Agent Run",
+            "Close": "关闭 Agent Run 工作区"
         },
         "WorkspacePanel": {
             "LoadFailed": "加载 Agent Run 失败。",

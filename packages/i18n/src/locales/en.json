@@ -3841,6 +3841,8 @@
             "SaveChart": "Save Chart",
             "Data": "Data",
             "SearchRows": "Search rows...",
+            "LoadingRows": "Loading result rows...",
+            "NoRows": "No rows match the current view.",
             "Previous": "Previous",
             "Next": "Next",
             "Page": "Page {page} of {pages}",
@@ -3852,6 +3854,14 @@
             "ChartRequired": "Configure the chart before saving.",
             "ActionFailed": "Artifact action failed.",
             "NotFound": "Artifact not found or no longer available."
+        },
+        "WorkspaceDrawer": {
+            "Title": "Artifact SQL Workspace",
+            "Description": "An isolated SQL workspace restored from this Artifact.",
+            "Back": "Back to Artifact",
+            "Close": "Close Artifact workspace",
+            "Loading": "Opening SQL Workspace...",
+            "Unavailable": "This Artifact can no longer be opened in SQL Workspace."
         }
     },
     "AgentRuns": {
@@ -3974,7 +3984,9 @@
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run workspace",
-            "Description": "SQL workspace for this Agent Run."
+            "Description": "SQL workspace for this Agent Run.",
+            "Back": "Back to Agent Run",
+            "Close": "Close Agent Run workspace"
         },
         "WorkspacePanel": {
             "LoadFailed": "Failed to load Agent Run.",

@@ -9,6 +9,26 @@ export type ArtifactChartState = {
     chartColorPreset?: 'blue' | 'emerald' | 'amber' | 'rose' | 'violet' | 'slate';
 };
 
+export type ArtifactWorkspaceTarget =
+    | {
+          mode: 'agent';
+          workId: string;
+          connectionId: string;
+          tabId: string;
+          sessionId: string;
+          setIndex: number;
+          sql: string | null;
+      }
+    | {
+          mode: 'sql';
+          workId: null;
+          connectionId: string;
+          tabId: string;
+          sessionId: string;
+          setIndex: number;
+          sql: string | null;
+      };
+
 type ArtifactSummaryBase = {
     id: string;
     title: string;
@@ -53,6 +73,7 @@ export type ResultSetArtifactDetail = ArtifactSummaryBase &
     ResultSetContext & {
         type: 'result_set';
         chartState: null;
+        workspaceTarget: ArtifactWorkspaceTarget | null;
         downloadUrl: null;
     };
 
@@ -60,6 +81,7 @@ export type ChartArtifactDetail = ArtifactSummaryBase &
     ResultSetContext & {
         type: 'chart';
         chartState: ArtifactChartState | null;
+        workspaceTarget: ArtifactWorkspaceTarget | null;
         downloadUrl: null;
     };
 
@@ -67,6 +89,7 @@ export type FileArtifactDetail = ArtifactSummaryBase &
     ResultSetContext & {
         type: 'file';
         chartState: null;
+        workspaceTarget: null;
         downloadUrl: string | null;
     };
 

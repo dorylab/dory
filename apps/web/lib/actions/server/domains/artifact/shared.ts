@@ -10,6 +10,26 @@ export const artifactChartStateSchema = z.object({
 });
 
 const dateSchema = z.union([z.date(), z.string()]);
+const artifactWorkspaceTargetSchema = z.discriminatedUnion('mode', [
+    z.object({
+        mode: z.literal('agent'),
+        workId: z.string().min(1),
+        connectionId: z.string().min(1),
+        tabId: z.string().min(1),
+        sessionId: z.string().min(1),
+        setIndex: z.number().int().nonnegative(),
+        sql: z.string().nullable(),
+    }),
+    z.object({
+        mode: z.literal('sql'),
+        workId: z.null(),
+        connectionId: z.string().min(1),
+        tabId: z.string().min(1),
+        sessionId: z.string().min(1),
+        setIndex: z.number().int().nonnegative(),
+        sql: z.string().nullable(),
+    }),
+]);
 const artifactSummarySchema = z.object({
     id: z.string(),
     type: artifactTypeSchema,
@@ -49,6 +69,7 @@ export const artifactDetailOutputSchema = artifactSummarySchema.extend({
             previewRowCount: z.number().int().nonnegative(),
         })
         .nullable(),
+    workspaceTarget: artifactWorkspaceTargetSchema.nullable(),
     downloadUrl: z.string().nullable(),
 });
 

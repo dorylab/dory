@@ -99,6 +99,7 @@ export interface VTableRemoteSource {
         rows: { rowData: Record<string, unknown> }[];
         ready: boolean;
     }>;
+    onError?: (error: unknown) => void;
 }
 
 export type ColWidths = Record<string, number>;

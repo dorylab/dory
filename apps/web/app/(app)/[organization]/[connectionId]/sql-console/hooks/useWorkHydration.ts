@@ -11,6 +11,7 @@ import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 import { resolveWorkHydrationTarget } from '../work-hydration-target';
+import type { SqlWorkspaceInitialResultTarget } from '../initial-result-target';
 
 type WorkSnapshotResponse = {
     code?: number;
@@ -72,17 +73,19 @@ export function useWorkHydration({
     isLoading,
     setActiveTabId,
     workspaceScope,
+    initialResultTarget,
 }: {
     tabs: UITabPayload[];
     isLoading: boolean;
     setActiveTabId: (tabId: string) => void;
     workspaceScope?: SqlWorkspaceScope;
+    initialResultTarget?: SqlWorkspaceInitialResultTarget | null;
 }) {
     const searchParams = useSearchParams();
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const workId = normalizedWorkspaceScope.workspaceMode === 'agent' ? normalizedWorkspaceScope.workId : null;
-    const requestedTabId = searchParams.get('tabId');
-    const requestedSessionId = searchParams.get('sessionId');
+    const requestedTabId = initialResultTarget?.tabId ?? searchParams.get('tabId');
+    const requestedSessionId = initialResultTarget?.sessionId ?? searchParams.get('sessionId');
     const activeTabId = useAtomValue(activeTabIdAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
     const hydratedWorkRef = useRef<string | null>(null);
