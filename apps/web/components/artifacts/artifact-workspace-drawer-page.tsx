@@ -3,8 +3,8 @@ import { getTranslations } from 'next-intl/server';
 
 import SqlConsoleLayout from '@/app/(app)/[organization]/[connectionId]/sql-console/layout';
 import { getImportConfig } from '@/lib/server/imports/config';
-import { AgentWorkspaceDrawer } from '@/components/agent-runs/agent-workspace-drawer';
 import { ArtifactWorkspaceDrawerContent } from './artifact-workspace-drawer-content';
+import { ArtifactWorkspaceDrawer } from './artifact-workspace-drawer';
 
 export async function ArtifactWorkspaceDrawerPage({ organization, artifactId, connectionId }: { organization: string; artifactId: string; connectionId: string }) {
     const t = await getTranslations('Artifacts.WorkspaceDrawer');
@@ -19,13 +19,7 @@ export async function ArtifactWorkspaceDrawerPage({ organization, artifactId, co
     }
 
     return (
-        <AgentWorkspaceDrawer
-            closeHref={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifactId)}`}
-            title={t('Title')}
-            description={t('Description')}
-            backLabel={t('Back')}
-            closeLabel={t('Close')}
-        >
+        <ArtifactWorkspaceDrawer artifactId={artifactId} organization={organization} title={t('Title')} description={t('Description')} closeLabel={t('Close')}>
             <SqlConsoleLayout>
                 <ArtifactWorkspaceDrawerContent
                     artifactId={artifactId}
@@ -35,6 +29,6 @@ export async function ArtifactWorkspaceDrawerPage({ organization, artifactId, co
                     maxFileBytes={getImportConfig().maxFileBytes}
                 />
             </SqlConsoleLayout>
-        </AgentWorkspaceDrawer>
+        </ArtifactWorkspaceDrawer>
     );
 }

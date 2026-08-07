@@ -32,6 +32,10 @@ export function AgentWorkspaceDrawer({
     const resolvedCloseLabel = closeLabel ?? t('WorkspaceDrawer.Close');
 
     const closeDrawer = useCallback(() => {
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
         router.replace(closeHref, { scroll: false });
     }, [closeHref, router]);
 

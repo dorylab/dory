@@ -3789,7 +3789,25 @@
         "Empty": "未找到 Artifacts",
         "EmptyDescription": "持久化查询结果、保存的图表和导出文件会显示在这里。",
         "UnknownSource": "未知来源",
+        "Details": "详情",
+        "Delete": "删除",
+        "Deleted": "Artifact 已删除。",
+        "NoExpiry": "不过期",
         "Rows": "{count, number} 行",
+        "Columns": {
+            "Title": "标题",
+            "Source": "来源",
+            "Rows": "行数",
+            "Size": "大小",
+            "ExpiresAt": "过期时间",
+            "Actions": "操作"
+        },
+        "DeleteDialog": {
+            "Title": "删除 Artifact？",
+            "Description": "确定要删除“{title}”吗？此操作无法撤销。",
+            "Cancel": "取消",
+            "Confirm": "删除"
+        },
         "Previous": "上一页",
         "Next": "下一页",
         "Page": "第 {page} / {pages} 页",
@@ -3848,6 +3866,15 @@
             "ChartSaved": "图表已保存到 Artifacts。",
             "ShareCopied": "组织内链接已复制。",
             "AgentTaskCopied": "外部 Agent 任务已复制。",
+            "MoreActions": "更多操作",
+            "Delete": "删除",
+            "Deleted": "Artifact 已删除。",
+            "DeleteDialog": {
+                "Title": "删除 Artifact？",
+                "Description": "确定要删除“{title}”吗？此操作无法撤销。",
+                "Cancel": "取消",
+                "Confirm": "删除"
+            },
             "ChartRequired": "请先配置图表再保存。",
             "ActionFailed": "Artifact 操作失败。",
             "NotFound": "Artifact 不存在或已不可用。"
@@ -3856,6 +3883,7 @@
             "Title": "Artifact SQL Workspace",
             "Description": "从此 Artifact 恢复的独立 SQL 工作区。",
             "Back": "返回 Artifact",
+            "BackToArtifact": "{title} 查询结果",
             "Close": "关闭 Artifact 工作区",
             "Loading": "正在打开 SQL Workspace...",
             "Unavailable": "此 Artifact 已无法在 SQL Workspace 中打开。"

@@ -219,6 +219,16 @@ export class PostgresArtifactsRepository {
         return row;
     }
 
+    async delete(input: { organizationId: string; artifactId: string }) {
+        this.assertInited();
+        const [row] = await this.db
+            .delete(artifacts)
+            .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
+            .returning({ id: artifacts.id, title: artifacts.title });
+        if (!row) throw new DatabaseError('Artifact not found', 404);
+        return row;
+    }
+
     async createChart(input: {
         organizationId: string;
         sourceArtifactId: string;

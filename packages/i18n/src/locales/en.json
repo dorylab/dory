@@ -3799,7 +3799,25 @@
         "Empty": "No artifacts found",
         "EmptyDescription": "Persistent query results, saved charts, and exports will appear here.",
         "UnknownSource": "Unknown source",
+        "Details": "Details",
+        "Delete": "Delete",
+        "Deleted": "Artifact deleted.",
+        "NoExpiry": "No expiry",
         "Rows": "{count, number} rows",
+        "Columns": {
+            "Title": "Title",
+            "Source": "Source",
+            "Rows": "Rows",
+            "Size": "Size",
+            "ExpiresAt": "Expires at",
+            "Actions": "Actions"
+        },
+        "DeleteDialog": {
+            "Title": "Delete artifact?",
+            "Description": "Are you sure you want to delete \"{title}\"? This action cannot be undone.",
+            "Cancel": "Cancel",
+            "Confirm": "Delete"
+        },
         "Previous": "Previous",
         "Next": "Next",
         "Page": "Page {page} of {pages}",
@@ -3858,6 +3876,15 @@
             "ChartSaved": "Chart saved to Artifacts.",
             "ShareCopied": "Organization link copied.",
             "AgentTaskCopied": "Task for external Agent copied.",
+            "MoreActions": "More actions",
+            "Delete": "Delete",
+            "Deleted": "Artifact deleted.",
+            "DeleteDialog": {
+                "Title": "Delete artifact?",
+                "Description": "Are you sure you want to delete \"{title}\"? This action cannot be undone.",
+                "Cancel": "Cancel",
+                "Confirm": "Delete"
+            },
             "ChartRequired": "Configure the chart before saving.",
             "ActionFailed": "Artifact action failed.",
             "NotFound": "Artifact not found or no longer available."
@@ -3866,6 +3893,7 @@
             "Title": "Artifact SQL Workspace",
             "Description": "An isolated SQL workspace restored from this Artifact.",
             "Back": "Back to Artifact",
+            "BackToArtifact": "{title} query results",
             "Close": "Close Artifact workspace",
             "Loading": "Opening SQL Workspace...",
             "Unavailable": "This Artifact can no longer be opened in SQL Workspace."

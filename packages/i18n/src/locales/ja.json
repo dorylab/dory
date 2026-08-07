@@ -3799,7 +3799,25 @@
         "Empty": "Artifact がありません",
         "EmptyDescription": "保存された結果セット、チャート、エクスポートがここに表示されます。",
         "UnknownSource": "不明なソース",
+        "Details": "詳細",
+        "Delete": "削除",
+        "Deleted": "Artifact を削除しました。",
+        "NoExpiry": "期限なし",
         "Rows": "{count, number} 行",
+        "Columns": {
+            "Title": "タイトル",
+            "Source": "ソース",
+            "Rows": "行数",
+            "Size": "サイズ",
+            "ExpiresAt": "有効期限",
+            "Actions": "操作"
+        },
+        "DeleteDialog": {
+            "Title": "Artifact を削除しますか？",
+            "Description": "「{title}」を削除してもよろしいですか？この操作は元に戻せません。",
+            "Cancel": "キャンセル",
+            "Confirm": "削除"
+        },
         "Previous": "前へ",
         "Next": "次へ",
         "Page": "{page} / {pages} ページ",
@@ -3858,6 +3876,15 @@
             "ChartSaved": "チャートを Artifacts に保存しました。",
             "ShareCopied": "組織内リンクをコピーしました。",
             "AgentTaskCopied": "外部 Agent 用タスクをコピーしました。",
+            "MoreActions": "その他の操作",
+            "Delete": "削除",
+            "Deleted": "Artifact を削除しました。",
+            "DeleteDialog": {
+                "Title": "Artifact を削除しますか？",
+                "Description": "「{title}」を削除してもよろしいですか？この操作は元に戻せません。",
+                "Cancel": "キャンセル",
+                "Confirm": "削除"
+            },
             "ChartRequired": "保存前にチャートを設定してください。",
             "ActionFailed": "Artifact の操作に失敗しました。",
             "NotFound": "Artifact が存在しないか、利用できません。"
@@ -3866,6 +3893,7 @@
             "Title": "Artifact SQL Workspace",
             "Description": "この Artifact から復元された独立 SQL ワークスペースです。",
             "Back": "Artifact に戻る",
+            "BackToArtifact": "{title} のクエリ結果",
             "Close": "Artifact ワークスペースを閉じる",
             "Loading": "SQL Workspace を開いています...",
             "Unavailable": "この Artifact は SQL Workspace で開けなくなりました。"

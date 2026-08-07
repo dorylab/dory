@@ -1,19 +1,34 @@
 'use client';
 
-import { useDeferredValue, useMemo } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { Archive, BarChart3, Database, FileText, Loader2, Search } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Archive, BarChart3, Database, FileText, Loader2, MoreHorizontal, PanelTop, Search, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsInteger, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
+import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
-import type { ArtifactSummary, ArtifactType } from '@/lib/artifacts/types';
+import type { ArtifactDetail, ArtifactSummary, ArtifactType } from '@/lib/artifacts/types';
+import { buildArtifactHandoffPrompt } from '@/lib/artifacts/handoff-prompt';
+import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
 
 const PAGE_SIZE = 50;
 const TYPES = ['all', 'result_set', 'chart', 'file'] as const;
@@ -31,9 +46,98 @@ function formatBytes(value: number | null) {
     return `${(value / 1024 ** 3).toFixed(1)} GB`;
 }
 
+function formatDate(value: string | null) {
+    return value ? new Date(value).toLocaleDateString() : null;
+}
+
+function ArtifactRowActions({ artifact, organization, onDelete }: { artifact: ArtifactSummary; organization: string; onDelete: () => void }) {
+    const t = useTranslations('Artifacts.Viewer');
+    const router = useRouter();
+    const organizationId = useOrganizationId();
+    const artifactPath = `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`;
+    const loadDetail = () => executeActionClient<ArtifactDetail>('artifact.get', { artifactId: artifact.id }, { organizationId });
+
+    const openArtifact = async () => {
+        try {
+            const detail = await loadDetail();
+            router.push(detail.workspaceTarget ? buildArtifactWorkspacePath(organization, artifact.id, detail.workspaceTarget.connectionId) : artifactPath);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t('ActionFailed'));
+        }
+    };
+    const continueWithAgent = async () => {
+        try {
+            const detail = await loadDetail();
+            await navigator.clipboard.writeText(buildArtifactHandoffPrompt(detail, window.location.origin + artifactPath));
+            toast.success(t('AgentTaskCopied'));
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t('ActionFailed'));
+        }
+    };
+    const exportArtifact = async (format: 'csv' | 'parquet') => {
+        try {
+            const detail = await loadDetail();
+            if (!detail.sourceResultSetId) throw new Error(t('ActionFailed'));
+            const output = await executeActionClient<{ artifactId: string; downloadUrl: string }>(
+                'resultSet.export.create',
+                {
+                    resultSetId: detail.sourceResultSetId,
+                    format,
+                },
+                { organizationId },
+            );
+            window.location.assign(output.downloadUrl);
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : t('ActionFailed'));
+        }
+    };
+    const shareArtifact = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.origin + artifactPath);
+            toast.success(t('ShareCopied'));
+        } catch {
+            toast.error(t('ActionFailed'));
+        }
+    };
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={t('MoreActions')}>
+                    <MoreHorizontal />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => void openArtifact()}>
+                    <PanelTop />
+                    {t('Open')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void continueWithAgent()}>{t('ContinueWithAgent')}</DropdownMenuItem>
+                {artifact.type === 'result_set' ? (
+                    <>
+                        <DropdownMenuItem onSelect={() => void exportArtifact('csv')}>{t('Export')} CSV</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => void exportArtifact('parquet')}>{t('Export')} Parquet</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => router.push(artifactPath)}>{t('CreateChart')}</DropdownMenuItem>
+                    </>
+                ) : artifact.type === 'file' ? (
+                    <DropdownMenuItem onSelect={() => router.push(artifactPath)}>{t('Download')}</DropdownMenuItem>
+                ) : null}
+                <DropdownMenuItem onSelect={() => void shareArtifact()}>{t('Share')}</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+                    <Trash2 />
+                    {t('Delete')}
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    );
+}
+
 export function ArtifactsPageClient({ organization }: { organization: string }) {
     const t = useTranslations('Artifacts');
     const organizationId = useOrganizationId();
+    const queryClient = useQueryClient();
+    const [artifactToDelete, setArtifactToDelete] = useState<ArtifactSummary | null>(null);
     const [state, setState] = useQueryStates({
         q: parseAsString.withDefault(''),
         type: parseAsStringLiteral(TYPES).withDefault('all'),
@@ -49,6 +153,15 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
                 { query: deferredQuery || null, types, offset: (state.page - 1) * PAGE_SIZE, limit: PAGE_SIZE },
                 { organizationId },
             ),
+    });
+    const deleteMutation = useMutation({
+        mutationFn: (artifactId: string) => executeActionClient<{ id: string; title: string }>('artifact.delete', { artifactId }, { organizationId }),
+        onSuccess: () => {
+            setArtifactToDelete(null);
+            void queryClient.invalidateQueries({ queryKey: ['artifacts', organizationId] });
+            toast.success(t('Deleted'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('ActionFailed')),
     });
     const grouped = useMemo(() => {
         const groups = new Map<ArtifactType, ArtifactSummary[]>(TYPE_ORDER.map(type => [type, []]));
@@ -108,38 +221,63 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
                                         <Badge variant="secondary">{rows.length}</Badge>
                                     </div>
                                     <Card>
-                                        <CardContent className="divide-y p-0">
+                                        <CardContent className="p-0">
+                                            <div className="hidden h-10 items-center gap-4 border-b bg-muted/30 px-4 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(20rem,2fr)_minmax(9rem,1fr)_6rem_6rem_8rem_7rem]">
+                                                <span>{t('Columns.Title')}</span>
+                                                <span>{t('Columns.Source')}</span>
+                                                <span>{t('Columns.Rows')}</span>
+                                                <span>{t('Columns.Size')}</span>
+                                                <span>{t('Columns.ExpiresAt')}</span>
+                                                <span className="text-right">{t('Columns.Actions')}</span>
+                                            </div>
                                             {rows.map(artifact => (
-                                                <Link
+                                                <div
                                                     key={artifact.id}
-                                                    href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`}
-                                                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                    className="grid min-h-20 items-center gap-4 border-b px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(20rem,2fr)_minmax(9rem,1fr)_6rem_6rem_8rem_7rem]"
                                                 >
-                                                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="truncate text-sm font-medium">{artifact.title}</div>
-                                                            <Badge variant={artifact.status === 'ready' ? 'secondary' : 'destructive'}>{t(`Statuses.${artifact.status}`)}</Badge>
-                                                        </div>
-                                                        <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-                                                            <span>{artifact.connectionName ?? artifact.comparisonName ?? t('UnknownSource')}</span>
-                                                            <span>·</span>
-                                                            <span>
-                                                                {artifact.runTitle ??
-                                                                    (CREATOR_KEYS.has(artifact.createdByActorType)
-                                                                        ? t(`Creators.${artifact.createdByActorType}`)
-                                                                        : artifact.createdByActorType)}
-                                                            </span>
+                                                    <div className="min-w-0 lg:col-start-1 lg:row-start-1 lg:flex lg:items-center lg:gap-3">
+                                                        <Icon className="hidden h-4 w-4 shrink-0 text-muted-foreground lg:block" />
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <Link
+                                                                    href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`}
+                                                                    className="truncate text-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                                >
+                                                                    {artifact.title}
+                                                                </Link>
+                                                                <Badge variant={artifact.status === 'ready' ? 'secondary' : 'destructive'}>
+                                                                    {t(`Statuses.${artifact.status}`)}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+                                                                <span>{artifact.connectionName ?? artifact.comparisonName ?? t('UnknownSource')}</span>
+                                                                <span>·</span>
+                                                                <span>
+                                                                    {artifact.runTitle ??
+                                                                        (CREATOR_KEYS.has(artifact.createdByActorType)
+                                                                            ? t(`Creators.${artifact.createdByActorType}`)
+                                                                            : artifact.createdByActorType)}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    {artifact.rowCount != null ? (
-                                                        <span className="hidden text-xs text-muted-foreground sm:block">{t('Rows', { count: artifact.rowCount })}</span>
-                                                    ) : null}
-                                                    {formatBytes(artifact.byteSize) ? (
-                                                        <span className="hidden text-xs text-muted-foreground md:block">{formatBytes(artifact.byteSize)}</span>
-                                                    ) : null}
-                                                    <time className="text-xs text-muted-foreground">{new Date(artifact.createdAt).toLocaleDateString()}</time>
-                                                </Link>
+                                                    <span className="hidden truncate text-xs text-muted-foreground lg:block">
+                                                        {artifact.connectionName ?? artifact.comparisonName ?? t('UnknownSource')}
+                                                    </span>
+                                                    <span className="hidden text-xs text-muted-foreground lg:block">
+                                                        {artifact.rowCount == null ? '—' : t('Rows', { count: artifact.rowCount })}
+                                                    </span>
+                                                    <span className="hidden text-xs text-muted-foreground lg:block">{formatBytes(artifact.byteSize) ?? '—'}</span>
+                                                    <span
+                                                        className="hidden text-xs text-muted-foreground lg:block"
+                                                        title={artifact.expiresAt ? new Date(artifact.expiresAt).toLocaleString() : undefined}
+                                                    >
+                                                        {formatDate(artifact.expiresAt) ?? t('NoExpiry')}
+                                                    </span>
+                                                    <div className="flex items-center justify-end gap-1 lg:col-start-6 lg:row-start-1">
+                                                        <ArtifactRowActions artifact={artifact} organization={organization} onDelete={() => setArtifactToDelete(artifact)} />
+                                                    </div>
+                                                </div>
                                             ))}
                                         </CardContent>
                                     </Card>
@@ -169,6 +307,27 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
                     </div>
                 ) : null}
             </main>
+            <AlertDialog open={Boolean(artifactToDelete)} onOpenChange={open => !open && setArtifactToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>{t('DeleteDialog.Title')}</AlertDialogTitle>
+                        <AlertDialogDescription>{t('DeleteDialog.Description', { title: artifactToDelete?.title ?? '' })}</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>{t('DeleteDialog.Cancel')}</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-destructive text-white hover:bg-destructive/90"
+                            disabled={deleteMutation.isPending}
+                            onClick={event => {
+                                event.preventDefault();
+                                if (artifactToDelete) deleteMutation.mutate(artifactToDelete.id);
+                            }}
+                        >
+                            {t('DeleteDialog.Confirm')}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
