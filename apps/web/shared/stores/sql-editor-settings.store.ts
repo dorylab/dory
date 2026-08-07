@@ -10,6 +10,7 @@ export type SqlEditorSettings = {
     customFontFamily: string;
     fontSize: number;
     lineHeight: number;
+    editorPanelHeight: number;
     lineNumbers: Monaco.editor.LineNumbersType;
     minimap: boolean;
     wordWrap: Monaco.editor.IEditorOptions['wordWrap'];
@@ -44,6 +45,7 @@ export const DEFAULT_SQL_EDITOR_SETTINGS: SqlEditorSettings = {
     customFontFamily: '',
     fontSize: 12,
     lineHeight: 1.5,
+    editorPanelHeight: 20,
     lineNumbers: 'on',
     minimap: false,
     wordWrap: 'on',
@@ -55,6 +57,8 @@ const FONT_SIZE_MIN = 12;
 const FONT_SIZE_MAX = 24;
 const LINE_HEIGHT_MIN = 1.1;
 const LINE_HEIGHT_MAX = 2.2;
+export const EDITOR_PANEL_HEIGHT_MIN = 15;
+export const EDITOR_PANEL_HEIGHT_MAX = 80;
 const themeSet = new Set(SQL_EDITOR_THEME_OPTIONS.map(option => option.value));
 const fontSet = new Set(SQL_EDITOR_FONT_FAMILY_OPTIONS.map(option => option.value));
 const lineNumbersSet = new Set<SqlEditorSettings['lineNumbers']>(['on', 'off']);
@@ -74,6 +78,7 @@ export const normalizeSqlEditorSettings = (value?: Partial<SqlEditorSettings> | 
         : DEFAULT_SQL_EDITOR_SETTINGS.fontFamilyPreset;
     const fontSize = clamp(Number(next.fontSize ?? DEFAULT_SQL_EDITOR_SETTINGS.fontSize), FONT_SIZE_MIN, FONT_SIZE_MAX);
     const lineHeight = clamp(Number(next.lineHeight ?? DEFAULT_SQL_EDITOR_SETTINGS.lineHeight), LINE_HEIGHT_MIN, LINE_HEIGHT_MAX);
+    const editorPanelHeight = clamp(Number(next.editorPanelHeight ?? DEFAULT_SQL_EDITOR_SETTINGS.editorPanelHeight), EDITOR_PANEL_HEIGHT_MIN, EDITOR_PANEL_HEIGHT_MAX);
     const rawQueryLimit = next.queryLimit === null ? null : Number(next.queryLimit ?? DEFAULT_SQL_EDITOR_SETTINGS.queryLimit);
     const queryLimit = queryLimitSet.has(rawQueryLimit) ? rawQueryLimit : DEFAULT_SQL_EDITOR_SETTINGS.queryLimit;
 
@@ -83,6 +88,7 @@ export const normalizeSqlEditorSettings = (value?: Partial<SqlEditorSettings> | 
         customFontFamily: typeof next.customFontFamily === 'string' ? next.customFontFamily : DEFAULT_SQL_EDITOR_SETTINGS.customFontFamily,
         fontSize: Number.isFinite(fontSize) ? Math.round(fontSize) : DEFAULT_SQL_EDITOR_SETTINGS.fontSize,
         lineHeight: Number.isFinite(lineHeight) ? lineHeight : DEFAULT_SQL_EDITOR_SETTINGS.lineHeight,
+        editorPanelHeight: Number.isFinite(editorPanelHeight) ? Math.round(editorPanelHeight) : DEFAULT_SQL_EDITOR_SETTINGS.editorPanelHeight,
         lineNumbers: lineNumbersSet.has(next.lineNumbers as SqlEditorSettings['lineNumbers'])
             ? (next.lineNumbers as SqlEditorSettings['lineNumbers'])
             : DEFAULT_SQL_EDITOR_SETTINGS.lineNumbers,
@@ -92,6 +98,14 @@ export const normalizeSqlEditorSettings = (value?: Partial<SqlEditorSettings> | 
         queryLimit,
     };
 };
+
+export const buildDefaultSqlEditorResultLayout = (settings: SqlEditorSettings): [number, number] => {
+    const { editorPanelHeight } = normalizeSqlEditorSettings(settings);
+    return [editorPanelHeight, 100 - editorPanelHeight];
+};
+
+export const resolveSqlEditorResultLayout = (savedLayout: [number, number] | undefined, settings: SqlEditorSettings): [number, number] =>
+    savedLayout ?? buildDefaultSqlEditorResultLayout(settings);
 
 export const resolveSqlEditorTheme = (settings: SqlEditorSettings, appTheme?: string) => {
     const normalized = normalizeSqlEditorSettings(settings);

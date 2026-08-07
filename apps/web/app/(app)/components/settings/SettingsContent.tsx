@@ -10,6 +10,7 @@ import { ScrollArea } from '@/registry/new-york-v4/ui/scroll-area';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
 import type { CategoryKey } from './types';
 import { PanelByKey } from './PanelByKey';
+import { EditorPanel } from './EditorPanel/EditorPanel';
 import { SettingsHeaderActionContext, SettingsPanelActionSlot } from './settings-header-action';
 
 export function SettingsContent({
@@ -51,18 +52,22 @@ export function SettingsContent({
                 </div>
                 <SettingsPanelActionSlot>{headerAction}</SettingsPanelActionSlot>
                 <Separator className="my-4 shrink-0" />
-                <ScrollArea className="h-0 min-h-0 flex-1">
-                    <div className="px-6 pb-6">
-                        <PanelByKey
-                            keyName={active}
-                            currentOrganizationId={currentOrganizationId}
-                            initialUserId={initialUserId}
-                            runtime={runtime}
-                            billingManagementAvailable={billingManagementAvailable}
-                            desktopBillingHandoff={desktopBillingHandoff}
-                        />
-                    </div>
-                </ScrollArea>
+                {active === 'editor' ? (
+                    <EditorPanel />
+                ) : (
+                    <ScrollArea className="h-0 min-h-0 flex-1">
+                        <div className="px-6 pb-6">
+                            <PanelByKey
+                                keyName={active}
+                                currentOrganizationId={currentOrganizationId}
+                                initialUserId={initialUserId}
+                                runtime={runtime}
+                                billingManagementAvailable={billingManagementAvailable}
+                                desktopBillingHandoff={desktopBillingHandoff}
+                            />
+                        </div>
+                    </ScrollArea>
+                )}
             </section>
         </SettingsHeaderActionContext.Provider>
     );
