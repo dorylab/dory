@@ -32,7 +32,9 @@ const FALLBACK_CHAR_WIDTH = 8;
 const PRIMARY_SELECTION_CLASS = 'bg-primary/10 text-foreground';
 const PRIMARY_SELECTION_SUBTLE_CLASS = 'bg-primary/6 text-foreground';
 const PRIMARY_SELECTION_SOFT_CLASS = 'bg-primary/8 text-foreground';
-const PRIMARY_SELECTION_RING_CLASS = 'ring-1 ring-inset ring-primary/40';
+const PRIMARY_SELECTION_RING_CLASS = 'ring-1 ring-inset ring-primary/25';
+const SELECTION_BORDER_COLOR = 'color-mix(in oklab, var(--primary) 60%, transparent)';
+const INDEPENDENT_SELECTION_OUTLINE = `1px solid ${SELECTION_BORDER_COLOR}`;
 const SELECTION_CLASS_NAMES = [...new Set(`${PRIMARY_SELECTION_CLASS} ${PRIMARY_SELECTION_SUBTLE_CLASS} ${PRIMARY_SELECTION_RING_CLASS}`.split(' '))];
 const TOP_RIGHT_GRID_STYLE = { overflowX: 'hidden', overflowY: 'hidden' } as const;
 const BOTTOM_LEFT_GRID_STYLE = { overflowY: 'hidden', overflowX: 'hidden' } as const;
@@ -1654,10 +1656,10 @@ export default function VTable({
         const rectRightCol = selectedRectBounds?.cols[selectedRectBounds.cols.length - 1];
         const selectionEdgeShadow = isRectSelectedCell
             ? [
-                  r === rectTopRow ? 'inset 0 1px 0 var(--primary)' : '',
-                  r === rectBottomRow ? 'inset 0 -1px 0 var(--primary)' : '',
-                  colKeyName === rectLeftCol ? 'inset 1px 0 0 var(--primary)' : '',
-                  colKeyName === rectRightCol ? 'inset -1px 0 0 var(--primary)' : '',
+                  r === rectTopRow ? `inset 0 1px 0 ${SELECTION_BORDER_COLOR}` : '',
+                  r === rectBottomRow ? `inset 0 -1px 0 ${SELECTION_BORDER_COLOR}` : '',
+                  colKeyName === rectLeftCol ? `inset 1px 0 0 ${SELECTION_BORDER_COLOR}` : '',
+                  colKeyName === rectRightCol ? `inset -1px 0 0 ${SELECTION_BORDER_COLOR}` : '',
               ]
                   .filter(Boolean)
                   .join(', ')
@@ -1686,8 +1688,8 @@ export default function VTable({
                     alignItems: 'center',
                     backgroundColor: cellEditState.changed ? 'color-mix(in oklab, var(--color-orange-500) 15%, var(--card))' : undefined,
                     boxShadow: cellStateShadow,
-                    outline: isIndependentSelectedCell ? '2px solid var(--primary)' : undefined,
-                    outlineOffset: isIndependentSelectedCell ? '-2px' : undefined,
+                    outline: isIndependentSelectedCell ? INDEPENDENT_SELECTION_OUTLINE : undefined,
+                    outlineOffset: isIndependentSelectedCell ? '-1px' : undefined,
                     zIndex: isIndependentSelectedCell ? 1 : undefined,
                 }}
                 className={cn(
@@ -1989,17 +1991,17 @@ export default function VTable({
             // A non-rectangular selection is rendered as individual cells. Give each
             // one its own elevated outline so neighbouring virtualized cells cannot
             // paint their grid border over part of the selection.
-            element.style.outline = isIndependentSelectedCell ? '2px solid var(--primary)' : '';
-            element.style.outlineOffset = isIndependentSelectedCell ? '-2px' : '';
+            element.style.outline = isIndependentSelectedCell ? INDEPENDENT_SELECTION_OUTLINE : '';
+            element.style.outlineOffset = isIndependentSelectedCell ? '-1px' : '';
             element.style.zIndex = isIndependentSelectedCell ? '1' : '';
 
             element.style.boxShadow =
                 rectBounds && isCellSelected
                     ? [
-                          row === rectTopRow ? 'inset 0 1px 0 var(--primary)' : '',
-                          row === rectBottomRow ? 'inset 0 -1px 0 var(--primary)' : '',
-                          col === rectLeftCol ? 'inset 1px 0 0 var(--primary)' : '',
-                          col === rectRightCol ? 'inset -1px 0 0 var(--primary)' : '',
+                          row === rectTopRow ? `inset 0 1px 0 ${SELECTION_BORDER_COLOR}` : '',
+                          row === rectBottomRow ? `inset 0 -1px 0 ${SELECTION_BORDER_COLOR}` : '',
+                          col === rectLeftCol ? `inset 1px 0 0 ${SELECTION_BORDER_COLOR}` : '',
+                          col === rectRightCol ? `inset -1px 0 0 ${SELECTION_BORDER_COLOR}` : '',
                       ]
                           .filter(Boolean)
                           .join(', ')

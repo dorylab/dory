@@ -83,7 +83,7 @@ function DialogFooter({
     showCloseButton?: boolean;
 }) {
     return (
-        <div data-slot="dialog-footer" className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)} {...props}>
+        <div data-slot="dialog-footer" className={cn('bg-card flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)} {...props}>
             {children}
             {showCloseButton && (
                 <DialogPrimitive.Close asChild>

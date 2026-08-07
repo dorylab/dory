@@ -597,7 +597,7 @@ export function ConnectionDialog({ open, onOpenChange, mode = 'Create', connecti
                             </ScrollArea>
                         </div>
 
-                        <DialogFooter className="flex shrink-0 border-t bg-background px-5 py-4 lg:justify-between">
+                        <DialogFooter className="flex shrink-0 border-t bg-card px-5 py-4 lg:justify-between">
                             <div className="flex items-center gap-3">
                                 <Button
                                     type="button"

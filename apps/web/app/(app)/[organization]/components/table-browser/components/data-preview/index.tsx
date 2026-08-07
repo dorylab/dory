@@ -70,6 +70,7 @@ import {
     revertTableCells,
     tableEditSessionsAtom,
     tableIdentitySelectionsAtom,
+    tableSelectionEditHintDismissedAtom,
     toTableMutationValue,
     undoTableEdit,
     type PendingRowChange,
@@ -369,6 +370,7 @@ function DataPreviewInner({
     const queryClient = useQueryClient();
     const [editSessions, setEditSessions] = useAtom(tableEditSessionsAtom);
     const [identitySelections, setIdentitySelections] = useAtom(tableIdentitySelectionsAtom);
+    const [selectionEditHintDismissed, setSelectionEditHintDismissed] = useAtom(tableSelectionEditHintDismissedAtom);
     const sessionKey = storageKey ?? `preview:${connectionId ?? 'unknown'}:${databaseName ?? 'unknown'}:${tableName ?? 'unknown'}`;
     const editSession = useMemo(() => editSessions[sessionKey] ?? createEmptyTableEditSession(), [editSessions, sessionKey]);
     const editSessionRef = useRef(editSession);
@@ -997,6 +999,7 @@ function DataPreviewInner({
     const rowsSummaryTotal = previewData?.unfilteredTotalRows ?? metadataTotalRowEstimate ?? rowsSummaryValue;
     const totalRowsLabel = rowsSummaryTotal != null ? t('Pagination.TotalLabel', { total: rowsSummaryTotal.toLocaleString() }) : null;
     const rowsLabel = rowsSummaryValue != null ? t('Pagination.RowsLabel', { rows: rowsSummaryValue.toLocaleString() }) : null;
+    const showSelectionEditTooltip = tableIsEditable && selectionSummary.cellCount > 1 && !selectionEditHintDismissed;
 
     const previewControls = (
         <div className="flex items-center justify-between w-full gap-3 flex-none">
@@ -1011,15 +1014,31 @@ function DataPreviewInner({
                 {totalRowsLabel && <div className="shrink-0 rounded-sm border bg-muted/40 px-2 py-1 text-xs tabular-nums text-muted-foreground">{totalRowsLabel}</div>}
                 {selectionSummary.cellCount > 0 || selectionSummary.rowCount > 0 ? (
                     <div className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted-foreground">
-                        <span>
-                            {t('Editor.SelectionSummary', {
-                                cells: selectionSummary.cellCount,
-                                rows: selectionSummary.rowCount,
-                            })}
-                        </span>
-                        {tableIsEditable && selectionSummary.cellCount > 1 ? (
-                            <span className="hidden text-muted-foreground/80 xl:inline">{t('Editor.SelectionEditHint')}</span>
-                        ) : null}
+                        {showSelectionEditTooltip ? (
+                            <Tooltip open>
+                                <TooltipTrigger asChild>
+                                    <span>
+                                        {t('Editor.SelectionSummary', {
+                                            cells: selectionSummary.cellCount,
+                                            rows: selectionSummary.rowCount,
+                                        })}
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" align="start" sideOffset={8} className="flex items-center gap-2">
+                                    <span>{t('Editor.SelectionEditTooltip')}</span>
+                                    <Button type="button" variant="secondary" size="sm" className="h-6 px-2 text-xs" onClick={() => setSelectionEditHintDismissed(true)}>
+                                        {t('Editor.SelectionEditTooltipDone')}
+                                    </Button>
+                                </TooltipContent>
+                            </Tooltip>
+                        ) : (
+                            <span>
+                                {t('Editor.SelectionSummary', {
+                                    cells: selectionSummary.cellCount,
+                                    rows: selectionSummary.rowCount,
+                                })}
+                            </span>
+                        )}
                     </div>
                 ) : null}
                 {mutationAvailable && selectableIdentityColumns.length > 0 ? (
