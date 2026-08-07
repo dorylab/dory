@@ -46,6 +46,7 @@ type ChartsProps = {
     initialState?: Partial<ChartState>;
     onStateChange?: (state: ChartState) => void;
     stateSyncEnabled?: boolean;
+    onSaveArtifact?: (state: ChartState) => void;
 };
 
 type ChartApplyMode = {
@@ -103,7 +104,20 @@ function isMetricKeyCompatibleWithColumns(metricKey: string, columnNames: string
     return column ? columnNames.includes(column) : true;
 }
 
-export function Charts({ rows, columnsRaw, resultStats, remoteSource, className, onApplyFilters, onResetState, stateKey, initialState, onStateChange, stateSyncEnabled = true }: ChartsProps) {
+export function Charts({
+    rows,
+    columnsRaw,
+    resultStats,
+    remoteSource,
+    className,
+    onApplyFilters,
+    onResetState,
+    stateKey,
+    initialState,
+    onStateChange,
+    stateSyncEnabled = true,
+    onSaveArtifact,
+}: ChartsProps) {
     const { resolvedTheme } = useTheme();
     const autoChartProfile = useMemo(() => {
         if (resultStats?.autoChartProfile) {
@@ -413,6 +427,7 @@ export function Charts({ rows, columnsRaw, resultStats, remoteSource, className,
                         setYKey(suggestedState.yKey);
                         setGroupKey(suggestedState.groupKey);
                     }}
+                    onSaveArtifact={onSaveArtifact ? () => onSaveArtifact({ chartType, xKey, yKey, groupKey, chartColorPreset }) : undefined}
                 />
             </div>
         </div>

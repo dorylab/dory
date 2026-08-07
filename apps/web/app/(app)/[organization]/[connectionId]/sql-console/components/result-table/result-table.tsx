@@ -34,6 +34,9 @@ import { getSessionStorageKey, sqlWorkspaceScopeAtom } from '../../workspace-sco
 import type { ResultSetMeta, ResultSetViewState } from '@/lib/client/type';
 import { isQueryHistoryRestoredSession } from '../../query-history-result-restore';
 import { resolveResultLoadingMode, shouldShowResultMetadataLoading } from './result-loading-mode';
+import { executeActionClient } from '@/lib/actions/client';
+import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
+import { toast } from 'sonner';
 /* =================================== constants =================================== */
 
 const OVERVIEW_SET = -1;
@@ -158,6 +161,7 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 
 export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const t = useTranslations('SqlConsole');
+    const organizationId = useOrganizationId();
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
     const [currentViewMode, setCurrentViewMode] = useState<ResultViewMode>('table');
     const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -1188,6 +1192,19 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                                                     };
                                                 });
                                             }}
+                                            onSaveArtifact={
+                                                visible && remoteResultSetId
+                                                    ? nextState => {
+                                                          void executeActionClient<{ id: string }>(
+                                                              'artifact.chart.create',
+                                                              { sourceArtifactId: `artifact_${remoteResultSetId}`, chartState: nextState },
+                                                              { organizationId },
+                                                          )
+                                                              .then(() => toast.success('Chart saved to Artifacts.'))
+                                                              .catch(error => toast.error(error instanceof Error ? error.message : 'Failed to save chart.'));
+                                                      }
+                                                    : undefined
+                                            }
                                             onApplyFilters={(filters, options) => {
                                                 if (!visible) {
                                                     return;

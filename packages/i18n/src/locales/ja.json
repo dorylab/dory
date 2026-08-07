@@ -3741,6 +3741,7 @@
     },
     "AppSidebar": {
         "DataSources": "データソース",
+        "Artifacts": "Artifacts",
         "NoDataSourceSelected": "データソース未選択",
         "WorkspaceTitle": "ワークスペース",
         "WorkspaceDataSourcesCount": "{count} 件のデータソース",
@@ -3779,6 +3780,78 @@
             "Confirm": "ワークスペースを削除",
             "Cancel": "ワークスペースを保持",
             "DeleteFailed": "ゲストセッションの削除に失敗しました。もう一度お試しください。"
+        }
+    },
+    "Artifacts": {
+        "Eyebrow": "ワークスペース出力",
+        "Title": "Artifacts",
+        "Description": "結果セット、チャート、エクスポートファイルを検索して再利用できます。",
+        "SearchPlaceholder": "Artifacts を検索...",
+        "TypeFilter": "種類で絞り込む",
+        "Loading": "Artifacts を読み込み中...",
+        "Empty": "Artifact がありません",
+        "EmptyDescription": "保存された結果セット、チャート、エクスポートがここに表示されます。",
+        "UnknownSource": "不明なソース",
+        "Rows": "{count, number} 行",
+        "Previous": "前へ",
+        "Next": "次へ",
+        "Page": "{page} / {pages} ページ",
+        "Types": {
+            "all": "すべて",
+            "result_set": "結果セット",
+            "chart": "チャート",
+            "file": "ファイル"
+        },
+        "Groups": {
+            "result_set": "結果セット",
+            "chart": "チャート",
+            "file": "ファイル"
+        },
+        "Statuses": {
+            "ready": "利用可能",
+            "unavailable": "利用不可"
+        },
+        "Creators": {
+            "user": "ユーザー",
+            "agent": "Agent",
+            "mcp": "MCP",
+            "automation": "自動化"
+        },
+        "Viewer": {
+            "Back": "Artifacts",
+            "Types": {
+                "result_set": "結果セット",
+                "chart": "チャート",
+                "file": "ファイル"
+            },
+            "CreatedBy": "作成者",
+            "Source": "ソース",
+            "Rows": "行数",
+            "Size": "サイズ",
+            "CreatedAt": "作成日時",
+            "ExpiresAt": "有効期限",
+            "NoExpiry": "期限なし",
+            "Open": "開く",
+            "ContinueWithAgent": "Agent で続ける",
+            "Export": "エクスポート",
+            "Download": "ダウンロード",
+            "CreateChart": "チャートを作成",
+            "Share": "共有",
+            "Chart": "チャート",
+            "SaveChart": "チャートを保存",
+            "Data": "データ",
+            "SearchRows": "行を検索...",
+            "Previous": "前へ",
+            "Next": "次へ",
+            "Page": "{page} / {pages} ページ",
+            "FileDescription": "この {format} ファイルはワークスペースの保持期間中利用できます。",
+            "Renamed": "Artifact の名前を変更しました。",
+            "ChartSaved": "チャートを Artifacts に保存しました。",
+            "ShareCopied": "組織内リンクをコピーしました。",
+            "AgentTaskCopied": "外部 Agent 用タスクをコピーしました。",
+            "ChartRequired": "保存前にチャートを設定してください。",
+            "ActionFailed": "Artifact の操作に失敗しました。",
+            "NotFound": "Artifact が存在しないか、利用できません。"
         }
     },
     "AgentRuns": {

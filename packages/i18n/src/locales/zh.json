@@ -3731,6 +3731,7 @@
     },
     "AppSidebar": {
         "DataSources": "数据源",
+        "Artifacts": "Artifacts",
         "NoDataSourceSelected": "未选择数据源",
         "WorkspaceTitle": "工作区",
         "WorkspaceDataSourcesCount": "{count} 个数据源",
@@ -3769,6 +3770,78 @@
             "Confirm": "确认删除",
             "Cancel": "保留工作区",
             "DeleteFailed": "删除访客会话失败，请重试。"
+        }
+    },
+    "Artifacts": {
+        "Eyebrow": "工作区产物",
+        "Title": "Artifacts",
+        "Description": "搜索并继续使用结果集、图表和导出文件。",
+        "SearchPlaceholder": "搜索 Artifacts...",
+        "TypeFilter": "按类型筛选 Artifacts",
+        "Loading": "正在加载 Artifacts...",
+        "Empty": "未找到 Artifacts",
+        "EmptyDescription": "持久化查询结果、保存的图表和导出文件会显示在这里。",
+        "UnknownSource": "未知来源",
+        "Rows": "{count, number} 行",
+        "Previous": "上一页",
+        "Next": "下一页",
+        "Page": "第 {page} / {pages} 页",
+        "Types": {
+            "all": "全部",
+            "result_set": "结果集",
+            "chart": "图表",
+            "file": "文件"
+        },
+        "Groups": {
+            "result_set": "结果集",
+            "chart": "图表",
+            "file": "文件"
+        },
+        "Statuses": {
+            "ready": "可用",
+            "unavailable": "不可用"
+        },
+        "Creators": {
+            "user": "用户",
+            "agent": "Agent",
+            "mcp": "MCP",
+            "automation": "自动化"
+        },
+        "Viewer": {
+            "Back": "Artifacts",
+            "Types": {
+                "result_set": "结果集",
+                "chart": "图表",
+                "file": "文件"
+            },
+            "CreatedBy": "创建者",
+            "Source": "来源",
+            "Rows": "行数",
+            "Size": "大小",
+            "CreatedAt": "创建时间",
+            "ExpiresAt": "过期时间",
+            "NoExpiry": "不过期",
+            "Open": "打开",
+            "ContinueWithAgent": "交给 Agent 继续",
+            "Export": "导出",
+            "Download": "下载",
+            "CreateChart": "创建图表",
+            "Share": "分享",
+            "Chart": "图表",
+            "SaveChart": "保存图表",
+            "Data": "数据",
+            "SearchRows": "搜索数据行...",
+            "Previous": "上一页",
+            "Next": "下一页",
+            "Page": "第 {page} / {pages} 页",
+            "FileDescription": "此 {format} 文件将在工作区保留周期内保持可用。",
+            "Renamed": "Artifact 已重命名。",
+            "ChartSaved": "图表已保存到 Artifacts。",
+            "ShareCopied": "组织内链接已复制。",
+            "AgentTaskCopied": "外部 Agent 任务已复制。",
+            "ChartRequired": "请先配置图表再保存。",
+            "ActionFailed": "Artifact 操作失败。",
+            "NotFound": "Artifact 不存在或已不可用。"
         }
     },
     "AgentRuns": {

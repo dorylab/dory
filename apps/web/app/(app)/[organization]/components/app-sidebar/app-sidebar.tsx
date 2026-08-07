@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { ArrowDownToLine, ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
+import { Archive, ArrowDownToLine, ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -148,6 +148,12 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   title: t('DataSources'),
                   url: dataSourcesUrl,
                   icon: Database,
+                  requiresConnection: false,
+              },
+              {
+                  title: t('Artifacts'),
+                  url: `/${organization}/artifacts`,
+                  icon: Archive,
                   requiresConnection: false,
               },
               {

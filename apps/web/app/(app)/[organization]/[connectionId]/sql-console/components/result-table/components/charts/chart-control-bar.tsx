@@ -15,7 +15,7 @@ import {
     DropdownMenuTrigger,
 } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
-import { CircleDotDashed, Copy, Download, EllipsisVertical, FileImage, RotateCcw, Settings2 } from 'lucide-react';
+import { Archive, CircleDotDashed, Copy, Download, EllipsisVertical, FileImage, RotateCcw, Settings2 } from 'lucide-react';
 
 import { ComboboxSubmenu, type ComboboxSubmenuGroup, type ComboboxSubmenuOption } from '@/components/ui/combobox-submenu';
 import { ChartCombobox, ChartSelect, type ChartState, type MetricOption, NONE_VALUE } from './chart-shared';
@@ -41,6 +41,7 @@ export function ChartControlBar(props: {
     onExportPng: () => void;
     onCopyPng: () => void;
     onExportSvg: () => void;
+    onSaveArtifact?: () => void;
 }) {
     const {
         chartState,
@@ -63,6 +64,7 @@ export function ChartControlBar(props: {
         onExportPng,
         onCopyPng,
         onExportSvg,
+        onSaveArtifact,
     } = props;
 
     const supportsTimelineSlider = chartState.chartType === 'line' || chartState.chartType === 'bar' || chartState.chartType === 'histogram';
@@ -217,6 +219,12 @@ export function ChartControlBar(props: {
                                 <TooltipContent side="top">More</TooltipContent>
                             </Tooltip>
                             <DropdownMenuContent align="end">
+                                {onSaveArtifact ? (
+                                    <DropdownMenuItem onSelect={onSaveArtifact}>
+                                        <Archive />
+                                        Save to Artifacts
+                                    </DropdownMenuItem>
+                                ) : null}
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
                                         <Download />

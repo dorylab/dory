@@ -3741,6 +3741,7 @@
     },
     "AppSidebar": {
         "DataSources": "Data Sources",
+        "Artifacts": "Artifacts",
         "NoDataSourceSelected": "No data source selected",
         "WorkspaceTitle": "Workspace",
         "WorkspaceDataSourcesCount": "{count} data source",
@@ -3779,6 +3780,78 @@
             "Confirm": "Delete workspace",
             "Cancel": "Keep workspace",
             "DeleteFailed": "Failed to delete guest session. Please try again."
+        }
+    },
+    "Artifacts": {
+        "Eyebrow": "Workspace outputs",
+        "Title": "Artifacts",
+        "Description": "Search and continue working with result sets, charts, and exported files.",
+        "SearchPlaceholder": "Search artifacts...",
+        "TypeFilter": "Filter artifacts by type",
+        "Loading": "Loading artifacts...",
+        "Empty": "No artifacts found",
+        "EmptyDescription": "Persistent query results, saved charts, and exports will appear here.",
+        "UnknownSource": "Unknown source",
+        "Rows": "{count, number} rows",
+        "Previous": "Previous",
+        "Next": "Next",
+        "Page": "Page {page} of {pages}",
+        "Types": {
+            "all": "All",
+            "result_set": "Result Sets",
+            "chart": "Charts",
+            "file": "Files"
+        },
+        "Groups": {
+            "result_set": "Result Sets",
+            "chart": "Charts",
+            "file": "Files"
+        },
+        "Statuses": {
+            "ready": "Ready",
+            "unavailable": "Unavailable"
+        },
+        "Creators": {
+            "user": "User",
+            "agent": "Agent",
+            "mcp": "MCP",
+            "automation": "Automation"
+        },
+        "Viewer": {
+            "Back": "Artifacts",
+            "Types": {
+                "result_set": "Result Set",
+                "chart": "Chart",
+                "file": "File"
+            },
+            "CreatedBy": "Created by",
+            "Source": "Source",
+            "Rows": "Rows",
+            "Size": "Size",
+            "CreatedAt": "Created",
+            "ExpiresAt": "Expires",
+            "NoExpiry": "No expiration",
+            "Open": "Open",
+            "ContinueWithAgent": "Continue with Agent",
+            "Export": "Export",
+            "Download": "Download",
+            "CreateChart": "Create Chart",
+            "Share": "Share",
+            "Chart": "Chart",
+            "SaveChart": "Save Chart",
+            "Data": "Data",
+            "SearchRows": "Search rows...",
+            "Previous": "Previous",
+            "Next": "Next",
+            "Page": "Page {page} of {pages}",
+            "FileDescription": "This {format} file stays available for the workspace retention period.",
+            "Renamed": "Artifact renamed.",
+            "ChartSaved": "Chart saved to Artifacts.",
+            "ShareCopied": "Organization link copied.",
+            "AgentTaskCopied": "Task for external Agent copied.",
+            "ChartRequired": "Configure the chart before saving.",
+            "ActionFailed": "Artifact action failed.",
+            "NotFound": "Artifact not found or no longer available."
         }
     },
     "AgentRuns": {

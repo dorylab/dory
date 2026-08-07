@@ -1,6 +1,7 @@
 import { ActionRegistry } from '@dory/actions';
 import type { WebActionServices } from './types';
 import { aiActions } from './domains/ai';
+import { artifactActions } from './domains/artifact';
 import { chartActions } from './domains/chart';
 import { comparisonActions } from './domains/comparison';
 import { connectionActions } from './domains/connection';
@@ -23,5 +24,6 @@ webActionRegistry.registerMany([
     ...savedQueryActions,
     ...chartActions,
     ...aiActions,
+    ...artifactActions,
     ...comparisonActions,
 ]);

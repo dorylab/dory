@@ -34,6 +34,7 @@ export const workChartStates = activeSchemas?.workChartStates;
 export const queryRuns = activeSchemas?.queryRuns;
 export const resultSets = activeSchemas?.resultSets;
 export const agentRunResultSets = activeSchemas?.agentRunResultSets;
+export const artifacts = activeSchemas?.artifacts;
 export const importRuns = activeSchemas?.importRuns;
 export const importRunEvents = activeSchemas?.importRunEvents;
 export const exportRuns = activeSchemas?.exportRuns;

@@ -27,6 +27,13 @@ const connectionListInputSchema = z
     })
     .merge(workResolutionInputSchema);
 
+const artifactReadInputSchema = z
+    .object({
+        artifactId: z.string().min(1),
+        previewRows: z.number().int().positive().max(200).optional(),
+    })
+    .merge(workResolutionInputSchema);
+
 const schemaExploreInputSchema = z
     .object({
         operation: z.enum(['search', 'list_databases', 'list_tables', 'describe_table', 'preview_table', 'table_profile', 'get_ddl']),
@@ -1362,6 +1369,46 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
                     return withWork(
                         {
                             connections: (Array.isArray(output.connections) ? output.connections : []).map(toPublicConnection).filter(item => item.connectionId),
+                        },
+                        work,
+                    );
+                }),
+        },
+        {
+            name: 'dory_artifacts',
+            title: 'Read Dory Artifact',
+            description: `Read one organization Artifact by ID, including its source metadata, schema, chart configuration, and at most 200 Result Set preview rows. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
+            inputSchema: artifactReadInputSchema,
+            outputSchema: unknownObjectOutputSchema,
+            annotations: {
+                readOnlyHint: true,
+                idempotentHint: true,
+                openWorldHint: false,
+            },
+            execute: (ctx, rawInput) =>
+                executeWithWork(ctx, 'dory_artifacts', rawInput, async (input, work) => {
+                    const artifactId = requireString(input.artifactId, 'artifactId');
+                    const artifact = await executeInternal<UnknownRecord>(ctx, 'artifact.get', { artifactId });
+                    const sourceResultSetId = getString(artifact.sourceResultSetId);
+                    const previewRows = Math.min(getNumber(input.previewRows) ?? 100, 200);
+                    const result = sourceResultSetId
+                        ? await executeInternal<UnknownRecord>(ctx, 'resultSet.rows.read', {
+                              resultSetId: sourceResultSetId,
+                              offset: 0,
+                              limit: previewRows,
+                          }).catch(() => null)
+                        : null;
+                    return withWork(
+                        {
+                            artifact,
+                            preview: result
+                                ? {
+                                      rows: Array.isArray(result.rows) ? result.rows.slice(0, previewRows) : [],
+                                      columns: Array.isArray(result.columns) ? result.columns : [],
+                                      rowCount: getNumber(result.rowCount),
+                                      limited: (getNumber(result.rowCount) ?? 0) > previewRows,
+                                  }
+                                : null,
                         },
                         work,
                     );

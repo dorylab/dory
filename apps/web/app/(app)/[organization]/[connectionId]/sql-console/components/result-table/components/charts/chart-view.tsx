@@ -35,6 +35,7 @@ export function ChartView(props: {
     onChartColorPresetChange: (value: string) => void;
     onTimelineSliderEnabledChange: (value: boolean) => void;
     onResetAuto: () => void;
+    onSaveArtifact?: () => void;
 }) {
     const {
         chartState,
@@ -59,6 +60,7 @@ export function ChartView(props: {
         onChartColorPresetChange,
         onTimelineSliderEnabledChange,
         onResetAuto,
+        onSaveArtifact,
     } = props;
     const chartRootRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -259,6 +261,7 @@ export function ChartView(props: {
                     void handleCopyPng();
                 }}
                 onExportSvg={handleExportSvg}
+                onSaveArtifact={onSaveArtifact}
             />
             <ChartCanvas
                 chartType={chartState.chartType}
