@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { IconFileAi, IconHelp, IconUsers } from '@tabler/icons-react';
+import { IconFileAi, IconUsers } from '@tabler/icons-react';
 import { IconBrandGithub } from '@tabler/icons-react';
 import React from 'react';
 import { useTranslations } from 'next-intl';
@@ -170,15 +170,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
               },
           ];
 
-    const navSecondary = [
-        {
-            title: t('GetHelp'),
-            url: 'https://github.com/dorylab/dory/discussions',
-            icon: IconHelp,
-            external: true,
-        },
-    ];
-
     React.useEffect(() => {
         if (!window.updateBridge) return;
         let disposed = false;
@@ -273,7 +264,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                             </div>
                         </div>
                     ) : null}
-                    <NavSecondary items={navSecondary} />
+                    <NavSecondary />
                 </div>
             </SidebarContent>
 

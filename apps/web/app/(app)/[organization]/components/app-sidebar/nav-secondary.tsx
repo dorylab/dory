@@ -1,67 +1,102 @@
 'use client';
 
 import * as React from 'react';
-import type { Icon } from '@tabler/icons-react';
-import Link from 'next/link';
+import { IconBrandDiscord, IconBrandGithub, IconBrandX, IconHelp } from '@tabler/icons-react';
+import { BookOpen, Bug, ExternalLink } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
-import { ExternalLink } from 'lucide-react';
-import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/registry/new-york-v4/ui/sidebar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/registry/new-york-v4/ui/popover';
+import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '@/registry/new-york-v4/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { SidebarSettingsEntry, SidebarThemeEntry } from './nav-settings';
 import { cn } from '@dory/web-utils';
 
-export function NavSecondary({
-    items,
-    disabled = false,
-    ...props
-}: {
-    items: {
-        title: string;
-        url: string;
-        icon: Icon;
-        external?: boolean;
-    }[];
-    disabled?: boolean;
-} & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
+const HELP_LINKS = [
+    {
+        label: 'Documentation',
+        href: 'https://getdory.dev/docs',
+        icon: BookOpen,
+    },
+    {
+        label: 'DiscordCommunity',
+        href: 'https://discord.gg/qDVMqFDbdg',
+        icon: IconBrandDiscord,
+    },
+    {
+        label: 'GitHubDiscussions',
+        href: 'https://github.com/dorylab/dory/discussions',
+        icon: IconBrandGithub,
+    },
+    {
+        label: 'ReportIssue',
+        href: 'https://github.com/dorylab/dory/issues',
+        icon: Bug,
+    },
+    {
+        label: 'X',
+        href: 'https://x.com/dorystudio',
+        icon: IconBrandX,
+    },
+] as const;
+
+function SidebarHelpCommunityEntry() {
+    const t = useTranslations('AppSidebar');
+    const { isMobile, state } = useSidebar();
+    const [open, setOpen] = React.useState(false);
+
+    return (
+        <SidebarMenuItem>
+            <Popover open={open} onOpenChange={setOpen}>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <PopoverTrigger asChild>
+                            <SidebarMenuButton type="button" aria-label={t('HelpCommunity')} className="w-full justify-start group-data-[collapsible=icon]:justify-center">
+                                <IconHelp className="h-4 w-4 shrink-0" />
+                                <span>{t('HelpCommunity')}</span>
+                                <ExternalLink className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            </SidebarMenuButton>
+                        </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" align="center" hidden={state !== 'collapsed' || isMobile}>
+                        {t('HelpCommunity')}
+                    </TooltipContent>
+                </Tooltip>
+                <PopoverContent side="right" align="end" sideOffset={8} className="w-64 p-2">
+                    <p className="px-2 py-1.5 text-sm font-medium">{t('NeedHelp')}</p>
+                    <div className="mt-1 space-y-0.5">
+                        {HELP_LINKS.map(item => {
+                            const Icon = item.icon;
+
+                            return (
+                                <a
+                                    key={item.href}
+                                    href={item.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setOpen(false)}
+                                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
+                                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                </a>
+                            );
+                        })}
+                    </div>
+                </PopoverContent>
+            </Popover>
+        </SidebarMenuItem>
+    );
+}
+
+export function NavSecondary({ ...props }: React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
     return (
         <SidebarGroup {...props} className={cn(props.className)}>
             <SidebarGroupContent>
                 <SidebarMenu>
                     <SidebarThemeEntry />
                     <SidebarSettingsEntry />
-                    {items.map(item => {
-                        const IconComp = item.icon;
-
-                        const content = (
-                            <Link
-                                href={item.url}
-                                target={item.external ? '_blank' : undefined}
-                                rel={item.external ? 'noreferrer' : undefined}
-                                aria-disabled={disabled}
-                                tabIndex={disabled ? -1 : 0}
-                                onClick={e => {
-                                    if (disabled) {
-                                        e.preventDefault();
-                                    }
-                                }}
-                                className={cn(
-                                    'flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0',
-                                    disabled && 'cursor-not-allowed opacity-60 text-muted-foreground',
-                                )}
-                            >
-                                {IconComp && <IconComp className="h-4 w-4 shrink-0" />}
-                                <span>{item.title}</span>
-                                {item.external && <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />}
-                            </Link>
-                        );
-
-                        return (
-                            <SidebarMenuItem key={item.title}>
-                                <SidebarMenuButton asChild className={cn(disabled && 'pointer-events-none hover:bg-transparent hover:text-muted-foreground')}>
-                                    {content}
-                                </SidebarMenuButton>
-                            </SidebarMenuItem>
-                        );
-                    })}
+                    <SidebarHelpCommunityEntry />
                 </SidebarMenu>
             </SidebarGroupContent>
         </SidebarGroup>
