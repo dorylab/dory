@@ -26,7 +26,7 @@ process.env.PGLITE_DB_PATH = dbDir;
 
 const { getClient } = await import('@dory/database/postgres/client');
 const { resetPgliteClient } = await import('@dory/database/postgres/client/pglite');
-const { user, organizations, resultSets, resultSetExports, queryRuns, agentRunResultSets } = await import('@dory/database/postgres/schemas');
+const { artifacts: artifactCatalog, user, organizations, resultSets, resultSetExports, queryRuns, agentRunResultSets } = await import('@dory/database/postgres/schemas');
 const {
     ALLOWED_RESULT_SET_MAX_STORAGE_BYTES,
     PostgresOrganizationsRepository,
@@ -36,6 +36,7 @@ const {
 } = await import('@dory/database/postgres/impl/organization');
 const { PostgresResultSetsRepository } = await import('@dory/database/postgres/impl/result-sets');
 const { PostgresComparisonsRepository } = await import('@dory/database/postgres/impl/comparisons');
+const { PostgresArtifactsRepository } = await import('@dory/database/postgres/impl/artifacts');
 
 const db = await getClient();
 const objectStore = new FilesystemObjectStore(artifactDir);
@@ -82,9 +83,11 @@ async function initSchema() {
             "id" text PRIMARY KEY NOT NULL,
             "organization_id" text NOT NULL,
             "type" text NOT NULL,
+            "name" text,
             "database" text
         )
     `);
+    await db.execute(sql`CREATE TABLE "works" ("work_id" text PRIMARY KEY, "title" text NOT NULL)`);
     await db.execute(sql`
         CREATE TABLE "query_runs" (
             "id" text PRIMARY KEY NOT NULL,
@@ -146,6 +149,8 @@ async function initSchema() {
             "content_hash" text,
             "byte_size" bigint,
             "storage_limit_applied" boolean NOT NULL DEFAULT false,
+            "pinned_at" timestamp with time zone,
+            "pinned_by_actor_id" text,
             "expires_at" timestamp with time zone,
             "created_at" timestamp with time zone NOT NULL,
             "updated_at" timestamp with time zone NOT NULL
@@ -160,8 +165,35 @@ async function initSchema() {
             "format" text NOT NULL,
             "file_name" text NOT NULL,
             "byte_size" bigint NOT NULL,
-            "expires_at" timestamp with time zone NOT NULL,
+            "expires_at" timestamp with time zone,
             "created_at" timestamp with time zone NOT NULL
+        )
+    `);
+    await db.execute(sql`
+        CREATE TABLE "artifacts" (
+            "id" text PRIMARY KEY NOT NULL,
+            "organization_id" text NOT NULL,
+            "type" text NOT NULL,
+            "title" text NOT NULL,
+            "status" text NOT NULL DEFAULT 'ready',
+            "resource_id" text NOT NULL,
+            "parent_artifact_id" text,
+            "source_result_set_id" text,
+            "connection_id" text,
+            "work_id" text,
+            "agent_run_id" text,
+            "comparison_id" text,
+            "comparison_run_id" text,
+            "source_type" text,
+            "created_by_actor_type" text NOT NULL,
+            "created_by_actor_id" text,
+            "chart_state" jsonb,
+            "file_name" text,
+            "file_format" text,
+            "byte_size" bigint,
+            "expires_at" timestamp with time zone,
+            "created_at" timestamp with time zone NOT NULL,
+            "updated_at" timestamp with time zone NOT NULL
         )
     `);
     await db.execute(sql`
@@ -605,6 +637,72 @@ test('writes expiresAt when persisting result sets and streams', async () => {
     });
     assert.equal(legacyReloaded?.sourceConnectionType, 'sqlite');
     assert.equal(legacyReloaded?.sourceDatabaseName, 'main');
+});
+
+test('pinning an artifact preserves its result set and exports permanently', async () => {
+    const { resultSetsRepo } = await createRepositories();
+    const persisted = await resultSetsRepo.persistQueryResultSet({
+        organizationId: 'org_retention',
+        userId: 'user_retention',
+        sessionId: 'session_pinned',
+        sessionSqlText: 'select * from orders',
+        resultSet: { sessionId: 'session_pinned', setIndex: 0, sqlText: 'select * from orders', status: 'success', rowCount: 1 },
+        rows: [{ id: 1 }],
+    });
+    const expiry = new Date('2026-09-01T00:00:00.000Z');
+    await db.insert(resultSetExports).values({
+        id: 'rse_pinned',
+        organizationId: 'org_retention',
+        resultSetId: persisted.resultSetId,
+        objectPath: 'exports/pinned.csv',
+        format: 'csv',
+        fileName: 'pinned.csv',
+        byteSize: 12,
+        expiresAt: expiry,
+        createdAt: expiry,
+    });
+    await db.insert(artifactCatalog).values({
+        id: 'artifact_rse_pinned',
+        organizationId: 'org_retention',
+        type: 'file',
+        title: 'pinned.csv',
+        resourceId: 'rse_pinned',
+        sourceResultSetId: persisted.resultSetId,
+        createdByActorType: 'user',
+        expiresAt: expiry,
+        createdAt: expiry,
+        updatedAt: expiry,
+    });
+
+    const artifactsRepo = new PostgresArtifactsRepository();
+    await artifactsRepo.init();
+    await artifactsRepo.pin({ organizationId: 'org_retention', artifactId: 'artifact_rse_pinned', pinnedByActorId: 'user_retention' });
+
+    const [resultSet] = await db.select().from(resultSets).where(eq(resultSets.id, persisted.resultSetId)).limit(1);
+    const [exportRecord] = await db.select().from(resultSetExports).where(eq(resultSetExports.id, 'rse_pinned')).limit(1);
+    const pinnedArtifacts = await db.select().from(artifactCatalog).where(eq(artifactCatalog.sourceResultSetId, persisted.resultSetId));
+    assert.ok(resultSet?.pinnedAt);
+    assert.equal(resultSet?.pinnedByActorId, 'user_retention');
+    assert.equal(resultSet?.expiresAt, null);
+    assert.equal(exportRecord?.expiresAt, null);
+    assert.ok(pinnedArtifacts.every(artifact => artifact.expiresAt === null));
+
+    const pinnedList = await artifactsRepo.list({ organizationId: 'org_retention', types: ['result_set', 'chart'], pinnedOnly: true });
+    assert.equal(pinnedList.total, 1);
+    assert.equal(pinnedList.rows[0]?.id, `artifact_${persisted.resultSetId}`);
+
+    const unpinStartedAt = Date.now();
+    await artifactsRepo.unpin({ organizationId: 'org_retention', artifactId: 'artifact_rse_pinned' });
+    const [unpinnedResultSet] = await db.select().from(resultSets).where(eq(resultSets.id, persisted.resultSetId)).limit(1);
+    const [unpinnedExport] = await db.select().from(resultSetExports).where(eq(resultSetExports.id, 'rse_pinned')).limit(1);
+    const unpinnedArtifacts = await db.select().from(artifactCatalog).where(eq(artifactCatalog.sourceResultSetId, persisted.resultSetId));
+    assert.equal(unpinnedResultSet?.pinnedAt, null);
+    assert.equal(unpinnedResultSet?.pinnedByActorId, null);
+    assert.ok(unpinnedResultSet?.expiresAt);
+    assert.ok(unpinnedExport?.expiresAt);
+    assert.ok(unpinnedArtifacts.every(artifact => artifact.expiresAt?.getTime() === unpinnedResultSet?.expiresAt?.getTime()));
+    assert.ok(Math.abs(unpinnedResultSet!.expiresAt!.getTime() - (unpinStartedAt + 14 * 24 * 60 * 60 * 1000)) < 5_000);
+    assert.equal((await artifactsRepo.list({ organizationId: 'org_retention', types: ['result_set', 'chart'], pinnedOnly: true })).total, 0);
 });
 
 test('stream failure publishes a v2 preview-only error manifest and removes uncommitted data', async () => {

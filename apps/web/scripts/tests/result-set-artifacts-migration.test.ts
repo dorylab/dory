@@ -47,6 +47,7 @@ test('keeps the PostgreSQL and PGlite ResultSet migrations in sync', async () =>
         '0024_import_transform_stats.sql',
         '0025_export_runs.sql',
         '0027_silent_zarda.sql',
+        '0028_artifact_workspace_pins.sql',
     ]) {
         const postgres = await readMigration(migrationRoots.PostgreSQL, name);
         const pglite = await readMigration(migrationRoots.PGlite, name);
@@ -78,6 +79,7 @@ test('keeps the compiled PGlite bundle on the released 0019 through export runs'
     const transformStatsMigration = byCreatedAt.get(1785866199860);
     const exportRunsMigration = byCreatedAt.get(1786028223308);
     const artifactCatalogMigration = byCreatedAt.get(1786118400000);
+    const workspacePinsMigration = byCreatedAt.get(1786204800000);
 
     assert.ok(releasedMigration);
     assert.ok(schemaUpdateMigration);
@@ -87,6 +89,7 @@ test('keeps the compiled PGlite bundle on the released 0019 through export runs'
     assert.ok(transformStatsMigration);
     assert.ok(exportRunsMigration);
     assert.ok(artifactCatalogMigration);
+    assert.ok(workspacePinsMigration);
     assert.equal(releasedMigration.folderMillis, 1783075200000);
     assert.equal(releasedMigration.hash, releasedMigrationHash);
     assert.equal(schemaUpdateMigration.folderMillis, 1784296092000);
@@ -106,8 +109,29 @@ test('keeps the compiled PGlite bundle on the released 0019 through export runs'
     const exportRunsSql = await readMigration(migrationRoots.PGlite, '0025_export_runs.sql');
     assert.equal(exportRunsMigration.hash, createHash('sha256').update(exportRunsSql).digest('hex'));
     const artifactCatalogSql = await readMigration(migrationRoots.PGlite, '0027_silent_zarda.sql');
+    const workspacePinsSql = await readMigration(migrationRoots.PGlite, '0028_artifact_workspace_pins.sql');
     assert.equal(artifactCatalogMigration.hash, createHash('sha256').update(artifactCatalogSql).digest('hex'));
+    assert.equal(workspacePinsMigration.hash, createHash('sha256').update(workspacePinsSql).digest('hex'));
 });
+
+for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
+    test(`adds permanent workspace pin storage with the ${dialect} migration`, async () => {
+        const client = new PGlite();
+        try {
+            await client.exec(`
+                CREATE TABLE "result_sets" ("id" text PRIMARY KEY, "expires_at" timestamptz);
+                CREATE TABLE "result_set_exports" ("id" text PRIMARY KEY, "expires_at" timestamptz NOT NULL);
+            `);
+            await executeMigration(client, await readMigration(migrationRoot, '0028_artifact_workspace_pins.sql'));
+            const resultSetColumns = await getColumnTypes(client, 'result_sets');
+            assert.equal(resultSetColumns.get('pinned_at'), 'timestamp with time zone');
+            assert.equal(resultSetColumns.get('pinned_by_actor_id'), 'text');
+            await client.exec(`INSERT INTO "result_set_exports" ("id", "expires_at") VALUES ('export_1', NULL);`);
+        } finally {
+            await client.close();
+        }
+    });
+}
 
 for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
     test(`creates and backfills the Artifact catalog with the ${dialect} migration`, async () => {

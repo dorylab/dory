@@ -1,7 +1,19 @@
-import { and, count, desc, eq, gt, ilike, inArray, isNull, or } from 'drizzle-orm';
+import { and, count, desc, eq, gt, ilike, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 
 import { getClient } from '@dory/database/postgres/client';
-import { artifacts, comparisons, connections, resultSets, works, type ArtifactChartState, type ArtifactType, type NewArtifact } from '@dory/database/postgres/schemas';
+import {
+    artifacts,
+    comparisons,
+    connections,
+    organizations,
+    resultSetExports,
+    resultSets,
+    works,
+    type ArtifactChartState,
+    type ArtifactType,
+    type NewArtifact,
+} from '@dory/database/postgres/schemas';
+import { getResultSetRetentionDaysFromOrganizationMetadata } from '@dory/database/postgres/impl/organization';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import { newEntityId } from '@dory/shared/id';
 import type { PostgresDBClient } from '@dory/shared';
@@ -31,6 +43,9 @@ export type ArtifactSummary = {
     createdAt: Date;
     updatedAt: Date;
     expiresAt: Date | null;
+    pinnedAt: Date | null;
+    pinnedByActorId: string | null;
+    retentionDays: number | null;
 };
 
 export type ArtifactWorkspaceTarget =
@@ -95,6 +110,39 @@ function defaultTitle(type: ArtifactType, resourceId: string) {
     return `${label} ${resourceId.replace(/^[^_]+_/, '').slice(0, 8)}`;
 }
 
+function isSqlTitle(value: string) {
+    return /^(?:with\b[\s\S]+?\bselect\b|select\b|insert\b|update\b|delete\b|create\b|alter\b|drop\b)/i.test(value.trim());
+}
+
+export function formatSqlResultTitle(sql: string | null) {
+    const normalized =
+        sql
+            ?.replace(/\/\*[\s\S]*?\*\//g, ' ')
+            .replace(/--.*$/gm, ' ')
+            .replace(/\s+/g, ' ')
+            .trim() ?? '';
+    const tableName = normalized
+        .match(/\b(?:from|join|into|update|table)\s+["`]?([a-zA-Z0-9_.-]+)/i)?.[1]
+        ?.split('.')
+        .filter(Boolean)
+        .pop();
+    const subject = tableName
+        ? tableName
+              .split(/[_\s.-]+/)
+              .filter(Boolean)
+              .slice(0, 3)
+              .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+              .join(' ')
+        : 'Query';
+    if (/^\s*select\b/i.test(normalized)) return `${subject} query`;
+    return `${subject} result`;
+}
+
+function displayTitle(input: { artifact: typeof artifacts.$inferSelect; runTitle: string | null; resultSetSql: string | null }) {
+    if (input.artifact.type === 'result_set' && input.artifact.agentRunId && input.runTitle) return input.runTitle;
+    return isSqlTitle(input.artifact.title) ? formatSqlResultTitle(input.resultSetSql) : input.artifact.title;
+}
+
 export class PostgresArtifactsRepository {
     private db!: PostgresDBClient;
 
@@ -124,11 +172,12 @@ export class PostgresArtifactsRepository {
         return row;
     }
 
-    async list(input: { organizationId: string; query?: string | null; types?: ArtifactType[]; offset?: number; limit?: number }) {
+    async list(input: { organizationId: string; query?: string | null; types?: ArtifactType[]; pinnedOnly?: boolean; offset?: number; limit?: number }) {
         this.assertInited();
         const query = input.query?.trim();
         const conditions = [eq(artifacts.organizationId, input.organizationId), or(isNull(artifacts.expiresAt), gt(artifacts.expiresAt, new Date()))!];
         if (input.types?.length) conditions.push(inArray(artifacts.type, input.types));
+        if (input.pinnedOnly) conditions.push(isNotNull(resultSets.pinnedAt));
         if (query) {
             const match = `%${query.replace(/[%_]/g, value => `\\${value}`)}%`;
             conditions.push(or(ilike(artifacts.title, match), ilike(connections.name, match), ilike(works.title, match), ilike(comparisons.name, match))!);
@@ -141,6 +190,9 @@ export class PostgresArtifactsRepository {
                 runTitle: works.title,
                 comparisonName: comparisons.name,
                 rowCount: resultSets.rowCount,
+                resultSetSql: resultSets.sql,
+                pinnedAt: resultSets.pinnedAt,
+                pinnedByActorId: resultSets.pinnedByActorId,
             })
             .from(artifacts)
             .leftJoin(connections, and(eq(connections.organizationId, artifacts.organizationId), eq(connections.id, artifacts.connectionId)))
@@ -190,7 +242,13 @@ export class PostgresArtifactsRepository {
             resultSet: row.resultSet,
         });
         return {
-            ...this.toSummary({ ...row, rowCount: row.resultSet?.rowCount ?? null }),
+            ...this.toSummary({
+                ...row,
+                rowCount: row.resultSet?.rowCount ?? null,
+                resultSetSql: row.resultSet?.sql ?? null,
+                pinnedAt: row.resultSet?.pinnedAt ?? null,
+                pinnedByActorId: row.resultSet?.pinnedByActorId ?? null,
+            }),
             chartState: row.artifact.chartState,
             resultSet: row.resultSet
                 ? {
@@ -227,6 +285,54 @@ export class PostgresArtifactsRepository {
             .returning({ id: artifacts.id, title: artifacts.title });
         if (!row) throw new DatabaseError('Artifact not found', 404);
         return row;
+    }
+
+    async pin(input: { organizationId: string; artifactId: string; pinnedByActorId: string | null }) {
+        const artifact = await this.get({ organizationId: input.organizationId, artifactId: input.artifactId });
+        if (!artifact.sourceResultSetId) throw new DatabaseError('Artifact cannot be pinned because its result set is unavailable', 409);
+
+        const now = new Date();
+        await this.db.transaction(async tx => {
+            await tx
+                .update(resultSets)
+                .set({ expiresAt: null, pinnedAt: now, pinnedByActorId: input.pinnedByActorId, updatedAt: now })
+                .where(and(eq(resultSets.organizationId, input.organizationId), eq(resultSets.id, artifact.sourceResultSetId!)));
+            await tx
+                .update(artifacts)
+                .set({ expiresAt: null, updatedAt: now })
+                .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.sourceResultSetId, artifact.sourceResultSetId!)));
+            await tx
+                .update(resultSetExports)
+                .set({ expiresAt: null })
+                .where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, artifact.sourceResultSetId!)));
+        });
+
+        return { id: artifact.id, title: artifact.title };
+    }
+
+    async unpin(input: { organizationId: string; artifactId: string }) {
+        const artifact = await this.get({ organizationId: input.organizationId, artifactId: input.artifactId });
+        if (!artifact.sourceResultSetId) throw new DatabaseError('Artifact cannot be unpinned because its result set is unavailable', 409);
+
+        const [organization] = await this.db.select({ metadata: organizations.metadata }).from(organizations).where(eq(organizations.id, input.organizationId)).limit(1);
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + getResultSetRetentionDaysFromOrganizationMetadata(organization?.metadata) * 24 * 60 * 60 * 1000);
+        await this.db.transaction(async tx => {
+            await tx
+                .update(resultSets)
+                .set({ expiresAt, pinnedAt: null, pinnedByActorId: null, updatedAt: now })
+                .where(and(eq(resultSets.organizationId, input.organizationId), eq(resultSets.id, artifact.sourceResultSetId!)));
+            await tx
+                .update(artifacts)
+                .set({ expiresAt, updatedAt: now })
+                .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.sourceResultSetId, artifact.sourceResultSetId!)));
+            await tx
+                .update(resultSetExports)
+                .set({ expiresAt })
+                .where(and(eq(resultSetExports.organizationId, input.organizationId), eq(resultSetExports.resultSetId, artifact.sourceResultSetId!)));
+        });
+
+        return { id: artifact.id, title: artifact.title };
     }
 
     async createChart(input: {
@@ -287,13 +393,24 @@ export class PostgresArtifactsRepository {
         runTitle: string | null;
         comparisonName: string | null;
         rowCount: number | null;
+        resultSetSql?: string | null;
+        pinnedAt?: Date | null;
+        pinnedByActorId?: string | null;
     }): ArtifactSummary {
+        const retentionDays =
+            row.artifact.expiresAt && row.artifact.createdAt
+                ? Math.max(1, Math.round((row.artifact.expiresAt.getTime() - row.artifact.createdAt.getTime()) / (24 * 60 * 60 * 1000)))
+                : null;
         return {
             ...row.artifact,
+            title: displayTitle({ artifact: row.artifact, runTitle: row.runTitle, resultSetSql: row.resultSetSql ?? null }),
             connectionName: row.connectionName,
             runTitle: row.runTitle,
             comparisonName: row.comparisonName,
             rowCount: row.rowCount,
+            pinnedAt: row.pinnedAt ?? null,
+            pinnedByActorId: row.pinnedByActorId ?? null,
+            retentionDays,
         };
     }
 

@@ -82,6 +82,8 @@ export const resultSets = pgTable(
         contentHash: text('content_hash'),
         byteSize: bigint('byte_size', { mode: 'number' }),
         storageLimitApplied: boolean('storage_limit_applied').notNull().default(false),
+        pinnedAt: timestamp('pinned_at', { withTimezone: true }),
+        pinnedByActorId: text('pinned_by_actor_id'),
         expiresAt: timestamp('expires_at', { withTimezone: true }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -110,7 +112,7 @@ export const resultSetExports = pgTable(
         format: text('format').$type<'csv' | 'parquet'>().notNull(),
         fileName: text('file_name').notNull(),
         byteSize: bigint('byte_size', { mode: 'number' }).notNull(),
-        expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+        expiresAt: timestamp('expires_at', { withTimezone: true }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
     t => [

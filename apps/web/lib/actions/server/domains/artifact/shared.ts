@@ -55,6 +55,9 @@ const artifactSummarySchema = z.object({
     createdAt: dateSchema,
     updatedAt: dateSchema,
     expiresAt: dateSchema.nullable(),
+    pinnedAt: dateSchema.nullable(),
+    pinnedByActorId: z.string().nullable(),
+    retentionDays: z.number().int().positive().nullable(),
 });
 
 export const artifactListOutputSchema = z.object({ rows: z.array(artifactSummarySchema), total: z.number().int().nonnegative() });

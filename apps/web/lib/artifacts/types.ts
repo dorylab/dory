@@ -53,6 +53,9 @@ type ArtifactSummaryBase = {
     createdAt: string;
     updatedAt: string;
     expiresAt: string | null;
+    pinnedAt: string | null;
+    pinnedByActorId: string | null;
+    retentionDays: number | null;
 };
 
 export type ArtifactSummary = ArtifactSummaryBase & {

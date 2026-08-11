@@ -3787,7 +3787,7 @@
     "Artifacts": {
         "Eyebrow": "工作区产物",
         "Title": "Artifacts",
-        "Description": "搜索并继续使用结果集、图表和导出文件。",
+        "Description": "搜索并继续使用结果集和可视化内容。",
         "SearchPlaceholder": "搜索 Artifacts...",
         "TypeFilter": "按类型筛选 Artifacts",
         "Loading": "正在加载 Artifacts...",
@@ -3798,13 +3798,23 @@
         "Delete": "删除",
         "Deleted": "Artifact 已删除。",
         "NoExpiry": "不过期",
+        "Pinned": "已固定到工作区",
+        "Unpinned": "已从工作区收藏中移除。",
+        "PinnedOnly": "收藏",
+        "CreatedBy": "创建者：{creator}",
+        "CreatedByAgent": "Agent Run · {title}",
+        "Retention": {
+            "Pinned": "已固定到工作区",
+            "Stored": "已存储",
+            "Temporary": "临时结果 · 保留 {days} 天"
+        },
         "Rows": "{count, number} 行",
         "Columns": {
             "Title": "标题",
             "Source": "来源",
             "Rows": "行数",
             "Size": "大小",
-            "ExpiresAt": "过期时间",
+            "Retention": "保留状态",
             "Actions": "操作"
         },
         "DeleteDialog": {
@@ -3819,12 +3829,12 @@
         "Types": {
             "all": "全部",
             "result_set": "结果集",
-            "chart": "图表",
+            "chart": "可视化",
             "file": "文件"
         },
         "Groups": {
             "result_set": "结果集",
-            "chart": "图表",
+            "chart": "可视化",
             "file": "文件"
         },
         "Statuses": {
@@ -3851,6 +3861,14 @@
             "CreatedAt": "创建时间",
             "ExpiresAt": "过期时间",
             "NoExpiry": "不过期",
+            "CreatedFrom": "创建自",
+            "Retention": "保留状态",
+            "Temporary": "临时结果 · 保留 {days} 天",
+            "Stored": "已存储",
+            "Pinned": "已固定到工作区",
+            "Pin": "固定到工作区",
+            "Unpin": "取消固定到工作区",
+            "Unpinned": "已从工作区收藏中移除。",
             "Open": "打开",
             "ContinueWithAgent": "交给 Agent 继续",
             "Export": "导出",

@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, BarChart3, Bot, Check, Database, Download, ExternalLink, FileText, Loader2, Pencil, Save, Share2 } from 'lucide-react';
+import { ArrowLeft, BarChart3, Bot, Check, Database, Download, ExternalLink, FileText, Loader2, Pencil, Pin, PinOff, Save, Share2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -46,10 +46,11 @@ function Metadata({ artifact }: { artifact: ArtifactDetail }) {
     const items = [
         [t('CreatedBy'), artifact.runTitle ?? artifact.createdByActorType],
         [t('Source'), artifact.connectionName ?? artifact.comparisonName ?? artifact.sourceType ?? '—'],
+        ...(artifact.resultSet?.sql ? [[t('CreatedFrom'), artifact.resultSet.sql]] : []),
         [t('Rows'), artifact.rowCount == null ? '—' : artifact.rowCount.toLocaleString()],
         [t('Size'), formatBytes(artifact.byteSize)],
         [t('CreatedAt'), new Date(artifact.createdAt).toLocaleString()],
-        [t('ExpiresAt'), artifact.expiresAt ? new Date(artifact.expiresAt).toLocaleString() : t('NoExpiry')],
+        [t('Retention'), artifact.pinnedAt ? t('Pinned') : artifact.expiresAt ? t('Temporary', { days: artifact.retentionDays ?? 1 }) : t('Stored')],
     ];
     return (
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -138,6 +139,24 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('ActionFailed')),
     });
+    const pinMutation = useMutation({
+        mutationFn: () => executeActionClient<{ id: string; title: string }>('artifact.pin', { artifactId }, { organizationId }),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: ['artifact', organizationId, artifactId] });
+            void queryClient.invalidateQueries({ queryKey: ['artifacts', organizationId] });
+            toast.success(t('Pinned'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('ActionFailed')),
+    });
+    const unpinMutation = useMutation({
+        mutationFn: () => executeActionClient<{ id: string; title: string }>('artifact.unpin', { artifactId }, { organizationId }),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: ['artifact', organizationId, artifactId] });
+            void queryClient.invalidateQueries({ queryKey: ['artifacts', organizationId] });
+            toast.success(t('Unpinned'));
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : t('ActionFailed')),
+    });
 
     const copyShare = async () => {
         try {
@@ -223,6 +242,19 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                                 <Bot />
                                 {t('ContinueWithAgent')}
                             </Button>
+                            {artifact.sourceResultSetId ? (
+                                artifact.pinnedAt ? (
+                                    <Button variant="outline" onClick={() => unpinMutation.mutate()} disabled={unpinMutation.isPending}>
+                                        <PinOff />
+                                        {t('Unpin')}
+                                    </Button>
+                                ) : (
+                                    <Button variant="outline" onClick={() => pinMutation.mutate()} disabled={pinMutation.isPending}>
+                                        <Pin />
+                                        {t('Pin')}
+                                    </Button>
+                                )
+                            ) : null}
                             {artifact.type === 'result_set' ? (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>

@@ -3797,7 +3797,7 @@
     "Artifacts": {
         "Eyebrow": "ワークスペース出力",
         "Title": "Artifacts",
-        "Description": "結果セット、チャート、エクスポートファイルを検索して再利用できます。",
+        "Description": "結果セットとビジュアライゼーションを検索して再利用できます。",
         "SearchPlaceholder": "Artifacts を検索...",
         "TypeFilter": "種類で絞り込む",
         "Loading": "Artifacts を読み込み中...",
@@ -3808,13 +3808,23 @@
         "Delete": "削除",
         "Deleted": "Artifact を削除しました。",
         "NoExpiry": "期限なし",
+        "Pinned": "ワークスペースにピン留め済み",
+        "Unpinned": "ワークスペースのピン留めを解除しました。",
+        "PinnedOnly": "ピン留め済み",
+        "CreatedBy": "作成者: {creator}",
+        "CreatedByAgent": "Agent Run · {title}",
+        "Retention": {
+            "Pinned": "ワークスペースにピン留め済み",
+            "Stored": "保存済み",
+            "Temporary": "一時保存 · {days} 日間保持"
+        },
         "Rows": "{count, number} 行",
         "Columns": {
             "Title": "タイトル",
             "Source": "ソース",
             "Rows": "行数",
             "Size": "サイズ",
-            "ExpiresAt": "有効期限",
+            "Retention": "保持",
             "Actions": "操作"
         },
         "DeleteDialog": {
@@ -3829,12 +3839,12 @@
         "Types": {
             "all": "すべて",
             "result_set": "結果セット",
-            "chart": "チャート",
+            "chart": "ビジュアライゼーション",
             "file": "ファイル"
         },
         "Groups": {
             "result_set": "結果セット",
-            "chart": "チャート",
+            "chart": "ビジュアライゼーション",
             "file": "ファイル"
         },
         "Statuses": {
@@ -3861,6 +3871,14 @@
             "CreatedAt": "作成日時",
             "ExpiresAt": "有効期限",
             "NoExpiry": "期限なし",
+            "CreatedFrom": "作成元",
+            "Retention": "保持",
+            "Temporary": "一時保存 · {days} 日間保持",
+            "Stored": "保存済み",
+            "Pinned": "ワークスペースにピン留め済み",
+            "Pin": "ワークスペースにピン留め",
+            "Unpin": "ワークスペースからピン留めを解除",
+            "Unpinned": "ワークスペースのピン留めを解除しました。",
             "Open": "開く",
             "ContinueWithAgent": "Agent で続ける",
             "Export": "エクスポート",

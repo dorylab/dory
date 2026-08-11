@@ -3761,7 +3761,7 @@
         "Monitoring": "Monitoring",
         "Privileges": "Privileges",
         "GetHelp": "Get Help",
-        "HelpCommunity": "Help & Community",
+        "HelpCommunity": "Help",
         "NeedHelp": "Need help?",
         "Documentation": "Documentation",
         "DiscordCommunity": "Discord Community",
@@ -3797,7 +3797,7 @@
     "Artifacts": {
         "Eyebrow": "Workspace outputs",
         "Title": "Artifacts",
-        "Description": "Search and continue working with result sets, charts, and exported files.",
+        "Description": "Search and continue working with result sets and visualizations.",
         "SearchPlaceholder": "Search artifacts...",
         "TypeFilter": "Filter artifacts by type",
         "Loading": "Loading artifacts...",
@@ -3808,13 +3808,23 @@
         "Delete": "Delete",
         "Deleted": "Artifact deleted.",
         "NoExpiry": "No expiry",
+        "Pinned": "Pinned to Workspace",
+        "Unpinned": "Removed from Workspace pins.",
+        "PinnedOnly": "Pinned",
+        "CreatedBy": "Created by {creator}",
+        "CreatedByAgent": "Agent Run · {title}",
+        "Retention": {
+            "Pinned": "Pinned to Workspace",
+            "Stored": "Stored",
+            "Temporary": "Temporary · retained for {days} days"
+        },
         "Rows": "{count, number} rows",
         "Columns": {
             "Title": "Title",
             "Source": "Source",
             "Rows": "Rows",
             "Size": "Size",
-            "ExpiresAt": "Expires at",
+            "Retention": "Retention",
             "Actions": "Actions"
         },
         "DeleteDialog": {
@@ -3829,12 +3839,12 @@
         "Types": {
             "all": "All",
             "result_set": "Result Sets",
-            "chart": "Charts",
+            "chart": "Visualizations",
             "file": "Files"
         },
         "Groups": {
             "result_set": "Result Sets",
-            "chart": "Charts",
+            "chart": "Visualizations",
             "file": "Files"
         },
         "Statuses": {
@@ -3861,6 +3871,14 @@
             "CreatedAt": "Created",
             "ExpiresAt": "Expires",
             "NoExpiry": "No expiration",
+            "CreatedFrom": "Created from",
+            "Retention": "Retention",
+            "Temporary": "Temporary · retained for {days} days",
+            "Stored": "Stored",
+            "Pinned": "Pinned to Workspace",
+            "Pin": "Pin to Workspace",
+            "Unpin": "Unpin from Workspace",
+            "Unpinned": "Removed from Workspace pins.",
             "Open": "Open",
             "ContinueWithAgent": "Continue with Agent",
             "Export": "Export",

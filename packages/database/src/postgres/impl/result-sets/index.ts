@@ -2073,7 +2073,7 @@ export class PostgresResultSetsRepository {
 
         const now = new Date();
         const retentionExpiry = addDays(now, await this.getRetentionDays(params.organizationId));
-        const exportExpiresAt = record.expiresAt && record.expiresAt < retentionExpiry ? record.expiresAt : retentionExpiry;
+        const exportExpiresAt = record.pinnedAt ? null : record.expiresAt && record.expiresAt < retentionExpiry ? record.expiresAt : retentionExpiry;
         let exportRegistered = false;
         try {
             await this.db.insert(resultSetExports).values({
@@ -2152,7 +2152,7 @@ export class PostgresResultSetsRepository {
             .from(resultSetExports)
             .where(and(eq(resultSetExports.organizationId, params.organizationId), eq(resultSetExports.id, params.exportId)))
             .limit(1);
-        if (record && record.expiresAt.getTime() <= Date.now()) {
+        if (record?.expiresAt && record.expiresAt.getTime() <= Date.now()) {
             try {
                 await this.artifacts.objectStore.delete(record.objectPath);
                 await Promise.all([

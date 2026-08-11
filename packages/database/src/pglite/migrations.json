@@ -451,5 +451,15 @@
     "bps": true,
     "folderMillis": 1786118400000,
     "hash": "7ad228e6e48d1b80233980f9bb4cca068df576b271b11c7f9a8284e45f14f39c"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"result_sets\" ADD COLUMN \"pinned_at\" timestamp with time zone;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN \"pinned_by_actor_id\" text;\n",
+      "\nALTER TABLE \"result_set_exports\" ALTER COLUMN \"expires_at\" DROP NOT NULL;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1786204800000,
+    "hash": "e66c3e6af23ecfe788d150f414dcccfdd15b37d5c1ec6b9969b234a9810504b7"
   }
 ]

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveArtifactWorkspaceTarget } from '@dory/database/postgres/impl/artifacts';
+import { formatSqlResultTitle, resolveArtifactWorkspaceTarget } from '@dory/database/postgres/impl/artifacts';
 import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
 import { resolveInitialResultTargetTabId, type SqlWorkspaceInitialResultTarget } from '@/app/(app)/[organization]/[connectionId]/sql-console/initial-result-target';
 
@@ -56,6 +56,11 @@ test('does not expose Open for files, comparisons, or incomplete SQL context', (
         }),
         null,
     );
+});
+
+test('derives a semantic Artifact title from SQL instead of exposing the statement', () => {
+    assert.equal(formatSqlResultTitle('SELECT * FROM production_logs'), 'Production Logs query');
+    assert.equal(formatSqlResultTitle('SELECT count(*) FROM orders'), 'Orders query');
 });
 
 test('builds an Artifact-only workspace URL without source session parameters', () => {
