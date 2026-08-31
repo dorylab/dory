@@ -47,6 +47,10 @@ type ChartsProps = {
     onStateChange?: (state: ChartState) => void;
     stateSyncEnabled?: boolean;
     onSaveArtifact?: (state: ChartState) => void;
+    saveArtifactLabel?: string;
+    saveArtifactPending?: boolean;
+    saveArtifactDisabled?: boolean;
+    saveArtifactPlacement?: 'menu' | 'inline';
 };
 
 type ChartApplyMode = {
@@ -117,6 +121,10 @@ export function Charts({
     onStateChange,
     stateSyncEnabled = true,
     onSaveArtifact,
+    saveArtifactLabel,
+    saveArtifactPending,
+    saveArtifactDisabled,
+    saveArtifactPlacement,
 }: ChartsProps) {
     const { resolvedTheme } = useTheme();
     const autoChartProfile = useMemo(() => {
@@ -428,6 +436,10 @@ export function Charts({
                         setGroupKey(suggestedState.groupKey);
                     }}
                     onSaveArtifact={onSaveArtifact ? () => onSaveArtifact({ chartType, xKey, yKey, groupKey, chartColorPreset }) : undefined}
+                    saveArtifactLabel={saveArtifactLabel}
+                    saveArtifactPending={saveArtifactPending}
+                    saveArtifactDisabled={saveArtifactDisabled}
+                    saveArtifactPlacement={saveArtifactPlacement}
                 />
             </div>
         </div>

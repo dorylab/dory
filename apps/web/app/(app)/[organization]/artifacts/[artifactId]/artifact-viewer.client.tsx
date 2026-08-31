@@ -5,25 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-    ArrowLeft,
-    BarChart3,
-    Bot,
-    Check,
-    Copy,
-    Database,
-    Download,
-    ExternalLink,
-    FileText,
-    Loader2,
-    MoreHorizontal,
-    Pencil,
-    Pin,
-    PinOff,
-    Save,
-    Share2,
-    Trash2,
-} from 'lucide-react';
+import { ArrowLeft, BarChart3, Bot, Check, Copy, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pencil, Pin, PinOff, Share2, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -292,7 +274,7 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                             {artifact.workspaceTarget ? (
                                 <Button asChild>
                                     <Link href={buildArtifactWorkspacePath(organization, artifact.id, artifact.workspaceTarget.connectionId)}>
-                                        <ExternalLink />
+                                        <PanelTop />
                                         {t('OpenInWorkspace')}
                                     </Link>
                                 </Button>
@@ -376,15 +358,9 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
 
                     {(artifact.type === 'chart' || showChartBuilder) && artifact.sourceResultSetId ? (
                         <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-                            <CardHeader className="flex-row items-center justify-between">
-                                <CardTitle>{t('Chart')}</CardTitle>
-                                <Button onClick={() => chartMutation.mutate()} disabled={!chartState || chartMutation.isPending}>
-                                    {chartMutation.isPending ? <Loader2 className="animate-spin" /> : <Save />}
-                                    {t('SaveChart')}
-                                </Button>
-                            </CardHeader>
-                            <CardContent className="min-h-0 flex-1">
+                            <CardContent className="flex min-h-0 flex-1 flex-col">
                                 <ArtifactCharts
+                                    className="min-h-0"
                                     rows={(chartRowsQuery.data?.rows ?? []).map(row => ({ rowData: row }))}
                                     columnsRaw={chartRowsQuery.data?.columns ?? artifact.resultSet?.columns}
                                     remoteSource={{
@@ -404,6 +380,11 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                                     }}
                                     initialState={artifact.chartState ?? undefined}
                                     onStateChange={setChartState}
+                                    onSaveArtifact={() => chartMutation.mutate()}
+                                    saveArtifactLabel={t('SaveChart')}
+                                    saveArtifactPending={chartMutation.isPending}
+                                    saveArtifactDisabled={!chartState}
+                                    saveArtifactPlacement="inline"
                                     stateKey={`artifact:${artifact.id}`}
                                 />
                             </CardContent>
