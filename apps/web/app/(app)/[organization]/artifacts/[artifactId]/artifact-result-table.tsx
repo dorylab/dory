@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, BarChart3, Download, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 
@@ -12,6 +12,8 @@ import { VTableSearchBar } from '@/app/(app)/[organization]/[connectionId]/sql-c
 import { InspectorPanel } from '@/app/(app)/[organization]/[connectionId]/sql-console/components/result-table/vtable/InspectorPanel';
 import { VTableFilters } from '@/app/(app)/[organization]/[connectionId]/sql-console/components/result-table/vtable/VTableFilters';
 import type { ColumnFilter, VTableInspectorPayload, VTableRemoteSource } from '@/app/(app)/[organization]/[connectionId]/sql-console/components/result-table/vtable/type';
+import { Button } from '@/registry/new-york-v4/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 
 const VTable = dynamic(() => import('@/app/(app)/[organization]/[connectionId]/sql-console/components/result-table/vtable'), {
     ssr: false,
@@ -71,7 +73,23 @@ function serializeFilters(filters: ColumnFilter[]) {
     return filters.length ? JSON.stringify(filters) : '';
 }
 
-export function ArtifactResultTable({ artifactId, resultSetId, columns, rowCount }: { artifactId: string; resultSetId: string; columns: unknown[]; rowCount: number | null }) {
+export function ArtifactResultTable({
+    artifactId,
+    resultSetId,
+    columns,
+    rowCount,
+    onCreateChart,
+    onExport,
+    exportPending,
+}: {
+    artifactId: string;
+    resultSetId: string;
+    columns: unknown[];
+    rowCount: number | null;
+    onCreateChart: () => void;
+    onExport: (format: 'csv' | 'parquet') => void;
+    exportPending: boolean;
+}) {
     const t = useTranslations('Artifacts.Viewer');
     const [tableState, setTableState] = useQueryStates({
         q: parseAsString.withDefault(''),
@@ -150,26 +168,46 @@ export function ArtifactResultTable({ artifactId, resultSetId, columns, rowCount
 
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card" data-testid="artifact-result-table">
-            <div className="flex min-h-12 shrink-0 items-center border-b bg-muted/30 px-2 py-1">
-                <VTableSearchBar
-                    query={tableState.q}
-                    onQueryChange={query => {
-                        setRemoteError(null);
-                        void setTableState({ q: query });
-                    }}
-                    onClearQuery={() => void setTableState({ q: '' })}
-                    filteredCount={effectiveRowCount}
-                    totalCount={unfilteredRowCount}
-                    className="w-80 max-w-full"
-                />
-                <VTableFilters
-                    activeFilters={activeFilters}
-                    columnsRaw={effectiveColumns.filter((column): column is { name: string; type?: string | null } => typeof column.name === 'string')}
-                    onUpsertFilter={upsertFilter}
-                    onRemoveFilter={removeFilter}
-                    onClearAllFilters={() => setFilters([])}
-                    className="border-0 bg-transparent px-0 py-0"
-                />
+            <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b bg-muted/30 px-2 py-1">
+                <div className="flex min-w-0 flex-1 items-center">
+                    <VTableSearchBar
+                        query={tableState.q}
+                        onQueryChange={query => {
+                            setRemoteError(null);
+                            void setTableState({ q: query });
+                        }}
+                        onClearQuery={() => void setTableState({ q: '' })}
+                        filteredCount={effectiveRowCount}
+                        totalCount={unfilteredRowCount}
+                        className="w-80 max-w-full"
+                    />
+                    <VTableFilters
+                        activeFilters={activeFilters}
+                        columnsRaw={effectiveColumns.filter((column): column is { name: string; type?: string | null } => typeof column.name === 'string')}
+                        onUpsertFilter={upsertFilter}
+                        onRemoveFilter={removeFilter}
+                        onClearAllFilters={() => setFilters([])}
+                        className="border-0 bg-transparent px-0 py-0"
+                    />
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                    <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={onCreateChart}>
+                        <BarChart3 className="h-3.5 w-3.5" />
+                        {t('CreateChart')}
+                    </Button>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 gap-1.5" disabled={exportPending}>
+                                {exportPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                                {t('Export')}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => onExport('csv')}>CSV</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => onExport('parquet')}>Parquet</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </div>
             <div ref={setInspectorContainer} className="relative min-h-0 flex-1">
                 {initialQuery.isLoading ? (

@@ -3787,6 +3787,139 @@
             "DeleteFailed": "No se pudo eliminar la sesión de invitado. Inténtalo de nuevo."
         }
     },
+    "Artifacts": {
+        "Eyebrow": "Resultados del espacio de trabajo",
+        "Title": "Artifacts",
+        "Description": "Busca y sigue trabajando con conjuntos de resultados y visualizaciones.",
+        "SearchPlaceholder": "Buscar artifacts...",
+        "TypeFilter": "Filtrar artifacts por tipo",
+        "Loading": "Cargando artifacts...",
+        "Empty": "No se encontraron artifacts",
+        "EmptyDescription": "Los resultados persistentes, gráficos guardados y exportaciones aparecerán aquí.",
+        "UnknownSource": "Origen desconocido",
+        "Details": "Detalles",
+        "Delete": "Eliminar",
+        "Deleted": "Artifact eliminado.",
+        "NoExpiry": "Sin caducidad",
+        "Pinned": "Fijado al espacio de trabajo",
+        "Unpinned": "Se quitó de los elementos fijados del espacio de trabajo.",
+        "PinnedOnly": "Fijados",
+        "CreatedBy": "Creado por {creator}",
+        "CreatedByAgent": "Ejecución de agente · {title}",
+        "Retention": {
+            "Pinned": "Fijado al espacio de trabajo",
+            "Stored": "Almacenado",
+            "Temporary": "Temporal · se conserva durante {days} días"
+        },
+        "Rows": "{count, number} filas",
+        "Columns": {
+            "Title": "Título",
+            "Source": "Origen",
+            "Rows": "Filas",
+            "Size": "Tamaño",
+            "Retention": "Conservación",
+            "Actions": "Acciones"
+        },
+        "DeleteDialog": {
+            "Title": "¿Eliminar artifact?",
+            "Description": "¿Seguro que quieres eliminar \"{title}\"? Esta acción no se puede deshacer.",
+            "Cancel": "Cancelar",
+            "Confirm": "Eliminar"
+        },
+        "Previous": "Anterior",
+        "Next": "Siguiente",
+        "Page": "Página {page} de {pages}",
+        "Types": {
+            "all": "Todos",
+            "result_set": "Conjuntos de resultados",
+            "chart": "Visualizaciones",
+            "file": "Archivos"
+        },
+        "Groups": {
+            "result_set": "Conjuntos de resultados",
+            "chart": "Visualizaciones",
+            "file": "Archivos"
+        },
+        "Statuses": {
+            "ready": "Listo",
+            "unavailable": "No disponible"
+        },
+        "Creators": {
+            "user": "Usuario",
+            "agent": "Agente",
+            "mcp": "MCP",
+            "automation": "Automatización"
+        },
+        "Viewer": {
+            "Back": "Artifacts",
+            "Types": {
+                "result_set": "Conjunto de resultados",
+                "chart": "Gráfico",
+                "file": "Archivo"
+            },
+            "CreatedBy": "Creado por",
+            "Source": "Origen",
+            "Rows": "Filas",
+            "Size": "Tamaño",
+            "CreatedAt": "Creado",
+            "ExpiresAt": "Caduca",
+            "NoExpiry": "Sin caducidad",
+            "CreatedFrom": "Creado a partir de",
+            "Retention": "Conservación",
+            "Temporary": "Temporal · se conserva durante {days} días",
+            "Stored": "Almacenado",
+            "Pinned": "Fijado al espacio de trabajo",
+            "Pin": "Fijar al espacio de trabajo",
+            "Unpin": "Quitar del espacio de trabajo",
+            "Unpinned": "Se quitó de los elementos fijados del espacio de trabajo.",
+            "Open": "Abrir",
+            "OpenInWorkspace": "Abrir en el espacio de trabajo",
+            "ContinueWithAgent": "Continuar con Agent",
+            "RowsCount": "{count} filas",
+            "CreatedByLine": "Creado el {createdAt} · por {creator}",
+            "Copy": "Copiar",
+            "SqlCopied": "SQL copiado.",
+            "Export": "Exportar",
+            "Download": "Descargar",
+            "CreateChart": "Crear gráfico",
+            "Share": "Compartir",
+            "Chart": "Gráfico",
+            "SaveChart": "Guardar gráfico",
+            "Data": "Datos",
+            "SearchRows": "Buscar filas...",
+            "LoadingRows": "Cargando filas de resultados...",
+            "NoRows": "No hay filas que coincidan con la vista actual.",
+            "Previous": "Anterior",
+            "Next": "Siguiente",
+            "Page": "Página {page} de {pages}",
+            "FileDescription": "Este archivo {format} seguirá disponible durante el período de conservación del espacio de trabajo.",
+            "Renamed": "Artifact renombrado.",
+            "ChartSaved": "Gráfico guardado en Artifacts.",
+            "ShareCopied": "Enlace de la organización copiado.",
+            "AgentTaskCopied": "Tarea para Agent externo copiada.",
+            "MoreActions": "Más acciones",
+            "Delete": "Eliminar",
+            "Deleted": "Artifact eliminado.",
+            "DeleteDialog": {
+                "Title": "¿Eliminar artifact?",
+                "Description": "¿Seguro que quieres eliminar \"{title}\"? Esta acción no se puede deshacer.",
+                "Cancel": "Cancelar",
+                "Confirm": "Eliminar"
+            },
+            "ChartRequired": "Configura el gráfico antes de guardarlo.",
+            "ActionFailed": "La acción del artifact falló.",
+            "NotFound": "El artifact no existe o ya no está disponible."
+        },
+        "WorkspaceDrawer": {
+            "Title": "Espacio SQL del artifact",
+            "Description": "Un espacio SQL aislado restaurado desde este artifact.",
+            "Back": "Volver al artifact",
+            "BackToArtifact": "Resultados de consulta de {title}",
+            "Close": "Cerrar espacio del artifact",
+            "Loading": "Abriendo el espacio SQL...",
+            "Unavailable": "Este artifact ya no se puede abrir en el espacio SQL."
+        }
+    },
     "AgentRuns": {
         "Common": {
             "AgentRun": "Ejecución de agente",

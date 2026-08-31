@@ -211,6 +211,7 @@ export class PostgresArtifactsRepository {
                 .leftJoin(connections, and(eq(connections.organizationId, artifacts.organizationId), eq(connections.id, artifacts.connectionId)))
                 .leftJoin(works, eq(works.workId, artifacts.workId))
                 .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
+                .leftJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
                 .where(where),
         ]);
         return { rows: rows.map(row => this.toSummary(row)), total: Number(totals[0]?.total ?? 0) };
