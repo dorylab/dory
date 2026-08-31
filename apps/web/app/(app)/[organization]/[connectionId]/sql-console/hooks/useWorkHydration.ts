@@ -6,6 +6,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 
 import { authFetch } from '@/lib/client/auth-fetch';
 import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
+import type { SqlConsoleResultUpdatePayload } from '@/lib/client/sql-console-result-snapshot';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
@@ -58,6 +59,16 @@ type WorkSnapshotResponse = {
                     startedAt?: string | Date | null;
                     finishedAt?: string | Date | null;
                     durationMs?: number | null;
+                    resultSetId?: string | null;
+                    dataAvailability?: string | null;
+                    previewRowCount?: number | null;
+                    byteSize?: number | null;
+                    artifactStore?: string | null;
+                    storageFormat?: 'parquet' | 'json' | null;
+                    sourceConnectionType?: string | null;
+                    sourceDatabaseName?: string | null;
+                    createdAt?: number | string | Date | null;
+                    expiresAt?: number | string | Date | null;
                 }>;
                 results: unknown[][];
             }>;
@@ -156,7 +167,14 @@ export function useWorkHydration({
 
             snapshotRef.current = snapshot;
             setSnapshotRevision(revision => revision + 1);
-            notifySqlConsoleResultDataUpdated();
+            for (const sessionSnapshot of snapshot.sessions ?? []) {
+                const payload: SqlConsoleResultUpdatePayload = {
+                    session: sessionSnapshot.session,
+                    queryResultSets: sessionSnapshot.queryResultSets,
+                    results: sessionSnapshot.results,
+                };
+                notifySqlConsoleResultDataUpdated(payload);
+            }
         }
 
         hydrate().catch(error => {
