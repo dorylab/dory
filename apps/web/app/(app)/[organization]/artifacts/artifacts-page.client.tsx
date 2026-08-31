@@ -298,7 +298,7 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
                                         <h2 className="text-sm font-semibold">{t(`Groups.${type}`)}</h2>
                                         <Badge variant="secondary">{rows.length}</Badge>
                                     </div>
-                                    <Card>
+                                    <Card className="py-0">
                                         <CardContent className="p-0">
                                             <div className="hidden h-10 items-center gap-4 border-b bg-muted/30 px-4 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(20rem,2fr)_minmax(9rem,1fr)_6rem_6rem_10rem_7rem]">
                                                 <span>{t('Columns.Title')}</span>
