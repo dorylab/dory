@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/registry/new-york-v4
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -63,7 +64,7 @@ function CompactMetadata({ artifact, onTogglePin, pinPending }: { artifact: Arti
     const creator =
         artifact.agentRunId && artifact.runTitle
             ? artifactsT('CreatedByAgent', { title: artifact.runTitle })
-            : (creators[artifact.createdByActorType as keyof typeof creators] ?? artifact.createdByActorType);
+            : (artifact.createdByName ?? creators[artifact.createdByActorType as keyof typeof creators] ?? artifact.createdByActorType);
     const metadata = [
         t(`Types.${artifact.type}`),
         artifact.rowCount == null ? null : t('RowsCount', { count: artifact.rowCount.toLocaleString() }),
@@ -80,10 +81,21 @@ function CompactMetadata({ artifact, onTogglePin, pinPending }: { artifact: Arti
                     </span>
                 ))}
                 {artifact.sourceResultSetId ? (
-                    <Button variant="ghost" size="sm" className="h-6 gap-1 px-1.5 text-muted-foreground" onClick={onTogglePin} disabled={pinPending}>
-                        {artifact.pinnedAt ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
-                        {artifact.pinnedAt ? t('Pinned') : t('Pin')}
-                    </Button>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground"
+                                onClick={onTogglePin}
+                                disabled={pinPending}
+                                aria-label={artifact.pinnedAt ? t('Unpin') : t('Pin')}
+                            >
+                                {artifact.pinnedAt ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
+                            </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{artifact.pinnedAt ? t('Unpin') : t('Pin')}</TooltipContent>
+                    </Tooltip>
                 ) : null}
             </div>
             <p>{t('CreatedByLine', { createdAt: new Date(artifact.createdAt).toLocaleString(), creator })}</p>

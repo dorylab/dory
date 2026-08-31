@@ -48,6 +48,7 @@ const artifactSummarySchema = z.object({
     sourceType: z.string().nullable(),
     createdByActorType: z.string(),
     createdByActorId: z.string().nullable(),
+    createdByName: z.string().nullable(),
     rowCount: z.number().nullable(),
     byteSize: z.number().nullable(),
     fileName: z.string().nullable(),

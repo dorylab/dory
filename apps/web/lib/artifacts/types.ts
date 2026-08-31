@@ -46,6 +46,7 @@ type ArtifactSummaryBase = {
     sourceType: string | null;
     createdByActorType: string;
     createdByActorId: string | null;
+    createdByName: string | null;
     rowCount: number | null;
     byteSize: number | null;
     fileName: string | null;

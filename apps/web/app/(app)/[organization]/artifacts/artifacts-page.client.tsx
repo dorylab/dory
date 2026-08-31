@@ -54,6 +54,7 @@ function retentionLabel(artifact: ArtifactSummary, t: ReturnType<typeof useTrans
 }
 
 function creatorLabel(artifact: ArtifactSummary, t: ReturnType<typeof useTranslations<'Artifacts'>>) {
+    if (artifact.createdByName) return t('CreatedBy', { creator: artifact.createdByName });
     const creator = CREATOR_KEYS.has(artifact.createdByActorType) ? t(`Creators.${artifact.createdByActorType}`) : artifact.createdByActorType;
     if (artifact.agentRunId && artifact.runTitle) return t('CreatedByAgent', { title: artifact.runTitle });
     return t('CreatedBy', { creator });

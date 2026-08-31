@@ -8,6 +8,7 @@ import {
     organizations,
     resultSetExports,
     resultSets,
+    user,
     works,
     type ArtifactChartState,
     type ArtifactType,
@@ -36,6 +37,7 @@ export type ArtifactSummary = {
     sourceType: string | null;
     createdByActorType: string;
     createdByActorId: string | null;
+    createdByName: string | null;
     rowCount: number | null;
     byteSize: number | null;
     fileName: string | null;
@@ -193,12 +195,14 @@ export class PostgresArtifactsRepository {
                 resultSetSql: resultSets.sql,
                 pinnedAt: resultSets.pinnedAt,
                 pinnedByActorId: resultSets.pinnedByActorId,
+                createdByName: user.name,
             })
             .from(artifacts)
             .leftJoin(connections, and(eq(connections.organizationId, artifacts.organizationId), eq(connections.id, artifacts.connectionId)))
             .leftJoin(works, eq(works.workId, artifacts.workId))
             .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
             .leftJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
+            .leftJoin(user, eq(user.id, artifacts.createdByActorId))
             .where(where);
         const [rows, totals] = await Promise.all([
             base
@@ -226,12 +230,14 @@ export class PostgresArtifactsRepository {
                 runTitle: works.title,
                 comparisonName: comparisons.name,
                 resultSet: resultSets,
+                createdByName: user.name,
             })
             .from(artifacts)
             .leftJoin(connections, and(eq(connections.organizationId, artifacts.organizationId), eq(connections.id, artifacts.connectionId)))
             .leftJoin(works, eq(works.workId, artifacts.workId))
             .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
             .leftJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
+            .leftJoin(user, eq(user.id, artifacts.createdByActorId))
             .where(and(eq(artifacts.organizationId, input.organizationId), eq(artifacts.id, input.artifactId)))
             .limit(1);
         if (!row) throw new DatabaseError('Artifact not found', 404);
@@ -393,6 +399,7 @@ export class PostgresArtifactsRepository {
         connectionName: string | null;
         runTitle: string | null;
         comparisonName: string | null;
+        createdByName: string | null;
         rowCount: number | null;
         resultSetSql?: string | null;
         pinnedAt?: Date | null;
@@ -408,6 +415,7 @@ export class PostgresArtifactsRepository {
             connectionName: row.connectionName,
             runTitle: row.runTitle,
             comparisonName: row.comparisonName,
+            createdByName: row.createdByName,
             rowCount: row.rowCount,
             pinnedAt: row.pinnedAt ?? null,
             pinnedByActorId: row.pinnedByActorId ?? null,
