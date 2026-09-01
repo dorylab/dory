@@ -25,11 +25,13 @@ COPY packages/database/package.json ./packages/database/
 COPY packages/data-plane/package.json ./packages/data-plane/
 COPY packages/drivers/package.json ./packages/drivers/
 COPY packages/ee/package.json ./packages/ee/
+COPY packages/export/package.json ./packages/export/
 COPY packages/files/package.json ./packages/files/
 COPY packages/i18n/package.json ./packages/i18n/
 COPY packages/import/package.json ./packages/import/
 COPY packages/mcp/package.json ./packages/mcp/
 COPY packages/resultset/package.json ./packages/resultset/
+COPY packages/schema-compare/package.json ./packages/schema-compare/
 COPY packages/server-core/package.json ./packages/server-core/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/ui/package.json ./packages/ui/
