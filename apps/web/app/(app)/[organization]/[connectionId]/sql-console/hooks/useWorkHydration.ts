@@ -13,6 +13,7 @@ import { sessionIdByTabAtom } from '../sql-console.store';
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 import { resolveWorkHydrationTarget } from '../work-hydration-target';
 import type { SqlWorkspaceInitialResultTarget } from '../initial-result-target';
+import { upsertActiveSetAtom } from '../components/result-table/stores/active-set.atoms';
 
 type WorkSnapshotResponse = {
     code?: number;
@@ -99,6 +100,7 @@ export function useWorkHydration({
     const requestedSessionId = initialResultTarget?.sessionId ?? searchParams.get('sessionId');
     const activeTabId = useAtomValue(activeTabIdAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
+    const setActiveResult = useSetAtom(upsertActiveSetAtom);
     const hydratedWorkRef = useRef<string | null>(null);
     const activatedWorkRef = useRef<string | null>(null);
     const snapshotRef = useRef<WorkSnapshot | null>(null);
@@ -168,6 +170,17 @@ export function useWorkHydration({
             snapshotRef.current = snapshot;
             setSnapshotRevision(revision => revision + 1);
             for (const sessionSnapshot of snapshot.sessions ?? []) {
+                if (normalizedWorkspaceScope.workspaceMode === 'agent' && !initialResultTarget && sessionSnapshot.session.tabId) {
+                    const latestSetIndex = sessionSnapshot.queryResultSets.reduce((latest, resultSet) => Math.max(latest, resultSet.setIndex), -1);
+                    if (latestSetIndex >= 0) {
+                        setActiveResult({
+                            tabId: sessionSnapshot.session.tabId,
+                            sessionId: sessionSnapshot.session.sessionId,
+                            activeSet: latestSetIndex,
+                            userPicked: false,
+                        });
+                    }
+                }
                 const payload: SqlConsoleResultUpdatePayload = {
                     session: sessionSnapshot.session,
                     queryResultSets: sessionSnapshot.queryResultSets,
@@ -186,7 +199,7 @@ export function useWorkHydration({
         return () => {
             cancelled = true;
         };
-    }, [isLoading, workId]);
+    }, [initialResultTarget, isLoading, normalizedWorkspaceScope.workspaceMode, setActiveResult, workId]);
 
     useEffect(() => {
         if (!workId || hydratedWorkRef.current !== workId) return;

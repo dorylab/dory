@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, BarChart3, Bot, Check, Copy, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pencil, Pin, PinOff, Share2, Trash2 } from 'lucide-react';
+import { ArrowLeft, BarChart3, Bot, Check, Copy, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -205,14 +205,6 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
         onError: error => toast.error(error instanceof Error ? error.message : t('ActionFailed')),
     });
 
-    const copyShare = async () => {
-        try {
-            await navigator.clipboard.writeText(window.location.href);
-            toast.success(t('ShareCopied'));
-        } catch {
-            toast.error(t('ActionFailed'));
-        }
-    };
     const continueWithAgent = async () => {
         if (!artifact) return;
         try {
@@ -302,10 +294,6 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onSelect={() => void copyShare()}>
-                                        <Share2 />
-                                        {t('Share')}
-                                    </DropdownMenuItem>
                                     {artifact.sourceResultSetId ? (
                                         <DropdownMenuItem onSelect={() => (artifact.pinnedAt ? unpinMutation.mutate() : pinMutation.mutate())}>
                                             {artifact.pinnedAt ? <PinOff /> : <Pin />}

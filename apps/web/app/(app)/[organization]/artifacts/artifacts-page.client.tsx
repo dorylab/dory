@@ -4,7 +4,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, BarChart3, Bot, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pin, PinOff, Search, Share2, Star, Trash2 } from 'lucide-react';
+import { Archive, BarChart3, Bot, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pin, PinOff, Search, Star, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { parseAsBoolean, parseAsInteger, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
@@ -113,15 +113,6 @@ function ArtifactRowActions({
             toast.error(error instanceof Error ? error.message : t('ActionFailed'));
         }
     };
-    const shareArtifact = async () => {
-        try {
-            await navigator.clipboard.writeText(window.location.origin + artifactPath);
-            toast.success(t('ShareCopied'));
-        } catch {
-            toast.error(t('ActionFailed'));
-        }
-    };
-
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -167,10 +158,6 @@ function ArtifactRowActions({
                         </DropdownMenuItem>
                     </>
                 ) : null}
-                <DropdownMenuItem onSelect={() => void shareArtifact()}>
-                    <Share2 />
-                    {t('Share')}
-                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
                     <Trash2 />

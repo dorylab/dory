@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTheme } from 'next-themes';
 import type * as Monaco from 'monaco-editor';
 
@@ -8,10 +8,7 @@ import { vsPlusTheme } from '@/components/@dory/ui/monaco-editor/theme';
 import { buildSqlEditorOptions, resolveSqlEditorTheme, type SqlEditorSettings } from '@/shared/stores/sql-editor-settings.store';
 import { loadSqlMonaco } from '@/app/(app)/[organization]/[connectionId]/sql-console/components/sql-editor/monaco-loader';
 
-const PREVIEW_SQL = `SELECT
-    o.order_id,
-    o.amount,
-    o.created_at
+const PREVIEW_SQL = `SELECT o.order_id, o.amount, o.created_at
 FROM orders AS o
 WHERE o.status = 'completed'
 ORDER BY o.created_at DESC
@@ -22,6 +19,7 @@ export function EditorPreview({ settings }: { settings: SqlEditorSettings }) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
     const monacoRef = useRef<typeof Monaco | null>(null);
+    const [isReady, setIsReady] = useState(false);
     const settingsRef = useRef(settings);
     const editorTheme = resolveSqlEditorTheme(settings, resolvedTheme);
     const editorThemeRef = useRef(editorTheme);
@@ -51,8 +49,10 @@ export function EditorPreview({ settings }: { settings: SqlEditorSettings }) {
                 tabIndex: -1,
                 scrollBeyondLastLine: false,
                 renderLineHighlight: 'none',
+                padding: { top: 8, bottom: 8 },
                 minimap: { enabled: settingsRef.current.minimap, renderCharacters: false },
             });
+            setIsReady(true);
         });
 
         return () => {
@@ -75,5 +75,10 @@ export function EditorPreview({ settings }: { settings: SqlEditorSettings }) {
         });
     }, [editorTheme, settings]);
 
-    return <div ref={containerRef} className="pointer-events-none mt-2 h-44 overflow-hidden rounded-md border bg-card" aria-label="SQL editor preview" />;
+    return (
+        <div className="pointer-events-none relative h-36 overflow-hidden rounded-md border bg-card" aria-label="SQL editor preview">
+            {!isReady ? <pre className="absolute inset-0 overflow-hidden px-14 py-2 font-mono text-sm leading-[18px] text-foreground">{PREVIEW_SQL}</pre> : null}
+            <div ref={containerRef} className="h-full w-full" />
+        </div>
+    );
 }

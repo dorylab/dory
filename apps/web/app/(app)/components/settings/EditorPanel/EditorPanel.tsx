@@ -46,14 +46,10 @@ export function EditorPanel() {
     return (
         <div className="flex h-0 min-h-0 flex-1 flex-col">
             <div className="shrink-0 px-6 pb-4">
-                <div>
-                    <div className="text-sm font-medium">{t('Editor.PreviewLabel')}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{t('Editor.PreviewDescription')}</div>
-                </div>
                 <EditorPreview settings={settings} />
             </div>
-            <ScrollArea className="min-h-0 flex-1 border-t">
-                <div className="space-y-6 px-6 py-6 pb-10">
+            <ScrollArea className="min-h-0 flex-1">
+                <div className="space-y-6 px-6 pb-10 pt-0">
                     <SettingsRow label={t('Editor.ThemeLabel')} description={t('Editor.ThemeDescription')}>
                         <Select value={settings.theme} onValueChange={value => updateSettings({ theme: value as typeof settings.theme })}>
                             <SelectTrigger className="h-8 w-55 justify-between">
