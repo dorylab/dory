@@ -6,11 +6,14 @@ import { useAtomValue, useSetAtom } from 'jotai';
 
 import { authFetch } from '@/lib/client/auth-fetch';
 import { notifySqlConsoleResultDataUpdated } from '@/lib/client/sql-console-result-store';
+import type { SqlConsoleResultUpdatePayload } from '@/lib/client/sql-console-result-snapshot';
 import { activeTabIdAtom } from '@/shared/stores/app.store';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
 import { resolveWorkHydrationTarget } from '../work-hydration-target';
+import type { SqlWorkspaceInitialResultTarget } from '../initial-result-target';
+import { upsertActiveSetAtom } from '../components/result-table/stores/active-set.atoms';
 
 type WorkSnapshotResponse = {
     code?: number;
@@ -57,6 +60,16 @@ type WorkSnapshotResponse = {
                     startedAt?: string | Date | null;
                     finishedAt?: string | Date | null;
                     durationMs?: number | null;
+                    resultSetId?: string | null;
+                    dataAvailability?: string | null;
+                    previewRowCount?: number | null;
+                    byteSize?: number | null;
+                    artifactStore?: string | null;
+                    storageFormat?: 'parquet' | 'json' | null;
+                    sourceConnectionType?: string | null;
+                    sourceDatabaseName?: string | null;
+                    createdAt?: number | string | Date | null;
+                    expiresAt?: number | string | Date | null;
                 }>;
                 results: unknown[][];
             }>;
@@ -72,19 +85,22 @@ export function useWorkHydration({
     isLoading,
     setActiveTabId,
     workspaceScope,
+    initialResultTarget,
 }: {
     tabs: UITabPayload[];
     isLoading: boolean;
     setActiveTabId: (tabId: string) => void;
     workspaceScope?: SqlWorkspaceScope;
+    initialResultTarget?: SqlWorkspaceInitialResultTarget | null;
 }) {
     const searchParams = useSearchParams();
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const workId = normalizedWorkspaceScope.workspaceMode === 'agent' ? normalizedWorkspaceScope.workId : null;
-    const requestedTabId = searchParams.get('tabId');
-    const requestedSessionId = searchParams.get('sessionId');
+    const requestedTabId = initialResultTarget?.tabId ?? searchParams.get('tabId');
+    const requestedSessionId = initialResultTarget?.sessionId ?? searchParams.get('sessionId');
     const activeTabId = useAtomValue(activeTabIdAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
+    const setActiveResult = useSetAtom(upsertActiveSetAtom);
     const hydratedWorkRef = useRef<string | null>(null);
     const activatedWorkRef = useRef<string | null>(null);
     const snapshotRef = useRef<WorkSnapshot | null>(null);
@@ -153,7 +169,25 @@ export function useWorkHydration({
 
             snapshotRef.current = snapshot;
             setSnapshotRevision(revision => revision + 1);
-            notifySqlConsoleResultDataUpdated();
+            for (const sessionSnapshot of snapshot.sessions ?? []) {
+                if (normalizedWorkspaceScope.workspaceMode === 'agent' && !initialResultTarget && sessionSnapshot.session.tabId) {
+                    const latestSetIndex = sessionSnapshot.queryResultSets.reduce((latest, resultSet) => Math.max(latest, resultSet.setIndex), -1);
+                    if (latestSetIndex >= 0) {
+                        setActiveResult({
+                            tabId: sessionSnapshot.session.tabId,
+                            sessionId: sessionSnapshot.session.sessionId,
+                            activeSet: latestSetIndex,
+                            userPicked: false,
+                        });
+                    }
+                }
+                const payload: SqlConsoleResultUpdatePayload = {
+                    session: sessionSnapshot.session,
+                    queryResultSets: sessionSnapshot.queryResultSets,
+                    results: sessionSnapshot.results,
+                };
+                notifySqlConsoleResultDataUpdated(payload);
+            }
         }
 
         hydrate().catch(error => {
@@ -165,7 +199,7 @@ export function useWorkHydration({
         return () => {
             cancelled = true;
         };
-    }, [isLoading, workId]);
+    }, [initialResultTarget, isLoading, normalizedWorkspaceScope.workspaceMode, setActiveResult, workId]);
 
     useEffect(() => {
         if (!workId || hydratedWorkRef.current !== workId) return;

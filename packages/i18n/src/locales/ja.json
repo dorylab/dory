@@ -541,7 +541,8 @@
             "CommitAll": "すべてコミット（{count}）",
             "Committing": "コミット中…",
             "SelectionSummary": "{cells} セル · {rows} 行",
-            "SelectionEditHint": "入力して一括設定 · Cmd/Ctrl+V で貼り付け",
+            "SelectionEditTooltip": "入力して選択中のセルを一括設定するか、Cmd/Ctrl+V で貼り付けます。",
+            "SelectionEditTooltipDone": "完了",
             "BatchRowUnavailable": "選択した行の一部が現在のページにありません。",
             "BatchReadOnly": "選択範囲に読み取り専用セルが含まれています。",
             "BatchIdentityUnavailable": "選択した行を一意に識別できません。",
@@ -3328,6 +3329,10 @@
                 "FontSizeDescription": "エディターの文字サイズを調整します。",
                 "LineHeightLabel": "行の高さ",
                 "LineHeightDescription": "行間倍率を調整します（1.1-2.2）。",
+                "PreviewLabel": "プレビュー",
+                "PreviewDescription": "読み取り専用の SQL サンプルでエディター設定をプレビューします。",
+                "HeightLabel": "エディターの高さ",
+                "HeightDescription": "新しい SQL ワークスペースの既定のエディター高さを設定します（既定 20%、15〜80%で調整可能）。",
                 "QueryLimitLabel": "既定のクエリ上限",
                 "QueryLimitDescription": "SQL 実行時の既定 LIMIT を設定します。",
                 "LineNumbersLabel": "行番号",
@@ -3741,6 +3746,7 @@
     },
     "AppSidebar": {
         "DataSources": "データソース",
+        "Artifacts": "Artifacts",
         "NoDataSourceSelected": "データソース未選択",
         "WorkspaceTitle": "ワークスペース",
         "WorkspaceDataSourcesCount": "{count} 件のデータソース",
@@ -3755,6 +3761,13 @@
         "Monitoring": "モニタリング",
         "Privileges": "権限",
         "GetHelp": "ヘルプ",
+        "HelpCommunity": "ヘルプとコミュニティ",
+        "NeedHelp": "お困りですか？",
+        "Documentation": "ドキュメント",
+        "DiscordCommunity": "Discord コミュニティ",
+        "GitHubDiscussions": "GitHub ディスカッション",
+        "ReportIssue": "問題を報告",
+        "X": "X",
         "StarNotificationTitle": "Dory を気に入っていただけましたか？",
         "StarNotificationDescription": "GitHub でスターを付けて、このプロジェクトを広めてください。",
         "StarNotificationAction": "GitHub でスター",
@@ -3779,6 +3792,139 @@
             "Confirm": "ワークスペースを削除",
             "Cancel": "ワークスペースを保持",
             "DeleteFailed": "ゲストセッションの削除に失敗しました。もう一度お試しください。"
+        }
+    },
+    "Artifacts": {
+        "Eyebrow": "ワークスペース出力",
+        "Title": "Artifacts",
+        "Description": "結果セットとビジュアライゼーションを検索して再利用できます。",
+        "SearchPlaceholder": "Artifacts を検索...",
+        "TypeFilter": "種類で絞り込む",
+        "Loading": "Artifacts を読み込み中...",
+        "Empty": "Artifact がありません",
+        "EmptyDescription": "保存された結果セット、チャート、エクスポートがここに表示されます。",
+        "UnknownSource": "不明なソース",
+        "Details": "詳細",
+        "Delete": "削除",
+        "Deleted": "Artifact を削除しました。",
+        "NoExpiry": "期限なし",
+        "Pinned": "ワークスペースにピン留め済み",
+        "Unpinned": "ワークスペースのピン留めを解除しました。",
+        "PinnedOnly": "ピン留め済み",
+        "CreatedBy": "作成者: {creator}",
+        "CreatedByAgent": "Agent Run · {title}",
+        "Retention": {
+            "Pinned": "ワークスペースにピン留め済み",
+            "Stored": "保存済み",
+            "Temporary": "一時保存 · {days} 日間保持"
+        },
+        "Rows": "{count, number} 行",
+        "Columns": {
+            "Title": "タイトル",
+            "Source": "ソース",
+            "Rows": "行数",
+            "Size": "サイズ",
+            "Retention": "保持",
+            "Actions": "操作"
+        },
+        "DeleteDialog": {
+            "Title": "Artifact を削除しますか？",
+            "Description": "「{title}」を削除してもよろしいですか？この操作は元に戻せません。",
+            "Cancel": "キャンセル",
+            "Confirm": "削除"
+        },
+        "Previous": "前へ",
+        "Next": "次へ",
+        "Page": "{page} / {pages} ページ",
+        "Types": {
+            "all": "すべて",
+            "result_set": "結果セット",
+            "chart": "ビジュアライゼーション",
+            "file": "ファイル"
+        },
+        "Groups": {
+            "result_set": "結果セット",
+            "chart": "ビジュアライゼーション",
+            "file": "ファイル"
+        },
+        "Statuses": {
+            "ready": "利用可能",
+            "unavailable": "利用不可"
+        },
+        "Creators": {
+            "user": "ユーザー",
+            "agent": "Agent",
+            "mcp": "MCP",
+            "automation": "自動化"
+        },
+        "Viewer": {
+            "Back": "Artifacts",
+            "Types": {
+                "result_set": "結果セット",
+                "chart": "チャート",
+                "file": "ファイル"
+            },
+            "CreatedBy": "作成者",
+            "Source": "ソース",
+            "Rows": "行数",
+            "Size": "サイズ",
+            "CreatedAt": "作成日時",
+            "ExpiresAt": "有効期限",
+            "NoExpiry": "期限なし",
+            "CreatedFrom": "作成元",
+            "Retention": "保持",
+            "Temporary": "一時保存 · {days} 日間保持",
+            "Stored": "保存済み",
+            "Pinned": "ワークスペースにピン留め済み",
+            "Pin": "Pin",
+            "Unpin": "Unpin",
+            "Unpinned": "ワークスペースのピン留めを解除しました。",
+            "Open": "開く",
+            "OpenInWorkspace": "ワークスペースで開く",
+            "ContinueWithAgent": "Agent で続ける",
+            "RowsCount": "{count} 行",
+            "CreatedByLine": "{createdAt} に {creator} が作成",
+            "Copy": "コピー",
+            "SqlCopied": "SQL をコピーしました。",
+            "Export": "エクスポート",
+            "Download": "ダウンロード",
+            "CreateChart": "チャートを作成",
+            "Share": "共有",
+            "Chart": "チャート",
+            "SaveChart": "チャートを保存",
+            "Data": "データ",
+            "SearchRows": "行を検索...",
+            "LoadingRows": "結果行を読み込んでいます...",
+            "NoRows": "現在の表示条件に一致する行はありません。",
+            "Previous": "前へ",
+            "Next": "次へ",
+            "Page": "{page} / {pages} ページ",
+            "FileDescription": "この {format} ファイルはワークスペースの保持期間中利用できます。",
+            "Renamed": "Artifact の名前を変更しました。",
+            "ChartSaved": "チャートを Artifacts に保存しました。",
+            "ShareCopied": "組織内リンクをコピーしました。",
+            "AgentTaskCopied": "外部 Agent 用タスクをコピーしました。",
+            "MoreActions": "その他の操作",
+            "Delete": "削除",
+            "Deleted": "Artifact を削除しました。",
+            "DeleteDialog": {
+                "Title": "Artifact を削除しますか？",
+                "Description": "「{title}」を削除してもよろしいですか？この操作は元に戻せません。",
+                "Cancel": "キャンセル",
+                "Confirm": "削除"
+            },
+            "ChartRequired": "保存前にチャートを設定してください。",
+            "ActionFailed": "Artifact の操作に失敗しました。",
+            "NotFound": "Artifact が存在しないか、利用できません。"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Artifact SQL Workspace",
+            "Description": "この Artifact から復元された独立 SQL ワークスペースです。",
+            "Back": "Artifact に戻る",
+            "BackToArtifact": "{title} のクエリ結果",
+            "Close": "Artifact ワークスペースを閉じる",
+            "Loading": "SQL Workspace を開いています...",
+            "Unavailable": "この Artifact は SQL Workspace で開けなくなりました。"
         }
     },
     "AgentRuns": {
@@ -3901,7 +4047,9 @@
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run ワークスペース",
-            "Description": "この Agent Run の SQL ワークスペースです。"
+            "Description": "この Agent Run の SQL ワークスペースです。",
+            "Back": "Agent Run に戻る",
+            "Close": "Agent Run ワークスペースを閉じる"
         },
         "WorkspacePanel": {
             "LoadFailed": "Agent Run の読み込みに失敗しました。",

@@ -1,14 +1,14 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { IconFileAi, IconHelp, IconUsers } from '@tabler/icons-react';
+import { IconFileAi, IconUsers } from '@tabler/icons-react';
 import { IconBrandGithub } from '@tabler/icons-react';
 import React from 'react';
 import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { ArrowDownToLine, ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
+import { Archive, ArrowDownToLine, ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -151,6 +151,12 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   requiresConnection: false,
               },
               {
+                  title: t('Artifacts'),
+                  url: `/${organization}/artifacts`,
+                  icon: Archive,
+                  requiresConnection: false,
+              },
+              {
                   title: t('AgentRuns'),
                   url: `/${organization}/agent-runs`,
                   icon: Bot,
@@ -163,15 +169,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   requiresConnection: false,
               },
           ];
-
-    const navSecondary = [
-        {
-            title: t('GetHelp'),
-            url: 'https://github.com/dorylab/dory/discussions',
-            icon: IconHelp,
-            external: true,
-        },
-    ];
 
     React.useEffect(() => {
         if (!window.updateBridge) return;
@@ -267,7 +264,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                             </div>
                         </div>
                     ) : null}
-                    <NavSecondary items={navSecondary} />
+                    <NavSecondary />
                 </div>
             </SidebarContent>
 

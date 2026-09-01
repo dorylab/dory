@@ -33,7 +33,7 @@ export function SettingsSidebar({
         .filter(group => group.items.length > 0);
 
     return (
-        <aside className="flex h-full min-h-0 flex-col border-r bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <aside className="flex h-full min-h-0 flex-col border-r bg-card">
             <div className="shrink-0 p-3">
                 <div className="relative">
                     <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

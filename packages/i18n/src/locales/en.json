@@ -541,7 +541,8 @@
             "CommitAll": "Commit All ({count})",
             "Committing": "Committing…",
             "SelectionSummary": "{cells} cells · {rows} rows",
-            "SelectionEditHint": "Type to set all · Cmd/Ctrl+V to paste",
+            "SelectionEditTooltip": "Type to set all selected cells, or press Cmd/Ctrl+V to paste.",
+            "SelectionEditTooltipDone": "Done",
             "BatchRowUnavailable": "A selected row is no longer available on this page.",
             "BatchReadOnly": "The selection contains a read-only cell.",
             "BatchIdentityUnavailable": "A selected row cannot be uniquely identified.",
@@ -3330,6 +3331,10 @@
                 "FontSizeDescription": "Adjust the editor text size.",
                 "LineHeightLabel": "Line height",
                 "LineHeightDescription": "Controls line spacing multiplier (1.1-2.2).",
+                "PreviewLabel": "Preview",
+                "PreviewDescription": "Preview your editor settings with a read-only SQL sample.",
+                "HeightLabel": "Editor height",
+                "HeightDescription": "Sets the default editor height for new SQL workspaces (20%, adjustable from 15-80%).",
                 "QueryLimitLabel": "Default query limit",
                 "QueryLimitDescription": "Sets the default LIMIT for SQL runs. Choose No limit to run without adding a LIMIT.",
                 "LineNumbersLabel": "Line numbers",
@@ -3741,6 +3746,7 @@
     },
     "AppSidebar": {
         "DataSources": "Data Sources",
+        "Artifacts": "Artifacts",
         "NoDataSourceSelected": "No data source selected",
         "WorkspaceTitle": "Workspace",
         "WorkspaceDataSourcesCount": "{count} data source",
@@ -3755,6 +3761,13 @@
         "Monitoring": "Monitoring",
         "Privileges": "Privileges",
         "GetHelp": "Get Help",
+        "HelpCommunity": "Help",
+        "NeedHelp": "Need help?",
+        "Documentation": "Documentation",
+        "DiscordCommunity": "Discord Community",
+        "GitHubDiscussions": "GitHub Discussions",
+        "ReportIssue": "Report Issue",
+        "X": "X",
         "StarNotificationTitle": "Enjoying Dory?",
         "StarNotificationDescription": "Give the project a GitHub star to help more people discover it.",
         "StarNotificationAction": "Star on GitHub",
@@ -3779,6 +3792,139 @@
             "Confirm": "Delete workspace",
             "Cancel": "Keep workspace",
             "DeleteFailed": "Failed to delete guest session. Please try again."
+        }
+    },
+    "Artifacts": {
+        "Eyebrow": "Workspace outputs",
+        "Title": "Artifacts",
+        "Description": "Search and continue working with result sets and visualizations.",
+        "SearchPlaceholder": "Search artifacts...",
+        "TypeFilter": "Filter artifacts by type",
+        "Loading": "Loading artifacts...",
+        "Empty": "No artifacts found",
+        "EmptyDescription": "Persistent query results, saved charts, and exports will appear here.",
+        "UnknownSource": "Unknown source",
+        "Details": "Details",
+        "Delete": "Delete",
+        "Deleted": "Artifact deleted.",
+        "NoExpiry": "No expiry",
+        "Pinned": "Pinned to Workspace",
+        "Unpinned": "Removed from Workspace pins.",
+        "PinnedOnly": "Pinned",
+        "CreatedBy": "Created by {creator}",
+        "CreatedByAgent": "Agent Run · {title}",
+        "Retention": {
+            "Pinned": "Pinned to Workspace",
+            "Stored": "Stored",
+            "Temporary": "Temporary · retained for {days} days"
+        },
+        "Rows": "{count, number} rows",
+        "Columns": {
+            "Title": "Title",
+            "Source": "Source",
+            "Rows": "Rows",
+            "Size": "Size",
+            "Retention": "Retention",
+            "Actions": "Actions"
+        },
+        "DeleteDialog": {
+            "Title": "Delete artifact?",
+            "Description": "Are you sure you want to delete \"{title}\"? This action cannot be undone.",
+            "Cancel": "Cancel",
+            "Confirm": "Delete"
+        },
+        "Previous": "Previous",
+        "Next": "Next",
+        "Page": "Page {page} of {pages}",
+        "Types": {
+            "all": "All",
+            "result_set": "Result Sets",
+            "chart": "Visualizations",
+            "file": "Files"
+        },
+        "Groups": {
+            "result_set": "Result Sets",
+            "chart": "Visualizations",
+            "file": "Files"
+        },
+        "Statuses": {
+            "ready": "Ready",
+            "unavailable": "Unavailable"
+        },
+        "Creators": {
+            "user": "User",
+            "agent": "Agent",
+            "mcp": "MCP",
+            "automation": "Automation"
+        },
+        "Viewer": {
+            "Back": "Artifacts",
+            "Types": {
+                "result_set": "Result Set",
+                "chart": "Chart",
+                "file": "File"
+            },
+            "CreatedBy": "Created by",
+            "Source": "Source",
+            "Rows": "Rows",
+            "Size": "Size",
+            "CreatedAt": "Created",
+            "ExpiresAt": "Expires",
+            "NoExpiry": "No expiration",
+            "CreatedFrom": "Created from",
+            "Retention": "Retention",
+            "Temporary": "Temporary · retained for {days} days",
+            "Stored": "Stored",
+            "Pinned": "Pinned to Workspace",
+            "Pin": "Pin",
+            "Unpin": "Unpin",
+            "Unpinned": "Removed from Workspace pins.",
+            "Open": "Open",
+            "OpenInWorkspace": "Open in Workspace",
+            "ContinueWithAgent": "Continue with Agent",
+            "RowsCount": "{count} rows",
+            "CreatedByLine": "Created {createdAt} · by {creator}",
+            "Copy": "Copy",
+            "SqlCopied": "SQL copied.",
+            "Export": "Export",
+            "Download": "Download",
+            "CreateChart": "Create Chart",
+            "Share": "Share",
+            "Chart": "Chart",
+            "SaveChart": "Save Chart",
+            "Data": "Data",
+            "SearchRows": "Search rows...",
+            "LoadingRows": "Loading result rows...",
+            "NoRows": "No rows match the current view.",
+            "Previous": "Previous",
+            "Next": "Next",
+            "Page": "Page {page} of {pages}",
+            "FileDescription": "This {format} file stays available for the workspace retention period.",
+            "Renamed": "Artifact renamed.",
+            "ChartSaved": "Chart saved to Artifacts.",
+            "ShareCopied": "Organization link copied.",
+            "AgentTaskCopied": "Task for external Agent copied.",
+            "MoreActions": "More actions",
+            "Delete": "Delete",
+            "Deleted": "Artifact deleted.",
+            "DeleteDialog": {
+                "Title": "Delete artifact?",
+                "Description": "Are you sure you want to delete \"{title}\"? This action cannot be undone.",
+                "Cancel": "Cancel",
+                "Confirm": "Delete"
+            },
+            "ChartRequired": "Configure the chart before saving.",
+            "ActionFailed": "Artifact action failed.",
+            "NotFound": "Artifact not found or no longer available."
+        },
+        "WorkspaceDrawer": {
+            "Title": "Artifact SQL Workspace",
+            "Description": "An isolated SQL workspace restored from this Artifact.",
+            "Back": "Back to Artifact",
+            "BackToArtifact": "{title} query results",
+            "Close": "Close Artifact workspace",
+            "Loading": "Opening SQL Workspace...",
+            "Unavailable": "This Artifact can no longer be opened in SQL Workspace."
         }
     },
     "AgentRuns": {
@@ -3901,7 +4047,9 @@
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run workspace",
-            "Description": "SQL workspace for this Agent Run."
+            "Description": "SQL workspace for this Agent Run.",
+            "Back": "Back to Agent Run",
+            "Close": "Close Agent Run workspace"
         },
         "WorkspacePanel": {
             "LoadFailed": "Failed to load Agent Run.",

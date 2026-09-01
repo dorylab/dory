@@ -435,5 +435,31 @@
     "bps": true,
     "folderMillis": 1786028223308,
     "hash": "75b9503a8a9b061964fd64a9a0bc16c17e17d863a5400904eccc32d0b178aa6d"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"artifacts\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"type\" text NOT NULL,\n    \"title\" text NOT NULL,\n    \"status\" text DEFAULT 'ready' NOT NULL,\n    \"resource_id\" text NOT NULL,\n    \"parent_artifact_id\" text,\n    \"source_result_set_id\" text,\n    \"connection_id\" text,\n    \"work_id\" text,\n    \"agent_run_id\" text,\n    \"comparison_id\" text,\n    \"comparison_run_id\" text,\n    \"source_type\" text,\n    \"created_by_actor_type\" text NOT NULL,\n    \"created_by_actor_id\" text,\n    \"chart_state\" jsonb,\n    \"file_name\" text,\n    \"file_format\" text,\n    \"byte_size\" bigint,\n    \"expires_at\" timestamp with time zone,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_artifacts_org_resource\" ON \"artifacts\" USING btree (\"organization_id\",\"type\",\"resource_id\");\n",
+      "\nCREATE INDEX \"idx_artifacts_org_created\" ON \"artifacts\" USING btree (\"organization_id\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_artifacts_org_type_created\" ON \"artifacts\" USING btree (\"organization_id\",\"type\",\"created_at\");\n",
+      "\nCREATE INDEX \"idx_artifacts_source_result_set\" ON \"artifacts\" USING btree (\"organization_id\",\"source_result_set_id\");\n",
+      "\nCREATE INDEX \"idx_artifacts_expires_at\" ON \"artifacts\" USING btree (\"expires_at\");\n",
+      "\nINSERT INTO \"artifacts\" (\n    \"id\", \"organization_id\", \"type\", \"title\", \"status\", \"resource_id\",\n    \"source_result_set_id\", \"connection_id\", \"work_id\", \"agent_run_id\",\n    \"comparison_id\", \"comparison_run_id\", \"source_type\",\n    \"created_by_actor_type\", \"created_by_actor_id\", \"byte_size\",\n    \"expires_at\", \"created_at\", \"updated_at\"\n)\nSELECT\n    'artifact_' || rs.\"id\", rs.\"organization_id\", 'result_set',\n    COALESCE(NULLIF(wqrs.\"title\", ''), NULLIF(w.\"title\", ''), 'Result Set ' || substring(rs.\"id\" from 4 for 8)),\n    CASE WHEN rs.\"data_availability\" = 'none' THEN 'unavailable' ELSE 'ready' END,\n    rs.\"id\", rs.\"id\", rs.\"connection_id\", rs.\"work_id\", rs.\"agent_run_id\",\n    rs.\"comparison_id\", rs.\"comparison_run_id\", rs.\"source_type\",\n    rs.\"created_by_actor_type\", rs.\"created_by_actor_id\", rs.\"byte_size\",\n    rs.\"expires_at\", rs.\"created_at\", rs.\"updated_at\"\nFROM \"result_sets\" rs\nLEFT JOIN \"work_query_result_sets\" wqrs ON wqrs.\"work_id\" = rs.\"work_id\" AND wqrs.\"session_id\" = rs.\"session_id\" AND wqrs.\"set_index\" = rs.\"set_index\"\nLEFT JOIN \"works\" w ON w.\"work_id\" = rs.\"work_id\"\nON CONFLICT (\"organization_id\", \"type\", \"resource_id\") DO NOTHING;\n",
+      "\nINSERT INTO \"artifacts\" (\n    \"id\", \"organization_id\", \"type\", \"title\", \"status\", \"resource_id\",\n    \"parent_artifact_id\", \"source_result_set_id\", \"connection_id\", \"work_id\",\n    \"agent_run_id\", \"comparison_id\", \"comparison_run_id\", \"source_type\",\n    \"created_by_actor_type\", \"created_by_actor_id\", \"file_name\", \"file_format\",\n    \"byte_size\", \"expires_at\", \"created_at\", \"updated_at\"\n)\nSELECT\n    'artifact_' || rse.\"id\", rse.\"organization_id\", 'file', rse.\"file_name\", 'ready', rse.\"id\",\n    'artifact_' || rs.\"id\", rse.\"result_set_id\", rs.\"connection_id\", rs.\"work_id\",\n    rs.\"agent_run_id\", rs.\"comparison_id\", rs.\"comparison_run_id\", rs.\"source_type\",\n    rs.\"created_by_actor_type\", rs.\"created_by_actor_id\", rse.\"file_name\", rse.\"format\",\n    rse.\"byte_size\", rse.\"expires_at\", rse.\"created_at\", rse.\"created_at\"\nFROM \"result_set_exports\" rse\nJOIN \"result_sets\" rs ON rs.\"organization_id\" = rse.\"organization_id\" AND rs.\"id\" = rse.\"result_set_id\"\nWHERE rse.\"expires_at\" > now()\nON CONFLICT (\"organization_id\", \"type\", \"resource_id\") DO NOTHING;\n",
+      "\nINSERT INTO \"artifacts\" (\n    \"id\", \"organization_id\", \"type\", \"title\", \"status\", \"resource_id\",\n    \"parent_artifact_id\", \"source_result_set_id\", \"connection_id\", \"work_id\",\n    \"agent_run_id\", \"source_type\", \"created_by_actor_type\", \"created_by_actor_id\",\n    \"chart_state\", \"expires_at\", \"created_at\", \"updated_at\"\n)\nSELECT\n    'artifact_chart_' || wcs.\"work_id\" || '_' || wcs.\"session_id\" || '_' || wcs.\"set_index\" || '_' || wcs.\"state_key\",\n    rs.\"organization_id\", 'chart',\n    COALESCE(NULLIF(wqrs.\"title\", '') || ' chart', 'Chart ' || substring(rs.\"id\" from 4 for 8)),\n    'ready',\n    'chart_' || wcs.\"work_id\" || '_' || wcs.\"session_id\" || '_' || wcs.\"set_index\" || '_' || wcs.\"state_key\",\n    'artifact_' || rs.\"id\", rs.\"id\", rs.\"connection_id\", rs.\"work_id\", rs.\"agent_run_id\",\n    rs.\"source_type\", rs.\"created_by_actor_type\", rs.\"created_by_actor_id\", wcs.\"chart_state\",\n    rs.\"expires_at\", wcs.\"updated_at\", wcs.\"updated_at\"\nFROM \"work_chart_states\" wcs\nJOIN \"result_sets\" rs ON rs.\"work_id\" = wcs.\"work_id\" AND rs.\"session_id\" = wcs.\"session_id\" AND rs.\"set_index\" = wcs.\"set_index\"\nLEFT JOIN \"work_query_result_sets\" wqrs ON wqrs.\"work_id\" = wcs.\"work_id\" AND wqrs.\"session_id\" = wcs.\"session_id\" AND wqrs.\"set_index\" = wcs.\"set_index\"\nWHERE jsonb_typeof(wcs.\"chart_state\") = 'object'\nON CONFLICT (\"organization_id\", \"type\", \"resource_id\") DO NOTHING;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1786118400000,
+    "hash": "7ad228e6e48d1b80233980f9bb4cca068df576b271b11c7f9a8284e45f14f39c"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"result_sets\" ADD COLUMN \"pinned_at\" timestamp with time zone;\n",
+      "\nALTER TABLE \"result_sets\" ADD COLUMN \"pinned_by_actor_id\" text;\n",
+      "\nALTER TABLE \"result_set_exports\" ALTER COLUMN \"expires_at\" DROP NOT NULL;\n"
+    ],
+    "bps": true,
+    "folderMillis": 1786204800000,
+    "hash": "e66c3e6af23ecfe788d150f414dcccfdd15b37d5c1ec6b9969b234a9810504b7"
   }
 ]

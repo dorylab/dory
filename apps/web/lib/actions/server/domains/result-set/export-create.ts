@@ -13,6 +13,7 @@ const inputSchema = z.object({
 });
 
 const outputSchema = z.object({
+    artifactId: z.string(),
     exportId: z.string(),
     format: z.enum(['csv', 'parquet']),
     fileName: z.string(),

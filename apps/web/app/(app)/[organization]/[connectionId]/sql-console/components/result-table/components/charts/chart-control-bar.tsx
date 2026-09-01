@@ -15,7 +15,7 @@ import {
     DropdownMenuTrigger,
 } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
-import { CircleDotDashed, Copy, Download, EllipsisVertical, FileImage, RotateCcw, Settings2 } from 'lucide-react';
+import { Archive, CircleDotDashed, Copy, Download, EllipsisVertical, FileImage, Loader2, RotateCcw, Settings2 } from 'lucide-react';
 
 import { ComboboxSubmenu, type ComboboxSubmenuGroup, type ComboboxSubmenuOption } from '@/components/ui/combobox-submenu';
 import { ChartCombobox, ChartSelect, type ChartState, type MetricOption, NONE_VALUE } from './chart-shared';
@@ -41,6 +41,11 @@ export function ChartControlBar(props: {
     onExportPng: () => void;
     onCopyPng: () => void;
     onExportSvg: () => void;
+    onSaveArtifact?: () => void;
+    saveArtifactLabel?: string;
+    saveArtifactPending?: boolean;
+    saveArtifactDisabled?: boolean;
+    saveArtifactPlacement?: 'menu' | 'inline';
 }) {
     const {
         chartState,
@@ -63,6 +68,11 @@ export function ChartControlBar(props: {
         onExportPng,
         onCopyPng,
         onExportSvg,
+        onSaveArtifact,
+        saveArtifactLabel,
+        saveArtifactPending = false,
+        saveArtifactDisabled = false,
+        saveArtifactPlacement = 'menu',
     } = props;
 
     const supportsTimelineSlider = chartState.chartType === 'line' || chartState.chartType === 'bar' || chartState.chartType === 'histogram';
@@ -121,6 +131,12 @@ export function ChartControlBar(props: {
                 </div>
                 <TooltipProvider delayDuration={150}>
                     <div className="flex shrink-0 items-center gap-0.5 pt-0.5">
+                        {onSaveArtifact && saveArtifactPlacement === 'inline' ? (
+                            <Button type="button" size="sm" className="mr-1 h-7 gap-1.5" onClick={onSaveArtifact} disabled={saveArtifactPending || saveArtifactDisabled}>
+                                {saveArtifactPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+                                {saveArtifactLabel ?? 'Save chart'}
+                            </Button>
+                        ) : null}
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <span
@@ -217,6 +233,12 @@ export function ChartControlBar(props: {
                                 <TooltipContent side="top">More</TooltipContent>
                             </Tooltip>
                             <DropdownMenuContent align="end">
+                                {onSaveArtifact && saveArtifactPlacement === 'menu' ? (
+                                    <DropdownMenuItem onSelect={onSaveArtifact}>
+                                        <Archive />
+                                        Save to Artifacts
+                                    </DropdownMenuItem>
+                                ) : null}
                                 <DropdownMenuSub>
                                     <DropdownMenuSubTrigger>
                                         <Download />

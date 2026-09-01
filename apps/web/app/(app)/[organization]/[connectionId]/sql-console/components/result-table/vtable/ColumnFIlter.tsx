@@ -1,4 +1,4 @@
-"use client";
+'use client';
 // ColumnFilter.tsx
 import { useMemo, useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
 import { cn } from '@dory/web-utils';
@@ -12,6 +12,7 @@ import { Label } from '@/registry/new-york-v4/ui/label';
 import { useTranslations } from 'next-intl';
 
 type FieldKind = 'string' | 'number' | 'boolean' | 'date';
+type FilterDraft = { col: string; kind: 'string' | 'number'; op: any; value?: string; cs: boolean };
 
 function normType(t?: string | null) {
     return (t ?? '').toLowerCase().replace(/\s+/g, '');
@@ -30,7 +31,6 @@ function mapDbTypeToKind(dbType?: string | null): FieldKind | undefined {
     // date/time
     if (/(date|datetime|timestamp|time|year)/.test(t)) return 'date';
 
-    
     if (/(char|text|uuid|json|map|array|tuple|object|string|variant)/.test(t)) return 'string';
 
     return;
@@ -41,15 +41,14 @@ export const ColumnFilterPopover = forwardRef<
     {
         column: string;
         columns: Array<{ name: string; type: string }>;
-        draft: { col: string; kind: 'string' | 'number'; op: any; value?: string; cs: boolean };
+        draft: FilterDraft;
         setDraft: (updater: any) => void;
         existing?: ColumnFilter;
-        onApply: () => void;
+        onApply: (draft: FilterDraft) => void;
         onRemove: (col: string) => void;
 
-    
         externalAnchor?: HTMLElement | null;
-    
+
         externalOpenSignal?: number | string;
     }
 >((props, ref) => {
@@ -57,18 +56,16 @@ export const ColumnFilterPopover = forwardRef<
     const triggerBtnRef = useRef<HTMLButtonElement | null>(null);
     const t = useTranslations('SqlConsole');
 
-    
     useImperativeHandle(ref, () => triggerBtnRef.current!);
 
     const [open, setOpen] = useState(false);
-
+    const [localDraft, setLocalDraft] = useState(draft);
 
     const effectiveKind: FieldKind = useMemo(() => {
         const colMeta = columns.find(c => c.name === column);
         const k = mapDbTypeToKind(colMeta?.type);
         return k ?? 'string';
     }, [columns, column]);
-
 
     const ops = useMemo(() => {
         if (effectiveKind === 'number') {
@@ -108,17 +105,16 @@ export const ColumnFilterPopover = forwardRef<
         ];
     }, [effectiveKind, t]);
 
-
     useEffect(() => {
-        const cur = String(draft.op);
+        const cur = String(localDraft.op);
         const allowed = ops.map(o => o.v);
         if (!allowed.includes(cur)) {
-            setDraft((p: any) => ({ ...p, op: ops[0].v as any }));
+            setLocalDraft(current => ({ ...current, op: ops[0].v as any }));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveKind]);
 
-    const showValueInput = !['empty', 'notEmpty', 'isTrue', 'isFalse'].includes(String(draft.op)) && effectiveKind !== 'boolean';
+    const showValueInput = !['empty', 'notEmpty', 'isTrue', 'isFalse'].includes(String(localDraft.op)) && effectiveKind !== 'boolean';
 
     const inputType = effectiveKind === 'number' ? 'number' : effectiveKind === 'date' ? 'date' : 'text';
 
@@ -128,31 +124,33 @@ export const ColumnFilterPopover = forwardRef<
 
     useEffect(() => {
         if (!externalAnchor) return;
-        
+
         if (existing && existing.col === column) {
-            setDraft((p: any) => ({
-                ...p,
+            const nextDraft = {
+                ...draft,
                 col: existing.col,
-                kind: existing.kind === 'number' ? 'number' : 'string',
+                kind: (existing.kind === 'number' ? 'number' : 'string') as 'number' | 'string',
                 op: existing.op as any,
                 value: existing.value ?? '',
                 cs: !!existing.caseSensitive,
-            }));
+            };
+            setDraft(nextDraft);
+            setLocalDraft(nextDraft);
         } else {
-            const mappedKind = effectiveKind === 'number' ? 'number' : 'string';
-            setDraft((p: any) => ({ ...p, col: column, kind: mappedKind }));
+            const mappedKind: 'number' | 'string' = effectiveKind === 'number' ? 'number' : 'string';
+            const nextDraft = { ...draft, col: column, kind: mappedKind };
+            setDraft(nextDraft);
+            setLocalDraft(nextDraft);
         }
-        
+
         setOpen(true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [externalAnchor, externalOpenSignal]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
-            
             {externalAnchor && <PopoverAnchor virtualRef={{ current: externalAnchor }} />}
 
-            
             {!externalAnchor && (
                 <PopoverTrigger asChild>
                     <button
@@ -160,29 +158,30 @@ export const ColumnFilterPopover = forwardRef<
                         type="button"
                         className={cn('mr-1 inline-flex items-center justify-center rounded p-1 hover:bg-white/10', existing && 'bg-white/10')}
                         onClick={() => {
-                            
-                            const mappedKind = effectiveKind === 'number' ? 'number' : 'string';
+                            const mappedKind: 'number' | 'string' = effectiveKind === 'number' ? 'number' : 'string';
 
                             if (existing && existing.col === column) {
-                                
-                                setDraft((p: any) => ({
-                                    ...p,
+                                const nextDraft = {
+                                    ...draft,
                                     col: existing.col,
                                     kind: mappedKind,
                                     op: existing.op as any,
                                     value: existing.value ?? '',
                                     cs: !!existing.caseSensitive,
-                                }));
+                                };
+                                setDraft(nextDraft);
+                                setLocalDraft(nextDraft);
                             } else {
-                                
-                                setDraft((p: any) => ({
-                                    ...p,
+                                const nextDraft = {
+                                    ...draft,
                                     col: column,
                                     kind: mappedKind,
                                     op: defaultOpForKind(effectiveKind),
                                     value: '',
                                     cs: false,
-                                }));
+                                };
+                                setDraft(nextDraft);
+                                setLocalDraft(nextDraft);
                             }
 
                             setOpen(true);
@@ -194,7 +193,14 @@ export const ColumnFilterPopover = forwardRef<
                 </PopoverTrigger>
             )}
 
-            <PopoverContent align="start" side="bottom" className="w-80">
+            <PopoverContent
+                align="start"
+                side="bottom"
+                className="w-80"
+                onKeyDown={event => event.stopPropagation()}
+                onPaste={event => event.stopPropagation()}
+                onMouseDown={event => event.stopPropagation()}
+            >
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <div className="text-sm font-medium">{t('VTable.Filter.TitleWithColumn', { column })}</div>
@@ -213,10 +219,9 @@ export const ColumnFilterPopover = forwardRef<
                         )}
                     </div>
 
-                    
                     <div className="space-y-1">
                         <Label>{t('VTable.Filter.Operator')}</Label>
-                        <Select value={String(draft.op)} onValueChange={(v: any) => setDraft((p: any) => ({ ...p, op: v }))}>
+                        <Select value={String(localDraft.op)} onValueChange={(v: any) => setLocalDraft(current => ({ ...current, op: v }))}>
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
@@ -230,28 +235,26 @@ export const ColumnFilterPopover = forwardRef<
                         </Select>
                     </div>
 
-                    
                     {showValueInput && (
                         <div className="space-y-2">
                             <div className="space-y-1">
                                 <Label>{t('VTable.Filter.Value')}</Label>
                                 <Input
                                     type={inputType}
-                                    value={draft.value ?? ''}
-                                    onChange={e => setDraft((p: any) => ({ ...p, value: e.target.value }))}
+                                    value={localDraft.value ?? ''}
+                                    onChange={e => setLocalDraft(current => ({ ...current, value: e.target.value }))}
                                     placeholder={effectiveKind === 'date' ? t('VTable.Filter.PlaceholderDate') : t('VTable.Filter.PlaceholderText')}
                                 />
                             </div>
 
-                            
                             {(effectiveKind === 'string' || effectiveKind === 'date') && (
                                 <div className="flex items-center gap-2">
                                     <input
                                         id={`cs-${column}`}
                                         type="checkbox"
                                         className="h-4 w-4"
-                                        checked={!!draft.cs}
-                                        onChange={e => setDraft((p: any) => ({ ...p, cs: e.target.checked }))}
+                                        checked={!!localDraft.cs}
+                                        onChange={e => setLocalDraft(current => ({ ...current, cs: e.target.checked }))}
                                     />
                                     <Label htmlFor={`cs-${column}`}>{t('VTable.Filter.CaseSensitive')}</Label>
                                 </div>
@@ -266,7 +269,8 @@ export const ColumnFilterPopover = forwardRef<
                         <Button
                             size="sm"
                             onClick={() => {
-                                onApply();
+                                setDraft(localDraft);
+                                onApply(localDraft);
                                 setOpen(false);
                             }}
                         >

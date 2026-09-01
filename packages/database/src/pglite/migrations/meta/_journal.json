@@ -183,6 +183,20 @@
             "when": 1786028223308,
             "tag": "0025_export_runs",
             "breakpoints": true
+        },
+        {
+            "idx": 26,
+            "version": "7",
+            "when": 1786118400000,
+            "tag": "0027_silent_zarda",
+            "breakpoints": true
+        },
+        {
+            "idx": 27,
+            "version": "7",
+            "when": 1786204800000,
+            "tag": "0028_artifact_workspace_pins",
+            "breakpoints": true
         }
     ]
 }

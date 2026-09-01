@@ -1,4 +1,5 @@
 import { atom } from 'jotai';
+import { atomWithStorage } from 'jotai/utils';
 import type { TableMutationValue, TablePreviewFilter, TablePreviewSort, TableUpdateRow } from '@dory/drivers/types';
 
 export type TableEditViewSnapshot = {
@@ -51,6 +52,7 @@ export type TableCellEditTarget = {
 
 export const tableEditSessionsAtom = atom<TableEditSessions>({});
 export const tableIdentitySelectionsAtom = atom<TableIdentitySelections>({});
+export const tableSelectionEditHintDismissedAtom = atomWithStorage('table-browser:selection-edit-hint-dismissed', false);
 
 const HISTORY_LIMIT = 100;
 

@@ -40,7 +40,15 @@ async function tableExists(client: PGlite, tableName: string) {
 }
 
 test('keeps the PostgreSQL and PGlite ResultSet migrations in sync', async () => {
-    for (const name of ['0019_resultset_artifacts.sql', '0020_resultset_schema_updates.sql', '0023_import_runs.sql', '0024_import_transform_stats.sql', '0025_export_runs.sql']) {
+    for (const name of [
+        '0019_resultset_artifacts.sql',
+        '0020_resultset_schema_updates.sql',
+        '0023_import_runs.sql',
+        '0024_import_transform_stats.sql',
+        '0025_export_runs.sql',
+        '0027_silent_zarda.sql',
+        '0028_artifact_workspace_pins.sql',
+    ]) {
         const postgres = await readMigration(migrationRoots.PostgreSQL, name);
         const pglite = await readMigration(migrationRoots.PGlite, name);
         assert.equal(postgres, pglite, `${name} differs between PostgreSQL and PGlite`);
@@ -70,6 +78,8 @@ test('keeps the compiled PGlite bundle on the released 0019 through export runs'
     const importRunsMigration = byCreatedAt.get(1785851842755);
     const transformStatsMigration = byCreatedAt.get(1785866199860);
     const exportRunsMigration = byCreatedAt.get(1786028223308);
+    const artifactCatalogMigration = byCreatedAt.get(1786118400000);
+    const workspacePinsMigration = byCreatedAt.get(1786204800000);
 
     assert.ok(releasedMigration);
     assert.ok(schemaUpdateMigration);
@@ -78,6 +88,8 @@ test('keeps the compiled PGlite bundle on the released 0019 through export runs'
     assert.ok(importRunsMigration);
     assert.ok(transformStatsMigration);
     assert.ok(exportRunsMigration);
+    assert.ok(artifactCatalogMigration);
+    assert.ok(workspacePinsMigration);
     assert.equal(releasedMigration.folderMillis, 1783075200000);
     assert.equal(releasedMigration.hash, releasedMigrationHash);
     assert.equal(schemaUpdateMigration.folderMillis, 1784296092000);
@@ -96,7 +108,78 @@ test('keeps the compiled PGlite bundle on the released 0019 through export runs'
     assert.equal(transformStatsMigration.hash, createHash('sha256').update(transformStatsSql).digest('hex'));
     const exportRunsSql = await readMigration(migrationRoots.PGlite, '0025_export_runs.sql');
     assert.equal(exportRunsMigration.hash, createHash('sha256').update(exportRunsSql).digest('hex'));
+    const artifactCatalogSql = await readMigration(migrationRoots.PGlite, '0027_silent_zarda.sql');
+    const workspacePinsSql = await readMigration(migrationRoots.PGlite, '0028_artifact_workspace_pins.sql');
+    assert.equal(artifactCatalogMigration.hash, createHash('sha256').update(artifactCatalogSql).digest('hex'));
+    assert.equal(workspacePinsMigration.hash, createHash('sha256').update(workspacePinsSql).digest('hex'));
 });
+
+for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
+    test(`adds permanent workspace pin storage with the ${dialect} migration`, async () => {
+        const client = new PGlite();
+        try {
+            await client.exec(`
+                CREATE TABLE "result_sets" ("id" text PRIMARY KEY, "expires_at" timestamptz);
+                CREATE TABLE "result_set_exports" ("id" text PRIMARY KEY, "expires_at" timestamptz NOT NULL);
+            `);
+            await executeMigration(client, await readMigration(migrationRoot, '0028_artifact_workspace_pins.sql'));
+            const resultSetColumns = await getColumnTypes(client, 'result_sets');
+            assert.equal(resultSetColumns.get('pinned_at'), 'timestamp with time zone');
+            assert.equal(resultSetColumns.get('pinned_by_actor_id'), 'text');
+            await client.exec(`INSERT INTO "result_set_exports" ("id", "expires_at") VALUES ('export_1', NULL);`);
+        } finally {
+            await client.close();
+        }
+    });
+}
+
+for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
+    test(`creates and backfills the Artifact catalog with the ${dialect} migration`, async () => {
+        const client = new PGlite();
+        try {
+            await client.exec(`
+                CREATE TABLE "result_sets" (
+                    "id" text PRIMARY KEY, "organization_id" text NOT NULL, "data_availability" text NOT NULL,
+                    "connection_id" text, "work_id" text, "agent_run_id" text, "comparison_id" text,
+                    "comparison_run_id" text, "source_type" text NOT NULL, "created_by_actor_type" text NOT NULL,
+                    "created_by_actor_id" text, "byte_size" bigint, "expires_at" timestamptz,
+                    "created_at" timestamptz NOT NULL, "updated_at" timestamptz NOT NULL,
+                    "session_id" text, "set_index" integer
+                );
+                CREATE TABLE "work_query_result_sets" ("work_id" text, "session_id" text, "set_index" integer, "title" text);
+                CREATE TABLE "works" ("work_id" text PRIMARY KEY, "title" text NOT NULL);
+                CREATE TABLE "result_set_exports" (
+                    "id" text PRIMARY KEY, "organization_id" text NOT NULL, "result_set_id" text,
+                    "file_name" text NOT NULL, "format" text NOT NULL, "byte_size" bigint NOT NULL,
+                    "expires_at" timestamptz NOT NULL, "created_at" timestamptz NOT NULL
+                );
+                CREATE TABLE "work_chart_states" (
+                    "work_id" text, "session_id" text, "set_index" integer, "state_key" text,
+                    "chart_state" jsonb NOT NULL, "updated_at" timestamptz NOT NULL
+                );
+                INSERT INTO "works" VALUES ('work_1', 'Customer analysis');
+                INSERT INTO "result_sets" VALUES (
+                    'rs_1', 'org_1', 'full', 'conn_1', 'work_1', 'work_1', NULL, NULL, 'query-run',
+                    'agent', 'user_1', 1024, now() + interval '7 days', now(), now(), 'session_1', 0
+                );
+                INSERT INTO "work_query_result_sets" VALUES ('work_1', 'session_1', 0, 'Monthly revenue');
+                INSERT INTO "result_set_exports" VALUES ('rse_1', 'org_1', 'rs_1', 'report.csv', 'csv', 256, now() + interval '1 day', now());
+                INSERT INTO "work_chart_states" VALUES (
+                    'work_1', 'session_1', 0, 'primary', '{"chartType":"line","xKey":"month","yKey":"sum:revenue","groupKey":"__none__"}', now()
+                );
+            `);
+            await executeMigration(client, await readMigration(migrationRoot, '0027_silent_zarda.sql'));
+            const result = await client.query<{ type: string; title: string }>(`SELECT "type", "title" FROM "artifacts" ORDER BY "type"`);
+            assert.deepEqual(result.rows, [
+                { type: 'chart', title: 'Monthly revenue chart' },
+                { type: 'file', title: 'report.csv' },
+                { type: 'result_set', title: 'Monthly revenue' },
+            ]);
+        } finally {
+            await client.close();
+        }
+    });
+}
 
 for (const [dialect, migrationRoot] of Object.entries(migrationRoots)) {
     test(`creates export run storage with the ${dialect} migration`, async () => {

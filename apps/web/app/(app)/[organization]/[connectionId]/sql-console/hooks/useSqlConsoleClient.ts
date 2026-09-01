@@ -12,8 +12,10 @@ import { useSqlQueryRunner } from './useSqlQueryRunner';
 import { useSqlChatHandoff } from './useSqlChatHandoff';
 import { useWorkHydration } from './useWorkHydration';
 import { normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
+import type { SqlWorkspaceInitialResultTarget } from '../initial-result-target';
+import { useInitialResultTarget } from './useInitialResultTarget';
 
-export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspaceScope?: SqlWorkspaceScope) {
+export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspaceScope?: SqlWorkspaceScope, initialResultTarget?: SqlWorkspaceInitialResultTarget | null) {
     const { normalizedLayout, onLayout } = useSqlLayout(defaultLayout);
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const { data: session } = authClient.useSession();
@@ -65,6 +67,17 @@ export function useSqlConsoleClient(defaultLayout: number[] | undefined, workspa
     useWorkHydration({
         tabs,
         isLoading,
+        setActiveTabId,
+        workspaceScope: normalizedWorkspaceScope,
+        initialResultTarget,
+    });
+
+    useInitialResultTarget({
+        target: initialResultTarget,
+        tabs,
+        areTabsHydrated,
+        isLoading,
+        addTab,
         setActiveTabId,
         workspaceScope: normalizedWorkspaceScope,
     });

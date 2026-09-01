@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import type { FieldValues, UseFormReturn } from 'react-hook-form';
-import { Link2 } from 'lucide-react';
+import { CircleHelp, Link2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { FormLabel } from '@/registry/new-york-v4/ui/form';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import { CONNECTION_URL_TYPES, getConnectionUrlPlaceholder, parseConnectionUrl } from './drivers/connection-url';
 
 export function supportsConnectionUrl(type?: string): boolean {
@@ -59,10 +60,26 @@ export function ConnectionUrlField({ form, type }: { form: UseFormReturn<FieldVa
 
     return (
         <div className="space-y-2">
-            <FormLabel htmlFor={inputId} className="flex items-center gap-1.5">
-                <span>{t('Connection URL')}</span>
-                <span className="text-xs font-normal text-muted-foreground">({t('Optional')})</span>
-            </FormLabel>
+            <div className="flex items-center gap-1.5">
+                <FormLabel htmlFor={inputId} className="flex items-center gap-1.5">
+                    <span>{t('Connection URL')}</span>
+                    <span className="text-xs font-normal text-muted-foreground">({t('Optional')})</span>
+                </FormLabel>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button
+                            type="button"
+                            className="inline-flex size-4 cursor-pointer items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                            aria-label={t('Connection URL Help')}
+                        >
+                            <CircleHelp className="size-4" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" align="start" sideOffset={6} className="max-w-64 text-left leading-relaxed">
+                        {t('Connection URL Help')}
+                    </TooltipContent>
+                </Tooltip>
+            </div>
             <div className="flex gap-2">
                 <Input
                     id={inputId}
@@ -97,9 +114,7 @@ export function ConnectionUrlField({ form, type }: { form: UseFormReturn<FieldVa
                 <p id={`${type}-connection-url-error`} className="text-sm font-medium text-destructive" aria-live="polite">
                     {t('Invalid Connection URL')}
                 </p>
-            ) : (
-                <p className="text-xs text-muted-foreground">{t('Connection URL Help')}</p>
-            )}
+            ) : null}
         </div>
     );
 }

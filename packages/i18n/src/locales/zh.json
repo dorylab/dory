@@ -537,7 +537,8 @@
             "CommitAll": "全部提交（{count}）",
             "Committing": "正在提交…",
             "SelectionSummary": "{cells} 个单元格 · {rows} 行",
-            "SelectionEditHint": "输入以统一赋值 · Cmd/Ctrl+V 粘贴",
+            "SelectionEditTooltip": "输入可统一赋值，或按 Cmd/Ctrl+V 粘贴。",
+            "SelectionEditTooltipDone": "完成",
             "BatchRowUnavailable": "选中的某一行已不在当前页面中。",
             "BatchReadOnly": "选区中包含只读单元格。",
             "BatchIdentityUnavailable": "选中的某一行无法被唯一定位。",
@@ -3326,6 +3327,10 @@
                 "FontSizeDescription": "调整编辑器文字大小。",
                 "LineHeightLabel": "行高",
                 "LineHeightDescription": "控制行间距倍率（1.1-2.2）。",
+                "PreviewLabel": "预览",
+                "PreviewDescription": "使用只读 SQL 示例预览编辑器设置。",
+                "HeightLabel": "编辑器高度",
+                "HeightDescription": "设置新 SQL 工作区的默认编辑器高度（默认 20%，可调整为 15%-80%）。",
                 "QueryLimitLabel": "默认查询限制",
                 "QueryLimitDescription": "设置执行 SQL 时默认附带的 LIMIT。选择 No limit 时不会自动追加 LIMIT。",
                 "LineNumbersLabel": "行号",
@@ -3731,6 +3736,7 @@
     },
     "AppSidebar": {
         "DataSources": "数据源",
+        "Artifacts": "Artifacts",
         "NoDataSourceSelected": "未选择数据源",
         "WorkspaceTitle": "工作区",
         "WorkspaceDataSourcesCount": "{count} 个数据源",
@@ -3749,6 +3755,13 @@
         "StarNotificationAction": "GitHub Star",
         "DismissStarNotification": "关闭 GitHub Star 提示",
         "GetHelp": "获取帮助",
+        "HelpCommunity": "帮助与社区",
+        "NeedHelp": "需要帮助？",
+        "Documentation": "文档",
+        "DiscordCommunity": "Discord 社区",
+        "GitHubDiscussions": "GitHub 讨论区",
+        "ReportIssue": "报告问题",
+        "X": "X",
         "Organization": "组织",
         "OrganizationSetting": "组织设置",
         "QueryAudit": "查询审计",
@@ -3769,6 +3782,139 @@
             "Confirm": "确认删除",
             "Cancel": "保留工作区",
             "DeleteFailed": "删除访客会话失败，请重试。"
+        }
+    },
+    "Artifacts": {
+        "Eyebrow": "工作区产物",
+        "Title": "Artifacts",
+        "Description": "搜索并继续使用结果集和可视化内容。",
+        "SearchPlaceholder": "搜索 Artifacts...",
+        "TypeFilter": "按类型筛选 Artifacts",
+        "Loading": "正在加载 Artifacts...",
+        "Empty": "未找到 Artifacts",
+        "EmptyDescription": "持久化查询结果、保存的图表和导出文件会显示在这里。",
+        "UnknownSource": "未知来源",
+        "Details": "详情",
+        "Delete": "删除",
+        "Deleted": "Artifact 已删除。",
+        "NoExpiry": "不过期",
+        "Pinned": "已固定到工作区",
+        "Unpinned": "已从工作区收藏中移除。",
+        "PinnedOnly": "收藏",
+        "CreatedBy": "创建者：{creator}",
+        "CreatedByAgent": "Agent Run · {title}",
+        "Retention": {
+            "Pinned": "已固定到工作区",
+            "Stored": "已存储",
+            "Temporary": "临时结果 · 保留 {days} 天"
+        },
+        "Rows": "{count, number} 行",
+        "Columns": {
+            "Title": "标题",
+            "Source": "来源",
+            "Rows": "行数",
+            "Size": "大小",
+            "Retention": "保留状态",
+            "Actions": "操作"
+        },
+        "DeleteDialog": {
+            "Title": "删除 Artifact？",
+            "Description": "确定要删除“{title}”吗？此操作无法撤销。",
+            "Cancel": "取消",
+            "Confirm": "删除"
+        },
+        "Previous": "上一页",
+        "Next": "下一页",
+        "Page": "第 {page} / {pages} 页",
+        "Types": {
+            "all": "全部",
+            "result_set": "结果集",
+            "chart": "可视化",
+            "file": "文件"
+        },
+        "Groups": {
+            "result_set": "结果集",
+            "chart": "可视化",
+            "file": "文件"
+        },
+        "Statuses": {
+            "ready": "可用",
+            "unavailable": "不可用"
+        },
+        "Creators": {
+            "user": "用户",
+            "agent": "Agent",
+            "mcp": "MCP",
+            "automation": "自动化"
+        },
+        "Viewer": {
+            "Back": "Artifacts",
+            "Types": {
+                "result_set": "结果集",
+                "chart": "图表",
+                "file": "文件"
+            },
+            "CreatedBy": "创建者",
+            "Source": "来源",
+            "Rows": "行数",
+            "Size": "大小",
+            "CreatedAt": "创建时间",
+            "ExpiresAt": "过期时间",
+            "NoExpiry": "不过期",
+            "CreatedFrom": "创建自",
+            "Retention": "保留状态",
+            "Temporary": "临时结果 · 保留 {days} 天",
+            "Stored": "已存储",
+            "Pinned": "已固定到工作区",
+            "Pin": "Pin",
+            "Unpin": "Unpin",
+            "Unpinned": "已从工作区收藏中移除。",
+            "Open": "打开",
+            "OpenInWorkspace": "在工作区打开",
+            "ContinueWithAgent": "交给 Agent 继续",
+            "RowsCount": "{count} 行",
+            "CreatedByLine": "创建于 {createdAt} · 由 {creator} 创建",
+            "Copy": "复制",
+            "SqlCopied": "SQL 已复制。",
+            "Export": "导出",
+            "Download": "下载",
+            "CreateChart": "创建图表",
+            "Share": "分享",
+            "Chart": "图表",
+            "SaveChart": "保存图表",
+            "Data": "数据",
+            "SearchRows": "搜索数据行...",
+            "LoadingRows": "正在加载结果数据...",
+            "NoRows": "当前视图没有匹配的数据行。",
+            "Previous": "上一页",
+            "Next": "下一页",
+            "Page": "第 {page} / {pages} 页",
+            "FileDescription": "此 {format} 文件将在工作区保留周期内保持可用。",
+            "Renamed": "Artifact 已重命名。",
+            "ChartSaved": "图表已保存到 Artifacts。",
+            "ShareCopied": "组织内链接已复制。",
+            "AgentTaskCopied": "外部 Agent 任务已复制。",
+            "MoreActions": "更多操作",
+            "Delete": "删除",
+            "Deleted": "Artifact 已删除。",
+            "DeleteDialog": {
+                "Title": "删除 Artifact？",
+                "Description": "确定要删除“{title}”吗？此操作无法撤销。",
+                "Cancel": "取消",
+                "Confirm": "删除"
+            },
+            "ChartRequired": "请先配置图表再保存。",
+            "ActionFailed": "Artifact 操作失败。",
+            "NotFound": "Artifact 不存在或已不可用。"
+        },
+        "WorkspaceDrawer": {
+            "Title": "Artifact SQL Workspace",
+            "Description": "从此 Artifact 恢复的独立 SQL 工作区。",
+            "Back": "返回 Artifact",
+            "BackToArtifact": "{title} 查询结果",
+            "Close": "关闭 Artifact 工作区",
+            "Loading": "正在打开 SQL Workspace...",
+            "Unavailable": "此 Artifact 已无法在 SQL Workspace 中打开。"
         }
     },
     "AgentRuns": {
@@ -3891,7 +4037,9 @@
         },
         "WorkspaceDrawer": {
             "Title": "Agent Run 工作区",
-            "Description": "这个 Agent Run 的 SQL 工作区。"
+            "Description": "这个 Agent Run 的 SQL 工作区。",
+            "Back": "返回 Agent Run",
+            "Close": "关闭 Agent Run 工作区"
         },
         "WorkspacePanel": {
             "LoadFailed": "加载 Agent Run 失败。",

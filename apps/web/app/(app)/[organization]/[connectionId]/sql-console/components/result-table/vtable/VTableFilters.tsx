@@ -211,11 +211,14 @@ export function useVTableFilters({
         });
     }, []);
 
-    const applyFilterDraft = useCallback(() => {
-        const { col, kind, op, value, cs } = filterDraft;
-        if (!col) return;
-        setColumnFilter({ col, kind, op, value: value ?? '', caseSensitive: cs });
-    }, [filterDraft, setColumnFilter]);
+    const applyFilterDraft = useCallback(
+        (draftToApply: FilterDraft = filterDraft) => {
+            const { col, kind, op, value, cs } = draftToApply;
+            if (!col) return;
+            setColumnFilter({ col, kind, op, value: value ?? '', caseSensitive: cs });
+        },
+        [filterDraft, setColumnFilter],
+    );
 
     const removeFilter = useCallback((col: string) => {
         setActiveFilters(prev => prev.filter(filter => filter.col !== col));
@@ -229,10 +232,7 @@ export function useVTableFilters({
         setActiveFilters(filters);
     }, []);
 
-    const getColumnFilter = useCallback(
-        (column: string) => filtersByColumn.get(column),
-        [filtersByColumn],
-    );
+    const getColumnFilter = useCallback((column: string) => filtersByColumn.get(column), [filtersByColumn]);
 
     const getColumnFilterPopoverProps = useCallback(
         (column: string, columnsRaw: ColumnMeta[]) => ({
@@ -283,15 +283,15 @@ export function useVTableFilterUi({
         return map;
     }, [activeFilters]);
     const normalizedColumns = useMemo(() => normalizeColumns(columnsRaw), [columnsRaw]);
-    const applyFilterDraft = useCallback(() => {
-        const { col, kind, op, value, cs } = filterDraft;
-        if (!col) return;
-        onUpsertFilter({ col, kind, op, value: value ?? '', caseSensitive: cs });
-    }, [filterDraft, onUpsertFilter]);
-    const getColumnFilter = useCallback(
-        (column: string) => filtersByColumn.get(column),
-        [filtersByColumn],
+    const applyFilterDraft = useCallback(
+        (draftToApply: FilterDraft = filterDraft) => {
+            const { col, kind, op, value, cs } = draftToApply;
+            if (!col) return;
+            onUpsertFilter({ col, kind, op, value: value ?? '', caseSensitive: cs });
+        },
+        [filterDraft, onUpsertFilter],
     );
+    const getColumnFilter = useCallback((column: string) => filtersByColumn.get(column), [filtersByColumn]);
     const getColumnFilterPopoverProps = useCallback(
         (column: string) => ({
             column,
@@ -378,53 +378,40 @@ export function VTableFilters({
                 <div className={cn('flex items-center gap-2 border-b bg-muted/30 px-2 py-1', className)}>
                     <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                         {visibleFilters.map(filter => (
-                            <FilterPill
-                                key={filter.col}
-                                filter={filter}
-                                label={formatFilterSummary(filter, t)}
-                                onOpen={openFilterEditor}
-                                onRemove={onRemoveFilter}
-                                t={t}
-                            />
+                            <FilterPill key={filter.col} filter={filter} label={formatFilterSummary(filter, t)} onOpen={openFilterEditor} onRemove={onRemoveFilter} t={t} />
                         ))}
                         {hiddenFilters.length > 0 && (
                             <>
                                 <div ref={hiddenFiltersAnchorRef} className="h-0 w-0 shrink-0" />
                                 <Popover open={hiddenFiltersOpen} onOpenChange={setHiddenFiltersOpen}>
-                                <PopoverTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className="shrink-0 rounded-md border border-border/70 bg-background px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                                    >
-                                        +{hiddenFilters.length} more
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent align="start" className="w-80 p-2">
-                                    <div className="space-y-1">
-                                        {hiddenFilters.map(filter => (
-                                            <FilterPill
-                                                key={filter.col}
-                                                filter={filter}
-                                                label={formatFilterSummary(filter, t)}
-                                                onOpen={filter => openHiddenFilterEditor(filter)}
-                                                onRemove={onRemoveFilter}
-                                                t={t}
-                                                className="w-full"
-                                            />
-                                        ))}
-                                    </div>
-                                </PopoverContent>
+                                    <PopoverTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="shrink-0 rounded-md border border-border/70 bg-background px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                        >
+                                            +{hiddenFilters.length} more
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent align="start" className="w-80 p-2">
+                                        <div className="space-y-1">
+                                            {hiddenFilters.map(filter => (
+                                                <FilterPill
+                                                    key={filter.col}
+                                                    filter={filter}
+                                                    label={formatFilterSummary(filter, t)}
+                                                    onOpen={filter => openHiddenFilterEditor(filter)}
+                                                    onRemove={onRemoveFilter}
+                                                    t={t}
+                                                    className="w-full"
+                                                />
+                                            ))}
+                                        </div>
+                                    </PopoverContent>
                                 </Popover>
                             </>
                         )}
                     </div>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        className="shrink-0"
-                        onClick={onClearAllFilters}
-                    >
+                    <Button type="button" variant="ghost" size="xs" className="shrink-0" onClick={onClearAllFilters}>
                         {t('VTable.Filter.ClearAll')}
                     </Button>
                 </div>
@@ -433,8 +420,8 @@ export function VTableFilters({
             {tagFilterCol && tagFilterPopoverProps && (
                 <ColumnFilterPopover
                     {...tagFilterPopoverProps}
-                    onApply={() => {
-                        tagFilterPopoverProps.onApply();
+                    onApply={draft => {
+                        tagFilterPopoverProps.onApply(draft);
                         setTagFilterAnchor(null);
                         setTagFilterCol(null);
                     }}
@@ -467,12 +454,7 @@ function FilterPill({
     className?: string;
 }) {
     return (
-        <div
-            className={cn(
-                'flex min-w-0 items-center gap-1 rounded-md border border-border/70 bg-background px-2 py-1 text-xs',
-                className,
-            )}
-        >
+        <div className={cn('flex min-w-0 items-center gap-1 rounded-md border border-border/70 bg-background px-2 py-1 text-xs', className)}>
             <button
                 type="button"
                 className={cn('flex min-w-0 flex-1 items-center gap-1 overflow-hidden text-left', filter.kind === 'range' ? 'cursor-default' : 'cursor-pointer')}

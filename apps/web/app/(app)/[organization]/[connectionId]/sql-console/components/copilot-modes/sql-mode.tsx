@@ -31,6 +31,7 @@ import { isAnonymousUser } from '@/lib/auth/anonymous-user';
 import { useTranslations } from 'next-intl';
 import {
     normalizeSqlEditorSettings,
+    resolveSqlEditorResultLayout,
     SQL_EDITOR_QUERY_LIMIT_NO_LIMIT_VALUE,
     SQL_EDITOR_QUERY_LIMIT_OPTIONS,
     sqlEditorSettingsAtom,
@@ -63,7 +64,7 @@ const buildInlineAskSqlComment = (prompt: string) => {
     return commentText ? `-- ${commentText}` : '';
 };
 
-const DEFAULT_EDITOR_RESULT_LAYOUT = [45, 55] as const;
+const DEFAULT_EDITOR_RESULT_LAYOUT = [20, 80] as const;
 const LEGACY_DEFAULT_EDITOR_RESULT_LAYOUT = [25, 75] as const;
 const MIN_EDITOR_PANEL_SIZE = 15;
 const MIN_RESULT_PANEL_SIZE = 20;
@@ -203,7 +204,10 @@ export function SqlMode({
             }),
         [activeTab, activeTabId, connectionId],
     );
-    const editorResultLayout = useMemo(() => normalizeEditorResultLayout(editorResultLayouts[editorResultLayoutScopeKey]), [editorResultLayoutScopeKey, editorResultLayouts]);
+    const editorResultLayout = useMemo(
+        () => normalizeEditorResultLayout(resolveSqlEditorResultLayout(editorResultLayouts[editorResultLayoutScopeKey], editorSettings)),
+        [editorResultLayoutScopeKey, editorResultLayouts, editorSettings],
+    );
     const editorResultDefaultLayout = useMemo(
         () => ({
             'editor-panel': editorResultLayout[0],

@@ -56,7 +56,7 @@ export function SettingsModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className={cn('p-0 gap-0 overflow-hidden', 'sm:max-w-[1080px] w-[1080px] h-[680px] min-h-0', 'rounded-2xl')}>
+            <DialogContent className={cn('bg-card p-0 gap-0 overflow-hidden', 'sm:max-w-[1080px] w-[1080px] h-[680px] min-h-0', 'rounded-2xl')}>
                 <div className="grid h-full min-h-0 overflow-hidden grid-cols-[280px_minmax(0,1fr)]">
                     <SettingsSidebar
                         active={resolvedActiveCategory}
