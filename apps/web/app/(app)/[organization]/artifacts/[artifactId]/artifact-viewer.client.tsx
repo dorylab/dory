@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, BarChart3, Bot, Check, Copy, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { ArrowLeft, BarChart3, Bot, Check, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -13,13 +13,14 @@ import { useOrganizationId } from '@/app/(app)/[organization]/components/organiz
 import { executeActionClient } from '@/lib/actions/client';
 import { buildArtifactHandoffPrompt } from '@/lib/artifacts/handoff-prompt';
 import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
+import { SmartCodeBlock } from '@/components/@dory/ui/code-block/code-block';
+import { DataSourceCell } from '@/components/data-source/data-source-cell';
 import type { ArtifactChartState, ArtifactDetail } from '@/lib/artifacts/types';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Skeleton } from '@/registry/new-york-v4/ui/skeleton';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/registry/new-york-v4/ui/tooltip';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -44,35 +45,15 @@ type RowsOutput = {
     dataAvailability: string;
 };
 
-function formatBytes(value: number | null) {
-    if (value == null) return '—';
-    if (value < 1024) return `${value} B`;
-    if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
-    if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
-    return `${(value / 1024 ** 3).toFixed(1)} GB`;
-}
-
-function CompactMetadata({ artifact, onTogglePin, pinPending }: { artifact: ArtifactDetail; onTogglePin: () => void; pinPending: boolean }) {
+function CompactMetadata({ artifact }: { artifact: ArtifactDetail }) {
     const t = useTranslations('Artifacts.Viewer');
-    const artifactsT = useTranslations('Artifacts');
-    const creators = {
-        user: artifactsT('Creators.user'),
-        agent: artifactsT('Creators.agent'),
-        mcp: artifactsT('Creators.mcp'),
-        automation: artifactsT('Creators.automation'),
-    };
-    const creator =
-        artifact.agentRunId && artifact.runTitle
-            ? artifactsT('CreatedByAgent', { title: artifact.runTitle })
-            : (artifact.createdByName ?? creators[artifact.createdByActorType as keyof typeof creators] ?? artifact.createdByActorType);
     const metadata = [
         t(`Types.${artifact.type}`),
         artifact.rowCount == null ? null : t('RowsCount', { count: artifact.rowCount.toLocaleString() }),
-        artifact.byteSize == null ? null : formatBytes(artifact.byteSize),
-        artifact.connectionName ?? artifact.comparisonName ?? artifact.sourceType,
+        t('SnapshotStatus'),
     ].filter(Boolean);
     return (
-        <div className="space-y-1 text-sm text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {metadata.map((item, index) => (
                     <span key={item} className="flex items-center gap-x-2">
@@ -80,25 +61,7 @@ function CompactMetadata({ artifact, onTogglePin, pinPending }: { artifact: Arti
                         <span>{item}</span>
                     </span>
                 ))}
-                {artifact.sourceResultSetId ? (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 text-muted-foreground"
-                                onClick={onTogglePin}
-                                disabled={pinPending}
-                                aria-label={artifact.pinnedAt ? t('Unpin') : t('Pin')}
-                            >
-                                {artifact.pinnedAt ? <Pin className="h-3.5 w-3.5" /> : <PinOff className="h-3.5 w-3.5" />}
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{artifact.pinnedAt ? t('Unpin') : t('Pin')}</TooltipContent>
-                    </Tooltip>
-                ) : null}
             </div>
-            <p>{t('CreatedByLine', { createdAt: new Date(artifact.createdAt).toLocaleString(), creator })}</p>
         </div>
     );
 }
@@ -214,15 +177,6 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
             toast.error(t('ActionFailed'));
         }
     };
-    const copySql = async () => {
-        if (!artifact?.resultSet?.sql) return;
-        try {
-            await navigator.clipboard.writeText(artifact.resultSet.sql);
-            toast.success(t('SqlCopied'));
-        } catch {
-            toast.error(t('ActionFailed'));
-        }
-    };
     if (artifactQuery.isLoading) {
         return (
             <div className="h-screen bg-n8 p-8">
@@ -273,6 +227,25 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                                     <Pencil className="h-4 w-4 opacity-0 transition-opacity group-hover:opacity-60" />
                                 </button>
                             )}
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                                <span>{t('CreatedAt')} · {new Date(artifact.createdAt).toLocaleString()}</span>
+                                {artifact.connectionName ? (
+                                    <>
+                                        <span aria-hidden="true">·</span>
+                                        <div className="flex items-center gap-1">
+                                            {t('Source')} ·
+                                            <DataSourceCell
+                                                dataSource={{
+                                                    connectionId: artifact.connectionId,
+                                                    connectionName: artifact.connectionName,
+                                                }}
+                                                className="-my-0.5"
+                                            />
+                                        </div>
+                                    </>
+                                ) : null}
+                            </div>
+                            <CompactMetadata artifact={artifact} />
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {artifact.workspaceTarget ? (
@@ -317,22 +290,37 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
                             </DropdownMenu>
                         </div>
                     </div>
-                    <CompactMetadata
-                        artifact={artifact}
-                        onTogglePin={() => (artifact.pinnedAt ? unpinMutation.mutate() : pinMutation.mutate())}
-                        pinPending={pinMutation.isPending || unpinMutation.isPending}
-                    />
-                    {artifact.resultSet?.sql ? (
-                        <div className="flex min-w-0 items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5 font-mono text-sm">
-                            <code className="min-w-0 flex-1 truncate" title={artifact.resultSet.sql}>
-                                {artifact.resultSet.sql}
-                            </code>
-                            <Button variant="ghost" size="sm" className="h-6 shrink-0 gap-1 px-1.5" onClick={() => void copySql()}>
-                                <Copy className="h-3.5 w-3.5" />
-                                {t('Copy')}
-                            </Button>
-                        </div>
-                    ) : null}
+                    <Card>
+                        <CardContent className={artifact.resultSet?.sql ? 'grid gap-6 p-4 text-sm lg:grid-cols-2' : 'grid gap-4 p-4 text-sm'}>
+                            <div className="grid content-start gap-4">
+                                {artifact.workId ? (
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('ProducedBy')}</span>
+                                        <Link href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(artifact.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`} className="font-medium text-primary hover:underline">
+                                            {t('AgentRun', { title: artifact.runTitle ?? artifact.workId })}
+                                        </Link>
+                                    </div>
+                                ) : null}
+                                <div className="grid gap-2">
+                                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('EvidenceFor')}</span>
+                                    {artifact.usedBy.length ? (
+                                        artifact.usedBy.map(finding => (
+                                            <Link key={finding.findingId} href={`/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(finding.workId)}?fromArtifact=${encodeURIComponent(artifact.id)}`} className="text-primary hover:underline">
+                                                {finding.title}
+                                            </Link>
+                                        ))
+                                    ) : (
+                                        <span className="text-muted-foreground">{t('NoEvidence')}</span>
+                                    )}
+                                </div>
+                            </div>
+                            {artifact.resultSet?.sql ? (
+                                <div className="min-w-0 border-t pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+                                    <SmartCodeBlock label={t('SourceQuery')} value={artifact.resultSet.sql} type="sql" maxHeightClassName="max-h-64" variant="bare" />
+                                </div>
+                            ) : null}
+                        </CardContent>
+                    </Card>
                 </header>
 
                 <div className="min-h-0 flex-1">

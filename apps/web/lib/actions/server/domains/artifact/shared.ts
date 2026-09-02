@@ -59,6 +59,7 @@ const artifactSummarySchema = z.object({
     pinnedAt: dateSchema.nullable(),
     pinnedByActorId: z.string().nullable(),
     retentionDays: z.number().int().positive().nullable(),
+    usedByCount: z.number().int().nonnegative(),
 });
 
 export const artifactListOutputSchema = z.object({ rows: z.array(artifactSummarySchema), total: z.number().int().nonnegative() });
@@ -75,6 +76,7 @@ export const artifactDetailOutputSchema = artifactSummarySchema.extend({
         .nullable(),
     workspaceTarget: artifactWorkspaceTargetSchema.nullable(),
     downloadUrl: z.string().nullable(),
+    usedBy: z.array(z.object({ findingId: z.string(), workId: z.string(), title: z.string() })),
 });
 
 export const artifactMutationOutputSchema = z.object({ id: z.string(), title: z.string() });

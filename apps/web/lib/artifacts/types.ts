@@ -57,6 +57,7 @@ type ArtifactSummaryBase = {
     pinnedAt: string | null;
     pinnedByActorId: string | null;
     retentionDays: number | null;
+    usedByCount: number;
 };
 
 export type ArtifactSummary = ArtifactSummaryBase & {
@@ -79,6 +80,7 @@ export type ResultSetArtifactDetail = ArtifactSummaryBase &
         chartState: null;
         workspaceTarget: ArtifactWorkspaceTarget | null;
         downloadUrl: null;
+        usedBy: Array<{ findingId: string; workId: string; title: string }>;
     };
 
 export type ChartArtifactDetail = ArtifactSummaryBase &
@@ -87,6 +89,7 @@ export type ChartArtifactDetail = ArtifactSummaryBase &
         chartState: ArtifactChartState | null;
         workspaceTarget: ArtifactWorkspaceTarget | null;
         downloadUrl: null;
+        usedBy: Array<{ findingId: string; workId: string; title: string }>;
     };
 
 export type FileArtifactDetail = ArtifactSummaryBase &
@@ -95,6 +98,7 @@ export type FileArtifactDetail = ArtifactSummaryBase &
         chartState: null;
         workspaceTarget: null;
         downloadUrl: string | null;
+        usedBy: Array<{ findingId: string; workId: string; title: string }>;
     };
 
 export type ArtifactDetail = ResultSetArtifactDetail | ChartArtifactDetail | FileArtifactDetail;

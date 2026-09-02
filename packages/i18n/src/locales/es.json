@@ -3812,12 +3812,25 @@
             "Temporary": "Temporal · se conserva durante {days} días"
         },
         "Rows": "{count, number} filas",
+        "UsedBy": "{count, plural, one {# hallazgo} other {# hallazgos}}",
+        "UpdatedAt": "Actualizado {updatedAt}",
+        "Origins": {
+            "AgentRun": "Ejecución de agente · {title}",
+            "UntitledRun": "Ejecución sin título",
+            "SqlWorkspace": "Espacio de trabajo SQL",
+            "Comparison": "Comparación"
+        },
+        "Freshness": {
+            "fresh": "Reciente",
+            "aging": "Por revisar",
+            "stale": "Antiguo"
+        },
         "Columns": {
-            "Title": "Título",
-            "Source": "Origen",
-            "Rows": "Filas",
-            "Size": "Tamaño",
-            "Retention": "Conservación",
+            "Artifact": "Artifact",
+            "Origin": "Origen",
+            "UsedBy": "Usado por",
+            "Created": "Creado",
+            "Freshness": "Vigencia",
             "Actions": "Acciones"
         },
         "DeleteDialog": {
@@ -3858,6 +3871,17 @@
                 "file": "Archivo"
             },
             "CreatedBy": "Creado por",
+            "Origin": "Origen",
+            "Snapshot": "Instantánea creada {createdAt}",
+            "SnapshotStatus": "Instantánea",
+            "ProducedBy": "Generado por",
+            "AgentRun": "Ejecución de agente · {title}",
+            "EvidenceFor": "Evidencia para",
+            "NoEvidence": "Este artifact aún no se usa como evidencia para ningún hallazgo.",
+            "SourceQuery": "Consulta de origen",
+            "DataPreview": "Vista previa de datos",
+            "ShowQuery": "Mostrar consulta",
+            "HideQuery": "Ocultar consulta",
             "Source": "Origen",
             "Rows": "Filas",
             "Size": "Tamaño",

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { ArrowLeft, CheckCircle2, Database, PanelTop, TerminalSquare } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Database, FileText, PanelTop, TerminalSquare } from 'lucide-react';
 
 import { getDBService } from '@dory/database';
 import { AgentRunActivitySection } from '@/components/agent-runs/agent-run-activity-section';
@@ -37,9 +37,18 @@ function Metric({ icon: Icon, label, value }: { icon: typeof Database; label: st
     );
 }
 
-export default async function AgentRunDetailPage({ params }: { params: Promise<{ organization: string; workId: string }> }) {
-    const { organization, workId } = await params;
-    const t = await getTranslations('AgentRuns');
+export default async function AgentRunDetailPage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ organization: string; workId: string }>;
+    searchParams: Promise<{ fromArtifact?: string }>;
+}) {
+    const [{ organization, workId }, { fromArtifact }] = await Promise.all([params, searchParams]);
+    const [t, artifactsT] = await Promise.all([
+        getTranslations('AgentRuns'),
+        getTranslations('Artifacts'),
+    ]);
     const formatter = createAgentRunTextFormatter(t);
     const bootstrap = await getAppBootstrapState({ organizationSlugOrId: organization });
     const userId = bootstrap.session?.user?.id ?? null;
@@ -50,10 +59,12 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
     }
 
     const db = await getDBService();
-    const [snapshot, events, connections] = await Promise.all([
+    const [snapshot, events, connections, persistedFindings, artifacts] = await Promise.all([
         db.works.getSnapshot({ organizationId, userId, workId }),
         db.works.listEvents({ organizationId, userId, workId }),
         db.connections.list(organizationId),
+        db.works.listFindings({ organizationId, userId, workId }),
+        db.artifacts.listByWork({ organizationId, workId }),
     ]);
     if (!snapshot) notFound();
 
@@ -66,16 +77,21 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
     const activitySummary = getAgentRunActivitySummary(snapshot, events, formatter);
     const hasWorkspace = Boolean(resolveAgentWorkspaceTarget(snapshot).connectionId);
     const hasSummary = Boolean(summary && (summary.findings.length || summary.steps.length));
+    const backToArtifacts = Boolean(fromArtifact);
+    const backHref = backToArtifacts
+        ? `/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(fromArtifact!)}`
+        : `/${encodeURIComponent(organization)}/agent-runs`;
+    const backLabel = backToArtifacts ? `${artifactsT('Title')} · ${fromArtifact}` : t('List.Title');
 
     return (
         <div className="bg-n8 h-screen overflow-auto">
-            <main className="container mx-auto flex flex-col gap-7 px-12 pt-8 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
+            <main className="container mx-auto flex flex-col gap-7 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="flex flex-col gap-3">
                     <div>
                         <Button asChild variant="ghost" size="sm" className="-ml-2">
-                            <Link href={`/${organization}/agent-runs`}>
+                            <Link href={backHref}>
                                 <ArrowLeft className="h-4 w-4" />
-                                {t('List.Title')}
+                                {backLabel}
                             </Link>
                         </Button>
                     </div>
@@ -113,12 +129,24 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                             <div className="grid gap-6 md:grid-cols-2">
                                 <section className="grid content-start gap-3">
                                     <h3 className="text-sm font-semibold">{t('Summary.Findings')}</h3>
-                                    {summary?.findings.length ? (
+                                    {(persistedFindings.length ? persistedFindings : (summary?.findings ?? []).map((title, index) => ({ id: `legacy-${index}`, title, content: null, evidence: [] }))).length ? (
                                         <ul className="grid gap-3">
-                                            {summary.findings.map((item, itemIndex) => (
-                                                <li key={`finding-${itemIndex}-${item}`} className="flex gap-3 text-sm">
+                                            {(persistedFindings.length ? persistedFindings : (summary?.findings ?? []).map((title, index) => ({ id: `legacy-${index}`, title, content: null, evidence: [] }))).map(item => (
+                                                <li key={item.id} className="flex gap-3 text-sm">
                                                     <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                                                    <span>{item}</span>
+                                                    <div className="grid gap-2">
+                                                        <span>{item.title}</span>
+                                                        {item.content ? <span className="text-muted-foreground">{item.content}</span> : null}
+                                                        {item.evidence.length ? (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {item.evidence.map(artifact => (
+                                                                    <Link key={artifact.id} href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`} className="rounded-md border bg-muted px-2 py-1 text-xs hover:bg-accent">
+                                                                        {artifact.title}{artifact.rowCount == null ? '' : ` · ${artifact.rowCount.toLocaleString()} rows`}
+                                                                    </Link>
+                                                                ))}
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
@@ -146,6 +174,29 @@ export default async function AgentRunDetailPage({ params }: { params: Promise<{
                             <div className="rounded-md border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
                                 {t('Summary.Empty')}
                             </div>
+                        )}
+                    </div>
+                </section>
+
+                <section className="grid gap-3">
+                    <div>
+                        <h2 className="text-base font-semibold">Artifacts</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">Snapshots produced during this Agent Run.</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-5">
+                        {artifacts.length ? (
+                            <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                {artifacts.map(artifact => (
+                                    <li key={artifact.id}>
+                                        <Link href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`} className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent">
+                                            <FileText className="h-4 w-4 text-muted-foreground" />
+                                            <span className="min-w-0 truncate text-sm font-medium">{artifact.title}</span>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">No artifacts were produced by this Run.</div>
                         )}
                     </div>
                 </section>

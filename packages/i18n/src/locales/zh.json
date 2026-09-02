@@ -3809,12 +3809,25 @@
             "Temporary": "临时结果 · 保留 {days} 天"
         },
         "Rows": "{count, number} 行",
+        "UsedBy": "{count} 个发现",
+        "UpdatedAt": "更新于 {updatedAt}",
+        "Origins": {
+            "AgentRun": "Agent Run · {title}",
+            "UntitledRun": "未命名运行",
+            "SqlWorkspace": "SQL 工作区",
+            "Comparison": "比较"
+        },
+        "Freshness": {
+            "fresh": "新鲜",
+            "aging": "待复核",
+            "stale": "陈旧"
+        },
         "Columns": {
-            "Title": "标题",
-            "Source": "来源",
-            "Rows": "行数",
-            "Size": "大小",
-            "Retention": "保留状态",
+            "Artifact": "Artifact",
+            "Origin": "来源",
+            "UsedBy": "用于",
+            "Created": "创建时间",
+            "Freshness": "新鲜度",
             "Actions": "操作"
         },
         "DeleteDialog": {
@@ -3855,6 +3868,17 @@
                 "file": "文件"
             },
             "CreatedBy": "创建者",
+            "Origin": "来源",
+            "Snapshot": "快照创建于 {createdAt}",
+            "SnapshotStatus": "快照",
+            "ProducedBy": "产出者",
+            "AgentRun": "Agent Run · {title}",
+            "EvidenceFor": "作为以下结论的证据",
+            "NoEvidence": "此 Artifact 尚未被用于支持任何发现。",
+            "SourceQuery": "来源查询",
+            "DataPreview": "数据预览",
+            "ShowQuery": "显示查询",
+            "HideQuery": "收起查询",
             "Source": "来源",
             "Rows": "行数",
             "Size": "大小",

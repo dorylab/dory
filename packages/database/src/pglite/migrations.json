@@ -461,5 +461,16 @@
     "bps": true,
     "folderMillis": 1786204800000,
     "hash": "e66c3e6af23ecfe788d150f414dcccfdd15b37d5c1ec6b9969b234a9810504b7"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"findings\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"title\" text NOT NULL,\n    \"content\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_findings_org_work_created\" ON \"findings\" USING btree (\"organization_id\", \"work_id\", \"created_at\");\n",
+      "\nCREATE TABLE \"finding_artifacts\" (\n    \"finding_id\" text NOT NULL,\n    \"artifact_id\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_finding_artifacts\" PRIMARY KEY(\"finding_id\", \"artifact_id\")\n);\n",
+      "\nCREATE INDEX \"idx_finding_artifacts_artifact\" ON \"finding_artifacts\" USING btree (\"artifact_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1786291200000,
+    "hash": "agent-run-findings-0029"
   }
 ]

@@ -280,6 +280,7 @@ test('public Dory MCP catalog is limited to high-level facade tools', () => {
             .sort(),
         [
             'dory_analyze_database_changes',
+            'dory_artifacts',
             'dory_compare_schema',
             'dory_create_work',
             'dory_explore_schema',

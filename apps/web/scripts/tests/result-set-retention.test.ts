@@ -26,7 +26,17 @@ process.env.PGLITE_DB_PATH = dbDir;
 
 const { getClient } = await import('@dory/database/postgres/client');
 const { resetPgliteClient } = await import('@dory/database/postgres/client/pglite');
-const { artifacts: artifactCatalog, user, organizations, resultSets, resultSetExports, queryRuns, agentRunResultSets } = await import('@dory/database/postgres/schemas');
+const {
+    artifacts: artifactCatalog,
+    findingArtifacts,
+    findings,
+    user,
+    organizations,
+    resultSets,
+    resultSetExports,
+    queryRuns,
+    agentRunResultSets,
+} = await import('@dory/database/postgres/schemas');
 const {
     ALLOWED_RESULT_SET_MAX_STORAGE_BYTES,
     PostgresOrganizationsRepository,
@@ -194,6 +204,24 @@ async function initSchema() {
             "expires_at" timestamp with time zone,
             "created_at" timestamp with time zone NOT NULL,
             "updated_at" timestamp with time zone NOT NULL
+        )
+    `);
+    await db.execute(sql`
+        CREATE TABLE "findings" (
+            "id" text PRIMARY KEY NOT NULL,
+            "organization_id" text NOT NULL,
+            "work_id" text NOT NULL,
+            "title" text NOT NULL,
+            "content" text,
+            "created_at" timestamp with time zone NOT NULL
+        )
+    `);
+    await db.execute(sql`
+        CREATE TABLE "finding_artifacts" (
+            "finding_id" text NOT NULL,
+            "artifact_id" text NOT NULL,
+            "created_at" timestamp with time zone NOT NULL,
+            PRIMARY KEY ("finding_id", "artifact_id")
         )
     `);
     await db.execute(sql`
@@ -649,7 +677,7 @@ test('pinning an artifact preserves its result set and exports permanently', asy
         resultSet: { sessionId: 'session_pinned', setIndex: 0, sqlText: 'select * from orders', status: 'success', rowCount: 1 },
         rows: [{ id: 1 }],
     });
-    const expiry = new Date('2026-09-01T00:00:00.000Z');
+    const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await db.insert(resultSetExports).values({
         id: 'rse_pinned',
         organizationId: 'org_retention',
@@ -703,6 +731,54 @@ test('pinning an artifact preserves its result set and exports permanently', asy
     assert.ok(unpinnedArtifacts.every(artifact => artifact.expiresAt?.getTime() === unpinnedResultSet?.expiresAt?.getTime()));
     assert.ok(Math.abs(unpinnedResultSet!.expiresAt!.getTime() - (unpinStartedAt + 14 * 24 * 60 * 60 * 1000)) < 5_000);
     assert.equal((await artifactsRepo.list({ organizationId: 'org_retention', types: ['result_set', 'chart'], pinnedOnly: true })).total, 0);
+});
+
+test('artifact lists include organization-scoped finding usage counts', async () => {
+    const now = new Date('2026-09-02T00:00:00.000Z');
+    await db.insert(artifactCatalog).values([
+        {
+            id: 'artifact_usage_one',
+            organizationId: 'org_retention',
+            type: 'result_set',
+            title: 'Revenue analysis',
+            status: 'ready',
+            resourceId: 'usage_one',
+            createdByActorType: 'agent',
+            createdAt: now,
+            updatedAt: now,
+        },
+        {
+            id: 'artifact_usage_two',
+            organizationId: 'org_retention',
+            type: 'result_set',
+            title: 'Customer risk',
+            status: 'ready',
+            resourceId: 'usage_two',
+            createdByActorType: 'agent',
+            createdAt: now,
+            updatedAt: now,
+        },
+    ]);
+    await db.insert(findings).values([
+        { id: 'finding_usage_one', organizationId: 'org_retention', workId: 'work_usage', title: 'Revenue finding', createdAt: now },
+        { id: 'finding_usage_two', organizationId: 'org_retention', workId: 'work_usage', title: 'Risk finding', createdAt: now },
+        { id: 'finding_usage_other_org', organizationId: 'org_other', workId: 'work_other', title: 'Unrelated finding', createdAt: now },
+    ]);
+    await db.insert(findingArtifacts).values([
+        { findingId: 'finding_usage_one', artifactId: 'artifact_usage_one', createdAt: now },
+        { findingId: 'finding_usage_two', artifactId: 'artifact_usage_one', createdAt: now },
+        { findingId: 'finding_usage_other_org', artifactId: 'artifact_usage_one', createdAt: now },
+    ]);
+
+    const artifactsRepo = new PostgresArtifactsRepository();
+    await artifactsRepo.init();
+    const list = await artifactsRepo.list({ organizationId: 'org_retention', query: 'analysis', limit: 10 });
+
+    assert.equal(list.rows.length, 1);
+    assert.equal(list.rows[0]?.id, 'artifact_usage_one');
+    assert.equal(list.rows[0]?.usedByCount, 2);
+    const allArtifacts = await artifactsRepo.list({ organizationId: 'org_retention', query: 'risk', limit: 10 });
+    assert.equal(allArtifacts.rows[0]?.usedByCount, 0);
 });
 
 test('stream failure publishes a v2 preview-only error manifest and removes uncommitted data', async () => {
