@@ -18375,12 +18375,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nanoid@npm:^5.1.7":
-  version: 5.1.7
-  resolution: "nanoid@npm:5.1.7"
+"nanoid@npm:^5.1.16":
+  version: 5.1.16
+  resolution: "nanoid@npm:5.1.16"
   bin:
     nanoid: bin/nanoid.js
-  checksum: 10c0/c5523bcb11031d2e8f4eb2ba96f99cd63cbe7f6776748035b4f292c6d524902b142b18a1bf0992e0039f9f925ef51154119bb19ee021766ec0a542d07dc51a82
+  checksum: 10c0/04b4f96237f5639716da0e98f453361b313bebaf458bb67dea2d384724fc8b3340a28f032a4373052150bcf3b801d122e291d81ae4fc522969f55c134f4401a3
   languageName: node
   linkType: hard
 
@@ -23838,7 +23838,7 @@ __metadata:
     monaco-editor-webpack-plugin: "npm:^7.1.1"
     motion: "npm:^12.38.0"
     mysql2: "npm:^3.20.0"
-    nanoid: "npm:^5.1.7"
+    nanoid: "npm:^5.1.16"
     next: "npm:16.2.11"
     next-intl: "npm:^4.9.2"
     next-runtime-env: "npm:^3.3.0"
