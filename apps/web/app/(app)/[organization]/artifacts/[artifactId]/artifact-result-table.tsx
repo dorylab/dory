@@ -169,6 +169,7 @@ export function ArtifactResultTable({
     return (
         <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card" data-testid="artifact-result-table">
             <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b bg-muted/30 px-2 py-1">
+                <span className="px-2 text-sm font-semibold">{t('DataPreview')}</span>
                 <div className="flex min-w-0 flex-1 items-center">
                     <VTableSearchBar
                         query={tableState.q}

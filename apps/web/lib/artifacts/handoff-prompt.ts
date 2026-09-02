@@ -18,7 +18,7 @@ export function buildArtifactHandoffPrompt(artifact: ArtifactDetail, url: string
         `Instructions:`,
         `1. ${workInstruction}`,
         `2. Call dory_artifacts with artifactId "${artifact.id}" and that workId to read its bounded context.`,
-        `3. Treat the Artifact as the source of truth and continue the user's analysis from it.`,
+        `3. Treat the Artifact as historical evidence and working context. Query the live source when the user needs current facts; inspect this snapshot to verify or continue the prior analysis.`,
         `4. Update the Dory workspace as needed and finish the work with a concise summary.`,
     ]
         .filter((line): line is string => line !== null)

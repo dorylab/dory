@@ -31,6 +31,8 @@ export type QueryExecuteInput = {
     stopOnError?: boolean | null;
     sessionId?: string | null;
     tabId?: string | null;
+    workId?: string | null;
+    agentRunId?: string | null;
     source?: string | null;
     refId?: string | null;
     limit?: number | null;
@@ -679,6 +681,8 @@ async function runSqlExecution(
                                 sourceConnectionType,
                                 sourceDatabaseName,
                                 tabId: input.tabId ?? null,
+                                workId: input.workId ?? null,
+                                agentRunId: input.agentRunId ?? null,
                                 sessionId,
                                 database: input.database ?? null,
                                 sessionSqlText: input.sql,
@@ -704,6 +708,8 @@ async function runSqlExecution(
                         sourceConnectionType,
                         sourceDatabaseName,
                         tabId: input.tabId ?? null,
+                        workId: input.workId ?? null,
+                        agentRunId: input.agentRunId ?? null,
                         sessionId,
                         database: input.database ?? null,
                         sessionSqlText: input.sql,

@@ -197,6 +197,13 @@
             "when": 1786204800000,
             "tag": "0028_artifact_workspace_pins",
             "breakpoints": true
+        },
+        {
+            "idx": 28,
+            "version": "7",
+            "when": 1786291200000,
+            "tag": "0029_agent_run_findings",
+            "breakpoints": true
         }
     ]
 }

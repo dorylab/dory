@@ -224,7 +224,7 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
 
     return (
         <div className="h-screen overflow-auto bg-n8">
-            <main className="container mx-auto flex flex-col gap-5 px-12 pb-12 pt-8 lg:px-12 xl:px-8 2xl:px-4">
+            <main className="container mx-auto flex flex-col gap-5 px-12 pb-12 pt-4 lg:px-12 xl:px-8 2xl:px-4">
                 <header>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Archive className="h-4 w-4" />

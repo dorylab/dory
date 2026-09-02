@@ -193,7 +193,20 @@ const finishWorkInputSchema = z
         workId: z.string().min(1),
         status: z.enum(['active', 'completed', 'error']),
         summaryTitle: z.string().min(1).max(1000).optional(),
-        findings: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing analytical conclusions from this Agent Run. These appear under Findings.'),
+        findings: z
+            .array(
+                z.union([
+                    z.string().min(1).max(500),
+                    z.object({
+                        title: z.string().min(1).max(500),
+                        content: z.string().max(4000).nullable().optional(),
+                        evidenceArtifactIds: z.array(z.string().min(1)).max(20).optional(),
+                    }),
+                ]),
+            )
+            .min(1)
+            .max(20)
+            .describe('User-facing analytical conclusions. For conclusions supported by SQL results, use an object with evidenceArtifactIds set to Artifact IDs returned by dory_run_readonly_sql. Evidence is optional when no Artifact supports the conclusion.'),
         steps: z.array(z.string().min(1).max(500)).min(1).max(20).describe('User-facing execution steps taken to complete this Agent Run. These appear under Steps.'),
     })
     .passthrough();
@@ -249,6 +262,16 @@ const readonlySqlOutputSchema = z
         rowCount: z.number().optional(),
         truncated: z.boolean().optional(),
         executionTimeMs: z.number().optional(),
+        artifacts: z
+            .array(
+                z.object({
+                    artifactId: z.string(),
+                    resultSetId: z.string(),
+                    title: z.string(),
+                    rowCount: z.number(),
+                }),
+            )
+            .optional(),
         workspaceAction: z
             .object({
                 mode: z.enum(['none', 'create_tab', 'append_to_tab', 'replace_tab']),
@@ -814,6 +837,8 @@ async function runReadonlySqlFacade(ctx: ActionContext<WebActionServices>, rawIn
         sql: input.sql,
         limit: input.maxRows,
         identityId: input.identityId,
+        workId: work.workId,
+        agentRunId: work.workId,
     });
     const firstSet = firstResultSet(output);
     const workspaceMode = input.workspaceMode && input.workspaceMode !== 'none' ? input.workspaceMode : input.targetTabId ? 'replace_tab' : 'create_tab';
@@ -835,7 +860,7 @@ async function runReadonlySqlFacade(ctx: ActionContext<WebActionServices>, rawIn
     if (output.session && tabId) {
         output.session.tabId = tabId;
     }
-    await ctx.services.db.works.saveSqlSnapshot(work.workId, output);
+    const savedArtifacts = (await ctx.services.db.works.saveSqlSnapshot(work.workId, output)) ?? [];
     work.workspaceUrl = buildWorkspaceUrl(ctx, { workId: work.workId, connectionId: input.connectionId }, { tabId, sessionId: output.session.sessionId });
 
     return withWork(
@@ -848,6 +873,7 @@ async function runReadonlySqlFacade(ctx: ActionContext<WebActionServices>, rawIn
             tabId,
             sessionId: output.session.sessionId,
             resultSetIds: output.queryResultSets.map(set => ({ sessionId: set.sessionId, setIndex: set.setIndex })),
+            artifacts: savedArtifacts,
             workspaceAction,
         },
         work,
@@ -1231,13 +1257,14 @@ async function actionTransportFacade(ctx: ActionContext<WebActionServices>, rawI
 
 async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput: unknown, work: ResolvedMcpWork) {
     const input = finishWorkInputSchema.parse(rawInput);
+    const findings = input.findings;
     const updated = await ctx.services.db.works.finishWithSummary({
         organizationId: ctx.organizationId,
         userId: ctx.userId,
         workId: work.workId,
         status: input.status,
         summaryTitle: input.summaryTitle ?? null,
-        findings: input.findings,
+        findings,
         steps: input.steps,
     });
 
@@ -1249,7 +1276,7 @@ async function finishWorkFacade(ctx: ActionContext<WebActionServices>, rawInput:
         {
             status: updated.status,
             summaryTitle: summary?.summaryTitle ?? null,
-            findings: summary?.findings ?? input.findings,
+            findings: summary?.findings ?? findings.map(finding => (typeof finding === 'string' ? finding : finding.title)),
             steps: summary?.steps ?? input.steps,
         },
         work,
@@ -1314,7 +1341,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
             name: 'dory_finish_work',
             title: 'Finish Dory Work',
             description:
-                'Finish or update a Dory Agent Run with structured Run summary content. Provide findings for analytical conclusions and steps for execution actions. Requires an existing workId.',
+                'Finish or update a Dory Agent Run with structured summary content. dory_run_readonly_sql returns persisted Artifact IDs; for every conclusion supported by one, pass a structured Finding with those IDs in evidenceArtifactIds. Evidence is optional when no Artifact supports the conclusion. Requires an existing workId.',
             inputSchema: finishWorkInputSchema,
             outputSchema: unknownObjectOutputSchema,
             annotations: {
@@ -1469,7 +1496,7 @@ export function getPublicDoryMcpTools(): McpFacadeTool[] {
         {
             name: 'dory_run_readonly_sql',
             title: 'Run read-only SQL',
-            description: `Run read-only SQL against a Dory connection, update the existing Agent Run workspace tab, and persist a result snapshot. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
+            description: `Run read-only SQL against a Dory connection, update the existing Agent Run workspace tab, and persist a result snapshot. Returns Artifact IDs; retain them and cite the relevant ones in dory_finish_work findings.evidenceArtifactIds. Requires an existing workId. ${WORK_CONTEXT_INSTRUCTION}`,
             inputSchema: readonlySqlInputSchema,
             outputSchema: readonlySqlOutputSchema,
             annotations: {

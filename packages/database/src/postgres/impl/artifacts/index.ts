@@ -5,6 +5,8 @@ import {
     artifacts,
     comparisons,
     connections,
+    findingArtifacts,
+    findings,
     organizations,
     resultSetExports,
     resultSets,
@@ -81,6 +83,7 @@ export type ArtifactDetail = ArtifactSummary & {
     } | null;
     workspaceTarget: ArtifactWorkspaceTarget | null;
     downloadUrl: string | null;
+    usedBy: Array<{ findingId: string; workId: string; title: string }>;
 };
 
 type ArtifactWorkspaceResultSet = Pick<typeof resultSets.$inferSelect, 'connectionId' | 'tabId' | 'sessionId' | 'setIndex' | 'sql' | 'workId'>;
@@ -221,6 +224,31 @@ export class PostgresArtifactsRepository {
         return { rows: rows.map(row => this.toSummary(row)), total: Number(totals[0]?.total ?? 0) };
     }
 
+    async listByWork(input: { organizationId: string; workId: string }) {
+        this.assertInited();
+        const rows = await this.db
+            .select({
+                artifact: artifacts,
+                connectionName: connections.name,
+                runTitle: works.title,
+                comparisonName: comparisons.name,
+                rowCount: resultSets.rowCount,
+                resultSetSql: resultSets.sql,
+                pinnedAt: resultSets.pinnedAt,
+                pinnedByActorId: resultSets.pinnedByActorId,
+                createdByName: user.name,
+            })
+            .from(artifacts)
+            .leftJoin(connections, and(eq(connections.organizationId, artifacts.organizationId), eq(connections.id, artifacts.connectionId)))
+            .leftJoin(works, eq(works.workId, artifacts.workId))
+            .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
+            .leftJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
+            .leftJoin(user, eq(user.id, artifacts.createdByActorId))
+            .where(and(eq(artifacts.organizationId, input.organizationId), or(eq(artifacts.workId, input.workId), eq(artifacts.agentRunId, input.workId))))
+            .orderBy(desc(artifacts.createdAt));
+        return rows.map(row => this.toSummary(row));
+    }
+
     async get(input: { organizationId: string; artifactId: string }): Promise<ArtifactDetail> {
         this.assertInited();
         const [row] = await this.db
@@ -248,6 +276,12 @@ export class PostgresArtifactsRepository {
             artifactWorkId: row.artifact.workId,
             resultSet: row.resultSet,
         });
+        const usedByRows = await this.db
+            .select({ findingId: findings.id, workId: findings.workId, title: findings.title })
+            .from(findingArtifacts)
+            .innerJoin(findings, eq(findings.id, findingArtifacts.findingId))
+            .where(and(eq(findingArtifacts.artifactId, row.artifact.id), eq(findings.organizationId, input.organizationId)))
+            .orderBy(desc(findings.createdAt));
         return {
             ...this.toSummary({
                 ...row,
@@ -268,6 +302,7 @@ export class PostgresArtifactsRepository {
                 : null,
             workspaceTarget,
             downloadUrl: row.artifact.type === 'file' ? `/api/result-set-exports/${encodeURIComponent(row.artifact.resourceId)}` : null,
+            usedBy: usedByRows,
         };
     }
 

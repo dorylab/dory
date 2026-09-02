@@ -75,6 +75,7 @@ export const artifactDetailOutputSchema = artifactSummarySchema.extend({
         .nullable(),
     workspaceTarget: artifactWorkspaceTargetSchema.nullable(),
     downloadUrl: z.string().nullable(),
+    usedBy: z.array(z.object({ findingId: z.string(), workId: z.string(), title: z.string() })),
 });
 
 export const artifactMutationOutputSchema = z.object({ id: z.string(), title: z.string() });

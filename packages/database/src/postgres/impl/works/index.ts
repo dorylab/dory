@@ -3,6 +3,9 @@ import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { getClient } from '@dory/database/postgres/client';
 import {
     agentRunResultSets,
+    artifacts,
+    findingArtifacts,
+    findings,
     queryRuns,
     resultSets as resultSetsTable,
     tabs,
@@ -72,8 +75,22 @@ export type WorkFinishInput = {
     workId: string;
     status: Extract<WorkStatus, 'active' | 'completed' | 'error'>;
     summaryTitle?: string | null;
-    findings: string[];
+    findings: Array<string | WorkFindingInput>;
     steps: string[];
+};
+
+export type WorkFindingInput = {
+    title: string;
+    content?: string | null;
+    evidenceArtifactIds?: string[];
+};
+
+export type WorkFinding = {
+    id: string;
+    title: string;
+    content: string | null;
+    createdAt: Date;
+    evidence: Array<{ id: string; title: string; type: string; rowCount: number | null }>;
 };
 
 export type WorkSqlSnapshotPayload = {
@@ -95,6 +112,13 @@ export type WorkSqlSnapshotPayload = {
     };
     queryResultSets: Array<Record<string, unknown> & { sessionId: string; setIndex: number; sqlText: string }>;
     results: unknown[][];
+};
+
+export type WorkSqlSnapshotArtifact = {
+    artifactId: string;
+    resultSetId: string;
+    title: string;
+    rowCount: number;
 };
 
 function toDate(value: unknown, fallback?: Date | null): Date | null {
@@ -154,6 +178,15 @@ function compactToolInput(input: Record<string, unknown>) {
 function cleanSummaryItems(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
     return value.map(item => (typeof item === 'string' ? item.trim() : '')).filter(Boolean);
+}
+
+function normalizeFinding(input: string | WorkFindingInput) {
+    if (typeof input === 'string') return { title: input.trim(), content: null, evidenceArtifactIds: [] };
+    return {
+        title: input.title.trim(),
+        content: input.content?.trim() || null,
+        evidenceArtifactIds: [...new Set(input.evidenceArtifactIds ?? [])],
+    };
 }
 
 function getAgentRunSummaryMetadata(metadata: Record<string, unknown>) {
@@ -504,7 +537,8 @@ export class PostgresWorksRepository {
         const finishedAt = now.toISOString();
         const currentMetadata = existing.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata) ? existing.metadata : {};
         const existingSummary = getAgentRunSummaryMetadata(currentMetadata);
-        const newFindings = cleanSummaryItems(input.findings);
+        const normalizedFindings = input.findings.map(normalizeFinding).filter(finding => finding.title);
+        const newFindings = normalizedFindings.map(finding => finding.title);
         const newSteps = cleanSummaryItems(input.steps);
         const nextFindings = [...existingSummary.findings, ...newFindings];
         const nextSteps = [...existingSummary.steps, ...newSteps];
@@ -527,26 +561,69 @@ export class PostgresWorksRepository {
             },
         };
 
-        const [row] = await this.db
-            .update(works)
-            .set({
-                status: input.status,
-                metadata,
-                updatedAt: now,
-                lastActiveAt: now,
-            })
-            .where(and(eq(works.workId, input.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId)))
-            .returning();
+        const [row] = await this.db.transaction(async tx => {
+            const evidenceIds = [...new Set(normalizedFindings.flatMap(finding => finding.evidenceArtifactIds))];
+            if (evidenceIds.length) {
+                const evidenceRows = await tx
+                    .select({ id: artifacts.id })
+                    .from(artifacts)
+                    .where(
+                        and(
+                            eq(artifacts.organizationId, input.organizationId),
+                            or(eq(artifacts.workId, input.workId), eq(artifacts.agentRunId, input.workId)),
+                            inArray(artifacts.id, evidenceIds),
+                        ),
+                    );
+                if (evidenceRows.length !== evidenceIds.length) {
+                    throw new DatabaseError('Finding evidence must be an Artifact produced by this Agent Run', 400);
+                }
+            }
+            for (const finding of normalizedFindings) {
+                const [created] = await tx
+                    .insert(findings)
+                    .values({ organizationId: input.organizationId, workId: input.workId, title: finding.title, content: finding.content })
+                    .returning({ id: findings.id });
+                if (finding.evidenceArtifactIds.length) {
+                    await tx.insert(findingArtifacts).values(finding.evidenceArtifactIds.map(artifactId => ({ findingId: created.id, artifactId })));
+                }
+            }
+            return tx
+                .update(works)
+                .set({ status: input.status, metadata, updatedAt: now, lastActiveAt: now })
+                .where(and(eq(works.workId, input.workId), eq(works.organizationId, input.organizationId), eq(works.userId, input.userId)))
+                .returning();
+        });
 
         if (!row) throw new DatabaseError('Failed to finish Work', 500);
         return row as WorkRecord;
+    }
+
+    async listFindings(input: { organizationId: string; userId: string; workId: string }): Promise<WorkFinding[]> {
+        this.assertInited();
+        const owned = await this.getById(input);
+        if (!owned) throw new DatabaseError('Work not found', 404);
+        const rows = await this.db
+            .select({ finding: findings, artifact: artifacts, rowCount: resultSetsTable.rowCount })
+            .from(findings)
+            .leftJoin(findingArtifacts, eq(findingArtifacts.findingId, findings.id))
+            .leftJoin(artifacts, eq(artifacts.id, findingArtifacts.artifactId))
+            .leftJoin(resultSetsTable, and(eq(resultSetsTable.organizationId, artifacts.organizationId), eq(resultSetsTable.id, artifacts.sourceResultSetId)))
+            .where(and(eq(findings.organizationId, input.organizationId), eq(findings.workId, input.workId)))
+            .orderBy(findings.createdAt);
+        const grouped = new Map<string, WorkFinding>();
+        for (const row of rows) {
+            const finding = grouped.get(row.finding.id) ?? { id: row.finding.id, title: row.finding.title, content: row.finding.content, createdAt: row.finding.createdAt, evidence: [] };
+            if (row.artifact) finding.evidence.push({ id: row.artifact.id, title: row.artifact.title, type: row.artifact.type, rowCount: row.rowCount ?? null });
+            grouped.set(finding.id, finding);
+        }
+        return [...grouped.values()];
     }
 
     summarizeInput(input: unknown) {
         return input && typeof input === 'object' && !Array.isArray(input) ? compactToolInput(input as Record<string, unknown>) : {};
     }
 
-    async saveSqlSnapshot(workId: string, payload: WorkSqlSnapshotPayload): Promise<void> {
+    async saveSqlSnapshot(workId: string, payload: WorkSqlSnapshotPayload): Promise<WorkSqlSnapshotArtifact[]> {
         this.assertInited();
         const session = payload.session;
         const sessionId = session.sessionId;
@@ -594,6 +671,7 @@ export class PostgresWorksRepository {
         await this.db.delete(workQueryResultSets).where(and(eq(workQueryResultSets.workId, workId), eq(workQueryResultSets.sessionId, sessionId)));
 
         const compatibilityRows: Array<typeof workQueryResultSets.$inferInsert> = [];
+        const savedArtifacts: WorkSqlSnapshotArtifact[] = [];
         const now = new Date();
 
         for (const [index, resultSet] of payload.queryResultSets.entries()) {
@@ -727,12 +805,42 @@ export class PostgresWorksRepository {
                     updatedAt: now,
                 });
 
+                await this.db
+                    .insert(artifacts)
+                    .values({
+                        id: `artifact_${artifactId}`,
+                        organizationId: work.organizationId,
+                        type: 'result_set',
+                        title: getString(resultSet.title) ?? `Result Set ${artifactId.slice(3, 11)}`,
+                        status: status === 'error' ? 'unavailable' : 'ready',
+                        resourceId: artifactId,
+                        sourceResultSetId: artifactId,
+                        connectionId: session.connectionId ?? work.connectionId ?? null,
+                        workId,
+                        agentRunId: workId,
+                        sourceType: 'query-run',
+                        createdByActorType: actorType,
+                        createdByActorId: session.userId ?? work.userId ?? null,
+                        byteSize: persistedManifest.byteSize ?? 0,
+                        expiresAt: null,
+                        createdAt: now,
+                        updatedAt: now,
+                    })
+                    .onConflictDoNothing();
+
                 await this.db.insert(agentRunResultSets).values({
                     agentRunId: workId,
                     resultSetId: artifactId,
                     queryRunId,
                     role: 'generated',
                     createdAt: now,
+                });
+
+                savedArtifacts.push({
+                    artifactId: `artifact_${artifactId}`,
+                    resultSetId: artifactId,
+                    title: getString(resultSet.title) ?? `Result Set ${artifactId.slice(3, 11)}`,
+                    rowCount,
                 });
             } catch (error) {
                 await this.artifacts.resultSets.deleteResultSet(ref).catch(() => undefined);
@@ -779,6 +887,8 @@ export class PostgresWorksRepository {
                 .set({ currentResultSetId, updatedAt: now })
                 .where(and(eq(tabs.tabId, session.tabId), eq(tabs.userId, session.userId)));
         }
+
+        return savedArtifacts;
     }
 
     async getSnapshot(params: { organizationId: string; userId: string; workId: string }) {
