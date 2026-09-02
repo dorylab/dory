@@ -561,8 +561,28 @@ export class PostgresWorksRepository {
             },
         };
 
+        // Agents sometimes omit evidence IDs even when the Run produced snapshots.
+        // Use those snapshots as a new-Finding fallback; explicit IDs still take
+        // precedence and a Run with no Artifacts remains uncited.
+        const inferredEvidenceArtifactIds = await this.db
+            .select({ id: artifacts.id })
+            .from(artifacts)
+            .where(
+                and(
+                    eq(artifacts.organizationId, input.organizationId),
+                    or(eq(artifacts.workId, input.workId), eq(artifacts.agentRunId, input.workId)),
+                ),
+            )
+            .orderBy(desc(artifacts.createdAt))
+            .limit(20);
+        const findingsToCreate = normalizedFindings.map(finding =>
+            !finding.evidenceArtifactIds.length && inferredEvidenceArtifactIds.length
+                ? { ...finding, evidenceArtifactIds: inferredEvidenceArtifactIds.map(artifact => artifact.id) }
+                : finding,
+        );
+
         const [row] = await this.db.transaction(async tx => {
-            const evidenceIds = [...new Set(normalizedFindings.flatMap(finding => finding.evidenceArtifactIds))];
+            const evidenceIds = [...new Set(findingsToCreate.flatMap(finding => finding.evidenceArtifactIds))];
             if (evidenceIds.length) {
                 const evidenceRows = await tx
                     .select({ id: artifacts.id })
@@ -578,7 +598,7 @@ export class PostgresWorksRepository {
                     throw new DatabaseError('Finding evidence must be an Artifact produced by this Agent Run', 400);
                 }
             }
-            for (const finding of normalizedFindings) {
+            for (const finding of findingsToCreate) {
                 const [created] = await tx
                     .insert(findings)
                     .values({ organizationId: input.organizationId, workId: input.workId, title: finding.title, content: finding.content })

@@ -35,7 +35,7 @@ export function buildAgentRunHandoffPrompt(input: AgentRunHandoffPromptInput) {
             : `2. List workspace tabs first with dory_workspace_tabs using workId "${input.workId}" and the Agent Run connection from the workspace context.`,
         `3. Treat the current workspace tabs as the user's latest context, including human edits made after the original Agent Run.`,
         `4. Continue the task from that state. Update or create workspace tabs as needed.`,
-        `5. When calling dory_finish_work, summarize only the new work completed in this continuation. Provide findings for analytical conclusions and steps for execution actions; Dory appends both to the existing Run summary.`,
+        `5. When calling dory_finish_work, summarize only the new work completed in this continuation. For conclusions supported by an Artifact returned from Dory SQL tools, use a structured Finding with its evidenceArtifactIds; Dory appends findings and steps to the existing Run summary.`,
     ].filter((line): line is string => line !== null);
 
     return lines.join('\n');
