@@ -22,7 +22,7 @@ Unlike a plain database MCP server that only sends query results back to a chat,
 Use Dory as your everyday SQL client, or as the database execution layer for agents like Claude Code, Codex CLI, and other MCP-compatible tools.
 
 <p align="center">
-  <a href="https://app.getdory.dev"><b>🚀 Try Live Demo</b></a> &nbsp; • &nbsp;
+  <!-- <a href="https://app.getdory.dev"><b>🚀 Try Live Demo</b></a> &nbsp; • &nbsp; -->
   <a href="#install-on-macos-with-homebrew"><b>🍺 Install via Homebrew</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/releases"><b>🍎 Download for macOS</b></a> &nbsp; • &nbsp;
   <a href="https://github.com/dorylab/dory/releases"><b>Download for Windows</b></a> &nbsp; • &nbsp;
@@ -33,9 +33,7 @@ Use Dory as your everyday SQL client, or as the database execution layer for age
   <a href="https://github.com/dorylab/dory/stargazers"><b>⭐ Star</b></a>
 </p>
 
-**No signup required. Click "Sign in as demo" to start instantly.**
-
-**👇 Live Playground: https://app.getdory.dev**
+**No signup required. Click "Try Dory without an account" to start instantly.**
 
 ![Dory AI-native SQL workspace](./public/actions.png)
 
