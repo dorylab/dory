@@ -57,6 +57,7 @@ type ArtifactSummaryBase = {
     pinnedAt: string | null;
     pinnedByActorId: string | null;
     retentionDays: number | null;
+    usedByCount: number;
 };
 
 export type ArtifactSummary = ArtifactSummaryBase & {

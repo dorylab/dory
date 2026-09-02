@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Archive, BarChart3, Bot, Database, Download, FileText, Loader2, MoreHorizontal, PanelTop, Pin, PinOff, Search, Star, Trash2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { parseAsBoolean, parseAsInteger, parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { toast } from 'sonner';
 
 import { executeActionClient } from '@/lib/actions/client';
 import type { ArtifactDetail, ArtifactSummary, ArtifactType } from '@/lib/artifacts/types';
 import { buildArtifactHandoffPrompt } from '@/lib/artifacts/handoff-prompt';
+import { formatArtifactRelativeTime, getArtifactFreshness, getArtifactListOrigin } from '@/lib/artifacts/list-display';
 import { buildArtifactWorkspacePath } from '@/lib/artifacts/workspace-url';
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
@@ -35,29 +36,25 @@ const PAGE_SIZE = 50;
 const TYPES = ['all', 'result_set', 'chart'] as const;
 const TYPE_ORDER: ArtifactType[] = ['result_set', 'chart'];
 const TYPE_ICONS = { result_set: Database, chart: BarChart3, file: FileText } as const;
-const CREATOR_KEYS = new Set(['user', 'agent', 'mcp', 'automation']);
-
 type ArtifactListOutput = { rows: ArtifactSummary[]; total: number };
 
-function formatBytes(value: number | null) {
-    if (value == null) return null;
-    if (value < 1024) return `${value} B`;
-    if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
-    if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
-    return `${(value / 1024 ** 3).toFixed(1)} GB`;
+function formatExactTimestamp(timestamp: string, locale: string) {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return '—';
+    return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function retentionLabel(artifact: ArtifactSummary, t: ReturnType<typeof useTranslations<'Artifacts'>>) {
-    if (artifact.pinnedAt) return t('Retention.Pinned');
-    if (!artifact.expiresAt) return t('Retention.Stored');
-    return t('Retention.Temporary', { days: artifact.retentionDays ?? 1 });
-}
-
-function creatorLabel(artifact: ArtifactSummary, t: ReturnType<typeof useTranslations<'Artifacts'>>) {
-    if (artifact.createdByName) return t('CreatedBy', { creator: artifact.createdByName });
-    const creator = CREATOR_KEYS.has(artifact.createdByActorType) ? t(`Creators.${artifact.createdByActorType}`) : artifact.createdByActorType;
-    if (artifact.agentRunId && artifact.runTitle) return t('CreatedByAgent', { title: artifact.runTitle });
-    return t('CreatedBy', { creator });
+function originLabel(artifact: ArtifactSummary, t: ReturnType<typeof useTranslations<'Artifacts'>>) {
+    switch (getArtifactListOrigin(artifact)) {
+        case 'agent-run':
+            return t('Origins.AgentRun', { title: artifact.runTitle ?? t('Origins.UntitledRun') });
+        case 'sql-workspace':
+            return t('Origins.SqlWorkspace');
+        case 'comparison':
+            return artifact.comparisonName ?? t('Origins.Comparison');
+        default:
+            return artifact.connectionName ?? t('UnknownSource');
+    }
 }
 
 function ArtifactRowActions({
@@ -170,6 +167,7 @@ function ArtifactRowActions({
 
 export function ArtifactsPageClient({ organization }: { organization: string }) {
     const t = useTranslations('Artifacts');
+    const locale = useLocale();
     const organizationId = useOrganizationId();
     const queryClient = useQueryClient();
     const [artifactToDelete, setArtifactToDelete] = useState<ArtifactSummary | null>(null);
@@ -288,18 +286,18 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
                                     </div>
                                     <Card className="py-0">
                                         <CardContent className="p-0">
-                                            <div className="hidden h-10 items-center gap-4 border-b bg-muted/30 px-4 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(20rem,2fr)_minmax(9rem,1fr)_6rem_6rem_10rem_7rem]">
-                                                <span>{t('Columns.Title')}</span>
-                                                <span>{t('Columns.Source')}</span>
-                                                <span>{t('Columns.Rows')}</span>
-                                                <span>{t('Columns.Size')}</span>
-                                                <span>{t('Columns.Retention')}</span>
+                                            <div className="hidden h-10 items-center gap-4 border-b bg-muted/30 px-4 text-xs font-medium text-muted-foreground lg:grid lg:grid-cols-[minmax(16rem,1.8fr)_minmax(12rem,1.4fr)_7rem_8rem_7rem_3rem]">
+                                                <span>{t('Columns.Artifact')}</span>
+                                                <span>{t('Columns.Origin')}</span>
+                                                <span>{t('Columns.UsedBy')}</span>
+                                                <span>{t('Columns.Created')}</span>
+                                                <span>{t('Columns.Freshness')}</span>
                                                 <span className="text-right">{t('Columns.Actions')}</span>
                                             </div>
                                             {rows.map(artifact => (
                                                 <div
                                                     key={artifact.id}
-                                                    className="grid min-h-20 items-center gap-4 border-b px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(20rem,2fr)_minmax(9rem,1fr)_6rem_6rem_10rem_7rem]"
+                                                    className="grid min-h-20 items-center gap-4 border-b px-4 py-3 last:border-b-0 lg:grid-cols-[minmax(16rem,1.8fr)_minmax(12rem,1.4fr)_7rem_8rem_7rem_3rem]"
                                                 >
                                                     <div className="min-w-0 lg:col-start-1 lg:row-start-1 lg:flex lg:items-center lg:gap-3">
                                                         <Icon className="hidden h-4 w-4 shrink-0 text-muted-foreground lg:block" />
@@ -318,21 +316,46 @@ export function ArtifactsPageClient({ organization }: { organization: string }) 
                                                                     <Pin className="h-3.5 w-3.5 text-muted-foreground" aria-label={t('Retention.Pinned')} />
                                                                 ) : null}
                                                             </div>
-                                                            <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-                                                                <span>{artifact.connectionName ?? artifact.comparisonName ?? t('UnknownSource')}</span>
-                                                                <span>·</span>
-                                                                <span>{creatorLabel(artifact, t)}</span>
-                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <span className="hidden truncate text-xs text-muted-foreground lg:block">
-                                                        {artifact.connectionName ?? artifact.comparisonName ?? t('UnknownSource')}
-                                                    </span>
-                                                    <span className="hidden text-xs text-muted-foreground lg:block">
-                                                        {artifact.rowCount == null ? '—' : t('Rows', { count: artifact.rowCount })}
-                                                    </span>
-                                                    <span className="hidden text-xs text-muted-foreground lg:block">{formatBytes(artifact.byteSize) ?? '—'}</span>
-                                                    <span className="hidden text-xs text-muted-foreground lg:block">{retentionLabel(artifact, t)}</span>
+                                                    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-xs lg:contents">
+                                                        <div className="min-w-0 lg:col-start-2 lg:row-start-1">
+                                                            <dt className="mb-1 text-muted-foreground lg:hidden">{t('Columns.Origin')}</dt>
+                                                            <dd className="truncate text-muted-foreground">{originLabel(artifact, t)}</dd>
+                                                        </div>
+                                                        <div className="lg:col-start-3 lg:row-start-1">
+                                                            <dt className="mb-1 text-muted-foreground lg:hidden">{t('Columns.UsedBy')}</dt>
+                                                            <dd className="text-muted-foreground">{artifact.usedByCount ? t('UsedBy', { count: artifact.usedByCount }) : '—'}</dd>
+                                                        </div>
+                                                        <div className="lg:col-start-4 lg:row-start-1">
+                                                            <dt className="mb-1 text-muted-foreground lg:hidden">{t('Columns.Created')}</dt>
+                                                            <dd className="text-muted-foreground">
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <span className="cursor-default">{formatArtifactRelativeTime(artifact.createdAt, locale) ?? '—'}</span>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>{formatExactTimestamp(artifact.createdAt, locale)}</TooltipContent>
+                                                                </Tooltip>
+                                                            </dd>
+                                                        </div>
+                                                        <div className="lg:col-start-5 lg:row-start-1">
+                                                            <dt className="mb-1 text-muted-foreground lg:hidden">{t('Columns.Freshness')}</dt>
+                                                            <dd>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <span className="cursor-default">
+                                                                            <Badge variant="outline" className="capitalize">
+                                                                                {t(`Freshness.${getArtifactFreshness(artifact.updatedAt)}`)}
+                                                                            </Badge>
+                                                                        </span>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        {t('UpdatedAt', { updatedAt: formatExactTimestamp(artifact.updatedAt, locale) })}
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </dd>
+                                                        </div>
+                                                    </dl>
                                                     <div className="flex items-center justify-end gap-1 lg:col-start-6 lg:row-start-1">
                                                         <ArtifactRowActions
                                                             artifact={artifact}

@@ -3819,12 +3819,25 @@
             "Temporary": "Temporary · retained for {days} days"
         },
         "Rows": "{count, number} rows",
+        "UsedBy": "{count, plural, one {# finding} other {# findings}}",
+        "UpdatedAt": "Updated {updatedAt}",
+        "Origins": {
+            "AgentRun": "Agent Run · {title}",
+            "UntitledRun": "Untitled run",
+            "SqlWorkspace": "SQL Workspace",
+            "Comparison": "Comparison"
+        },
+        "Freshness": {
+            "fresh": "Fresh",
+            "aging": "Aging",
+            "stale": "Stale"
+        },
         "Columns": {
-            "Title": "Title",
-            "Source": "Source",
-            "Rows": "Rows",
-            "Size": "Size",
-            "Retention": "Retention",
+            "Artifact": "Artifact",
+            "Origin": "Origin",
+            "UsedBy": "Used by",
+            "Created": "Created",
+            "Freshness": "Freshness",
             "Actions": "Actions"
         },
         "DeleteDialog": {

@@ -50,6 +50,7 @@ export type ArtifactSummary = {
     pinnedAt: Date | null;
     pinnedByActorId: string | null;
     retentionDays: number | null;
+    usedByCount: number;
 };
 
 export type ArtifactWorkspaceTarget =
@@ -188,6 +189,13 @@ export class PostgresArtifactsRepository {
             conditions.push(or(ilike(artifacts.title, match), ilike(connections.name, match), ilike(works.title, match), ilike(comparisons.name, match))!);
         }
         const where = and(...conditions);
+        const findingUsage = this.db
+            .select({ artifactId: findingArtifacts.artifactId, usedByCount: count(findingArtifacts.findingId).as('used_by_count') })
+            .from(findingArtifacts)
+            .innerJoin(findings, eq(findings.id, findingArtifacts.findingId))
+            .where(eq(findings.organizationId, input.organizationId))
+            .groupBy(findingArtifacts.artifactId)
+            .as('finding_usage');
         const base = this.db
             .select({
                 artifact: artifacts,
@@ -199,6 +207,7 @@ export class PostgresArtifactsRepository {
                 pinnedAt: resultSets.pinnedAt,
                 pinnedByActorId: resultSets.pinnedByActorId,
                 createdByName: user.name,
+                usedByCount: findingUsage.usedByCount,
             })
             .from(artifacts)
             .leftJoin(connections, and(eq(connections.organizationId, artifacts.organizationId), eq(connections.id, artifacts.connectionId)))
@@ -206,6 +215,7 @@ export class PostgresArtifactsRepository {
             .leftJoin(comparisons, and(eq(comparisons.organizationId, artifacts.organizationId), eq(comparisons.id, artifacts.comparisonId)))
             .leftJoin(resultSets, and(eq(resultSets.organizationId, artifacts.organizationId), eq(resultSets.id, artifacts.sourceResultSetId)))
             .leftJoin(user, eq(user.id, artifacts.createdByActorId))
+            .leftJoin(findingUsage, eq(findingUsage.artifactId, artifacts.id))
             .where(where);
         const [rows, totals] = await Promise.all([
             base
@@ -289,6 +299,7 @@ export class PostgresArtifactsRepository {
                 resultSetSql: row.resultSet?.sql ?? null,
                 pinnedAt: row.resultSet?.pinnedAt ?? null,
                 pinnedByActorId: row.resultSet?.pinnedByActorId ?? null,
+                usedByCount: usedByRows.length,
             }),
             chartState: row.artifact.chartState,
             resultSet: row.resultSet
@@ -439,6 +450,7 @@ export class PostgresArtifactsRepository {
         resultSetSql?: string | null;
         pinnedAt?: Date | null;
         pinnedByActorId?: string | null;
+        usedByCount?: number | null;
     }): ArtifactSummary {
         const retentionDays =
             row.artifact.expiresAt && row.artifact.createdAt
@@ -455,6 +467,7 @@ export class PostgresArtifactsRepository {
             pinnedAt: row.pinnedAt ?? null,
             pinnedByActorId: row.pinnedByActorId ?? null,
             retentionDays,
+            usedByCount: Number(row.usedByCount ?? 0),
         };
     }
 

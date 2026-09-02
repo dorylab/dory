@@ -3812,12 +3812,25 @@
             "Temporary": "Temporal · se conserva durante {days} días"
         },
         "Rows": "{count, number} filas",
+        "UsedBy": "{count, plural, one {# hallazgo} other {# hallazgos}}",
+        "UpdatedAt": "Actualizado {updatedAt}",
+        "Origins": {
+            "AgentRun": "Ejecución de agente · {title}",
+            "UntitledRun": "Ejecución sin título",
+            "SqlWorkspace": "Espacio de trabajo SQL",
+            "Comparison": "Comparación"
+        },
+        "Freshness": {
+            "fresh": "Reciente",
+            "aging": "Por revisar",
+            "stale": "Antiguo"
+        },
         "Columns": {
-            "Title": "Título",
-            "Source": "Origen",
-            "Rows": "Filas",
-            "Size": "Tamaño",
-            "Retention": "Conservación",
+            "Artifact": "Artifact",
+            "Origin": "Origen",
+            "UsedBy": "Usado por",
+            "Created": "Creado",
+            "Freshness": "Vigencia",
             "Actions": "Acciones"
         },
         "DeleteDialog": {
