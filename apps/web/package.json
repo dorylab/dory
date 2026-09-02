@@ -167,7 +167,7 @@
         "monaco-editor": "^0.55.1",
         "monaco-editor-webpack-plugin": "^7.1.1",
         "motion": "^12.38.0",
-        "mysql2": "^3.20.0",
+        "mysql2": "^3.22.0",
         "nanoid": "^5.1.7",
         "next": "16.2.11",
         "next-intl": "^4.9.2",

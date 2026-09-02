@@ -29,7 +29,7 @@
         "@duckdb/node-api": "^1.5.2-r.1",
         "better-sqlite3": "^12.8.0",
         "mssql": "^12.2.1",
-        "mysql2": "^3.20.0",
+        "mysql2": "^3.22.0",
         "oracledb": "^6.10.0",
         "pg": "^8.20.0",
         "pg-copy-streams": "^7.0.0",
