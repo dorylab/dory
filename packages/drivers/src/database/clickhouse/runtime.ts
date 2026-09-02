@@ -170,8 +170,59 @@ function normalizeParams(params?: DriverQueryParams): Record<string, unknown> | 
     return compiled.params as Record<string, unknown> | undefined;
 }
 
+const CLICKHOUSE_RESULT_STATEMENT_KEYWORDS = new Set(['SELECT', 'WITH', 'FROM', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN', 'EXISTS', 'CHECK', 'WATCH', 'KILL']);
+
+function firstClickhouseStatementKeyword(sql: string): string | null {
+    let offset = 0;
+
+    while (offset < sql.length) {
+        const remaining = sql.slice(offset);
+        const whitespace = remaining.match(/^[\s\uFEFF]+/u);
+        if (whitespace) {
+            offset += whitespace[0].length;
+            continue;
+        }
+
+        if (remaining.startsWith('--') || remaining.startsWith('#')) {
+            const newlineIndex = remaining.search(/[\r\n]/);
+            if (newlineIndex < 0) return null;
+            offset += newlineIndex + 1;
+            continue;
+        }
+
+        if (remaining.startsWith('/*')) {
+            const commentEnd = remaining.indexOf('*/', 2);
+            if (commentEnd < 0) return null;
+            offset += commentEnd + 2;
+            continue;
+        }
+
+        return remaining.match(/^[A-Z]+/i)?.[0]?.toUpperCase() ?? null;
+    }
+
+    return null;
+}
+
+function isClickhouseResultStatement(sql: string): boolean {
+    const keyword = firstClickhouseStatementKeyword(sql);
+    return keyword !== null && CLICKHOUSE_RESULT_STATEMENT_KEYWORDS.has(keyword);
+}
+
 export async function executeClickhouseQuery<Row>(client: ClickHouseClient, sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<QueryResult<Row>> {
     const started = Date.now();
+
+    // The ClickHouse query API appends an output FORMAT clause. Only use it for
+    // statements that return rows; commands must be sent to ClickHouse verbatim.
+    if (!isClickhouseResultStatement(sql)) {
+        await executeClickhouseCommand(client, sql, params, context);
+        return {
+            rows: [],
+            rowCount: 0,
+            columns: [],
+            tookMs: Date.now() - started,
+        };
+    }
+
     const resultSet = await client.query({
         query: enforceSelectLimit(sql, DEFAULT_MAX_RESULT_ROWS),
         format: 'JSON',
@@ -278,10 +329,11 @@ export async function executeClickhouseQueryRowStream<Row>(
     };
 }
 
-export async function executeClickhouseCommand(client: ClickHouseClient, sql: string, params?: DriverQueryParams): Promise<void> {
+export async function executeClickhouseCommand(client: ClickHouseClient, sql: string, params?: DriverQueryParams, context?: ConnectionQueryContext): Promise<void> {
     await client.command({
         query: sql,
         query_params: normalizeParams(params),
+        query_id: context?.queryId,
     });
 }
 
