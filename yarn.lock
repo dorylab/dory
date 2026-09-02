@@ -3921,10 +3921,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@faker-js/faker@npm:^10.4.0":
-  version: 10.4.0
-  resolution: "@faker-js/faker@npm:10.4.0"
-  checksum: 10c0/29f15e46f91757d654f6f42ac8313ac4aebb6591e2ebae7fdd8d36d5017490327ea67be37cff06d18303db54abf468524bcc7e4b1de53be4eb884c1f71d571c1
+"@faker-js/faker@npm:^10.5.0":
+  version: 10.5.0
+  resolution: "@faker-js/faker@npm:10.5.0"
+  checksum: 10c0/2de3c7b8f41592d52cefc3ab4c99536656249bca78d5ad184a3b7ac43ecc9d946056cef2c4d37060373ef06ad992d82530de08479fabe16fdbe77b911d842446
   languageName: node
   linkType: hard
 
@@ -23731,7 +23731,7 @@ __metadata:
     "@duckdb/node-api": "npm:^1.5.2-r.1"
     "@electric-sql/pglite": "npm:^0.4.3"
     "@eslint/eslintrc": "npm:^3"
-    "@faker-js/faker": "npm:^10.4.0"
+    "@faker-js/faker": "npm:^10.5.0"
     "@hookform/resolvers": "npm:^5.2.2"
     "@ianvs/prettier-plugin-sort-imports": "npm:^4.7.1"
     "@modelcontextprotocol/sdk": "npm:^1.29.0"
