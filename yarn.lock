@@ -3158,7 +3158,7 @@ __metadata:
     "@types/pg-query-stream": "npm:^3.4.0"
     better-sqlite3: "npm:^12.8.0"
     mssql: "npm:^12.2.1"
-    mysql2: "npm:^3.20.0"
+    mysql2: "npm:^3.23.1"
     oracledb: "npm:^6.10.0"
     pg: "npm:^8.20.0"
     pg-copy-streams: "npm:^7.0.0"
@@ -4038,7 +4038,7 @@ __metadata:
     "@types/pg": "npm:^8.20.0"
     better-sqlite3: "npm:^12.8.0"
     esbuild: "npm:^0.28.1"
-    mysql2: "npm:^3.20.0"
+    mysql2: "npm:^3.23.1"
     oracledb: "npm:^6.10.0"
     pg: "npm:^8.20.0"
     ssh2-no-cpu-features: "npm:^2.0.0"
@@ -18338,9 +18338,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mysql2@npm:^3.20.0":
-  version: 3.20.0
-  resolution: "mysql2@npm:3.20.0"
+"mysql2@npm:^3.23.1":
+  version: 3.23.1
+  resolution: "mysql2@npm:3.23.1"
   dependencies:
     aws-ssl-profiles: "npm:^1.1.2"
     denque: "npm:^2.1.0"
@@ -18349,10 +18349,10 @@ __metadata:
     long: "npm:^5.3.2"
     lru.min: "npm:^1.1.4"
     named-placeholders: "npm:^1.1.6"
-    sql-escaper: "npm:^1.3.3"
+    sql-escaper: "npm:^1.5.1"
   peerDependencies:
     "@types/node": ">= 8"
-  checksum: 10c0/02d61ae766b847ff398e50b651849947f555983c081d18f47cd66a50bb960aeaaf39cd7171e103ac79e703f9d5852c7e69b0a36f0c05e7643499665100ed4cee
+  checksum: 10c0/67bd75281b6be93a8a8ce6b95640f3596e8bc3de985e56dc5c861a0090dc959cd8b97ee5b3242b1dd4b495a0ddb13683eecc4d0369aaf39058b367937919f9cd
   languageName: node
   linkType: hard
 
@@ -21999,10 +21999,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"sql-escaper@npm:^1.3.3":
-  version: 1.3.3
-  resolution: "sql-escaper@npm:1.3.3"
-  checksum: 10c0/aa6545685745f4d457a6993cd7b442ac39d54aae6780d15e5ed1ff929f298f6c10562b9e09ddcbedcdf5c3601161e5ee39d3e8d435b1d168775f121946d1bf44
+"sql-escaper@npm:^1.5.1":
+  version: 1.5.1
+  resolution: "sql-escaper@npm:1.5.1"
+  checksum: 10c0/49986addddfbf86fe041de827abc9a089a6f757d4bec86860576e625468b0fa93a9ee42c5f20ed7d77391c0bbe02c68fb65a73b134367456681fd1a589bed231
   languageName: node
   linkType: hard
 
@@ -23845,7 +23845,7 @@ __metadata:
     monaco-editor: "npm:^0.55.1"
     monaco-editor-webpack-plugin: "npm:^7.1.1"
     motion: "npm:^12.38.0"
-    mysql2: "npm:^3.20.0"
+    mysql2: "npm:^3.23.1"
     nanoid: "npm:^5.1.16"
     next: "npm:16.2.11"
     next-intl: "npm:^4.9.2"
