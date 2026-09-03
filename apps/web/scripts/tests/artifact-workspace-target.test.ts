@@ -59,8 +59,12 @@ test('does not expose Open for files, comparisons, or incomplete SQL context', (
 });
 
 test('derives a semantic Artifact title from SQL instead of exposing the statement', () => {
-    assert.equal(formatSqlResultTitle('SELECT * FROM production_logs'), 'Production Logs query');
-    assert.equal(formatSqlResultTitle('SELECT count(*) FROM orders'), 'Orders query');
+    assert.equal(formatSqlResultTitle('SELECT * FROM production_logs'), 'Production Logs — *');
+    assert.equal(formatSqlResultTitle('SELECT count(*) AS order_count FROM orders'), 'Orders — order count');
+    assert.notEqual(
+        formatSqlResultTitle('SELECT country, COUNT(*) AS user_count FROM users GROUP BY country'),
+        formatSqlResultTitle('SELECT substr(created_at, 1, 7) AS signup_month, COUNT(*) AS user_count FROM users GROUP BY signup_month'),
+    );
 });
 
 test('builds an Artifact-only workspace URL without source session parameters', () => {

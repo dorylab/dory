@@ -140,12 +140,18 @@ export function formatSqlResultTitle(sql: string | null) {
               .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
               .join(' ')
         : 'Query';
+    const projection = normalized.match(/\bselect\s+(.+?)\s+\bfrom\b/i)?.[1];
+    const aliases = projection?.match(/\bas\s+["`]?([a-zA-Z0-9_.-]+)/gi)?.map(alias => alias.replace(/^\bas\s+/i, '').replace(/["`]/g, '')) ?? [];
+    const detail = aliases.length ? aliases.join(', ') : projection;
+    if (/\bselect\b/i.test(normalized) && detail) {
+        const readableDetail = detail.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+        return `${subject} — ${readableDetail.slice(0, 72)}${readableDetail.length > 72 ? '…' : ''}`;
+    }
     if (/^\s*select\b/i.test(normalized)) return `${subject} query`;
     return `${subject} result`;
 }
 
-function displayTitle(input: { artifact: typeof artifacts.$inferSelect; runTitle: string | null; resultSetSql: string | null }) {
-    if (input.artifact.type === 'result_set' && input.artifact.agentRunId && input.runTitle) return input.runTitle;
+function displayTitle(input: { artifact: typeof artifacts.$inferSelect; resultSetSql: string | null }) {
     return isSqlTitle(input.artifact.title) ? formatSqlResultTitle(input.resultSetSql) : input.artifact.title;
 }
 
@@ -458,7 +464,7 @@ export class PostgresArtifactsRepository {
                 : null;
         return {
             ...row.artifact,
-            title: displayTitle({ artifact: row.artifact, runTitle: row.runTitle, resultSetSql: row.resultSetSql ?? null }),
+            title: displayTitle({ artifact: row.artifact, resultSetSql: row.resultSetSql ?? null }),
             connectionName: row.connectionName,
             runTitle: row.runTitle,
             comparisonName: row.comparisonName,

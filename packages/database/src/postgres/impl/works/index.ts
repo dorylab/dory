@@ -561,25 +561,9 @@ export class PostgresWorksRepository {
             },
         };
 
-        // Agents sometimes omit evidence IDs even when the Run produced snapshots.
-        // Use those snapshots as a new-Finding fallback; explicit IDs still take
-        // precedence and a Run with no Artifacts remains uncited.
-        const inferredEvidenceArtifactIds = await this.db
-            .select({ id: artifacts.id })
-            .from(artifacts)
-            .where(
-                and(
-                    eq(artifacts.organizationId, input.organizationId),
-                    or(eq(artifacts.workId, input.workId), eq(artifacts.agentRunId, input.workId)),
-                ),
-            )
-            .orderBy(desc(artifacts.createdAt))
-            .limit(20);
-        const findingsToCreate = normalizedFindings.map(finding =>
-            !finding.evidenceArtifactIds.length && inferredEvidenceArtifactIds.length
-                ? { ...finding, evidenceArtifactIds: inferredEvidenceArtifactIds.map(artifact => artifact.id) }
-                : finding,
-        );
+        // Evidence must be explicitly cited by the agent. Attaching every Artifact
+        // from a Run to a Finding when IDs are omitted creates false evidence links.
+        const findingsToCreate = normalizedFindings;
 
         const [row] = await this.db.transaction(async tx => {
             const evidenceIds = [...new Set(findingsToCreate.flatMap(finding => finding.evidenceArtifactIds))];
