@@ -7,6 +7,7 @@ import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import { cn } from '@dory/web-utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/registry/new-york-v4/ui/collapsible';
 import { SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem } from '@/registry/new-york-v4/ui/sidebar';
+import { instantNavigationEnabled } from '@/lib/env';
 
 export type NavItem = {
     title: string;
@@ -14,6 +15,7 @@ export type NavItem = {
     matchPrefix?: string;
     icon?: ComponentType<{ className?: string }>;
     requiresConnection?: boolean;
+    instantNavigation?: boolean;
 };
 
 function getIsDisabled(item: NavItem, disabled: boolean, hasActiveConnection: boolean) {
@@ -57,6 +59,7 @@ export function NavMain({
                         const IconComp = item.icon;
                         const itemDisabled = getIsDisabled(item, disabled, hasActiveConnection);
                         const isActive = getIsActive(item, pathname, disabled, hasActiveConnection);
+                        const shouldPrefetch = instantNavigationEnabled && item.instantNavigation === true;
 
                         const content = itemDisabled ? (
                             <span
@@ -72,7 +75,7 @@ export function NavMain({
                         ) : (
                             <Link
                                 href={item.url}
-                                prefetch={false}
+                                prefetch={shouldPrefetch ? null : false}
                                 className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0"
                             >
                                 {IconComp && <IconComp className="h-4 w-4 shrink-0" />}
@@ -114,6 +117,7 @@ export function NavMain({
                                             const IconComp = item.icon;
                                             const itemDisabled = getIsDisabled(item, disabled, hasActiveConnection);
                                             const isActive = getIsActive(item, pathname, disabled, hasActiveConnection);
+                                            const shouldPrefetch = instantNavigationEnabled && item.instantNavigation === true;
 
                                             return (
                                                 <SidebarMenuSubItem key={item.title}>
@@ -128,7 +132,7 @@ export function NavMain({
                                                             isActive={isActive}
                                                             className="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground data-[active=true]:hover:bg-primary/90 data-[active=true]:hover:text-primary-foreground data-[active=true]:active:bg-primary/90 data-[active=true]:active:text-primary-foreground data-[active=true]:[&>svg]:!text-primary-foreground"
                                                         >
-                                                            <Link href={item.url} prefetch={false}>
+                                                            <Link href={item.url} prefetch={shouldPrefetch ? null : false}>
                                                                 {IconComp ? <IconComp className="h-4 w-4 shrink-0" /> : null}
                                                                 <span>{item.title}</span>
                                                             </Link>

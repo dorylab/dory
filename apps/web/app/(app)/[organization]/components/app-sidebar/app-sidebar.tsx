@@ -101,6 +101,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   url: sqlConsoleUrl,
                   icon: SquareCode,
                   requiresConnection: true,
+                  instantNavigation: true,
               },
               {
                   title: t('Explorer'),
@@ -108,6 +109,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   matchPrefix: buildExplorerBasePath({ organization, connectionId }),
                   icon: Compass,
                   requiresConnection: true,
+                  instantNavigation: true,
               },
               {
                   title: t('Chatbot'),
@@ -130,9 +132,11 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   ? [
                         {
                             title: t('Monitoring'),
-                            url: `/${organization}/${connectionId}/monitoring`,
+                            url: `/${organization}/${connectionId}/monitoring/overview`,
+                            matchPrefix: `/${organization}/${connectionId}/monitoring`,
                             icon: FileChartColumnIncreasing,
                             requiresConnection: true,
+                            instantNavigation: true,
                         },
                         {
                             title: t('Privileges'),
