@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { resolveWorkHydrationTarget } from '@/app/(app)/[organization]/[connectionId]/sql-console/work-hydration-target';
+import { consolidateAgentWorkspaceSessions, resolveWorkHydrationTarget } from '@/app/(app)/[organization]/[connectionId]/sql-console/work-hydration-target';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 
 const tabs = [
@@ -147,4 +147,88 @@ test('work hydration maps session ids even when no tabs are loaded yet', () => {
     });
     assert.equal(target.targetTabId, 'tab-2');
     assert.equal(target.targetSessionId, 'session-2');
+});
+
+test('Agent Workspace combines separate executions in one tab into result tabs', () => {
+    const sessions = consolidateAgentWorkspaceSessions('work-1', [
+        {
+            session: {
+                sessionId: 'session-1',
+                tabId: 'tab-1',
+                status: 'success',
+                startedAt: '2026-06-01T00:00:00.000Z',
+            },
+            queryResultSets: [{ sessionId: 'session-1', setIndex: 0, resultSetId: 'result-1' }],
+            results: [[{ value: 1 }]],
+        },
+        {
+            session: {
+                sessionId: 'session-2',
+                tabId: 'tab-1',
+                status: 'success',
+                startedAt: '2026-06-01T00:01:00.000Z',
+            },
+            queryResultSets: [
+                { sessionId: 'session-2', setIndex: 0, resultSetId: 'result-2' },
+                { sessionId: 'session-2', setIndex: 1, resultSetId: 'result-3' },
+            ],
+            results: [[{ value: 2 }], [{ value: 3 }]],
+        },
+    ]);
+
+    const virtualSession = sessions.at(-1)!;
+    assert.equal(virtualSession.session.sessionId, 'agent-workspace:work-1:tab-1');
+    assert.equal((virtualSession.session as { resultSetCount?: number }).resultSetCount, 3);
+    assert.deepEqual(
+        virtualSession.queryResultSets.map(resultSet => [resultSet.sessionId, resultSet.setIndex, resultSet.resultSetId]),
+        [
+            ['agent-workspace:work-1:tab-1', 0, 'result-1'],
+            ['agent-workspace:work-1:tab-1', 1, 'result-2'],
+            ['agent-workspace:work-1:tab-1', 2, 'result-3'],
+        ],
+    );
+    assert.deepEqual(virtualSession.results, [[{ value: 1 }], [{ value: 2 }], [{ value: 3 }]]);
+
+    const target = resolveWorkHydrationTarget({
+        tabs: [tabs[0]!],
+        sessions,
+        requestedTabId: 'tab-1',
+    });
+    assert.equal(target.targetSessionId, 'agent-workspace:work-1:tab-1');
+});
+
+test('Agent Workspace assigns unbound historical sessions to its only SQL tab', () => {
+    const sessions = consolidateAgentWorkspaceSessions(
+        'work-1',
+        [
+            {
+                session: {
+                    sessionId: 'session-1',
+                    tabId: '',
+                    status: 'success',
+                    startedAt: '2026-06-01T00:00:00.000Z',
+                },
+                queryResultSets: [{ sessionId: 'session-1', setIndex: 0, resultSetId: 'result-1' }],
+                results: [[{ value: 1 }]],
+            },
+            {
+                session: {
+                    sessionId: 'session-2',
+                    tabId: 'tab-1',
+                    status: 'success',
+                    startedAt: '2026-06-01T00:01:00.000Z',
+                },
+                queryResultSets: [{ sessionId: 'session-2', setIndex: 0, resultSetId: 'result-2' }],
+                results: [[{ value: 2 }]],
+            },
+        ],
+        'tab-1',
+    );
+
+    const virtualSession = sessions.at(-1)!;
+    assert.equal(virtualSession.session.tabId, 'tab-1');
+    assert.deepEqual(
+        virtualSession.queryResultSets.map(resultSet => resultSet.resultSetId),
+        ['result-1', 'result-2'],
+    );
 });

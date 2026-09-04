@@ -10,6 +10,22 @@ export type WorkHydrationSessionLike = {
     };
 };
 
+type AgentWorkspaceResultSetLike = {
+    sessionId: string;
+    setIndex: number;
+};
+
+export type AgentWorkspaceSnapshotSessionLike = WorkHydrationSessionLike & {
+    session: WorkHydrationSessionLike['session'] & {
+        sessionId: string;
+        status?: string;
+        sqlText?: string;
+        resultSetCount?: number;
+    };
+    queryResultSets: AgentWorkspaceResultSetLike[];
+    results: unknown[][];
+};
+
 type SessionCandidate = {
     sessionId: string;
     tabId: string;
@@ -26,6 +42,61 @@ function timeValue(value: string | Date | null | undefined) {
 
 function sessionTime(session: WorkHydrationSessionLike['session']) {
     return Math.max(timeValue(session.finishedAt), timeValue(session.startedAt), timeValue(session.createdAt));
+}
+
+/**
+ * Agent tools commonly append several SQL executions to a single workspace tab.
+ * Unlike a console script, each tool call has its own query session. Present those
+ * result sets as one virtual session so the existing result toolbar can show every
+ * result in the tab instead of only the final execution.
+ */
+export function consolidateAgentWorkspaceSessions<T extends AgentWorkspaceSnapshotSessionLike>(workId: string, sessions: readonly T[], fallbackTabId?: string | null): T[] {
+    const groupedByTab = new Map<string, Array<{ session: T; originalIndex: number }>>();
+
+    sessions.forEach((session, originalIndex) => {
+        const tabId = session.session.tabId || fallbackTabId;
+        if (!tabId || session.queryResultSets.length === 0) return;
+
+        const group = groupedByTab.get(tabId) ?? [];
+        group.push({ session, originalIndex });
+        groupedByTab.set(tabId, group);
+    });
+
+    const consolidated = [...sessions];
+    for (const [tabId, group] of groupedByTab) {
+        if (group.length < 2) continue;
+
+        const ordered = group.toSorted((left, right) => {
+            const timeDelta = sessionTime(left.session.session) - sessionTime(right.session.session);
+            return timeDelta || left.originalIndex - right.originalIndex;
+        });
+        const latest = ordered.at(-1)!.session;
+        const flattened = ordered.flatMap(({ session }) =>
+            session.queryResultSets.map((resultSet, resultIndex) => ({
+                resultSet,
+                rows: Array.isArray(session.results[resultIndex]) ? session.results[resultIndex]! : [],
+            })),
+        );
+        const virtualSessionId = `agent-workspace:${workId}:${tabId}`;
+
+        consolidated.push({
+            ...latest,
+            session: {
+                ...latest.session,
+                sessionId: virtualSessionId,
+                tabId,
+                resultSetCount: flattened.length,
+            },
+            queryResultSets: flattened.map(({ resultSet }, setIndex) => ({
+                ...resultSet,
+                sessionId: virtualSessionId,
+                setIndex,
+            })),
+            results: flattened.map(({ rows }) => rows),
+        } as T);
+    }
+
+    return consolidated;
 }
 
 export function resolveWorkHydrationTarget({
