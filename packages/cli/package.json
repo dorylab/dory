@@ -46,7 +46,7 @@
         "@electric-sql/pglite": "^0.4.3",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "better-sqlite3": "^12.8.0",
-        "mysql2": "^3.20.0",
+        "mysql2": "^3.23.1",
         "oracledb": "^6.10.0",
         "pg": "^8.20.0",
         "ssh2-no-cpu-features": "^2.0.0",
