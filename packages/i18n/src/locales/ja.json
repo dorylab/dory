@@ -3747,6 +3747,7 @@
     "AppSidebar": {
         "DataSources": "データソース",
         "Artifacts": "Artifacts",
+        "More": "その他",
         "NoDataSourceSelected": "データソース未選択",
         "WorkspaceTitle": "ワークスペース",
         "WorkspaceDataSourcesCount": "{count} 件のデータソース",

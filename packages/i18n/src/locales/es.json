@@ -3740,6 +3740,8 @@
     },
     "AppSidebar": {
         "DataSources": "Fuentes de datos",
+        "Artifacts": "Artifacts",
+        "More": "Más",
         "NoDataSourceSelected": "Sin fuente de datos seleccionada",
         "WorkspaceTitle": "Espacio de trabajo",
         "WorkspaceDataSourcesCount": "{count} fuente de datos",

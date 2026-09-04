@@ -151,12 +151,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   requiresConnection: false,
               },
               {
-                  title: t('Artifacts'),
-                  url: `/${organization}/artifacts`,
-                  icon: Archive,
-                  requiresConnection: false,
-              },
-              {
                   title: t('AgentRuns'),
                   url: `/${organization}/agent-runs`,
                   icon: Bot,
@@ -166,6 +160,16 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   title: t('SchemaCompare'),
                   url: `/${organization}/comparisons`,
                   icon: GitCompareArrows,
+                  requiresConnection: false,
+              },
+          ];
+    const moreItems = connectionId
+        ? []
+        : [
+              {
+                  title: t('Artifacts'),
+                  url: `/${organization}/artifacts`,
+                  icon: Archive,
                   requiresConnection: false,
               },
           ];
@@ -231,7 +235,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             <SidebarHeader className="pb-2">{connectionId ? <ConnectionSwitcher /> : <ConnectionSwitcher displayMode="all-connections" />}</SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navMain} disabled={!connectionId} hasActiveConnection={!!connectionId} />
+                <NavMain items={navMain} moreItems={moreItems} moreTitle={t('More')} disabled={!connectionId} hasActiveConnection={!!connectionId} />
                 <div className="mt-auto space-y-2">
                     {showStarNotification ? (
                         <div className="px-2 group-data-[collapsible=icon]:hidden">
