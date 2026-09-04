@@ -11,7 +11,7 @@ import { activeTabIdAtom } from '@/shared/stores/app.store';
 import type { UITabPayload } from '@dory/shared/types/tabs';
 import { sessionIdByTabAtom } from '../sql-console.store';
 import { getSessionStorageKey, normalizeSqlWorkspaceScope, type SqlWorkspaceScope } from '../workspace-scope';
-import { resolveWorkHydrationTarget } from '../work-hydration-target';
+import { consolidateAgentWorkspaceSessions, resolveWorkHydrationTarget } from '../work-hydration-target';
 import type { SqlWorkspaceInitialResultTarget } from '../initial-result-target';
 import { upsertActiveSetAtom } from '../components/result-table/stores/active-set.atoms';
 
@@ -97,7 +97,11 @@ export function useWorkHydration({
     const normalizedWorkspaceScope = useMemo(() => normalizeSqlWorkspaceScope(workspaceScope), [workspaceScope]);
     const workId = normalizedWorkspaceScope.workspaceMode === 'agent' ? normalizedWorkspaceScope.workId : null;
     const requestedTabId = initialResultTarget?.tabId ?? searchParams.get('tabId');
-    const requestedSessionId = initialResultTarget?.sessionId ?? searchParams.get('sessionId');
+    // Agent Run workspace URLs carry the latest execution session for backwards
+    // compatibility. It must not override the consolidated result session: a Run
+    // can contain multiple executions in the same SQL tab. Artifact deep links
+    // pass an explicit target and retain their exact-result behavior.
+    const requestedSessionId = initialResultTarget?.sessionId ?? (normalizedWorkspaceScope.workspaceMode === 'agent' ? null : searchParams.get('sessionId'));
     const activeTabId = useAtomValue(activeTabIdAtom);
     const setSessionIdMap = useSetAtom(sessionIdByTabAtom);
     const setActiveResult = useSetAtom(upsertActiveSetAtom);
@@ -167,9 +171,21 @@ export function useWorkHydration({
 
             if (cancelled) return;
 
-            snapshotRef.current = snapshot;
+            const hydratedSnapshot =
+                normalizedWorkspaceScope.workspaceMode === 'agent'
+                    ? {
+                          ...snapshot,
+                          sessions: consolidateAgentWorkspaceSessions(
+                              activeWorkId,
+                              snapshot.sessions ?? [],
+                              (snapshot.tabs ?? []).filter(tab => tab.tabType === 'sql').length === 1 ? (snapshot.tabs ?? []).find(tab => tab.tabType === 'sql')?.tabId : null,
+                          ),
+                      }
+                    : snapshot;
+
+            snapshotRef.current = hydratedSnapshot;
             setSnapshotRevision(revision => revision + 1);
-            for (const sessionSnapshot of snapshot.sessions ?? []) {
+            for (const sessionSnapshot of hydratedSnapshot.sessions ?? []) {
                 if (normalizedWorkspaceScope.workspaceMode === 'agent' && !initialResultTarget && sessionSnapshot.session.tabId) {
                     const latestSetIndex = sessionSnapshot.queryResultSets.reduce((latest, resultSet) => Math.max(latest, resultSet.setIndex), -1);
                     if (latestSetIndex >= 0) {

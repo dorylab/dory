@@ -3737,6 +3737,7 @@
     "AppSidebar": {
         "DataSources": "数据源",
         "Artifacts": "Artifacts",
+        "More": "更多",
         "NoDataSourceSelected": "未选择数据源",
         "WorkspaceTitle": "工作区",
         "WorkspaceDataSourcesCount": "{count} 个数据源",

@@ -140,7 +140,7 @@ export default async function AgentRunDetailPage({
                                                         {item.evidence.length ? (
                                                             <div className="flex flex-wrap gap-2">
                                                                 {item.evidence.map(artifact => (
-                                                                    <Link key={artifact.id} href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`} className="rounded-md border bg-muted px-2 py-1 text-xs hover:bg-accent">
+                                                                    <Link key={artifact.id} href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}?fromAgentRun=${encodeURIComponent(workId)}`} className="rounded-md border bg-muted px-2 py-1 text-xs hover:bg-accent">
                                                                         {artifact.title}{artifact.rowCount == null ? '' : ` · ${artifact.rowCount.toLocaleString()} rows`}
                                                                     </Link>
                                                                 ))}
@@ -188,7 +188,7 @@ export default async function AgentRunDetailPage({
                             <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                                 {artifacts.map(artifact => (
                                     <li key={artifact.id}>
-                                        <Link href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}`} className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent">
+                                        <Link href={`/${encodeURIComponent(organization)}/artifacts/${encodeURIComponent(artifact.id)}?fromAgentRun=${encodeURIComponent(workId)}`} className="flex items-center gap-3 rounded-md border p-3 hover:bg-accent">
                                             <FileText className="h-4 w-4 text-muted-foreground" />
                                             <span className="min-w-0 truncate text-sm font-medium">{artifact.title}</span>
                                         </Link>

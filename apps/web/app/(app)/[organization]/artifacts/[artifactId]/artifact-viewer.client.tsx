@@ -66,8 +66,9 @@ function CompactMetadata({ artifact }: { artifact: ArtifactDetail }) {
     );
 }
 
-export function ArtifactViewerClient({ organization, artifactId }: { organization: string; artifactId: string }) {
+export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }: { organization: string; artifactId: string; fromAgentRun: string | null }) {
     const t = useTranslations('Artifacts.Viewer');
+    const agentRunsT = useTranslations('AgentRuns');
     const router = useRouter();
     const organizationId = useOrganizationId();
     const queryClient = useQueryClient();
@@ -189,13 +190,17 @@ export function ArtifactViewerClient({ organization, artifactId }: { organizatio
     }
 
     const TypeIcon = artifact.type === 'result_set' ? Database : artifact.type === 'chart' ? BarChart3 : FileText;
+    const backHref = fromAgentRun
+        ? `/${encodeURIComponent(organization)}/agent-runs/${encodeURIComponent(fromAgentRun)}`
+        : `/${encodeURIComponent(organization)}/artifacts`;
+    const backLabel = fromAgentRun ? `${agentRunsT('List.Title')} - ${artifact.runTitle ?? fromAgentRun}` : t('Back');
     return (
         <div className="h-dvh overflow-hidden bg-n8">
             <main className="container mx-auto flex h-full min-h-0 flex-col gap-3 px-12 pb-6 pt-4 lg:px-12 xl:px-8 2xl:px-4">
                 <Button asChild variant="ghost" size="sm" className="w-fit -ml-2">
-                    <Link href={`/${encodeURIComponent(organization)}/artifacts`}>
+                    <Link href={backHref}>
                         <ArrowLeft className="h-4 w-4" />
-                        {t('Back')}
+                        {backLabel}
                     </Link>
                 </Button>
                 <header className="shrink-0 space-y-2 border-b pb-3">
