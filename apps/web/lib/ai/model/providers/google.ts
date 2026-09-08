@@ -1,4 +1,4 @@
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogle } from '@ai-sdk/google';
 
 export type GoogleProviderOptions = {
     apiKey?: string;
@@ -13,7 +13,7 @@ export function createGoogleProvider(options: GoogleProviderOptions = {}) {
 
     const baseURL = options.baseURL ?? process.env.DORY_AI_URL;
 
-    const provider = createGoogleGenerativeAI({
+    const provider = createGoogle({
         apiKey,
         baseURL,
     });

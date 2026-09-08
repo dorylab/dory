@@ -1,11 +1,20 @@
-import { generateText as sdkGenerateText, streamText as sdkStreamText, type ModelMessage, type ToolSet, type LanguageModelUsage, type SystemModelMessage } from 'ai';
+import {
+    generateText as sdkGenerateText,
+    streamText as sdkStreamText,
+    type ModelMessage,
+    type ToolSet,
+    type LanguageModelUsage,
+    type OutputInterface,
+    type SystemModelMessage,
+} from 'ai';
+import type { Context } from '@ai-sdk/provider-utils';
 import { runAiWithCache as runAiWithCacheBase, type RunAiWithCacheOptions, type RunAiWithCacheResult } from './runtime/runAiWithCache';
 import { AI_QUOTA_EXCEEDED_CODE, assertAiQuotaAllowed, buildCloudflareAiGatewayHeaders, resolveAiEntitlements, type AiIdentityContext } from './usage-quota';
 
 type AiUsageStatus = 'ok' | 'error' | 'aborted';
 
 export type AiDebugInput = {
-    system?: string | SystemModelMessage | Array<SystemModelMessage> | null;
+    instructions?: string | SystemModelMessage | Array<SystemModelMessage> | null;
     prompt?: string | null;
     messages?: ModelMessage[] | null;
 };
@@ -106,7 +115,7 @@ type StreamTextOptions<TOOLS extends ToolSet> = Parameters<typeof sdkStreamText<
     meter?: AiMeteringOptions;
 };
 
-type UsageLike = Pick<LanguageModelUsage, 'inputTokens' | 'outputTokens' | 'reasoningTokens' | 'cachedInputTokens' | 'totalTokens'>;
+type UsageLike = Pick<LanguageModelUsage, 'inputTokens' | 'inputTokenDetails' | 'outputTokens' | 'outputTokenDetails' | 'totalTokens'>;
 
 const DEFAULT_PROTECTED_KEYS = [
     'password',
@@ -186,7 +195,7 @@ function buildDebugInput(input: AiDebugInput, options?: RedactionOptions): AiDeb
     };
 
     return {
-        system: input.system ? (sanitizeForDebug(input.system, redaction) as AiDebugInput['system']) : (input.system ?? null),
+        instructions: input.instructions ? (sanitizeForDebug(input.instructions, redaction) as AiDebugInput['instructions']) : (input.instructions ?? null),
         prompt: input.prompt ? (sanitizeForDebug(input.prompt, redaction) as string) : (input.prompt ?? null),
         messages: input.messages ? (sanitizeForDebug(input.messages, redaction) as ModelMessage[]) : (input.messages ?? null),
     };
@@ -271,8 +280,8 @@ function extractUsageFields(usage?: LanguageModelUsage) {
     return {
         inputTokens: usage?.inputTokens ?? null,
         outputTokens: usage?.outputTokens ?? null,
-        reasoningTokens: usage?.reasoningTokens ?? null,
-        cachedInputTokens: usage?.cachedInputTokens ?? null,
+        reasoningTokens: usage?.outputTokenDetails.reasoningTokens ?? null,
+        cachedInputTokens: usage?.inputTokenDetails.cacheReadTokens ?? null,
         totalTokens: usage?.totalTokens ?? null,
     };
 }
@@ -285,8 +294,15 @@ function addUsage(current: UsageLike, next: UsageLike): UsageLike {
     return {
         inputTokens: addTokenCounts(current.inputTokens, next.inputTokens),
         outputTokens: addTokenCounts(current.outputTokens, next.outputTokens),
-        reasoningTokens: addTokenCounts(current.reasoningTokens, next.reasoningTokens),
-        cachedInputTokens: addTokenCounts(current.cachedInputTokens, next.cachedInputTokens),
+        inputTokenDetails: {
+            noCacheTokens: addTokenCounts(current.inputTokenDetails.noCacheTokens, next.inputTokenDetails.noCacheTokens),
+            cacheReadTokens: addTokenCounts(current.inputTokenDetails.cacheReadTokens, next.inputTokenDetails.cacheReadTokens),
+            cacheWriteTokens: addTokenCounts(current.inputTokenDetails.cacheWriteTokens, next.inputTokenDetails.cacheWriteTokens),
+        },
+        outputTokenDetails: {
+            textTokens: addTokenCounts(current.outputTokenDetails.textTokens, next.outputTokenDetails.textTokens),
+            reasoningTokens: addTokenCounts(current.outputTokenDetails.reasoningTokens, next.outputTokenDetails.reasoningTokens),
+        },
         totalTokens: addTokenCounts(current.totalTokens, next.totalTokens),
     };
 }
@@ -300,8 +316,8 @@ function sumUsage(usages: Array<LanguageModelUsage | undefined>): LanguageModelU
             : {
                   inputTokens: usage.inputTokens,
                   outputTokens: usage.outputTokens,
-                  reasoningTokens: usage.reasoningTokens,
-                  cachedInputTokens: usage.cachedInputTokens,
+                  inputTokenDetails: usage.inputTokenDetails,
+                  outputTokenDetails: usage.outputTokenDetails,
                   totalTokens: usage.totalTokens,
               };
     }
@@ -311,12 +327,12 @@ function sumUsage(usages: Array<LanguageModelUsage | undefined>): LanguageModelU
         ...acc,
         inputTokenDetails: {
             noCacheTokens: undefined,
-            cacheReadTokens: acc.cachedInputTokens,
+            cacheReadTokens: acc.inputTokenDetails.cacheReadTokens,
             cacheWriteTokens: undefined,
         },
         outputTokenDetails: {
             textTokens: undefined,
-            reasoningTokens: acc.reasoningTokens,
+            reasoningTokens: acc.outputTokenDetails.reasoningTokens,
         },
     };
 }
@@ -345,8 +361,8 @@ function toUsageJson(usage?: LanguageModelUsage): Record<string, unknown> | null
         inputTokens: usage.inputTokens ?? null,
         outputTokens: usage.outputTokens ?? null,
         totalTokens: usage.totalTokens ?? null,
-        reasoningTokens: usage.reasoningTokens ?? usage.outputTokenDetails?.reasoningTokens ?? null,
-        cachedInputTokens: usage.cachedInputTokens ?? usage.inputTokenDetails?.cacheReadTokens ?? null,
+        reasoningTokens: usage.outputTokenDetails.reasoningTokens ?? null,
+        cachedInputTokens: usage.inputTokenDetails.cacheReadTokens ?? null,
         inputTokenDetails: {
             noCacheTokens: usage.inputTokenDetails?.noCacheTokens ?? null,
             cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? null,
@@ -354,7 +370,7 @@ function toUsageJson(usage?: LanguageModelUsage): Record<string, unknown> | null
         },
         outputTokenDetails: {
             textTokens: usage.outputTokenDetails?.textTokens ?? null,
-            reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? null,
+            reasoningTokens: usage.outputTokenDetails.reasoningTokens ?? null,
         },
         raw: usage.raw ?? null,
     };
@@ -397,8 +413,8 @@ function buildTraceRecord(args: {
     const { requestId, context, debugInput, outputText, outputJson } = args;
     const prompt = typeof debugInput.prompt === 'string' ? debugInput.prompt : null;
     const messagesText = debugInput.messages ? JSON.stringify(debugInput.messages) : null;
-    const systemText = debugInput.system ? JSON.stringify(debugInput.system) : null;
-    const mergedInputText = [prompt, systemText, messagesText].filter((part): part is string => !!part && part.length > 0).join('\n\n');
+    const instructionsText = debugInput.instructions ? JSON.stringify(debugInput.instructions) : null;
+    const mergedInputText = [prompt, instructionsText, messagesText].filter((part): part is string => !!part && part.length > 0).join('\n\n');
 
     return {
         requestId,
@@ -512,11 +528,11 @@ export async function generateText(options: GenerateTextOptions): Promise<Awaite
 
     const promptValue = typeof callOptions.prompt === 'string' ? callOptions.prompt : null;
     const messagesValue = (callOptions as { messages?: ModelMessage[] }).messages ?? null;
-    const systemValue = callOptions.system ?? null;
+    const instructionsValue = callOptions.instructions ?? null;
 
     const debugInput = buildDebugInput(
         {
-            system: systemValue,
+            instructions: instructionsValue,
             prompt: promptValue,
             messages: messagesValue,
         },
@@ -629,7 +645,7 @@ export async function streamText<TOOLS extends ToolSet>(
 
     const debugInput = buildDebugInput(
         {
-            system: callOptions.system ?? null,
+            instructions: callOptions.instructions ?? null,
             prompt: callOptions.prompt as string,
             messages: (callOptions as { messages?: ModelMessage[] }).messages ?? null,
         },
@@ -715,12 +731,12 @@ export async function streamText<TOOLS extends ToolSet>(
     const gateway = inferGateway(effectiveContext);
     const provider = inferProvider(effectiveContext);
 
-    const wrappedOnFinish = async (event: Parameters<NonNullable<typeof callOptions.onFinish>>[0]) => {
+    const wrappedOnEnd = async (event: Parameters<NonNullable<typeof callOptions.onEnd>>[0]) => {
         const finishReason = (event as { finishReason?: string }).finishReason ?? null;
         const isAborted = (event as { isAborted?: boolean }).isAborted === true || finishReason === 'abort';
         const text = (event as { text?: string }).text ?? null;
         const fallbackStepUsage = sumUsage(event.steps.map(step => step.usage));
-        const usage = event.totalUsage ?? event.usage ?? fallbackStepUsage;
+        const usage = event.usage ?? fallbackStepUsage;
         const shouldLogCloudflareStreamUsage =
             effectiveContext.feature === 'chat_stream' && gateway === 'cloudflare' && typeof process !== 'undefined' && process.env.AI_USAGE_LOG === '1';
         if (shouldLogCloudflareStreamUsage) {
@@ -731,7 +747,6 @@ export async function streamText<TOOLS extends ToolSet>(
                 gateway,
                 finishReason,
                 isAborted,
-                hasTotalUsage: !!event.totalUsage,
                 hasUsage: !!event.usage,
                 hasFallbackStepUsage: !!fallbackStepUsage,
                 steps: event.steps.length,
@@ -751,8 +766,8 @@ export async function streamText<TOOLS extends ToolSet>(
             gateway,
             provider,
         });
-        if (callOptions.onFinish) {
-            await callOptions.onFinish(event);
+        if (callOptions.onEnd) {
+            await callOptions.onEnd(event);
         }
     };
 
@@ -807,13 +822,13 @@ export async function streamText<TOOLS extends ToolSet>(
     try {
         assertAiQuotaAllowed(entitlements.quota);
         const cloudflareHeaders = buildCloudflareAiGatewayHeaders(effectiveContext as AiIdentityContext, gateway);
-        const result = sdkStreamText({
+        const result = sdkStreamText<TOOLS, Context, OutputInterface<string, string, never>>({
             ...callOptions,
             headers: mergeCallHeaders(callOptions.headers, cloudflareHeaders),
-            onFinish: wrappedOnFinish,
+            onEnd: wrappedOnEnd,
             onError: wrappedOnError,
             onAbort: wrappedOnAbort,
-        });
+        } as Parameters<typeof sdkStreamText<TOOLS, Context, OutputInterface<string, string, never>>>[0]);
 
         return Object.assign(result, { debug, debugReady });
     } catch (error) {

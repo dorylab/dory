@@ -1,4 +1,4 @@
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV4 } from '@ai-sdk/provider';
 
 import { createAnthropicProvider } from '../../lib/ai/model/providers/anthropic';
 import { createCloudflareGatewayProvider } from '../../lib/ai/model/providers/cloudflare';
@@ -10,7 +10,7 @@ import { createQwenProvider } from '../../lib/ai/model/providers/qwen';
 import { createXaiProvider } from '../../lib/ai/model/providers/xai';
 
 type ChatProvider = {
-    chatModel: (modelName: string) => LanguageModelV3;
+    chatModel: (modelName: string) => LanguageModelV4;
 };
 
 type ProviderFactoryOptions = {

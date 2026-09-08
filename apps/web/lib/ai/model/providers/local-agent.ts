@@ -4,14 +4,14 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
 import type {
-    LanguageModelV3,
-    LanguageModelV3CallOptions,
-    LanguageModelV3Content,
-    LanguageModelV3GenerateResult,
-    LanguageModelV3Prompt,
-    LanguageModelV3StreamPart,
-    LanguageModelV3StreamResult,
-    LanguageModelV3Usage,
+    LanguageModelV4,
+    LanguageModelV4CallOptions,
+    LanguageModelV4Content,
+    LanguageModelV4GenerateResult,
+    LanguageModelV4Prompt,
+    LanguageModelV4StreamPart,
+    LanguageModelV4StreamResult,
+    LanguageModelV4Usage,
 } from '@ai-sdk/provider';
 import { getDBService } from '@dory/database';
 import { assertLocalAiAgentAvailable } from '@/lib/server/local-ai/detection';
@@ -129,7 +129,7 @@ function getHeader(headers: Record<string, string | undefined> | undefined, name
 function resolveLocalAgentDoryContext(
     providerKey: LocalAiAgentProvider,
     target: string | null | undefined,
-    options: LanguageModelV3CallOptions,
+    options: LanguageModelV4CallOptions,
     bridgeSupportsDoryMcpTools = false,
 ): LocalAgentDoryContext {
     const headers = options.headers;
@@ -185,7 +185,7 @@ function resolveLocalAgentDoryContext(
     };
 }
 
-function usageFromText(input: string, output: string): LanguageModelV3Usage {
+function usageFromText(input: string, output: string): LanguageModelV4Usage {
     return {
         inputTokens: {
             total: Math.ceil(input.length / 4),
@@ -215,10 +215,11 @@ function stringifyPart(part: unknown): string {
     if (typed.type === 'tool-call') return `[tool call: ${typed.toolName ?? 'unknown'}] ${JSON.stringify(typed.input ?? null)}`;
     if (typed.type === 'tool-result') return `[tool result: ${typed.toolName ?? 'unknown'}] ${JSON.stringify(typed.output ?? null)}`;
     if (typed.type === 'file') return '[file attachment omitted]';
+    if (typed.type === 'reasoning-file') return '[reasoning file]';
     return '';
 }
 
-function promptToText(prompt: LanguageModelV3Prompt): string {
+function promptToText(prompt: LanguageModelV4Prompt): string {
     const parts: string[] = [];
 
     for (const message of prompt) {
@@ -234,7 +235,7 @@ function promptToText(prompt: LanguageModelV3Prompt): string {
     return parts.join('\n\n');
 }
 
-function toolInstructions(options: LanguageModelV3CallOptions, context: LocalAgentDoryContext): string[] {
+function toolInstructions(options: LanguageModelV4CallOptions, context: LocalAgentDoryContext): string[] {
     if (context.doryMcpAvailable) {
         const contextLines = [
             context.connectionId ? `- Current Dory connectionId: ${context.connectionId}` : null,
@@ -278,7 +279,7 @@ function toolInstructions(options: LanguageModelV3CallOptions, context: LocalAge
     ];
 }
 
-export function buildInstruction(options: LanguageModelV3CallOptions, context: LocalAgentDoryContext = { doryMcpAvailable: false }): string {
+export function buildInstruction(options: LanguageModelV4CallOptions, context: LocalAgentDoryContext = { doryMcpAvailable: false }): string {
     const parts = [
         'You are acting as a local AI provider for Dory.',
         'Return only the final answer for the user request.',
@@ -439,7 +440,7 @@ async function runClaudeCodeAgent(modelId: string, prompt: string, signal?: Abor
 async function runLocalAgent(
     providerKey: LocalAiAgentProvider,
     modelId: string,
-    options: LanguageModelV3CallOptions,
+    options: LanguageModelV4CallOptions,
     context: LocalAgentDoryContext,
 ): Promise<LocalAgentCommandResult> {
     const prompt = buildInstruction(options, context);
@@ -455,7 +456,7 @@ async function runLocalAgentViaBridge(
     modelId: string,
     target: string,
     organizationId: string | null | undefined,
-    options: LanguageModelV3CallOptions,
+    options: LanguageModelV4CallOptions,
     context: LocalAgentDoryContext,
 ): Promise<LocalAgentCommandResult> {
     const bridgeId = parseLocalAiBridgeTarget(target);
@@ -487,8 +488,8 @@ function shouldUseBridge(target?: string | null) {
     return Boolean(parseLocalAiBridgeTarget(target));
 }
 
-function toGenerateResult(commandResult: LocalAgentCommandResult, prompt: string): LanguageModelV3GenerateResult {
-    const content: LanguageModelV3Content[] = [
+function toGenerateResult(commandResult: LocalAgentCommandResult, prompt: string): LanguageModelV4GenerateResult {
+    const content: LanguageModelV4Content[] = [
         {
             type: 'text',
             text: commandResult.text,
@@ -512,9 +513,9 @@ function toGenerateResult(commandResult: LocalAgentCommandResult, prompt: string
     };
 }
 
-function toStreamResult(commandResult: LocalAgentCommandResult, prompt: string): LanguageModelV3StreamResult {
+function toStreamResult(commandResult: LocalAgentCommandResult, prompt: string): LanguageModelV4StreamResult {
     const usage = usageFromText(prompt, commandResult.text);
-    const stream = new ReadableStream<LanguageModelV3StreamPart>({
+    const stream = new ReadableStream<LanguageModelV4StreamPart>({
         start(controller) {
             const textId = 'local-agent-text';
             controller.enqueue({ type: 'stream-start', warnings: [] });
@@ -540,10 +541,10 @@ function toStreamResult(commandResult: LocalAgentCommandResult, prompt: string):
 
 export function createLocalAgentProvider(options: LocalAgentProviderOptions) {
     return {
-        chatModel: (modelName: string): LanguageModelV3 => {
+        chatModel: (modelName: string): LanguageModelV4 => {
             const modelId = modelName.trim() || 'default';
             return {
-                specificationVersion: 'v3',
+                specificationVersion: 'v4',
                 provider: options.providerKey,
                 modelId,
                 supportedUrls: {},

@@ -19,6 +19,7 @@ export function createXaiProvider(options: XaiProviderOptions = {}) {
     });
 
     return {
+        // Keep Chat Completions semantics instead of V7's Responses API default.
         chatModel: (modelName: string) => provider.chat(modelName),
     };
 }

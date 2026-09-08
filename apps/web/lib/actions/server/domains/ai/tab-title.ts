@@ -67,7 +67,7 @@ async function runTabTitleAction(ctx: AiActionContext, input: { sql: string; dat
         });
         const { text } = await generateText({
             model,
-            system: compileSystemPrompt(preset.system) ?? 'Return a concise title only, with no explanation.',
+            instructions: compileSystemPrompt(preset.system) ?? 'Return a concise title only, with no explanation.',
             prompt: buildTabTitlePrompt({ sql, database: input.database ?? null, locale: ctx.locale }),
             temperature: preset.temperature,
             maxOutputTokens: preset.maxOutputTokens ?? 32,
