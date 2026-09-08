@@ -22,7 +22,7 @@ import { isDesktopRuntime } from '@dory/shared/runtime';
 import { MAX_HISTORY_MESSAGES } from '@/lib/ai/prompts';
 import { getApiLocale, translateApi } from '@/app/api/utils/i18n';
 import { withUserAndOrganizationHandler } from '../utils/with-organization-handler';
-import { createExternalRequestUrl, getExternalRequestOrigin } from '@/lib/server/request-origin';
+import { createExternalRequestUrl } from '@/lib/server/request-origin';
 import { issueMcpDesktopGrant, MCP_DESKTOP_GRANT_HEADER } from '@/lib/server/mcp/auth';
 import type { CopilotEnvelopeV1 } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/types/copilot-envelope';
 import { toPromptContext } from '@/app/(app)/[organization]/[connectionId]/chatbot/copilot/copilot-envelope';
@@ -147,7 +147,7 @@ async function handleChatRequest(req: Request) {
     } = body;
 
     const uiMessages: UIMessage[] = Array.isArray(rawMessages) ? rawMessages.map(normalizeMessage) : [];
-    const modelHistoryMessages = uiMessages.filter(message => (message as any)?.role !== 'tool');
+    const modelHistoryMessages = uiMessages.filter(message => (message as any)?.role !== 'tool' && (message as any)?.role !== 'system');
     const historyMessagesForAgent = modelHistoryMessages.length > MAX_HISTORY_MESSAGES ? modelHistoryMessages.slice(-MAX_HISTORY_MESSAGES) : modelHistoryMessages;
     const currentUserMessage =
         uiMessages.find(message => (message as any)?.id === requestMessageId && message.role === 'user') ?? [...uiMessages].reverse().find(message => message.role === 'user');
@@ -396,14 +396,10 @@ async function handleChatRequest(req: Request) {
             gateway: execution.gateway,
             provider: execution.providerKey,
         },
-        experimentalContext: {
-            requestOrigin: getExternalRequestOrigin(req),
-            chatId,
-        },
         requestId,
         startedAt,
         debugInput: {
-            system: agentInstructions,
+            instructions: agentInstructions,
             messages: historyMessagesForAgent as any,
             prompt: null,
         },
@@ -415,7 +411,7 @@ async function handleChatRequest(req: Request) {
         originalMessages: historyMessagesForAgent as any,
         generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
         headers: chatId ? { 'x-chat-id': chatId } : undefined,
-        onFinish: async event => {
+        onEnd: async event => {
             if (event.isAborted || !db || !userId || !organizationId || !chatId) return;
 
             const messageId = typeof (event.responseMessage as any)?.id === 'string' && (event.responseMessage as any).id ? (event.responseMessage as any).id : newEntityId();
@@ -463,7 +459,7 @@ async function handleChatRequest(req: Request) {
                     provider: execution.providerKey,
                 },
                 input: {
-                    system: agentContext.instructions,
+                    instructions: agentContext.instructions,
                     messages: historyMessagesForAgent as any,
                     prompt: null,
                 },

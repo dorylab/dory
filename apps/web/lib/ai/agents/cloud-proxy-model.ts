@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { LanguageModelV3, LanguageModelV3CallOptions, LanguageModelV3GenerateResult, LanguageModelV3StreamPart, LanguageModelV3StreamResult } from '@ai-sdk/provider';
+import type { LanguageModelV4, LanguageModelV4CallOptions, LanguageModelV4GenerateResult, LanguageModelV4StreamPart, LanguageModelV4StreamResult } from '@ai-sdk/provider';
 import type { ModelRole } from '@/lib/ai/model/types';
 
 type DoryCloudProxyLanguageModelOptions = {
@@ -18,7 +18,7 @@ function headersToObject(headers: Headers): Record<string, string> {
     return result;
 }
 
-function withoutAbortSignal(options: LanguageModelV3CallOptions): Omit<LanguageModelV3CallOptions, 'abortSignal'> {
+function withoutAbortSignal(options: LanguageModelV4CallOptions): Omit<LanguageModelV4CallOptions, 'abortSignal'> {
     const { abortSignal: _abortSignal, ...rest } = options;
     return rest;
 }
@@ -70,11 +70,11 @@ async function assertOk(response: Response) {
     throw new Error(text || `Cloud model request failed with ${response.status}`);
 }
 
-export function createDoryCloudProxyLanguageModel(options: DoryCloudProxyLanguageModelOptions): LanguageModelV3 {
+export function createDoryCloudProxyLanguageModel(options: DoryCloudProxyLanguageModelOptions): LanguageModelV4 {
     const streamUrl = new URL('/api/ai/model/stream', options.baseUrl).toString();
     const generateUrl = new URL('/api/ai/model/generate', options.baseUrl).toString();
 
-    async function post(path: string, callOptions: LanguageModelV3CallOptions, signal?: AbortSignal) {
+    async function post(path: string, callOptions: LanguageModelV4CallOptions, signal?: AbortSignal) {
         const headers = new Headers(options.headers);
         headers.set('content-type', 'application/json');
 
@@ -91,21 +91,21 @@ export function createDoryCloudProxyLanguageModel(options: DoryCloudProxyLanguag
     }
 
     return {
-        specificationVersion: 'v3',
+        specificationVersion: 'v4',
         provider: 'dory-cloud',
         modelId: options.model ?? 'cloud-chat',
         supportedUrls: {},
-        async doGenerate(callOptions): Promise<LanguageModelV3GenerateResult> {
+        async doGenerate(callOptions): Promise<LanguageModelV4GenerateResult> {
             const response = await post(generateUrl, callOptions, callOptions.abortSignal);
             await assertOk(response);
-            return (await response.json()) as LanguageModelV3GenerateResult;
+            return (await response.json()) as LanguageModelV4GenerateResult;
         },
-        async doStream(callOptions): Promise<LanguageModelV3StreamResult> {
+        async doStream(callOptions): Promise<LanguageModelV4StreamResult> {
             const response = await post(streamUrl, callOptions, callOptions.abortSignal);
             await assertOk(response);
 
             return {
-                stream: response.body ? parseSseJsonStream<LanguageModelV3StreamPart>(response.body) : new ReadableStream(),
+                stream: response.body ? parseSseJsonStream<LanguageModelV4StreamPart>(response.body) : new ReadableStream(),
                 response: {
                     headers: headersToObject(response.headers),
                 },

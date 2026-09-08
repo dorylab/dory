@@ -108,7 +108,7 @@ export async function getColumnTagsWithCache(options: GetColumnTagsWithCacheOpti
 
             const { text } = await generateText({
                 model: chatModel,
-                system: systemPrompt,
+                instructions: systemPrompt,
                 prompt,
                 temperature: preset.temperature,
                 topP: 1,

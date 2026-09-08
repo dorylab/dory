@@ -33,9 +33,7 @@ function main() {
     const commits = getCommits(range, options.maxCommits);
 
     if (commits.length === 0) {
-        const emptyMessage = fromRef
-            ? `No commits found in range ${fromRef}..${options.to}.`
-            : `No commits found up to ${options.to}.`;
+        const emptyMessage = fromRef ? `No commits found in range ${fromRef}..${options.to}.` : `No commits found up to ${options.to}.`;
 
         if (outputPath) {
             ensureParentDir(outputPath);
@@ -52,7 +50,7 @@ function main() {
         toRef: options.to,
         modelName: options.model,
     })
-        .then((notes) => {
+        .then(notes => {
             const normalized = sanitizeReleaseNotes(notes).trim();
 
             if (outputPath) {
@@ -62,7 +60,7 @@ function main() {
 
             process.stdout.write(`${normalized}\n`);
         })
-        .catch((error) => {
+        .catch(error => {
             const message = error instanceof Error ? error.message : String(error);
             console.error(`[release-notes] ${message}`);
             process.exitCode = 1;
@@ -88,12 +86,9 @@ function applyReleaseAiEnvOverrides() {
 function loadEnvironment() {
     const cwd = process.cwd();
     const gitRoot = safeGitRoot();
-    const candidates = [
-        resolve(cwd, '.env.local'),
-        resolve(cwd, '.env'),
-        gitRoot ? resolve(gitRoot, '.env.local') : null,
-        gitRoot ? resolve(gitRoot, '.env') : null,
-    ].filter((value): value is string => Boolean(value));
+    const candidates = [resolve(cwd, '.env.local'), resolve(cwd, '.env'), gitRoot ? resolve(gitRoot, '.env.local') : null, gitRoot ? resolve(gitRoot, '.env') : null].filter(
+        (value): value is string => Boolean(value),
+    );
 
     for (const file of candidates) {
         if (existsSync(file)) {
@@ -208,28 +203,15 @@ function getLatestTag() {
 function getCommits(range: string, maxCommits: number): CommitInfo[] {
     const hashes = git(['rev-list', '--reverse', '--max-count', String(maxCommits), range])
         .split('\n')
-        .map((value) => value.trim())
+        .map(value => value.trim())
         .filter(Boolean);
 
-    return hashes.map((hash) => {
-        const metadata = git([
-            'show',
-            '-s',
-            '--date=short',
-            '--format=%H%x1f%ad%x1f%s%x1f%b',
-            hash,
-        ]);
+    return hashes.map(hash => {
+        const metadata = git(['show', '-s', '--date=short', '--format=%H%x1f%ad%x1f%s%x1f%b', hash]);
         const [fullHash, date, subject, body = ''] = metadata.split('\u001f');
-        const files = git([
-            'diff-tree',
-            '--no-commit-id',
-            '--name-only',
-            '-r',
-            '-m',
-            hash,
-        ])
+        const files = git(['diff-tree', '--no-commit-id', '--name-only', '-r', '-m', hash])
             .split('\n')
-            .map((value) => value.trim())
+            .map(value => value.trim())
             .filter(Boolean);
 
         return {
@@ -243,19 +225,14 @@ function getCommits(range: string, maxCommits: number): CommitInfo[] {
     });
 }
 
-async function generateReleaseNotes(args: {
-    commits: CommitInfo[];
-    fromRef?: string;
-    toRef: string;
-    modelName: string;
-}) {
+async function generateReleaseNotes(args: { commits: CommitInfo[]; fromRef?: string; toRef: string; modelName: string }) {
     const model = getReleaseNotesChatModel(args.modelName);
     const prompt = buildPrompt(args);
 
     const { text } = await generateText({
         model,
         temperature: 0.2,
-        system: [
+        instructions: [
             'You write polished GitHub release notes in English.',
             'Return Markdown only.',
             'Be concrete and product-facing, but do not invent features or fixes.',
@@ -271,12 +248,7 @@ async function generateReleaseNotes(args: {
     return text.trim();
 }
 
-function buildPrompt(args: {
-    commits: CommitInfo[];
-    fromRef?: string;
-    toRef: string;
-    modelName: string;
-}) {
+function buildPrompt(args: { commits: CommitInfo[]; fromRef?: string; toRef: string; modelName: string }) {
     const header = [
         'Generate release notes for the following git range.',
         `From: ${args.fromRef ?? '(repository start)'}`,
@@ -303,17 +275,10 @@ function buildPrompt(args: {
 }
 
 function formatCommitForPrompt(commit: CommitInfo) {
-    const files = commit.files.length > 0
-        ? commit.files.slice(0, 12).join(', ')
-        : '(no file list)';
+    const files = commit.files.length > 0 ? commit.files.slice(0, 12).join(', ') : '(no file list)';
     const remainder = commit.files.length > 12 ? `, +${commit.files.length - 12} more` : '';
 
-    const lines = [
-        `- ${commit.subject}`,
-        `  hash: ${commit.shortHash}`,
-        `  date: ${commit.date}`,
-        `  files: ${files}${remainder}`,
-    ];
+    const lines = [`- ${commit.subject}`, `  hash: ${commit.shortHash}`, `  date: ${commit.date}`, `  files: ${files}${remainder}`];
 
     if (commit.body) {
         lines.push(`  body: ${collapseWhitespace(commit.body)}`);
@@ -329,7 +294,7 @@ function collapseWhitespace(value: string) {
 function sanitizeReleaseNotes(notes: string) {
     return notes
         .split('\n')
-        .filter((line) => {
+        .filter(line => {
             const normalizedLine = line.toLowerCase();
             if (normalizedLine.includes('sourceforge')) return false;
             if (normalizedLine.includes('trusted for open source')) return false;

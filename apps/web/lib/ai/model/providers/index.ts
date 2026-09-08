@@ -1,4 +1,4 @@
-import type { LanguageModelV3 } from '@ai-sdk/provider';
+import type { LanguageModelV4 } from '@ai-sdk/provider';
 import { createAnthropicProvider } from './anthropic';
 import { createQwenProvider } from './qwen';
 import { createGoogleProvider } from './google';
@@ -10,7 +10,7 @@ import { createCloudflareGatewayProvider } from './cloudflare';
 import { createLocalAgentProvider } from './local-agent';
 
 type ChatProvider = {
-    chatModel: (modelName: string) => LanguageModelV3;
+    chatModel: (modelName: string) => LanguageModelV4;
 };
 
 type ProviderFactoryOptions = {
@@ -91,7 +91,13 @@ export function getChatModel(modelName: string) {
     return provider.chatModel(model);
 }
 
-export function getChatModelForProviderConfig(options: { providerKey: string; modelName: string; apiKey?: string | null; baseURL?: string | null; organizationId?: string | null }) {
+export function getChatModelForProviderConfig(options: {
+    providerKey: string;
+    modelName: string;
+    apiKey?: string | null;
+    baseURL?: string | null;
+    organizationId?: string | null;
+}) {
     const providerKey = options.providerKey.trim().toLowerCase();
     const factory = providerFactories[providerKey];
     if (!factory) {

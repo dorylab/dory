@@ -44,7 +44,7 @@ export async function runLLMJson<T extends z.ZodTypeAny>(args: {
             const system = compileSystemPrompt(preset.system);
             const { text } = await generateText({
                 model,
-                system,
+                instructions: system,
                 prompt,
                 temperature: temperature ?? preset.temperature,
                 maxOutputTokens: maxOutputTokens ?? preset.maxOutputTokens,

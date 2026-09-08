@@ -291,6 +291,21 @@ const MessageRenderer = ({ message, messageIndex, messages, status, onCopySql, o
                 return renderSources(`${message.id}-sources`);
             }
 
+            if (part.type === 'reasoning-file') {
+                if (typeof part.url !== 'string' || !part.url) return null;
+                return (
+                    <a
+                        key={`${message.id}-reasoning-file-${index}`}
+                        className="text-sm text-muted-foreground underline underline-offset-4"
+                        href={part.url}
+                        rel="noreferrer"
+                        target="_blank"
+                    >
+                        {part.mediaType || 'Reasoning attachment'}
+                    </a>
+                );
+            }
+
             if (part.type === 'source-document' || part.type === 'file' || part.type === 'step-start') {
                 return null;
             }

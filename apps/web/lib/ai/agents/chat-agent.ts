@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { hasToolCall, stepCountIs, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
+import { hasToolCall, isStepCount, ToolLoopAgent, type LanguageModel, type StopCondition, type ToolSet } from 'ai';
 
 import { recordAiUsage, type AiDebugInput, type AiGatewayContext } from '@/lib/ai/gateway';
 
@@ -12,7 +12,6 @@ type BuildDoryChatAgentOptions<TOOLS extends ToolSet> = {
     maxSteps?: number;
     headers?: Record<string, string | undefined> | null;
     context: AiGatewayContext;
-    experimentalContext?: Record<string, unknown> | null;
     requestId: string;
     startedAt?: number;
     debugInput?: AiDebugInput;
@@ -44,34 +43,21 @@ export function buildDoryChatAgent<TOOLS extends ToolSet>(options: BuildDoryChat
     return new ToolLoopAgent({
         model: options.model,
         tools: options.tools,
+        toolsContext: {} as never,
         instructions: options.instructions,
         temperature: options.temperature,
-        stopWhen: [stepCountIs(options.maxSteps ?? 6), hasToolCall('chartBuilder' as keyof TOOLS & string), stopAfterManualSqlResult<TOOLS>()],
+        stopWhen: [isStepCount(options.maxSteps ?? 6), hasToolCall('chartBuilder' as keyof TOOLS & string), stopAfterManualSqlResult<TOOLS>()],
         headers: options.headers ?? undefined,
-        experimental_context: {
-            requestId: options.requestId,
-            organizationId: options.context.organizationId ?? null,
-            userId: options.context.userId ?? null,
-            connectionId: options.context.connectionId ?? null,
-            ...(options.experimentalContext ?? {}),
-        },
-        prepareCall: callOptions => ({
-            ...callOptions,
-            headers: {
-                ...(callOptions.headers ?? {}),
-                ...(options.headers ?? {}),
-            },
-        }),
-        onFinish: async event => {
+        onEnd: async event => {
             await recordAiUsage({
                 requestId: options.requestId,
                 context: options.context,
                 input: options.debugInput ?? {
-                    system: options.instructions,
+                    instructions: options.instructions,
                     messages: null,
                     prompt: null,
                 },
-                usage: event.totalUsage ?? event.usage,
+                usage: event.usage,
                 latencyMs: Date.now() - startedAt,
                 status: 'ok',
                 outputText: event.text,

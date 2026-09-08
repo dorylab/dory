@@ -1,5 +1,5 @@
 import 'server-only';
-import { createIdGenerator, stepCountIs } from 'ai';
+import { createIdGenerator, createUIMessageStreamResponse, isStepCount, toUIMessageStream } from 'ai';
 
 import { streamText } from '@/lib/ai/gateway';
 import { isLocalMissingAiEnvError, requireLocalAiRouteModel, resolveAiRouteExecution } from '@/lib/ai/execution/route-dispatch';
@@ -12,7 +12,9 @@ export const runtime = 'nodejs';
 export const POST = withUserAndOrganizationHandler(async ({ req, db, organizationId, userId }) => {
     try {
         const body = (await req.json()) as {
-            system: string;
+            instructions?: string;
+            /** @deprecated V6 transport field, accepted for rolling cloud upgrades. */
+            system?: string;
             messages: unknown[];
             tools?: Record<string, unknown> | null;
             toolChoice?: 'auto' | 'none';
@@ -49,11 +51,11 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
 
         const result = await streamText({
             model,
-            system: body.system,
+            instructions: body.instructions ?? body.system ?? '',
             messages: body.messages as any,
             tools: toolSet,
             toolChoice: body.toolChoice ?? 'auto',
-            stopWhen: stepCountIs(Math.max(1, body.maxSteps ?? 1)),
+            stopWhen: isStepCount(Math.max(1, body.maxSteps ?? 1)),
             temperature: body.temperature ?? execution.preset.temperature,
             context: {
                 organizationId,
@@ -65,8 +67,11 @@ export const POST = withUserAndOrganizationHandler(async ({ req, db, organizatio
             },
         });
 
-        return result.toUIMessageStreamResponse({
-            generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
+        return createUIMessageStreamResponse({
+            stream: toUIMessageStream({
+                stream: result.stream,
+                generateMessageId: createIdGenerator({ prefix: 'msg', size: 16 }),
+            }),
         });
     } catch (error) {
         if (isAiQuotaExceededError(error)) {

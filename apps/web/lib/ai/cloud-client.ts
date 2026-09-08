@@ -1,13 +1,11 @@
-import {
-    parseJsonEventStream,
-    uiMessageChunkSchema,
-    type UIMessageChunk,
-} from 'ai';
+import { parseJsonEventStream, uiMessageChunkSchema, type UIMessageChunk } from 'ai';
 
 import type { CloudToolDeclaration } from './cloud-tools';
 
 export type CloudStreamRequest = {
-    system: string;
+    instructions?: string;
+    /** @deprecated Accepted by the server during V6-to-V7 rolling upgrades. */
+    system?: string;
     messages: unknown[];
     tools?: Record<string, CloudToolDeclaration> | null;
     toolChoice?: 'auto' | 'none';
@@ -21,15 +19,9 @@ export type CloudStreamResponse = {
     stream: ReadableStream<UIMessageChunk>;
 };
 
-type ParseResult<T> =
-    | { success: true; value: T; rawValue: unknown }
-    | { success: false; error: unknown; rawValue: unknown };
+type ParseResult<T> = { success: true; value: T; rawValue: unknown } | { success: false; error: unknown; rawValue: unknown };
 
-export async function fetchCloudUiMessageStream(options: {
-    url: string;
-    payload: CloudStreamRequest;
-    headers?: HeadersInit;
-}): Promise<CloudStreamResponse> {
+export async function fetchCloudUiMessageStream(options: { url: string; payload: CloudStreamRequest; headers?: HeadersInit }): Promise<CloudStreamResponse> {
     const headers = new Headers(options.headers);
     if (!headers.has('content-type')) {
         headers.set('content-type', 'application/json');
