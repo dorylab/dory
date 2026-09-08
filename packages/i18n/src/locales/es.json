@@ -3740,6 +3740,7 @@
     },
     "AppSidebar": {
         "DataSources": "Fuentes de datos",
+        "SemanticContext": "Contexto semántico",
         "Artifacts": "Artifacts",
         "More": "Más",
         "NoDataSourceSelected": "Sin fuente de datos seleccionada",

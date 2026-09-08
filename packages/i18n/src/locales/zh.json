@@ -3736,6 +3736,7 @@
     },
     "AppSidebar": {
         "DataSources": "数据源",
+        "SemanticContext": "语义上下文",
         "Artifacts": "Artifacts",
         "More": "更多",
         "NoDataSourceSelected": "未选择数据源",

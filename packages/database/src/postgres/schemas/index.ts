@@ -21,6 +21,7 @@ import * as importRunsSchema from './import-runs';
 import * as exportRunsSchema from './export-runs';
 import * as artifactsSchema from './artifacts';
 import * as findingsSchema from './findings';
+import * as semanticContextSchema from './semantic-context';
 
 export * from './tabs';
 export * from './auth-schema';
@@ -45,6 +46,7 @@ export * from './import-runs';
 export * from './export-runs';
 export * from './artifacts';
 export * from './findings';
+export * from './semantic-context';
 
 export const schema = {
     ...tabsSchema,
@@ -70,6 +72,7 @@ export const schema = {
     ...exportRunsSchema,
     ...artifactsSchema,
     ...findingsSchema,
+    ...semanticContextSchema,
 };
 
 export type DBSchema = typeof schema;

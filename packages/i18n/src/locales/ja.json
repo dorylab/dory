@@ -3746,6 +3746,7 @@
     },
     "AppSidebar": {
         "DataSources": "データソース",
+        "SemanticContext": "セマンティックコンテキスト",
         "Artifacts": "Artifacts",
         "More": "その他",
         "NoDataSourceSelected": "データソース未選択",

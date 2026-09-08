@@ -8,7 +8,7 @@ import { useTranslations } from 'next-intl';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenuButton } from '@/registry/new-york-v4/ui/sidebar';
 import { NavMain } from './nav-main';
 import { NavUser } from './nav-user';
-import { Archive, ArrowDownToLine, ArrowUpCircle, Bot, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
+import { Archive, ArrowDownToLine, ArrowUpCircle, Bot, BrainCircuit, Compass, Database, FileChartColumnIncreasing, GitCompareArrows, SquareCode, Star, X } from 'lucide-react';
 import { NavSecondary } from './nav-secondary';
 import { ConnectionSwitcher } from './connection-switcher';
 import { Separator } from '@/registry/new-york-v4/ui/separator';
@@ -94,8 +94,13 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     const updateTooltip = updaterState.version ? t('UpdateTooltip', { version: updaterState.version }) : t('UpdateTooltipUnknown');
     const [showStarNotification, setShowStarNotification] = React.useState<boolean | null>(null);
 
+    const organizationItems = [
+        { title: t('DataSources'), url: dataSourcesUrl, icon: Database, requiresConnection: false },
+        { title: t('SemanticContext'), url: `/${organization}/semantic`, matchPrefix: `/${organization}/semantic`, icon: BrainCircuit, requiresConnection: false },
+    ];
     const navMain = connectionId
         ? [
+              ...organizationItems,
               {
                   title: t('SQLConsole'),
                   url: sqlConsoleUrl,
@@ -148,12 +153,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
                   : []),
           ]
         : [
-              {
-                  title: t('DataSources'),
-                  url: dataSourcesUrl,
-                  icon: Database,
-                  requiresConnection: false,
-              },
+              ...organizationItems,
               {
                   title: t('AgentRuns'),
                   url: `/${organization}/agent-runs`,

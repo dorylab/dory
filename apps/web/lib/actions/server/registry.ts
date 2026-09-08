@@ -11,6 +11,7 @@ import { savedQueryActions } from './domains/saved-query';
 import { schemaActions } from './domains/schema';
 import { tabActions } from './domains/tab';
 import { tableActions } from './domains/table';
+import { semanticActions } from './domains/semantic';
 
 export const webActionRegistry = new ActionRegistry<WebActionServices>();
 
@@ -26,4 +27,5 @@ webActionRegistry.registerMany([
     ...aiActions,
     ...artifactActions,
     ...comparisonActions,
+    ...semanticActions,
 ]);

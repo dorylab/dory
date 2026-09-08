@@ -20,6 +20,7 @@ import { PostgresComparisonsRepository } from './postgres/impl/comparisons';
 import { PostgresImportRunsRepository } from './postgres/impl/import-runs';
 import { PostgresExportRunsRepository } from './postgres/impl/export-runs';
 import { PostgresArtifactsRepository } from './postgres/impl/artifacts';
+import { PostgresSemanticContextRepository } from './postgres/impl/semantic-context';
 import { translateDatabase } from './i18n';
 import type { AiUsageRepository } from '@dory/shared';
 
@@ -49,6 +50,7 @@ export type PostgresDBService = {
     importRuns: PostgresImportRunsRepository;
     exportRuns: PostgresExportRunsRepository;
     artifacts: PostgresArtifactsRepository;
+    semanticContext: PostgresSemanticContextRepository;
 };
 
 /**
@@ -129,6 +131,8 @@ export async function getDBService(): Promise<DBService> {
 
             const exportRunsRepo = new PostgresExportRunsRepository();
             await exportRunsRepo.init();
+            const semanticContextRepo = new PostgresSemanticContextRepository();
+            await semanticContextRepo.init();
 
             instance = {
                 tabState: tabStateRepo,
@@ -152,6 +156,7 @@ export async function getDBService(): Promise<DBService> {
                 importRuns: importRunsRepo,
                 exportRuns: exportRunsRepo,
                 artifacts: artifactsRepo,
+                semanticContext: semanticContextRepo,
             };
             break;
         }

@@ -4,6 +4,12 @@ import { executeAction } from '../execute';
 import type { WebActionServices } from '../types';
 
 export function toAgentToolName(actionId: string) {
+    const semanticToolNames: Record<string, string> = {
+        'semantic.searchContext': 'search_semantic_context',
+        'semantic.getDefinition': 'get_semantic_definition',
+        'semantic.listVerifiedQueries': 'search_verified_queries',
+    };
+    if (semanticToolNames[actionId]) return semanticToolNames[actionId];
     return actionId.replace(/[^a-zA-Z0-9_]/g, '_');
 }
 
