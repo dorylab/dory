@@ -5,6 +5,7 @@ import path from 'path';
 
 const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const isProductionBuild = process.env.NODE_ENV === 'production';
+const isVercelDeployment = process.env.VERCEL === '1';
 const runtime = process.env.DORY_RUNTIME?.trim() || process.env.NEXT_PUBLIC_DORY_RUNTIME?.trim() || 'web';
 const isDesktopRuntime = runtime === 'desktop';
 const desktopRuntimeAliases: Record<string, string> = isDesktopRuntime
@@ -41,7 +42,10 @@ type NextWebpackOptionsShape = {
 
 const nextConfig = {
     distDir: process.env.DORY_NEXT_DIST_DIR?.trim() || '.next',
-    output: 'standalone',
+    // Next 16.3's Turbopack adapter on Vercel omits the root NFT trace that
+    // standalone packaging still reads. Vercel packages Next apps itself, so
+    // only self-hosted and desktop builds need the standalone output.
+    output: isVercelDeployment ? undefined : 'standalone',
     typescript: {
         tsconfigPath: isProductionBuild ? 'tsconfig.build.json' : 'tsconfig.json',
     },
