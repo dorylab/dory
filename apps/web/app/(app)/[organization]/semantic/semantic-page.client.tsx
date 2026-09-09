@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useDeferredValue, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BrainCircuit, CheckCircle2, Database, MoreHorizontal, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, Database, MoreHorizontal, Plus, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
@@ -12,7 +12,7 @@ import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { executeActionClient } from '@/lib/actions/client';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/registry/new-york-v4/ui/card';
+import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/registry/new-york-v4/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
@@ -234,6 +234,48 @@ function SemanticModelList({ organization }: { organization: string }) {
     );
 }
 
+function DefinitionExpandedRow({ definition, onClose }: { definition: Definition; onClose: () => void }) {
+    const fields = [
+        ['Description', definition.description],
+        ['Aliases', definition.aliases?.join(', ')],
+        ['Calculation', definition.expression],
+        ['Filters', definition.filters?.join('\n')],
+        ['Time dimension', definition.timeDimension],
+        ['Available dimensions', definition.dimensions?.join(', ')],
+    ].filter(([, value]) => value);
+
+    return (
+        <tr className="border-t bg-muted/20">
+            <td colSpan={5} className="p-0">
+                <div className="relative p-5">
+                    <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3" onClick={onClose} aria-label="Close definition details">
+                        <X />
+                    </Button>
+                    <div className="pr-10">
+                        <div className="text-base font-semibold">{definition.name}</div>
+                        <div className="mt-2 flex gap-2">
+                            <Badge>{definition.kind}</Badge>
+                            {definition.status === 'verified' ? <Badge variant="secondary">Verified</Badge> : null}
+                        </div>
+                    </div>
+                    {fields.length ? (
+                        <div className="mt-5 grid gap-4 md:grid-cols-2">
+                            {fields.map(([label, value]) => (
+                                <div key={label}>
+                                    <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
+                                    <div className="mt-1 whitespace-pre-wrap text-sm">{value}</div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="mt-5 text-sm text-muted-foreground">No additional details have been documented for this definition.</p>
+                    )}
+                </div>
+            </td>
+        </tr>
+    );
+}
+
 function DefinitionPanel({
     model,
     onSave,
@@ -336,8 +378,12 @@ function DefinitionPanel({
                         </tr>
                     </thead>
                     <tbody>
-                        {model.model.definitions.map(definition => (
-                            <tr key={definition.id} className="cursor-pointer border-t hover:bg-muted/30" onClick={() => setSelected(definition)}>
+                        {model.model.definitions.flatMap(definition => [
+                            <tr
+                                key={definition.id}
+                                className="cursor-pointer border-t hover:bg-muted/30"
+                                onClick={() => setSelected(current => (current?.id === definition.id ? null : definition))}
+                            >
                                 <td className="p-3 font-medium">{definition.name}</td>
                                 <td className="p-3 capitalize">{definition.kind}</td>
                                 <td className="p-3">{definition.source || sourceName(definition.sourceConnectionId)}</td>
@@ -363,44 +409,14 @@ function DefinitionPanel({
                                         <Trash2 />
                                     </Button>
                                 </td>
-                            </tr>
-                        ))}
+                            </tr>,
+                            ...(selected?.id === definition.id
+                                ? [<DefinitionExpandedRow key={`${definition.id}:detail`} definition={definition} onClose={() => setSelected(null)} />]
+                                : []),
+                        ])}
                     </tbody>
                 </table>
             </div>
-            {selected ? (
-                <Card>
-                    <CardHeader className="flex-row items-start justify-between">
-                        <div>
-                            <CardTitle>{selected.name}</CardTitle>
-                            <div className="mt-2 flex gap-2">
-                                <Badge>{selected.kind}</Badge>
-                                {selected.status === 'verified' ? <Badge variant="secondary">Verified</Badge> : null}
-                            </div>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
-                            Close
-                        </Button>
-                    </CardHeader>
-                    <CardContent className="grid gap-4 md:grid-cols-2">
-                        {[
-                            ['Description', selected.description],
-                            ['Aliases', selected.aliases?.join(', ')],
-                            ['Calculation', selected.expression],
-                            ['Filters', selected.filters?.join('\n')],
-                            ['Time dimension', selected.timeDimension],
-                            ['Available dimensions', selected.dimensions?.join(', ')],
-                        ]
-                            .filter(([, value]) => value)
-                            .map(([label, value]) => (
-                                <div key={label}>
-                                    <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
-                                    <div className="mt-1 whitespace-pre-wrap text-sm">{value}</div>
-                                </div>
-                            ))}
-                    </CardContent>
-                </Card>
-            ) : null}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -718,20 +734,16 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
                             </Card>
                         ))}
                     </div>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Business Context</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            <Textarea
-                                className="min-h-64 font-mono"
-                                value={markdown}
-                                onChange={event => setMarkdown(event.target.value)}
-                                placeholder="Document business rules, vocabulary and agent instructions in Markdown."
-                            />
-                            <Button onClick={() => update.mutate({ businessContextMd: markdown })}>Save context</Button>
-                        </CardContent>
-                    </Card>
+                    <section className="space-y-3 pt-1">
+                        <h2 className="text-base font-semibold">Business Context</h2>
+                        <Textarea
+                            className="min-h-64 font-mono"
+                            value={markdown}
+                            onChange={event => setMarkdown(event.target.value)}
+                            placeholder="Document business rules, vocabulary and agent instructions in Markdown."
+                        />
+                        <Button onClick={() => update.mutate({ businessContextMd: markdown })}>Save context</Button>
+                    </section>
                 </TabsContent>
                 <TabsContent value="definitions" className="pt-4">
                     <DefinitionPanel
