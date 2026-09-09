@@ -1,5 +1,5 @@
 import { SemanticPage } from '../semantic-page.client';
 
-export default function SemanticConnectionPage() {
+export default function SemanticModelPage() {
     return <SemanticPage />;
 }

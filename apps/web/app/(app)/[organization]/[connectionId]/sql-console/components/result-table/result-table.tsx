@@ -1,6 +1,7 @@
 'use client';
 
 import React, { Activity, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams } from 'next/navigation';
 import { Download, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { cn } from '@dory/web-utils';
 
@@ -37,6 +38,7 @@ import { resolveResultLoadingMode, shouldShowResultMetadataLoading } from './res
 import { executeActionClient } from '@/lib/actions/client';
 import { useOrganizationId } from '@/app/(app)/[organization]/components/organization-context';
 import { toast } from 'sonner';
+import { AddVerifiedQueryDialog } from '@/components/semantic/add-verified-query-dialog';
 /* =================================== constants =================================== */
 
 const OVERVIEW_SET = -1;
@@ -162,6 +164,8 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const t = useTranslations('SqlConsole');
     const organizationId = useOrganizationId();
+    const params = useParams<{ connectionId: string }>();
+    const [addToSemanticOpen, setAddToSemanticOpen] = useState(false);
     const [viewModesByKey, setViewModesByKey] = useAtom(viewModesByTabAtom);
     const [currentViewMode, setCurrentViewMode] = useState<ResultViewMode>('table');
     const [inspectorOpen, setInspectorOpen] = useState(false);
@@ -299,6 +303,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const setUserPickedFalse = useSetAtom(useMemo(() => makeSetUserPickedAtom(tabId, sessionId), [tabId, sessionId]));
 
     const [setsMeta, setSetsMeta] = useState<ResultSetSummaryMeta[]>([]);
+    const currentSql = activeSet >= 0 ? (setsMeta.find(item => item.sessionId === sessionId && item.setIndex === activeSet)?.sqlText ?? '') : '';
     const [loadedResultMetaSessionId, setLoadedResultMetaSessionId] = useState<string | null>(null);
 
     const cacheSessionUi = useCallback((cacheSessionId: string, snapshot: Partial<SessionUiSnapshot>) => {
@@ -1251,11 +1256,27 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
                 }}
             />
 
+            {remoteResultSetId && sessionMetas.status === 'success' && currentSql ? (
+                <div className="flex justify-end border-b bg-card px-3 py-2">
+                    <Button variant="outline" size="sm" onClick={() => setAddToSemanticOpen(true)}>
+                        Save as Verified Query
+                    </Button>
+                </div>
+            ) : null}
+
             {/* Table area */}
             {storageLimitApplied ? <div className="border-b bg-muted/50 px-3 py-2 text-xs text-muted-foreground">{t('Results.StorageLimitPreviewOnly')}</div> : null}
             <div className="flex-1 min-h-0">{renderResult()}</div>
 
             {isResult && <ResultStatusBar meta={execMetaBySet?.[activeSet]} shouldShowLimitNotice={shouldShowLimitNotice} />}
+            <AddVerifiedQueryDialog
+                open={addToSemanticOpen}
+                onOpenChange={setAddToSemanticOpen}
+                connectionId={params.connectionId}
+                sql={currentSql}
+                sourceType="workspace"
+                sourceId={remoteResultSetId}
+            />
         </div>
     );
 }

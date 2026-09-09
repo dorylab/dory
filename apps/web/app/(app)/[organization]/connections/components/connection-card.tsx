@@ -7,13 +7,15 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/registry/new-york-v4/ui/tooltip';
 import { ConnectionCheckStatus, ConnectionListItem } from '@dory/shared/types/connections';
-import { Copy, Edit2, EllipsisVertical, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
+import { BrainCircuit, Copy, Edit2, EllipsisVertical, FolderOpen, Loader2, Server, Trash2, User } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useHasMounted } from '@/hooks/use-has-mounted';
 import { getConnectionLocationLabel } from '@/lib/connection/display';
 import { DatabaseTypeIcon, getDatabaseTypeMeta } from './database-type-icon';
 import { FileTypeIcon, getFileTypeLabel } from './file-type-icon';
 import { getConnectionEnvironmentOption } from '../constants';
+import { AddDataSourceToSemanticModelDialog } from '@/components/semantic/add-data-source-dialog';
 
 type Props = {
     connectionItem: ConnectionListItem;
@@ -56,6 +58,7 @@ function getLocalFilesMeta(connection: ConnectionListItem['connection']) {
 export default function ConnectionCard({ connectionItem, id, connectLoading, errorMessage, onEdit, onConnect, onDuplicateRequest, onDeleteRequest }: Props) {
     const t = useTranslations('Connections');
     const hasMounted = useHasMounted();
+    const [semanticDialogOpen, setSemanticDialogOpen] = useState(false);
 
     const connection = connectionItem.connection;
     const locationLabel = getConnectionLocationLabel(connection);
@@ -215,6 +218,10 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" side="bottom" onClick={e => e.stopPropagation()}>
+                            <DropdownMenuItem onSelect={() => setSemanticDialogOpen(true)}>
+                                <BrainCircuit className="h-4 w-4" />
+                                Add to semantic model
+                            </DropdownMenuItem>
                             {!isLocalFiles ? (
                                 <DropdownMenuItem
                                     onClick={e => {
@@ -238,6 +245,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    <AddDataSourceToSemanticModelDialog open={semanticDialogOpen} onOpenChange={setSemanticDialogOpen} connectionId={id} />
                 </div>
             </div>
         </DataSourceCard>

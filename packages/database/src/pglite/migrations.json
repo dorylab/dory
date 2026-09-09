@@ -461,5 +461,45 @@
     "bps": true,
     "folderMillis": 1786204800000,
     "hash": "e66c3e6af23ecfe788d150f414dcccfdd15b37d5c1ec6b9969b234a9810504b7"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"findings\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"work_id\" text NOT NULL,\n    \"title\" text NOT NULL,\n    \"content\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_findings_org_work_created\" ON \"findings\" USING btree (\"organization_id\", \"work_id\", \"created_at\");\n",
+      "\nCREATE TABLE \"finding_artifacts\" (\n    \"finding_id\" text NOT NULL,\n    \"artifact_id\" text NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_finding_artifacts\" PRIMARY KEY(\"finding_id\", \"artifact_id\")\n);\n",
+      "\nCREATE INDEX \"idx_finding_artifacts_artifact\" ON \"finding_artifacts\" USING btree (\"artifact_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1786291200000,
+    "hash": "8423f44697aac468ebae42806d626bb94279316fdfc2c99eb2a09f03d5540e3f"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"semantic_contexts\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"connection_id\" text NOT NULL,\n    \"business_context_md\" text DEFAULT '' NOT NULL,\n    \"model_yaml\" text DEFAULT 'cubes: []\\n' NOT NULL,\n    \"model_json\" jsonb DEFAULT '{\"definitions\":[]}'::jsonb NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_semantic_contexts_org_connection\" ON \"semantic_contexts\" USING btree (\"organization_id\", \"connection_id\");\n",
+      "\nCREATE INDEX \"idx_semantic_contexts_org\" ON \"semantic_contexts\" USING btree (\"organization_id\");\n",
+      "\nCREATE TABLE \"semantic_verified_queries\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"semantic_context_id\" text NOT NULL,\n    \"title\" text NOT NULL,\n    \"question\" text NOT NULL,\n    \"sql\" text NOT NULL,\n    \"description\" text,\n    \"source_type\" text DEFAULT 'manual' NOT NULL,\n    \"source_id\" text,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_semantic_verified_queries_context_created\" ON \"semantic_verified_queries\" USING btree (\"semantic_context_id\", \"created_at\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1788859254000,
+    "hash": "55960d8f431e95c6bbbaaa54a0ff589c35bef804885378271409741df5ccc9d5"
+  },
+  {
+    "sql": [
+      "DROP TABLE IF EXISTS \"semantic_verified_queries\";\n",
+      "\nDROP TABLE IF EXISTS \"semantic_contexts\";\n",
+      "\nCREATE TABLE \"semantic_models\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"name\" text NOT NULL,\n    \"description\" text,\n    \"business_context_md\" text DEFAULT '' NOT NULL,\n    \"model_yaml\" text DEFAULT 'cubes: []\\n' NOT NULL,\n    \"model_json\" jsonb DEFAULT '{\"definitions\":[]}'::jsonb NOT NULL,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_semantic_models_org_name\" ON \"semantic_models\" USING btree (\"organization_id\", \"name\");\n",
+      "\nCREATE INDEX \"idx_semantic_models_org_updated\" ON \"semantic_models\" USING btree (\"organization_id\", \"updated_at\");\n",
+      "\nCREATE TABLE \"semantic_model_sources\" (\n    \"semantic_model_id\" text NOT NULL REFERENCES \"semantic_models\"(\"id\") ON DELETE CASCADE,\n    \"connection_id\" text NOT NULL REFERENCES \"connections\"(\"id\") ON DELETE CASCADE,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    CONSTRAINT \"pk_semantic_model_sources\" PRIMARY KEY(\"semantic_model_id\", \"connection_id\")\n);\n",
+      "\nCREATE INDEX \"idx_semantic_model_sources_connection\" ON \"semantic_model_sources\" USING btree (\"connection_id\");\n",
+      "\nCREATE TABLE \"semantic_verified_queries\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"semantic_model_id\" text NOT NULL REFERENCES \"semantic_models\"(\"id\") ON DELETE CASCADE,\n    \"source_connection_id\" text NOT NULL REFERENCES \"connections\"(\"id\") ON DELETE CASCADE,\n    \"title\" text NOT NULL,\n    \"question\" text NOT NULL,\n    \"sql\" text NOT NULL,\n    \"description\" text,\n    \"definition_ids\" jsonb DEFAULT '[]'::jsonb NOT NULL,\n    \"source_type\" text DEFAULT 'manual' NOT NULL,\n    \"source_id\" text,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE INDEX \"idx_semantic_verified_queries_model_updated\" ON \"semantic_verified_queries\" USING btree (\"semantic_model_id\", \"updated_at\");\n",
+      "\nCREATE INDEX \"idx_semantic_verified_queries_connection\" ON \"semantic_verified_queries\" USING btree (\"source_connection_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1788945600000,
+    "hash": "709ee7964c68895b8396be2b765cb9f6466f5115ba64acf2dfe6ce8d7ed67d86"
   }
 ]

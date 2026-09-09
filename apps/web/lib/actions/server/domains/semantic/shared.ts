@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
-export const semanticDefinitionKindSchema = z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']);
 export const semanticDefinitionSchema = z.object({
     id: z.string().min(1).optional(),
     name: z.string().min(1).max(160),
-    kind: semanticDefinitionKindSchema,
+    kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']),
+    status: z.enum(['verified', 'unverified']).default('verified'),
+    sourceConnectionId: z.string().min(1),
     description: z.string().max(4000).optional(),
     aliases: z.array(z.string().min(1).max(160)).max(30).optional(),
     source: z.string().max(300).optional(),
@@ -16,26 +17,33 @@ export const semanticDefinitionSchema = z.object({
     to: z.string().max(300).optional(),
 });
 
-export const semanticContextOutputSchema = z.object({
+export const semanticSourceSchema = z.object({ connectionId: z.string(), name: z.string(), type: z.string(), engine: z.string() });
+export const semanticModelOutputSchema = z.object({
     id: z.string(),
     organizationId: z.string(),
-    connectionId: z.string(),
+    name: z.string(),
+    description: z.string().nullable(),
     businessContextMd: z.string(),
     modelYaml: z.string(),
     model: z.object({ definitions: z.array(semanticDefinitionSchema.extend({ id: z.string() })) }),
+    sources: z.array(semanticSourceSchema),
+    verifiedQueryCount: z.number().int().nonnegative(),
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
 });
 
 export const semanticVerifiedQuerySchema = z.object({
     id: z.string(),
-    semanticContextId: z.string(),
+    semanticModelId: z.string(),
+    sourceConnectionId: z.string(),
     title: z.string(),
     question: z.string(),
     sql: z.string(),
     description: z.string().nullable(),
+    definitionIds: z.array(z.string()),
     sourceType: z.string(),
     sourceId: z.string().nullable(),
     createdBy: z.string().nullable(),
     createdAt: z.union([z.date(), z.string()]),
+    updatedAt: z.union([z.date(), z.string()]),
 });

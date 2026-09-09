@@ -10,11 +10,13 @@ const DEFAULT_SCOPE_ALIASES: Partial<Record<ActionScope, ActionScope[]>> = {
     'monitoring:read': ['read', 'write'],
     'analysis:run': ['read', 'write'],
     'comparisons:read': ['read', 'write'],
+    'semantic:read': ['read', 'write'],
     'connections:write': ['write'],
     'query:write': ['write'],
     'tabs:write': ['write'],
     'saved_queries:write': ['write'],
     'comparisons:write': ['write'],
+    'semantic:write': ['write'],
     'action:destructive': ['write', 'connections:write'],
 };
 
