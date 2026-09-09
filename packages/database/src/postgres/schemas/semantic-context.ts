@@ -1,4 +1,4 @@
-import { index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { newEntityId } from '@dory/shared/id';
 import { connections } from './connections';
@@ -28,7 +28,9 @@ export type SemanticModelDocument = { definitions: SemanticDefinition[] };
 export const semanticModels = pgTable(
     'semantic_models',
     {
-        id: text('id').primaryKey().$defaultFn(() => `sem_${newEntityId()}`),
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `sem_${newEntityId()}`),
         organizationId: text('organization_id').notNull(),
         name: text('name').notNull(),
         description: text('description'),
@@ -36,7 +38,10 @@ export const semanticModels = pgTable(
         modelYaml: text('model_yaml').notNull().default('cubes: []\n'),
         modelJson: jsonb('model_json').$type<SemanticModelDocument>().notNull().default({ definitions: [] }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdateFn(() => new Date()),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .defaultNow()
+            .$onUpdateFn(() => new Date()),
     },
     table => [
         uniqueIndex('uidx_semantic_models_org_name').on(table.organizationId, table.name),
@@ -47,8 +52,12 @@ export const semanticModels = pgTable(
 export const semanticModelSources = pgTable(
     'semantic_model_sources',
     {
-        semanticModelId: text('semantic_model_id').notNull().references(() => semanticModels.id, { onDelete: 'cascade' }),
-        connectionId: text('connection_id').notNull().references(() => connections.id, { onDelete: 'cascade' }),
+        semanticModelId: text('semantic_model_id')
+            .notNull()
+            .references(() => semanticModels.id, { onDelete: 'cascade' }),
+        connectionId: text('connection_id')
+            .notNull()
+            .references(() => connections.id, { onDelete: 'cascade' }),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     },
     table => [
@@ -57,12 +66,49 @@ export const semanticModelSources = pgTable(
     ],
 );
 
+export type SemanticKnowledgeSourceFormat = 'markdown' | 'yaml' | 'text';
+
+export const semanticModelKnowledgeSources = pgTable(
+    'semantic_model_knowledge_sources',
+    {
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `sks_${newEntityId()}`),
+        organizationId: text('organization_id').notNull(),
+        semanticModelId: text('semantic_model_id')
+            .notNull()
+            .references(() => semanticModels.id, { onDelete: 'cascade' }),
+        connectionId: text('connection_id').references(() => connections.id, { onDelete: 'set null' }),
+        fileName: text('file_name').notNull(),
+        format: text('format').$type<SemanticKnowledgeSourceFormat>().notNull(),
+        contentText: text('content_text').notNull(),
+        byteSize: integer('byte_size').notNull(),
+        createdBy: text('created_by'),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .defaultNow()
+            .$onUpdateFn(() => new Date()),
+    },
+    table => [
+        uniqueIndex('uidx_semantic_knowledge_sources_model_file').on(table.semanticModelId, table.fileName),
+        index('idx_semantic_knowledge_sources_org_model').on(table.organizationId, table.semanticModelId),
+        index('idx_semantic_knowledge_sources_connection').on(table.connectionId),
+    ],
+);
+
 export const semanticVerifiedQueries = pgTable(
     'semantic_verified_queries',
     {
-        id: text('id').primaryKey().$defaultFn(() => `svq_${newEntityId()}`),
-        semanticModelId: text('semantic_model_id').notNull().references(() => semanticModels.id, { onDelete: 'cascade' }),
-        sourceConnectionId: text('source_connection_id').notNull().references(() => connections.id, { onDelete: 'cascade' }),
+        id: text('id')
+            .primaryKey()
+            .$defaultFn(() => `svq_${newEntityId()}`),
+        semanticModelId: text('semantic_model_id')
+            .notNull()
+            .references(() => semanticModels.id, { onDelete: 'cascade' }),
+        sourceConnectionId: text('source_connection_id')
+            .notNull()
+            .references(() => connections.id, { onDelete: 'cascade' }),
         title: text('title').notNull(),
         question: text('question').notNull(),
         sql: text('sql').notNull(),
@@ -72,7 +118,10 @@ export const semanticVerifiedQueries = pgTable(
         sourceId: text('source_id'),
         createdBy: text('created_by'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdateFn(() => new Date()),
+        updatedAt: timestamp('updated_at', { withTimezone: true })
+            .notNull()
+            .defaultNow()
+            .$onUpdateFn(() => new Date()),
     },
     table => [
         index('idx_semantic_verified_queries_model_updated').on(table.semanticModelId, table.updatedAt),
@@ -81,4 +130,5 @@ export const semanticVerifiedQueries = pgTable(
 );
 
 export type SemanticModel = typeof semanticModels.$inferSelect;
+export type SemanticKnowledgeSource = typeof semanticModelKnowledgeSources.$inferSelect;
 export type SemanticVerifiedQuery = typeof semanticVerifiedQueries.$inferSelect;

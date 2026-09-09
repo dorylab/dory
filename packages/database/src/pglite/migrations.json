@@ -501,5 +501,16 @@
     "bps": true,
     "folderMillis": 1788945600000,
     "hash": "709ee7964c68895b8396be2b765cb9f6466f5115ba64acf2dfe6ce8d7ed67d86"
+  },
+  {
+    "sql": [
+      "CREATE TABLE \"semantic_model_knowledge_sources\" (\n    \"id\" text PRIMARY KEY NOT NULL,\n    \"organization_id\" text NOT NULL,\n    \"semantic_model_id\" text NOT NULL REFERENCES \"semantic_models\"(\"id\") ON DELETE CASCADE,\n    \"connection_id\" text REFERENCES \"connections\"(\"id\") ON DELETE SET NULL,\n    \"file_name\" text NOT NULL,\n    \"format\" text NOT NULL,\n    \"content_text\" text NOT NULL,\n    \"byte_size\" integer NOT NULL,\n    \"created_by\" text,\n    \"created_at\" timestamp with time zone DEFAULT now() NOT NULL,\n    \"updated_at\" timestamp with time zone DEFAULT now() NOT NULL\n);\n",
+      "\nCREATE UNIQUE INDEX \"uidx_semantic_knowledge_sources_model_file\" ON \"semantic_model_knowledge_sources\" USING btree (\"semantic_model_id\", \"file_name\");\n",
+      "\nCREATE INDEX \"idx_semantic_knowledge_sources_org_model\" ON \"semantic_model_knowledge_sources\" USING btree (\"organization_id\", \"semantic_model_id\");\n",
+      "\nCREATE INDEX \"idx_semantic_knowledge_sources_connection\" ON \"semantic_model_knowledge_sources\" USING btree (\"connection_id\");\n"
+    ],
+    "bps": true,
+    "folderMillis": 1788949200000,
+    "hash": "111e394640b3909ab353ef585d02acf1c5a46ccd8d66b40658f0918035454fd9"
   }
 ]

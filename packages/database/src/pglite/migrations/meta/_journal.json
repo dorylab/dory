@@ -218,6 +218,13 @@
             "when": 1788945600000,
             "tag": "0031_semantic_models",
             "breakpoints": true
+        },
+        {
+            "idx": 31,
+            "version": "7",
+            "when": 1788949200000,
+            "tag": "0032_semantic_knowledge_sources",
+            "breakpoints": true
         }
     ]
 }

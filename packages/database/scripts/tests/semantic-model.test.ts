@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseSemanticYaml, serializeSemanticModel, validateSemanticModelDocument } from '../../src/postgres/impl/semantic-context/index';
+import { parseSemanticYaml, serializeSemanticModel, validateSemanticKnowledgeSource, validateSemanticModelDocument } from '../../src/postgres/impl/semantic-context/index';
 
 const sources = new Set(['postgres', 'clickhouse']);
 
@@ -24,6 +24,7 @@ test('semantic model YAML preserves source ownership and imports definitions as 
             { id: 'metric:revenue', sourceConnectionId: 'postgres', status: 'unverified' },
         ],
     );
+    assert.equal(parseSemanticYaml(serializeSemanticModel(model), undefined, false).definitions[0]?.status, 'verified');
 });
 
 test('Cube YAML without Dory source metadata requires a selected model source', () => {
@@ -57,4 +58,13 @@ test('semantic validation rejects unlinked sources, unsafe filters and cross-sou
             ),
         /cannot cross data sources/i,
     );
+});
+
+test('knowledge sources validate supported text formats, size and YAML syntax', () => {
+    assert.equal(validateSemanticKnowledgeSource('rules.md', '# Revenue').format, 'markdown');
+    assert.equal(validateSemanticKnowledgeSource('model.yml', 'cubes: []\n').format, 'yaml');
+    assert.equal(validateSemanticKnowledgeSource('notes.txt', 'Fiscal year starts in February.').format, 'text');
+    assert.throws(() => validateSemanticKnowledgeSource('rules.pdf', 'content'), /only Markdown, YAML, and TXT/i);
+    assert.throws(() => validateSemanticKnowledgeSource('model.yaml', 'cubes: ['), /flow sequence|invalid YAML/i);
+    assert.throws(() => validateSemanticKnowledgeSource('large.md', 'x'.repeat(500_001)), /500 KB/i);
 });

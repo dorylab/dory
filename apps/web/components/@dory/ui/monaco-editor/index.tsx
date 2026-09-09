@@ -8,7 +8,7 @@ import { vsPlusTheme } from './theme';
 
 export default function MonacoEditor(props: EditorProps) {
     const monacoRef = useRef<Monaco | null>(null);
-    const { theme } = useTheme();
+    const { resolvedTheme } = useTheme();
     const language = props.language || 'mysql';
 
     // 只在浏览器环境配置 loader
@@ -27,14 +27,14 @@ export default function MonacoEditor(props: EditorProps) {
 
         monaco.editor.defineTheme('github-dark', vsPlusTheme.darkThemeData);
         monaco.editor.defineTheme('github-light', vsPlusTheme.lightThemeData);
-        monaco.editor.setTheme(theme === 'dark' ? 'github-dark' : 'github-light');
+        monaco.editor.setTheme(resolvedTheme === 'dark' ? 'github-dark' : 'github-light');
     };
 
     // 主题变化时切换 monaco 主题
     useEffect(() => {
         if (!monacoRef.current) return;
-        monacoRef.current.editor.setTheme(theme === 'dark' ? 'github-dark' : 'github-light');
-    }, [theme]);
+        monacoRef.current.editor.setTheme(resolvedTheme === 'dark' ? 'github-dark' : 'github-light');
+    }, [resolvedTheme]);
 
     return <Editor language={language} {...props} onMount={onMount} />;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -9,7 +9,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Input } from '@/registry/new-york-v4/ui/input';
 
-type ModelOption = { id: string; name: string; sources: Array<{ connectionId: string }> };
+type ModelOption = { id: string; name: string; dataSources: Array<{ connectionId: string }> };
 
 export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connectionId }: { open: boolean; onOpenChange: (open: boolean) => void; connectionId: string }) {
     const [semanticModelId, setSemanticModelId] = useState('');
@@ -19,14 +19,17 @@ export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connect
         enabled: open,
         queryFn: () => executeActionClient<{ models: ModelOption[] }>('semantic.list', {}),
     });
-    const available = models.data?.models.filter(model => !model.sources.some(source => source.connectionId === connectionId)) ?? [];
+    const available = useMemo(
+        () => models.data?.models.filter(model => !model.dataSources.some(source => source.connectionId === connectionId)) ?? [],
+        [connectionId, models.data?.models],
+    );
     useEffect(() => {
         if (!semanticModelId && available[0]) setSemanticModelId(available[0].id);
     }, [available, semanticModelId]);
     const save = useMutation({
         mutationFn: () =>
             semanticModelId
-                ? executeActionClient('semantic.addSource', { semanticModelId, connectionId })
+                ? executeActionClient('semantic.addDataSource', { semanticModelId, connectionId })
                 : executeActionClient('semantic.create', { name: newModelName, connectionIds: [connectionId] }),
         onSuccess: () => {
             toast.success('Data source added to semantic model.');

@@ -17,7 +17,20 @@ export const semanticDefinitionSchema = z.object({
     to: z.string().max(300).optional(),
 });
 
-export const semanticSourceSchema = z.object({ connectionId: z.string(), name: z.string(), type: z.string(), engine: z.string() });
+export const semanticDataSourceSchema = z.object({ connectionId: z.string(), name: z.string(), type: z.string(), engine: z.string() });
+export const semanticKnowledgeSourceSummarySchema = z.object({
+    id: z.string(),
+    organizationId: z.string(),
+    semanticModelId: z.string(),
+    connectionId: z.string().nullable(),
+    fileName: z.string(),
+    format: z.enum(['markdown', 'yaml', 'text']),
+    byteSize: z.number().int().nonnegative(),
+    createdBy: z.string().nullable(),
+    createdAt: z.union([z.date(), z.string()]),
+    updatedAt: z.union([z.date(), z.string()]),
+});
+export const semanticKnowledgeSourceSchema = semanticKnowledgeSourceSummarySchema.extend({ contentText: z.string() });
 export const semanticModelOutputSchema = z.object({
     id: z.string(),
     organizationId: z.string(),
@@ -26,7 +39,7 @@ export const semanticModelOutputSchema = z.object({
     businessContextMd: z.string(),
     modelYaml: z.string(),
     model: z.object({ definitions: z.array(semanticDefinitionSchema.extend({ id: z.string() })) }),
-    sources: z.array(semanticSourceSchema),
+    dataSources: z.array(semanticDataSourceSchema),
     verifiedQueryCount: z.number().int().nonnegative(),
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),

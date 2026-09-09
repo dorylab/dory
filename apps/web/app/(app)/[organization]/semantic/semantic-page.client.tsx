@@ -1,15 +1,27 @@
 'use client';
 
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
 import { useDeferredValue, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BrainCircuit, CheckCircle2, Database, MoreHorizontal, Plus, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, X } from 'lucide-react';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
 import type { ConnectionListItem } from '@dory/shared/types/connections';
 import { executeActionClient } from '@/lib/actions/client';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/registry/new-york-v4/ui/alert-dialog';
 import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
@@ -18,6 +30,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/registry/new-york-v4/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
+import { KnowledgeSourcesPanel } from './knowledge-sources-panel';
 
 type Definition = {
     id: string;
@@ -35,7 +48,7 @@ type Definition = {
     from?: string;
     to?: string;
 };
-type ModelSource = { connectionId: string; name: string; type: string; engine: string };
+type ModelDataSource = { connectionId: string; name: string; type: string; engine: string };
 export type SemanticModelView = {
     id: string;
     organizationId: string;
@@ -44,7 +57,7 @@ export type SemanticModelView = {
     businessContextMd: string;
     modelYaml: string;
     model: { definitions: Definition[] };
-    sources: ModelSource[];
+    dataSources: ModelDataSource[];
     verifiedQueryCount: number;
     createdAt: string;
     updatedAt: string;
@@ -65,6 +78,10 @@ type VerifiedQuery = {
 
 const modelKey = (modelId: string) => ['semantic-model', modelId] as const;
 const connectionIdOf = (item: ConnectionListItem) => item.connection.id!;
+const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-editor'), {
+    ssr: false,
+    loading: () => <div className="h-full animate-pulse bg-muted" aria-label="Loading YAML editor" />,
+});
 
 function relativeTime(value: string) {
     const seconds = Math.round((new Date(value).getTime() - Date.now()) / 1000);
@@ -155,10 +172,100 @@ export function CreateSemanticModelDialog({
     );
 }
 
+function EditSemanticModelDialog({
+    model,
+    organization,
+    connections,
+    onOpenChange,
+    onUpdated,
+}: {
+    model: SemanticModelView | null;
+    organization: string;
+    connections: ConnectionListItem[];
+    onOpenChange: (open: boolean) => void;
+    onUpdated: (model: SemanticModelView) => void;
+}) {
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [connectionIds, setConnectionIds] = useState<string[]>([]);
+    useEffect(() => {
+        setName(model?.name ?? '');
+        setDescription(model?.description ?? '');
+        setConnectionIds(model?.dataSources.map(source => source.connectionId) ?? []);
+    }, [model]);
+    const update = useMutation({
+        mutationFn: async () => {
+            if (!model) throw new Error('Select a semantic model first.');
+            await executeActionClient<SemanticModelView>('semantic.update', { semanticModelId: model.id, name, description }, { organizationId: organization });
+            return executeActionClient<SemanticModelView>('semantic.replaceDataSources', { semanticModelId: model.id, connectionIds }, { organizationId: organization });
+        },
+        onSuccess: updated => {
+            onUpdated(updated);
+            onOpenChange(false);
+            toast.success('Semantic model updated.');
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : 'Could not update semantic model.'),
+    });
+
+    return (
+        <Dialog open={Boolean(model)} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Edit semantic model</DialogTitle>
+                    <DialogDescription>Update the model name and business description.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Name</label>
+                        <Input value={name} onChange={event => setName(event.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Description</label>
+                        <Textarea value={description} onChange={event => setDescription(event.target.value)} />
+                    </div>
+                    <fieldset className="space-y-2">
+                        <legend className="text-sm font-medium">Data sources</legend>
+                        <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border p-2">
+                            {connections.map(connection => {
+                                const connectionId = connectionIdOf(connection);
+                                return (
+                                    <label key={connectionId} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50">
+                                        <input
+                                            type="checkbox"
+                                            checked={connectionIds.includes(connectionId)}
+                                            onChange={() =>
+                                                setConnectionIds(current =>
+                                                    current.includes(connectionId) ? current.filter(id => id !== connectionId) : [...current, connectionId],
+                                                )
+                                            }
+                                        />
+                                        <span className="text-sm">{connection.connection.name}</span>
+                                        <span className="ml-auto text-xs text-muted-foreground">{connection.connection.engine}</span>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </fieldset>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        Cancel
+                    </Button>
+                    <Button onClick={() => update.mutate()} disabled={!name.trim() || connectionIds.length === 0 || update.isPending}>
+                        Save changes
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function SemanticModelList({ organization }: { organization: string }) {
     const router = useRouter();
     const queryClient = useQueryClient();
     const [search, setSearch] = useQueryState('q', parseAsString.withDefault(''));
+    const [editingModel, setEditingModel] = useState<SemanticModelView | null>(null);
+    const [deletingModel, setDeletingModel] = useState<SemanticModelView | null>(null);
     const deferredSearch = useDeferredValue(search);
     const connections = useQuery({
         queryKey: ['connections', organization],
@@ -173,64 +280,154 @@ function SemanticModelList({ organization }: { organization: string }) {
         router.push(`/${organization}/semantic/${model.id}`);
     };
     const connectionItems = connections.data?.connections ?? [];
+    const deleteModel = useMutation({
+        mutationFn: () => {
+            if (!deletingModel) throw new Error('Select a semantic model first.');
+            return executeActionClient('semantic.delete', { semanticModelId: deletingModel.id }, { organizationId: organization, confirmationToken: 'semantic.delete' });
+        },
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: ['semantic-models', organization] });
+            setDeletingModel(null);
+            toast.success('Semantic model deleted.');
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : 'Could not delete semantic model.'),
+    });
+    const updateModel = (_model: SemanticModelView) => {
+        void queryClient.invalidateQueries({ queryKey: ['semantic-models', organization] });
+        setEditingModel(null);
+    };
     return (
-        <main className="container mx-auto max-w-6xl space-y-6 px-8 py-8">
-            <header className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold">Semantic Context</h1>
-                    <p className="mt-1 text-muted-foreground">Give agents consistent business meaning across your data.</p>
-                </div>
-                <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} />
-            </header>
-            {models.data?.models.length || search ? (
-                <div className="relative max-w-xl">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input className="pl-9" value={search} onChange={event => void setSearch(event.target.value || null)} placeholder="Search semantic models" />
-                </div>
-            ) : null}
-            {models.isLoading ? <p className="text-sm text-muted-foreground">Loading semantic models…</p> : null}
-            {models.data?.models.length ? (
-                <div className="grid gap-3 md:grid-cols-2">
-                    {models.data.models.map(model => (
-                        <Link key={model.id} href={`/${organization}/semantic/${model.id}`}>
-                            <Card className="h-full transition-colors hover:bg-accent">
-                                <CardContent className="space-y-3 py-5">
-                                    <div>
-                                        <div className="text-lg font-semibold">{model.name}</div>
-                                        {model.description ? <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{model.description}</p> : null}
-                                    </div>
-                                    <div className="text-sm">
-                                        {model.model.definitions.length} definitions · {model.verifiedQueryCount} verified queries
-                                        <br />
-                                        {model.sources.length} data {model.sources.length === 1 ? 'source' : 'sources'} ·{' '}
-                                        {[...new Set(model.sources.map(source => source.engine))].join(' · ')}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">Updated {relativeTime(model.updatedAt)}</div>
-                                </CardContent>
-                            </Card>
-                        </Link>
-                    ))}
-                </div>
-            ) : models.data && !search ? (
-                <Card className="border-dashed">
-                    <CardContent className="flex min-h-80 flex-col items-center justify-center text-center">
-                        <div className="mb-4 rounded-full bg-primary/10 p-4 text-primary">
-                            <BrainCircuit className="h-8 w-8" />
-                        </div>
-                        <h2 className="text-lg font-semibold">Create your first semantic model</h2>
-                        <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                            Define metrics, relationships, business rules and verified queries so agents understand your data consistently.
-                        </p>
-                        <div className="mt-5 flex gap-2">
-                            <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} trigger={<Button>Create semantic model</Button>} />
-                            <Button variant="outline" disabled>
-                                Generate from data sources
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-            ) : null}
-        </main>
+        <div className="bg-n8 h-screen overflow-auto">
+            <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
+                <header className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold">Semantic Context</h1>
+                        <p className="mt-1 text-muted-foreground">Give agents consistent business meaning across your data.</p>
+                    </div>
+                    <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} />
+                </header>
+                {models.data?.models.length || search ? (
+                    <div className="relative max-w-xl">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input className="pl-9" value={search} onChange={event => void setSearch(event.target.value || null)} placeholder="Search semantic models" />
+                    </div>
+                ) : null}
+                {models.isLoading ? <p className="text-sm text-muted-foreground">Loading semantic models…</p> : null}
+                {models.data?.models.length ? (
+                    <div className="overflow-hidden rounded-lg border bg-card">
+                        <table className="w-full text-sm">
+                            <thead className="bg-muted/50 text-left text-muted-foreground">
+                                <tr>
+                                    <th className="px-4 py-3 font-medium">Model</th>
+                                    <th className="px-4 py-3 font-medium">Definitions</th>
+                                    <th className="px-4 py-3 font-medium">Data sources</th>
+                                    <th className="px-4 py-3 font-medium">Updated</th>
+                                    <th className="w-24 px-4 py-3" />
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {models.data.models.map(model => (
+                                    <tr
+                                        key={model.id}
+                                        className="cursor-pointer border-t transition-colors hover:bg-muted/30"
+                                        onClick={() => router.push(`/${organization}/semantic/${model.id}`)}
+                                    >
+                                        <td className="px-4 py-4">
+                                            <div className="font-medium">{model.name}</div>
+                                            {model.description ? <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{model.description}</p> : null}
+                                        </td>
+                                        <td className="px-4 py-4 text-muted-foreground">
+                                            {model.model.definitions.length} definitions · {model.verifiedQueryCount} verified queries
+                                        </td>
+                                        <td className="px-4 py-4 text-muted-foreground">
+                                            <div>
+                                                {model.dataSources.length} {model.dataSources.length === 1 ? 'source' : 'sources'}
+                                            </div>
+                                            <div className="mt-1 text-xs">{model.dataSources.map(source => source.name).join(' · ')}</div>
+                                        </td>
+                                        <td className="px-4 py-4 text-muted-foreground">{relativeTime(model.updatedAt)}</td>
+                                        <td className="px-4 py-4 text-right">
+                                            <div className="flex justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    aria-label={`Edit ${model.name}`}
+                                                    onClick={event => {
+                                                        event.stopPropagation();
+                                                        setEditingModel(model);
+                                                    }}
+                                                >
+                                                    <Pencil />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    aria-label={`Delete ${model.name}`}
+                                                    onClick={event => {
+                                                        event.stopPropagation();
+                                                        setDeletingModel(model);
+                                                    }}
+                                                >
+                                                    <Trash2 className="text-destructive" />
+                                                </Button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : models.data && !search ? (
+                    <Card className="border-dashed">
+                        <CardContent className="flex min-h-80 flex-col items-center justify-center text-center">
+                            <div className="mb-4 rounded-full bg-primary/10 p-4 text-primary">
+                                <BrainCircuit className="h-8 w-8" />
+                            </div>
+                            <h2 className="text-lg font-semibold">Create your first semantic model</h2>
+                            <p className="mt-2 max-w-md text-sm text-muted-foreground">
+                                Define metrics, relationships, business rules and verified queries so agents understand your data consistently.
+                            </p>
+                            <div className="mt-5 flex gap-2">
+                                <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} trigger={<Button>Create semantic model</Button>} />
+                                <Button variant="outline" disabled>
+                                    Generate from data sources
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ) : null}
+                <EditSemanticModelDialog
+                    model={editingModel}
+                    organization={organization}
+                    connections={connectionItems}
+                    onOpenChange={open => !open && setEditingModel(null)}
+                    onUpdated={updateModel}
+                />
+                <AlertDialog open={Boolean(deletingModel)} onOpenChange={open => !open && setDeletingModel(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete semantic model?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {deletingModel ? `This permanently deletes “${deletingModel.name}”, its definitions, and verified queries.` : ''}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={deleteModel.isPending}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={event => {
+                                    event.preventDefault();
+                                    deleteModel.mutate();
+                                }}
+                                disabled={deleteModel.isPending}
+                            >
+                                Delete model
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </main>
+        </div>
     );
 }
 
@@ -291,7 +488,7 @@ function DefinitionPanel({
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
     const [kind, setKind] = useState<Definition['kind']>('metric');
-    const [sourceConnectionId, setSourceConnectionId] = useState(model.sources[0]?.connectionId ?? '');
+    const [sourceConnectionId, setSourceConnectionId] = useState(model.dataSources[0]?.connectionId ?? '');
     const [source, setSource] = useState('');
     const [expression, setExpression] = useState('');
     const [description, setDescription] = useState('');
@@ -322,7 +519,7 @@ function DefinitionPanel({
         setFrom('');
         setTo('');
     };
-    const sourceName = (id: string) => model.sources.find(item => item.connectionId === id)?.name ?? id;
+    const sourceName = (id: string) => model.dataSources.find(item => item.connectionId === id)?.name ?? id;
     return (
         <div className="space-y-4">
             <div className="flex justify-end">
@@ -430,7 +627,7 @@ function DefinitionPanel({
                             value={sourceConnectionId}
                             onChange={event => setSourceConnectionId(event.target.value)}
                         >
-                            {model.sources.map(item => (
+                            {model.dataSources.map(item => (
                                 <option key={item.connectionId} value={item.connectionId}>
                                     {item.name}
                                 </option>
@@ -565,7 +762,7 @@ function ImportYamlDialog({
     onImported: (model: SemanticModelView) => void;
 }) {
     const [yaml, setYaml] = useState('');
-    const [fallbackSourceConnectionId, setFallbackSourceConnectionId] = useState(model.sources[0]?.connectionId ?? '');
+    const [fallbackSourceConnectionId, setFallbackSourceConnectionId] = useState(model.dataSources[0]?.connectionId ?? '');
     const importYaml = useMutation({
         mutationFn: () =>
             executeActionClient<SemanticModelView>('semantic.importYaml', {
@@ -595,7 +792,7 @@ function ImportYamlDialog({
                         value={fallbackSourceConnectionId}
                         onChange={event => setFallbackSourceConnectionId(event.target.value)}
                     >
-                        {model.sources.map(source => (
+                        {model.dataSources.map(source => (
                             <option key={source.connectionId} value={source.connectionId}>
                                 {source.name}
                             </option>
@@ -621,12 +818,82 @@ function ImportYamlDialog({
     );
 }
 
+function YamlEditorDialog({
+    open,
+    onOpenChange,
+    model,
+    onSaved,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    model: SemanticModelView;
+    onSaved: (model: SemanticModelView) => void;
+}) {
+    const [yaml, setYaml] = useState(model.modelYaml);
+    useEffect(() => {
+        if (open) setYaml(model.modelYaml);
+    }, [open, model.modelYaml]);
+    const save = useMutation({
+        mutationFn: () =>
+            executeActionClient<SemanticModelView>('semantic.importYaml', {
+                semanticModelId: model.id,
+                source: yaml,
+                fallbackSourceConnectionId: model.dataSources[0]?.connectionId,
+                preserveStatus: true,
+            }),
+        onSuccess: saved => {
+            onSaved(saved);
+            onOpenChange(false);
+            toast.success('YAML saved.');
+        },
+        onError: error => toast.error(error instanceof Error ? error.message : 'Could not save YAML.'),
+    });
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
+                <DialogHeader className="shrink-0">
+                    <DialogTitle>Model YAML</DialogTitle>
+                    <DialogDescription>Changes are validated before they update the semantic model.</DialogDescription>
+                </DialogHeader>
+                <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+                    <MonacoYamlEditor
+                        height="100%"
+                        language="yaml"
+                        value={yaml}
+                        onChange={value => setYaml(value ?? '')}
+                        options={{
+                            automaticLayout: true,
+                            minimap: { enabled: false },
+                            fontSize: 13,
+                            lineNumbers: 'off',
+                            lineNumbersMinChars: 0,
+                            scrollBeyondLastLine: false,
+                            tabSize: 2,
+                            insertSpaces: true,
+                            padding: { top: 12, bottom: 12 },
+                        }}
+                    />
+                </div>
+                <DialogFooter className="shrink-0">
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        Cancel
+                    </Button>
+                    <Button onClick={() => save.mutate()} disabled={!yaml.trim() || save.isPending}>
+                        {save.isPending ? 'Saving…' : 'Save YAML'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function SemanticModelDetail({ organization, semanticModelId }: { organization: string; semanticModelId: string }) {
+    const sourcesText = useTranslations('SemanticContext.KnowledgeSources');
     const router = useRouter();
     const queryClient = useQueryClient();
     const [markdown, setMarkdown] = useState('');
-    const [yamlOpen, setYamlOpen] = useState(false);
-    const [sourceToAdd, setSourceToAdd] = useState('');
+    const [yamlEditorOpen, setYamlEditorOpen] = useState(false);
     const [askAiOpen, setAskAiOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const modelQuery = useQuery({
@@ -636,10 +903,6 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
     const queries = useQuery({
         queryKey: [...modelKey(semanticModelId), 'verified-queries'],
         queryFn: () => executeActionClient<{ queries: VerifiedQuery[] }>('semantic.listVerifiedQueries', { semanticModelId }, { organizationId: organization }),
-    });
-    const connections = useQuery({
-        queryKey: ['connections', organization],
-        queryFn: () => executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {}, { organizationId: organization }),
     });
     useEffect(() => {
         if (modelQuery.data) setMarkdown(modelQuery.data.businessContextMd);
@@ -656,19 +919,6 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
         onSuccess: setModel,
         onError: error => toast.error(error instanceof Error ? error.message : 'Could not save definitions.'),
     });
-    const addSource = useMutation({
-        mutationFn: () => executeActionClient<SemanticModelView>('semantic.addSource', { semanticModelId, connectionId: sourceToAdd }, { organizationId: organization }),
-        onSuccess: model => {
-            setModel(model);
-            setSourceToAdd('');
-        },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not add data source.'),
-    });
-    const removeSource = useMutation({
-        mutationFn: (connectionId: string) => executeActionClient<SemanticModelView>('semantic.removeSource', { semanticModelId, connectionId }, { organizationId: organization }),
-        onSuccess: setModel,
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not remove data source.'),
-    });
     const deleteModel = useMutation({
         mutationFn: () => executeActionClient('semantic.delete', { semanticModelId }, { organizationId: organization, confirmationToken: 'semantic.delete' }),
         onSuccess: () => router.push(`/${organization}/semantic`),
@@ -680,155 +930,120 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
     if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">Loading semantic model…</div>;
     if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">Semantic model not found.</div>;
     const model = modelQuery.data;
-    const availableSources = (connections.data?.connections ?? []).filter(item => !model.sources.some(source => source.connectionId === connectionIdOf(item)));
     return (
-        <main className="container mx-auto max-w-6xl space-y-6 px-8 py-8">
-            <header className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <Link className="text-sm text-muted-foreground hover:text-foreground" href={`/${organization}/semantic`}>
-                        Semantic Context
-                    </Link>
-                    <h1 className="mt-2 text-2xl font-bold">{model.name}</h1>
-                    {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
-                </div>
-                <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setAskAiOpen(true)}>
-                        Ask AI
-                    </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon">
-                                <MoreHorizontal />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => setYamlOpen(value => !value)}>View YAML</DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setImportOpen(true)}>Import YAML</DropdownMenuItem>
-                            <DropdownMenuItem variant="destructive" onSelect={() => deleteModel.mutate()}>
-                                Delete model
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </header>
-            {yamlOpen ? <pre className="max-h-80 overflow-auto rounded-md bg-muted p-4 text-xs">{model.modelYaml}</pre> : null}
-            <Tabs defaultValue="overview">
-                <TabsList variant="line">
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="definitions">Definitions</TabsTrigger>
-                    <TabsTrigger value="queries">Verified Queries</TabsTrigger>
-                    <TabsTrigger value="sources">Sources</TabsTrigger>
-                </TabsList>
-                <TabsContent value="overview" className="space-y-5 pt-4">
-                    <div className="grid gap-3 sm:grid-cols-3">
-                        {[
-                            [model.model.definitions.length, 'Definitions'],
-                            [model.verifiedQueryCount, 'Verified Queries'],
-                            [model.sources.length, 'Data Sources'],
-                        ].map(([value, label]) => (
-                            <Card key={label}>
-                                <CardContent className="py-5">
-                                    <div className="text-2xl font-semibold">{value}</div>
-                                    <div className="text-sm text-muted-foreground">{label}</div>
-                                </CardContent>
-                            </Card>
-                        ))}
+        <div className="bg-n8 h-screen overflow-auto">
+            <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
+                <header className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <Link className="text-sm text-muted-foreground hover:text-foreground" href={`/${organization}/semantic`}>
+                            Semantic Context
+                        </Link>
+                        <h1 className="mt-2 text-2xl font-bold">{model.name}</h1>
+                        {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
                     </div>
-                    <section className="space-y-3 pt-1">
-                        <h2 className="text-base font-semibold">Business Context</h2>
-                        <Textarea
-                            className="min-h-64 font-mono"
-                            value={markdown}
-                            onChange={event => setMarkdown(event.target.value)}
-                            placeholder="Document business rules, vocabulary and agent instructions in Markdown."
-                        />
-                        <Button onClick={() => update.mutate({ businessContextMd: markdown })}>Save context</Button>
-                    </section>
-                </TabsContent>
-                <TabsContent value="definitions" className="pt-4">
-                    <DefinitionPanel
-                        model={model}
-                        onSave={definitions => saveDefinitions.mutate(definitions)}
-                        onImport={() => setImportOpen(true)}
-                        onAskAi={() => setAskAiOpen(true)}
-                    />
-                </TabsContent>
-                <TabsContent value="queries" className="space-y-3 pt-4">
-                    {queries.data?.queries.length ? (
-                        queries.data.queries.map(item => (
-                            <Card key={item.id}>
-                                <CardContent className="flex items-start justify-between gap-4 py-4">
-                                    <div className="min-w-0">
-                                        <div className="font-medium">{item.title}</div>
-                                        <p className="mt-1 text-sm text-muted-foreground">{item.question}</p>
-                                        <div className="mt-2 text-xs text-muted-foreground">
-                                            {item.sourceType} · Updated {relativeTime(item.updatedAt)}
-                                        </div>
-                                        <pre className="mt-3 max-h-48 overflow-auto rounded bg-muted p-3 text-xs">{item.sql}</pre>
-                                    </div>
-                                    <Button variant="ghost" size="icon-sm" onClick={() => deleteQuery.mutate(item.id)}>
-                                        <Trash2 />
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))
-                    ) : (
-                        <Card className="border-dashed">
-                            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                                Verified queries added from Workspace, Agent Runs, or Artifacts will appear here.
-                            </CardContent>
-                        </Card>
-                    )}
-                </TabsContent>
-                <TabsContent value="sources" className="space-y-4 pt-4">
-                    <div className="flex justify-end gap-2">
-                        <select className="h-9 rounded-md border bg-background px-3 text-sm" value={sourceToAdd} onChange={event => setSourceToAdd(event.target.value)}>
-                            <option value="">Select data source</option>
-                            {availableSources.map(item => (
-                                <option key={connectionIdOf(item)} value={connectionIdOf(item)}>
-                                    {item.connection.name}
-                                </option>
-                            ))}
-                        </select>
-                        <Button onClick={() => addSource.mutate()} disabled={!sourceToAdd}>
-                            <Plus />
-                            Add data source
+                    <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setAskAiOpen(true)}>
+                            Ask AI
                         </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="icon">
+                                    <MoreHorizontal />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onSelect={() => setYamlEditorOpen(true)}>View YAML</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => setImportOpen(true)}>Import YAML</DropdownMenuItem>
+                                <DropdownMenuItem variant="destructive" onSelect={() => deleteModel.mutate()}>
+                                    Delete model
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
-                    {model.sources.map(source => {
-                        const tables = [
-                            ...new Set(
-                                model.model.definitions
-                                    .filter(item => item.sourceConnectionId === source.connectionId)
-                                    .map(item => item.source)
-                                    .filter(Boolean),
-                            ),
-                        ];
-                        return (
-                            <Card key={source.connectionId}>
-                                <CardContent className="flex items-start justify-between gap-4 py-4">
-                                    <div>
-                                        <div className="flex items-center gap-2 font-medium">
-                                            <Database className="h-4 w-4" />
-                                            {source.name}
+                </header>
+                <Tabs defaultValue="overview">
+                    <TabsList variant="line">
+                        <TabsTrigger value="overview">Overview</TabsTrigger>
+                        <TabsTrigger value="definitions">Definitions</TabsTrigger>
+                        <TabsTrigger value="queries">Verified Queries</TabsTrigger>
+                        <TabsTrigger value="sources">{sourcesText('Tab')}</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="overview" className="space-y-5 pt-4">
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            {[
+                                [model.model.definitions.length, 'Definitions'],
+                                [model.verifiedQueryCount, 'Verified Queries'],
+                                [model.dataSources.length, 'Data Sources'],
+                            ].map(([value, label]) => (
+                                <Card key={label}>
+                                    <CardContent className="py-5">
+                                        <div className="text-2xl font-semibold">{value}</div>
+                                        <div className="text-sm text-muted-foreground">{label}</div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                        <section className="space-y-3 pt-1">
+                            <h2 className="text-base font-semibold">Business Context</h2>
+                            <Textarea
+                                className="min-h-64 font-mono"
+                                value={markdown}
+                                onChange={event => setMarkdown(event.target.value)}
+                                placeholder="Document business rules, vocabulary and agent instructions in Markdown."
+                            />
+                            <Button onClick={() => update.mutate({ businessContextMd: markdown })}>Save context</Button>
+                        </section>
+                    </TabsContent>
+                    <TabsContent value="definitions" className="pt-4">
+                        <DefinitionPanel
+                            model={model}
+                            onSave={definitions => saveDefinitions.mutate(definitions)}
+                            onImport={() => setImportOpen(true)}
+                            onAskAi={() => setAskAiOpen(true)}
+                        />
+                    </TabsContent>
+                    <TabsContent value="queries" className="space-y-3 pt-4">
+                        {queries.data?.queries.length ? (
+                            queries.data.queries.map(item => (
+                                <Card key={item.id}>
+                                    <CardContent className="flex items-start justify-between gap-4 py-4">
+                                        <div className="min-w-0">
+                                            <div className="font-medium">{item.title}</div>
+                                            <p className="mt-1 text-sm text-muted-foreground">{item.question}</p>
+                                            <div className="mt-2 text-xs text-muted-foreground">
+                                                {item.sourceType} · Updated {relativeTime(item.updatedAt)}
+                                            </div>
+                                            <pre className="mt-3 max-h-48 overflow-auto rounded bg-muted p-3 text-xs">{item.sql}</pre>
                                         </div>
-                                        <p className="mt-1 text-sm text-muted-foreground">
-                                            {source.engine}
-                                            {tables.length ? ` · ${tables.join(' · ')}` : ''}
-                                        </p>
-                                    </div>
-                                    <Button variant="ghost" size="sm" onClick={() => removeSource.mutate(source.connectionId)}>
-                                        Remove
-                                    </Button>
+                                        <Button variant="ghost" size="icon-sm" onClick={() => deleteQuery.mutate(item.id)}>
+                                            <Trash2 />
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            ))
+                        ) : (
+                            <Card className="border-dashed">
+                                <CardContent className="py-12 text-center text-sm text-muted-foreground">
+                                    Verified queries added from Workspace, Agent Runs, or Artifacts will appear here.
                                 </CardContent>
                             </Card>
-                        );
-                    })}
-                </TabsContent>
-            </Tabs>
-            <AskAiDialog open={askAiOpen} onOpenChange={setAskAiOpen} model={model} onAccept={definitions => saveDefinitions.mutate(definitions)} />
-            <ImportYamlDialog open={importOpen} onOpenChange={setImportOpen} model={model} onImported={setModel} />
-        </main>
+                        )}
+                    </TabsContent>
+                    <TabsContent value="sources" className="pt-4">
+                        <KnowledgeSourcesPanel
+                            organization={organization}
+                            semanticModelId={semanticModelId}
+                            dataSources={model.dataSources}
+                            definitions={model.model.definitions}
+                            onImportDefinitions={definitions => saveDefinitions.mutate(definitions)}
+                        />
+                    </TabsContent>
+                </Tabs>
+                <AskAiDialog open={askAiOpen} onOpenChange={setAskAiOpen} model={model} onAccept={definitions => saveDefinitions.mutate(definitions)} />
+                <ImportYamlDialog open={importOpen} onOpenChange={setImportOpen} model={model} onImported={setModel} />
+                <YamlEditorDialog open={yamlEditorOpen} onOpenChange={setYamlEditorOpen} model={model} onSaved={setModel} />
+            </main>
+        </div>
     );
 }
 
