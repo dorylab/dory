@@ -80,7 +80,7 @@ const modelKey = (modelId: string) => ['semantic-model', modelId] as const;
 const connectionIdOf = (item: ConnectionListItem) => item.connection.id!;
 const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-editor'), {
     ssr: false,
-    loading: () => <div className="h-full animate-pulse bg-muted" aria-label="Loading YAML editor" />,
+    loading: () => <div className="h-full animate-pulse bg-muted" />,
 });
 
 function relativeTime(value: string) {
@@ -102,6 +102,7 @@ export function CreateSemanticModelDialog({
     initialConnectionId?: string;
     onCreated?: (model: SemanticModelView) => void;
 }) {
+    const t = useTranslations('SemanticContext');
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
@@ -115,7 +116,7 @@ export function CreateSemanticModelDialog({
             setSelected(initialConnectionId ? [initialConnectionId] : []);
             onCreated?.(model);
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not create semantic model.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.CreateModel')),
     });
     return (
         <Dialog open={open} onOpenChange={setOpen}>
@@ -123,26 +124,26 @@ export function CreateSemanticModelDialog({
                 {trigger ?? (
                     <Button>
                         <Plus />
-                        New semantic model
+                        {t('NewModel')}
                     </Button>
                 )}
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>New semantic model</DialogTitle>
-                    <DialogDescription>Group business meaning across one or more data sources.</DialogDescription>
+                    <DialogTitle>{t('NewModel')}</DialogTitle>
+                    <DialogDescription>{t('CreateDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Name</label>
-                        <Input value={name} onChange={event => setName(event.target.value)} placeholder="Commerce" />
+                        <label className="text-sm font-medium">{t('Name')}</label>
+                        <Input value={name} onChange={event => setName(event.target.value)} placeholder={t('NamePlaceholder')} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Description</label>
-                        <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Business semantics for orders, customers and revenue." />
+                        <label className="text-sm font-medium">{t('Description')}</label>
+                        <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={t('DescriptionPlaceholder')} />
                     </div>
                     <fieldset className="space-y-2">
-                        <legend className="mb-2 text-sm font-medium">Data sources</legend>
+                        <legend className="mb-2 text-sm font-medium">{t('DataSources')}</legend>
                         {connections.map(item => {
                             const id = connectionIdOf(item);
                             return (
@@ -161,10 +162,10 @@ export function CreateSemanticModelDialog({
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => setOpen(false)}>
-                        Cancel
+                        {t('Cancel')}
                     </Button>
                     <Button onClick={() => create.mutate()} disabled={!name.trim() || selected.length === 0 || create.isPending}>
-                        Create model
+                        {t('CreateModel')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -185,6 +186,7 @@ function EditSemanticModelDialog({
     onOpenChange: (open: boolean) => void;
     onUpdated: (model: SemanticModelView) => void;
 }) {
+    const t = useTranslations('SemanticContext');
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [connectionIds, setConnectionIds] = useState<string[]>([]);
@@ -195,36 +197,36 @@ function EditSemanticModelDialog({
     }, [model]);
     const update = useMutation({
         mutationFn: async () => {
-            if (!model) throw new Error('Select a semantic model first.');
+            if (!model) throw new Error(t('Errors.SelectModel'));
             await executeActionClient<SemanticModelView>('semantic.update', { semanticModelId: model.id, name, description }, { organizationId: organization });
             return executeActionClient<SemanticModelView>('semantic.replaceDataSources', { semanticModelId: model.id, connectionIds }, { organizationId: organization });
         },
         onSuccess: updated => {
             onUpdated(updated);
             onOpenChange(false);
-            toast.success('Semantic model updated.');
+            toast.success(t('ModelUpdated'));
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not update semantic model.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateModel')),
     });
 
     return (
         <Dialog open={Boolean(model)} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Edit semantic model</DialogTitle>
-                    <DialogDescription>Update the model name and business description.</DialogDescription>
+                    <DialogTitle>{t('EditModel')}</DialogTitle>
+                    <DialogDescription>{t('EditDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Name</label>
+                        <label className="text-sm font-medium">{t('Name')}</label>
                         <Input value={name} onChange={event => setName(event.target.value)} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Description</label>
+                        <label className="text-sm font-medium">{t('Description')}</label>
                         <Textarea value={description} onChange={event => setDescription(event.target.value)} />
                     </div>
                     <fieldset className="space-y-2">
-                        <legend className="text-sm font-medium">Data sources</legend>
+                        <legend className="text-sm font-medium">{t('DataSources')}</legend>
                         <div className="max-h-52 space-y-2 overflow-y-auto rounded-md border p-2">
                             {connections.map(connection => {
                                 const connectionId = connectionIdOf(connection);
@@ -249,10 +251,10 @@ function EditSemanticModelDialog({
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t('Cancel')}
                     </Button>
                     <Button onClick={() => update.mutate()} disabled={!name.trim() || connectionIds.length === 0 || update.isPending}>
-                        Save changes
+                        {update.isPending ? t('Saving') : t('SaveChanges')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -261,6 +263,7 @@ function EditSemanticModelDialog({
 }
 
 function SemanticModelList({ organization }: { organization: string }) {
+    const t = useTranslations('SemanticContext');
     const router = useRouter();
     const queryClient = useQueryClient();
     const [search, setSearch] = useQueryState('q', parseAsString.withDefault(''));
@@ -282,15 +285,15 @@ function SemanticModelList({ organization }: { organization: string }) {
     const connectionItems = connections.data?.connections ?? [];
     const deleteModel = useMutation({
         mutationFn: () => {
-            if (!deletingModel) throw new Error('Select a semantic model first.');
+            if (!deletingModel) throw new Error(t('Errors.SelectModel'));
             return executeActionClient('semantic.delete', { semanticModelId: deletingModel.id }, { organizationId: organization, confirmationToken: 'semantic.delete' });
         },
         onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: ['semantic-models', organization] });
             setDeletingModel(null);
-            toast.success('Semantic model deleted.');
+            toast.success(t('ModelDeleted'));
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not delete semantic model.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.DeleteModel')),
     });
     const updateModel = (_model: SemanticModelView) => {
         void queryClient.invalidateQueries({ queryKey: ['semantic-models', organization] });
@@ -301,27 +304,27 @@ function SemanticModelList({ organization }: { organization: string }) {
             <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold">Semantic Context</h1>
-                        <p className="mt-1 text-muted-foreground">Give agents consistent business meaning across your data.</p>
+                        <h1 className="text-2xl font-bold">{t('Title')}</h1>
+                        <p className="mt-1 text-muted-foreground">{t('Subtitle')}</p>
                     </div>
                     <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} />
                 </header>
                 {models.data?.models.length || search ? (
                     <div className="relative max-w-xl">
                         <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input className="pl-9" value={search} onChange={event => void setSearch(event.target.value || null)} placeholder="Search semantic models" />
+                        <Input className="pl-9" value={search} onChange={event => void setSearch(event.target.value || null)} placeholder={t('SearchModels')} />
                     </div>
                 ) : null}
-                {models.isLoading ? <p className="text-sm text-muted-foreground">Loading semantic models…</p> : null}
+                {models.isLoading ? <p className="text-sm text-muted-foreground">{t('LoadingModels')}</p> : null}
                 {models.data?.models.length ? (
                     <div className="overflow-hidden rounded-lg border bg-card">
                         <table className="w-full text-sm">
                             <thead className="bg-muted/50 text-left text-muted-foreground">
                                 <tr>
-                                    <th className="px-4 py-3 font-medium">Model</th>
-                                    <th className="px-4 py-3 font-medium">Definitions</th>
-                                    <th className="px-4 py-3 font-medium">Data sources</th>
-                                    <th className="px-4 py-3 font-medium">Updated</th>
+                                    <th className="px-4 py-3 font-medium">{t('Model')}</th>
+                                    <th className="px-4 py-3 font-medium">{t('Definitions')}</th>
+                                    <th className="px-4 py-3 font-medium">{t('DataSources')}</th>
+                                    <th className="px-4 py-3 font-medium">{t('Updated')}</th>
                                     <th className="w-24 px-4 py-3" />
                                 </tr>
                             </thead>
@@ -337,12 +340,13 @@ function SemanticModelList({ organization }: { organization: string }) {
                                             {model.description ? <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{model.description}</p> : null}
                                         </td>
                                         <td className="px-4 py-4 text-muted-foreground">
-                                            {model.model.definitions.length} definitions · {model.verifiedQueryCount} verified queries
+                                            {t('DefinitionQueryCount', {
+                                                definitions: model.model.definitions.length,
+                                                queries: model.verifiedQueryCount,
+                                            })}
                                         </td>
                                         <td className="px-4 py-4 text-muted-foreground">
-                                            <div>
-                                                {model.dataSources.length} {model.dataSources.length === 1 ? 'source' : 'sources'}
-                                            </div>
+                                            <div>{t('DataSourceCount', { count: model.dataSources.length })}</div>
                                             <div className="mt-1 text-xs">{model.dataSources.map(source => source.name).join(' · ')}</div>
                                         </td>
                                         <td className="px-4 py-4 text-muted-foreground">{relativeTime(model.updatedAt)}</td>
@@ -351,7 +355,7 @@ function SemanticModelList({ organization }: { organization: string }) {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon-sm"
-                                                    aria-label={`Edit ${model.name}`}
+                                                    aria-label={t('EditNamedModel', { name: model.name })}
                                                     onClick={event => {
                                                         event.stopPropagation();
                                                         setEditingModel(model);
@@ -362,7 +366,7 @@ function SemanticModelList({ organization }: { organization: string }) {
                                                 <Button
                                                     variant="ghost"
                                                     size="icon-sm"
-                                                    aria-label={`Delete ${model.name}`}
+                                                    aria-label={t('DeleteNamedModel', { name: model.name })}
                                                     onClick={event => {
                                                         event.stopPropagation();
                                                         setDeletingModel(model);
@@ -383,14 +387,12 @@ function SemanticModelList({ organization }: { organization: string }) {
                             <div className="mb-4 rounded-full bg-primary/10 p-4 text-primary">
                                 <BrainCircuit className="h-8 w-8" />
                             </div>
-                            <h2 className="text-lg font-semibold">Create your first semantic model</h2>
-                            <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                                Define metrics, relationships, business rules and verified queries so agents understand your data consistently.
-                            </p>
+                            <h2 className="text-lg font-semibold">{t('EmptyTitle')}</h2>
+                            <p className="mt-2 max-w-md text-sm text-muted-foreground">{t('EmptyDescription')}</p>
                             <div className="mt-5 flex gap-2">
-                                <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} trigger={<Button>Create semantic model</Button>} />
+                                <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} trigger={<Button>{t('CreateSemanticModel')}</Button>} />
                                 <Button variant="outline" disabled>
-                                    Generate from data sources
+                                    {t('GenerateFromDataSources')}
                                 </Button>
                             </div>
                         </CardContent>
@@ -406,13 +408,11 @@ function SemanticModelList({ organization }: { organization: string }) {
                 <AlertDialog open={Boolean(deletingModel)} onOpenChange={open => !open && setDeletingModel(null)}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Delete semantic model?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                {deletingModel ? `This permanently deletes “${deletingModel.name}”, its definitions, and verified queries.` : ''}
-                            </AlertDialogDescription>
+                            <AlertDialogTitle>{t('DeleteModelTitle')}</AlertDialogTitle>
+                            <AlertDialogDescription>{deletingModel ? t('DeleteModelDescription', { name: deletingModel.name }) : ''}</AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                            <AlertDialogCancel disabled={deleteModel.isPending}>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel disabled={deleteModel.isPending}>{t('Cancel')}</AlertDialogCancel>
                             <AlertDialogAction
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 onClick={event => {
@@ -421,7 +421,7 @@ function SemanticModelList({ organization }: { organization: string }) {
                                 }}
                                 disabled={deleteModel.isPending}
                             >
-                                Delete model
+                                {deleteModel.isPending ? t('Deleting') : t('DeleteModel')}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
@@ -432,27 +432,28 @@ function SemanticModelList({ organization }: { organization: string }) {
 }
 
 function DefinitionExpandedRow({ definition, onClose }: { definition: Definition; onClose: () => void }) {
+    const t = useTranslations('SemanticContext');
     const fields = [
-        ['Description', definition.description],
-        ['Aliases', definition.aliases?.join(', ')],
-        ['Calculation', definition.expression],
-        ['Filters', definition.filters?.join('\n')],
-        ['Time dimension', definition.timeDimension],
-        ['Available dimensions', definition.dimensions?.join(', ')],
+        [t('DefinitionFields.Description'), definition.description],
+        [t('DefinitionFields.Aliases'), definition.aliases?.join(', ')],
+        [t('DefinitionFields.Calculation'), definition.expression],
+        [t('DefinitionFields.Filters'), definition.filters?.join('\n')],
+        [t('DefinitionFields.TimeDimension'), definition.timeDimension],
+        [t('DefinitionFields.AvailableDimensions'), definition.dimensions?.join(', ')],
     ].filter(([, value]) => value);
 
     return (
         <tr className="border-t bg-muted/20">
             <td colSpan={5} className="p-0">
                 <div className="relative p-5">
-                    <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3" onClick={onClose} aria-label="Close definition details">
+                    <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3" onClick={onClose} aria-label={t('CloseDefinitionDetails')}>
                         <X />
                     </Button>
                     <div className="pr-10">
                         <div className="text-base font-semibold">{definition.name}</div>
                         <div className="mt-2 flex gap-2">
-                            <Badge>{definition.kind}</Badge>
-                            {definition.status === 'verified' ? <Badge variant="secondary">Verified</Badge> : null}
+                            <Badge>{t(`Kinds.${definition.kind}`)}</Badge>
+                            {definition.status === 'verified' ? <Badge variant="secondary">{t('Verified')}</Badge> : null}
                         </div>
                     </div>
                     {fields.length ? (
@@ -465,7 +466,7 @@ function DefinitionExpandedRow({ definition, onClose }: { definition: Definition
                             ))}
                         </div>
                     ) : (
-                        <p className="mt-5 text-sm text-muted-foreground">No additional details have been documented for this definition.</p>
+                        <p className="mt-5 text-sm text-muted-foreground">{t('NoDefinitionDetails')}</p>
                     )}
                 </div>
             </td>
@@ -484,6 +485,7 @@ function DefinitionPanel({
     onImport: () => void;
     onAskAi: () => void;
 }) {
+    const t = useTranslations('SemanticContext');
     const [selected, setSelected] = useState<Definition | null>(null);
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
@@ -527,13 +529,13 @@ function DefinitionPanel({
                     <DropdownMenuTrigger asChild>
                         <Button>
                             <Plus />
-                            Add definition
+                            {t('AddDefinition')}
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onSelect={onAskAi}>
                             <Sparkles />
-                            Create with AI
+                            {t('CreateWithAi')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onSelect={() => {
@@ -541,7 +543,7 @@ function DefinitionPanel({
                                 setOpen(true);
                             }}
                         >
-                            Metric
+                            {t('Kinds.metric')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onSelect={() => {
@@ -549,7 +551,7 @@ function DefinitionPanel({
                                 setOpen(true);
                             }}
                         >
-                            Dimension
+                            {t('Kinds.dimension')}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                             onSelect={() => {
@@ -557,9 +559,9 @@ function DefinitionPanel({
                                 setOpen(true);
                             }}
                         >
-                            Relationship
+                            {t('Kinds.relationship')}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={onImport}>Import</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={onImport}>{t('Import')}</DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -567,10 +569,10 @@ function DefinitionPanel({
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50 text-left">
                         <tr>
-                            <th className="p-3">Name</th>
-                            <th className="p-3">Type</th>
-                            <th className="p-3">Source</th>
-                            <th className="p-3">Status</th>
+                            <th className="p-3">{t('Name')}</th>
+                            <th className="p-3">{t('Type')}</th>
+                            <th className="p-3">{t('Source')}</th>
+                            <th className="p-3">{t('Status')}</th>
                             <th className="w-12" />
                         </tr>
                     </thead>
@@ -582,13 +584,13 @@ function DefinitionPanel({
                                 onClick={() => setSelected(current => (current?.id === definition.id ? null : definition))}
                             >
                                 <td className="p-3 font-medium">{definition.name}</td>
-                                <td className="p-3 capitalize">{definition.kind}</td>
+                                <td className="p-3">{t(`Kinds.${definition.kind}`)}</td>
                                 <td className="p-3">{definition.source || sourceName(definition.sourceConnectionId)}</td>
                                 <td className="p-3">
                                     {definition.status === 'verified' ? (
                                         <Badge variant="secondary">
                                             <CheckCircle2 />
-                                            Verified
+                                            {t('Verified')}
                                         </Badge>
                                     ) : (
                                         '—'
@@ -598,6 +600,7 @@ function DefinitionPanel({
                                     <Button
                                         variant="ghost"
                                         size="icon-sm"
+                                        aria-label={t('DeleteNamedDefinition', { name: definition.name })}
                                         onClick={event => {
                                             event.stopPropagation();
                                             onSave(model.model.definitions.filter(item => item.id !== definition.id));
@@ -617,11 +620,11 @@ function DefinitionPanel({
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{kind === 'metric' ? 'Create definition' : `Create ${kind}`}</DialogTitle>
-                        <DialogDescription>Add a verified definition to this semantic model.</DialogDescription>
+                        <DialogTitle>{t('CreateDefinitionTitle', { type: t(`Kinds.${kind}`) })}</DialogTitle>
+                        <DialogDescription>{t('CreateDefinitionDescription')}</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3">
-                        <Input value={name} onChange={event => setName(event.target.value)} placeholder="Revenue" />
+                        <Input value={name} onChange={event => setName(event.target.value)} placeholder={t('DefinitionNamePlaceholder')} />
                         <select
                             className="h-9 w-full rounded-md border bg-background px-3 text-sm"
                             value={sourceConnectionId}
@@ -636,7 +639,7 @@ function DefinitionPanel({
                         {kind === 'relationship' ? (
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <select className="h-9 rounded-md border bg-background px-3 text-sm" value={from} onChange={event => setFrom(event.target.value)}>
-                                    <option value="">From definition</option>
+                                    <option value="">{t('FromDefinition')}</option>
                                     {model.model.definitions
                                         .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
                                         .map(item => (
@@ -646,7 +649,7 @@ function DefinitionPanel({
                                         ))}
                                 </select>
                                 <select className="h-9 rounded-md border bg-background px-3 text-sm" value={to} onChange={event => setTo(event.target.value)}>
-                                    <option value="">To definition</option>
+                                    <option value="">{t('ToDefinition')}</option>
                                     {model.model.definitions
                                         .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
                                         .map(item => (
@@ -658,17 +661,17 @@ function DefinitionPanel({
                             </div>
                         ) : (
                             <>
-                                <Input value={source} onChange={event => setSource(event.target.value)} placeholder="Source table, e.g. orders" />
-                                <Input value={expression} onChange={event => setExpression(event.target.value)} placeholder="Calculation, e.g. SUM(amount)" />
+                                <Input value={source} onChange={event => setSource(event.target.value)} placeholder={t('SourceTablePlaceholder')} />
+                                <Input value={expression} onChange={event => setExpression(event.target.value)} placeholder={t('CalculationPlaceholder')} />
                             </>
                         )}
-                        <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder="Business definition" />
+                        <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={t('BusinessDefinitionPlaceholder')} />
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setOpen(false)}>
-                            Cancel
+                            {t('Cancel')}
                         </Button>
-                        <Button onClick={create}>Add definition</Button>
+                        <Button onClick={create}>{t('AddDefinition')}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -687,13 +690,14 @@ function AskAiDialog({
     model: SemanticModelView;
     onAccept: (definitions: Definition[]) => void;
 }) {
+    const t = useTranslations('SemanticContext');
     const [operation, setOperation] = useState('generate_definitions');
     const [prompt, setPrompt] = useState('');
     const [suggestions, setSuggestions] = useState<Definition[]>([]);
     const generate = useMutation({
         mutationFn: () => executeActionClient<{ suggestions: Definition[] }>('semantic.generateSuggestions', { semanticModelId: model.id, operation, prompt }),
         onSuccess: data => setSuggestions(data.suggestions),
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not generate suggestions.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.GenerateSuggestions')),
     });
     const accept = () => {
         const existing = new Set(model.model.definitions.map(item => item.id));
@@ -708,24 +712,24 @@ function AskAiDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Ask AI</DialogTitle>
-                    <DialogDescription>AI suggestions are temporary until you review and add them.</DialogDescription>
+                    <DialogTitle>{t('AskAi')}</DialogTitle>
+                    <DialogDescription>{t('AskAiDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
                     <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={operation} onChange={event => setOperation(event.target.value)}>
-                        <option value="generate_definitions">Generate semantic definitions</option>
-                        <option value="analyze_context">Analyze business context</option>
-                        <option value="analyze_schema">Analyze schema</option>
-                        <option value="find_relationships">Find missing relationships</option>
-                        <option value="suggest_metrics">Suggest metrics</option>
+                        <option value="generate_definitions">{t('AiOperations.GenerateDefinitions')}</option>
+                        <option value="analyze_context">{t('AiOperations.AnalyzeContext')}</option>
+                        <option value="analyze_schema">{t('AiOperations.AnalyzeSchema')}</option>
+                        <option value="find_relationships">{t('AiOperations.FindRelationships')}</option>
+                        <option value="suggest_metrics">{t('AiOperations.SuggestMetrics')}</option>
                     </select>
-                    <Textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder="Help me analyze orders and customers and suggest common metrics." />
+                    <Textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={t('AiPromptPlaceholder')} />
                     {suggestions.length ? (
                         <div className="max-h-72 space-y-2 overflow-auto">
                             {suggestions.map(item => (
                                 <div key={item.id} className="rounded-md border p-3">
                                     <div className="font-medium">
-                                        {item.name} <span className="text-xs capitalize text-muted-foreground">{item.kind}</span>
+                                        {item.name} <span className="text-xs text-muted-foreground">{t(`Kinds.${item.kind}`)}</span>
                                     </div>
                                     <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
                                 </div>
@@ -735,13 +739,13 @@ function AskAiDialog({
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t('Cancel')}
                     </Button>
                     {suggestions.length ? (
-                        <Button onClick={accept}>Review and add {suggestions.length}</Button>
+                        <Button onClick={accept}>{t('ReviewAndAdd', { count: suggestions.length })}</Button>
                     ) : (
                         <Button onClick={() => generate.mutate()} disabled={generate.isPending}>
-                            {generate.isPending ? 'Analyzing…' : 'Generate suggestions'}
+                            {generate.isPending ? t('Analyzing') : t('GenerateSuggestions')}
                         </Button>
                     )}
                 </DialogFooter>
@@ -761,6 +765,7 @@ function ImportYamlDialog({
     model: SemanticModelView;
     onImported: (model: SemanticModelView) => void;
 }) {
+    const t = useTranslations('SemanticContext');
     const [yaml, setYaml] = useState('');
     const [fallbackSourceConnectionId, setFallbackSourceConnectionId] = useState(model.dataSources[0]?.connectionId ?? '');
     const importYaml = useMutation({
@@ -774,17 +779,17 @@ function ImportYamlDialog({
             onImported(imported);
             onOpenChange(false);
             setYaml('');
-            toast.success('YAML imported. Imported definitions are unverified.');
+            toast.success(t('YamlImported'));
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not import YAML.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.ImportYaml')),
     });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Import Cube-compatible YAML</DialogTitle>
-                    <DialogDescription>Definitions without meta.dory.sourceConnectionId will use the selected data source and remain unverified until reviewed.</DialogDescription>
+                    <DialogTitle>{t('ImportYamlTitle')}</DialogTitle>
+                    <DialogDescription>{t('ImportYamlDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
                     <select
@@ -807,10 +812,10 @@ function ImportYamlDialog({
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t('Cancel')}
                     </Button>
                     <Button onClick={() => importYaml.mutate()} disabled={!yaml.trim() || !fallbackSourceConnectionId || importYaml.isPending}>
-                        Import
+                        {importYaml.isPending ? t('Importing') : t('Import')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -829,6 +834,7 @@ function YamlEditorDialog({
     model: SemanticModelView;
     onSaved: (model: SemanticModelView) => void;
 }) {
+    const t = useTranslations('SemanticContext');
     const [yaml, setYaml] = useState(model.modelYaml);
     useEffect(() => {
         if (open) setYaml(model.modelYaml);
@@ -844,17 +850,17 @@ function YamlEditorDialog({
         onSuccess: saved => {
             onSaved(saved);
             onOpenChange(false);
-            toast.success('YAML saved.');
+            toast.success(t('YamlSaved'));
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not save YAML.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveYaml')),
     });
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle>Model YAML</DialogTitle>
-                    <DialogDescription>Changes are validated before they update the semantic model.</DialogDescription>
+                    <DialogTitle>{t('ModelYaml')}</DialogTitle>
+                    <DialogDescription>{t('ModelYamlDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
                     <MonacoYamlEditor
@@ -877,10 +883,10 @@ function YamlEditorDialog({
                 </div>
                 <DialogFooter className="shrink-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t('Cancel')}
                     </Button>
                     <Button onClick={() => save.mutate()} disabled={!yaml.trim() || save.isPending}>
-                        {save.isPending ? 'Saving…' : 'Save YAML'}
+                        {save.isPending ? t('Saving') : t('SaveYaml')}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -889,7 +895,7 @@ function YamlEditorDialog({
 }
 
 function SemanticModelDetail({ organization, semanticModelId }: { organization: string; semanticModelId: string }) {
-    const sourcesText = useTranslations('SemanticContext.KnowledgeSources');
+    const t = useTranslations('SemanticContext');
     const router = useRouter();
     const queryClient = useQueryClient();
     const [markdown, setMarkdown] = useState('');
@@ -911,13 +917,13 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
     const update = useMutation({
         mutationFn: (input: Record<string, unknown>) => executeActionClient<SemanticModelView>('semantic.update', { semanticModelId, ...input }, { organizationId: organization }),
         onSuccess: setModel,
-        onError: error => toast.error(error instanceof Error ? error.message : 'Update failed.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.Update')),
     });
     const saveDefinitions = useMutation({
         mutationFn: (definitions: Definition[]) =>
             executeActionClient<SemanticModelView>('semantic.saveDefinitions', { semanticModelId, definitions }, { organizationId: organization }),
         onSuccess: setModel,
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not save definitions.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveDefinitions')),
     });
     const deleteModel = useMutation({
         mutationFn: () => executeActionClient('semantic.delete', { semanticModelId }, { organizationId: organization, confirmationToken: 'semantic.delete' }),
@@ -927,8 +933,8 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
         mutationFn: (id: string) => executeActionClient('semantic.deleteVerifiedQuery', { semanticModelId, id }, { organizationId: organization }),
         onSuccess: () => void queryClient.invalidateQueries({ queryKey: [...modelKey(semanticModelId), 'verified-queries'] }),
     });
-    if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">Loading semantic model…</div>;
-    if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">Semantic model not found.</div>;
+    if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">{t('LoadingModel')}</div>;
+    if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">{t('ModelNotFound')}</div>;
     const model = modelQuery.data;
     return (
         <div className="bg-n8 h-screen overflow-auto">
@@ -936,26 +942,26 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <Link className="text-sm text-muted-foreground hover:text-foreground" href={`/${organization}/semantic`}>
-                            Semantic Context
+                            {t('Title')}
                         </Link>
                         <h1 className="mt-2 text-2xl font-bold">{model.name}</h1>
                         {model.description ? <p className="mt-1 text-muted-foreground">{model.description}</p> : null}
                     </div>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => setAskAiOpen(true)}>
-                            Ask AI
+                            {t('AskAi')}
                         </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon">
+                                <Button variant="outline" size="icon" aria-label={t('ModelActions')}>
                                     <MoreHorizontal />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onSelect={() => setYamlEditorOpen(true)}>View YAML</DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => setImportOpen(true)}>Import YAML</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => setYamlEditorOpen(true)}>{t('ViewYaml')}</DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => setImportOpen(true)}>{t('ImportYaml')}</DropdownMenuItem>
                                 <DropdownMenuItem variant="destructive" onSelect={() => deleteModel.mutate()}>
-                                    Delete model
+                                    {t('DeleteModel')}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -963,17 +969,17 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
                 </header>
                 <Tabs defaultValue="overview">
                     <TabsList variant="line">
-                        <TabsTrigger value="overview">Overview</TabsTrigger>
-                        <TabsTrigger value="definitions">Definitions</TabsTrigger>
-                        <TabsTrigger value="queries">Verified Queries</TabsTrigger>
-                        <TabsTrigger value="sources">{sourcesText('Tab')}</TabsTrigger>
+                        <TabsTrigger value="overview">{t('Overview')}</TabsTrigger>
+                        <TabsTrigger value="definitions">{t('Definitions')}</TabsTrigger>
+                        <TabsTrigger value="queries">{t('VerifiedQueries')}</TabsTrigger>
+                        <TabsTrigger value="sources">{t('KnowledgeSources.Tab')}</TabsTrigger>
                     </TabsList>
                     <TabsContent value="overview" className="space-y-5 pt-4">
                         <div className="grid gap-3 sm:grid-cols-3">
                             {[
-                                [model.model.definitions.length, 'Definitions'],
-                                [model.verifiedQueryCount, 'Verified Queries'],
-                                [model.dataSources.length, 'Data Sources'],
+                                [model.model.definitions.length, t('Definitions')],
+                                [model.verifiedQueryCount, t('VerifiedQueries')],
+                                [model.dataSources.length, t('DataSources')],
                             ].map(([value, label]) => (
                                 <Card key={label}>
                                     <CardContent className="py-5">
@@ -984,14 +990,14 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
                             ))}
                         </div>
                         <section className="space-y-3 pt-1">
-                            <h2 className="text-base font-semibold">Business Context</h2>
+                            <h2 className="text-base font-semibold">{t('BusinessContext')}</h2>
                             <Textarea
                                 className="min-h-64 font-mono"
                                 value={markdown}
                                 onChange={event => setMarkdown(event.target.value)}
-                                placeholder="Document business rules, vocabulary and agent instructions in Markdown."
+                                placeholder={t('BusinessContextPlaceholder')}
                             />
-                            <Button onClick={() => update.mutate({ businessContextMd: markdown })}>Save context</Button>
+                            <Button onClick={() => update.mutate({ businessContextMd: markdown })}>{update.isPending ? t('Saving') : t('SaveContext')}</Button>
                         </section>
                     </TabsContent>
                     <TabsContent value="definitions" className="pt-4">
@@ -1011,11 +1017,11 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
                                             <div className="font-medium">{item.title}</div>
                                             <p className="mt-1 text-sm text-muted-foreground">{item.question}</p>
                                             <div className="mt-2 text-xs text-muted-foreground">
-                                                {item.sourceType} · Updated {relativeTime(item.updatedAt)}
+                                                {item.sourceType} · {t('UpdatedTime', { time: relativeTime(item.updatedAt) })}
                                             </div>
                                             <pre className="mt-3 max-h-48 overflow-auto rounded bg-muted p-3 text-xs">{item.sql}</pre>
                                         </div>
-                                        <Button variant="ghost" size="icon-sm" onClick={() => deleteQuery.mutate(item.id)}>
+                                        <Button variant="ghost" size="icon-sm" aria-label={t('DeleteNamedQuery', { name: item.title })} onClick={() => deleteQuery.mutate(item.id)}>
                                             <Trash2 />
                                         </Button>
                                     </CardContent>
@@ -1023,9 +1029,7 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
                             ))
                         ) : (
                             <Card className="border-dashed">
-                                <CardContent className="py-12 text-center text-sm text-muted-foreground">
-                                    Verified queries added from Workspace, Agent Runs, or Artifacts will appear here.
-                                </CardContent>
+                                <CardContent className="py-12 text-center text-sm text-muted-foreground">{t('VerifiedQueriesEmpty')}</CardContent>
                             </Card>
                         )}
                     </TabsContent>

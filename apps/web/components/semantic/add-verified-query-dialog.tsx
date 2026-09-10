@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -29,6 +30,7 @@ export function AddVerifiedQueryDialog({
     sourceId?: string | null;
     initialTitle?: string;
 }) {
+    const t = useTranslations('SemanticContext');
     const [semanticModelId, setSemanticModelId] = useState('');
     const [newModelName, setNewModelName] = useState('');
     const [title, setTitle] = useState(initialTitle);
@@ -52,7 +54,7 @@ export function AddVerifiedQueryDialog({
         mutationFn: async () => {
             let targetModelId = semanticModelId;
             if (!targetModelId) {
-                if (!connectionId || !newModelName.trim()) throw new Error('Choose a model or create a new one.');
+                if (!connectionId || !newModelName.trim()) throw new Error(t('Errors.ChooseOrCreateModel'));
                 const model = await executeActionClient<SemanticModelOption>('semantic.create', { name: newModelName, connectionIds: [connectionId] });
                 targetModelId = model.id;
             }
@@ -63,18 +65,18 @@ export function AddVerifiedQueryDialog({
             );
         },
         onSuccess: () => {
-            toast.success('Added to Semantic Context.');
+            toast.success(t('VerifiedQueryAdded'));
             onOpenChange(false);
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not add verified query.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.AddVerifiedQuery')),
     });
     const hasModels = Boolean(models.data?.models.length);
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Add Verified Query</DialogTitle>
-                    <DialogDescription>Save this validated SQL as reusable business knowledge for agents.</DialogDescription>
+                    <DialogTitle>{t('AddVerifiedQuery')}</DialogTitle>
+                    <DialogDescription>{t('AddVerifiedQueryDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
                     {hasModels ? (
@@ -90,21 +92,21 @@ export function AddVerifiedQueryDialog({
                             ))}
                         </select>
                     ) : (
-                        <Input value={newModelName} onChange={event => setNewModelName(event.target.value)} placeholder="New semantic model name" />
+                        <Input value={newModelName} onChange={event => setNewModelName(event.target.value)} placeholder={t('NewModelName')} />
                     )}
-                    <Input value={title} onChange={event => setTitle(event.target.value)} placeholder="Monthly revenue by channel" />
-                    <Textarea value={question} onChange={event => setQuestion(event.target.value)} placeholder="What question does this query answer?" />
+                    <Input value={title} onChange={event => setTitle(event.target.value)} placeholder={t('VerifiedQueryTitlePlaceholder')} />
+                    <Textarea value={question} onChange={event => setQuestion(event.target.value)} placeholder={t('VerifiedQueryQuestionPlaceholder')} />
                     <Textarea className="min-h-40 font-mono" value={sql ?? ''} readOnly />
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t('Cancel')}
                     </Button>
                     <Button
                         onClick={() => save.mutate()}
                         disabled={!connectionId || !sql?.trim() || !title.trim() || !question.trim() || (!semanticModelId && !newModelName.trim()) || save.isPending}
                     >
-                        Add Verified Query
+                        {save.isPending ? t('Saving') : t('AddVerifiedQuery')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

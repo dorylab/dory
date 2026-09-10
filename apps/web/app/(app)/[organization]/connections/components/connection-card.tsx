@@ -57,6 +57,7 @@ function getLocalFilesMeta(connection: ConnectionListItem['connection']) {
 
 export default function ConnectionCard({ connectionItem, id, connectLoading, errorMessage, onEdit, onConnect, onDuplicateRequest, onDeleteRequest }: Props) {
     const t = useTranslations('Connections');
+    const semanticT = useTranslations('SemanticContext');
     const hasMounted = useHasMounted();
     const [semanticDialogOpen, setSemanticDialogOpen] = useState(false);
 
@@ -220,7 +221,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                         <DropdownMenuContent align="end" side="bottom" onClick={e => e.stopPropagation()}>
                             <DropdownMenuItem onSelect={() => setSemanticDialogOpen(true)}>
                                 <BrainCircuit className="h-4 w-4" />
-                                Add to semantic model
+                                {semanticT('AddToSemanticModel')}
                             </DropdownMenuItem>
                             {!isLocalFiles ? (
                                 <DropdownMenuItem

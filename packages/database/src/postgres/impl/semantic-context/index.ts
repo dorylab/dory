@@ -15,7 +15,7 @@ import {
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
 
-export const SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES = 500_000;
+export const SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES = 10_000_000;
 export type SemanticModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
 export type SemanticModelDetail = {
     id: string;
@@ -39,7 +39,7 @@ export function validateSemanticKnowledgeSource(fileName: string, contentText: s
         extension === 'md' || extension === 'markdown' ? 'markdown' : extension === 'yaml' || extension === 'yml' ? 'yaml' : extension === 'txt' ? 'text' : undefined;
     if (!format) throw new Error('Only Markdown, YAML, and TXT files are supported.');
     const byteSize = Buffer.byteLength(contentText, 'utf8');
-    if (byteSize > SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES) throw new Error('Knowledge source files must be 500 KB or smaller.');
+    if (byteSize > SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES) throw new Error('Knowledge source files must be 10 MB or smaller.');
     if (format === 'yaml') {
         const document = parseDocument(contentText);
         if (document.errors.length) throw new Error(document.errors[0]?.message ?? 'Invalid YAML.');

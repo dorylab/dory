@@ -57,18 +57,19 @@ type KnowledgeSource = KnowledgeSourceSummary & { contentText: string };
 type PendingFile = { key: string; fileName: string; contentText: string; byteSize: number; connectionId: string | null };
 type ImportSuggestion = Omit<Definition, 'sourceConnectionId'> & { sourceConnectionId?: string };
 
-const MAX_FILE_BYTES = 500_000;
+const MAX_FILE_BYTES = 10_000_000;
 const MAX_FILES_PER_UPLOAD = 20;
 const SUPPORTED_FILE_NAME = /\.(md|markdown|ya?ml|txt)$/i;
 const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-editor'), {
     ssr: false,
-    loading: () => <div className="h-full animate-pulse bg-muted" aria-label="Loading YAML editor" />,
+    loading: () => <div className="h-full animate-pulse bg-muted" />,
 });
 
 const knowledgeSourcesKey = (semanticModelId: string) => ['semantic-model', semanticModelId, 'knowledge-sources'] as const;
 
 function formatBytes(bytes: number) {
     if (bytes < 1_000) return `${bytes} B`;
+    if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(bytes < 10_000_000 ? 1 : 0)} MB`;
     return `${(bytes / 1_000).toFixed(bytes < 10_000 ? 1 : 0)} KB`;
 }
 
@@ -214,7 +215,7 @@ function UploadSourcesDialog({
                                 <Button
                                     variant="ghost"
                                     size="icon-sm"
-                                    aria-label={`Remove ${file.fileName}`}
+                                    aria-label={t('RemoveFile', { name: file.fileName })}
                                     onClick={() => setFiles(current => current.filter(item => item.key !== file.key))}
                                 >
                                     <Trash2 />
@@ -529,7 +530,12 @@ export function KnowledgeSourcesPanel({
                                     <td className="px-4 py-3 text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${source.fileName}`} onClick={event => event.stopPropagation()}>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    aria-label={t('ActionsFor', { name: source.fileName })}
+                                                    onClick={event => event.stopPropagation()}
+                                                >
                                                     <MoreHorizontal />
                                                 </Button>
                                             </DropdownMenuTrigger>
@@ -593,7 +599,11 @@ export function KnowledgeSourcesPanel({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={remove.isPending}>{t('Cancel')}</AlertDialogCancel>
-                        <AlertDialogAction variant="destructive" disabled={remove.isPending} onClick={() => deleting && remove.mutate(deleting)}>
+                        <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            disabled={remove.isPending}
+                            onClick={() => deleting && remove.mutate(deleting)}
+                        >
                             {remove.isPending ? t('Deleting') : t('Delete')}
                         </AlertDialogAction>
                     </AlertDialogFooter>

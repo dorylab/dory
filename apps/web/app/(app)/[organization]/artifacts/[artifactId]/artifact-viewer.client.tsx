@@ -70,6 +70,7 @@ function CompactMetadata({ artifact }: { artifact: ArtifactDetail }) {
 export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }: { organization: string; artifactId: string; fromAgentRun: string | null }) {
     const t = useTranslations('Artifacts.Viewer');
     const agentRunsT = useTranslations('AgentRuns');
+    const semanticT = useTranslations('SemanticContext');
     const router = useRouter();
     const organizationId = useOrganizationId();
     const queryClient = useQueryClient();
@@ -267,7 +268,11 @@ export function ArtifactViewerClient({ organization, artifactId, fromAgentRun }:
                                 <Bot />
                                 {t('ContinueWithAgent')}
                             </Button>
-                            {artifact.connectionId && artifact.resultSet?.sql ? <Button variant="outline" onClick={() => setAddToSemanticOpen(true)}>Add to Semantic Context</Button> : null}
+                            {artifact.connectionId && artifact.resultSet?.sql ? (
+                                <Button variant="outline" onClick={() => setAddToSemanticOpen(true)}>
+                                    {semanticT('AddToSemanticContext')}
+                                </Button>
+                            ) : null}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="icon" aria-label={t('MoreActions')}>

@@ -98,7 +98,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
         { title: t('DataSources'), url: dataSourcesUrl, icon: Database, requiresConnection: false },
         { title: t('SemanticContext'), url: `/${organization}/semantic`, matchPrefix: `/${organization}/semantic`, icon: BrainCircuit, requiresConnection: false },
         { title: t('AgentRuns'), url: `/${organization}/agent-runs`, icon: Bot, requiresConnection: false },
-        { title: t('SchemaCompare'), url: `/${organization}/comparisons`, icon: GitCompareArrows, requiresConnection: false },
     ];
     const navMain = connectionId
         ? [
@@ -156,6 +155,12 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
           ]
         : organizationItems;
     const moreItems = [
+        {
+            title: t('SchemaCompare'),
+            url: `/${organization}/comparisons`,
+            icon: GitCompareArrows,
+            requiresConnection: false,
+        },
         {
             title: t('Artifacts'),
             url: `/${organization}/artifacts`,

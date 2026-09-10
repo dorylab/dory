@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
@@ -12,6 +13,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 type ModelOption = { id: string; name: string; dataSources: Array<{ connectionId: string }> };
 
 export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connectionId }: { open: boolean; onOpenChange: (open: boolean) => void; connectionId: string }) {
+    const t = useTranslations('SemanticContext');
     const [semanticModelId, setSemanticModelId] = useState('');
     const [newModelName, setNewModelName] = useState('');
     const models = useQuery({
@@ -32,17 +34,17 @@ export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connect
                 ? executeActionClient('semantic.addDataSource', { semanticModelId, connectionId })
                 : executeActionClient('semantic.create', { name: newModelName, connectionIds: [connectionId] }),
         onSuccess: () => {
-            toast.success('Data source added to semantic model.');
+            toast.success(t('DataSourceAdded'));
             onOpenChange(false);
         },
-        onError: error => toast.error(error instanceof Error ? error.message : 'Could not add data source.'),
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.AddDataSource')),
     });
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Add to semantic model</DialogTitle>
-                    <DialogDescription>Connect this data source to an existing semantic model or create a new one.</DialogDescription>
+                    <DialogTitle>{t('AddToSemanticModel')}</DialogTitle>
+                    <DialogDescription>{t('AddDataSourceDescription')}</DialogDescription>
                 </DialogHeader>
                 {available.length ? (
                     <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={semanticModelId} onChange={event => setSemanticModelId(event.target.value)}>
@@ -53,14 +55,14 @@ export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connect
                         ))}
                     </select>
                 ) : (
-                    <Input value={newModelName} onChange={event => setNewModelName(event.target.value)} placeholder="New semantic model name" />
+                    <Input value={newModelName} onChange={event => setNewModelName(event.target.value)} placeholder={t('NewModelName')} />
                 )}
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
+                        {t('Cancel')}
                     </Button>
                     <Button onClick={() => save.mutate()} disabled={(!semanticModelId && !newModelName.trim()) || save.isPending}>
-                        {semanticModelId ? 'Add data source' : 'Create model'}
+                        {save.isPending ? t('Saving') : semanticModelId ? t('AddDataSource') : t('CreateModel')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

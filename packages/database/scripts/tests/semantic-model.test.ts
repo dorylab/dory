@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseSemanticYaml, serializeSemanticModel, validateSemanticKnowledgeSource, validateSemanticModelDocument } from '../../src/postgres/impl/semantic-context/index';
+import {
+    parseSemanticYaml,
+    SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES,
+    serializeSemanticModel,
+    validateSemanticKnowledgeSource,
+    validateSemanticModelDocument,
+} from '../../src/postgres/impl/semantic-context/index';
 
 const sources = new Set(['postgres', 'clickhouse']);
 
@@ -66,5 +72,6 @@ test('knowledge sources validate supported text formats, size and YAML syntax', 
     assert.equal(validateSemanticKnowledgeSource('notes.txt', 'Fiscal year starts in February.').format, 'text');
     assert.throws(() => validateSemanticKnowledgeSource('rules.pdf', 'content'), /only Markdown, YAML, and TXT/i);
     assert.throws(() => validateSemanticKnowledgeSource('model.yaml', 'cubes: ['), /flow sequence|invalid YAML/i);
-    assert.throws(() => validateSemanticKnowledgeSource('large.md', 'x'.repeat(500_001)), /500 KB/i);
+    assert.doesNotThrow(() => validateSemanticKnowledgeSource('large.md', 'x'.repeat(SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES)));
+    assert.throws(() => validateSemanticKnowledgeSource('large.md', 'x'.repeat(SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES + 1)), /10 MB/i);
 });

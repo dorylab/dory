@@ -163,6 +163,7 @@ function areNumberArraysEqual(left: number[] | undefined, right: number[] | unde
 
 export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
     const t = useTranslations('SqlConsole');
+    const semanticT = useTranslations('SemanticContext');
     const organizationId = useOrganizationId();
     const params = useParams<{ connectionId: string }>();
     const [addToSemanticOpen, setAddToSemanticOpen] = useState(false);
@@ -1259,7 +1260,7 @@ export function ResultTable({ tabId: tabIdProp }: ResultTableProps = {}) {
             {remoteResultSetId && sessionMetas.status === 'success' && currentSql ? (
                 <div className="flex justify-end border-b bg-card px-3 py-2">
                     <Button variant="outline" size="sm" onClick={() => setAddToSemanticOpen(true)}>
-                        Save as Verified Query
+                        {semanticT('SaveAsVerifiedQuery')}
                     </Button>
                 </div>
             ) : null}
