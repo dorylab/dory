@@ -1563,6 +1563,8 @@
             "RootFolderLabel": "No Folder (Root)",
             "FolderEmpty": "No folders found",
             "LoadingFolders": "Loading folders...",
+            "GeneratingMetadata": "Generating with AI...",
+            "MetadataGenerationFailed": "AI could not generate query metadata. You can enter it manually.",
             "Saving": "Saving...",
             "Success": "Saved",
             "SuccessWithKnowledge": "Saved query and business knowledge",

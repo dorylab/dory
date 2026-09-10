@@ -1559,6 +1559,8 @@
             "RootFolderLabel": "无文件夹（根级别）",
             "FolderEmpty": "暂无可选文件夹",
             "LoadingFolders": "正在加载文件夹...",
+            "GeneratingMetadata": "正在使用 AI 生成...",
+            "MetadataGenerationFailed": "AI 未能生成查询元数据。你可以手动填写。",
             "Saving": "保存中...",
             "Success": "已保存",
             "SuccessWithKnowledge": "查询和业务知识已保存",

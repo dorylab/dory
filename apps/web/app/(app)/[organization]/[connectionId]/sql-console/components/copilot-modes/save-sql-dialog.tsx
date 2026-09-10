@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Folder } from 'lucide-react';
 import { toast } from 'sonner';
@@ -42,7 +42,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const [description, setDescription] = useState('');
     const [folderId, setFolderId] = useState('');
     const [folderOptions, setFolderOptions] = useState<SelectOption[]>([]);
-    const [addToBusinessKnowledge, setAddToBusinessKnowledge] = useState(false);
+    const [addToBusinessKnowledge, setAddToBusinessKnowledge] = useState(true);
     const [knowledgeModelId, setKnowledgeModelId] = useState('');
     const [newModelName, setNewModelName] = useState('');
     const [businessMeaning, setBusinessMeaning] = useState('');
@@ -50,6 +50,8 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [authSheetOpen, setAuthSheetOpen] = useState(false);
+    const descriptionEditedRef = useRef(false);
+    const businessMeaningEditedRef = useRef(false);
     const isAnonymous = isAnonymousUser(session?.user);
 
     const resolvedDefaultTitle = useMemo(() => {
@@ -64,18 +66,56 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
         const query = searchParams?.toString();
         return query ? `${pathname}?${query}` : pathname || '/';
     }, [pathname, searchParams]);
+    const sqlTextForMetadata = useMemo(() => (open && addToBusinessKnowledge ? getSqlText().trim() : ''), [addToBusinessKnowledge, getSqlText, open]);
 
     useEffect(() => {
         if (!open) return;
         setTitle(resolvedDefaultTitle);
         setDescription('');
         setFolderId('');
-        setAddToBusinessKnowledge(false);
+        setAddToBusinessKnowledge(true);
         setKnowledgeModelId('');
         setNewModelName('');
         setBusinessMeaning('');
         setError(null);
+        descriptionEditedRef.current = false;
+        businessMeaningEditedRef.current = false;
     }, [open, resolvedDefaultTitle]);
+
+    const savedQueryMetadata = useQuery({
+        queryKey: ['saved-query-metadata', connectionId, resolvedDefaultTitle, sqlTextForMetadata],
+        enabled: open && addToBusinessKnowledge && !isAnonymous && Boolean(connectionId) && Boolean(sqlTextForMetadata),
+        queryFn: async ({ signal }) => {
+            const controller = new AbortController();
+            const abort = () => controller.abort();
+            const timeout = window.setTimeout(abort, 15_000);
+            signal.addEventListener('abort', abort, { once: true });
+
+            try {
+                return await executeActionClient<{ description: string; useWhen: string }>(
+                    'ai.savedQueryMetadata',
+                    {
+                        connectionId,
+                        title: resolvedDefaultTitle,
+                        sql: sqlTextForMetadata,
+                        database: currentConnection?.connection?.database ?? null,
+                    },
+                    { currentConnectionId: connectionId, signal: controller.signal },
+                );
+            } finally {
+                window.clearTimeout(timeout);
+                signal.removeEventListener('abort', abort);
+            }
+        },
+        retry: false,
+        staleTime: Infinity,
+    });
+
+    useEffect(() => {
+        if (!savedQueryMetadata.data) return;
+        if (!descriptionEditedRef.current) setDescription(savedQueryMetadata.data.description);
+        if (!businessMeaningEditedRef.current) setBusinessMeaning(savedQueryMetadata.data.useWhen);
+    }, [savedQueryMetadata.data]);
 
     const knowledgeModels = useQuery({
         queryKey: ['knowledge-model-options', connectionId],
@@ -227,7 +267,16 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                         </div>
                         <div className="grid gap-2">
                             <label className="text-sm font-medium">{t('SaveSql.DescriptionLabel')}</label>
-                            <Textarea value={description} onChange={event => setDescription(event.target.value)} placeholder={t('SaveSql.DescriptionPlaceholder')} rows={3} />
+                            <Textarea
+                                value={description}
+                                onChange={event => {
+                                    descriptionEditedRef.current = true;
+                                    setDescription(event.target.value);
+                                }}
+                                placeholder={savedQueryMetadata.isPending ? t('SaveSql.GeneratingMetadata') : t('SaveSql.DescriptionPlaceholder')}
+                                rows={3}
+                                disabled={saving}
+                            />
                         </div>
                         <div className="grid gap-2">
                             <label className="text-sm font-medium">{t('SaveSql.FolderLabel')}</label>
@@ -295,11 +344,15 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                                         <label className="text-sm font-medium">{t('SaveSql.UseWhenLabel')}</label>
                                         <Textarea
                                             value={businessMeaning}
-                                            onChange={event => setBusinessMeaning(event.target.value)}
-                                            placeholder={t('SaveSql.UseWhenPlaceholder')}
+                                            onChange={event => {
+                                                businessMeaningEditedRef.current = true;
+                                                setBusinessMeaning(event.target.value);
+                                            }}
+                                            placeholder={savedQueryMetadata.isPending ? t('SaveSql.GeneratingMetadata') : t('SaveSql.UseWhenPlaceholder')}
                                             rows={3}
                                             disabled={saving}
                                         />
+                                        {savedQueryMetadata.isError ? <p className="text-xs text-destructive">{t('SaveSql.MetadataGenerationFailed')}</p> : null}
                                     </div>
                                 </div>
                             ) : null}
@@ -310,7 +363,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                         <Button className="mr-2" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                             {t('Actions.Cancel')}
                         </Button>
-                        <Button onClick={handleSave} disabled={saving}>
+                        <Button onClick={handleSave} disabled={saving || (addToBusinessKnowledge && savedQueryMetadata.isPending)}>
                             {saving ? t('SaveSql.Saving') : t('Actions.Save')}
                         </Button>
                     </DialogFooter>

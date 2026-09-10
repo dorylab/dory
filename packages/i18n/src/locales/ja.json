@@ -1563,6 +1563,8 @@
             "RootFolderLabel": "フォルダーなし（ルート）",
             "FolderEmpty": "フォルダーが見つかりません",
             "LoadingFolders": "フォルダーを読み込み中...",
+            "GeneratingMetadata": "AI で生成中...",
+            "MetadataGenerationFailed": "AI はクエリのメタデータを生成できませんでした。手動で入力できます。",
             "Saving": "保存中...",
             "Success": "保存しました",
             "SuccessWithKnowledge": "クエリとビジネスナレッジを保存しました",

@@ -1563,6 +1563,8 @@
             "RootFolderLabel": "Sin carpeta (raíz)",
             "FolderEmpty": "No se encontraron carpetas",
             "LoadingFolders": "Cargando carpetas...",
+            "GeneratingMetadata": "Generando con IA...",
+            "MetadataGenerationFailed": "La IA no pudo generar los metadatos de la consulta. Puedes introducirlos manualmente.",
             "Saving": "Guardando...",
             "Success": "Guardado",
             "SuccessWithKnowledge": "Consulta y conocimiento empresarial guardados",
