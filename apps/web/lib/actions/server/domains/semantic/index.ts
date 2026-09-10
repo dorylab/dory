@@ -178,7 +178,7 @@ export const semanticImportYamlAction = defineWebAction({
     kind: 'command',
     risk: 'write',
     requiresConfirmation: false,
-    inputSchema: modelIdInput.extend({ source: z.string().min(1).max(500_000), fallbackSourceConnectionId: z.string().optional(), preserveStatus: z.boolean().optional() }),
+    inputSchema: modelIdInput.extend({ source: z.string().min(1).max(10_000_000), fallbackSourceConnectionId: z.string().optional(), preserveStatus: z.boolean().optional() }),
     outputSchema: semanticModelOutputSchema,
     permissions: writeWorkspace,
     scopes: ['semantic:write'],

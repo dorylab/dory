@@ -252,7 +252,7 @@ export const ColumnFilterPopover = forwardRef<
                                     <input
                                         id={`cs-${column}`}
                                         type="checkbox"
-                                        className="h-4 w-4"
+                                        className="h-4 w-4 cursor-pointer"
                                         checked={!!localDraft.cs}
                                         onChange={e => setLocalDraft(current => ({ ...current, cs: e.target.checked }))}
                                     />

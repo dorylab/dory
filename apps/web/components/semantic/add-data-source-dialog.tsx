@@ -9,6 +9,7 @@ import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 
 type ModelOption = { id: string; name: string; dataSources: Array<{ connectionId: string }> };
 
@@ -47,13 +48,18 @@ export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connect
                     <DialogDescription>{t('AddDataSourceDescription')}</DialogDescription>
                 </DialogHeader>
                 {available.length ? (
-                    <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={semanticModelId} onChange={event => setSemanticModelId(event.target.value)}>
-                        {available.map(model => (
-                            <option key={model.id} value={model.id}>
-                                {model.name}
-                            </option>
-                        ))}
-                    </select>
+                    <Select value={semanticModelId} onValueChange={setSemanticModelId}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {available.map(model => (
+                                <SelectItem key={model.id} value={model.id}>
+                                    {model.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 ) : (
                     <Input value={newModelName} onChange={event => setNewModelName(event.target.value)} placeholder={t('NewModelName')} />
                 )}

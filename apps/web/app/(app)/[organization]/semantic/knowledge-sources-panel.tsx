@@ -22,6 +22,7 @@ import { Badge } from '@/registry/new-york-v4/ui/badge';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 
 type DataSource = { connectionId: string; name: string; type: string; engine: string };
@@ -76,14 +77,19 @@ function formatBytes(bytes: number) {
 function ScopeSelect({ value, dataSources, onChange }: { value: string | null; dataSources: DataSource[]; onChange: (value: string | null) => void }) {
     const t = useTranslations('SemanticContext.KnowledgeSources');
     return (
-        <select className="h-9 rounded-md border bg-background px-3 text-sm" value={value ?? ''} onChange={event => onChange(event.target.value || null)}>
-            <option value="">{t('Shared')}</option>
-            {dataSources.map(source => (
-                <option key={source.connectionId} value={source.connectionId}>
-                    {source.name}
-                </option>
-            ))}
-        </select>
+        <Select value={value ?? '__shared__'} onValueChange={selected => onChange(selected === '__shared__' ? null : selected)}>
+            <SelectTrigger className="w-full">
+                <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="__shared__">{t('Shared')}</SelectItem>
+                {dataSources.map(source => (
+                    <SelectItem key={source.connectionId} value={source.connectionId}>
+                        {source.name}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
     );
 }
 
@@ -387,7 +393,7 @@ function ImportReviewDialog({
                                 <label className="flex min-w-0 items-start gap-3">
                                     <input
                                         type="checkbox"
-                                        className="mt-1"
+                                        className="mt-1 cursor-pointer"
                                         checked={checked}
                                         onChange={() => setSelectedIds(current => (checked ? current.filter(id => id !== item.id) : [...current, item.id]))}
                                     />
@@ -400,22 +406,26 @@ function ImportReviewDialog({
                                         {item.description ? <span className="mt-1 block text-xs text-muted-foreground">{item.description}</span> : null}
                                     </span>
                                 </label>
-                                <select
-                                    className="h-9 rounded-md border bg-background px-3 text-sm"
-                                    value={item.sourceConnectionId ?? ''}
-                                    onChange={event =>
+                                <Select
+                                    value={item.sourceConnectionId ?? '__unassigned__'}
+                                    onValueChange={value =>
                                         setDrafts(current =>
-                                            current.map(draft => (draft.id === item.id ? { ...draft, sourceConnectionId: event.target.value || undefined } : draft)),
+                                            current.map(draft => (draft.id === item.id ? { ...draft, sourceConnectionId: value === '__unassigned__' ? undefined : value } : draft)),
                                         )
                                     }
                                 >
-                                    <option value="">{t('SelectDataSource')}</option>
-                                    {dataSources.map(dataSource => (
-                                        <option key={dataSource.connectionId} value={dataSource.connectionId}>
-                                            {dataSource.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder={t('SelectDataSource')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="__unassigned__">{t('SelectDataSource')}</SelectItem>
+                                        {dataSources.map(dataSource => (
+                                            <SelectItem key={dataSource.connectionId} value={dataSource.connectionId}>
+                                                {dataSource.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         );
                     })}

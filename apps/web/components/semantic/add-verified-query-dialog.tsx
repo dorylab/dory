@@ -9,6 +9,7 @@ import { executeActionClient } from '@/lib/actions/client';
 import { Button } from '@/registry/new-york-v4/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/registry/new-york-v4/ui/dialog';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 
 type SemanticModelOption = { id: string; name: string };
@@ -80,17 +81,18 @@ export function AddVerifiedQueryDialog({
                 </DialogHeader>
                 <div className="space-y-3">
                     {hasModels ? (
-                        <select
-                            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                            value={semanticModelId}
-                            onChange={event => setSemanticModelId(event.target.value)}
-                        >
-                            {models.data!.models.map(model => (
-                                <option key={model.id} value={model.id}>
-                                    {model.name}
-                                </option>
-                            ))}
-                        </select>
+                        <Select value={semanticModelId} onValueChange={setSemanticModelId}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {models.data!.models.map(model => (
+                                    <SelectItem key={model.id} value={model.id}>
+                                        {model.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     ) : (
                         <Input value={newModelName} onChange={event => setNewModelName(event.target.value)} placeholder={t('NewModelName')} />
                     )}

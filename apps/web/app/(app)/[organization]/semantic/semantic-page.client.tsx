@@ -4,9 +4,9 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useTranslations } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { useDeferredValue, useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BrainCircuit, CheckCircle2, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, FileCode2, MoreHorizontal, Pencil, Plus, Search, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import { parseAsString, useQueryState } from 'nuqs';
 import { toast } from 'sonner';
 
@@ -28,6 +28,7 @@ import { Card, CardContent } from '@/registry/new-york-v4/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/registry/new-york-v4/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/registry/new-york-v4/ui/dropdown-menu';
 import { Input } from '@/registry/new-york-v4/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/registry/new-york-v4/ui/tabs';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 import { KnowledgeSourcesPanel } from './knowledge-sources-panel';
@@ -91,6 +92,12 @@ function relativeTime(value: string) {
     return formatter.format(Math.round(seconds / 86400), 'day');
 }
 
+function formatFileSize(bytes: number) {
+    if (bytes < 1_000) return `${bytes} B`;
+    if (bytes < 1_000_000) return `${(bytes / 1_000).toFixed(bytes < 10_000 ? 1 : 0)} KB`;
+    return `${(bytes / 1_000_000).toFixed(bytes < 10_000_000 ? 1 : 0)} MB`;
+}
+
 export function CreateSemanticModelDialog({
     connections,
     trigger,
@@ -150,6 +157,7 @@ export function CreateSemanticModelDialog({
                                 <label key={id} className="flex cursor-pointer items-center gap-3 rounded-md border p-3">
                                     <input
                                         type="checkbox"
+                                        className="cursor-pointer"
                                         checked={selected.includes(id)}
                                         onChange={() => setSelected(current => (current.includes(id) ? current.filter(value => value !== id) : [...current, id]))}
                                     />
@@ -625,39 +633,48 @@ function DefinitionPanel({
                     </DialogHeader>
                     <div className="space-y-3">
                         <Input value={name} onChange={event => setName(event.target.value)} placeholder={t('DefinitionNamePlaceholder')} />
-                        <select
-                            className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                            value={sourceConnectionId}
-                            onChange={event => setSourceConnectionId(event.target.value)}
-                        >
-                            {model.dataSources.map(item => (
-                                <option key={item.connectionId} value={item.connectionId}>
-                                    {item.name}
-                                </option>
-                            ))}
-                        </select>
+                        <Select value={sourceConnectionId} onValueChange={setSourceConnectionId}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder={t('SelectDataSource')} />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {model.dataSources.map(item => (
+                                    <SelectItem key={item.connectionId} value={item.connectionId}>
+                                        {item.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         {kind === 'relationship' ? (
                             <div className="grid gap-3 sm:grid-cols-2">
-                                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={from} onChange={event => setFrom(event.target.value)}>
-                                    <option value="">{t('FromDefinition')}</option>
-                                    {model.model.definitions
-                                        .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
-                                        .map(item => (
-                                            <option key={item.id} value={item.id}>
-                                                {item.name}
-                                            </option>
-                                        ))}
-                                </select>
-                                <select className="h-9 rounded-md border bg-background px-3 text-sm" value={to} onChange={event => setTo(event.target.value)}>
-                                    <option value="">{t('ToDefinition')}</option>
-                                    {model.model.definitions
-                                        .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
-                                        .map(item => (
-                                            <option key={item.id} value={item.id}>
-                                                {item.name}
-                                            </option>
-                                        ))}
-                                </select>
+                                <Select value={from} onValueChange={setFrom}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder={t('FromDefinition')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {model.model.definitions
+                                            .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
+                                            .map(item => (
+                                                <SelectItem key={item.id} value={item.id}>
+                                                    {item.name}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={to} onValueChange={setTo}>
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder={t('ToDefinition')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {model.model.definitions
+                                            .filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship')
+                                            .map(item => (
+                                                <SelectItem key={item.id} value={item.id}>
+                                                    {item.name}
+                                                </SelectItem>
+                                            ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         ) : (
                             <>
@@ -716,13 +733,18 @@ function AskAiDialog({
                     <DialogDescription>{t('AskAiDescription')}</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3">
-                    <select className="h-9 w-full rounded-md border bg-background px-3 text-sm" value={operation} onChange={event => setOperation(event.target.value)}>
-                        <option value="generate_definitions">{t('AiOperations.GenerateDefinitions')}</option>
-                        <option value="analyze_context">{t('AiOperations.AnalyzeContext')}</option>
-                        <option value="analyze_schema">{t('AiOperations.AnalyzeSchema')}</option>
-                        <option value="find_relationships">{t('AiOperations.FindRelationships')}</option>
-                        <option value="suggest_metrics">{t('AiOperations.SuggestMetrics')}</option>
-                    </select>
+                    <Select value={operation} onValueChange={setOperation}>
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="generate_definitions">{t('AiOperations.GenerateDefinitions')}</SelectItem>
+                            <SelectItem value="analyze_context">{t('AiOperations.AnalyzeContext')}</SelectItem>
+                            <SelectItem value="analyze_schema">{t('AiOperations.AnalyzeSchema')}</SelectItem>
+                            <SelectItem value="find_relationships">{t('AiOperations.FindRelationships')}</SelectItem>
+                            <SelectItem value="suggest_metrics">{t('AiOperations.SuggestMetrics')}</SelectItem>
+                        </SelectContent>
+                    </Select>
                     <Textarea value={prompt} onChange={event => setPrompt(event.target.value)} placeholder={t('AiPromptPlaceholder')} />
                     {suggestions.length ? (
                         <div className="max-h-72 space-y-2 overflow-auto">
@@ -766,8 +788,36 @@ function ImportYamlDialog({
     onImported: (model: SemanticModelView) => void;
 }) {
     const t = useTranslations('SemanticContext');
+    const inputRef = useRef<HTMLInputElement | null>(null);
     const [yaml, setYaml] = useState('');
+    const [fileName, setFileName] = useState('');
+    const [fileSize, setFileSize] = useState(0);
     const [fallbackSourceConnectionId, setFallbackSourceConnectionId] = useState(model.dataSources[0]?.connectionId ?? '');
+    const selectFile = async (file: File | undefined) => {
+        if (!file) return;
+        if (!/\.ya?ml$/i.test(file.name)) {
+            toast.error(t('UnsupportedYamlFile'));
+            return;
+        }
+        if (file.size > 10_000_000) {
+            toast.error(t('YamlFileTooLarge'));
+            return;
+        }
+        const content = await file.text();
+        if (!content.trim()) {
+            toast.error(t('EmptyYamlFile'));
+            return;
+        }
+        setYaml(content);
+        setFileName(file.name);
+        setFileSize(file.size);
+    };
+    const clearFile = () => {
+        setYaml('');
+        setFileName('');
+        setFileSize(0);
+        if (inputRef.current) inputRef.current.value = '';
+    };
     const importYaml = useMutation({
         mutationFn: () =>
             executeActionClient<SemanticModelView>('semantic.importYaml', {
@@ -778,39 +828,103 @@ function ImportYamlDialog({
         onSuccess: imported => {
             onImported(imported);
             onOpenChange(false);
-            setYaml('');
+            clearFile();
             toast.success(t('YamlImported'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.ImportYaml')),
     });
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl">
-                <DialogHeader>
+        <Dialog
+            open={open}
+            onOpenChange={next => {
+                onOpenChange(next);
+                if (!next && !importYaml.isPending) clearFile();
+            }}
+        >
+            <DialogContent className="flex h-[min(42rem,calc(100dvh-2rem))] flex-col sm:max-w-3xl">
+                <DialogHeader className="shrink-0">
                     <DialogTitle>{t('ImportYamlTitle')}</DialogTitle>
                     <DialogDescription>{t('ImportYamlDescription')}</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-3">
-                    <select
-                        className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-                        value={fallbackSourceConnectionId}
-                        onChange={event => setFallbackSourceConnectionId(event.target.value)}
-                    >
-                        {model.dataSources.map(source => (
-                            <option key={source.connectionId} value={source.connectionId}>
-                                {source.name}
-                            </option>
-                        ))}
-                    </select>
-                    <Textarea
-                        className="min-h-72 font-mono"
-                        value={yaml}
-                        onChange={event => setYaml(event.target.value)}
-                        placeholder={'cubes:\n  - name: orders\n    measures:\n      - name: revenue'}
+                <div className="flex min-h-0 flex-1 flex-col gap-3">
+                    <Select value={fallbackSourceConnectionId} onValueChange={setFallbackSourceConnectionId}>
+                        <SelectTrigger className="w-full shrink-0">
+                            <SelectValue placeholder={t('SelectDataSource')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {model.dataSources.map(source => (
+                                <SelectItem key={source.connectionId} value={source.connectionId}>
+                                    {source.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <input
+                        ref={inputRef}
+                        type="file"
+                        accept=".yaml,.yml,application/x-yaml,text/yaml"
+                        className="sr-only"
+                        onChange={event => void selectFile(event.target.files?.[0])}
                     />
+                    {fileName ? (
+                        <>
+                            <div className="flex shrink-0 items-center gap-3 rounded-md border px-3 py-2">
+                                <FileCode2 className="size-5 shrink-0 text-muted-foreground" />
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium">{fileName}</div>
+                                    <div className="text-xs text-muted-foreground">{formatFileSize(fileSize)}</div>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+                                    {t('ReplaceFile')}
+                                </Button>
+                                <Button variant="ghost" size="icon-sm" onClick={clearFile} aria-label={t('RemoveYamlFile')}>
+                                    <X />
+                                </Button>
+                            </div>
+                            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+                                <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">{t('YamlPreview')}</div>
+                                <div className="h-[calc(100%-2.0625rem)]">
+                                    <MonacoYamlEditor
+                                        height="100%"
+                                        language="yaml"
+                                        value={yaml}
+                                        options={{
+                                            automaticLayout: true,
+                                            minimap: { enabled: false },
+                                            fontSize: 13,
+                                            lineNumbers: 'off',
+                                            lineNumbersMinChars: 0,
+                                            readOnly: true,
+                                            scrollBeyondLastLine: false,
+                                            tabSize: 2,
+                                            wordWrap: 'on',
+                                            padding: { top: 12, bottom: 12 },
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <button
+                            type="button"
+                            className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-md border border-dashed bg-muted/20 px-6 text-center transition-colors hover:bg-muted/35"
+                            onClick={() => inputRef.current?.click()}
+                            onDragOver={event => event.preventDefault()}
+                            onDrop={event => {
+                                event.preventDefault();
+                                void selectFile(event.dataTransfer.files[0]);
+                            }}
+                        >
+                            <span className="rounded-full bg-primary/10 p-3 text-primary">
+                                <Upload className="size-5" />
+                            </span>
+                            <span className="mt-3 text-sm font-medium">{t('UploadYamlFile')}</span>
+                            <span className="mt-1 text-xs text-muted-foreground">{t('UploadYamlHint')}</span>
+                        </button>
+                    )}
                 </div>
-                <DialogFooter>
+                <DialogFooter className="shrink-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         {t('Cancel')}
                     </Button>
