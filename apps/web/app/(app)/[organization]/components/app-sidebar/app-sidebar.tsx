@@ -101,7 +101,6 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
     ];
     const navMain = connectionId
         ? [
-              ...organizationItems,
               {
                   title: t('SQLConsole'),
                   url: sqlConsoleUrl,
@@ -168,6 +167,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             requiresConnection: false,
         },
     ];
+    const visibleMoreItems = connectionId ? [] : moreItems;
 
     React.useEffect(() => {
         if (!window.updateBridge) return;
@@ -230,7 +230,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
             <SidebarHeader className="pb-2">{connectionId ? <ConnectionSwitcher /> : <ConnectionSwitcher displayMode="all-connections" />}</SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navMain} moreItems={moreItems} moreTitle={t('More')} disabled={!connectionId} hasActiveConnection={!!connectionId} />
+                <NavMain items={navMain} moreItems={visibleMoreItems} moreTitle={t('More')} disabled={!connectionId} hasActiveConnection={!!connectionId} />
                 <div className="mt-auto space-y-2">
                     {showStarNotification ? (
                         <div className="px-2 group-data-[collapsible=icon]:hidden">

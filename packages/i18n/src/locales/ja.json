@@ -3770,6 +3770,7 @@
         "Description": "説明",
         "DescriptionPlaceholder": "注文、顧客、売上のビジネスセマンティクス。",
         "DataSources": "データソース",
+        "SelectDataSource": "データソースを選択",
         "Cancel": "キャンセル",
         "Saving": "保存中…",
         "Deleting": "削除中…",

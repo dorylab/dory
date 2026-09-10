@@ -3770,6 +3770,7 @@
         "Description": "Description",
         "DescriptionPlaceholder": "Business knowledge for orders, customers, and revenue.",
         "DataSources": "Data sources",
+        "SelectDataSource": "Select data source",
         "Cancel": "Cancel",
         "Saving": "Saving…",
         "Deleting": "Deleting…",

@@ -3764,6 +3764,7 @@
         "Description": "Descripción",
         "DescriptionPlaceholder": "Conocimiento empresarial para pedidos, clientes e ingresos.",
         "DataSources": "Fuentes de datos",
+        "SelectDataSource": "Seleccionar fuente de datos",
         "Cancel": "Cancelar",
         "Saving": "Guardando…",
         "Deleting": "Eliminando…",
