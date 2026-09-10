@@ -439,7 +439,7 @@ function KnowledgeModelList({ organization }: { organization: string }) {
     );
 }
 
-function DefinitionExpandedRow({ definition, onClose }: { definition: Definition; onClose: () => void }) {
+function DefinitionExpandedRow({ definition, onEdit }: { definition: Definition; onEdit: () => void }) {
     const t = useTranslations('Knowledge');
     const fields = [
         [t('DefinitionFields.Description'), definition.description],
@@ -454,8 +454,8 @@ function DefinitionExpandedRow({ definition, onClose }: { definition: Definition
         <tr className="border-t bg-muted/20">
             <td colSpan={5} className="p-0">
                 <div className="relative p-5">
-                    <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3" onClick={onClose} aria-label={t('CloseDefinitionDetails')}>
-                        <X />
+                    <Button variant="ghost" size="icon-sm" className="absolute right-3 top-3" onClick={onEdit} aria-label={t('EditNamedDefinition', { name: definition.name })}>
+                        <Pencil />
                     </Button>
                     <div className="pr-10">
                         <div className="text-base font-semibold">{definition.name}</div>
@@ -482,19 +482,173 @@ function DefinitionExpandedRow({ definition, onClose }: { definition: Definition
     );
 }
 
+function EditDefinitionDialog({
+    definition,
+    model,
+    onOpenChange,
+    onSave,
+}: {
+    definition: Definition | null;
+    model: KnowledgeModelView;
+    onOpenChange: (open: boolean) => void;
+    onSave: (definitionId: string, definition: Definition) => Promise<void>;
+}) {
+    const t = useTranslations('Knowledge');
+    const [name, setName] = useState('');
+    const [sourceConnectionId, setSourceConnectionId] = useState('');
+    const [source, setSource] = useState('');
+    const [expression, setExpression] = useState('');
+    const [description, setDescription] = useState('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    useEffect(() => {
+        if (!definition) return;
+        setName(definition.name);
+        setSourceConnectionId(definition.sourceConnectionId);
+        setSource(definition.source ?? '');
+        setExpression(definition.expression ?? '');
+        setDescription(definition.description ?? '');
+        setFrom(definition.from ?? '');
+        setTo(definition.to ?? '');
+    }, [definition]);
+
+    const relationshipOptions = model.model.definitions.filter(item => item.sourceConnectionId === sourceConnectionId && item.kind !== 'relationship');
+    const kind = definition?.kind ?? 'metric';
+    const save = async () => {
+        if (!definition || !name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to))) return;
+        setIsSaving(true);
+        try {
+            await onSave(definition.id, {
+                ...definition,
+                name: name.trim(),
+                sourceConnectionId,
+                description: description.trim() || undefined,
+                source: kind === 'relationship' ? undefined : source.trim() || undefined,
+                expression: kind === 'relationship' ? undefined : expression.trim() || undefined,
+                from: kind === 'relationship' ? from : undefined,
+                to: kind === 'relationship' ? to : undefined,
+            });
+            onOpenChange(false);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={Boolean(definition)} onOpenChange={onOpenChange}>
+            <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>{t('EditDefinitionTitle')}</DialogTitle>
+                    <DialogDescription>{t('EditDefinitionDescription')}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                    <Input aria-label={t('Name')} value={name} onChange={event => setName(event.target.value)} placeholder={t('DefinitionNamePlaceholder')} />
+                    <Select
+                        value={sourceConnectionId}
+                        onValueChange={value => {
+                            setSourceConnectionId(value);
+                            setFrom('');
+                            setTo('');
+                        }}
+                    >
+                        <SelectTrigger className="w-full" aria-label={t('DataSources')}>
+                            <SelectValue placeholder={t('SelectDataSource')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {model.dataSources.map(item => (
+                                <SelectItem key={item.connectionId} value={item.connectionId}>
+                                    {item.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {kind === 'relationship' ? (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">{t('FromDefinition')}</label>
+                                <Select value={from} onValueChange={setFrom}>
+                                    <SelectTrigger className="w-full" aria-label={t('FromDefinition')}>
+                                        <SelectValue placeholder={t('FromDefinition')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {relationshipOptions.map(item => (
+                                            <SelectItem key={item.id} value={item.id}>
+                                                {item.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">{t('ToDefinition')}</label>
+                                <Select value={to} onValueChange={setTo}>
+                                    <SelectTrigger className="w-full" aria-label={t('ToDefinition')}>
+                                        <SelectValue placeholder={t('ToDefinition')} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {relationshipOptions.map(item => (
+                                            <SelectItem key={item.id} value={item.id}>
+                                                {item.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <Input
+                                aria-label={t('DefinitionFields.SourceTable')}
+                                value={source}
+                                onChange={event => setSource(event.target.value)}
+                                placeholder={t('SourceTablePlaceholder')}
+                            />
+                            <Input
+                                aria-label={t('DefinitionFields.Calculation')}
+                                value={expression}
+                                onChange={event => setExpression(event.target.value)}
+                                placeholder={t('CalculationPlaceholder')}
+                            />
+                        </>
+                    )}
+                    <Textarea
+                        aria-label={t('DefinitionFields.Description')}
+                        value={description}
+                        onChange={event => setDescription(event.target.value)}
+                        placeholder={t('BusinessDefinitionPlaceholder')}
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+                        {t('Cancel')}
+                    </Button>
+                    <Button onClick={save} disabled={!name.trim() || !sourceConnectionId || (kind === 'relationship' && (!from || !to)) || isSaving}>
+                        {isSaving ? t('Saving') : t('SaveDefinition')}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function DefinitionPanel({
     model,
     onSave,
+    onUpdate,
     onImport,
     onAskAi,
 }: {
     model: KnowledgeModelView;
     onSave: (definitions: Definition[]) => void;
+    onUpdate: (definitionId: string, definition: Definition) => Promise<void>;
     onImport: () => void;
     onAskAi: () => void;
 }) {
     const t = useTranslations('Knowledge');
     const [selected, setSelected] = useState<Definition | null>(null);
+    const [editingDefinition, setEditingDefinition] = useState<Definition | null>(null);
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
     const [kind, setKind] = useState<Definition['kind']>('metric');
@@ -619,7 +773,7 @@ function DefinitionPanel({
                                 </td>
                             </tr>,
                             ...(selected?.id === definition.id
-                                ? [<DefinitionExpandedRow key={`${definition.id}:detail`} definition={definition} onClose={() => setSelected(null)} />]
+                                ? [<DefinitionExpandedRow key={`${definition.id}:detail`} definition={definition} onEdit={() => setEditingDefinition(definition)} />]
                                 : []),
                         ])}
                     </tbody>
@@ -692,6 +846,7 @@ function DefinitionPanel({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <EditDefinitionDialog definition={editingDefinition} model={model} onOpenChange={open => !open && setEditingDefinition(null)} onSave={onUpdate} />
         </div>
     );
 }
@@ -1029,7 +1184,8 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
     }, [modelQuery.data]);
     const setModel = (model: KnowledgeModelView) => queryClient.setQueryData(modelKey(knowledgeModelId), model);
     const update = useMutation({
-        mutationFn: (input: Record<string, unknown>) => executeActionClient<KnowledgeModelView>('knowledge.update', { knowledgeModelId, ...input }, { organizationId: organization }),
+        mutationFn: (input: Record<string, unknown>) =>
+            executeActionClient<KnowledgeModelView>('knowledge.update', { knowledgeModelId, ...input }, { organizationId: organization }),
         onSuccess: setModel,
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.Update')),
     });
@@ -1038,6 +1194,12 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
             executeActionClient<KnowledgeModelView>('knowledge.saveDefinitions', { knowledgeModelId, definitions }, { organizationId: organization }),
         onSuccess: setModel,
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveDefinitions')),
+    });
+    const updateDefinition = useMutation({
+        mutationFn: ({ definitionId, definition }: { definitionId: string; definition: Definition }) =>
+            executeActionClient<KnowledgeModelView>('knowledge.updateDefinition', { knowledgeModelId, definitionId, definition }, { organizationId: organization }),
+        onSuccess: setModel,
+        onError: error => toast.error(error instanceof Error ? error.message : t('Errors.UpdateDefinition')),
     });
     const deleteModel = useMutation({
         mutationFn: () => executeActionClient('knowledge.delete', { knowledgeModelId }, { organizationId: organization, confirmationToken: 'knowledge.delete' }),
@@ -1118,6 +1280,9 @@ function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization
                         <DefinitionPanel
                             model={model}
                             onSave={definitions => saveDefinitions.mutate(definitions)}
+                            onUpdate={async (definitionId, definition) => {
+                                await updateDefinition.mutateAsync({ definitionId, definition });
+                            }}
                             onImport={() => setImportOpen(true)}
                             onAskAi={() => setAskAiOpen(true)}
                         />
