@@ -3,7 +3,7 @@ import type { DoryRuntime } from '@dory/shared/runtime';
 import type { z } from 'zod';
 
 export type ActionActorType = 'user' | 'agent' | 'mcp' | 'automation';
-export type ActionDomain = 'connection' | 'schema' | 'table' | 'query' | 'resultSet' | 'artifact' | 'tab' | 'savedQuery' | 'chart' | 'ai' | 'comparison' | 'semantic';
+export type ActionDomain = 'connection' | 'schema' | 'table' | 'query' | 'resultSet' | 'artifact' | 'tab' | 'savedQuery' | 'chart' | 'ai' | 'comparison' | 'knowledge';
 export type ActionKind = 'query' | 'command';
 export type ActionRisk = 'read' | 'low' | 'write' | 'destructive';
 export type ActionId = `${ActionDomain}.${string}`;

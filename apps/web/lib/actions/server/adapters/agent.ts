@@ -4,12 +4,12 @@ import { executeAction } from '../execute';
 import type { WebActionServices } from '../types';
 
 export function toAgentToolName(actionId: string) {
-    const semanticToolNames: Record<string, string> = {
-        'semantic.searchContext': 'search_semantic_context',
-        'semantic.getDefinition': 'get_semantic_definition',
-        'semantic.searchVerifiedQueries': 'search_verified_queries',
+    const knowledgeToolNames: Record<string, string> = {
+        'knowledge.searchKnowledge': 'search_knowledge',
+        'knowledge.getDefinition': 'get_knowledge_definition',
+        'knowledge.searchVerifiedQueries': 'search_knowledge_verified_queries',
     };
-    if (semanticToolNames[actionId]) return semanticToolNames[actionId];
+    if (knowledgeToolNames[actionId]) return knowledgeToolNames[actionId];
     return actionId.replace(/[^a-zA-Z0-9_]/g, '_');
 }
 

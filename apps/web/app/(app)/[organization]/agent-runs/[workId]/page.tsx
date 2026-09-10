@@ -11,7 +11,7 @@ import { getAgentRunActivitySummary, buildAgentRunTimeline, getAgentRunStats, ge
 import { buildAgentWorkspacePathFromSnapshot, resolveAgentWorkspaceTarget } from '@/lib/agent-runs/workspace-url';
 import { getAppBootstrapState } from '@/lib/server/app-bootstrap';
 import { Button } from '@/registry/new-york-v4/ui/button';
-import { AgentRunVerifiedQueryButton } from '@/components/semantic/agent-run-verified-query-button';
+import { AgentRunVerifiedQueryButton } from '@/components/knowledge/agent-run-verified-query-button';
 
 function formatDate(value: Date | string | null | undefined, emptyLabel: string) {
     if (!value) return emptyLabel;

@@ -45,7 +45,7 @@ type Definition = {
 type KnowledgeSourceSummary = {
     id: string;
     organizationId: string;
-    semanticModelId: string;
+    knowledgeModelId: string;
     connectionId: string | null;
     fileName: string;
     format: 'markdown' | 'yaml' | 'text';
@@ -66,7 +66,7 @@ const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-edit
     loading: () => <div className="h-full animate-pulse bg-muted" />,
 });
 
-const knowledgeSourcesKey = (semanticModelId: string) => ['semantic-model', semanticModelId, 'knowledge-sources'] as const;
+const knowledgeSourcesKey = (knowledgeModelId: string) => ['knowledge-model', knowledgeModelId, 'knowledge-sources'] as const;
 
 function formatBytes(bytes: number) {
     if (bytes < 1_000) return `${bytes} B`;
@@ -75,7 +75,7 @@ function formatBytes(bytes: number) {
 }
 
 function ScopeSelect({ value, dataSources, onChange }: { value: string | null; dataSources: DataSource[]; onChange: (value: string | null) => void }) {
-    const t = useTranslations('SemanticContext.KnowledgeSources');
+    const t = useTranslations('Knowledge.KnowledgeSources');
     return (
         <Select value={value ?? '__shared__'} onValueChange={selected => onChange(selected === '__shared__' ? null : selected)}>
             <SelectTrigger className="w-full">
@@ -97,16 +97,16 @@ function UploadSourcesDialog({
     open,
     onOpenChange,
     organization,
-    semanticModelId,
+    knowledgeModelId,
     dataSources,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     organization: string;
-    semanticModelId: string;
+    knowledgeModelId: string;
     dataSources: DataSource[];
 }) {
-    const t = useTranslations('SemanticContext.KnowledgeSources');
+    const t = useTranslations('Knowledge.KnowledgeSources');
     const queryClient = useQueryClient();
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [files, setFiles] = useState<PendingFile[]>([]);
@@ -140,8 +140,8 @@ function UploadSourcesDialog({
             const results = await Promise.allSettled(
                 files.map(file =>
                     executeActionClient<KnowledgeSource>(
-                        'semantic.createKnowledgeSource',
-                        { semanticModelId, fileName: file.fileName, contentText: file.contentText, connectionId: file.connectionId },
+                        'knowledge.createKnowledgeSource',
+                        { knowledgeModelId, fileName: file.fileName, contentText: file.contentText, connectionId: file.connectionId },
                         { organizationId: organization },
                     ),
                 ),
@@ -152,7 +152,7 @@ function UploadSourcesDialog({
             };
         },
         onSuccess: result => {
-            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(semanticModelId) });
+            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) });
             if (result.uploadedNames.length) toast.success(t('Uploaded', { count: result.uploadedNames.length }));
             result.errors.forEach(error => toast.error(error));
             if (result.uploadedNames.length === files.length) {
@@ -248,21 +248,21 @@ function SourceEditorDialog({
     open,
     onOpenChange,
     organization,
-    semanticModelId,
+    knowledgeModelId,
     dataSources,
 }: {
     source: KnowledgeSourceSummary | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     organization: string;
-    semanticModelId: string;
+    knowledgeModelId: string;
     dataSources: DataSource[];
 }) {
-    const t = useTranslations('SemanticContext.KnowledgeSources');
+    const t = useTranslations('Knowledge.KnowledgeSources');
     const queryClient = useQueryClient();
     const detail = useQuery({
-        queryKey: [...knowledgeSourcesKey(semanticModelId), source?.id],
-        queryFn: () => executeActionClient<KnowledgeSource>('semantic.getKnowledgeSource', { semanticModelId, id: source!.id }, { organizationId: organization }),
+        queryKey: [...knowledgeSourcesKey(knowledgeModelId), source?.id],
+        queryFn: () => executeActionClient<KnowledgeSource>('knowledge.getKnowledgeSource', { knowledgeModelId, id: source!.id }, { organizationId: organization }),
         enabled: Boolean(source && open),
     });
     const [contentText, setContentText] = useState('');
@@ -275,13 +275,13 @@ function SourceEditorDialog({
     const save = useMutation({
         mutationFn: () =>
             executeActionClient<KnowledgeSource>(
-                'semantic.updateKnowledgeSource',
-                { semanticModelId, id: source!.id, contentText, connectionId },
+                'knowledge.updateKnowledgeSource',
+                { knowledgeModelId, id: source!.id, contentText, connectionId },
                 { organizationId: organization },
             ),
         onSuccess: updated => {
-            queryClient.setQueryData([...knowledgeSourcesKey(semanticModelId), updated.id], updated);
-            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(semanticModelId) });
+            queryClient.setQueryData([...knowledgeSourcesKey(knowledgeModelId), updated.id], updated);
+            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) });
             onOpenChange(false);
             toast.success(t('Saved'));
         },
@@ -356,7 +356,7 @@ function ImportReviewDialog({
     onOpenChange: (open: boolean) => void;
     onImport: (definitions: Definition[]) => void;
 }) {
-    const t = useTranslations('SemanticContext.KnowledgeSources');
+    const t = useTranslations('Knowledge.KnowledgeSources');
     const existingIds = new Set(existingDefinitions.map(item => item.id));
     const [drafts, setDrafts] = useState<ImportSuggestion[]>([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -445,18 +445,18 @@ function ImportReviewDialog({
 
 export function KnowledgeSourcesPanel({
     organization,
-    semanticModelId,
+    knowledgeModelId,
     dataSources,
     definitions,
     onImportDefinitions,
 }: {
     organization: string;
-    semanticModelId: string;
+    knowledgeModelId: string;
     dataSources: DataSource[];
     definitions: Definition[];
     onImportDefinitions: (definitions: Definition[]) => void;
 }) {
-    const t = useTranslations('SemanticContext.KnowledgeSources');
+    const t = useTranslations('Knowledge.KnowledgeSources');
     const queryClient = useQueryClient();
     const [uploadOpen, setUploadOpen] = useState(false);
     const [editing, setEditing] = useState<KnowledgeSourceSummary | null>(null);
@@ -464,12 +464,12 @@ export function KnowledgeSourcesPanel({
     const [reviewing, setReviewing] = useState<KnowledgeSourceSummary | null>(null);
     const [suggestions, setSuggestions] = useState<ImportSuggestion[]>([]);
     const sources = useQuery({
-        queryKey: knowledgeSourcesKey(semanticModelId),
-        queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('semantic.listKnowledgeSources', { semanticModelId }, { organizationId: organization }),
+        queryKey: knowledgeSourcesKey(knowledgeModelId),
+        queryFn: () => executeActionClient<{ sources: KnowledgeSourceSummary[] }>('knowledge.listKnowledgeSources', { knowledgeModelId }, { organizationId: organization }),
     });
     const previewImport = useMutation({
         mutationFn: (source: KnowledgeSourceSummary) =>
-            executeActionClient<{ suggestions: ImportSuggestion[] }>('semantic.previewKnowledgeSourceImport', { semanticModelId, id: source.id }, { organizationId: organization }),
+            executeActionClient<{ suggestions: ImportSuggestion[] }>('knowledge.previewKnowledgeSourceImport', { knowledgeModelId, id: source.id }, { organizationId: organization }),
         onSuccess: (result, source) => {
             if (!result.suggestions.length) {
                 toast.error(t('NoImportable'));
@@ -483,12 +483,12 @@ export function KnowledgeSourcesPanel({
     const remove = useMutation({
         mutationFn: (source: KnowledgeSourceSummary) =>
             executeActionClient(
-                'semantic.deleteKnowledgeSource',
-                { semanticModelId, id: source.id },
-                { organizationId: organization, confirmationToken: 'semantic.deleteKnowledgeSource' },
+                'knowledge.deleteKnowledgeSource',
+                { knowledgeModelId, id: source.id },
+                { organizationId: organization, confirmationToken: 'knowledge.deleteKnowledgeSource' },
             ),
         onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(semanticModelId) });
+            void queryClient.invalidateQueries({ queryKey: knowledgeSourcesKey(knowledgeModelId) });
             setDeleting(null);
             toast.success(t('Deleted'));
         },
@@ -579,13 +579,13 @@ export function KnowledgeSourcesPanel({
                     </Button>
                 </div>
             ) : null}
-            <UploadSourcesDialog open={uploadOpen} onOpenChange={setUploadOpen} organization={organization} semanticModelId={semanticModelId} dataSources={dataSources} />
+            <UploadSourcesDialog open={uploadOpen} onOpenChange={setUploadOpen} organization={organization} knowledgeModelId={knowledgeModelId} dataSources={dataSources} />
             <SourceEditorDialog
                 source={editing}
                 open={Boolean(editing)}
                 onOpenChange={open => !open && setEditing(null)}
                 organization={organization}
-                semanticModelId={semanticModelId}
+                knowledgeModelId={knowledgeModelId}
                 dataSources={dataSources}
             />
             <ImportReviewDialog

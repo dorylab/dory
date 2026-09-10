@@ -27,8 +27,8 @@ export const MCP_LEGACY_FINE_SCOPES = [
     'monitoring:read',
     'comparisons:read',
     'comparisons:write',
-    'semantic:read',
-    'semantic:write',
+    'knowledge:read',
+    'knowledge:write',
 ] as const;
 export const MCP_LOCAL_AI_SCOPE = 'local_ai:run';
 export const MCP_ALLOWED_SCOPES = [...MCP_DEFAULT_SCOPES, ...MCP_LEGACY_FINE_SCOPES] as const;

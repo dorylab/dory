@@ -12,7 +12,7 @@ import { Input } from '@/registry/new-york-v4/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/registry/new-york-v4/ui/select';
 import { Textarea } from '@/registry/new-york-v4/ui/textarea';
 
-type SemanticModelOption = { id: string; name: string };
+type KnowledgeModelOption = { id: string; name: string };
 
 export function AddVerifiedQueryDialog({
     open,
@@ -31,37 +31,37 @@ export function AddVerifiedQueryDialog({
     sourceId?: string | null;
     initialTitle?: string;
 }) {
-    const t = useTranslations('SemanticContext');
-    const [semanticModelId, setSemanticModelId] = useState('');
+    const t = useTranslations('Knowledge');
+    const [knowledgeModelId, setKnowledgeModelId] = useState('');
     const [newModelName, setNewModelName] = useState('');
     const [title, setTitle] = useState(initialTitle);
     const [question, setQuestion] = useState('');
     const models = useQuery({
-        queryKey: ['semantic-model-options', connectionId],
+        queryKey: ['knowledge-model-options', connectionId],
         enabled: open && Boolean(connectionId),
-        queryFn: () => executeActionClient<{ models: SemanticModelOption[] }>('semantic.list', { connectionId }, { currentConnectionId: connectionId ?? null }),
+        queryFn: () => executeActionClient<{ models: KnowledgeModelOption[] }>('knowledge.list', { connectionId }, { currentConnectionId: connectionId ?? null }),
     });
     useEffect(() => {
         if (!open) return;
         setTitle(initialTitle);
         setQuestion('');
         setNewModelName('');
-        setSemanticModelId('');
+        setKnowledgeModelId('');
     }, [open, initialTitle]);
     useEffect(() => {
-        if (!semanticModelId && models.data?.models[0]) setSemanticModelId(models.data.models[0].id);
-    }, [models.data, semanticModelId]);
+        if (!knowledgeModelId && models.data?.models[0]) setKnowledgeModelId(models.data.models[0].id);
+    }, [models.data, knowledgeModelId]);
     const save = useMutation({
         mutationFn: async () => {
-            let targetModelId = semanticModelId;
+            let targetModelId = knowledgeModelId;
             if (!targetModelId) {
                 if (!connectionId || !newModelName.trim()) throw new Error(t('Errors.ChooseOrCreateModel'));
-                const model = await executeActionClient<SemanticModelOption>('semantic.create', { name: newModelName, connectionIds: [connectionId] });
+                const model = await executeActionClient<KnowledgeModelOption>('knowledge.create', { name: newModelName, connectionIds: [connectionId] });
                 targetModelId = model.id;
             }
             return executeActionClient(
-                'semantic.createVerifiedQuery',
-                { semanticModelId: targetModelId, sourceConnectionId: connectionId, title, question, sql, sourceType, sourceId },
+                'knowledge.createVerifiedQuery',
+                { knowledgeModelId: targetModelId, sourceConnectionId: connectionId, title, question, sql, sourceType, sourceId },
                 { currentConnectionId: connectionId ?? null },
             );
         },
@@ -81,7 +81,7 @@ export function AddVerifiedQueryDialog({
                 </DialogHeader>
                 <div className="space-y-3">
                     {hasModels ? (
-                        <Select value={semanticModelId} onValueChange={setSemanticModelId}>
+                        <Select value={knowledgeModelId} onValueChange={setKnowledgeModelId}>
                             <SelectTrigger className="w-full">
                                 <SelectValue />
                             </SelectTrigger>
@@ -106,7 +106,7 @@ export function AddVerifiedQueryDialog({
                     </Button>
                     <Button
                         onClick={() => save.mutate()}
-                        disabled={!connectionId || !sql?.trim() || !title.trim() || !question.trim() || (!semanticModelId && !newModelName.trim()) || save.isPending}
+                        disabled={!connectionId || !sql?.trim() || !title.trim() || !question.trim() || (!knowledgeModelId && !newModelName.trim()) || save.isPending}
                     >
                         {save.isPending ? t('Saving') : t('AddVerifiedQuery')}
                     </Button>

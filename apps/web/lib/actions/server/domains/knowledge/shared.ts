@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const semanticDefinitionSchema = z.object({
+export const knowledgeDefinitionSchema = z.object({
     id: z.string().min(1).optional(),
     name: z.string().min(1).max(160),
     kind: z.enum(['entity', 'metric', 'measure', 'dimension', 'relationship']),
@@ -17,11 +17,11 @@ export const semanticDefinitionSchema = z.object({
     to: z.string().max(300).optional(),
 });
 
-export const semanticDataSourceSchema = z.object({ connectionId: z.string(), name: z.string(), type: z.string(), engine: z.string() });
-export const semanticKnowledgeSourceSummarySchema = z.object({
+export const knowledgeDataSourceSchema = z.object({ connectionId: z.string(), name: z.string(), type: z.string(), engine: z.string() });
+export const knowledgeSourceSummarySchema = z.object({
     id: z.string(),
     organizationId: z.string(),
-    semanticModelId: z.string(),
+    knowledgeModelId: z.string(),
     connectionId: z.string().nullable(),
     fileName: z.string(),
     format: z.enum(['markdown', 'yaml', 'text']),
@@ -30,24 +30,24 @@ export const semanticKnowledgeSourceSummarySchema = z.object({
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
 });
-export const semanticKnowledgeSourceSchema = semanticKnowledgeSourceSummarySchema.extend({ contentText: z.string() });
-export const semanticModelOutputSchema = z.object({
+export const knowledgeSourceSchema = knowledgeSourceSummarySchema.extend({ contentText: z.string() });
+export const knowledgeModelOutputSchema = z.object({
     id: z.string(),
     organizationId: z.string(),
     name: z.string(),
     description: z.string().nullable(),
     businessContextMd: z.string(),
     modelYaml: z.string(),
-    model: z.object({ definitions: z.array(semanticDefinitionSchema.extend({ id: z.string() })) }),
-    dataSources: z.array(semanticDataSourceSchema),
+    model: z.object({ definitions: z.array(knowledgeDefinitionSchema.extend({ id: z.string() })) }),
+    dataSources: z.array(knowledgeDataSourceSchema),
     verifiedQueryCount: z.number().int().nonnegative(),
     createdAt: z.union([z.date(), z.string()]),
     updatedAt: z.union([z.date(), z.string()]),
 });
 
-export const semanticVerifiedQuerySchema = z.object({
+export const knowledgeVerifiedQuerySchema = z.object({
     id: z.string(),
-    semanticModelId: z.string(),
+    knowledgeModelId: z.string(),
     sourceConnectionId: z.string(),
     title: z.string(),
     question: z.string(),

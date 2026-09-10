@@ -50,7 +50,7 @@ type Definition = {
     to?: string;
 };
 type ModelDataSource = { connectionId: string; name: string; type: string; engine: string };
-export type SemanticModelView = {
+export type KnowledgeModelView = {
     id: string;
     organizationId: string;
     name: string;
@@ -65,7 +65,7 @@ export type SemanticModelView = {
 };
 type VerifiedQuery = {
     id: string;
-    semanticModelId: string;
+    knowledgeModelId: string;
     sourceConnectionId: string;
     title: string;
     question: string;
@@ -77,7 +77,7 @@ type VerifiedQuery = {
     updatedAt: string;
 };
 
-const modelKey = (modelId: string) => ['semantic-model', modelId] as const;
+const modelKey = (modelId: string) => ['knowledge-model', modelId] as const;
 const connectionIdOf = (item: ConnectionListItem) => item.connection.id!;
 const MonacoYamlEditor = dynamic(() => import('@/components/@dory/ui/monaco-editor'), {
     ssr: false,
@@ -98,7 +98,7 @@ function formatFileSize(bytes: number) {
     return `${(bytes / 1_000_000).toFixed(bytes < 10_000_000 ? 1 : 0)} MB`;
 }
 
-export function CreateSemanticModelDialog({
+export function CreateKnowledgeModelDialog({
     connections,
     trigger,
     initialConnectionId,
@@ -107,15 +107,15 @@ export function CreateSemanticModelDialog({
     connections: ConnectionListItem[];
     trigger?: React.ReactNode;
     initialConnectionId?: string;
-    onCreated?: (model: SemanticModelView) => void;
+    onCreated?: (model: KnowledgeModelView) => void;
 }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [selected, setSelected] = useState<string[]>(initialConnectionId ? [initialConnectionId] : []);
     const create = useMutation({
-        mutationFn: () => executeActionClient<SemanticModelView>('semantic.create', { name, description, connectionIds: selected }),
+        mutationFn: () => executeActionClient<KnowledgeModelView>('knowledge.create', { name, description, connectionIds: selected }),
         onSuccess: model => {
             setOpen(false);
             setName('');
@@ -181,20 +181,20 @@ export function CreateSemanticModelDialog({
     );
 }
 
-function EditSemanticModelDialog({
+function EditKnowledgeModelDialog({
     model,
     organization,
     connections,
     onOpenChange,
     onUpdated,
 }: {
-    model: SemanticModelView | null;
+    model: KnowledgeModelView | null;
     organization: string;
     connections: ConnectionListItem[];
     onOpenChange: (open: boolean) => void;
-    onUpdated: (model: SemanticModelView) => void;
+    onUpdated: (model: KnowledgeModelView) => void;
 }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [connectionIds, setConnectionIds] = useState<string[]>([]);
@@ -206,8 +206,8 @@ function EditSemanticModelDialog({
     const update = useMutation({
         mutationFn: async () => {
             if (!model) throw new Error(t('Errors.SelectModel'));
-            await executeActionClient<SemanticModelView>('semantic.update', { semanticModelId: model.id, name, description }, { organizationId: organization });
-            return executeActionClient<SemanticModelView>('semantic.replaceDataSources', { semanticModelId: model.id, connectionIds }, { organizationId: organization });
+            await executeActionClient<KnowledgeModelView>('knowledge.update', { knowledgeModelId: model.id, name, description }, { organizationId: organization });
+            return executeActionClient<KnowledgeModelView>('knowledge.replaceDataSources', { knowledgeModelId: model.id, connectionIds }, { organizationId: organization });
         },
         onSuccess: updated => {
             onUpdated(updated);
@@ -270,41 +270,41 @@ function EditSemanticModelDialog({
     );
 }
 
-function SemanticModelList({ organization }: { organization: string }) {
-    const t = useTranslations('SemanticContext');
+function KnowledgeModelList({ organization }: { organization: string }) {
+    const t = useTranslations('Knowledge');
     const router = useRouter();
     const queryClient = useQueryClient();
     const [search, setSearch] = useQueryState('q', parseAsString.withDefault(''));
-    const [editingModel, setEditingModel] = useState<SemanticModelView | null>(null);
-    const [deletingModel, setDeletingModel] = useState<SemanticModelView | null>(null);
+    const [editingModel, setEditingModel] = useState<KnowledgeModelView | null>(null);
+    const [deletingModel, setDeletingModel] = useState<KnowledgeModelView | null>(null);
     const deferredSearch = useDeferredValue(search);
     const connections = useQuery({
         queryKey: ['connections', organization],
         queryFn: () => executeActionClient<{ connections: ConnectionListItem[] }>('connection.list', {}, { organizationId: organization }),
     });
     const models = useQuery({
-        queryKey: ['semantic-models', organization, deferredSearch],
-        queryFn: () => executeActionClient<{ models: SemanticModelView[] }>('semantic.list', { query: deferredSearch || undefined }, { organizationId: organization }),
+        queryKey: ['knowledge-models', organization, deferredSearch],
+        queryFn: () => executeActionClient<{ models: KnowledgeModelView[] }>('knowledge.list', { query: deferredSearch || undefined }, { organizationId: organization }),
     });
-    const onCreated = (model: SemanticModelView) => {
-        void queryClient.invalidateQueries({ queryKey: ['semantic-models', organization] });
-        router.push(`/${organization}/semantic/${model.id}`);
+    const onCreated = (model: KnowledgeModelView) => {
+        void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
+        router.push(`/${organization}/knowledge/${model.id}`);
     };
     const connectionItems = connections.data?.connections ?? [];
     const deleteModel = useMutation({
         mutationFn: () => {
             if (!deletingModel) throw new Error(t('Errors.SelectModel'));
-            return executeActionClient('semantic.delete', { semanticModelId: deletingModel.id }, { organizationId: organization, confirmationToken: 'semantic.delete' });
+            return executeActionClient('knowledge.delete', { knowledgeModelId: deletingModel.id }, { organizationId: organization, confirmationToken: 'knowledge.delete' });
         },
         onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: ['semantic-models', organization] });
+            void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
             setDeletingModel(null);
             toast.success(t('ModelDeleted'));
         },
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.DeleteModel')),
     });
-    const updateModel = (_model: SemanticModelView) => {
-        void queryClient.invalidateQueries({ queryKey: ['semantic-models', organization] });
+    const updateModel = (_model: KnowledgeModelView) => {
+        void queryClient.invalidateQueries({ queryKey: ['knowledge-models', organization] });
         setEditingModel(null);
     };
     return (
@@ -315,7 +315,7 @@ function SemanticModelList({ organization }: { organization: string }) {
                         <h1 className="text-2xl font-bold">{t('Title')}</h1>
                         <p className="mt-1 text-muted-foreground">{t('Subtitle')}</p>
                     </div>
-                    <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} />
+                    <CreateKnowledgeModelDialog connections={connectionItems} onCreated={onCreated} />
                 </header>
                 {models.data?.models.length || search ? (
                     <div className="relative max-w-xl">
@@ -341,7 +341,7 @@ function SemanticModelList({ organization }: { organization: string }) {
                                     <tr
                                         key={model.id}
                                         className="cursor-pointer border-t transition-colors hover:bg-muted/30"
-                                        onClick={() => router.push(`/${organization}/semantic/${model.id}`)}
+                                        onClick={() => router.push(`/${organization}/knowledge/${model.id}`)}
                                     >
                                         <td className="px-4 py-4">
                                             <div className="font-medium">{model.name}</div>
@@ -398,7 +398,7 @@ function SemanticModelList({ organization }: { organization: string }) {
                             <h2 className="text-lg font-semibold">{t('EmptyTitle')}</h2>
                             <p className="mt-2 max-w-md text-sm text-muted-foreground">{t('EmptyDescription')}</p>
                             <div className="mt-5 flex gap-2">
-                                <CreateSemanticModelDialog connections={connectionItems} onCreated={onCreated} trigger={<Button>{t('CreateSemanticModel')}</Button>} />
+                                <CreateKnowledgeModelDialog connections={connectionItems} onCreated={onCreated} trigger={<Button>{t('CreateKnowledgeModel')}</Button>} />
                                 <Button variant="outline" disabled>
                                     {t('GenerateFromDataSources')}
                                 </Button>
@@ -406,7 +406,7 @@ function SemanticModelList({ organization }: { organization: string }) {
                         </CardContent>
                     </Card>
                 ) : null}
-                <EditSemanticModelDialog
+                <EditKnowledgeModelDialog
                     model={editingModel}
                     organization={organization}
                     connections={connectionItems}
@@ -440,7 +440,7 @@ function SemanticModelList({ organization }: { organization: string }) {
 }
 
 function DefinitionExpandedRow({ definition, onClose }: { definition: Definition; onClose: () => void }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const fields = [
         [t('DefinitionFields.Description'), definition.description],
         [t('DefinitionFields.Aliases'), definition.aliases?.join(', ')],
@@ -488,12 +488,12 @@ function DefinitionPanel({
     onImport,
     onAskAi,
 }: {
-    model: SemanticModelView;
+    model: KnowledgeModelView;
     onSave: (definitions: Definition[]) => void;
     onImport: () => void;
     onAskAi: () => void;
 }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const [selected, setSelected] = useState<Definition | null>(null);
     const [open, setOpen] = useState(false);
     const [name, setName] = useState('');
@@ -704,15 +704,15 @@ function AskAiDialog({
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    model: SemanticModelView;
+    model: KnowledgeModelView;
     onAccept: (definitions: Definition[]) => void;
 }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const [operation, setOperation] = useState('generate_definitions');
     const [prompt, setPrompt] = useState('');
     const [suggestions, setSuggestions] = useState<Definition[]>([]);
     const generate = useMutation({
-        mutationFn: () => executeActionClient<{ suggestions: Definition[] }>('semantic.generateSuggestions', { semanticModelId: model.id, operation, prompt }),
+        mutationFn: () => executeActionClient<{ suggestions: Definition[] }>('knowledge.generateSuggestions', { knowledgeModelId: model.id, operation, prompt }),
         onSuccess: data => setSuggestions(data.suggestions),
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.GenerateSuggestions')),
     });
@@ -784,10 +784,10 @@ function ImportYamlDialog({
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    model: SemanticModelView;
-    onImported: (model: SemanticModelView) => void;
+    model: KnowledgeModelView;
+    onImported: (model: KnowledgeModelView) => void;
 }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const inputRef = useRef<HTMLInputElement | null>(null);
     const [yaml, setYaml] = useState('');
     const [fileName, setFileName] = useState('');
@@ -820,8 +820,8 @@ function ImportYamlDialog({
     };
     const importYaml = useMutation({
         mutationFn: () =>
-            executeActionClient<SemanticModelView>('semantic.importYaml', {
-                semanticModelId: model.id,
+            executeActionClient<KnowledgeModelView>('knowledge.importYaml', {
+                knowledgeModelId: model.id,
                 source: yaml,
                 fallbackSourceConnectionId,
             }),
@@ -945,18 +945,18 @@ function YamlEditorDialog({
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    model: SemanticModelView;
-    onSaved: (model: SemanticModelView) => void;
+    model: KnowledgeModelView;
+    onSaved: (model: KnowledgeModelView) => void;
 }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const [yaml, setYaml] = useState(model.modelYaml);
     useEffect(() => {
         if (open) setYaml(model.modelYaml);
     }, [open, model.modelYaml]);
     const save = useMutation({
         mutationFn: () =>
-            executeActionClient<SemanticModelView>('semantic.importYaml', {
-                semanticModelId: model.id,
+            executeActionClient<KnowledgeModelView>('knowledge.importYaml', {
+                knowledgeModelId: model.id,
                 source: yaml,
                 fallbackSourceConnectionId: model.dataSources[0]?.connectionId,
                 preserveStatus: true,
@@ -1008,8 +1008,8 @@ function YamlEditorDialog({
     );
 }
 
-function SemanticModelDetail({ organization, semanticModelId }: { organization: string; semanticModelId: string }) {
-    const t = useTranslations('SemanticContext');
+function KnowledgeModelDetail({ organization, knowledgeModelId }: { organization: string; knowledgeModelId: string }) {
+    const t = useTranslations('Knowledge');
     const router = useRouter();
     const queryClient = useQueryClient();
     const [markdown, setMarkdown] = useState('');
@@ -1017,35 +1017,35 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
     const [askAiOpen, setAskAiOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const modelQuery = useQuery({
-        queryKey: modelKey(semanticModelId),
-        queryFn: () => executeActionClient<SemanticModelView>('semantic.get', { semanticModelId }, { organizationId: organization }),
+        queryKey: modelKey(knowledgeModelId),
+        queryFn: () => executeActionClient<KnowledgeModelView>('knowledge.get', { knowledgeModelId }, { organizationId: organization }),
     });
     const queries = useQuery({
-        queryKey: [...modelKey(semanticModelId), 'verified-queries'],
-        queryFn: () => executeActionClient<{ queries: VerifiedQuery[] }>('semantic.listVerifiedQueries', { semanticModelId }, { organizationId: organization }),
+        queryKey: [...modelKey(knowledgeModelId), 'verified-queries'],
+        queryFn: () => executeActionClient<{ queries: VerifiedQuery[] }>('knowledge.listVerifiedQueries', { knowledgeModelId }, { organizationId: organization }),
     });
     useEffect(() => {
         if (modelQuery.data) setMarkdown(modelQuery.data.businessContextMd);
     }, [modelQuery.data]);
-    const setModel = (model: SemanticModelView) => queryClient.setQueryData(modelKey(semanticModelId), model);
+    const setModel = (model: KnowledgeModelView) => queryClient.setQueryData(modelKey(knowledgeModelId), model);
     const update = useMutation({
-        mutationFn: (input: Record<string, unknown>) => executeActionClient<SemanticModelView>('semantic.update', { semanticModelId, ...input }, { organizationId: organization }),
+        mutationFn: (input: Record<string, unknown>) => executeActionClient<KnowledgeModelView>('knowledge.update', { knowledgeModelId, ...input }, { organizationId: organization }),
         onSuccess: setModel,
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.Update')),
     });
     const saveDefinitions = useMutation({
         mutationFn: (definitions: Definition[]) =>
-            executeActionClient<SemanticModelView>('semantic.saveDefinitions', { semanticModelId, definitions }, { organizationId: organization }),
+            executeActionClient<KnowledgeModelView>('knowledge.saveDefinitions', { knowledgeModelId, definitions }, { organizationId: organization }),
         onSuccess: setModel,
         onError: error => toast.error(error instanceof Error ? error.message : t('Errors.SaveDefinitions')),
     });
     const deleteModel = useMutation({
-        mutationFn: () => executeActionClient('semantic.delete', { semanticModelId }, { organizationId: organization, confirmationToken: 'semantic.delete' }),
-        onSuccess: () => router.push(`/${organization}/semantic`),
+        mutationFn: () => executeActionClient('knowledge.delete', { knowledgeModelId }, { organizationId: organization, confirmationToken: 'knowledge.delete' }),
+        onSuccess: () => router.push(`/${organization}/knowledge`),
     });
     const deleteQuery = useMutation({
-        mutationFn: (id: string) => executeActionClient('semantic.deleteVerifiedQuery', { semanticModelId, id }, { organizationId: organization }),
-        onSuccess: () => void queryClient.invalidateQueries({ queryKey: [...modelKey(semanticModelId), 'verified-queries'] }),
+        mutationFn: (id: string) => executeActionClient('knowledge.deleteVerifiedQuery', { knowledgeModelId, id }, { organizationId: organization }),
+        onSuccess: () => void queryClient.invalidateQueries({ queryKey: [...modelKey(knowledgeModelId), 'verified-queries'] }),
     });
     if (modelQuery.isLoading) return <div className="p-8 text-sm text-muted-foreground">{t('LoadingModel')}</div>;
     if (!modelQuery.data) return <div className="p-8 text-sm text-destructive">{t('ModelNotFound')}</div>;
@@ -1055,7 +1055,7 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
             <main className="container mx-auto flex flex-col gap-6 px-12 pt-4 pb-12 lg:px-12 lg:pb-12 xl:px-8 xl:pb-8 2xl:px-4 2xl:pb-4">
                 <header className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                        <Link className="text-sm text-muted-foreground hover:text-foreground" href={`/${organization}/semantic`}>
+                        <Link className="text-sm text-muted-foreground hover:text-foreground" href={`/${organization}/knowledge`}>
                             {t('Title')}
                         </Link>
                         <h1 className="mt-2 text-2xl font-bold">{model.name}</h1>
@@ -1150,7 +1150,7 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
                     <TabsContent value="sources" className="pt-4">
                         <KnowledgeSourcesPanel
                             organization={organization}
-                            semanticModelId={semanticModelId}
+                            knowledgeModelId={knowledgeModelId}
                             dataSources={model.dataSources}
                             definitions={model.model.definitions}
                             onImportDefinitions={definitions => saveDefinitions.mutate(definitions)}
@@ -1165,11 +1165,11 @@ function SemanticModelDetail({ organization, semanticModelId }: { organization: 
     );
 }
 
-export function SemanticPage() {
-    const params = useParams<{ organization: string; semanticModelId?: string }>();
-    return params.semanticModelId ? (
-        <SemanticModelDetail organization={params.organization} semanticModelId={params.semanticModelId} />
+export function KnowledgePage() {
+    const params = useParams<{ organization: string; knowledgeModelId?: string }>();
+    return params.knowledgeModelId ? (
+        <KnowledgeModelDetail organization={params.organization} knowledgeModelId={params.knowledgeModelId} />
     ) : (
-        <SemanticModelList organization={params.organization} />
+        <KnowledgeModelList organization={params.organization} />
     );
 }

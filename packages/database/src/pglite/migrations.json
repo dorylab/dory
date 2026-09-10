@@ -512,5 +512,36 @@
     "bps": true,
     "folderMillis": 1788949200000,
     "hash": "111e394640b3909ab353ef585d02acf1c5a46ccd8d66b40658f0918035454fd9"
+  },
+  {
+    "sql": [
+      "ALTER TABLE \"semantic_models\" RENAME TO \"knowledge_models\";\n",
+      "\nALTER TABLE \"semantic_model_sources\" RENAME TO \"knowledge_model_sources\";\n",
+      "\nALTER TABLE \"semantic_model_knowledge_sources\" RENAME TO \"knowledge_sources\";\n",
+      "\nALTER TABLE \"semantic_verified_queries\" RENAME TO \"knowledge_verified_queries\";\n",
+      "\nALTER TABLE \"knowledge_model_sources\" RENAME COLUMN \"semantic_model_id\" TO \"knowledge_model_id\";\n",
+      "\nALTER TABLE \"knowledge_sources\" RENAME COLUMN \"semantic_model_id\" TO \"knowledge_model_id\";\n",
+      "\nALTER TABLE \"knowledge_verified_queries\" RENAME COLUMN \"semantic_model_id\" TO \"knowledge_model_id\";\n",
+      "\nALTER TABLE \"knowledge_model_sources\" RENAME CONSTRAINT \"pk_semantic_model_sources\" TO \"pk_knowledge_model_sources\";\n",
+      "\nALTER TABLE \"knowledge_model_sources\" RENAME CONSTRAINT \"semantic_model_sources_semantic_model_id_fkey\" TO \"knowledge_model_sources_knowledge_model_id_fkey\";\n",
+      "\nALTER TABLE \"knowledge_model_sources\" RENAME CONSTRAINT \"semantic_model_sources_connection_id_fkey\" TO \"knowledge_model_sources_connection_id_fkey\";\n",
+      "\nALTER TABLE \"knowledge_sources\" RENAME CONSTRAINT \"semantic_model_knowledge_sources_pkey\" TO \"knowledge_sources_pkey\";\n",
+      "\nALTER TABLE \"knowledge_sources\" RENAME CONSTRAINT \"semantic_model_knowledge_sources_semantic_model_id_fkey\" TO \"knowledge_sources_knowledge_model_id_fkey\";\n",
+      "\nALTER TABLE \"knowledge_sources\" RENAME CONSTRAINT \"semantic_model_knowledge_sources_connection_id_fkey\" TO \"knowledge_sources_connection_id_fkey\";\n",
+      "\nALTER TABLE \"knowledge_verified_queries\" RENAME CONSTRAINT \"semantic_verified_queries_pkey\" TO \"knowledge_verified_queries_pkey\";\n",
+      "\nALTER TABLE \"knowledge_verified_queries\" RENAME CONSTRAINT \"semantic_verified_queries_semantic_model_id_fkey\" TO \"knowledge_verified_queries_knowledge_model_id_fkey\";\n",
+      "\nALTER TABLE \"knowledge_verified_queries\" RENAME CONSTRAINT \"semantic_verified_queries_source_connection_id_fkey\" TO \"knowledge_verified_queries_source_connection_id_fkey\";\n",
+      "\nALTER INDEX \"uidx_semantic_models_org_name\" RENAME TO \"uidx_knowledge_models_org_name\";\n",
+      "\nALTER INDEX \"idx_semantic_models_org_updated\" RENAME TO \"idx_knowledge_models_org_updated\";\n",
+      "\nALTER INDEX \"idx_semantic_model_sources_connection\" RENAME TO \"idx_knowledge_model_sources_connection\";\n",
+      "\nALTER INDEX \"uidx_semantic_knowledge_sources_model_file\" RENAME TO \"uidx_knowledge_sources_model_file\";\n",
+      "\nALTER INDEX \"idx_semantic_knowledge_sources_org_model\" RENAME TO \"idx_knowledge_sources_org_model\";\n",
+      "\nALTER INDEX \"idx_semantic_knowledge_sources_connection\" RENAME TO \"idx_knowledge_sources_connection\";\n",
+      "\nALTER INDEX \"idx_semantic_verified_queries_model_updated\" RENAME TO \"idx_knowledge_verified_queries_model_updated\";\n",
+      "\nALTER INDEX \"idx_semantic_verified_queries_connection\" RENAME TO \"idx_knowledge_verified_queries_connection\";\n"
+    ],
+    "bps": true,
+    "folderMillis": 1788949800000,
+    "hash": "a364cf46ff992a465c7fd22139007e9ee859b7b94ce953f13b47b28204bb6e35"
   }
 ]

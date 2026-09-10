@@ -96,7 +96,7 @@ export function AppSidebar({ initialUser = null, organizationId, enterpriseLicen
 
     const organizationItems = [
         { title: t('DataSources'), url: dataSourcesUrl, icon: Database, requiresConnection: false },
-        { title: t('SemanticContext'), url: `/${organization}/semantic`, matchPrefix: `/${organization}/semantic`, icon: BrainCircuit, requiresConnection: false },
+        { title: t('Knowledge'), url: `/${organization}/knowledge`, matchPrefix: `/${organization}/knowledge`, icon: BrainCircuit, requiresConnection: false },
         { title: t('AgentRuns'), url: `/${organization}/agent-runs`, icon: Bot, requiresConnection: false },
     ];
     const navMain = connectionId

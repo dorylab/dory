@@ -15,7 +15,7 @@ import { getConnectionLocationLabel } from '@/lib/connection/display';
 import { DatabaseTypeIcon, getDatabaseTypeMeta } from './database-type-icon';
 import { FileTypeIcon, getFileTypeLabel } from './file-type-icon';
 import { getConnectionEnvironmentOption } from '../constants';
-import { AddDataSourceToSemanticModelDialog } from '@/components/semantic/add-data-source-dialog';
+import { AddDataSourceToKnowledgeModelDialog } from '@/components/knowledge/add-data-source-dialog';
 
 type Props = {
     connectionItem: ConnectionListItem;
@@ -57,9 +57,9 @@ function getLocalFilesMeta(connection: ConnectionListItem['connection']) {
 
 export default function ConnectionCard({ connectionItem, id, connectLoading, errorMessage, onEdit, onConnect, onDuplicateRequest, onDeleteRequest }: Props) {
     const t = useTranslations('Connections');
-    const semanticT = useTranslations('SemanticContext');
+    const knowledgeT = useTranslations('Knowledge');
     const hasMounted = useHasMounted();
-    const [semanticDialogOpen, setSemanticDialogOpen] = useState(false);
+    const [knowledgeDialogOpen, setKnowledgeDialogOpen] = useState(false);
 
     const connection = connectionItem.connection;
     const locationLabel = getConnectionLocationLabel(connection);
@@ -219,9 +219,9 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" side="bottom" onClick={e => e.stopPropagation()}>
-                            <DropdownMenuItem onSelect={() => setSemanticDialogOpen(true)}>
+                            <DropdownMenuItem onSelect={() => setKnowledgeDialogOpen(true)}>
                                 <BrainCircuit className="h-4 w-4" />
-                                {semanticT('AddToSemanticModel')}
+                                {knowledgeT('AddToKnowledgeModel')}
                             </DropdownMenuItem>
                             {!isLocalFiles ? (
                                 <DropdownMenuItem
@@ -246,7 +246,7 @@ export default function ConnectionCard({ connectionItem, id, connectLoading, err
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <AddDataSourceToSemanticModelDialog open={semanticDialogOpen} onOpenChange={setSemanticDialogOpen} connectionId={id} />
+                    <AddDataSourceToKnowledgeModelDialog open={knowledgeDialogOpen} onOpenChange={setKnowledgeDialogOpen} connectionId={id} />
                 </div>
             </div>
         </DataSourceCard>

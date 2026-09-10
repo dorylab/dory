@@ -7,7 +7,7 @@ import { Button } from '@/registry/new-york-v4/ui/button';
 import { AddVerifiedQueryDialog } from './add-verified-query-dialog';
 
 export function AgentRunVerifiedQueryButton({ connectionId, sql, workId, title }: { connectionId: string; sql: string; workId: string; title: string }) {
-    const t = useTranslations('SemanticContext');
+    const t = useTranslations('Knowledge');
     const [open, setOpen] = useState(false);
 
     return (

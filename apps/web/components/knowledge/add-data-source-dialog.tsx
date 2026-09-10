@@ -13,27 +13,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 type ModelOption = { id: string; name: string; dataSources: Array<{ connectionId: string }> };
 
-export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connectionId }: { open: boolean; onOpenChange: (open: boolean) => void; connectionId: string }) {
-    const t = useTranslations('SemanticContext');
-    const [semanticModelId, setSemanticModelId] = useState('');
+export function AddDataSourceToKnowledgeModelDialog({ open, onOpenChange, connectionId }: { open: boolean; onOpenChange: (open: boolean) => void; connectionId: string }) {
+    const t = useTranslations('Knowledge');
+    const [knowledgeModelId, setKnowledgeModelId] = useState('');
     const [newModelName, setNewModelName] = useState('');
     const models = useQuery({
-        queryKey: ['semantic-models-for-source', connectionId],
+        queryKey: ['knowledge-models-for-source', connectionId],
         enabled: open,
-        queryFn: () => executeActionClient<{ models: ModelOption[] }>('semantic.list', {}),
+        queryFn: () => executeActionClient<{ models: ModelOption[] }>('knowledge.list', {}),
     });
     const available = useMemo(
         () => models.data?.models.filter(model => !model.dataSources.some(source => source.connectionId === connectionId)) ?? [],
         [connectionId, models.data?.models],
     );
     useEffect(() => {
-        if (!semanticModelId && available[0]) setSemanticModelId(available[0].id);
-    }, [available, semanticModelId]);
+        if (!knowledgeModelId && available[0]) setKnowledgeModelId(available[0].id);
+    }, [available, knowledgeModelId]);
     const save = useMutation({
         mutationFn: () =>
-            semanticModelId
-                ? executeActionClient('semantic.addDataSource', { semanticModelId, connectionId })
-                : executeActionClient('semantic.create', { name: newModelName, connectionIds: [connectionId] }),
+            knowledgeModelId
+                ? executeActionClient('knowledge.addDataSource', { knowledgeModelId, connectionId })
+                : executeActionClient('knowledge.create', { name: newModelName, connectionIds: [connectionId] }),
         onSuccess: () => {
             toast.success(t('DataSourceAdded'));
             onOpenChange(false);
@@ -44,11 +44,11 @@ export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connect
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>{t('AddToSemanticModel')}</DialogTitle>
+                    <DialogTitle>{t('AddToKnowledgeModel')}</DialogTitle>
                     <DialogDescription>{t('AddDataSourceDescription')}</DialogDescription>
                 </DialogHeader>
                 {available.length ? (
-                    <Select value={semanticModelId} onValueChange={setSemanticModelId}>
+                    <Select value={knowledgeModelId} onValueChange={setKnowledgeModelId}>
                         <SelectTrigger className="w-full">
                             <SelectValue />
                         </SelectTrigger>
@@ -67,8 +67,8 @@ export function AddDataSourceToSemanticModelDialog({ open, onOpenChange, connect
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         {t('Cancel')}
                     </Button>
-                    <Button onClick={() => save.mutate()} disabled={(!semanticModelId && !newModelName.trim()) || save.isPending}>
-                        {save.isPending ? t('Saving') : semanticModelId ? t('AddDataSource') : t('CreateModel')}
+                    <Button onClick={() => save.mutate()} disabled={(!knowledgeModelId && !newModelName.trim()) || save.isPending}>
+                        {save.isPending ? t('Saving') : knowledgeModelId ? t('AddDataSource') : t('CreateModel')}
                     </Button>
                 </DialogFooter>
             </DialogContent>

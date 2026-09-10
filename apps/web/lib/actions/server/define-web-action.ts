@@ -49,7 +49,7 @@ function getDefaultDesktopAuthMode(action: Pick<ActionDefinition<unknown, unknow
         return 'local-workspace';
     }
 
-    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'resultSet', 'artifact', 'comparison', 'semantic'].includes(action.domain)) {
+    if (['connection', 'tab', 'savedQuery', 'schema', 'table', 'resultSet', 'artifact', 'comparison', 'knowledge'].includes(action.domain)) {
         return 'local-workspace';
     }
 

@@ -28,7 +28,7 @@ const AGENT_SCOPES = [
     'monitoring:read',
     'comparisons:read',
     'comparisons:write',
-    'semantic:read',
+    'knowledge:read',
 ];
 
 async function createActionContext(options: CreateDoryChatToolsOptions): Promise<ActionContext<WebActionServices>> {

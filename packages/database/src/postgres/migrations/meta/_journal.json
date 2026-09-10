@@ -225,6 +225,13 @@
             "when": 1788949200000,
             "tag": "0032_semantic_knowledge_sources",
             "breakpoints": true
+        },
+        {
+            "idx": 32,
+            "version": "7",
+            "when": 1788949800000,
+            "tag": "0033_knowledge",
+            "breakpoints": true
         }
     ]
 }

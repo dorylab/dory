@@ -4,42 +4,42 @@ import { parseDocument, stringify } from 'yaml';
 import { getClient } from '@dory/database/postgres/client';
 import {
     connections,
-    semanticModelKnowledgeSources,
-    semanticModels,
-    semanticModelSources,
-    semanticVerifiedQueries,
-    type SemanticDefinition,
-    type SemanticKnowledgeSourceFormat,
-    type SemanticModelDocument,
+    knowledgeSources,
+    knowledgeModels,
+    knowledgeModelSources,
+    knowledgeVerifiedQueries,
+    type KnowledgeDefinition,
+    type KnowledgeSourceFormat,
+    type KnowledgeModelDocument,
 } from '@dory/database/postgres/schemas';
 import { DatabaseError } from '@dory/shared/errors/DatabaseError';
 import type { PostgresDBClient } from '@dory/shared';
 
-export const SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES = 10_000_000;
-export type SemanticModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
-export type SemanticModelDetail = {
+export const KNOWLEDGE_SOURCE_MAX_BYTES = 10_000_000;
+export type KnowledgeModelDataSourceDetail = { connectionId: string; name: string; type: string; engine: string };
+export type KnowledgeModelDetail = {
     id: string;
     organizationId: string;
     name: string;
     description: string | null;
     businessContextMd: string;
     modelYaml: string;
-    model: SemanticModelDocument;
-    dataSources: SemanticModelDataSourceDetail[];
+    model: KnowledgeModelDocument;
+    dataSources: KnowledgeModelDataSourceDetail[];
     verifiedQueryCount: number;
     createdAt: Date;
     updatedAt: Date;
 };
 
-export function validateSemanticKnowledgeSource(fileName: string, contentText: string) {
+export function validateKnowledgeSource(fileName: string, contentText: string) {
     const normalizedName = fileName.trim();
     if (!normalizedName || normalizedName.includes('/') || normalizedName.includes('\\') || normalizedName.includes('\0')) throw new Error('Enter a valid file name.');
     const extension = normalizedName.split('.').pop()?.toLowerCase();
-    const format: SemanticKnowledgeSourceFormat | undefined =
+    const format: KnowledgeSourceFormat | undefined =
         extension === 'md' || extension === 'markdown' ? 'markdown' : extension === 'yaml' || extension === 'yml' ? 'yaml' : extension === 'txt' ? 'text' : undefined;
     if (!format) throw new Error('Only Markdown, YAML, and TXT files are supported.');
     const byteSize = Buffer.byteLength(contentText, 'utf8');
-    if (byteSize > SEMANTIC_KNOWLEDGE_SOURCE_MAX_BYTES) throw new Error('Knowledge source files must be 10 MB or smaller.');
+    if (byteSize > KNOWLEDGE_SOURCE_MAX_BYTES) throw new Error('Knowledge source files must be 10 MB or smaller.');
     if (format === 'yaml') {
         const document = parseDocument(contentText);
         if (document.errors.length) throw new Error(document.errors[0]?.message ?? 'Invalid YAML.');
@@ -47,13 +47,13 @@ export function validateSemanticKnowledgeSource(fileName: string, contentText: s
     return { fileName: normalizedName, format, contentText, byteSize };
 }
 
-function normalizeDefinition(value: unknown): SemanticDefinition {
+function normalizeDefinition(value: unknown): KnowledgeDefinition {
     const input = value as Record<string, unknown>;
     const kind = String(input.kind ?? '');
-    if (!['entity', 'metric', 'measure', 'dimension', 'relationship'].includes(kind)) throw new Error('Unsupported semantic definition type.');
+    if (!['entity', 'metric', 'measure', 'dimension', 'relationship'].includes(kind)) throw new Error('Unsupported knowledge definition type.');
     const name = typeof input.name === 'string' ? input.name.trim() : '';
     const sourceConnectionId = typeof input.sourceConnectionId === 'string' ? input.sourceConnectionId.trim() : '';
-    if (!name) throw new Error('A semantic definition name is required.');
+    if (!name) throw new Error('A knowledge definition name is required.');
     if (!sourceConnectionId) throw new Error(`A data source is required for "${name}".`);
     const list = (key: string) =>
         Array.isArray(input[key]) ? input[key].filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map(item => item.trim()) : undefined;
@@ -61,7 +61,7 @@ function normalizeDefinition(value: unknown): SemanticDefinition {
     return {
         id: optional('id') ?? `${kind}:${name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
         name,
-        kind: kind as SemanticDefinition['kind'],
+        kind: kind as KnowledgeDefinition['kind'],
         status: input.status === 'unverified' ? 'unverified' : 'verified',
         sourceConnectionId,
         ...(optional('description') ? { description: optional('description') } : {}),
@@ -76,13 +76,13 @@ function normalizeDefinition(value: unknown): SemanticDefinition {
     };
 }
 
-export function validateSemanticModelDocument(value: unknown, sourceIds?: ReadonlySet<string>): SemanticModelDocument {
+export function validateKnowledgeModelDocument(value: unknown, sourceIds?: ReadonlySet<string>): KnowledgeModelDocument {
     const raw = value as { definitions?: unknown };
     const definitions = Array.isArray(raw?.definitions) ? raw.definitions.map(normalizeDefinition) : [];
     const ids = new Set<string>();
     for (const definition of definitions) {
-        if (ids.has(definition.id)) throw new Error(`Duplicate semantic definition: ${definition.id}`);
-        if (sourceIds && !sourceIds.has(definition.sourceConnectionId)) throw new Error(`Data source for "${definition.name}" is not linked to this semantic model.`);
+        if (ids.has(definition.id)) throw new Error(`Duplicate knowledge definition: ${definition.id}`);
+        if (sourceIds && !sourceIds.has(definition.sourceConnectionId)) throw new Error(`Data source for "${definition.name}" is not linked to this knowledge model.`);
         if (definition.filters?.some(filter => /;|--|\/\*/.test(filter))) throw new Error(`Filter for "${definition.name}" must be a single expression without comments.`);
         ids.add(definition.id);
     }
@@ -108,16 +108,16 @@ export function validateSemanticModelDocument(value: unknown, sourceIds?: Readon
     return { definitions };
 }
 
-export function serializeSemanticModel(model: SemanticModelDocument) {
-    const groups = new Map<string, SemanticDefinition[]>();
+export function serializeKnowledgeModel(model: KnowledgeModelDocument) {
+    const groups = new Map<string, KnowledgeDefinition[]>();
     for (const definition of model.definitions) {
         const key = `${definition.sourceConnectionId}:${definition.source ?? '__model__'}`;
         groups.set(key, [...(groups.get(key) ?? []), definition]);
     }
     const cubes = [...groups.values()].map((definitions, index) => {
         const first = definitions[0]!;
-        const cubeName = (first.source ?? `semantic_source_${index + 1}`).replace(/[^a-zA-Z0-9_]/g, '_');
-        const encode = (definition: SemanticDefinition) => ({
+        const cubeName = (first.source ?? `knowledge_source_${index + 1}`).replace(/[^a-zA-Z0-9_]/g, '_');
+        const encode = (definition: KnowledgeDefinition) => ({
             name: definition.name,
             ...(definition.description ? { description: definition.description } : {}),
             ...(definition.expression ? { sql: definition.expression } : {}),
@@ -151,12 +151,12 @@ export function serializeSemanticModel(model: SemanticModelDocument) {
     return stringify({ cubes });
 }
 
-export function parseSemanticYaml(source: string, fallbackSourceConnectionId?: string, markImportedDefinitionsUnverified = true): SemanticModelDocument {
+export function parseKnowledgeYaml(source: string, fallbackSourceConnectionId?: string, markImportedDefinitionsUnverified = true): KnowledgeModelDocument {
     const document = parseDocument(source);
     if (document.errors.length) throw new Error(document.errors[0]?.message ?? 'Invalid YAML.');
     const value = document.toJS() as { cubes?: Array<Record<string, unknown>>; definitions?: Array<Record<string, unknown>> };
     if (value.definitions) {
-        return validateSemanticModelDocument({
+        return validateKnowledgeModelDocument({
             definitions: value.definitions.map(item => ({
                 ...item,
                 sourceConnectionId: item.sourceConnectionId ?? fallbackSourceConnectionId,
@@ -172,7 +172,7 @@ export function parseSemanticYaml(source: string, fallbackSourceConnectionId?: s
         const cubeDory = (cube.meta as { dory?: Record<string, unknown> } | undefined)?.dory ?? {};
         const sourceConnectionId = String(cubeDory.sourceConnectionId ?? fallbackSourceConnectionId ?? '');
         const sourceTable = typeof cube.sql_table === 'string' ? cube.sql_table : typeof cube.sqlTable === 'string' ? cube.sqlTable : String(cube.name ?? '');
-        const decode = (item: Record<string, unknown>, defaultKind: SemanticDefinition['kind']) => {
+        const decode = (item: Record<string, unknown>, defaultKind: KnowledgeDefinition['kind']) => {
             const dory = (item.meta as { dory?: Record<string, unknown> } | undefined)?.dory ?? {};
             return {
                 ...item,
@@ -214,10 +214,10 @@ export function parseSemanticYaml(source: string, fallbackSourceConnectionId?: s
         const relationships = asRecords(cube.joins).map(item => ({ ...decode(item, 'relationship'), from: item.from ?? cube.name, to: item.to ?? item.name }));
         return [...entities, ...measures, ...dimensions, ...relationships];
     });
-    return validateSemanticModelDocument({ definitions });
+    return validateKnowledgeModelDocument({ definitions });
 }
 
-export class PostgresSemanticContextRepository {
+export class PostgresKnowledgeRepository {
     private db!: PostgresDBClient;
 
     async init() {
@@ -231,7 +231,7 @@ export class PostgresSemanticContextRepository {
     }
 
     parseYamlForImport(source: string, fallbackSourceConnectionId?: string) {
-        return parseSemanticYaml(source, fallbackSourceConnectionId);
+        return parseKnowledgeYaml(source, fallbackSourceConnectionId);
     }
 
     private async assertConnections(organizationId: string, connectionIds: string[]) {
@@ -249,34 +249,34 @@ export class PostgresSemanticContextRepository {
         if (!modelIds.length) return [];
         return this.db
             .select({
-                semanticModelId: semanticModelSources.semanticModelId,
+                knowledgeModelId: knowledgeModelSources.knowledgeModelId,
                 connectionId: connections.id,
                 name: connections.name,
                 type: connections.type,
                 engine: connections.engine,
             })
-            .from(semanticModelSources)
-            .innerJoin(connections, eq(connections.id, semanticModelSources.connectionId))
-            .where(inArray(semanticModelSources.semanticModelId, modelIds));
+            .from(knowledgeModelSources)
+            .innerJoin(connections, eq(connections.id, knowledgeModelSources.connectionId))
+            .where(inArray(knowledgeModelSources.knowledgeModelId, modelIds));
     }
 
-    private async touchModel(semanticModelId: string) {
-        await this.db.update(semanticModels).set({ updatedAt: new Date() }).where(eq(semanticModels.id, semanticModelId));
+    private async touchModel(knowledgeModelId: string) {
+        await this.db.update(knowledgeModels).set({ updatedAt: new Date() }).where(eq(knowledgeModels.id, knowledgeModelId));
     }
 
-    async listModels(input: { organizationId: string; query?: string | null; connectionId?: string | null }): Promise<SemanticModelDetail[]> {
+    async listModels(input: { organizationId: string; query?: string | null; connectionId?: string | null }): Promise<KnowledgeModelDetail[]> {
         this.assertInited();
-        let rows = await this.db.select().from(semanticModels).where(eq(semanticModels.organizationId, input.organizationId)).orderBy(desc(semanticModels.updatedAt));
+        let rows = await this.db.select().from(knowledgeModels).where(eq(knowledgeModels.organizationId, input.organizationId)).orderBy(desc(knowledgeModels.updatedAt));
         const dataSources = await this.sourceDetails(rows.map(row => row.id));
         if (input.connectionId) {
-            const allowed = new Set(dataSources.filter(source => source.connectionId === input.connectionId).map(source => source.semanticModelId));
+            const allowed = new Set(dataSources.filter(source => source.connectionId === input.connectionId).map(source => source.knowledgeModelId));
             rows = rows.filter(row => allowed.has(row.id));
         }
         const query = input.query?.trim().toLowerCase();
         if (query)
             rows = rows.filter(row =>
                 `${row.name} ${row.description ?? ''} ${dataSources
-                    .filter(source => source.semanticModelId === row.id)
+                    .filter(source => source.knowledgeModelId === row.id)
                     .map(source => `${source.name} ${source.engine}`)
                     .join(' ')}`
                     .toLowerCase()
@@ -285,101 +285,101 @@ export class PostgresSemanticContextRepository {
         const ids = rows.map(row => row.id);
         const verified = ids.length
             ? await this.db
-                  .select({ semanticModelId: semanticVerifiedQueries.semanticModelId })
-                  .from(semanticVerifiedQueries)
-                  .where(inArray(semanticVerifiedQueries.semanticModelId, ids))
+                  .select({ knowledgeModelId: knowledgeVerifiedQueries.knowledgeModelId })
+                  .from(knowledgeVerifiedQueries)
+                  .where(inArray(knowledgeVerifiedQueries.knowledgeModelId, ids))
             : [];
         return rows.map(row => ({
             ...row,
-            model: validateSemanticModelDocument(row.modelJson),
-            dataSources: dataSources.filter(source => source.semanticModelId === row.id).map(({ semanticModelId: _, ...source }) => source),
-            verifiedQueryCount: verified.filter(queryRow => queryRow.semanticModelId === row.id).length,
+            model: validateKnowledgeModelDocument(row.modelJson),
+            dataSources: dataSources.filter(source => source.knowledgeModelId === row.id).map(({ knowledgeModelId: _, ...source }) => source),
+            verifiedQueryCount: verified.filter(queryRow => queryRow.knowledgeModelId === row.id).length,
         }));
     }
 
-    async getModel(input: { organizationId: string; semanticModelId: string }) {
+    async getModel(input: { organizationId: string; knowledgeModelId: string }) {
         const models = await this.listModels({ organizationId: input.organizationId });
-        const found = models.find(item => item.id === input.semanticModelId);
-        if (!found) throw new Error('Semantic model not found.');
+        const found = models.find(item => item.id === input.knowledgeModelId);
+        if (!found) throw new Error('Knowledge model not found.');
         return found;
     }
 
     async createModel(input: { organizationId: string; name: string; description?: string | null; connectionIds: string[] }) {
         const connectionIds = await this.assertConnections(input.organizationId, input.connectionIds);
         const [model] = await this.db
-            .insert(semanticModels)
+            .insert(knowledgeModels)
             .values({ organizationId: input.organizationId, name: input.name.trim(), description: input.description?.trim() || null })
             .returning();
-        await this.db.insert(semanticModelSources).values(connectionIds.map(connectionId => ({ semanticModelId: model!.id, connectionId })));
-        return this.getModel({ organizationId: input.organizationId, semanticModelId: model!.id });
+        await this.db.insert(knowledgeModelSources).values(connectionIds.map(connectionId => ({ knowledgeModelId: model!.id, connectionId })));
+        return this.getModel({ organizationId: input.organizationId, knowledgeModelId: model!.id });
     }
 
-    async updateModel(input: { organizationId: string; semanticModelId: string; name?: string; description?: string | null; businessContextMd?: string }) {
+    async updateModel(input: { organizationId: string; knowledgeModelId: string; name?: string; description?: string | null; businessContextMd?: string }) {
         await this.getModel(input);
         await this.db
-            .update(semanticModels)
+            .update(knowledgeModels)
             .set({
                 ...(input.name !== undefined ? { name: input.name.trim() } : {}),
                 ...(input.description !== undefined ? { description: input.description?.trim() || null } : {}),
                 ...(input.businessContextMd !== undefined ? { businessContextMd: input.businessContextMd } : {}),
             })
-            .where(and(eq(semanticModels.id, input.semanticModelId), eq(semanticModels.organizationId, input.organizationId)));
+            .where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
         return this.getModel(input);
     }
 
-    async deleteModel(input: { organizationId: string; semanticModelId: string }) {
+    async deleteModel(input: { organizationId: string; knowledgeModelId: string }) {
         await this.getModel(input);
-        await this.db.delete(semanticModels).where(and(eq(semanticModels.id, input.semanticModelId), eq(semanticModels.organizationId, input.organizationId)));
+        await this.db.delete(knowledgeModels).where(and(eq(knowledgeModels.id, input.knowledgeModelId), eq(knowledgeModels.organizationId, input.organizationId)));
     }
 
-    async saveDefinitions(input: { organizationId: string; semanticModelId: string; definitions: unknown }) {
+    async saveDefinitions(input: { organizationId: string; knowledgeModelId: string; definitions: unknown }) {
         const model = await this.getModel(input);
-        const document = validateSemanticModelDocument({ definitions: input.definitions }, new Set(model.dataSources.map(source => source.connectionId)));
+        const document = validateKnowledgeModelDocument({ definitions: input.definitions }, new Set(model.dataSources.map(source => source.connectionId)));
         await this.db
-            .update(semanticModels)
-            .set({ modelJson: document, modelYaml: serializeSemanticModel(document) })
-            .where(eq(semanticModels.id, model.id));
+            .update(knowledgeModels)
+            .set({ modelJson: document, modelYaml: serializeKnowledgeModel(document) })
+            .where(eq(knowledgeModels.id, model.id));
         return this.getModel(input);
     }
 
-    async importYaml(input: { organizationId: string; semanticModelId: string; source: string; fallbackSourceConnectionId?: string; preserveStatus?: boolean }) {
-        const document = parseSemanticYaml(input.source, input.fallbackSourceConnectionId, !input.preserveStatus);
+    async importYaml(input: { organizationId: string; knowledgeModelId: string; source: string; fallbackSourceConnectionId?: string; preserveStatus?: boolean }) {
+        const document = parseKnowledgeYaml(input.source, input.fallbackSourceConnectionId, !input.preserveStatus);
         return this.saveDefinitions({ ...input, definitions: document.definitions });
     }
 
-    async addDataSource(input: { organizationId: string; semanticModelId: string; connectionId: string }) {
+    async addDataSource(input: { organizationId: string; knowledgeModelId: string; connectionId: string }) {
         await this.getModel(input);
         await this.assertConnections(input.organizationId, [input.connectionId]);
-        await this.db.insert(semanticModelSources).values({ semanticModelId: input.semanticModelId, connectionId: input.connectionId }).onConflictDoNothing();
-        await this.touchModel(input.semanticModelId);
+        await this.db.insert(knowledgeModelSources).values({ knowledgeModelId: input.knowledgeModelId, connectionId: input.connectionId }).onConflictDoNothing();
+        await this.touchModel(input.knowledgeModelId);
         return this.getModel(input);
     }
 
-    async removeDataSource(input: { organizationId: string; semanticModelId: string; connectionId: string }) {
+    async removeDataSource(input: { organizationId: string; knowledgeModelId: string; connectionId: string }) {
         const model = await this.getModel(input);
-        if (model.dataSources.length <= 1) throw new Error('A semantic model must have at least one data source.');
+        if (model.dataSources.length <= 1) throw new Error('A knowledge model must have at least one data source.');
         if (model.model.definitions.some(item => item.sourceConnectionId === input.connectionId))
             throw new Error('Remove or reassign definitions that use this data source first.');
         const [query] = await this.db
-            .select({ id: semanticVerifiedQueries.id })
-            .from(semanticVerifiedQueries)
-            .where(and(eq(semanticVerifiedQueries.semanticModelId, input.semanticModelId), eq(semanticVerifiedQueries.sourceConnectionId, input.connectionId)))
+            .select({ id: knowledgeVerifiedQueries.id })
+            .from(knowledgeVerifiedQueries)
+            .where(and(eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId), eq(knowledgeVerifiedQueries.sourceConnectionId, input.connectionId)))
             .limit(1);
         if (query) throw new Error('Remove verified queries that use this data source first.');
         const [knowledgeSource] = await this.db
-            .select({ id: semanticModelKnowledgeSources.id })
-            .from(semanticModelKnowledgeSources)
-            .where(and(eq(semanticModelKnowledgeSources.semanticModelId, input.semanticModelId), eq(semanticModelKnowledgeSources.connectionId, input.connectionId)))
+            .select({ id: knowledgeSources.id })
+            .from(knowledgeSources)
+            .where(and(eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId), eq(knowledgeSources.connectionId, input.connectionId)))
             .limit(1);
         if (knowledgeSource) throw new Error('Reassign knowledge sources that use this data source first.');
         await this.db
-            .delete(semanticModelSources)
-            .where(and(eq(semanticModelSources.semanticModelId, input.semanticModelId), eq(semanticModelSources.connectionId, input.connectionId)));
-        await this.touchModel(input.semanticModelId);
+            .delete(knowledgeModelSources)
+            .where(and(eq(knowledgeModelSources.knowledgeModelId, input.knowledgeModelId), eq(knowledgeModelSources.connectionId, input.connectionId)));
+        await this.touchModel(input.knowledgeModelId);
         return this.getModel(input);
     }
 
-    async replaceDataSources(input: { organizationId: string; semanticModelId: string; connectionIds: string[] }) {
+    async replaceDataSources(input: { organizationId: string; knowledgeModelId: string; connectionIds: string[] }) {
         const model = await this.getModel(input);
         const connectionIds = await this.assertConnections(input.organizationId, input.connectionIds);
         const nextIds = new Set(connectionIds);
@@ -390,68 +390,68 @@ export class PostgresSemanticContextRepository {
                 throw new Error('Remove or reassign definitions that use this data source first.');
             }
             const [query] = await this.db
-                .select({ id: semanticVerifiedQueries.id })
-                .from(semanticVerifiedQueries)
-                .where(and(eq(semanticVerifiedQueries.semanticModelId, input.semanticModelId), eq(semanticVerifiedQueries.sourceConnectionId, connectionId)))
+                .select({ id: knowledgeVerifiedQueries.id })
+                .from(knowledgeVerifiedQueries)
+                .where(and(eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId), eq(knowledgeVerifiedQueries.sourceConnectionId, connectionId)))
                 .limit(1);
             if (query) throw new Error('Remove verified queries that use this data source first.');
             const [knowledgeSource] = await this.db
-                .select({ id: semanticModelKnowledgeSources.id })
-                .from(semanticModelKnowledgeSources)
-                .where(and(eq(semanticModelKnowledgeSources.semanticModelId, input.semanticModelId), eq(semanticModelKnowledgeSources.connectionId, connectionId)))
+                .select({ id: knowledgeSources.id })
+                .from(knowledgeSources)
+                .where(and(eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId), eq(knowledgeSources.connectionId, connectionId)))
                 .limit(1);
             if (knowledgeSource) throw new Error('Reassign knowledge sources that use this data source first.');
         }
 
         await this.db
-            .insert(semanticModelSources)
-            .values(connectionIds.map(connectionId => ({ semanticModelId: input.semanticModelId, connectionId })))
+            .insert(knowledgeModelSources)
+            .values(connectionIds.map(connectionId => ({ knowledgeModelId: input.knowledgeModelId, connectionId })))
             .onConflictDoNothing();
         if (removedIds.length) {
             await this.db
-                .delete(semanticModelSources)
-                .where(and(eq(semanticModelSources.semanticModelId, input.semanticModelId), inArray(semanticModelSources.connectionId, removedIds)));
+                .delete(knowledgeModelSources)
+                .where(and(eq(knowledgeModelSources.knowledgeModelId, input.knowledgeModelId), inArray(knowledgeModelSources.connectionId, removedIds)));
         }
-        await this.touchModel(input.semanticModelId);
+        await this.touchModel(input.knowledgeModelId);
         return this.getModel(input);
     }
 
-    async listKnowledgeSources(input: { organizationId: string; semanticModelId: string; connectionId?: string | null }) {
+    async listKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId?: string | null }) {
         await this.getModel(input);
-        const conditions = [eq(semanticModelKnowledgeSources.organizationId, input.organizationId), eq(semanticModelKnowledgeSources.semanticModelId, input.semanticModelId)];
-        if (input.connectionId) conditions.push(or(isNull(semanticModelKnowledgeSources.connectionId), eq(semanticModelKnowledgeSources.connectionId, input.connectionId))!);
+        const conditions = [eq(knowledgeSources.organizationId, input.organizationId), eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId)];
+        if (input.connectionId) conditions.push(or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId))!);
         return this.db
             .select({
-                id: semanticModelKnowledgeSources.id,
-                organizationId: semanticModelKnowledgeSources.organizationId,
-                semanticModelId: semanticModelKnowledgeSources.semanticModelId,
-                connectionId: semanticModelKnowledgeSources.connectionId,
-                fileName: semanticModelKnowledgeSources.fileName,
-                format: semanticModelKnowledgeSources.format,
-                byteSize: semanticModelKnowledgeSources.byteSize,
-                createdBy: semanticModelKnowledgeSources.createdBy,
-                createdAt: semanticModelKnowledgeSources.createdAt,
-                updatedAt: semanticModelKnowledgeSources.updatedAt,
+                id: knowledgeSources.id,
+                organizationId: knowledgeSources.organizationId,
+                knowledgeModelId: knowledgeSources.knowledgeModelId,
+                connectionId: knowledgeSources.connectionId,
+                fileName: knowledgeSources.fileName,
+                format: knowledgeSources.format,
+                byteSize: knowledgeSources.byteSize,
+                createdBy: knowledgeSources.createdBy,
+                createdAt: knowledgeSources.createdAt,
+                updatedAt: knowledgeSources.updatedAt,
             })
-            .from(semanticModelKnowledgeSources)
+            .from(knowledgeSources)
             .where(and(...conditions))
-            .orderBy(desc(semanticModelKnowledgeSources.updatedAt));
+            .orderBy(desc(knowledgeSources.updatedAt));
     }
 
-    async searchKnowledgeSources(input: { organizationId: string; semanticModelId: string; connectionId: string; query: string }) {
+    async searchKnowledgeSources(input: { organizationId: string; knowledgeModelId: string; connectionId: string; query: string }) {
         const model = await this.getModel(input);
-        if (!model.dataSources.some(source => source.connectionId === input.connectionId)) throw new Error('Semantic model is not linked to this data source.');
+        if (!model.dataSources.some(source => source.connectionId === input.connectionId)) throw new Error('Knowledge model is not linked to this data source.');
         const rows = await this.db
             .select()
-            .from(semanticModelKnowledgeSources)
+            .from(knowledgeSources)
             .where(
                 and(
-                    eq(semanticModelKnowledgeSources.organizationId, input.organizationId),
-                    eq(semanticModelKnowledgeSources.semanticModelId, input.semanticModelId),
-                    or(isNull(semanticModelKnowledgeSources.connectionId), eq(semanticModelKnowledgeSources.connectionId, input.connectionId)),
+                    eq(knowledgeSources.organizationId, input.organizationId),
+                    eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId),
+                    or(isNull(knowledgeSources.connectionId), eq(knowledgeSources.connectionId, input.connectionId)),
                 ),
             )
-            .orderBy(desc(semanticModelKnowledgeSources.updatedAt));
+            .orderBy(desc(knowledgeSources.updatedAt));
         const needle = input.query.trim().toLowerCase();
         return rows
             .map(source => {
@@ -467,16 +467,16 @@ export class PostgresSemanticContextRepository {
             .slice(0, 10);
     }
 
-    async getKnowledgeSource(input: { organizationId: string; semanticModelId: string; id: string }) {
+    async getKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         await this.getModel(input);
         const [source] = await this.db
             .select()
-            .from(semanticModelKnowledgeSources)
+            .from(knowledgeSources)
             .where(
                 and(
-                    eq(semanticModelKnowledgeSources.id, input.id),
-                    eq(semanticModelKnowledgeSources.organizationId, input.organizationId),
-                    eq(semanticModelKnowledgeSources.semanticModelId, input.semanticModelId),
+                    eq(knowledgeSources.id, input.id),
+                    eq(knowledgeSources.organizationId, input.organizationId),
+                    eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId),
                 ),
             )
             .limit(1);
@@ -484,15 +484,15 @@ export class PostgresSemanticContextRepository {
         return source;
     }
 
-    private async assertKnowledgeSourceConnection(model: SemanticModelDetail, connectionId?: string | null) {
+    private async assertKnowledgeSourceConnection(model: KnowledgeModelDetail, connectionId?: string | null) {
         if (connectionId && !model.dataSources.some(source => source.connectionId === connectionId)) {
-            throw new Error('The selected data source is not linked to this semantic model.');
+            throw new Error('The selected data source is not linked to this knowledge model.');
         }
     }
 
     async createKnowledgeSource(input: {
         organizationId: string;
-        semanticModelId: string;
+        knowledgeModelId: string;
         fileName: string;
         contentText: string;
         connectionId?: string | null;
@@ -500,63 +500,63 @@ export class PostgresSemanticContextRepository {
     }) {
         const model = await this.getModel(input);
         await this.assertKnowledgeSourceConnection(model, input.connectionId);
-        const value = validateSemanticKnowledgeSource(input.fileName, input.contentText);
+        const value = validateKnowledgeSource(input.fileName, input.contentText);
         const [existing] = await this.db
-            .select({ id: semanticModelKnowledgeSources.id })
-            .from(semanticModelKnowledgeSources)
-            .where(and(eq(semanticModelKnowledgeSources.semanticModelId, input.semanticModelId), eq(semanticModelKnowledgeSources.fileName, value.fileName)))
+            .select({ id: knowledgeSources.id })
+            .from(knowledgeSources)
+            .where(and(eq(knowledgeSources.knowledgeModelId, input.knowledgeModelId), eq(knowledgeSources.fileName, value.fileName)))
             .limit(1);
         if (existing) throw new Error(`A knowledge source named "${value.fileName}" already exists.`);
         const [source] = await this.db
-            .insert(semanticModelKnowledgeSources)
+            .insert(knowledgeSources)
             .values({
                 organizationId: input.organizationId,
-                semanticModelId: input.semanticModelId,
+                knowledgeModelId: input.knowledgeModelId,
                 connectionId: input.connectionId || null,
                 createdBy: input.createdBy || null,
                 ...value,
             })
             .returning();
-        await this.touchModel(input.semanticModelId);
+        await this.touchModel(input.knowledgeModelId);
         return source!;
     }
 
-    async updateKnowledgeSource(input: { organizationId: string; semanticModelId: string; id: string; contentText: string; connectionId?: string | null }) {
+    async updateKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string; contentText: string; connectionId?: string | null }) {
         const model = await this.getModel(input);
         const existing = await this.getKnowledgeSource(input);
         await this.assertKnowledgeSourceConnection(model, input.connectionId);
-        const value = validateSemanticKnowledgeSource(existing.fileName, input.contentText);
+        const value = validateKnowledgeSource(existing.fileName, input.contentText);
         const [source] = await this.db
-            .update(semanticModelKnowledgeSources)
+            .update(knowledgeSources)
             .set({ contentText: value.contentText, byteSize: value.byteSize, format: value.format, connectionId: input.connectionId || null })
-            .where(eq(semanticModelKnowledgeSources.id, existing.id))
+            .where(eq(knowledgeSources.id, existing.id))
             .returning();
-        await this.touchModel(input.semanticModelId);
+        await this.touchModel(input.knowledgeModelId);
         return source!;
     }
 
-    async deleteKnowledgeSource(input: { organizationId: string; semanticModelId: string; id: string }) {
+    async deleteKnowledgeSource(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         const source = await this.getKnowledgeSource(input);
-        await this.db.delete(semanticModelKnowledgeSources).where(eq(semanticModelKnowledgeSources.id, source.id));
-        await this.touchModel(input.semanticModelId);
+        await this.db.delete(knowledgeSources).where(eq(knowledgeSources.id, source.id));
+        await this.touchModel(input.knowledgeModelId);
     }
 
-    async listVerifiedQueries(input: { organizationId: string; semanticModelId: string; query?: string | null; connectionId?: string | null }) {
+    async listVerifiedQueries(input: { organizationId: string; knowledgeModelId: string; query?: string | null; connectionId?: string | null }) {
         await this.getModel(input);
-        const conditions = [eq(semanticVerifiedQueries.semanticModelId, input.semanticModelId)];
-        if (input.connectionId) conditions.push(eq(semanticVerifiedQueries.sourceConnectionId, input.connectionId));
+        const conditions = [eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)];
+        if (input.connectionId) conditions.push(eq(knowledgeVerifiedQueries.sourceConnectionId, input.connectionId));
         if (input.query?.trim())
-            conditions.push(or(ilike(semanticVerifiedQueries.title, `%${input.query.trim()}%`), ilike(semanticVerifiedQueries.question, `%${input.query.trim()}%`))!);
+            conditions.push(or(ilike(knowledgeVerifiedQueries.title, `%${input.query.trim()}%`), ilike(knowledgeVerifiedQueries.question, `%${input.query.trim()}%`))!);
         return this.db
             .select()
-            .from(semanticVerifiedQueries)
+            .from(knowledgeVerifiedQueries)
             .where(and(...conditions))
-            .orderBy(desc(semanticVerifiedQueries.updatedAt));
+            .orderBy(desc(knowledgeVerifiedQueries.updatedAt));
     }
 
     async createVerifiedQuery(input: {
         organizationId: string;
-        semanticModelId: string;
+        knowledgeModelId: string;
         sourceConnectionId: string;
         title: string;
         question: string;
@@ -568,11 +568,11 @@ export class PostgresSemanticContextRepository {
         createdBy?: string | null;
     }) {
         const model = await this.getModel(input);
-        if (!model.dataSources.some(source => source.connectionId === input.sourceConnectionId)) throw new Error('This data source is not linked to the selected semantic model.');
+        if (!model.dataSources.some(source => source.connectionId === input.sourceConnectionId)) throw new Error('This data source is not linked to the selected knowledge model.');
         const [row] = await this.db
-            .insert(semanticVerifiedQueries)
+            .insert(knowledgeVerifiedQueries)
             .values({
-                semanticModelId: input.semanticModelId,
+                knowledgeModelId: input.knowledgeModelId,
                 sourceConnectionId: input.sourceConnectionId,
                 title: input.title.trim(),
                 question: input.question.trim(),
@@ -584,24 +584,24 @@ export class PostgresSemanticContextRepository {
                 createdBy: input.createdBy ?? null,
             })
             .returning();
-        await this.touchModel(input.semanticModelId);
+        await this.touchModel(input.knowledgeModelId);
         return row!;
     }
 
-    async getVerifiedQuery(input: { organizationId: string; semanticModelId: string; id: string }) {
+    async getVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         await this.getModel(input);
         const [row] = await this.db
             .select()
-            .from(semanticVerifiedQueries)
-            .where(and(eq(semanticVerifiedQueries.id, input.id), eq(semanticVerifiedQueries.semanticModelId, input.semanticModelId)))
+            .from(knowledgeVerifiedQueries)
+            .where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)))
             .limit(1);
         if (!row) throw new Error('Verified query not found.');
         return row;
     }
 
-    async deleteVerifiedQuery(input: { organizationId: string; semanticModelId: string; id: string }) {
+    async deleteVerifiedQuery(input: { organizationId: string; knowledgeModelId: string; id: string }) {
         await this.getModel(input);
-        await this.db.delete(semanticVerifiedQueries).where(and(eq(semanticVerifiedQueries.id, input.id), eq(semanticVerifiedQueries.semanticModelId, input.semanticModelId)));
-        await this.touchModel(input.semanticModelId);
+        await this.db.delete(knowledgeVerifiedQueries).where(and(eq(knowledgeVerifiedQueries.id, input.id), eq(knowledgeVerifiedQueries.knowledgeModelId, input.knowledgeModelId)));
+        await this.touchModel(input.knowledgeModelId);
     }
 }

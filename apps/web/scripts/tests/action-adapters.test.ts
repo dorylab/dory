@@ -19,7 +19,7 @@ require.cache[serverOnlyPath] = {
     exports: {},
 } as NodeJS.Module;
 
-const [{ actionToAgentTool }, { actionToMcpTool, structuredMcpActionResult }, { executeUiAction }, { defineWebAction }, { webActionRegistry }] = await Promise.all([
+const [{ actionToAgentTool, toAgentToolName }, { actionToMcpTool, structuredMcpActionResult }, { executeUiAction }, { defineWebAction }, { webActionRegistry }] = await Promise.all([
     import('@/lib/actions/server/adapters/agent'),
     import('@/lib/actions/server/adapters/mcp'),
     import('@/lib/actions/server/adapters/ui'),
@@ -29,6 +29,17 @@ const [{ actionToAgentTool }, { actionToMcpTool, structuredMcpActionResult }, { 
 
 const tabCreateAction = webActionRegistry.get('tab.create');
 assert.ok(tabCreateAction, 'Expected tab.create to be registered.');
+
+test('Knowledge actions and Agent tool names replace the Semantic Context contract', () => {
+    const actionIds = webActionRegistry.ids();
+    assert.ok(actionIds.includes('knowledge.searchKnowledge'));
+    assert.ok(actionIds.includes('knowledge.getDefinition'));
+    assert.ok(actionIds.includes('knowledge.searchVerifiedQueries'));
+    assert.ok(!actionIds.some(actionId => actionId.startsWith('semantic.')));
+    assert.equal(toAgentToolName('knowledge.searchKnowledge'), 'search_knowledge');
+    assert.equal(toAgentToolName('knowledge.getDefinition'), 'get_knowledge_definition');
+    assert.equal(toAgentToolName('knowledge.searchVerifiedQueries'), 'search_knowledge_verified_queries');
+});
 
 const tabCreateInput = {
     connectionId: 'conn-1',

@@ -43,7 +43,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
     const [folderId, setFolderId] = useState('');
     const [folderOptions, setFolderOptions] = useState<SelectOption[]>([]);
     const [addToBusinessKnowledge, setAddToBusinessKnowledge] = useState(false);
-    const [semanticModelId, setSemanticModelId] = useState('');
+    const [knowledgeModelId, setKnowledgeModelId] = useState('');
     const [newModelName, setNewModelName] = useState('');
     const [businessMeaning, setBusinessMeaning] = useState('');
     const [loadingFolders, setLoadingFolders] = useState(false);
@@ -71,22 +71,22 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
         setDescription('');
         setFolderId('');
         setAddToBusinessKnowledge(false);
-        setSemanticModelId('');
+        setKnowledgeModelId('');
         setNewModelName('');
         setBusinessMeaning('');
         setError(null);
     }, [open, resolvedDefaultTitle]);
 
-    const semanticModels = useQuery({
-        queryKey: ['semantic-model-options', connectionId],
+    const knowledgeModels = useQuery({
+        queryKey: ['knowledge-model-options', connectionId],
         enabled: open && addToBusinessKnowledge && Boolean(connectionId),
-        queryFn: () => executeActionClient<{ models: Array<{ id: string; name: string }> }>('semantic.list', { connectionId }, { currentConnectionId: connectionId }),
+        queryFn: () => executeActionClient<{ models: Array<{ id: string; name: string }> }>('knowledge.list', { connectionId }, { currentConnectionId: connectionId }),
     });
 
     useEffect(() => {
         if (!addToBusinessKnowledge) return;
-        if (!semanticModelId && semanticModels.data?.models[0]) setSemanticModelId(semanticModels.data.models[0].id);
-    }, [addToBusinessKnowledge, semanticModelId, semanticModels.data]);
+        if (!knowledgeModelId && knowledgeModels.data?.models[0]) setKnowledgeModelId(knowledgeModels.data.models[0].id);
+    }, [addToBusinessKnowledge, knowledgeModelId, knowledgeModels.data]);
 
     useEffect(() => {
         if (!open || !connectionId || isAnonymous) {
@@ -156,7 +156,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
             setError(t('SaveSql.Errors.UseWhenRequired'));
             return;
         }
-        if (addToBusinessKnowledge && !semanticModelId && !newModelName.trim()) {
+        if (addToBusinessKnowledge && !knowledgeModelId && !newModelName.trim()) {
             setError(t('SaveSql.Errors.DomainRequired'));
             return;
         }
@@ -182,15 +182,15 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
             await onSaved?.();
 
             if (addToBusinessKnowledge) {
-                let targetModelId = semanticModelId;
+                let targetModelId = knowledgeModelId;
                 if (!targetModelId) {
-                    const model = await executeActionClient<{ id: string }>('semantic.create', { name: newModelName.trim(), connectionIds: [connectionId] });
+                    const model = await executeActionClient<{ id: string }>('knowledge.create', { name: newModelName.trim(), connectionIds: [connectionId] });
                     targetModelId = model.id;
                 }
                 await executeActionClient(
-                    'semantic.createVerifiedQuery',
+                    'knowledge.createVerifiedQuery',
                     {
-                        semanticModelId: targetModelId,
+                        knowledgeModelId: targetModelId,
                         sourceConnectionId: connectionId,
                         title: title.trim(),
                         description: description.trim() ? description.trim() : undefined,
@@ -267,15 +267,15 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                                 <div className="mt-3 grid gap-3 border-t pt-3">
                                     <div className="grid gap-2">
                                         <label className="text-sm font-medium">{t('SaveSql.DomainLabel')}</label>
-                                        {semanticModels.isLoading ? (
+                                        {knowledgeModels.isLoading ? (
                                             <p className="text-sm text-muted-foreground">{t('SaveSql.LoadingDomains')}</p>
-                                        ) : semanticModels.data?.models.length ? (
-                                            <Select value={semanticModelId} onValueChange={setSemanticModelId} disabled={saving}>
+                                        ) : knowledgeModels.data?.models.length ? (
+                                            <Select value={knowledgeModelId} onValueChange={setKnowledgeModelId} disabled={saving}>
                                                 <SelectTrigger className="w-full">
                                                     <SelectValue placeholder={t('SaveSql.DomainPlaceholder')} />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {semanticModels.data.models.map(model => (
+                                                    {knowledgeModels.data.models.map(model => (
                                                         <SelectItem key={model.id} value={model.id}>
                                                             {model.name}
                                                         </SelectItem>
@@ -287,7 +287,7 @@ export function SaveSqlDialog({ open, onOpenChange, defaultTitle, getSqlText, on
                                                 value={newModelName}
                                                 onChange={event => setNewModelName(event.target.value)}
                                                 placeholder={t('SaveSql.NewDomainPlaceholder')}
-                                                disabled={saving || semanticModels.isLoading}
+                                                disabled={saving || knowledgeModels.isLoading}
                                             />
                                         )}
                                     </div>
